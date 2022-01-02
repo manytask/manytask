@@ -1,0 +1,13 @@
+
+*.md
+
+.git
+.gitignore
+.dockerignore
+
+*.env
+
+.gitlab-ci.yml
+
+venv
+.venv
