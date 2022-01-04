@@ -3,10 +3,33 @@
 Small application for manage course: set students' scores and so on
 
 
-## Setup a new course 
+## Start a new course 
 
+### Pre-setup
+
+1. Create gitlab oauth credentials here: [gitlab.manytask.org/admin/applications/](https://gitlab.manytask.org/admin/applications/) 
+
+2. Get gitlab admin token (to create users and repos)
+
+3. Create google sheets (public and private)  
+   and create new google account for course and get console credentials (to interact with google sheets api) 
+
+4. Create repos (public and private) 
+   and group for students' repos  
+   and create service account 
+
+6. Generate tester token, flask secret key and registration secret 
+
+
+### Setup
+
+Clone repo
 ```shell
 git clone https://github.com/yandexdataschool/manytask
+```
+
+Create `.env` file with production environment
+```shell
 cp .env.example .env
 ```
 
@@ -15,9 +38,22 @@ cp .env.example .env
 
 ### Debug and development 
 
+First you need to create `.env` file with debug environment
+
+* gitlab oauth credentials can be taken from `test` app here: [gitlab.manytask.org/admin/applications](https://gitlab.manytask.org/admin/applications/)
+
+
 #### Local
+
+Create new venv and install requirements 
 ```shell
-FLASK_ENV=development FLASK_APP=manytask.main:create_app python -m flask run --host=0.0.0.0 --port=5000 --reload --without-threads
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -U -r requrements.txt
+```
+Run it
+```shell
+CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP=manytask.main:create_app python -m flask run --host=0.0.0.0 --port=5000 --reload --without-threads
 ```
 
 #### Docker (manytask only)
@@ -83,7 +119,7 @@ However, you can implement your own checker just following `manytask` api:
 | GET    | `/api/sync_task_columns`    | update course to `deadlines`         | \*deadlines\*                                                 | -                                                       | -                                                                    |
 | GET    | `/api/update_cached_scores` | update cached scores for all users   | `task`, `user_id` (gitlab)                                    | -                                                       | -                                                                    |
 | POST   | `/api/report_source`        | save student's solution source files | `task`, `user_id` (gitlab) + multipart/form-data source files | -                                                       | -                                                                    |
-| GET    | `/api/get_solutions`        | get all solutions for the task       | `task`                                                        | -                                                       | zip archive file with solutions                                      |
+| GET    | `/api/solutions`            | get all solutions for the task       | `task`                                                        | -                                                       | zip archive file with solutions                                      |
 
 
 

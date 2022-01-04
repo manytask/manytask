@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="site">
+  <header class="header-container">
+
+    {% block header %}
+    {% set navbar = [
+        ("/", "tasks", "Tasks"),
+        (student_repo_url, "repo", "My Repo"),
+        (student_ci_url, "submits", "Submits"),
+        (gdoc_url, "gdoc", "GDoc"),
+        (lms_url, "wiki", "LMS"),
+        (tg_invite_link, "telegram", "Telegram"),
+        ("/logout", "logout", "Logout"),
+    ] -%}
+    {% set active_page = active_page|default("tasks") -%}
+
+    <nav id="navmenu">
+      <ul class="main-menu">
+      <div>
+          [ {{ username }} ] #
+      </div>
+        {% for href, id, caption in navbar %}
+        <li>
+          <a href="{{ href }}"
+             class="{{ 'current' if id == active_page else '' }}">
+            {{ caption }}
+          </a>
+        </li>
+        {% if not loop.last %}<li>|</li>{% endif %}
+        {% endfor %}
+      </ul>
+    </nav>
+    {% endblock %}
+  </header>
+  <main class="main">
+    {% block content %}
+    {% endblock %}
+  </main>
+</div>
+{% endblock %}

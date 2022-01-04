@@ -1,0 +1,309 @@
+body {
+    margin: 0;
+    font-family: 'Source Code Pro', monospace;
+    display: flex;
+}
+
+input:invalid {
+    border: 2px dashed #e7631c;
+}
+
+.site {
+    max-width: 1200px;
+    width: 100%;
+    
+    margin: 0 auto;
+    padding-left: 4em;
+    padding-right: 4em;
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.header-container {
+    margin: 0 auto;
+    margin-top: 2em;
+
+    display: flex;
+}
+
+/* ========================================================================== */
+
+.main-menu {
+    padding: 0;
+    display: flex;
+    list-style: none;
+    color: #455a64;
+}
+
+.main-menu a {
+    text-decoration: none;
+    color: #455a64;
+}
+
+.main-menu li {
+    font-size: 1em;
+    text-transform: uppercase;
+    margin-left: 0.66em;
+}
+
+.main-menu li .current {
+    font-weight: bold;
+}
+
+/* ========================================================================== */
+
+.main {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* ========================================================================== */
+
+.flag-submit {
+    display: flex;
+    align-content: center;
+    margin: auto;
+}
+
+/* ========================================================================== */
+
+.group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.group.hw {
+    background-color: #e2e2e2;
+}
+
+/*.group.hw .task {*/
+/*    border: 4px solid #070f36;*/
+/*    box-sizing: border-box;*/
+/*}*/
+
+.group a {
+    text-decoration: none;
+}
+
+.group-header {
+    display: flex;
+    margin-top: 10px;
+}
+
+.group-header h1 {
+    margin: 0em;
+}
+
+.group-header .title {
+    font-size: 1.05em;
+}
+.group-header .deadline {
+    font-size: 0.85em;
+    margin-left: 5px;
+}
+
+.group-tasks {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.task {
+    width: 220px;
+    height: 130px;
+    margin: 10px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.unsolved {
+    background-color: #1e3250;
+    color: white;
+}
+
+.solved {
+    background-color: #66cda3;
+    color: black;
+}
+
+.solved_partially {
+    background-color: #8869bd;
+    color: black;
+}
+
+.task .name {
+    margin: 0 auto;
+    margin-top: 0.8em;
+    font-size: 1.2em;
+    white-space: nowrap;
+}
+
+.task .score {
+    margin: 0 auto;
+    font-size: 3em;
+    font-weight: bold;
+}
+
+/* ========================================================================== */
+
+.signup {
+    width: 100%;
+    
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 2em;
+}
+
+.signup .login {
+    padding-top: 2em;
+    padding-bottom: 2em;
+
+    display: flex;
+}
+
+.login-button {
+    display: flex;
+    flex-direction: column;
+
+    font-size: 2em;
+
+    margin: auto;
+    height: 80px;
+    width: 300px;
+
+    border: solid;
+    border-width: 1px;
+    border-color: #168f48;
+    background-color: #1aaa55;
+
+    text-decoration: none;
+}
+
+.login-button .text {
+    margin: auto;
+    color: white;
+}
+
+.login-button .text:last-of-type {
+    font-size: 0.5em;
+    margin-top: -0.3em;
+}
+
+.signup .or {
+    display: flex;
+    min-width: 100px;
+}
+
+.or .text {
+    font-size: 1em;
+    margin: auto;
+}
+
+.signup .register {
+    display: flex;
+    padding-top: 2em;
+    padding-bottom: 2em;
+}
+
+.form {
+    width: 500px;
+
+    display: flex;
+    flex-direction: column;
+    
+    border: 1px solid #e5e5e5;
+}
+
+.form-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-right: 1em;
+    padding-left: 1em;
+}
+
+.form-header .text:last-of-type {
+    margin-top: -0.3em;
+}
+
+.form-header h1 {
+    margin: 0 auto;
+    padding-top: 0.33em;
+    padding-bottom: 0.33em;
+    font-weight: normal;
+    font-size: 2em;
+}
+
+.form .form-element {
+    flex: 1;
+
+    margin: 0.33em;
+    margin-bottom: 0;
+
+    padding: 0.33em;
+    padding-bottom: 0;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.form .form-element.last {
+    padding-bottom: 0.33em;
+    margin-bottom: 0.33em;
+    margin-top: 1em;
+}
+
+.form-element input {
+    flex: 1;
+    height: 40px;
+
+    font-size: 1.5em;
+    padding-left: 0.1em;
+    border: 1px solid #e5e5e5;
+}
+
+.form-element .button {
+    background-color: #1f78d1;
+    border-color: #1b69b6;
+    color: white;
+    cursor: pointer;
+    font-family: 'Source Code Pro', monospace;
+    font-size: 1.5em;
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
+}
+
+.form-element .name {
+    margin-left: 0.33em;
+    margin-bottom: 0.33em;
+    color: #555555;
+}
+
+.form .form-error {
+    background-color: #db3b21;
+}
+
+.form-error .error-message {
+    margin-left: 0.33em;
+    margin-bottom: 0.33em;
+    
+    color: white;
+}
+
+.password a {
+    text-decoration: none;
+}
+
+.selectable {
+    border: none;
+    font-family: 'Source Code Pro', monospace;
+    background-color: white;
+}

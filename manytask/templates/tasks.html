@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block content %}
+{% for group in current_course.deadlines.open_groups %}
+<div class="group {{ 'hw' if group.hw else '' }}">
+  <div class="group-header">
+      <h1 class="timer">
+          <div>{{ group.name }}</div>
+          <div class="deadline">[100%: {{ group.pretty_deadline }} MSK]</div>
+          {% if group.pretty_deadline != group.pretty_second_deadline %}
+                <div class="deadline">[ 50%: {{ group.pretty_second_deadline }} MSK]</div>
+          {% endif %}
+      </h1>
+  </div>
+  <div class="group-tasks">
+    {% set MAX_TASK_LENGTH = 16 %}
+    {% for task in group.tasks %}
+    <a href="{{ task_base_url }}/{{ group.name }}/{{ task.name }}/">
+      <div class="task {{ ('solved' if scores.get(task.name) >= task.score else 'solved_partially') if scores.get(task.name, '-') != '-' else 'unsolved' }}">
+        <div class="name">{{ task.name if (task.name | length <= MAX_TASK_LENGTH) else task.name[:MAX_TASK_LENGTH-1] + '…' }}</div>
+        <div class="score">{{ scores.get(task.name, '0') }}/{{ task.score }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

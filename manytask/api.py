@@ -118,9 +118,9 @@ def report_source():
     pass
 
 
-@bp.get('/update_cached_scores')
+@bp.get('/solutions')
 @requires_token
-def update_cached_scores():
+def get_solutions():
     # get and validate request parameters
     if 'task' not in request.form:
         return 'You didn\'t provide required attribute `task`', 400

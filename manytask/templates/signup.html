@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="signup">
+  <div class="login">
+    <a class="login-button" href="/login">
+      <div class="text">
+        Login: {{course_name}}
+      </div>
+      <div class="text">
+        with gitlab.manytask.org
+      </div>
+    </a>
+  </div>
+
+  <div class="or">
+    <div class="text">
+      OR
+    </div>
+  </div>
+
+  <div class="register">
+    <div class="form">
+      <div class="form-header">
+        <h1>Sign Up: {{course_name}}</h1>
+        <div class="text">
+          with gitlab.manytask.org
+        </div>
+      </div>
+      <hr>
+      <div class="form-header">
+        <div>
+            Choose any login you like, but mind it will be visible in the public table with marks next to your name :)
+            <br>
+            LMS id, telegram account and email address are going
+            to be available to teachers only.
+        </div>
+      </div>
+      <form method="post">
+        {% if error_message %}
+        <div class="form-element form-error">
+          <div class="error-message">{{ error_message }}</div>
+        </div>
+        {% endif %}
+        <div class="form-element">
+          <div class="name">Username:</div>
+          <input type="text" name="username" pattern="\S*" minlength="1" maxlength="32" required>
+        </div>
+        <div class="form-element">
+          <div class="name">First Name:</div>
+          <input type="text" name="firstname" pattern="\S*" minlength="2" maxlength="32" required>
+        </div>
+        <div class="form-element">
+          <div class="name">Last Name:</div>
+          <input type="text" name="lastname" pattern="\S*" minlength="2" maxlength="32" required>
+        </div>
+        <div class="form-element">
+          <div class="name">Email:</div>
+          <input type="email" name="email" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" required>
+        </div>
+        <div class="form-element">
+          <div class="name">Telegram nickname (without @):</div>
+          <input type="text" name="telegram" pattern="[^@]\S*" required>
+        </div>
+        <div class="form-element">
+          <div class="name">lms id:</div>
+          <input type="text" name="lms_id" pattern="[0-9]+$" required>
+        </div>
+        <div class="form-element">
+          <div class="name">Password:</div>
+          <input type="password" name="password" required>
+        </div>
+        <div class="form-element">
+          <div class="name">Secret Code (take from lms):</div>
+          <input type="text" name="secret" required>
+        </div>
+        <div class="form-element">
+          <div class="name">lms:</div>
+          <div style="display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 15px; margin: 0 5px 0 5px;">
+            <input style="height: 30px" type="checkbox" name="lms_confirm" required>
+            <label for="lms_confirm">I understand that I have to link my lms and manytask if I want to get a mark</label>
+          </div>
+        </div>
+        <div class="form-element last">
+          <input type="submit" class="button" value="Register">
+        </div>
+      </form>
+    </div>
+  </div>
+
+{#  <div class="password">#}
+{#    <a href="https://best-cpp-course-ever.ru/users/password/new">Forgot Password?</a>#}
+{#  </div>#}
+</div>
+{% endblock %}

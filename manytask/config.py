@@ -1,10 +1,6 @@
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
-
-load_dotenv('../.env')  # take environment variables from .env.
-
 
 @dataclass
 class Config:
@@ -23,18 +19,18 @@ class Config:
     telegram_invite_link: str = os.environ.get('TELEGRAM_INVITE_LINK', '')
 
     # gitlab
-    gitlab_host: str = os.environ.get('GITLAB_HOST', 'https://gitlab.manytask.org')
+    gitlab_url: str = os.environ.get('GITLAB_URL', 'https://gitlab.manytask.org')
     gitlab_admin_token: str = os.environ.get('GITLAB_ADMIN_TOKEN')
     # gitlab course repos
     gitlab_course_public_repo: str = os.environ.get('GITLAB_COURSE_PUBLIC_REPO')
-    gitlab_course_students_group: str = os.environ.get('GITLAB_COURSE_GROUP')
+    gitlab_course_students_group: str = os.environ.get('GITLAB_COURSE_STUDENTS_GROUP')
     gitlab_course_admins_repo: str = os.environ.get('GITLAB_COURSE_ADMINS_REPO', None)
     # gitlab oauth2
     gitlab_client_id: str = os.environ.get('GITLAB_CLIENT_ID')
     gitlab_client_secret: str = os.environ.get('GITLAB_CLIENT_SECRET')
 
     # google sheets
-    gdoc_host: str = os.environ.get('GDOC_HOST', 'https://docs.google.com')
+    gdoc_url: str = os.environ.get('GDOC_URL', 'https://docs.google.com')
     gdoc_account: str = os.environ.get('GDOC_ACCOUNT')  # google docs credentials base64 encoded json
     # google public sheet
     gdoc_spreadsheet_id: str = os.environ.get('GDOC_SPREADSHEET_ID')
