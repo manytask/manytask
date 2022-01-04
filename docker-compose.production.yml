@@ -1,0 +1,31 @@
+version: "3.8"
+
+
+volumes:
+    cache:
+    solutions:
+    letsencrypt:
+
+
+services:
+    nginx-certbot:
+        image: jonasal/nginx-certbot:3.0.0-nginx1.21.3
+        restart: unless-stopped
+        environment:
+            CERTBOT_EMAIL: no-reply@gitlab.manytask.org
+        ports:
+            - "80:80"
+            - "443:443"
+        volumes:
+            - letsencrypt:/etc/letsencrypt
+#            - ./configs/nginx.conf:/etc/nginx/conf.d/nginx.conf:ro
+            - ./configs/nginx_server.conf:/etc/nginx/user_conf.d/nginx_server.conf:ro
+
+    manytask:
+        container_name: manytask
+        env_file: .env
+        environment:
+            FLASK_ENV: production
+        volumes:
+            - cache:/cache
+            - solutions:/solutions

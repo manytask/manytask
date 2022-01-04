@@ -6,6 +6,9 @@ RUN pip install -r /tmp/requirements.txt
 
 COPY ./manytask /app
 
+ENV CACHE_DIR=/cache SOLUTIONS_DIR=/cache
+VOLUME ["/cache", "/solutions"]
+
 CMD gunicorn \
     --bind 0.0.0.0:5000 \
     --workers 4 \

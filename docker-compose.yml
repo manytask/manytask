@@ -8,10 +8,6 @@ services:
             context: .
         container_name: manytask
         env_file: .env
-        environment:
-            FLASK_ENV: development
-            CACHE_DIR: /cache
-        ports:
-            - "5000:5000"
-        volumes:
-            - /cache
+        # volumes: (auto from docker container)
+        #     - /cache
+        #     - /solutions
