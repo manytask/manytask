@@ -3,7 +3,6 @@ gunicorn==20.1.0
 flask==2.0.2
 cachelib==0.5.0
 Werkzeug==2.0.2
-python-dotenv==0.19.2
 
 # gsheets
 gspread==5.1.1
@@ -14,5 +13,6 @@ python-gitlab==2.10.1
 authlib==0.15.5  # gitlab oauth2 login
 
 # utils
+python-dotenv==0.19.2
 PyYAML==6.0
 requests==2.26.0

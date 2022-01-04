@@ -7,7 +7,7 @@ RUN pip install -r /tmp/requirements.txt
 COPY ./manytask /app
 
 CMD gunicorn \
-    --bind 0.0.0.0:8000 \
+    --bind 0.0.0.0:5000 \
     --workers 4 \
     --threads 4 \
     main:create_app
