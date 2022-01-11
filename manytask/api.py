@@ -4,10 +4,11 @@ import functools
 import logging
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import request, abort, current_app, Blueprint
 
+from manytask.course import Course, Task, get_current_time, validate_commit_time
 
 logger = logging.getLogger(__name__)
 bp = Blueprint('api', __name__, url_prefix='/api')
@@ -28,10 +29,62 @@ def requires_token(f):
     return decorated
 
 
+def _parse_flags(flags: str | None) -> timedelta:
+    flags = flags or ''
+
+    extra_time = timedelta()
+    left_colon = flags.find(':')
+    right_colon = flags.find(':', left_colon + 1)
+    if right_colon > -1 and left_colon > 0:
+        parsed = None
+        date_string = flags[right_colon + 1:]
+        try:
+            parsed = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
+        except ValueError:
+            logger.error(f'Could not parse date from flag {flags}')
+        if parsed is not None and datetime.now() <= parsed:
+            days = int(flags[left_colon + 1:right_colon])
+            extra_time = timedelta(days=days)
+    return extra_time
+
+
+def _update_score(
+        task: Task,
+        score: int,
+        flags: str,
+        old_score: int,
+        submit_time: datetime | None = None,
+        check_deadline: bool = True,
+) -> int:
+    if old_score < 0:
+        return old_score
+
+    extra_time = _parse_flags(flags)
+
+    if task.scoring_func == 'max':
+        if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
+            new_score = 0
+        elif check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
+            new_score = int(0.5 * score)
+        else:
+            new_score = score
+        return max(new_score, old_score)
+    elif task.scoring_func == 'latest':
+        if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
+            return old_score
+        if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
+            return int(0.5 * score)
+        return score
+    else:
+        raise ValueError(f'Wrong scoring func: {task.scoring_func}')
+
+
 @bp.post('/report')
 @requires_token
 def report_score():
-    # get and validate request parameters
+    course: Course = current_app.course
+
+    # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
         return 'You didn\'t provide required attribute `task`', 400
     task_name = request.form['task']
@@ -44,13 +97,13 @@ def report_score():
     if 'check_deadline' in request.form:
         check_deadline = request.form['check_deadline'] is True or request.form['check_deadline'] == 'True'
 
-    score: int | None = None
+    reported_score: int | None = None
     if 'score' in request.form:
         score_str = request.form['score']
         try:
-            score = int(score_str)
+            reported_score = int(score_str)
         except ValueError:
-            return f'Cannot parse `score` <{score}> to int`', 400
+            return f'Cannot parse `score` <{reported_score}> to int`', 400
 
     commit_time = None
     if 'commit_time' in request.form:
@@ -61,15 +114,45 @@ def report_score():
         except ValueError:
             commit_time = None
 
-    # logic
+    # ----- logic ----- #
+    try:
+        task = course.deadlines.find_task(task_name)
+    except KeyError:
+        return f'There is no task with name `{task_name}` (or it is closed for submission)', 404
 
-    pass
+    try:
+        student = course.gitlab_api.get_student(user_id)
+    except Exception:
+        return f'There is no student with user_id {user_id}', 404
+
+    current_time = get_current_time()
+    submit_time = validate_commit_time(commit_time, current_time)
+    logger.info(
+        f'Verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
+    )
+
+    logger.info(f'task {task.name} score {reported_score} check_deadline {check_deadline}')
+    update_function = functools.partial(
+        _update_score, task, reported_score, submit_time=submit_time, check_deadline=check_deadline
+    )
+    final_score = course.rating_table.store_score(student, task.name, update_function)
+
+    return {
+        'user_id': student.id,
+        'username': student.username,
+        'task': task.name,
+        'score': final_score,
+        'commit_time': commit_time.isoformat(sep=' ') if commit_time else 'None',
+        'submit_time': submit_time.isoformat(sep=' '),
+    }, 200
 
 
 @bp.get('/score')
 @requires_token
 def get_score():
-    # get and validate request parameters
+    course: Course = current_app.course
+
+    # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
         return 'You didn\'t provide required attribute `task`', 400
     task_name = request.form['task']
@@ -78,26 +161,72 @@ def get_score():
         return 'You didn\'t provide required attribute `user_id`', 400
     user_id = int(request.form['user_id'])
 
-    # logic
-    pass
+    # ----- logic ----- #
+    try:
+        task = course.deadlines.find_task(task_name)
+    except KeyError:
+        return f'There is no task with name `{task_name}` (or it is closed for submission)', 404
+
+    try:
+        student = course.gitlab_api.get_student(user_id)
+        student_scores = course.rating_table.get_scores(student.username)
+    except Exception:
+        return f'There is no student with user_id {user_id}', 404
+
+    try:
+        student_task_score = student_scores[task.name]
+    except Exception:
+        return f'Cannot get score for task {task.name} for {student.username}', 404
+
+    return {
+        'user_id': student.id,
+        'username': student.username,
+        'task': task.name,
+        'score': student_task_score,
+    }, 200
 
 
 @bp.post('/sync_task_columns')
 @requires_token
 def sync_task_columns():
-    pass
+    course: Course = current_app.course
+
+    # ----- get and validate request parameters ----- #
+    try:
+        course.store_deadlines(request.get_json(force=True, silent=False))
+    except Exception as e:
+        logger.exception(e)
+        return 'Invalid deadlines', 400
+
+    # ----- logic ----- #
+    # sync columns
+    tasks_started = course.deadlines.tasks_started
+    max_score_started = course.deadlines.max_score_started
+    course.rating_table.sync_columns(tasks_started, max_score_started)
+
+    # update cache with new values
+    # course.rating_table.update_cached_scores()
+
+    return '', 200
 
 
 @bp.post('/update_cached_scores')
 @requires_token
 def update_cached_scores():
-    pass
+    course: Course = current_app.course
+
+    # ----- logic ----- #
+    course.rating_table.update_cached_scores()
+
+    return '', 200
 
 
 @bp.post('/report_source')
 @requires_token
 def report_source():
-    # get and validate request parameters
+    course: Course = current_app.course
+
+    # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
         return 'You didn\'t provide required attribute `task`', 400
     task_name = request.form['task']
@@ -110,7 +239,7 @@ def report_source():
         return 'You didn\'t provide required attribute `files`', 400
     files = request.files.getlist('files')
 
-    # logic
+    # ----- logic ----- #
     for file in files:
         print('file', file)
         # file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
@@ -121,12 +250,14 @@ def report_source():
 @bp.get('/solutions')
 @requires_token
 def get_solutions():
-    # get and validate request parameters
+    course: Course = current_app.course
+
+    # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
         return 'You didn\'t provide required attribute `task`', 400
     task_name = request.form['task']
 
-    # logic
+    # ----- logic ----- #
 
     pass
 

@@ -1,8 +1,10 @@
 import logging
-from typing import List
+from typing import List, Any
 from collections import namedtuple
+import random
 
 import yaml
+from cachelib import BaseCache
 
 from . import course
 
@@ -11,29 +13,50 @@ logger = logging.getLogger(__name__)
 
 
 class DeadlinesAPI:
-    def __init__(self, cache):
+    def __init__(self, cache: BaseCache):
         self._file_path = '.deadlines.yml'
         self._cache = cache
 
-    def store(self, content):
+    def store(self, content: list[dict]) -> None:
         logger.info('Store deadlines...')
         Deadlines(content)  # For validation purposes
         self._cache.set('__deadlines__', content)
 
-    def fetch(self):
+    def fetch(self) -> 'Deadlines':
         logger.info('Fetching deadlines...')
         deadlines = self._cache.get('__deadlines__')
         return Deadlines(deadlines)
+
+    def fetch_debug(self) -> 'Deadlines':
+        logger.info('Fetching debug deadlines...')
+        deadlines = [
+            {
+                'group': f'group_{i}',
+                'start': '01-01-2010 00:00',
+                'deadline': '01-01-2010 00:01',
+                'second_deadline': '01-01-2010 00:02' if random.random() > 0.5 else '01-01-2010 00:01',
+                'hw': i == 2,
+                'tasks': [
+                    {
+                        'task': f'task_{i}_{j}',
+                        'score': random.randint(1, 12) * 10,
+                    }
+                    for j in range(random.randint(1, 7))
+                ],
+            }
+            for i in range(10)
+        ]
+        return Deadlines(reversed(deadlines))
 
 
 class Deadlines:
     Task = namedtuple('Task', ('name', 'group'))
 
-    def __init__(self, config):
+    def __init__(self, config: list[dict]):
         self.groups = self._parse_groups(config)
 
     @staticmethod
-    def _parse_groups(config) -> List[course.Group]:
+    def _parse_groups(config: list[dict]) -> List[course.Group]:
         task_names = []
         groups = []
         if config is None:
@@ -57,7 +80,7 @@ class Deadlines:
         return groups
 
     @staticmethod
-    def _parse_tasks(config) -> List[course.Task]:
+    def _parse_tasks(config: dict[str, Any]) -> List[course.Task]:
         tasks_config = config.get('tasks', [])
         return [
             course.Task(

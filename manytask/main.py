@@ -42,6 +42,7 @@ def create_app() -> Flask:
         admin_token=os.environ['GITLAB_ADMIN_TOKEN'],
         course_public_repo=os.environ['GITLAB_COURSE_PUBLIC_REPO'],
         course_students_group=os.environ['GITLAB_COURSE_STUDENTS_GROUP'],
+        course_admins_group=os.environ['GITLAB_COURSE_ADMINS_GROUP'],
         oauth_client_id=os.environ['GITLAB_CLIENT_ID'],
         oauth_client_secret=os.environ['GITLAB_CLIENT_SECRET'],
     )
@@ -63,7 +64,9 @@ def create_app() -> Flask:
     tg_invite_link = os.environ.get('TELEGRAM_INVITE_LINK', None)
 
     # create course
-    _course = course.Course(deadlines_api, gdoc_api, gitlab_api, registration_secret, lms_url, tg_invite_link)
+    _course = course.Course(
+        deadlines_api, gdoc_api, gitlab_api, registration_secret, lms_url, tg_invite_link, debug=app.debug,
+    )
     app.course = _course
 
     # routes

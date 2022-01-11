@@ -9,10 +9,10 @@ gspread==5.1.1
 oauth2client==4.1.3  # for gspread google oauth2 login
 
 # gitlab
-python-gitlab==2.10.1
+python-gitlab==3.0.0
 authlib==0.15.5  # gitlab oauth2 login
 
 # utils
 python-dotenv==0.19.2
 PyYAML==6.0
-requests==2.27.0
+requests==2.27.1

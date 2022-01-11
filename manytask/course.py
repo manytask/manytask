@@ -86,7 +86,9 @@ class Course:
             gitlab_api: 'glab.GitLabApi',
             registration_secret: str,
             lms_url: str,
-            tg_invite_link: str
+            tg_invite_link: str,
+            *,
+            debug: bool = False,
     ):
         self.deadlines_api = deadlines_api
         self.googledoc_api = googledoc_api
@@ -94,6 +96,8 @@ class Course:
         self.registration_secret = registration_secret
         self.lms_url = lms_url
         self.tg_invite_link = tg_invite_link
+
+        self.debug = debug
 
     @property
     def favicon(self) -> str:
@@ -105,7 +109,10 @@ class Course:
 
     @property
     def deadlines(self) -> 'deadlines.Deadlines':
-        return self.deadlines_api.fetch()
+        if self.debug:
+            return self.deadlines_api.fetch_debug()
+        else:
+            return self.deadlines_api.fetch()
 
     def store_deadlines(self, content):
         self.deadlines_api.store(content)

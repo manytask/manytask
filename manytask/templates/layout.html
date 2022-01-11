@@ -22,13 +22,15 @@
           [ {{ username }} ] #
       </div>
         {% for href, id, caption in navbar %}
-        <li>
-          <a href="{{ href }}"
-             class="{{ 'current' if id == active_page else '' }}">
-            {{ caption }}
-          </a>
-        </li>
-        {% if not loop.last %}<li>|</li>{% endif %}
+            {% if href is not none and href|length > 0 %}
+                <li>
+                  <a href="{{ href }}"
+                     class="{{ 'current' if id == active_page else '' }}">
+                    {{ caption }}
+                  </a>
+                </li>
+                {% if not loop.last %}<li>|</li>{% endif %}
+            {% endif %}
         {% endfor %}
       </ul>
     </nav>

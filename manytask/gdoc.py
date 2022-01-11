@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import random
 import re
 import logging
 from itertools import islice
-from typing import Callable, List, Optional, Dict
+from typing import Callable, Optional
 
 import gspread
 from gspread import Cell as GCell
@@ -18,6 +19,7 @@ from .deadlines import Deadlines
 logger = logging.getLogger(__name__)
 
 
+# all start with 1
 HEADER_ROW = 2
 GITLAB_COLUMN = 1
 LOGIN_COLUMN = 2
@@ -26,7 +28,7 @@ FLAGS_COLUMN = 4
 BONUS_COLUMN = 5
 TOTAL_COLUMN = 6
 PERCENTAGE_COLUMN = 7
-RATINGS_COLUMN = 14
+TASK_SCORES_START_COLUMN = 14
 
 
 class LoginNotFound(KeyError):
@@ -81,17 +83,24 @@ class RatingTable:
         self._cache = cache
         self.ws = worksheet
 
-    def get_scores(self, username: int) -> Dict[str, int]:
+    def get_scores(self, username: int) -> dict[str, int]:
         scores = self._cache.get(f'{self.ws.id}:{username}')
         if scores is None:
             scores = {}
+        return scores
+
+    def get_scores_debug(self, tasks: list) -> dict[str, int]:
+        scores = {
+            task.name: int(task.score * random.random())
+            for task in tasks
+        }
         return scores
 
     def update_cached_scores(self) -> None:
         list_of_dicts = self.ws.get_all_records(head=HEADER_ROW, default_blank='')
         cache = {
             f'{self.ws.id}:{scores_dict["login"]}': {k: int(v) for i, (k, v) in enumerate(scores_dict.items())
-                                                     if i >= RATINGS_COLUMN-1 and isinstance(v, int)}
+                                                     if i >= TASK_SCORES_START_COLUMN - 1 and isinstance(v, int)}
             for scores_dict in list_of_dicts
         }
         self._cache.clear()  # TODO: enable or disable complete cache clear
@@ -118,7 +127,7 @@ class RatingTable:
         self.ws.update_cells([repo_link_cell, score_cell], value_input_option=ValueInputOption.user_entered)
 
         tasks = self._list_tasks(with_index=False)
-        scores = self._get_row_values(student_row, start=RATINGS_COLUMN - 1, with_index=False)
+        scores = self._get_row_values(student_row, start=TASK_SCORES_START_COLUMN - 1, with_index=False)
         student_scores = {
             task: score for task, score in zip(tasks, scores) if score or str(score) == '0'
         }
@@ -127,14 +136,14 @@ class RatingTable:
         self._cache.set(f'{self.ws.id}:{student.username}', student_scores)
         return new_score
 
-    def sync_columns(self, tasks: List[Deadlines.Task], max_score: Optional[int] = None) -> None:
+    def sync_columns(self, tasks: list[Deadlines.Task], max_score: Optional[int] = None) -> None:
         # TODO: groups
         existing_tasks = list(self._list_tasks(with_index=False))
         existing_task_names = set(task for task in existing_tasks if task)
         tasks_to_create = [task for task in tasks if task.name not in existing_task_names]
 
         if tasks_to_create:
-            current_worksheet_size = RATINGS_COLUMN + len(existing_tasks) - 1
+            current_worksheet_size = TASK_SCORES_START_COLUMN + len(existing_tasks) - 1
             required_worksheet_size = current_worksheet_size + len(tasks_to_create)
 
             self.ws.resize(cols=required_worksheet_size)
@@ -169,7 +178,7 @@ class RatingTable:
         return values
 
     def _list_tasks(self, with_index: bool = False):
-        return self._get_row_values(HEADER_ROW, start=RATINGS_COLUMN - 1, with_index=with_index)
+        return self._get_row_values(HEADER_ROW, start=TASK_SCORES_START_COLUMN - 1, with_index=with_index)
 
     def _find_task_column(self, task: str) -> int:
         logger.info(f'Looking for task "{task}"...')
@@ -203,7 +212,7 @@ class RatingTable:
                 None,  # flags
                 None,  # bonus
                 # total: sum(current row: from RATINGS_COLUMN to inf) + BONUS_COLUMN
-                f'=SUM(INDIRECT(ADDRESS(ROW(); {RATINGS_COLUMN}) & ":" & ROW())) '
+                f'=SUM(INDIRECT(ADDRESS(ROW(); {TASK_SCORES_START_COLUMN}) & ":" & ROW())) '
                 f'+ INDIRECT(ADDRESS(ROW(); {BONUS_COLUMN}))',
                 # percentage: TOTAL_COLUMN / max_score cell (1st row of TOTAL_COLUMN)
                 f'=INDIRECT(ADDRESS(ROW(); {TOTAL_COLUMN})) '

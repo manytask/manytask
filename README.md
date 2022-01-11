@@ -3,32 +3,14 @@
 Small application for manage course: set students' scores and so on
 
 
-## Start a new course 
-
-### Pre-setup
-
-1. Create gitlab oauth credentials here: [gitlab.manytask.org/admin/applications/](https://gitlab.manytask.org/admin/applications/) 
-
-2. Get gitlab admin token (to create users and repos)
-
-3. Create google sheets (public and private)  
-   and create new google account for course and get console credentials (to interact with google sheets api) 
-
-4. Create repos (public and private) 
-   and group for students' repos  
-   and create service account 
-
-6. Generate tester token, flask secret key and registration secret 
-
-
-### Setup
+## Setup
 
 Clone repo
 ```shell
 git clone https://github.com/yandexdataschool/manytask
 ```
 
-Create `.env` file with production environment
+Create `.env` file with dev/production environment
 ```shell
 cp .env.example .env
 ```

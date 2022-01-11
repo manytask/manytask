@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from urllib.parse import urlencode
 import logging
 from typing import Optional, Mapping, List, Dict
@@ -10,35 +11,30 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class User:
-    def __init__(
-            self,
-            username: str,
-            firstname: str,
-            lastname: str,
-            email: str,
-            password: str,
-            telegram: str,
-            lms_id: str
-    ):
-        self.username = username
-        self.firstname = firstname
-        self.lastname = lastname
-        self.email = email
-        self.password = password
-        self.telegram = telegram
-        self.lms_id = lms_id
+    username: str
+    firstname: str
+    lastname: str
+    email: str
+    password: str
+    telegram: str
+    lms_id: str
 
     def __repr__(self) -> str:
         return f'User(username={self.username})'
 
 
+@dataclass
 class Student:
-    def __init__(self, user_id: int, username: str, name: str, repo: Optional[str] = None):
-        self.id = user_id
-        self.username = username
-        self.name = name
-        self.repo = repo
+    id: int
+    username: str
+    name: str
+    course_admin: bool = False
+    repo: Optional[str] = field(default=None)
+
+    def __repr__(self) -> str:
+        return f'Student(username={self.username})'
 
 
 class GitLabApiException(Exception):
@@ -52,21 +48,29 @@ class GitLabApi:
             admin_token: str,
             course_public_repo: str,
             course_students_group: str,
+            course_admins_group: str,
             oauth_client_id: str,
             oauth_client_secret: str,
+            *,
+            dry_run: bool = False,
     ):
         """
         :param base_url:
         :param admin_token:
         :param course_public_repo:
         :param course_students_group:
+        :param course_admins_group:
         :param oauth_client_id:
         :param oauth_client_secret:
         """
+        self.dry_run = dry_run
+
         self._url = base_url
-        self._gitlab = gitlab.Gitlab(self._url, admin_token)
+        self._gitlab = gitlab.Gitlab(self._url, private_token=admin_token)
+
         self._course_public_repo = course_public_repo
         self._course_group = course_students_group
+        self._admins_group = course_admins_group
         self._oauth_client_id = oauth_client_id
         self._oauth_client_secret = oauth_client_secret
 
@@ -140,10 +144,10 @@ class GitLabApi:
 
     def _parse_user_to_student(self, user: Dict) -> Student:
         return Student(
-            user['id'],
-            user['username'],
-            user['name'],
-            self.get_url_for_repo(user['username'])
+            id=user['id'],
+            username=user['username'],
+            name=user['name'],
+            repo=self.get_url_for_repo(user['username'])
         )
 
     def get_students_by_username(self, username: str) -> List[Student]:
@@ -156,7 +160,7 @@ class GitLabApi:
         logger.info(f'User found: "{user.username}"')
         return self._parse_user_to_student(user._attrs)
 
-    def get_authenticated_student(self, oauth_token) -> Student:
+    def get_authenticated_student(self, oauth_token: str) -> Student:
         headers = {'Authorization': 'Bearer ' + oauth_token}
         response = requests.get(f'{self._url}/api/v4/user', headers=headers)
         response.raise_for_status()
@@ -192,8 +196,8 @@ class GitLabApi:
 
 def map_gitlab_user_to_student(gitlab_response: gitlab.v4.objects.User) -> Student:
     return Student(
-        user_id=gitlab_response.id,
+        id=gitlab_response.id,
         username=gitlab_response.username,
         name=gitlab_response.name,
-        repo=gitlab_response.web_url
+        repo=gitlab_response.web_url,
     )
