@@ -1,6 +1,9 @@
 import logging
 import secrets
 
+import requests
+from authlib.integrations.base_client import OAuthError
+from authlib.integrations.flask_client import OAuth
 from flask import session, redirect, request, render_template, current_app, url_for, Blueprint
 import gitlab
 
@@ -116,21 +119,18 @@ def signup():
 @bp.route('/login', methods=['GET'])
 def login():
     """Only way to login - gitlab oauth"""
-    course: Course = current_app.course
+    oauth: OAuth = current_app.oauth
 
     redirect_uri = url_for('web.login_finish', _external=True)
-    state = secrets.token_urlsafe(32)
 
-    session['state'] = state
-    return redirect(
-        course.gitlab_api.get_authorization_url(redirect_uri, state)
-    )
+    return oauth.gitlab.authorize_redirect(redirect_uri)
 
 
 @bp.route('/login_finish')
 def login_finish():
     """Callback for gitlab oauth"""
     course: Course = current_app.course
+    oauth: OAuth = current_app.oauth
 
     # ----- get args ----- #
     is_create_project = True
@@ -139,21 +139,19 @@ def login_finish():
     if 'not_create_project' in request.args:
         is_create_project = False
 
-    request_state = request.args['state']
-
-    code = request.args['code']
-
-    # ----- Oauth login finish ----- #
-    # Check state we sent earlier to prevent CSRF attack
-    state = session.pop('state', None)
-    if state is None or request_state != state:
+    # ----- oauth authorize ----- #
+    try:
+        gitlab_oauth_token = oauth.gitlab.authorize_access_token()
+    except OAuthError:
         return redirect(url_for('web.login'))
 
+    gitlab_access_token: str = gitlab_oauth_token['access_token']
+    gitlab_refresh_token: str = gitlab_oauth_token['refresh_token']
+    gitlab_openid_user = oauth.gitlab.parse_id_token(gitlab_oauth_token, claims_options={'iss': {'essential': False}})
+
     # get oauth student
-    redirect_uri = url_for('web.login_finish', _external=True)
     # TODO do not return 502 (raise_for_status below)
-    gitlab_token = course.gitlab_api.get_oauth_token(redirect_uri, code)
-    student = course.gitlab_api.get_authenticated_student(gitlab_token)
+    student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
 
     # Create use if needed
     if is_create_project and not current_app.debug:
@@ -169,7 +167,8 @@ def login_finish():
 
     # save user in session
     session['gitlab'] = {
-        'oauth_token': gitlab_token,
+        'oauth_access_token': gitlab_access_token,
+        'oauth_refresh_token': gitlab_refresh_token,
         'username': student.username,
         'course_admin': student.course_admin,
         'repo': student.repo,

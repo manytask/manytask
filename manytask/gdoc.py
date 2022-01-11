@@ -9,7 +9,7 @@ from typing import Callable
 import gspread
 from gspread import Cell as GCell
 from gspread.utils import a1_to_rowcol, ValueInputOption, ValueRenderOption
-from oauth2client.service_account import ServiceAccountCredentials
+from authlib.integrations.requests_client import AssertionSession
 from cachelib import BaseCache
 
 from .glab import User, Student
@@ -43,7 +43,7 @@ class GoogleDocAPI:
     def __init__(
             self,
             base_url: str,
-            gdoc_account: str | None,
+            gdoc_account: dict | None,
             public_worksheet_id: str,
             public_scoreboard_sheet: int,
             private_worksheet_id: str,
@@ -53,29 +53,54 @@ class GoogleDocAPI:
     ):
         self._url = base_url
         self._gdoc_account = gdoc_account
-        self._worksheet_id = public_worksheet_id
-        self._sheet_id = public_scoreboard_sheet
-        self._rating_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
+        self._public_worksheet_id = public_worksheet_id
+        self._public_scoreboard_sheet = public_scoreboard_sheet
+        self._private_worksheet_id = private_worksheet_id
+        self._private_accounts_sheet = private_accounts_sheet
+        self._private_review_sheet = private_review_sheet
+
+        self._assertion_session = self._create_assertion_session()
+
+        self._public_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
         self._private_sheet = self._get_sheet(private_worksheet_id, private_accounts_sheet)
         self._cache = cache
 
+    def _create_assertion_session(self) -> AssertionSession:
+        """Create AssertionSession to auto refresh access to google api"""
+        scopes = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        credentials = self._gdoc_account
+
+        header = {'alg': 'RS256'}
+        if key_id := credentials.get('private_key_id'):
+            header['kid'] = key_id
+
+        # Google puts scope in payload
+        claims = {'scope': ' '.join(scopes)}
+        return AssertionSession(
+            token_endpoint=credentials['token_uri'],
+            issuer=credentials['client_email'],
+            subject=None,
+            audience=credentials['token_uri'],
+            grant_type=AssertionSession.JWT_BEARER_GRANT_TYPE,
+            scope=' '.join(scopes),
+            claims=claims,
+            key=credentials['private_key'],
+            header=header,
+        )
+
     def _get_sheet(self, worksheet_id: str, sheet_id: int) -> gspread.Worksheet:
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        credentials = ServiceAccountCredentials.from_json_keyfile_dict(self._gdoc_account, scope)
-        gs: gspread.Client = gspread.authorize(credentials)
+        gs: gspread.Client = gspread.Client(None, session=self._assertion_session)
         worksheet: gspread.Spreadsheet = gs.open_by_key(worksheet_id)
         return worksheet.get_worksheet(sheet_id)
 
     def fetch_rating_table(self) -> 'RatingTable':
-        self._rating_sheet.client.login()  # force re-login if token expired
-        return RatingTable(self._rating_sheet, self._cache)
+        return RatingTable(self._public_sheet, self._cache)
 
     def fetch_private_data_table(self) -> 'PrivateDataTable':
-        self._private_sheet.client.login()  # force re-login if token expired
         return PrivateDataTable(self._private_sheet)
 
     def get_spreadsheet_url(self) -> str:
-        return f'{self._url}/spreadsheets/d/{self._worksheet_id}#gid={self._sheet_id}'
+        return f'{self._url}/spreadsheets/d/{self._public_worksheet_id}#gid={self._public_scoreboard_sheet}'
 
 
 class RatingTable:
@@ -91,7 +116,7 @@ class RatingTable:
 
     def get_scores_debug(self, tasks: list) -> dict[str, int]:
         scores = {
-            task.name: int(task.score * random.random())
+            task.name: int(task.score * r) if (r := random.random()) > 0.5 else task.score
             for task in tasks
         }
         return scores

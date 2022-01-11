@@ -4,15 +4,12 @@ flask==2.0.2
 cachelib==0.5.0
 Werkzeug==2.0.2
 
-# gsheets
+# api interaction (gitlab, google sheets)
 gspread==5.1.1
-oauth2client==4.1.3  # for gspread google oauth2 login
-
-# gitlab
 python-gitlab==3.0.0
-authlib==0.15.5  # gitlab oauth2 login
 
 # utils
+authlib==0.15.5  # 'gitlab oauth2' and 'gspread login'
 python-dotenv==0.19.2
 PyYAML==6.0
 requests==2.27.1

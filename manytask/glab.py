@@ -50,8 +50,6 @@ class GitLabApi:
             course_public_repo: str,
             course_students_group: str,
             course_admins_group: str,
-            oauth_client_id: str,
-            oauth_client_secret: str,
             *,
             dry_run: bool = False,
     ):
@@ -61,8 +59,6 @@ class GitLabApi:
         :param course_public_repo:
         :param course_students_group:
         :param course_admins_group:
-        :param oauth_client_id:
-        :param oauth_client_secret:
         """
         self.dry_run = dry_run
 
@@ -72,8 +68,6 @@ class GitLabApi:
         self._course_public_repo = course_public_repo
         self._course_group = course_students_group
         self._admins_group = course_admins_group
-        self._oauth_client_id = oauth_client_id
-        self._oauth_client_secret = oauth_client_secret
 
     def register_new_user(self, user: User) -> gitlab.v4.objects.User:
         """
@@ -166,27 +160,6 @@ class GitLabApi:
         response = requests.get(f'{self._url}/api/v4/user', headers=headers)
         response.raise_for_status()
         return self._parse_user_to_student(response.json())
-
-    def get_oauth_token(self, redirect_url: str, code: str) -> str:
-        url = '{}/oauth/token'.format(self._url)
-        data = {
-            'client_id': self._oauth_client_id,
-            'client_secret': self._oauth_client_secret,
-            'redirect_uri': redirect_url,
-            'grant_type': 'authorization_code',
-            'code': code
-        }
-        response = requests.post(url, data=data)
-        response.raise_for_status()
-        return response.json()['access_token']
-
-    def get_authorization_url(self, redirect_url: str, oauth_state) -> str:
-        return '{}/oauth/authorize?{}'.format(self._url, urlencode({
-            'client_id': self._oauth_client_id,
-            'redirect_uri': redirect_url,
-            'response_type': 'code',
-            'state': oauth_state,
-        }))
 
     def get_url_for_task_base(self) -> str:
         return f'{self._url}/{self._course_public_repo}/blob/master'

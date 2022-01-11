@@ -7,6 +7,7 @@ import secrets
 from flask import Flask
 from dotenv import load_dotenv
 from cachelib import FileSystemCache
+from authlib.integrations.flask_client import OAuth
 
 from . import gdoc, glab, deadlines, course
 
@@ -21,6 +22,21 @@ def create_app() -> Flask:
     # app.debug = app.env == 'development'
     app.testing = os.environ.get('TESTING', False)
     app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex())
+
+    # oauth
+    oauth = OAuth(app)
+    _gitlab_base_url = os.environ['GITLAB_URL']
+    oauth.register(
+        name='gitlab',
+        client_id=os.environ['GITLAB_CLIENT_ID'],
+        client_secret=os.environ['GITLAB_CLIENT_SECRET'],
+        authorize_url=f'{_gitlab_base_url}/oauth/authorize',
+        access_token_url=f'{_gitlab_base_url}/oauth/token',
+        userinfo_endpoint=f'{_gitlab_base_url}/oauth/userinfo',
+        jwks_uri=f'{_gitlab_base_url}/oauth/discovery/keys',
+        client_kwargs={'scope': 'openid email profile read_user', 'code_challenge_method': 'S256'},
+    )
+    app.oauth = oauth
 
     # logging
     if not app.debug:
@@ -43,8 +59,6 @@ def create_app() -> Flask:
         course_public_repo=os.environ['GITLAB_COURSE_PUBLIC_REPO'],
         course_students_group=os.environ['GITLAB_COURSE_STUDENTS_GROUP'],
         course_admins_group=os.environ['GITLAB_COURSE_ADMINS_GROUP'],
-        oauth_client_id=os.environ['GITLAB_CLIENT_ID'],
-        oauth_client_secret=os.environ['GITLAB_CLIENT_SECRET'],
     )
     gdoc_api = gdoc.GoogleDocAPI(
         base_url=os.environ['GDOC_URL'],

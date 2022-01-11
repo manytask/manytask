@@ -53,7 +53,7 @@ One-time actions necessary for the functioning of the entire system
    or use existing account: `ysda.service.manytask@gmail.com` or `manytask` (credentials: @k4black)
 
 
-3. Create test gitlab oauth credentials in [gitlab admin area -> applications](https://gitlab.manytask.org/admin/applications/)  
+3. Create test gitlab oauth credentials in [gitlab admin area -> applications](https://gitlab.manytask.org/admin/applications/) with `api`, `sudo`, `profile` and `openid`  
    Or copy existed one (known by any gitlab admin: @k4black, @slon, @vadim_mazaev, etc.)
 
 ---
