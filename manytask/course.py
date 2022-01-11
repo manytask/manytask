@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
 from zoneinfo import ZoneInfo
 
 
@@ -18,7 +19,7 @@ def get_current_time() -> datetime:
     return datetime.now(tz=MOSCOW_TIMEZONE)
 
 
-def validate_commit_time(commit_time: Optional[datetime], current_time: datetime) -> datetime:
+def validate_commit_time(commit_time: datetime | None, current_time: datetime) -> datetime:
     """Check if commit_time 'to far' from current_time, use current_time, else use commit_time"""
     if not commit_time:
         return current_time
@@ -48,18 +49,18 @@ class Task:
     def is_started(self) -> bool:
         return datetime.now(tz=MOSCOW_TIMEZONE) > self.start
 
-    def is_overdue(self, extra_time: timedelta = timedelta(), submit_time: Optional[datetime] = None) -> bool:
+    def is_overdue(self, extra_time: timedelta = timedelta(), submit_time: datetime | None = None) -> bool:
         submit_time = submit_time or get_current_time()
         return submit_time - extra_time > self.deadline
 
-    def is_overdue_second(self, extra_time: timedelta = timedelta(), submit_time: Optional[datetime] = None) -> bool:
+    def is_overdue_second(self, extra_time: timedelta = timedelta(), submit_time: datetime | None = None) -> bool:
         submit_time = submit_time or get_current_time()
         return submit_time - extra_time > self.second_deadline
 
 
 class Group:
     def __init__(
-            self, name: str, start: str, deadline: str, second_deadline: str, tasks: List[Task], hw: bool = False
+            self, name: str, start: str, deadline: str, second_deadline: str, tasks: list[Task], hw: bool = False
     ):
         self.name = name
         self.start = parse_time(start)

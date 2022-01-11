@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from urllib.parse import urlencode
 import logging
-from typing import Optional, Mapping, List, Dict
 
 import gitlab
 import gitlab.v4.objects
@@ -31,7 +32,7 @@ class Student:
     username: str
     name: str
     course_admin: bool = False
-    repo: Optional[str] = field(default=None)
+    repo: str | None = field(default=None)
 
     def __repr__(self) -> str:
         return f'Student(username={self.username})'
@@ -142,7 +143,7 @@ class GitLabApi:
         except gitlab.GitlabCreateError as ex:
             logger.info(f'Access already granted for {student.username}')
 
-    def _parse_user_to_student(self, user: Dict) -> Student:
+    def _parse_user_to_student(self, user: dict) -> Student:
         return Student(
             id=user['id'],
             username=user['username'],
@@ -150,7 +151,7 @@ class GitLabApi:
             repo=self.get_url_for_repo(user['username'])
         )
 
-    def get_students_by_username(self, username: str) -> List[Student]:
+    def get_students_by_username(self, username: str) -> list[Student]:
         users = self._gitlab.users.list(username=username)
         return [self._parse_user_to_student(user._attrs) for user in users]
 

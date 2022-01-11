@@ -4,7 +4,7 @@ import random
 import re
 import logging
 from itertools import islice
-from typing import Callable, Optional
+from typing import Callable
 
 import gspread
 from gspread import Cell as GCell
@@ -136,7 +136,7 @@ class RatingTable:
         self._cache.set(f'{self.ws.id}:{student.username}', student_scores)
         return new_score
 
-    def sync_columns(self, tasks: list[Deadlines.Task], max_score: Optional[int] = None) -> None:
+    def sync_columns(self, tasks: list[Deadlines.Task], max_score: int | None = None) -> None:
         # TODO: groups
         existing_tasks = list(self._list_tasks(with_index=False))
         existing_task_names = set(task for task in existing_tasks if task)

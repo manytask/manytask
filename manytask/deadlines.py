@@ -1,5 +1,5 @@
 import logging
-from typing import List, Any
+from typing import Any
 from collections import namedtuple
 import random
 
@@ -56,7 +56,7 @@ class Deadlines:
         self.groups = self._parse_groups(config)
 
     @staticmethod
-    def _parse_groups(config: list[dict]) -> List[course.Group]:
+    def _parse_groups(config: list[dict]) -> list[course.Group]:
         task_names = []
         groups = []
         if config is None:
@@ -80,7 +80,7 @@ class Deadlines:
         return groups
 
     @staticmethod
-    def _parse_tasks(config: dict[str, Any]) -> List[course.Task]:
+    def _parse_tasks(config: dict[str, Any]) -> list[course.Task]:
         tasks_config = config.get('tasks', [])
         return [
             course.Task(
@@ -107,18 +107,18 @@ class Deadlines:
         raise KeyError(f'Task "{name}" not found')
 
     @property
-    def open_groups(self) -> List[course.Group]:
+    def open_groups(self) -> list[course.Group]:
         return [group for group in self.groups if group.is_open]
 
     @property
-    def tasks(self) -> List[Task]:
+    def tasks(self) -> list[Task]:
         return [
             self.Task(task.name, group.name) for group in reversed(self.groups)
             for task in group.tasks
         ]
 
     @property
-    def tasks_started(self) -> List[Task]:
+    def tasks_started(self) -> list[Task]:
         return [
             self.Task(task.name, group.name) for group in reversed(self.groups)
             for task in group.tasks if task.is_started()

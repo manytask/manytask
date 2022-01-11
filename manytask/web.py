@@ -1,13 +1,12 @@
 import logging
 import secrets
-import uuid
 
 from flask import session, redirect, request, render_template, current_app, url_for, Blueprint
 import gitlab
 
 from . import glab
 from .course import Course, Task
-from .glab import map_gitlab_user_to_student
+
 
 SESSION_VERSION = 1.5
 
