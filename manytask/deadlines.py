@@ -1,13 +1,12 @@
 import logging
-from typing import Any
-from collections import namedtuple
 import random
+from collections import namedtuple
+from typing import Any
 
 import yaml
 from cachelib import BaseCache
 
 from . import course
-
 
 logger = logging.getLogger(__name__)
 

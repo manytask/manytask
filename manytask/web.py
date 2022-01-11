@@ -1,15 +1,14 @@
 import logging
 import secrets
 
-import requests
+import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import session, redirect, request, render_template, current_app, url_for, Blueprint
-import gitlab
+from flask import (Blueprint, current_app, redirect, render_template, request,
+                   session, url_for)
 
 from . import glab
 from .course import Course, Task
-
 
 SESSION_VERSION = 1.5
 

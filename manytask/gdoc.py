@@ -1,20 +1,19 @@
 from __future__ import annotations
 
+import logging
 import random
 import re
-import logging
 from itertools import islice
 from typing import Callable
 
 import gspread
-from gspread import Cell as GCell
-from gspread.utils import a1_to_rowcol, ValueInputOption, ValueRenderOption
 from authlib.integrations.requests_client import AssertionSession
 from cachelib import BaseCache
+from gspread import Cell as GCell
+from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol
 
-from .glab import User, Student
 from .deadlines import Deadlines
-
+from .glab import Student, User
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ class GoogleDocAPI:
     def __init__(
             self,
             base_url: str,
-            gdoc_account: dict | None,
+            gdoc_credentials: dict | None,
             public_worksheet_id: str,
             public_scoreboard_sheet: int,
             private_worksheet_id: str,
@@ -52,7 +51,7 @@ class GoogleDocAPI:
             cache: BaseCache,
     ):
         self._url = base_url
-        self._gdoc_account = gdoc_account
+        self._gdoc_credentials = gdoc_credentials
         self._public_worksheet_id = public_worksheet_id
         self._public_scoreboard_sheet = public_scoreboard_sheet
         self._private_worksheet_id = private_worksheet_id
@@ -68,7 +67,7 @@ class GoogleDocAPI:
     def _create_assertion_session(self) -> AssertionSession:
         """Create AssertionSession to auto refresh access to google api"""
         scopes = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        credentials = self._gdoc_account
+        credentials = self._gdoc_credentials
 
         header = {'alg': 'RS256'}
         if key_id := credentials.get('private_key_id'):

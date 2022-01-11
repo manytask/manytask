@@ -4,23 +4,23 @@ import logging
 import os
 import secrets
 
-from flask import Flask
-from dotenv import load_dotenv
-from cachelib import FileSystemCache
 from authlib.integrations.flask_client import OAuth
+from cachelib import FileSystemCache
+from dotenv import load_dotenv
+from flask import Flask
 
-from . import gdoc, glab, deadlines, course
+from . import course, deadlines, gdoc, glab
+
+load_dotenv('../.env')  # take environment variables from .env.
 
 
-def create_app() -> Flask:
-    load_dotenv('../.env')  # take environment variables from .env.
-
+def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     app = Flask(__name__)
 
     # configuration
     # app.env = os.environ.get('FLASK_ENV', 'development')
     # app.debug = app.env == 'development'
-    app.testing = os.environ.get('TESTING', False)
+    app.testing = os.environ.get('TESTING', test)
     app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex())
 
     # oauth
@@ -62,7 +62,7 @@ def create_app() -> Flask:
     )
     gdoc_api = gdoc.GoogleDocAPI(
         base_url=os.environ['GDOC_URL'],
-        gdoc_account=json.loads(base64.decodebytes(os.environ['GDOC_ACCOUNT'].encode())),
+        gdoc_credentials=json.loads(base64.decodebytes(os.environ['GDOC_ACCOUNT'].encode())),
         public_worksheet_id=os.environ['GDOC_SPREADSHEET_ID'],
         public_scoreboard_sheet=int(os.environ['GDOC_SCOREBOARD_SHEET']),
         private_worksheet_id=os.environ['GDOC_PRIVATE_SPREADSHEET_ID'],

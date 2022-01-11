@@ -6,9 +6,10 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
-from flask import request, abort, current_app, Blueprint
+from flask import Blueprint, abort, current_app, request
 
-from manytask.course import Course, Task, get_current_time, validate_commit_time
+from manytask.course import (Course, Task, get_current_time,
+                             validate_commit_time)
 
 logger = logging.getLogger(__name__)
 bp = Blueprint('api', __name__, url_prefix='/api')

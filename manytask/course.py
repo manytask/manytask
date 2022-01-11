@@ -4,7 +4,6 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-
 logger = logging.getLogger(__name__)
 MOSCOW_TIMEZONE = ZoneInfo('Europe/Moscow')
 CONFIDENCE_INTERVAL = timedelta(minutes=10)
@@ -76,7 +75,7 @@ class Group:
         return get_current_time() > self.start
 
 
-from . import gdoc, glab, deadlines
+from . import deadlines, gdoc, glab
 
 
 class Course:

@@ -1,0 +1,8 @@
+# linters
+flake8==4.0.1
+mypy==0.931
+isort==5.10.1
+
+# testing
+pytest==6.2.5
+pytest-cov==3.0.0
