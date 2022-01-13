@@ -15,6 +15,7 @@ from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol
 from .deadlines import Deadlines
 from .glab import Student, User
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -123,11 +124,13 @@ class RatingTable:
     def update_cached_scores(self) -> None:
         list_of_dicts = self.ws.get_all_records(head=HEADER_ROW, default_blank='')
         cache = {
-            f'{self.ws.id}:{scores_dict["login"]}': {k: int(v) for i, (k, v) in enumerate(scores_dict.items())
-                                                     if i >= TASK_SCORES_START_COLUMN - 1 and isinstance(v, int)}
+            f'{self.ws.id}:{scores_dict["login"]}': {
+                k: int(v) for i, (k, v) in enumerate(scores_dict.items())
+                if i >= TASK_SCORES_START_COLUMN - 1 and isinstance(v, int)
+            }
             for scores_dict in list_of_dicts
         }
-        self._cache.clear()  # TODO: enable or disable complete cache clear
+        self._cache.clear()
         self._cache.set_many(cache)
 
     def store_score(self, student: Student, task_name: str, update_fn: Callable) -> int:
@@ -172,10 +175,6 @@ class RatingTable:
 
             self.ws.resize(cols=required_worksheet_size)
 
-            # cells_to_update = [
-            #     GCell(HEADER_ROW, col, task_name)
-            #     for col, task_name in enumerate(tasks_to_create, start=current_worksheet_size + 1)
-            # ]
             cells_to_update = []
             current_group = None
             for col, task in enumerate(tasks_to_create, start=current_worksheet_size + 1):

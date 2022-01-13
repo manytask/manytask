@@ -42,7 +42,7 @@ class Config:
 
 class DebugConfig(Config):
     # general
-    course_name: str = 'test'
+    course_name: str = 'CourseName'
 
     # tokens
     registration_secret: str = 'registration_secret'

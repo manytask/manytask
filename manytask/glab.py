@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from urllib.parse import urlencode
 
 import gitlab
 import gitlab.v4.objects
 import requests
+
 
 logger = logging.getLogger(__name__)
 

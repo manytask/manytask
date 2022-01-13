@@ -11,6 +11,7 @@ from flask import Flask
 
 from . import course, deadlines, gdoc, glab
 
+
 load_dotenv('../.env')  # take environment variables from .env.
 
 
@@ -52,6 +53,7 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         threshold=0,
         default_timeout=0
     )
+
     # api objects
     gitlab_api = glab.GitLabApi(
         base_url=os.environ['GITLAB_URL'],
@@ -70,7 +72,9 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         private_review_sheet=int(os.environ['GDOC_PRIVATE_REVIEW_SHEET']),
         cache=cache,
     )
-    deadlines_api = deadlines.DeadlinesAPI(cache)
+    deadlines_api = deadlines.DeadlinesAPI(
+        cache=cache
+    )
 
     # get additional info
     registration_secret = os.environ['REGISTRATION_SECRET']
