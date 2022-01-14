@@ -65,3 +65,14 @@ jobs:
 #          flags: unittests # optional
 #          fail_ci_if_error: true # optional (default = false)
 #          verbose: true # optional (default = false)
+
+  build-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: {{defaultContext}}:docker
+          push: false
+          tags: manytask:test
