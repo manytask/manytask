@@ -7,7 +7,7 @@ on:
 
 
 jobs:
-  update-chengelog:
+  update-version-and-chengelog:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -16,16 +16,18 @@ jobs:
       - name: Check current version
         run: |
           echo "VERSION ${{ github.ref_name }}"
-      - name: Update changelog file
+          cat VERSION
+      - name: Update changelog and version file
         run: |
+          echo "VERSION"
           echo "CHANGELOG"
       - name: Commit updated files
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@users.noreply.github.com'
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git add CHANGELOG.md
-          git commit -m "Auto changelog update [${{ github.ref_name }}]"
+          git add VERSION CHANGELOG.md
+          git commit -m "Auto version and changelog update [${{ github.ref_name }}]"
           git push origin
       - name: Tag new commit
         run: |
@@ -33,7 +35,7 @@ jobs:
           git push origin ${{ github.ref_name }} --force
 
   update-release-github:
-    needs: update-chengelog
+    needs: update-version-and-chengelog
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -43,9 +45,11 @@ jobs:
         run: |
           echo "CHANGELOG"
           cat CHANGELOG.md
+          echo "VERSION"
+          cat VERSION
 
   release-docker:
-    needs: update-chengelog
+    needs: update-version-and-chengelog
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -73,7 +77,7 @@ jobs:
 
 
 #  release-github-pages:
-#    needs: update-chengelog
+#    needs: update-version-and-chengelog
 #    runs-on: ubuntu-latest
 #    steps:
 #      - uses: actions/checkout@v2
