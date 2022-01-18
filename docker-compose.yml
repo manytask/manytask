@@ -6,6 +6,8 @@ services:
         build:
             dockerfile: Dockerfile
             context: .
+        expose:
+            - "5000"
         container_name: manytask
         env_file: .env
         # volumes: (auto from docker container)

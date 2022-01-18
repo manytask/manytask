@@ -9,6 +9,8 @@ COPY ./manytask /app
 ENV CACHE_DIR=/cache SOLUTIONS_DIR=/cache
 VOLUME ["/cache", "/solutions"]
 
+EXPOSE 5000  # declarative only
+
 CMD gunicorn \
     --bind 0.0.0.0:5000 \
     --workers 4 \
