@@ -112,7 +112,7 @@ Originally was developed at gitlab as [shad-ts](https://gitlab.com/slon/shad-ts/
 ### Acknowledgment 
 
 * [Fedor Korotkiy](https://github.com/slon) - development of the very first version, 2017-2018
-* Belova Ilariia - updates for python course, 2018
+* [Belova Ilariia](https://github.com/jhilary) - updates for python course, 2018
 * [Vadim Mazaev](https://github.com/GreenRiverRUS) - updates for python course, 2019-2020
 * Nikita Bondartsev - minor updates for python course, 2020-2021
 * [Konstantin Chernyshev](https://github.com/k4black) - updates for python course, massive refactor and moving to github, 2020-2021
