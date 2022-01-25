@@ -31,7 +31,7 @@ Create new venv and install requirements
 ```shell
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -U -r requrements.txt
+python -m pip install -U -r requirements.txt
 ```
 Run it
 ```shell
