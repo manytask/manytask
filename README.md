@@ -51,7 +51,7 @@ docker run \
 
 #### Docker-compose (development)
 ```shell
-docker-compose -f docker-compose.ymp -f docker-compose.override.yml up --build
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up --build
 ```
 or just
 ```shell
@@ -75,7 +75,7 @@ docker run \
 
 #### Docker-compose (manytask with certs)
 ```shell
-docker-compose -f docker-compose.ymp -f docker-compose.production.yml up --build
+docker-compose -f docker-compose.yml -f docker-compose.production.yml up --build
 ```
 
 
