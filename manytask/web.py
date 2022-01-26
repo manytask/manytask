@@ -38,7 +38,7 @@ def course_page():
         student_course_admin = request.args.get('admin', None) is not None
     else:
         if not valid_session(session):
-            return redirect(url_for('course_page.signup'))
+            return redirect(url_for('web.signup'))
         student_username = session['gitlab']['username']
         student_repo = session['gitlab']['repo']
         student_course_admin = session['gitlab']['course_admin']

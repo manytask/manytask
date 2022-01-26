@@ -8,6 +8,7 @@ from authlib.integrations.flask_client import OAuth
 from cachelib import FileSystemCache
 from dotenv import load_dotenv
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import course, deadlines, gdoc, glab
 
@@ -89,6 +90,10 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         deadlines_api, gdoc_api, gitlab_api, registration_secret, lms_url, tg_invite_link, debug=app.debug,
     )
     app.course = _course
+
+    # for https support
+    _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
+    app.wsgi_app = _wsgi_app
 
     # routes
     from . import api, web
