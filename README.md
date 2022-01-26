@@ -35,19 +35,24 @@ python -m pip install -U -r requirements.txt
 ```
 Run it
 ```shell
-CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP=manytask.main:create_app python -m flask run --host=0.0.0.0 --port=5000 --reload --without-threads
+CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5000 --reload --without-threads
 ```
+
+So, now it's available at `192.168.1.54:8000`
 
 #### Docker (manytask only)
 ```shell
 docker build -t manytask .
 docker run \
-    --port "5000:5000" \
+    --publish "5000:5000" \
     --name manytask \
     --env-file .env \
-    --env FLASK_ENV=development \ 
+    --env FLASK_ENV=development \
     manytask
 ```
+
+So, now it's available at `localhost:5000` 
+
 
 #### Docker-compose (development)
 ```shell
@@ -57,6 +62,9 @@ or just
 ```shell
 docker-compose up --build
 ```
+
+So, now it's available at `localhost:5000` 
+
 
 ### Production 
 
