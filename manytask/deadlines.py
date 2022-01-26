@@ -1,6 +1,7 @@
 import logging
 import random
 from collections import namedtuple
+from datetime import datetime, timedelta
 from typing import Any
 
 import yaml
@@ -28,22 +29,24 @@ class DeadlinesAPI:
 
     def fetch_debug(self) -> 'Deadlines':
         logger.info('Fetching debug deadlines...')
+        total_groups = 11
+        _now = datetime.now()
         deadlines = [
             {
                 'group': f'group_{i}',
-                'start': '01-01-2010 00:00',
-                'deadline': '01-01-2010 00:01',
-                'second_deadline': '01-01-2010 00:02' if random.random() > 0.5 else '01-01-2010 00:01',
+                'start': (_now + timedelta(days=i-10)).strftime('%d-%m-%Y 18:00'),
+                'deadline': (_now + timedelta(days=i-5)).strftime('%d-%m-%Y 23:59'),
+                'second_deadline': (_now + timedelta(days=i-5+(i % 2))).strftime('%d-%m-%Y 23:59'),
                 'hw': i == 2,
                 'tasks': [
                     {
                         'task': f'task_{i}_{j}',
-                        'score': random.randint(1, 12) * 10,
+                        'score': (j+1)*10,
                     }
-                    for j in range(random.randint(1, 7))
+                    for j in range(total_groups-i)
                 ],
             }
-            for i in range(10)
+            for i in range(total_groups)
         ]
         return Deadlines(reversed(deadlines))
 

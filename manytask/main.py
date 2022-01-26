@@ -62,9 +62,12 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         course_students_group=os.environ['GITLAB_COURSE_STUDENTS_GROUP'],
         course_admins_group=os.environ['GITLAB_COURSE_ADMINS_GROUP'],
     )
+    _gdoc_credentials_string = base64.decodebytes(
+        os.environ['GDOC_ACCOUNT_CREDENTIALS_BASE64'].encode()
+    )
     gdoc_api = gdoc.GoogleDocAPI(
         base_url=os.environ['GDOC_URL'],
-        gdoc_credentials=json.loads(base64.decodebytes(os.environ['GDOC_ACCOUNT'].encode())),
+        gdoc_credentials=json.loads(_gdoc_credentials_string),
         public_worksheet_id=os.environ['GDOC_SPREADSHEET_ID'],
         public_scoreboard_sheet=int(os.environ['GDOC_SCOREBOARD_SHEET']),
         private_worksheet_id=os.environ['GDOC_PRIVATE_SPREADSHEET_ID'],

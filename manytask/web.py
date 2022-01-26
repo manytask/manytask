@@ -35,7 +35,7 @@ def course_page():
     if current_app.debug:
         student_username = 'guest'
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
-        student_course_admin = True
+        student_course_admin = request.args.get('admin', None) is not None
     else:
         if not valid_session(session):
             return redirect(url_for('course_page.signup'))
@@ -43,13 +43,10 @@ def course_page():
         student_repo = session['gitlab']['repo']
         student_course_admin = session['gitlab']['course_admin']
 
-    if current_app.debug:
-        tasks: list[Task] = []
-        for group in course.deadlines.open_groups:
-            tasks.extend(group.tasks)
-        tasks_scores = course.rating_table.get_scores_debug(tasks)
-    else:
-        tasks_scores = course.rating_table.get_scores(student_username)
+    rating_table = course.rating_table
+    if course.debug:
+        rating_table.update_cached_scores()
+    tasks_scores = rating_table.get_scores(student_username)
 
     return render_template(
         'tasks.html',

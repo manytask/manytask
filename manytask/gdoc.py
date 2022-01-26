@@ -71,7 +71,7 @@ class GoogleDocAPI:
         credentials = self._gdoc_credentials
 
         header = {'alg': 'RS256'}
-        if key_id := credentials.get('private_key_id'):
+        if key_id := credentials.get('private_key_id', None):
             header['kid'] = key_id
 
         # Google puts scope in payload
@@ -112,13 +112,6 @@ class RatingTable:
         scores = self._cache.get(f'{self.ws.id}:{username}')
         if scores is None:
             scores = {}
-        return scores
-
-    def get_scores_debug(self, tasks: list) -> dict[str, int]:
-        scores = {
-            task.name: int(task.score * r) if (r := random.random()) > 0.5 else task.score
-            for task in tasks
-        }
         return scores
 
     def update_cached_scores(self) -> None:
