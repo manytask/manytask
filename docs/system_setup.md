@@ -69,44 +69,46 @@ Note: If access to some accounts is lost, then you need to refer to the Pre-setu
 ### Google
 
 
-1. For the Google Cloud project (current: `ysda.service.manytask@gmail.com` -> `manytask`)
-   * Create [new service account](https://console.cloud.google.com/apis/credentials): `tester` with editor access.   
-     Note: Save private key (!) it will apper only once  
-     (for example: `tester@manytask.iam.gserviceaccount.com`)
+1. For the Google Cloud project (current: `ysda.service.manytask@gmail.com` account -> `manytask` project)  
+   *Note: Alternatively you can create your own google project (other steps remain same).*
 
+   * Create [new service account](https://console.cloud.google.com/apis/credentials) unique for the course: `[course_name]` with editor access.   
+     (for example: `python` - `python@manytask.iam.gserviceaccount.com`)  
+     Note: Save private key (!) it will apper only once  or create new if old is lost
+   
 
-2. Create Google Sheets and give access for the service account  
-   * Create Public Google Sheet with rating/scores table:  
-     For example: [test sheet](https://docs.google.com/spreadsheets/d/1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM/edit?usp=sharing)
+2. Create Google Sheets and give access for the course service account created  
+   * Create Public Google Sheet with rating/scores table, name it (for example `scores`):  
+     For example: [test public sheet](https://docs.google.com/spreadsheets/d/1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM/edit?usp=sharing)
    * Share public table in reading only mode 
-   * Create Private Google Sheet with accounts and reviews tables:  
-     For example: [test sheet](https://docs.google.com/spreadsheets/d/1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM/edit?usp=sharing)
-   * Give access to all tables to all course admins   
-   * Give access to service account  
-     (for example: `tester@manytask.iam.gserviceaccount.com`)
+   * Create Private Google Sheet with accounts and reviews tables, name them (for example `accounts` and `review` sheets respectively):  
+     For example: [test private sheet](https://docs.google.com/spreadsheets/d/1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM/edit?usp=sharing)
+   * Give full access to all course admins (teachers) 
+   * Give access to course service account (for example: `python@manytask.iam.gserviceaccount.com`)
    
 
 ### Gitlab
 
-1. Create new oauth credentials in [gitlab admin area -> applications](https://gitlab.manytask.org/admin/applications/)  
+1. Create new oauth application in [gitlab admin area -> applications](https://gitlab.manytask.org/admin/applications/), save `client_id` and `client_secret`  
    (can be done by any gitlab admin: @k4black, @slon, @vadim_mazaev, etc.)
 
 
-2. Create new gitlab admin token (to create users and repos) for account `ysda.service.manytask@gmail.com`/`manytask` (credentials: @k4black)
+2. Create new gitlab api token (to create users and repos) for admin account `ysda.service.manytask@gmail.com`/`manytask` (credentials: @k4black)
 
 
 3. Create group for admins. Add all course admins/lecturers to the group  
    (for example: [py-tasks](https://gitlab.manytask.org/py-tasks/))
 
 
-4. Create private(!) group (to students not to see accounts of each other)   
-   Naming example: `py-tasks/public-[YEAR]-[spring/fall]`  
+4. Create private(!) group (to students not to see repositories of each other)   
+   Naming example: `python-[spring/fall]-[YEAR]`  
    Give full access for the admin group (auto access for all groups members)  
    In the CI-CD settings:
-   * Create group runner 
+   * Create group runner:  
+     TBA
 
-6. Create public (or internal) repository for the course (to fork students repo from)
-   Naming example: `python-[fall/spring]-[YEAR]`    
+6. Create public (or internal) repository with course assignments (to fork students repo from)
+   Naming example: `py-tasks/public-[YEAR]-[fall/spring]`    
    Give full access for the admin group (auto access for all groups members)   
    In the CI-CD settings:
    * Disable "Public pipelines" to hide private tests logs
