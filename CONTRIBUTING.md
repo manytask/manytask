@@ -41,9 +41,11 @@ TBA
     * `ci` - continuous integration related
 
 For example  
+
 Good:
 * `feat: improve performance with lazy load implementation for images`
 * `chore: update flask dependency to 2.1 version`
+
 Bad:
 * `some fixes`
 * `oops`
