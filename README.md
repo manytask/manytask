@@ -44,6 +44,7 @@ So, now it's available at `192.168.1.54:8000`
 ```shell
 docker build -t manytask .
 docker run \
+    --rm \
     --publish "5000:5000" \
     --name manytask \
     --env-file .env \
@@ -72,7 +73,8 @@ So, now it's available at `localhost:5000`
 ```shell
 docker build -t manytask .
 docker run \
-    --port "5000:5000" \
+    --rm \
+    --publish "5000:5000" \
     --name manytask \
     --env-file .env \
     --env FLASK_ENV=production \ 
