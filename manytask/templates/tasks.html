@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% set active_page = "tasks" -%}
 
 {% block content %}
 {% for group in current_course.deadlines.open_groups %}

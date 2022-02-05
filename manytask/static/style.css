@@ -30,6 +30,28 @@ input:invalid {
 
 /* ========================================================================== */
 
+
+#pageloader {
+    background: rgba(161, 161, 161, 0.5);
+    display: none;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 9999;
+}
+
+#pageloader img {
+    left: 50%;
+    margin-left: -32px;
+    margin-top: -32px;
+    position: absolute;
+    top: 50%;
+}
+
+/* ========================================================================== */
+
 .main-menu {
     padding: 0;
     display: flex;
@@ -50,6 +72,7 @@ input:invalid {
 
 .main-menu li .current {
     font-weight: bold;
+    text-decoration: underline black;
 }
 
 /* ========================================================================== */
@@ -144,10 +167,47 @@ input:invalid {
     white-space: nowrap;
 }
 
+.task {
+    position: relative;
+}
+
 .task .score {
     margin: 0 auto;
     font-size: 3em;
     font-weight: bold;
+}
+
+.task .review {
+    margin: 0 auto;
+    font-size: 3em;
+    font-weight: bold;
+    vertical-align: middle;
+}
+
+.task .review input {
+    font-family: 'Source Code Pro', monospace;
+    background: none;
+    border: 1px dashed #1e3250 ;
+    text-align: right;
+    margin: 0 0;
+    padding: 0 0;
+    height: 1em;
+    width: 1.7em;
+    font-size: 1em;
+    font-weight: normal;
+}
+
+.floating-save-button {
+    background-color: rgb(50, 153, 222);
+    border: 0;
+    color: white;
+    cursor: pointer;
+    position: fixed;
+    bottom: 1.5em;
+    right: 1em;
+    font-family: 'Source Code Pro', monospace;
+    font-size: 2.2em;
+    padding: 0.2em 0.5em;
 }
 
 /* ========================================================================== */

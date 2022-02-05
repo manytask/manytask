@@ -1,5 +1,6 @@
 import logging
 import secrets
+from collections import defaultdict
 
 import gitlab
 from authlib.integrations.base_client import OAuthError
@@ -9,6 +10,7 @@ from flask import (Blueprint, current_app, redirect, render_template, request,
 
 from . import glab
 from .course import Course, Task
+from .glab import Student
 
 SESSION_VERSION = 1.5
 
@@ -23,6 +25,7 @@ def valid_session(user_session: session) -> bool:
         and 'version' in user_session['gitlab']
         and user_session['gitlab']['version'] >= SESSION_VERSION
         and 'username' in user_session['gitlab']
+        and 'user_id' in user_session['gitlab']
         and 'repo' in user_session['gitlab']
         and 'course_admin' in user_session['gitlab']
     )
@@ -60,6 +63,98 @@ def course_page():
         lms_url=course.lms_url,
         tg_invite_link=course.tg_invite_link,
         scores=tasks_scores,
+        course_favicon=course.favicon
+    )
+
+
+@bp.route('/reviews', methods=['GET', 'POST'])
+def review_page():
+    course: Course = current_app.course
+
+    if current_app.debug:
+        student_username = 'guest'
+        student_user_id = 0
+        student_repo = course.gitlab_api.get_url_for_repo(student_username)
+        student_course_admin = request.args.get('admin', None) is not None
+    else:
+        if not valid_session(session):
+            return redirect(url_for('web.signup'))
+        student_username = session['gitlab']['username']
+        student_user_id = int(session['gitlab']['user_id'])
+        student_repo = session['gitlab']['repo']
+        student_course_admin = session['gitlab']['course_admin']
+
+    rating_table = course.rating_table
+    review_table = course.review_table
+    if course.debug:
+        rating_table.update_cached_scores()
+        review_table.update_cached_reviews()
+    tasks_scores = rating_table.get_scores(student_username)
+    all_task_reviews = review_table.get_reviews()
+
+    student_reviews = all_task_reviews.get(student_username, {})
+
+    # ---- process review ---- #
+    if request.method == 'POST':
+        if current_app.debug:
+            student = Student(
+                id=student_user_id, username=student_username, name='Guest', course_admin=student_course_admin
+            )
+        else:
+            try:
+                student = course.gitlab_api.get_student(student_user_id)
+            except Exception:
+                return f'There is no student with user_id {student_user_id}', 404
+
+        print('request.form', request.form)
+        new_or_updated_scores: dict[str, int] = {}
+        for task_name, review_score in request.form.items():
+            # check review score is valid
+            try:
+                review_score_int = int(review_score)
+            except ValueError:
+                continue
+
+            # check task solved
+            if task_name not in tasks_scores:
+                continue
+
+            # collect updated scores
+            if task_name not in student_reviews or student_reviews[task_name] != review_score_int:
+                new_or_updated_scores[task_name] = review_score_int
+
+        # insert new review scores
+        print('new_or_updated_scores', new_or_updated_scores)
+        if new_or_updated_scores:
+            review_table.store_reviews(student, new_or_updated_scores)
+        print('new_or_updated_scores end')
+
+        return redirect(
+            url_for('web.review_page')
+        )
+
+    # ---- render page ---- #
+    # task_reviews = defaultdict(list)
+    # for student, student_reviews in all_task_reviews.items():
+    #     for task_name, task_review_score in student_reviews.items():
+    #         task_reviews[task_name].append(int(task_review_score))
+    # print('task_reviews', task_reviews)
+
+    # print('! student_reviews', student_reviews)
+
+    return render_template(
+        'reviews.html',
+        task_base_url=course.gitlab_api.get_url_for_task_base(),
+        username=student_username,
+        course_name=course.name,
+        current_course=course,
+        student_repo_url=student_repo,
+        student_ci_url=f'{student_repo}/pipelines',
+        gdoc_url=course.googledoc_api.get_spreadsheet_url(),
+        lms_url=course.lms_url,
+        tg_invite_link=course.tg_invite_link,
+        scores=tasks_scores,
+        reviews=student_reviews,
         course_favicon=course.favicon
     )
 
@@ -102,7 +197,7 @@ def signup():
         )
     student = glab.map_gitlab_user_to_student(registered_user)
     try:
-        course.googledoc_api.fetch_private_data_table().add_user_row(user, student)
+        course.googledoc_api.fetch_private_accounts_table().add_user_row(user, student)
     except Exception as e:
         logger.exception(f'Could not write user data to private google doc, data: {user.__dict__}, {student.__dict__}')
         logger.exception(f'Writing private google doc failed: {e}')
@@ -166,6 +261,7 @@ def login_finish():
         'oauth_access_token': gitlab_access_token,
         'oauth_refresh_token': gitlab_refresh_token,
         'username': student.username,
+        'user_id': student.id,
         'course_admin': student.course_admin,
         'repo': student.repo,
         'version': SESSION_VERSION,
