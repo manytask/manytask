@@ -315,9 +315,16 @@ class PrivateReviewsTable:
         except LoginNotFound:
             student_row = self._add_student_row(student)
 
+        # find task_columns
+        task_columns = {
+            found_task: col
+            for col, found_task in self._list_tasks(with_index=True)
+            if found_task in review_scores.keys()
+        }
+
         review_cells = []
         for task_name, review_score in review_scores.items():
-            task_column = self._find_task_column(task_name)
+            task_column = task_columns[task_name]
 
             review_cell = self.ws.cell(student_row, task_column)
             review_cell.value = review_score
