@@ -177,6 +177,23 @@ input:invalid {
     font-weight: bold;
 }
 
+.task .reviews {
+    height: 30%;
+    width: 100%;
+    position: absolute;
+    bottom: 0;
+}
+
+.task .reviews {
+  /*display: none;*/
+    visibility: hidden;
+}
+
+.task:hover .reviews {
+  visibility: visible;
+}
+
+
 .task .review {
     margin: 0 auto;
     font-size: 3em;

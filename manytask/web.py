@@ -47,9 +47,18 @@ def course_page():
         student_course_admin = session['gitlab']['course_admin']
 
     rating_table = course.rating_table
+    review_table = course.review_table
     if course.debug:
         rating_table.update_cached_scores()
+        review_table.update_cached_reviews()
     tasks_scores = rating_table.get_scores(student_username)
+    all_task_reviews = review_table.get_reviews()
+
+    task_reviews = defaultdict(list)
+    for student, student_reviews in all_task_reviews.items():
+        for task_name, task_review_score in student_reviews.items():
+            task_reviews[task_name].append(int(task_review_score))
+    print('! task_reviews', task_reviews)
 
     return render_template(
         'tasks.html',
@@ -63,6 +72,7 @@ def course_page():
         lms_url=course.lms_url,
         tg_invite_link=course.tg_invite_link,
         scores=tasks_scores,
+        task_reviews=task_reviews,
         course_favicon=course.favicon
     )
 
@@ -134,13 +144,12 @@ def review_page():
         )
 
     # ---- render page ---- #
-    # task_reviews = defaultdict(list)
-    # for student, student_reviews in all_task_reviews.items():
-    #     for task_name, task_review_score in student_reviews.items():
-    #         task_reviews[task_name].append(int(task_review_score))
-    # print('task_reviews', task_reviews)
 
-    # print('! student_reviews', student_reviews)
+    task_reviews = defaultdict(list)
+    for student, student_reviews in all_task_reviews.items():
+        for task_name, task_review_score in student_reviews.items():
+            task_reviews[task_name].append(int(task_review_score))
+    print('! task_reviews', task_reviews)
 
     return render_template(
         'reviews.html',
@@ -155,6 +164,7 @@ def review_page():
         tg_invite_link=course.tg_invite_link,
         scores=tasks_scores,
         reviews=student_reviews,
+        task_reviews=task_reviews,
         course_favicon=course.favicon
     )
 
