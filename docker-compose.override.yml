@@ -8,5 +8,6 @@ services:
         ports:
             - "5000:5000"
         volumes:
+            - ./manytask/:/app/manytask
             - .tmp/cache/:/cache
             - .tmp/solutions/:/solutions
