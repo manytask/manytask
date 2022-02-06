@@ -32,6 +32,7 @@ GROUP_ROW_FORMATTING = {
     'textFormat': {
         'fontFamily': 'Amatic SC',
         'fontSize': 24,
+        'bold': True,
     }
 }
 
@@ -49,6 +50,7 @@ HEADER_ROW_FORMATTING = {
     'textFormat': {
         'fontFamily': 'Comfortaa',
         'fontSize': 10,
+        'bold': True,
     }
 }
 
