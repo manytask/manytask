@@ -191,6 +191,7 @@ class RatingTable:
         return new_score
 
     def sync_columns(self, tasks: list[Deadlines.Task], max_score: int | None = None) -> None:
+        # TODO: maintain group orger when adding new task in added group
         logger.info(f'Syncing rating columns...')
         existing_tasks = list(self._list_tasks(with_index=False))
         existing_task_names = set(task for task in existing_tasks if task)
@@ -220,16 +221,16 @@ class RatingTable:
         if cells_to_update:
             self.ws.update_cells(cells_to_update, value_input_option=ValueInputOption.user_entered)
 
-        self.ws.format(
-            f'{rowcol_to_a1(HEADER_ROW-1, TASK_SCORES_START_COLUMN)}:'
-            f'{rowcol_to_a1(HEADER_ROW-1, required_worksheet_size)}',
-            GROUP_ROW_FORMATTING
-        )
-        self.ws.format(
-            f'{rowcol_to_a1(HEADER_ROW, TASK_SCORES_START_COLUMN)}:'
-            f'{rowcol_to_a1(HEADER_ROW, required_worksheet_size)}',
-            HEADER_ROW_FORMATTING
-        )
+            self.ws.format(
+                f'{rowcol_to_a1(HEADER_ROW-1, TASK_SCORES_START_COLUMN)}:'
+                f'{rowcol_to_a1(HEADER_ROW-1, required_worksheet_size)}',
+                GROUP_ROW_FORMATTING
+            )
+            self.ws.format(
+                f'{rowcol_to_a1(HEADER_ROW, TASK_SCORES_START_COLUMN)}:'
+                f'{rowcol_to_a1(HEADER_ROW, required_worksheet_size)}',
+                HEADER_ROW_FORMATTING
+            )
 
     def _get_row_values(self, row, start=None, with_index: bool = False):
         values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
