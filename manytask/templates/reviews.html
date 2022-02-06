@@ -35,7 +35,7 @@ function setloading() {
         {% elif reviews.get(task.name, '-') != '-' %}
             <div class="review"><input style="border: none" type="text" pattern="[0-9]+" name="{{ task.name }}" value="{{ reviews.get(task.name, '') }}">/{{ task.score }}</div>
         {% else %}
-            <div class="review"><input type="text" pattern="[0-9]+" name="{{ task.name }}" value="{{ reviews.get(task.name, '') }}">/{{ task.score }}</div>
+            <div class="review"><input type="text" pattern="[0-9]+" placeholder="{{ task.score }}" name="{{ task.name }}" value="{{ reviews.get(task.name, '') }}">/{{ task.score }}</div>
         {% endif %}
       </div>
     </div>

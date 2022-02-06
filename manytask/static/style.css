@@ -197,6 +197,10 @@ input:invalid {
     font-weight: normal;
 }
 
+.task .review input::placeholder {
+  color: rgba(17, 17, 17, 0.3);
+}
+
 .floating-save-button {
     background-color: rgb(50, 153, 222);
     border: 0;
