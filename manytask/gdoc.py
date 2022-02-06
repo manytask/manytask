@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import random
 import re
 from itertools import islice
 from typing import Callable
@@ -10,13 +9,48 @@ import gspread
 from authlib.integrations.requests_client import AssertionSession
 from cachelib import BaseCache
 from gspread import Cell as GCell
-from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol
+from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
 from .deadlines import Deadlines
 from .glab import Student, User
 
 
 logger = logging.getLogger(__name__)
+
+
+GROUP_ROW_FORMATTING = {
+    'backgroundColor': {
+        'red': 182./255.,
+        'green': 215./255.,
+        'blue': 168./255.,
+    },
+    'borders': {
+        'bottom': {
+            'style': 'SOLID',
+        },
+    },
+    'textFormat': {
+        'fontFamily': 'Amatic SC',
+        'fontSize': 24,
+    }
+}
+
+HEADER_ROW_FORMATTING = {
+    'backgroundColor': {
+        'red': 217./255.,
+        'green': 234./255.,
+        'blue': 211./255.,
+    },
+    'borders': {
+        'bottom': {
+            'style': 'SOLID',
+        },
+    },
+    'textFormat': {
+        'fontFamily': 'Comfortaa',
+        'fontSize': 10,
+    }
+}
 
 
 # all start with 1
@@ -157,13 +191,13 @@ class RatingTable:
         return new_score
 
     def sync_columns(self, tasks: list[Deadlines.Task], max_score: int | None = None) -> None:
-        # TODO: groups
         existing_tasks = list(self._list_tasks(with_index=False))
         existing_task_names = set(task for task in existing_tasks if task)
         tasks_to_create = [task for task in tasks if task.name not in existing_task_names]
 
+        current_worksheet_size = TASK_SCORES_START_COLUMN + len(existing_tasks) - 1
+        required_worksheet_size = current_worksheet_size
         if tasks_to_create:
-            current_worksheet_size = TASK_SCORES_START_COLUMN + len(existing_tasks) - 1
             required_worksheet_size = current_worksheet_size + len(tasks_to_create)
 
             self.ws.resize(cols=required_worksheet_size)
@@ -184,6 +218,17 @@ class RatingTable:
 
         if cells_to_update:
             self.ws.update_cells(cells_to_update, value_input_option=ValueInputOption.user_entered)
+
+            self.ws.format(
+                f'{rowcol_to_a1(HEADER_ROW-1, TASK_SCORES_START_COLUMN)}:'
+                f'{rowcol_to_a1(HEADER_ROW-1, required_worksheet_size)}',
+                GROUP_ROW_FORMATTING
+            )
+            self.ws.format(
+                f'{rowcol_to_a1(HEADER_ROW, TASK_SCORES_START_COLUMN)}:'
+                f'{rowcol_to_a1(HEADER_ROW, required_worksheet_size)}',
+                HEADER_ROW_FORMATTING
+            )
 
     def _get_row_values(self, row, start=None, with_index: bool = False):
         values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
@@ -235,7 +280,8 @@ class RatingTable:
                 f'/ INDIRECT(ADDRESS({HEADER_ROW - 1}; {TOTAL_COLUMN}))'  # percentage
             ],
             value_input_option=ValueInputOption.user_entered,  # don't escape link
-            table_range=f'A{HEADER_ROW}',  # note logical table to upend to (gdoc implicit split it to logical tables)
+            # note logical table to upend to (gdoc implicit split it to logical tables)
+            table_range=rowcol_to_a1(HEADER_ROW, GITLAB_COLUMN),
         )
 
         updated_range = result['updates']['updatedRange']
