@@ -38,7 +38,7 @@ Run it
 CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5000 --reload --without-threads
 ```
 
-So, now it's available at `192.168.1.54:8000`
+So, now it's available at `localhost:5000`
 
 #### Docker (manytask only)
 ```shell
