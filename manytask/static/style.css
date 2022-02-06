@@ -178,7 +178,7 @@ input:invalid {
 }
 
 .task .reviews {
-    height: 30%;
+    height: 40px;
     width: 100%;
     position: absolute;
     bottom: 0;

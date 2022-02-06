@@ -116,7 +116,6 @@ def review_page():
             except Exception:
                 return f'There is no student with user_id {student_user_id}', 404
 
-        print('request.form', request.form)
         new_or_updated_scores: dict[str, int] = {}
         for task_name, review_score in request.form.items():
             # check review score is valid
@@ -134,22 +133,14 @@ def review_page():
                 new_or_updated_scores[task_name] = review_score_int
 
         # insert new review scores
-        print('new_or_updated_scores', new_or_updated_scores)
         if new_or_updated_scores:
             review_table.store_reviews(student, new_or_updated_scores)
-        print('new_or_updated_scores end')
 
         return redirect(
             url_for('web.review_page')
         )
 
     # ---- render page ---- #
-
-    task_reviews = defaultdict(list)
-    for student, student_reviews in all_task_reviews.items():
-        for task_name, task_review_score in student_reviews.items():
-            task_reviews[task_name].append(int(task_review_score))
-    print('! task_reviews', task_reviews)
 
     return render_template(
         'reviews.html',
@@ -164,7 +155,6 @@ def review_page():
         tg_invite_link=course.tg_invite_link,
         scores=tasks_scores,
         reviews=student_reviews,
-        task_reviews=task_reviews,
         course_favicon=course.favicon
     )
 

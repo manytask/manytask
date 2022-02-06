@@ -404,7 +404,7 @@ class PrivateReviewsTable:
 
         old_reviews[student.username] = student_reviews
 
-        self._cache.set(f'{self.ws.id}:{student.username}', old_reviews)
+        self._cache.set(f'{self.ws.id}:reviews', old_reviews)
 
     def sync_columns(self, tasks: list[Deadlines.Task]) -> None:
         # TODO: maintain group orger when adding new task in added group
