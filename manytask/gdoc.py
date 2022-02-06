@@ -407,13 +407,15 @@ class PrivateReviewsTable:
         self._cache.set(f'{self.ws.id}:{student.username}', old_reviews)
 
     def sync_columns(self, tasks: list[Deadlines.Task]) -> None:
-        # TODO: groups
+        # TODO: maintain group orger when adding new task in added group
+        logger.info(f'Syncing review columns...')
         existing_tasks = list(self._list_tasks(with_index=False))
         existing_task_names = set(task for task in existing_tasks if task)
         tasks_to_create = [task for task in tasks if task.name not in existing_task_names]
 
+        current_worksheet_size = PrivateReviewsSheetOptions.TASK_REVIEWS_START_COLUMN + len(existing_tasks) - 1
+        required_worksheet_size = current_worksheet_size
         if tasks_to_create:
-            current_worksheet_size = PrivateReviewsSheetOptions.TASK_REVIEWS_START_COLUMN + len(existing_tasks) - 1
             required_worksheet_size = current_worksheet_size + len(tasks_to_create)
 
             self.ws.resize(cols=required_worksheet_size)
@@ -431,6 +433,17 @@ class PrivateReviewsTable:
 
         if cells_to_update:
             self.ws.update_cells(cells_to_update, value_input_option=ValueInputOption.user_entered)
+
+            self.ws.format(
+                f'{rowcol_to_a1(PrivateReviewsSheetOptions.GROUPS_ROW, PrivateReviewsSheetOptions.TASK_REVIEWS_START_COLUMN)}:'
+                f'{rowcol_to_a1(PrivateReviewsSheetOptions.GROUPS_ROW, required_worksheet_size)}',
+                GROUP_ROW_FORMATTING
+            )
+            self.ws.format(
+                f'{rowcol_to_a1(PrivateReviewsSheetOptions.HEADER_ROW, PrivateReviewsSheetOptions.TASK_REVIEWS_START_COLUMN)}:'
+                f'{rowcol_to_a1(PrivateReviewsSheetOptions.HEADER_ROW, required_worksheet_size)}',
+                HEADER_ROW_FORMATTING
+            )
 
     def _get_row_values(self, row, start=None, with_index: bool = False):
         values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
