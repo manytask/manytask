@@ -12,6 +12,10 @@ function setloading() {
    <img src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/0.16.1/images/loader-large.gif" alt="processing..." />
 </div>
 
+<div class="tooltip"><i class="fa fa-question-circle"></i> About the REVIEWS page
+  <span class="tooltiptext">On this page you can score tasks you did; Please, estimate the score you want this tasks to have</span>
+</div>
+
 <form method="post">
 {% for group in current_course.deadlines.open_groups %}
 <div class="group {{ 'hw' if group.hw else '' }}">

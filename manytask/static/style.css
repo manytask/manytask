@@ -94,6 +94,47 @@ input:invalid {
 
 /* ========================================================================== */
 
+
+/* Tooltip container */
+.tooltip {
+    display: inline-block;
+    border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+
+    color: rgba(33, 33, 33, 0.51);
+
+    z-index: 1000;
+    position: fixed;
+    /*top: 5px;*/
+    bottom: 5px;
+    left: 5px;
+}
+
+/* Tooltip text */
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 260px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    padding: 5px 5px;
+    border-radius: 1px;
+
+    /* Position the tooltip text - see examples below! */
+    position: absolute;
+    z-index: 1000;
+    left: 15px;
+    /*top: 110%;*/
+    bottom: 110%;
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+}
+
+
+/* ========================================================================== */
+
 .group {
     display: flex;
     flex-direction: column;

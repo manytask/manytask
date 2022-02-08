@@ -2,6 +2,10 @@
 {% set active_page = "tasks" -%}
 
 {% block content %}
+<div class="tooltip"><i class="fa fa-question-circle"></i> About the TASKS page
+  <span class="tooltiptext">On this page you can see tasks you have; Green - solved, Purple - particularly solved, Blue - new</span>
+</div>
+
 {% for group in current_course.deadlines.open_groups %}
 <div class="group {{ 'hw' if group.hw else '' }}">
   <div class="group-header">
