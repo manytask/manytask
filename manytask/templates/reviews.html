@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{% set active_page = "reviews" -%}
+
+{% block content %}
+<script>
+function setloading() {
+    var x = document.getElementById("pageloader");
+    x.style.display = "block";
+}
+</script>
+<div id="pageloader">
+   <img src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/0.16.1/images/loader-large.gif" alt="processing..." />
+</div>
+
+<div class="tooltip"><i class="fa fa-question-circle"></i> About the REVIEWS page
+  <span class="tooltiptext">On this page you can score tasks you did; Please, estimate the score you want this tasks to have</span>
+</div>
+
+<form method="post">
+{% for group in current_course.deadlines.open_groups %}
+<div class="group {{ 'hw' if group.hw else '' }}">
+  <div class="group-header">
+      <h1 class="timer">
+          <div>{{ group.name }}</div>
+{#          <div class="deadline">[100%: {{ group.pretty_deadline }} MSK]</div>#}
+{#          {% if group.pretty_deadline != group.pretty_second_deadline %}#}
+{#                <div class="deadline">[ 50%: {{ group.pretty_second_deadline }} MSK]</div>#}
+{#          {% endif %}#}
+      </h1>
+  </div>
+  <div class="group-tasks">
+    {% set MAX_TASK_LENGTH = 16 %}
+    {% for task in group.tasks %}
+    <div style="cursor: pointer">
+      <div class="task {{ ('solved' if scores.get(task.name) >= task.score else 'solved_partially') if scores.get(task.name, '-') != '-' else 'unsolved' }}">
+        <div class="name">{{ task.name if (task.name | length <= MAX_TASK_LENGTH) else task.name[:MAX_TASK_LENGTH-1] + '…' }}</div>
+        {% if scores.get(task.name, '-') == '-' %}
+            <div class="review">-/{{ task.score }}</div>
+        {% elif reviews.get(task.name, '-') != '-' %}
+            <div class="review"><input style="border: none" type="text" pattern="[0-9]+" name="{{ task.name }}" value="{{ reviews.get(task.name, '') }}">/{{ task.score }}</div>
+        {% else %}
+            <div class="review"><input type="text" pattern="[0-9]+" placeholder="{{ task.score }}" name="{{ task.name }}" value="{{ reviews.get(task.name, '') }}">/{{ task.score }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+<input type="submit" class="floating-save-button" value="save" onclick="setloading()">
+</form>
+{% endblock %}

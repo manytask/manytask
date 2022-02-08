@@ -30,6 +30,28 @@ input:invalid {
 
 /* ========================================================================== */
 
+
+#pageloader {
+    background: rgba(161, 161, 161, 0.5);
+    display: none;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 9999;
+}
+
+#pageloader img {
+    left: 50%;
+    margin-left: -32px;
+    margin-top: -32px;
+    position: absolute;
+    top: 50%;
+}
+
+/* ========================================================================== */
+
 .main-menu {
     padding: 0;
     display: flex;
@@ -50,6 +72,7 @@ input:invalid {
 
 .main-menu li .current {
     font-weight: bold;
+    text-decoration: underline black;
 }
 
 /* ========================================================================== */
@@ -68,6 +91,47 @@ input:invalid {
     align-content: center;
     margin: auto;
 }
+
+/* ========================================================================== */
+
+
+/* Tooltip container */
+.tooltip {
+    display: inline-block;
+    border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+
+    color: rgba(33, 33, 33, 0.51);
+
+    z-index: 1000;
+    position: fixed;
+    /*top: 5px;*/
+    bottom: 5px;
+    left: 5px;
+}
+
+/* Tooltip text */
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 260px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    padding: 5px 5px;
+    border-radius: 1px;
+
+    /* Position the tooltip text - see examples below! */
+    position: absolute;
+    z-index: 1000;
+    left: 15px;
+    /*top: 110%;*/
+    bottom: 110%;
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+}
+
 
 /* ========================================================================== */
 
@@ -152,10 +216,68 @@ input:invalid {
     white-space: nowrap;
 }
 
+.task {
+    position: relative;
+}
+
 .task .score {
     margin: 0 auto;
     font-size: 3em;
     font-weight: bold;
+}
+
+.task .reviews {
+    height: 40px;
+    width: 100%;
+    position: absolute;
+    bottom: 0;
+}
+
+.task .reviews {
+  /*display: none;*/
+    visibility: hidden;
+}
+
+.task:hover .reviews {
+  visibility: visible;
+}
+
+
+.task .review {
+    margin: 0 auto;
+    font-size: 3em;
+    font-weight: bold;
+    vertical-align: middle;
+}
+
+.task .review input {
+    font-family: 'Source Code Pro', monospace;
+    background: none;
+    border: 1px dashed #1e3250 ;
+    text-align: right;
+    margin: 0 0;
+    padding: 0 0;
+    height: 1em;
+    width: 1.7em;
+    font-size: 1em;
+    font-weight: normal;
+}
+
+.task .review input::placeholder {
+  color: rgba(17, 17, 17, 0.3);
+}
+
+.floating-save-button {
+    background-color: rgb(50, 153, 222);
+    border: 0;
+    color: white;
+    cursor: pointer;
+    position: fixed;
+    bottom: 1.5em;
+    right: 1em;
+    font-family: 'Source Code Pro', monospace;
+    font-size: 2.2em;
+    padding: 0.2em 0.5em;
 }
 
 /* ========================================================================== */

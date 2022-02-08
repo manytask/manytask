@@ -120,3 +120,7 @@ class Course:
     @property
     def rating_table(self):
         return self.googledoc_api.fetch_rating_table()
+
+    @property
+    def review_table(self):
+        return self.googledoc_api.fetch_private_reviews_table()

@@ -204,6 +204,7 @@ def sync_task_columns():
     tasks_started = course.deadlines.tasks_started
     max_score_started = course.deadlines.max_score_started
     course.rating_table.sync_columns(tasks_started, max_score_started)
+    course.review_table.sync_columns(tasks_started)
 
     # update cache with new values
     # course.rating_table.update_cached_scores()
