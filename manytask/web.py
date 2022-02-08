@@ -9,7 +9,7 @@ from flask import (Blueprint, current_app, redirect, render_template, request,
                    session, url_for)
 
 from . import glab
-from .course import Course, Task
+from .course import Course, Task, get_current_time
 from .glab import Student
 
 SESSION_VERSION = 1.5
@@ -72,6 +72,7 @@ def course_page():
         lms_url=course.lms_url,
         tg_invite_link=course.tg_invite_link,
         scores=tasks_scores,
+        now=get_current_time(),
         task_reviews=task_reviews,
         course_favicon=course.favicon
     )

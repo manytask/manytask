@@ -171,6 +171,14 @@ input:invalid {
     margin-left: 5px;
 }
 
+.group-header .deadline.passed {
+    /*color: #5d5d5d;*/
+    /*color: #363636;*/
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+    text-decoration-color: rgba(40, 40, 40, 0.5);
+}
+
 .group-tasks {
     display: flex;
     flex-wrap: wrap;

@@ -11,9 +11,9 @@
   <div class="group-header">
       <h1 class="timer">
           <div>{{ group.name }}</div>
-          <div class="deadline">[100%: {{ group.pretty_deadline }} MSK]</div>
+          <div class="deadline {{ 'passed' if group.deadline < now else '' }}">[100%: {{ group.pretty_deadline }} MSK]</div>
           {% if group.pretty_deadline != group.pretty_second_deadline %}
-                <div class="deadline">[ 50%: {{ group.pretty_second_deadline }} MSK]</div>
+                <div class="deadline {{ 'passed' if group.second_deadline < now else '' }}">[ 50%: {{ group.pretty_second_deadline }} MSK]</div>
           {% endif %}
       </h1>
   </div>
