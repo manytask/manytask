@@ -52,7 +52,7 @@ class DeadlinesAPI:
 
 
 class Deadlines:
-    Task = namedtuple('Task', ('name', 'group'))
+    Task = namedtuple('Task', ('name', 'group', 'score'))
 
     def __init__(self, config: list[dict]):
         self.groups = self._parse_groups(config)
@@ -115,14 +115,14 @@ class Deadlines:
     @property
     def tasks(self) -> list[Task]:
         return [
-            self.Task(task.name, group.name) for group in reversed(self.groups)
+            self.Task(task.name, group.name, task.score) for group in reversed(self.groups)
             for task in group.tasks
         ]
 
     @property
     def tasks_started(self) -> list[Task]:
         return [
-            self.Task(task.name, group.name) for group in reversed(self.groups)
+            self.Task(task.name, group.name, task.score) for group in reversed(self.groups)
             for task in group.tasks if task.is_started()
         ]
 

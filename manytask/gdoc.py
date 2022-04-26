@@ -60,7 +60,8 @@ HEADER_ROW_FORMATTING = {
 @dataclass
 class PublicAccountsSheetOptions:
     GROUPS_ROW: int = 1
-    HEADER_ROW: int = 2
+    HEADER_ROW: int = 3
+    MAX_SCORES_ROW: int = 2
 
     GITLAB_COLUMN: int = 1
     LOGIN_COLUMN: int = 2
@@ -235,6 +236,7 @@ class RatingTable:
             current_group = None
             for col, task in enumerate(tasks_to_create, start=current_worksheet_size + 1):
                 cells_to_update.append(GCell(PublicAccountsSheetOptions.HEADER_ROW, col, task.name))
+                cells_to_update.append(GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, task.score))
 
                 if task.group != current_group:
                     cells_to_update.append(GCell(PublicAccountsSheetOptions.GROUPS_ROW, col, task.group))
@@ -258,6 +260,11 @@ class RatingTable:
             self.ws.format(
                 f'{rowcol_to_a1(PublicAccountsSheetOptions.HEADER_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:'
                 f'{rowcol_to_a1(PublicAccountsSheetOptions.HEADER_ROW, required_worksheet_size)}',
+                HEADER_ROW_FORMATTING
+            )
+            self.ws.format(
+                f'{rowcol_to_a1(PublicAccountsSheetOptions.MAX_SCORES_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:'
+                f'{rowcol_to_a1(PublicAccountsSheetOptions.MAX_SCORES_ROW, required_worksheet_size)}',
                 HEADER_ROW_FORMATTING
             )
 
@@ -301,20 +308,31 @@ class RatingTable:
         if len(student.name) == 0 or re.match(r'\W', student.name, flags=re.UNICODE):
             raise ValueError(f'Name "{student.name}" looks fishy')
 
-        result = self.ws.append_row(
-            values=[
-                self.create_student_repo_link(student),
-                student.username,
-                student.name,
-                None,  # flags
-                None,  # bonus
+        column_to_values_dict = {
+            PublicAccountsSheetOptions.GITLAB_COLUMN: self.create_student_repo_link(student),
+            PublicAccountsSheetOptions.LOGIN_COLUMN: student.username,
+            PublicAccountsSheetOptions.NAME_COLUMN: student.name,
+            PublicAccountsSheetOptions.FLAGS_COLUMN: None,
+            PublicAccountsSheetOptions.BONUS_COLUMN: None,
+            PublicAccountsSheetOptions.TOTAL_COLUMN:
                 # total: sum(current row: from RATINGS_COLUMN to inf) + BONUS_COLUMN
                 f'=SUM(INDIRECT(ADDRESS(ROW(); {PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN}) & ":" & ROW())) '
                 f'+ INDIRECT(ADDRESS(ROW(); {PublicAccountsSheetOptions.BONUS_COLUMN}))',
+            PublicAccountsSheetOptions.PERCENTAGE_COLUMN:
                 # percentage: TOTAL_COLUMN / max_score cell (1st row of TOTAL_COLUMN)
                 f'=INDIRECT(ADDRESS(ROW(); {PublicAccountsSheetOptions.TOTAL_COLUMN})) '
-                f'/ INDIRECT(ADDRESS({PublicAccountsSheetOptions.HEADER_ROW - 1}; {PublicAccountsSheetOptions.TOTAL_COLUMN}))'  # percentage
-            ],
+                f'/ INDIRECT(ADDRESS({PublicAccountsSheetOptions.HEADER_ROW - 1}; '
+                f'{PublicAccountsSheetOptions.TOTAL_COLUMN}))'  # percentage
+        }
+
+        # fill empty columns with None
+        row_values = [
+            column_to_values_dict.get(i-1, None)
+            for i in range(max(column_to_values_dict.items()))
+        ]
+
+        result = self.ws.append_row(
+            values=row_values,
             value_input_option=ValueInputOption.user_entered,  # don't escape link
             # note logical table to upend to (gdoc implicit split it to logical tables)
             table_range=f'A{PublicAccountsSheetOptions.HEADER_ROW}',
