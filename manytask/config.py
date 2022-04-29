@@ -35,9 +35,6 @@ class Config:
     # google public sheet
     gdoc_spreadsheet_id: str = os.environ.get('GDOC_SPREADSHEET_ID')
     gdoc_scoreboard_sheet: int = os.environ.get('GDOC_SCOREBOARD_SHEET', 0)
-    # google private sheet
-    gdoc_private_spreadsheet_id: str = os.environ.get('GDOC_PRIVATE_SPREADSHEET_ID')
-    gdoc_private_review_sheet: int = os.environ.get('GDOC_PRIVATE_REVIEW_SHEET', 0)
 
 
 class DebugConfig(Config):

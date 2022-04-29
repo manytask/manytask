@@ -24,68 +24,6 @@
       <div class="task {{ ('solved' if scores.get(task.name) >= task.score else 'solved_partially') if scores.get(task.name, '-') != '-' else 'unsolved' }}">
         <div class="name">{{ task.name if (task.name | length <= MAX_TASK_LENGTH) else task.name[:MAX_TASK_LENGTH-1] + '…' }}</div>
         <div class="score">{{ scores.get(task.name, '0') }}/{{ task.score }}</div>
-        <div class="reviews">
-            {% if task_reviews.get(task.name, '-') != '-' %}
-{#                <p>{{ task_reviews.get(task.name) }}</p>#}
-                <div id="reviews_{{ task.name }}"></div>
-
-                <script>
-                var layout = {
-                    autosize: false,
-                    height: 40+10,
-                    width: 220,
-                    showlegend: false,
-                    paper_bgcolor: 'rgba(0,0,0,0)',
-                    plot_bgcolor: 'rgba(0,0,0,0)',
-                    margin: {
-                        t: 0, r: 5, b: 10, l: 5,
-                    },
-                    font: {
-                        size: 8,
-                    },
-                    xaxis: {
-                        {#tickvals: [{{ task.score }}],#}
-                        {#ticktext: [{{ task.score }}],#}
-                    },
-                    yaxis: {
-                        autorange: true,
-                        showgrid: false,
-                        zeroline: false,
-                        showline: false,
-                        autotick: true,
-                        ticks: '',
-                        showticklabels: false
-                    },
-                    shapes: [{
-                        type: 'line',
-                        x0: '{{ task.score }}',
-                        y0: 0,
-                        x1: '{{ task.score }}',
-                        yref: 'paper',
-                        y1: 1,
-                        line: {
-                          color: 'grey',
-                          width: 1.5,
-                          dash: 'dot'
-                        }
-                    }],
-                };
-
-                var x = {{  task_reviews.get(task.name) }};
-
-                var trace = {
-                    x: x,
-                    type: 'histogram',
-                    marker: {
-                        color: 'rgba(50,153,222,0.5)',
-                    },
-                };
-
-                var data = [trace];
-                Plotly.newPlot('reviews_{{ task.name }}', data, layout, {staticPlot: true});
-                </script>
-            {% endif %}
-        </div>
       </div>
     </a>
     {% endfor %}

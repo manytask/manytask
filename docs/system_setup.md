@@ -101,9 +101,6 @@ Note: If access to some accounts is lost, then you need to refer to the Pre-setu
      For example: [test public sheet](https://docs.google.com/spreadsheets/d/1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM/edit?usp=sharing)  
      Naming: `[YEAR] [fall-spring] - [course]` (example: `2022 spring - YSDA Python`)
    * Share public table in reading only mode 
-   * Create Private Google Sheet with accounts and reviews tables, name them (for example `accounts` and `reviews` sheets respectively):  
-     For example: [test private sheet](https://docs.google.com/spreadsheets/d/1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM/edit?usp=sharing)  
-     Naming: `[YEAR] [fall-spring] - [course] - private` (example: `2022 spring - YSDA Python - private`)
    * Give full access to all course admins (teachers) 
    * Give access to course service account (for example: `python@manytask.iam.gserviceaccount.com`)
    
@@ -131,4 +128,3 @@ Note: If access to some accounts is lost, then you need to refer to the Pre-setu
      * Disable "Auto DevOps"
      * Disable "Shared runners"
      * Enable "Group runners"
-

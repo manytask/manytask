@@ -18,8 +18,6 @@ class User:
     lastname: str
     email: str
     password: str
-    telegram: str
-    lms_id: str
 
     def __repr__(self) -> str:
         return f'User(username={self.username})'

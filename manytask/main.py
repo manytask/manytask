@@ -71,9 +71,6 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         gdoc_credentials=json.loads(_gdoc_credentials_string),
         public_worksheet_id=os.environ['GDOC_SPREADSHEET_ID'],
         public_scoreboard_sheet=int(os.environ['GDOC_SCOREBOARD_SHEET']),
-        private_worksheet_id=os.environ['GDOC_PRIVATE_SPREADSHEET_ID'],
-        private_accounts_sheet=int(os.environ['GDOC_PRIVATE_ACCOUNTS_SHEET']),
-        private_review_sheet=int(os.environ['GDOC_PRIVATE_REVIEW_SHEET']),
         cache=cache,
     )
     deadlines_api = deadlines.DeadlinesAPI(
