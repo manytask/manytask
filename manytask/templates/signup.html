@@ -58,14 +58,14 @@
           <div class="name">Email:</div>
           <input type="email" name="email" placeholder="example@example.com" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" required>
         </div>
-        <div class="form-element">
-          <div class="name">Telegram nickname (without @):</div>
-          <input type="text" name="telegram" placeholder="example" pattern="[^@]\S*" required>
-        </div>
-        <div class="form-element">
-          <div class="name">lms id:</div>
-          <input type="text" name="lms_id" pattern="[0-9]+$" required>
-        </div>
+<!--        <div class="form-element">-->
+<!--          <div class="name">Telegram nickname (without @):</div>-->
+<!--          <input type="text" name="telegram" placeholder="example" pattern="[^@]\S*" required>-->
+<!--        </div>-->
+<!--        <div class="form-element">-->
+<!--          <div class="name">lms id:</div>-->
+<!--          <input type="text" name="lms_id" pattern="[0-9]+$" required>-->
+<!--        </div>-->
         <div class="form-element">
           <div class="name">Password:</div>
           <input type="password" name="password" required>
@@ -77,7 +77,7 @@
         <div class="form-element">
           <div class="name">lms:</div>
           <div style="display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 15px; margin: 0 5px 0 5px;">
-            <input style="height: 30px" type="checkbox" name="lms_confirm" required>
+            <input style="height: 30px" type="checkbox" id="lms_confirm" name="lms_confirm" required>
             <label for="lms_confirm">I understand that I have to link my lms and manytask if I want to get a mark</label>
           </div>
         </div>
