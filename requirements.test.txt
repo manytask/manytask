@@ -1,6 +1,6 @@
 # linters
 flake8==4.0.1
-mypy==0.942
+mypy==0.950
 isort==5.10.1
 
 # testing

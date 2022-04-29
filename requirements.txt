@@ -1,12 +1,12 @@
 # api and web
 gunicorn==20.1.0
-flask==2.1.1
+flask==2.1.2
 cachelib==0.6.0
-Werkzeug==2.1.1
+Werkzeug==2.1.2
 
 # api interaction (gitlab, google sheets)
-gspread==5.1.1
-python-gitlab==3.3.0
+gspread==5.3.2
+python-gitlab==3.4.0
 
 # utils
 authlib==1.0.1  # 'gitlab oauth2' and 'gspread login'
