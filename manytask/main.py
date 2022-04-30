@@ -1,8 +1,11 @@
 import base64
 import json
 import logging
+import logging.handlers
+import logging.config
 import os
 import secrets
+from typing import Any
 
 from authlib.integrations.flask_client import OAuth
 from cachelib import FileSystemCache
@@ -41,13 +44,60 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     app.oauth = oauth
 
     # logging
-    if not app.debug:
-        gunicorn_logger = logging.getLogger('gunicorn.error')
-        app.logger.handlers = gunicorn_logger.handlers
-        app.logger.setLevel(gunicorn_logger.level)
-    else:
-        app.logger.setLevel(logging.DEBUG)
-
+    logging_conf: dict[str, Any] = {
+        'version': 1,
+        'disable_existing_loggers': True,
+        'formatters': {
+            'default': {
+                'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+            },
+            'access': {
+                'format': '%(message)s',
+            }
+        },
+        'handlers': {
+            'console': {
+                'level': 'INFO',
+                'class': 'logging.StreamHandler',
+                'formatter': 'default',
+                'stream': 'ext://sys.stdout',
+            },
+            'error_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'default',
+                'filename': '/var/log/gunicorn.error.log',
+                'maxBytes': 10000,
+                'backupCount': 10,
+                'delay': 'True',
+            },
+            'access_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'access',
+                'filename': '/var/log/gunicorn.access.log',
+                'maxBytes': 10000,
+                'backupCount': 10,
+                'delay': 'True',
+            }
+        },
+        'loggers': {
+            'gunicorn.error': {
+                'handlers': ['console'] if app.debug else ['console', 'error_file'],
+                'level': 'INFO',
+                'propagate': False,
+            },
+            'gunicorn.access': {
+                'handlers': ['console'] if app.debug else ['console', 'access_file'],
+                'level': 'INFO',
+                'propagate': False,
+            }
+        },
+        'root': {
+            'level': 'DEBUG' if app.debug else 'INFO',
+            'handlers': ['console'],
+        },
+    }
+    logging.config.dictConfig(logging_conf)
+    
     # cache
     cache = FileSystemCache(
         os.environ['CACHE_DIR'],

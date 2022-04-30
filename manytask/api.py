@@ -11,6 +11,7 @@ from flask import Blueprint, abort, current_app, request
 from manytask.course import (Course, Task, get_current_time,
                              validate_commit_time)
 
+
 logger = logging.getLogger(__name__)
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -204,7 +205,6 @@ def sync_task_columns():
     tasks_started = course.deadlines.tasks_started
     max_score_started = course.deadlines.max_score_started
     course.rating_table.sync_columns(tasks_started, max_score_started)
-    course.review_table.sync_columns(tasks_started)
 
     # update cache with new values
     # course.rating_table.update_cached_scores()
