@@ -44,7 +44,7 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     app.oauth = oauth
 
     # logging
-    logging_conf: dict[str, Any] = {
+    logging.config.dictConfig({
         'version': 1,
         'disable_existing_loggers': True,
         'formatters': {
@@ -62,20 +62,28 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
                 'formatter': 'default',
                 'stream': 'ext://sys.stdout',
             },
+            'general_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'default',
+                'filename': '/var/log/general.log',
+                'maxBytes': 10 * 1000,
+                'backupCount': 2,
+                'delay': 'True',
+            },
             'error_file': {
                 'class': 'logging.handlers.RotatingFileHandler',
                 'formatter': 'default',
-                'filename': '/var/log/gunicorn.error.log',
-                'maxBytes': 10000,
-                'backupCount': 10,
+                'filename': '/var/log/error.log',
+                'maxBytes': 10 * 1000,
+                'backupCount': 2,
                 'delay': 'True',
             },
             'access_file': {
                 'class': 'logging.handlers.RotatingFileHandler',
                 'formatter': 'access',
-                'filename': '/var/log/gunicorn.access.log',
-                'maxBytes': 10000,
-                'backupCount': 10,
+                'filename': '/var/log/access.log',
+                'maxBytes': 10 * 1000,
+                'backupCount': 2,
                 'delay': 'True',
             }
         },
@@ -93,10 +101,9 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         },
         'root': {
             'level': 'DEBUG' if app.debug else 'INFO',
-            'handlers': ['console'],
+            'handlers': ['console'] if app.debug else ['console', 'general_file'],
         },
-    }
-    logging.config.dictConfig(logging_conf)
+    })
     
     # cache
     cache = FileSystemCache(
