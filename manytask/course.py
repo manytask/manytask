@@ -101,7 +101,7 @@ class Course:
 
     @property
     def favicon(self) -> str:
-        return 'favicon.png'
+        return 'favicon.ico'
 
     @property
     def name(self) -> str:
