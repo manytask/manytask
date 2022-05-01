@@ -8,7 +8,7 @@ from flask import (Blueprint, current_app, redirect, render_template, request,
                    session, url_for)
 
 from . import glab
-from .course import Course, Task
+from .course import Course, get_current_time
 
 SESSION_VERSION = 1.5
 
@@ -23,6 +23,7 @@ def valid_session(user_session: session) -> bool:
         and 'version' in user_session['gitlab']
         and user_session['gitlab']['version'] >= SESSION_VERSION
         and 'username' in user_session['gitlab']
+        and 'user_id' in user_session['gitlab']
         and 'repo' in user_session['gitlab']
         and 'course_admin' in user_session['gitlab']
     )
@@ -35,21 +36,18 @@ def course_page():
     if current_app.debug:
         student_username = 'guest'
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
-        student_course_admin = True
+        student_course_admin = request.args.get('admin', None) is not None
     else:
         if not valid_session(session):
-            return redirect(url_for('course_page.signup'))
+            return redirect(url_for('web.signup'))
         student_username = session['gitlab']['username']
         student_repo = session['gitlab']['repo']
         student_course_admin = session['gitlab']['course_admin']
 
-    if current_app.debug:
-        tasks: list[Task] = []
-        for group in course.deadlines.open_groups:
-            tasks.extend(group.tasks)
-        tasks_scores = course.rating_table.get_scores_debug(tasks)
-    else:
-        tasks_scores = course.rating_table.get_scores(student_username)
+    rating_table = course.rating_table
+    if course.debug:
+        rating_table.update_cached_scores()
+    tasks_scores = rating_table.get_scores(student_username)
 
     return render_template(
         'tasks.html',
@@ -63,6 +61,7 @@ def course_page():
         lms_url=course.lms_url,
         tg_invite_link=course.tg_invite_link,
         scores=tasks_scores,
+        now=get_current_time(),
         course_favicon=course.favicon
     )
 
@@ -82,13 +81,11 @@ def signup():
     # ----  register a new user ---- #
     # render template with error... if error
     user = glab.User(
-        request.form['username'].strip(),
-        request.form['firstname'].strip(),
-        request.form['lastname'].strip(),
-        request.form['email'].strip(),
-        request.form['password'],
-        request.form['telegram'],
-        request.form['lms_id'],
+        username=request.form['username'].strip(),
+        firstname=request.form['firstname'].strip(),
+        lastname=request.form['lastname'].strip(),
+        email=request.form['email'].strip(),
+        password=request.form['password'],
     )
 
     try:
@@ -103,12 +100,6 @@ def signup():
             course_name=course.name,
             course_favicon=course.favicon
         )
-    student = glab.map_gitlab_user_to_student(registered_user)
-    try:
-        course.googledoc_api.fetch_private_data_table().add_user_row(user, student)
-    except Exception as e:
-        logger.exception(f'Could not write user data to private google doc, data: {user.__dict__}, {student.__dict__}')
-        logger.exception(f'Writing private google doc failed: {e}')
 
     return redirect(
         url_for('web.login')
@@ -169,6 +160,7 @@ def login_finish():
         'oauth_access_token': gitlab_access_token,
         'oauth_refresh_token': gitlab_refresh_token,
         'username': student.username,
+        'user_id': student.id,
         'course_admin': student.course_admin,
         'repo': student.repo,
         'version': SESSION_VERSION,

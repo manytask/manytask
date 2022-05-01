@@ -31,32 +31,41 @@ Create new venv and install requirements
 ```shell
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -U -r requrements.txt
+python -m pip install -U -r requirements.txt
 ```
 Run it
 ```shell
-CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP=manytask.main:create_app python -m flask run --host=0.0.0.0 --port=5000 --reload --without-threads
+CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5000 --reload --without-threads
 ```
+
+So, now it's available at `localhost:5000`
 
 #### Docker (manytask only)
 ```shell
 docker build -t manytask .
 docker run \
-    --port "5000:5000" \
+    --rm \
+    --publish "5000:5000" \
     --name manytask \
     --env-file .env \
-    --env FLASK_ENV=development \ 
+    --env FLASK_ENV=development \
     manytask
 ```
 
+So, now it's available at `localhost:5000` 
+
+
 #### Docker-compose (development)
 ```shell
-docker-compose -f docker-compose.ymp -f docker-compose.override.yml up --build
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up --build
 ```
 or just
 ```shell
 docker-compose up --build
 ```
+
+So, now it's available at `localhost:5000` 
+
 
 ### Production 
 
@@ -64,7 +73,8 @@ docker-compose up --build
 ```shell
 docker build -t manytask .
 docker run \
-    --port "5000:5000" \
+    --rm \
+    --publish "5000:5000" \
     --name manytask \
     --env-file .env \
     --env FLASK_ENV=production \ 
@@ -75,7 +85,7 @@ docker run \
 
 #### Docker-compose (manytask with certs)
 ```shell
-docker-compose -f docker-compose.ymp -f docker-compose.production.yml up --build
+docker-compose -f docker-compose.yml -f docker-compose.production.yml up --build
 ```
 
 

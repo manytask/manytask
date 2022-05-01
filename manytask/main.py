@@ -1,13 +1,17 @@
 import base64
 import json
 import logging
+import logging.handlers
+import logging.config
 import os
 import secrets
+from typing import Any
 
 from authlib.integrations.flask_client import OAuth
 from cachelib import FileSystemCache
 from dotenv import load_dotenv
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import course, deadlines, gdoc, glab
 
@@ -40,13 +44,67 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     app.oauth = oauth
 
     # logging
-    if not app.debug:
-        gunicorn_logger = logging.getLogger('gunicorn.error')
-        app.logger.handlers = gunicorn_logger.handlers
-        app.logger.setLevel(gunicorn_logger.level)
-    else:
-        app.logger.setLevel(logging.DEBUG)
-
+    logging.config.dictConfig({
+        'version': 1,
+        'disable_existing_loggers': True,
+        'formatters': {
+            'default': {
+                'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+            },
+            'access': {
+                'format': '%(message)s',
+            }
+        },
+        'handlers': {
+            'console': {
+                'level': 'INFO',
+                'class': 'logging.StreamHandler',
+                'formatter': 'default',
+                'stream': 'ext://sys.stdout',
+            },
+            'general_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'default',
+                'filename': '/var/log/general.log',
+                'maxBytes': 10 * 1000,
+                'backupCount': 2,
+                'delay': 'True',
+            },
+            'error_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'default',
+                'filename': '/var/log/error.log',
+                'maxBytes': 10 * 1000,
+                'backupCount': 2,
+                'delay': 'True',
+            },
+            'access_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'access',
+                'filename': '/var/log/access.log',
+                'maxBytes': 10 * 1000,
+                'backupCount': 2,
+                'delay': 'True',
+            }
+        },
+        'loggers': {
+            'gunicorn.error': {
+                'handlers': ['console'] if app.debug else ['console', 'error_file'],
+                'level': 'INFO',
+                'propagate': False,
+            },
+            'gunicorn.access': {
+                'handlers': ['console'] if app.debug else ['console', 'access_file'],
+                'level': 'INFO',
+                'propagate': False,
+            }
+        },
+        'root': {
+            'level': 'DEBUG' if app.debug else 'INFO',
+            'handlers': ['console'] if app.debug else ['console', 'general_file'],
+        },
+    })
+    
     # cache
     cache = FileSystemCache(
         os.environ['CACHE_DIR'],
@@ -62,14 +120,14 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         course_students_group=os.environ['GITLAB_COURSE_STUDENTS_GROUP'],
         course_admins_group=os.environ['GITLAB_COURSE_ADMINS_GROUP'],
     )
+    _gdoc_credentials_string = base64.decodebytes(
+        os.environ['GDOC_ACCOUNT_CREDENTIALS_BASE64'].encode()
+    )
     gdoc_api = gdoc.GoogleDocAPI(
         base_url=os.environ['GDOC_URL'],
-        gdoc_credentials=json.loads(base64.decodebytes(os.environ['GDOC_ACCOUNT'].encode())),
+        gdoc_credentials=json.loads(_gdoc_credentials_string),
         public_worksheet_id=os.environ['GDOC_SPREADSHEET_ID'],
         public_scoreboard_sheet=int(os.environ['GDOC_SCOREBOARD_SHEET']),
-        private_worksheet_id=os.environ['GDOC_PRIVATE_SPREADSHEET_ID'],
-        private_accounts_sheet=int(os.environ['GDOC_PRIVATE_ACCOUNTS_SHEET']),
-        private_review_sheet=int(os.environ['GDOC_PRIVATE_REVIEW_SHEET']),
         cache=cache,
     )
     deadlines_api = deadlines.DeadlinesAPI(
@@ -86,6 +144,10 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         deadlines_api, gdoc_api, gitlab_api, registration_secret, lms_url, tg_invite_link, debug=app.debug,
     )
     app.course = _course
+
+    # for https support
+    _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
+    app.wsgi_app = _wsgi_app
 
     # routes
     from . import api, web
