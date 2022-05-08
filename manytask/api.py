@@ -6,6 +6,7 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
+import yaml
 from flask import Blueprint, abort, current_app, request
 
 from manytask.course import (Course, Task, get_current_time,
@@ -190,6 +191,31 @@ def get_score():
     }, 200
 
 
+@bp.post('/update_task_columns')
+@requires_token
+def update_task_columns():
+    course: Course = current_app.course
+
+    logger.info(f'Running update_task_columns')
+
+    # ----- get and validate request parameters ----- #
+    try:
+        deadlines_raw_data = request.get_data()
+        deadlines_data = yaml.load(deadlines_raw_data, Loader=yaml.SafeLoader)
+        course.store_deadlines(deadlines_data)
+    except Exception as e:
+        logger.exception(e)
+        return 'Invalid deadlines', 400
+
+    # ----- logic ----- #
+    # sync columns
+    tasks_started = course.deadlines.tasks_started
+    max_score_started = course.deadlines.max_score_started
+    course.rating_table.sync_columns(tasks_started, max_score_started)
+
+    return '', 200
+
+
 @bp.post('/sync_task_columns')
 @requires_token
 def sync_task_columns():
@@ -209,9 +235,6 @@ def sync_task_columns():
     tasks_started = course.deadlines.tasks_started
     max_score_started = course.deadlines.max_score_started
     course.rating_table.sync_columns(tasks_started, max_score_started)
-
-    # update cache with new values
-    # course.rating_table.update_cached_scores()
 
     return '', 200
 
