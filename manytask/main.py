@@ -154,4 +154,7 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     app.register_blueprint(api.bp)
     app.register_blueprint(web.bp)
 
+    logger = logging.getLogger(__name__)
+    logger.info(f'Init success')
+
     return app
