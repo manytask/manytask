@@ -137,7 +137,10 @@ def login_finish():
 
     gitlab_access_token: str = gitlab_oauth_token['access_token']
     gitlab_refresh_token: str = gitlab_oauth_token['refresh_token']
-    gitlab_openid_user = oauth.gitlab.parse_id_token(gitlab_oauth_token, claims_options={'iss': {'essential': False}})
+    # gitlab_openid_user = oauth.gitlab.parse_id_token(
+    #     gitlab_oauth_token,
+    #     nonce='', claims_options={'iss': {'essential': False}}
+    # )
 
     # get oauth student
     # TODO do not return 502 (raise_for_status below)
