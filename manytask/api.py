@@ -201,9 +201,7 @@ def update_task_columns():
     # ----- get and validate request parameters ----- #
     try:
         deadlines_raw_data = request.get_data()
-        logger.info('deadlines_raw_data\n' + str(deadlines_raw_data))
         deadlines_data = yaml.load(deadlines_raw_data, Loader=yaml.SafeLoader)
-        logger.info('deadlines_data\n' + str(deadlines_data))
         course.store_deadlines(deadlines_data)
     except Exception as e:
         logger.exception(e)
