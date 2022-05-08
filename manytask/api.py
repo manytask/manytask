@@ -195,6 +195,8 @@ def get_score():
 def sync_task_columns():
     course: Course = current_app.course
 
+    logger.info(f'Running sync_task_columns')
+
     # ----- get and validate request parameters ----- #
     try:
         course.store_deadlines(request.get_json(force=True, silent=False))
@@ -218,6 +220,8 @@ def sync_task_columns():
 @requires_token
 def update_cached_scores():
     course: Course = current_app.course
+
+    logger.info(f'Running update_cached_scores')
 
     # ----- logic ----- #
     course.rating_table.update_cached_scores()
