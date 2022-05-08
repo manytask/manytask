@@ -160,7 +160,10 @@ class RatingTable:
             }
             for scores_dict in list_of_dicts
         }
+        # clear cache saving deadlines
+        _deadlines = self._cache.get('__deadlines__')
         self._cache.clear()
+        self._cache.set('__deadlines__', _deadlines)
         self._cache.set_many(cache)
 
     def store_score(self, student: Student, task_name: str, update_fn: Callable) -> int:
