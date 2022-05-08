@@ -147,7 +147,12 @@ class RatingTable:
         return scores
 
     def update_cached_scores(self) -> None:
-        list_of_dicts = self.ws.get_all_records(head=PublicAccountsSheetOptions.HEADER_ROW, default_blank='')
+        list_of_dicts = self.ws.get_all_records(
+            empty2zero=False,
+            head=PublicAccountsSheetOptions.HEADER_ROW,
+            default_blank='',
+            expected_headers=[],
+        )
         cache = {
             f'{self.ws.id}:{scores_dict["login"]}': {
                 k: int(v) for i, (k, v) in enumerate(scores_dict.items())
