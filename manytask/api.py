@@ -23,6 +23,8 @@ def requires_token(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         token = request.form.get('token', request.headers.get('Authorization', ''))
+        if not token:
+            abort(403)
         token = token.split()[-1]
         if not secrets.compare_digest(token, TESTER_TOKEN):
             abort(403)
