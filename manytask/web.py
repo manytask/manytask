@@ -1,5 +1,6 @@
 import logging
 import secrets
+from collections import defaultdict
 
 import gitlab
 from authlib.integrations.base_client import OAuthError
@@ -49,6 +50,22 @@ def course_page():
         rating_table.update_cached_scores()
     tasks_scores = rating_table.get_scores(student_username)
 
+    all_tasks_scores = rating_table.get_all_scores()
+    num_users = len(all_tasks_scores)
+    _tasks_stats: defaultdict[str, int] = defaultdict(lambda: 0)
+    for tasks in all_tasks_scores.values():
+        for task_name in tasks.keys():
+            _tasks_stats[task_name] += 1
+    tasks_stats: dict[str, float] = {
+        task.name: _tasks_stats[task.name] / num_users
+        for task in course.deadlines.tasks
+    }
+    demand_multipliers: dict[str, float] = {
+        task_name: (0.5 * task_stat + 0.5) ** (-0.25)
+        for task_name, task_stat in tasks_stats.items()
+        if task_stat <= 0.25
+    }
+
     return render_template(
         'tasks.html',
         task_base_url=course.gitlab_api.get_url_for_task_base(),
@@ -62,6 +79,9 @@ def course_page():
         tg_invite_link=course.tg_invite_link,
         scores=tasks_scores,
         now=get_current_time(),
+        task_stats=tasks_stats,
+        demand_multipliers=demand_multipliers,
+        scores_update_timestamp=rating_table.get_scores_update_timestamp(),
         course_favicon=course.favicon
     )
 

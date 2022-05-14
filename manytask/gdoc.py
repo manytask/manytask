@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 import re
+import datetime
 from itertools import islice
 from typing import Callable
 
@@ -13,7 +14,8 @@ from gspread import Cell as GCell
 from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
 from .deadlines import Deadlines
-from .glab import Student, User
+from .glab import Student
+from .course import get_current_time
 
 
 logger = logging.getLogger(__name__)
@@ -146,25 +148,47 @@ class RatingTable:
             scores = {}
         return scores
 
+    def get_all_scores(self) -> dict[str, dict[str, int]]:
+        all_scores = self._cache.get(f'{self.ws.id}:scores')
+        if all_scores is None:
+            all_scores = {}
+        return all_scores
+
+    def get_scores_update_timestamp(self) -> str:
+        timestamp = self._cache.get(f'{self.ws.id}:scores-update-timestamp')
+        if timestamp is None:
+            timestamp = 'None'
+        return timestamp
+
     def update_cached_scores(self) -> None:
+        _utc_now = datetime.datetime.utcnow()
+
         list_of_dicts = self.ws.get_all_records(
             empty2zero=False,
             head=PublicAccountsSheetOptions.HEADER_ROW,
             default_blank='',
             expected_headers=[],
         )
-        cache = {
-            f'{self.ws.id}:{scores_dict["login"]}': {
+        all_users_scores_cache = {
+            scores_dict["login"]: {
                 k: int(v) for i, (k, v) in enumerate(scores_dict.items())
                 if i >= PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1 and isinstance(v, int)
             }
             for scores_dict in list_of_dicts
         }
+        users_score_cache = {
+            f'{self.ws.id}:{username}': scores_cache
+            for username, scores_cache in all_users_scores_cache.items()
+        }
         # clear cache saving deadlines
         _deadlines = self._cache.get('__deadlines__')
         self._cache.clear()
         self._cache.set('__deadlines__', _deadlines)
-        self._cache.set_many(cache)
+        self._cache.set(f'{self.ws.id}:scores', all_users_scores_cache)
+        # self._cache.set(f'{self.ws.id}:scores-update-timestamp',
+        #                 datetime.datetime.strftime(_utc_now, '%Y.%m.%d %H:%M:%S UTC'))
+        self._cache.set(f'{self.ws.id}:scores-update-timestamp', get_current_time())
+        self._cache.set_many(users_score_cache)
 
     def store_score(self, student: Student, task_name: str, update_fn: Callable) -> int:
         try:

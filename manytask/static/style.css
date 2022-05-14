@@ -76,7 +76,7 @@ input:invalid {
 /* Tooltip container */
 .tooltip {
     display: inline-block;
-    border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+    border-bottom: 1px dotted; /* If you want dots under the hoverable text */
 
     color: rgba(33, 33, 33, 0.51);
 
@@ -202,6 +202,59 @@ input:invalid {
     margin: 0 auto;
     font-size: 3em;
     font-weight: bold;
+}
+
+.task .stat {
+    opacity: 0.2;
+    position: absolute;
+    top: 0.1em;
+    left: 0.5em;
+    font-size: 1em;
+    text-align: left;
+    overflow: hidden;
+    max-width: 4ch;
+}
+
+.task .demand {
+    opacity: 0.2;
+    position: absolute;
+    top: 0.1em;
+    right: 0.5em;
+    font-size: 1em;
+    text-align: right;
+    display: flex;
+    justify-content: end;
+    align-items: center;
+
+    border-bottom: 1px dotted;
+}
+
+.task .demand .demand-mult {
+    overflow: hidden;
+    max-width: 4ch;
+}
+
+/* Tooltip text */
+.task .demand .demand-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    padding: 5px 5px;
+    border-radius: 1px;
+
+    /* Position the tooltip text - see examples below! */
+    position: absolute;
+    z-index: 1000;
+    left: 5px;
+    /*top: 110%;*/
+    bottom: 110%;
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.task .demand:hover .demand-text {
+    visibility: visible;
 }
 
 /* ========================================================================== */
