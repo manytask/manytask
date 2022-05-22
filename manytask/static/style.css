@@ -189,7 +189,7 @@ input:invalid {
 
 .task .name {
     margin: 0 auto;
-    margin-top: 0.8em;
+    margin-top: 20px;
     font-size: 1.2em;
     white-space: nowrap;
 }
@@ -207,7 +207,7 @@ input:invalid {
 .task .stat {
     opacity: 0.2;
     position: absolute;
-    top: 0.1em;
+    top: 0.15em;
     left: 0.5em;
     font-size: 1em;
     text-align: left;
@@ -216,9 +216,9 @@ input:invalid {
 }
 
 .task .demand {
-    opacity: 0.2;
+    opacity: 0.4;
     position: absolute;
-    top: 0.1em;
+    top: 0.15em;
     right: 0.5em;
     font-size: 1em;
     text-align: right;

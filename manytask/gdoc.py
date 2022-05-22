@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 import re
 import datetime
@@ -154,8 +155,20 @@ class RatingTable:
             all_scores = {}
         return all_scores
 
+    def get_stats(self) -> dict[str, dict[str, int]]:
+        stats = self._cache.get(f'{self.ws.id}:stats')
+        if stats is None:
+            stats = {}
+        return stats
+
+    def get_demands(self) -> dict[str, dict[str, int]]:
+        demands = self._cache.get(f'{self.ws.id}:demands')
+        if demands is None:
+            demands = {}
+        return demands
+
     def get_scores_update_timestamp(self) -> str:
-        timestamp = self._cache.get(f'{self.ws.id}:scores-update-timestamp')
+        timestamp = self._cache.get(f'{self.ws.id}:update-timestamp')
         if timestamp is None:
             timestamp = 'None'
         return timestamp
@@ -169,7 +182,7 @@ class RatingTable:
             default_blank='',
             expected_headers=[],
         )
-        all_users_scores_cache = {
+        all_users_scores = {
             scores_dict["login"]: {
                 k: int(v) for i, (k, v) in enumerate(scores_dict.items())
                 if i >= PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1 and isinstance(v, int)
@@ -178,16 +191,32 @@ class RatingTable:
         }
         users_score_cache = {
             f'{self.ws.id}:{username}': scores_cache
-            for username, scores_cache in all_users_scores_cache.items()
+            for username, scores_cache in all_users_scores.items()
         }
         # clear cache saving deadlines
         _deadlines = self._cache.get('__deadlines__')
+        deadlines = Deadlines(_deadlines)
+
+        _tasks_stats: defaultdict[str, int] = defaultdict(int)
+        for tasks in all_users_scores.values():
+            for task_name in tasks.keys():
+                _tasks_stats[task_name] += 1
+        tasks_stats: dict[str, float] = {
+            task.name: _tasks_stats[task.name] / len(all_users_scores)
+            for task in deadlines.tasks
+        }
+        demand_multipliers: dict[str, float] = {
+            task_name: deadlines.get_low_demand_multiplier(task_stat)
+            for task_name, task_stat in tasks_stats.items()
+            if deadlines.get_low_demand_multiplier(task_stat) != 1
+        }
+
         self._cache.clear()
         self._cache.set('__deadlines__', _deadlines)
-        self._cache.set(f'{self.ws.id}:scores', all_users_scores_cache)
-        # self._cache.set(f'{self.ws.id}:scores-update-timestamp',
-        #                 datetime.datetime.strftime(_utc_now, '%Y.%m.%d %H:%M:%S UTC'))
-        self._cache.set(f'{self.ws.id}:scores-update-timestamp', get_current_time())
+        self._cache.set(f'{self.ws.id}:scores', all_users_scores)
+        self._cache.set(f'{self.ws.id}:stats', tasks_stats)
+        self._cache.set(f'{self.ws.id}:demands', demand_multipliers)
+        self._cache.set(f'{self.ws.id}:update-timestamp', get_current_time())
         self._cache.set_many(users_score_cache)
 
     def store_score(self, student: Student, task_name: str, update_fn: Callable) -> int:

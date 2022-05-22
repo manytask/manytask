@@ -60,9 +60,12 @@ def _update_score(
         old_score: int,
         submit_time: datetime | None = None,
         check_deadline: bool = True,
+        demand_multiplier: float = 1.
 ) -> int:
     if old_score < 0:
         return old_score
+
+    assert 0 <= demand_multiplier <= 2
 
     extra_time = _parse_flags(flags)
 
@@ -70,16 +73,16 @@ def _update_score(
         if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
             new_score = 0
         elif check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            new_score = int(0.5 * score)
+            new_score = int(0.5 * score * demand_multiplier)
         else:
-            new_score = score
+            new_score = int(score * demand_multiplier)
         return max(new_score, old_score)
     elif task.scoring_func == 'latest':
         if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
             return old_score
         if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            return int(0.5 * score)
-        return score
+            return int(0.5 * score * demand_multiplier)
+        return int(score * demand_multiplier)
     else:
         raise ValueError(f'Wrong scoring func: {task.scoring_func}')
 
@@ -119,6 +122,9 @@ def report_score():
         except ValueError:
             commit_time = None
 
+    tasks_demands = course.rating_table.get_demands()
+    task_demand_multiplier = tasks_demands.get(task_name, 1)
+
     # ----- logic ----- #
     try:
         task = course.deadlines.find_task(task_name)
@@ -138,7 +144,8 @@ def report_score():
 
     logger.info(f'task {task.name} score {reported_score} check_deadline {check_deadline}')
     update_function = functools.partial(
-        _update_score, task, reported_score, submit_time=submit_time, check_deadline=check_deadline
+        _update_score, task, reported_score,
+        submit_time=submit_time, check_deadline=check_deadline, demand_multiplier=task_demand_multiplier,
     )
     final_score = course.rating_table.store_score(student, task.name, update_function)
 
