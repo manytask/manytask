@@ -25,7 +25,7 @@
         <div class="name">{{ task.name if (task.name | length <= MAX_TASK_LENGTH) else task.name[:MAX_TASK_LENGTH-1] + '…' }}</div>
         <div class="score">{{ scores.get(task.name, '0') }}/{{ task.score }}</div>
         <div class="stat">{{ task_stats.get(task.name, '0') }}</div>
-        {% if demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}
+        {% if not group.hw and demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}
           <div class="demand">
             <i class="demand-icon fa-solid fa-bolt"></i>
             <div class="demand-mult">{{ demand_multipliers.get(task.name, '1') }}</div>

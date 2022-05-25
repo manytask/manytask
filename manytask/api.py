@@ -105,6 +105,11 @@ def report_score():
     if 'check_deadline' in request.form:
         check_deadline = request.form['check_deadline'] is True or request.form['check_deadline'] == 'True'
 
+    use_demand_multiplier = False
+    if 'use_demand_multiplier' in request.form:
+        use_demand_multiplier = \
+            request.form['use_demand_multiplier'] is True or request.form['use_demand_multiplier'] == 'True'
+
     reported_score: int | None = None
     if 'score' in request.form:
         score_str = request.form['score']
@@ -123,7 +128,10 @@ def report_score():
             commit_time = None
 
     tasks_demands = course.rating_table.get_demands()
-    task_demand_multiplier = tasks_demands.get(task_name, 1)
+    if use_demand_multiplier:
+        task_demand_multiplier = tasks_demands.get(task_name, 1)
+    else:
+        task_demand_multiplier = 1
 
     # ----- logic ----- #
     try:
