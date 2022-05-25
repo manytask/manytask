@@ -154,6 +154,7 @@ def report_score():
         'username': student.username,
         'task': task.name,
         'score': final_score,
+        'demand_multiplier': task_demand_multiplier,
         'commit_time': commit_time.isoformat(sep=' ') if commit_time else 'None',
         'submit_time': submit_time.isoformat(sep=' '),
     }, 200
