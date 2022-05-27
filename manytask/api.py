@@ -9,8 +9,7 @@ from datetime import datetime, timedelta
 import yaml
 from flask import Blueprint, abort, current_app, request
 
-from manytask.course import (Course, Task, get_current_time,
-                             validate_commit_time)
+from manytask.course import Course, Task, get_current_time, validate_commit_time
 
 
 logger = logging.getLogger(__name__)
@@ -47,7 +46,7 @@ def _parse_flags(flags: str | None) -> timedelta:
             parsed = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
         except ValueError:
             logger.error(f'Could not parse date from flag {flags}')
-        if parsed is not None and datetime.now() <= parsed:
+        if parsed is not None and get_current_time() <= parsed:
             days = int(flags[left_colon + 1:right_colon])
             extra_time = timedelta(days=days)
     return extra_time
@@ -146,11 +145,14 @@ def report_score():
 
     current_time = get_current_time()
     submit_time = validate_commit_time(commit_time, current_time)
-    logger.info(
-        f'Verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
-    )
 
-    logger.info(f'task {task.name} score {reported_score} check_deadline {check_deadline}')
+    logger.info(
+        f'Save score {reported_score} for @{student} on task {task.name} \n'
+        f'check_deadline {check_deadline} task_demand_multiplier {task_demand_multiplier}'
+    )
+    logger.info(
+        f'verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
+    )
     update_function = functools.partial(
         _update_score, task, reported_score,
         submit_time=submit_time, check_deadline=check_deadline, demand_multiplier=task_demand_multiplier,
