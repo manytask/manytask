@@ -6,10 +6,10 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
+import yaml
 from flask import Blueprint, abort, current_app, request
 
-from manytask.course import (Course, Task, get_current_time,
-                             validate_commit_time)
+from manytask.course import Course, Task, get_current_time, validate_commit_time
 
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def _parse_flags(flags: str | None) -> timedelta:
             parsed = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
         except ValueError:
             logger.error(f'Could not parse date from flag {flags}')
-        if parsed is not None and datetime.now() <= parsed:
+        if parsed is not None and get_current_time() <= parsed:
             days = int(flags[left_colon + 1:right_colon])
             extra_time = timedelta(days=days)
     return extra_time
@@ -59,9 +59,12 @@ def _update_score(
         old_score: int,
         submit_time: datetime | None = None,
         check_deadline: bool = True,
+        demand_multiplier: float = 1.
 ) -> int:
     if old_score < 0:
         return old_score
+
+    assert 0 <= demand_multiplier <= 2
 
     extra_time = _parse_flags(flags)
 
@@ -69,16 +72,16 @@ def _update_score(
         if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
             new_score = 0
         elif check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            new_score = int(0.5 * score)
+            new_score = int(0.5 * score * demand_multiplier)
         else:
-            new_score = score
+            new_score = int(score * demand_multiplier)
         return max(new_score, old_score)
     elif task.scoring_func == 'latest':
         if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
             return old_score
         if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            return int(0.5 * score)
-        return score
+            return int(0.5 * score * demand_multiplier)
+        return int(score * demand_multiplier)
     else:
         raise ValueError(f'Wrong scoring func: {task.scoring_func}')
 
@@ -101,6 +104,11 @@ def report_score():
     if 'check_deadline' in request.form:
         check_deadline = request.form['check_deadline'] is True or request.form['check_deadline'] == 'True'
 
+    use_demand_multiplier = False
+    if 'use_demand_multiplier' in request.form:
+        use_demand_multiplier = \
+            request.form['use_demand_multiplier'] is True or request.form['use_demand_multiplier'] == 'True'
+
     reported_score: int | None = None
     if 'score' in request.form:
         score_str = request.form['score']
@@ -118,6 +126,12 @@ def report_score():
         except ValueError:
             commit_time = None
 
+    tasks_demands = course.rating_table.get_demands()
+    if use_demand_multiplier:
+        task_demand_multiplier = tasks_demands.get(task_name, 1)
+    else:
+        task_demand_multiplier = 1
+
     # ----- logic ----- #
     try:
         task = course.deadlines.find_task(task_name)
@@ -131,13 +145,17 @@ def report_score():
 
     current_time = get_current_time()
     submit_time = validate_commit_time(commit_time, current_time)
-    logger.info(
-        f'Verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
-    )
 
-    logger.info(f'task {task.name} score {reported_score} check_deadline {check_deadline}')
+    logger.info(
+        f'Save score {reported_score} for @{student} on task {task.name} \n'
+        f'check_deadline {check_deadline} task_demand_multiplier {task_demand_multiplier}'
+    )
+    logger.info(
+        f'verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
+    )
     update_function = functools.partial(
-        _update_score, task, reported_score, submit_time=submit_time, check_deadline=check_deadline
+        _update_score, task, reported_score,
+        submit_time=submit_time, check_deadline=check_deadline, demand_multiplier=task_demand_multiplier,
     )
     final_score = course.rating_table.store_score(student, task.name, update_function)
 
@@ -146,6 +164,7 @@ def report_score():
         'username': student.username,
         'task': task.name,
         'score': final_score,
+        'demand_multiplier': task_demand_multiplier,
         'commit_time': commit_time.isoformat(sep=' ') if commit_time else 'None',
         'submit_time': submit_time.isoformat(sep=' '),
     }, 200
@@ -190,10 +209,37 @@ def get_score():
     }, 200
 
 
+@bp.post('/update_task_columns')
+@requires_token
+def update_task_columns():
+    course: Course = current_app.course
+
+    logger.info(f'Running update_task_columns')
+
+    # ----- get and validate request parameters ----- #
+    try:
+        deadlines_raw_data = request.get_data()
+        deadlines_data = yaml.load(deadlines_raw_data, Loader=yaml.SafeLoader)
+        course.store_deadlines(deadlines_data)
+    except Exception as e:
+        logger.exception(e)
+        return 'Invalid deadlines', 400
+
+    # ----- logic ----- #
+    # sync columns
+    tasks_started = course.deadlines.tasks_started
+    max_score_started = course.deadlines.max_score_started
+    course.rating_table.sync_columns(tasks_started, max_score_started)
+
+    return '', 200
+
+
 @bp.post('/sync_task_columns')
 @requires_token
 def sync_task_columns():
     course: Course = current_app.course
+
+    logger.info(f'Running sync_task_columns')
 
     # ----- get and validate request parameters ----- #
     try:
@@ -208,9 +254,6 @@ def sync_task_columns():
     max_score_started = course.deadlines.max_score_started
     course.rating_table.sync_columns(tasks_started, max_score_started)
 
-    # update cache with new values
-    # course.rating_table.update_cached_scores()
-
     return '', 200
 
 
@@ -218,6 +261,8 @@ def sync_task_columns():
 @requires_token
 def update_cached_scores():
     course: Course = current_app.course
+
+    logger.info(f'Running update_cached_scores')
 
     # ----- logic ----- #
     course.rating_table.update_cached_scores()

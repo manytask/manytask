@@ -37,6 +37,7 @@ TBA
     * `chore` - changes that do not relate to a fix or feature and don't modify src or test files (for example updating dependencies) 
     * `refactor` - code refactor that neither fixes a bug nor adds a feature
     * `style` - changes that do not affect the meaning of the code
+    * `perf` - changes that improve performance
     * `test` - including new or correcting previous tests
     * `ci` - continuous integration related
 
