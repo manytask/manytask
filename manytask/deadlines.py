@@ -1,5 +1,4 @@
 import logging
-import random
 from collections import namedtuple
 from datetime import datetime, timedelta
 from typing import Any
@@ -48,7 +47,8 @@ class DeadlinesAPI:
             }
             for i in range(total_groups)
         ]
-        return Deadlines(reversed(deadlines))
+        self._cache.set('__deadlines__', deadlines)
+        return Deadlines(deadlines[::-1])
 
 
 class Deadlines:
@@ -56,6 +56,20 @@ class Deadlines:
 
     def __init__(self, config: list[dict]):
         self.groups = self._parse_groups(config)
+
+    @staticmethod
+    def get_low_demand_multiplier(demand: float) -> float:
+        # if demand <= 0.5:
+        #     demand_multiplier = 1 + 0.1 * 2 * (0.5 - demand)
+        # else:
+        #     demand_multiplier = 1
+
+        if demand <= 0.25:
+            demand_multiplier = 1 + 0.1 * (1 - demand)
+        else:
+            demand_multiplier = 1
+
+        return min(demand_multiplier, 2)
 
     @staticmethod
     def _parse_groups(config: list[dict]) -> list[course.Group]:

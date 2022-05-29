@@ -5,7 +5,6 @@ import logging.handlers
 import logging.config
 import os
 import secrets
-from typing import Any
 
 from authlib.integrations.flask_client import OAuth
 from cachelib import FileSystemCache
@@ -155,6 +154,11 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     app.register_blueprint(web.bp)
 
     logger = logging.getLogger(__name__)
+
+    # debug updates
+    if app.course.debug:
+        app.course.deadlines_api.fetch_debug()
+
     logger.info(f'Init success')
 
     return app
