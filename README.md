@@ -1,7 +1,15 @@
 # manytask
 
-Small application for manage course: set students' scores, maintain deadlines and so on
+[![Test](https://github.com/yandexdataschool/manytask/actions/workflows/test.yml/badge.svg)](https://github.com/yandexdataschool/manytask/actions/workflows/test.yml)
+[![Publish](https://github.com/yandexdataschool/manytask/actions/workflows/publish.yml/badge.svg)](https://github.com/yandexdataschool/manytask/actions/workflows/publish.yml)
+[![codecov](https://codecov.io/gh/yandexdataschool/manytask/branch/master/graph/badge.svg?token=3F9J850FX2)](https://codecov.io/gh/yandexdataschool/manytask)
+[![github](https://img.shields.io/github/v/release/yandexdataschool/manytask?logo=github&display_name=tag&sort=semver)](https://github.com/yandexdataschool/manytask/releases)
+[![docker](https://img.shields.io/docker/v/yandexdataschool/manytask?label=docker&logo=docker&sort=semver)](https://hub.docker.com/yandexdataschool/manytask?sort=semver)
 
+
+Small web application for managing courses: store students' grades, maintain deadlines, provide scoreboard etc.
+
+---
 
 ## Setup
 
@@ -101,7 +109,7 @@ docker-compose -f docker-compose.yml -f docker-compose.production.yml up --build
 
 
 
-## Testing script api
+## API and Testing Script Interface 
 
 ### Standard script 
 
@@ -115,21 +123,19 @@ However, you can implement your own checker just following `manytask` api:
 * All the endpoints require `Authorization: Bearer <token>` or `Authorization: <token>` (deprecated) header contain `TESTER_TOKEN`, to validate it's authorized checker. 
 * Or, alternatively, being admin (session with admin field) 
   
-| method | api endpoint                | description                               | required in body                                              | optional in body                                        | return                                                               |
-|--------|-----------------------------|-------------------------------------------|---------------------------------------------------------------|---------------------------------------------------------|----------------------------------------------------------------------|
-| POST   | `/api/report`               | set student's score                       | `task`, `user_id` (gitlab), `score`                           | `check_deadline`, `commit_time` (`%Y-%m-%d %H:%M:%S%z`) | `user_id`, `username`, `task`, `score`, `commit_time`, `submit_time` |
-| GET    | `/api/score`                | get student's score                       | `task`, `user_id` (gitlab)                                    | -                                                       | `user_id`, `username`, `task`, `score`                               |
-| POST   | `/api/sync_task_columns`    | update course to `deadlines` (deprecated) | \*deadlines json body\*                                       | -                                                       | -                                                                    |
-| POST   | `/api/update_task_columns`  | update course to `deadlines`              | \*deadlines yaml file\*                                       | -                                                       | -                                                                    |
-| POST   | `/api/update_cached_scores` | update cached scores for all users        | -                                                             | -                                                       | -                                                                    |
-| POST   | `/api/report_source`        | save student's solution source files      | `task`, `user_id` (gitlab) + multipart/form-data source files | -                                                       | -                                                                    |
-| GET    | `/api/solutions`            | get all solutions for the task            | `task`                                                        | -                                                       | zip archive file with solutions                                      |
-
+| method | api endpoint                | description                                       | required in body                                             | optional in body                                                                           | return                                                               |
+|--------|-----------------------------|---------------------------------------------------|--------------------------------------------------------------|--------------------------------------------------------------------------------------------|----------------------------------------------------------------------|
+| POST   | `/api/report`               | set student's score (optionally save source code) | `task`, `user_id` (gitlab), `score`                          | `check_deadline`, `commit_time` (`%Y-%m-%d %H:%M:%S%z`), multipart/form-data source files  | `user_id`, `username`, `task`, `score`, `commit_time`, `submit_time` |
+| GET    | `/api/score`                | get student's score                               | `task`, `user_id` (gitlab)                                   | -                                                                                          | `user_id`, `username`, `task`, `score`                               |
+| POST   | `/api/sync_task_columns`    | update course to `deadlines` (deprecated)         | \*deadlines json body\*                                      | -                                                                                          | -                                                                    |
+| POST   | `/api/update_task_columns`  | update course to `deadlines`                      | \*deadlines yaml file\*                                      | -                                                                                          | -                                                                    |
+| POST   | `/api/update_cached_scores` | update cached scores for all users                | -                                                            | -                                                                                          | -                                                                    |
+| GET    | `/api/solutions`            | get all solutions for the task                    | `task`                                                       | -                                                                                          | zip archive file with solutions                                      |
 
 
 ## About
 
-Originally was developed at gitlab as [shad-ts](https://gitlab.com/slon/shad-ts/) by [@slon](https://github.com/slon) for [Yandex School of Data Analysis](https://yandexdataschool.com/) 
+Originally was developed at gitlab as [shad-ts](https://gitlab.com/slon/shad-ts/) by [Fedor Korotkiy](https://github.com/slon) for [Yandex School of Data Analysis](https://yandexdataschool.com/) 
 
 ### Acknowledgment 
 
