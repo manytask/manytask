@@ -73,6 +73,5 @@ jobs:
       - name: Test Build Docker
         uses: docker/build-push-action@v3
         with:
-          context: {{defaultContext}}:docker
           push: false
           tags: manytask:test
