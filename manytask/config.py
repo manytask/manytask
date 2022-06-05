@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 
@@ -24,7 +26,7 @@ class Config:
     # gitlab course repos
     gitlab_course_public_repo: str = os.environ.get('GITLAB_COURSE_PUBLIC_REPO')
     gitlab_course_students_group: str = os.environ.get('GITLAB_COURSE_STUDENTS_GROUP')
-    gitlab_course_admins_group: str = os.environ.get('GITLAB_COURSE_ADMINS_GROUP', None)
+    gitlab_course_admins_group: str | None = os.environ.get('GITLAB_COURSE_ADMINS_GROUP', None)
     # gitlab oauth2
     gitlab_client_id: str = os.environ.get('GITLAB_CLIENT_ID')
     gitlab_client_secret: str = os.environ.get('GITLAB_CLIENT_SECRET')
@@ -47,4 +49,3 @@ class DebugConfig(Config):
 
     # utils
     cache_dir: str = './cache'
-
