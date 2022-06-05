@@ -5,7 +5,7 @@ import logging
 import os
 import secrets
 from datetime import datetime, timedelta
-from typing import Callable, Any
+from typing import Any, Callable
 
 import yaml
 from flask import Blueprint, abort, current_app, request

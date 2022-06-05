@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from dataclasses import dataclass
-import re
 from itertools import islice
-from typing import Callable, Any
+from typing import Any, Callable
 
 import gspread
 from authlib.integrations.requests_client import AssertionSession
@@ -13,9 +13,9 @@ from cachelib import BaseCache
 from gspread import Cell as GCell
 from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
+from .course import get_current_time
 from .deadlines import Deadlines
 from .glab import Student
-from .course import get_current_time
 
 
 logger = logging.getLogger(__name__)

@@ -10,6 +10,7 @@ from flask.typing import ResponseReturnValue
 from . import glab
 from .course import Course, get_current_time
 
+
 SESSION_VERSION = 1.5
 
 
