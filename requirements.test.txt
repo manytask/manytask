@@ -1,6 +1,6 @@
 # linters
 flake8==4.0.1
-mypy==0.960
+mypy==0.961
 isort==5.10.1
 
 # stubs
