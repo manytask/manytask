@@ -66,7 +66,10 @@ class GitLabApi:
         self._course_group = course_students_group
         self._admins_group = course_admins_group
 
-    def register_new_user(self, user: User) -> gitlab.v4.objects.User:
+    def register_new_user(
+            self,
+            user: User,
+    ) -> gitlab.v4.objects.User:
         """
         :param user:
         :return: returns this thing
@@ -88,7 +91,10 @@ class GitLabApi:
 
         return new_user
 
-    def create_project(self, student: Student) -> None:
+    def create_project(
+            self,
+            student: Student,
+    ) -> None:
         try:
             course_group = next(
                 group for group in self._gitlab.groups.list(search=self._course_group)
@@ -131,10 +137,13 @@ class GitLabApi:
                 'access_level': gitlab.MAINTAINER_ACCESS,
             })
             logger.info(f'Access to fork granted for {member.username}')
-        except gitlab.GitlabCreateError as ex:
+        except gitlab.GitlabCreateError:
             logger.info(f'Access already granted for {student.username}')
 
-    def _parse_user_to_student(self, user: dict) -> Student:
+    def _parse_user_to_student(
+            self,
+            user: dict,
+    ) -> Student:
         return Student(
             id=user['id'],
             username=user['username'],
@@ -142,17 +151,26 @@ class GitLabApi:
             repo=self.get_url_for_repo(user['username'])
         )
 
-    def get_students_by_username(self, username: str) -> list[Student]:
+    def get_students_by_username(
+            self,
+            username: str,
+    ) -> list[Student]:
         users = self._gitlab.users.list(username=username)
         return [self._parse_user_to_student(user._attrs) for user in users]
 
-    def get_student(self, user_id: int) -> Student:
+    def get_student(
+            self,
+            user_id: int,
+    ) -> Student:
         logger.info(f'Searching user {user_id}...')
         user = self._gitlab.users.get(user_id)
         logger.info(f'User found: "{user.username}"')
         return self._parse_user_to_student(user._attrs)
 
-    def get_authenticated_student(self, oauth_token: str) -> Student:
+    def get_authenticated_student(
+            self,
+            oauth_token: str,
+    ) -> Student:
         headers = {'Authorization': 'Bearer ' + oauth_token}
         response = requests.get(f'{self._url}/api/v4/user', headers=headers)
         response.raise_for_status()
@@ -161,11 +179,16 @@ class GitLabApi:
     def get_url_for_task_base(self) -> str:
         return f'{self._url}/{self._course_public_repo}/blob/master'
 
-    def get_url_for_repo(self, username: str) -> str:
+    def get_url_for_repo(
+            self,
+            username: str,
+    ) -> str:
         return f'{self._url}/{self._course_group}/{username}'
 
 
-def map_gitlab_user_to_student(gitlab_response: gitlab.v4.objects.User) -> Student:
+def map_gitlab_user_to_student(
+        gitlab_response: gitlab.v4.objects.User,
+) -> Student:
     return Student(
         id=gitlab_response.id,
         username=gitlab_response.username,

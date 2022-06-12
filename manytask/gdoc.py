@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from dataclasses import dataclass
-import re
-import datetime
 from itertools import islice
-from typing import Callable
+from typing import Any, Callable
 
 import gspread
 from authlib.integrations.requests_client import AssertionSession
@@ -14,9 +13,9 @@ from cachelib import BaseCache
 from gspread import Cell as GCell
 from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
+from .course import get_current_time
 from .deadlines import Deadlines
 from .glab import Student
-from .course import get_current_time
 
 
 logger = logging.getLogger(__name__)
@@ -88,7 +87,7 @@ class GoogleDocAPI:
     def __init__(
             self,
             base_url: str,
-            gdoc_credentials: dict | None,
+            gdoc_credentials: dict[str, Any],
             public_worksheet_id: str,
             public_scoreboard_sheet: int,
             cache: BaseCache,
@@ -126,7 +125,11 @@ class GoogleDocAPI:
             header=header,
         )
 
-    def _get_sheet(self, worksheet_id: str, sheet_id: int) -> gspread.Worksheet:
+    def _get_sheet(
+            self,
+            worksheet_id: str,
+            sheet_id: int,
+    ) -> gspread.Worksheet:
         gs: gspread.Client = gspread.Client(None, session=self._assertion_session)
         worksheet: gspread.Spreadsheet = gs.open_by_key(worksheet_id)
         return worksheet.get_worksheet(sheet_id)
@@ -139,11 +142,18 @@ class GoogleDocAPI:
 
 
 class RatingTable:
-    def __init__(self, worksheet: gspread.Worksheet, cache: BaseCache):
+    def __init__(
+            self,
+            worksheet: gspread.Worksheet,
+            cache: BaseCache,
+    ):
         self._cache = cache
         self.ws = worksheet
 
-    def get_scores(self, username: str) -> dict[str, int]:
+    def get_scores(
+            self,
+            username: str,
+    ) -> dict[str, int]:
         scores = self._cache.get(f'{self.ws.id}:{username}')
         if scores is None:
             scores = {}
@@ -174,7 +184,7 @@ class RatingTable:
         return timestamp
 
     def update_cached_scores(self) -> None:
-        _utc_now = datetime.datetime.utcnow()
+        _current_timestamp = get_current_time()
 
         list_of_dicts = self.ws.get_all_records(
             empty2zero=False,
@@ -216,10 +226,15 @@ class RatingTable:
         self._cache.set(f'{self.ws.id}:scores', all_users_scores)
         self._cache.set(f'{self.ws.id}:stats', tasks_stats)
         self._cache.set(f'{self.ws.id}:demands', demand_multipliers)
-        self._cache.set(f'{self.ws.id}:update-timestamp', get_current_time())
+        self._cache.set(f'{self.ws.id}:update-timestamp', _current_timestamp)
         self._cache.set_many(users_score_cache)
 
-    def store_score(self, student: Student, task_name: str, update_fn: Callable) -> int:
+    def store_score(
+            self,
+            student: Student,
+            task_name: str,
+            update_fn: Callable,
+    ) -> int:
         try:
             student_row = self._find_login_row(student.username)
         except LoginNotFound:
@@ -252,9 +267,13 @@ class RatingTable:
         self._cache.set(f'{self.ws.id}:{student.username}', student_scores)
         return new_score
 
-    def sync_columns(self, tasks: list[Deadlines.Task], max_score: int | None = None) -> None:
+    def sync_columns(
+            self,
+            tasks: list[Deadlines.Task],
+            max_score: int | None = None,
+    ) -> None:
         # TODO: maintain group orger when adding new task in added group
-        logger.info(f'Syncing rating columns...')
+        logger.info('Syncing rating columns...')
         existing_tasks = list(self._list_tasks(with_index=False))
         existing_task_names = set(task for task in existing_tasks if task)
         tasks_to_create = [task for task in tasks if task.name not in existing_task_names]
@@ -287,22 +306,27 @@ class RatingTable:
             self.ws.update_cells(cells_to_update, value_input_option=ValueInputOption.user_entered)
 
             self.ws.format(
-                f'{rowcol_to_a1(PublicAccountsSheetOptions.GROUPS_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:'
+                f'{rowcol_to_a1(PublicAccountsSheetOptions.GROUPS_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:'  # noqa: E501
                 f'{rowcol_to_a1(PublicAccountsSheetOptions.GROUPS_ROW, required_worksheet_size)}',
                 GROUP_ROW_FORMATTING
             )
             self.ws.format(
-                f'{rowcol_to_a1(PublicAccountsSheetOptions.HEADER_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:'
+                f'{rowcol_to_a1(PublicAccountsSheetOptions.HEADER_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:'  # noqa: E501
                 f'{rowcol_to_a1(PublicAccountsSheetOptions.HEADER_ROW, required_worksheet_size)}',
                 HEADER_ROW_FORMATTING
             )
             self.ws.format(
-                f'{rowcol_to_a1(PublicAccountsSheetOptions.MAX_SCORES_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:'
+                f'{rowcol_to_a1(PublicAccountsSheetOptions.MAX_SCORES_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:'  # noqa: E501
                 f'{rowcol_to_a1(PublicAccountsSheetOptions.MAX_SCORES_ROW, required_worksheet_size)}',
                 HEADER_ROW_FORMATTING
             )
 
-    def _get_row_values(self, row, start=None, with_index: bool = False):
+    def _get_row_values(
+            self,
+            row: int,
+            start: int | None = None,
+            with_index: bool = False,
+    ):
         values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
         if with_index:
             values = enumerate(values, start=1)
@@ -310,13 +334,19 @@ class RatingTable:
             values = islice(values, start, None)
         return values
 
-    def _list_tasks(self, with_index: bool = False):
+    def _list_tasks(
+            self,
+            with_index: bool = False,
+    ):
         return self._get_row_values(
             PublicAccountsSheetOptions.HEADER_ROW,
             start=PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1, with_index=with_index
         )
 
-    def _find_task_column(self, task: str) -> int:
+    def _find_task_column(
+            self,
+            task: str,
+    ) -> int:
         logger.info(f'Looking for task "{task}"...')
         logger.info(list(self._list_tasks()))
         logger.info(str(task))
@@ -325,7 +355,10 @@ class RatingTable:
                 return col
         raise TaskNotFound(f'Task "{task}" not found in spreadsheet')
 
-    def _find_login_row(self, login: str) -> int:
+    def _find_login_row(
+            self,
+            login: str,
+    ) -> int:
         logger.info(f'Looking for student "{login}"...')
         all_logins = self.ws.col_values(
             PublicAccountsSheetOptions.LOGIN_COLUMN, value_render_option=ValueRenderOption.unformatted
@@ -337,7 +370,10 @@ class RatingTable:
 
         raise LoginNotFound(f'Login {login} not found in spreadsheet')
 
-    def _add_student_row(self, student: Student) -> int:
+    def _add_student_row(
+            self,
+            student: Student,
+    ) -> int:
         logger.info(f'Adding student "{student.username}" with name "{student.name}"...')
         if len(student.name) == 0 or re.match(r'\W', student.name, flags=re.UNICODE):
             raise ValueError(f'Name "{student.name}" looks fishy')
@@ -378,5 +414,7 @@ class RatingTable:
         return row_count
 
     @staticmethod
-    def create_student_repo_link(student: Student) -> str:
+    def create_student_repo_link(
+            student: Student,
+    ) -> str:
         return f'=HYPERLINK("{student.repo}";"git")'

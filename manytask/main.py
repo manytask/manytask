@@ -1,8 +1,8 @@
 import base64
 import json
 import logging
-import logging.handlers
 import logging.config
+import logging.handlers
 import os
 import secrets
 
@@ -103,7 +103,7 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
             'handlers': ['console'] if app.debug else ['console', 'general_file'],
         },
     })
-    
+
     # cache
     cache = FileSystemCache(
         os.environ['CACHE_DIR'],
@@ -146,7 +146,7 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
 
     # for https support
     _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
-    app.wsgi_app = _wsgi_app
+    app.wsgi_app = _wsgi_app  # type: ignore
 
     # routes
     from . import api, web
@@ -159,6 +159,6 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     if app.course.debug:
         app.course.deadlines_api.fetch_debug()
 
-    logger.info(f'Init success')
+    logger.info('Init success')
 
     return app

@@ -1,15 +1,15 @@
 import logging
 import secrets
-from collections import defaultdict
 
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import (Blueprint, current_app, redirect, render_template, request,
-                   session, url_for)
+from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from flask.typing import ResponseReturnValue
 
 from . import glab
 from .course import Course, get_current_time
+
 
 SESSION_VERSION = 1.5
 
@@ -31,7 +31,7 @@ def valid_session(user_session: session) -> bool:
 
 
 @bp.route('/')
-def course_page():
+def course_page() -> ResponseReturnValue:
     course: Course = current_app.course
 
     if current_app.debug:
@@ -44,6 +44,8 @@ def course_page():
         student_username = session['gitlab']['username']
         student_repo = session['gitlab']['repo']
         student_course_admin = session['gitlab']['course_admin']
+
+    print(student_course_admin)
 
     rating_table = course.rating_table
     if course.debug:
@@ -74,7 +76,7 @@ def course_page():
 
 
 @bp.route('/signup', methods=['GET', 'POST'])
-def signup():
+def signup() -> ResponseReturnValue:
     course: Course = current_app.course
 
     # ---- render page ---- #
@@ -98,7 +100,7 @@ def signup():
     try:
         if not secrets.compare_digest(request.form['secret'], course.registration_secret):
             raise Exception('Invalid registration secret')
-        registered_user = course.gitlab_api.register_new_user(user)
+        _ = course.gitlab_api.register_new_user(user)
     except Exception as e:
         logger.exception(f'User registration failed: {e}')
         return render_template(
@@ -114,7 +116,7 @@ def signup():
 
 
 @bp.route('/login', methods=['GET'])
-def login():
+def login() -> ResponseReturnValue:
     """Only way to login - gitlab oauth"""
     oauth: OAuth = current_app.oauth
 
@@ -124,7 +126,7 @@ def login():
 
 
 @bp.route('/login_finish')
-def login_finish():
+def login_finish() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
     course: Course = current_app.course
     oauth: OAuth = current_app.oauth
@@ -181,6 +183,6 @@ def login_finish():
 
 
 @bp.route('/logout')
-def logout():
+def logout() -> ResponseReturnValue:
     session.pop('gitlab', None)
     return redirect(url_for('web.course_page'))

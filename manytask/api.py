@@ -5,9 +5,11 @@ import logging
 import os
 import secrets
 from datetime import datetime, timedelta
+from typing import Any, Callable
 
 import yaml
 from flask import Blueprint, abort, current_app, request
+from flask.typing import ResponseReturnValue
 
 from manytask.course import Course, Task, get_current_time, validate_commit_time
 
@@ -19,9 +21,9 @@ bp = Blueprint('api', __name__, url_prefix='/api')
 TESTER_TOKEN = os.environ['TESTER_TOKEN']
 
 
-def requires_token(f):
+def requires_token(f: Callable[[Any, ], Any]) -> Callable[[Any, ], Any]:
     @functools.wraps(f)
-    def decorated(*args, **kwargs):
+    def decorated(*args: Any, **kwargs: Any) -> Any:
         token = request.form.get('token', request.headers.get('Authorization', ''))
         if not token:
             abort(403)
@@ -88,7 +90,7 @@ def _update_score(
 
 @bp.post('/report')
 @requires_token
-def report_score():
+def report_score() -> ResponseReturnValue:
     course: Course = current_app.course
 
     # ----- get and validate request parameters ----- #
@@ -172,7 +174,7 @@ def report_score():
 
 @bp.get('/score')
 @requires_token
-def get_score():
+def get_score() -> ResponseReturnValue:
     course: Course = current_app.course
 
     # ----- get and validate request parameters ----- #
@@ -211,10 +213,10 @@ def get_score():
 
 @bp.post('/update_task_columns')
 @requires_token
-def update_task_columns():
+def update_task_columns() -> ResponseReturnValue:
     course: Course = current_app.course
 
-    logger.info(f'Running update_task_columns')
+    logger.info('Running update_task_columns')
 
     # ----- get and validate request parameters ----- #
     try:
@@ -236,10 +238,10 @@ def update_task_columns():
 
 @bp.post('/sync_task_columns')
 @requires_token
-def sync_task_columns():
+def sync_task_columns() -> ResponseReturnValue:
     course: Course = current_app.course
 
-    logger.info(f'Running sync_task_columns')
+    logger.info('Running sync_task_columns')
 
     # ----- get and validate request parameters ----- #
     try:
@@ -259,10 +261,10 @@ def sync_task_columns():
 
 @bp.post('/update_cached_scores')
 @requires_token
-def update_cached_scores():
+def update_cached_scores() -> ResponseReturnValue:
     course: Course = current_app.course
 
-    logger.info(f'Running update_cached_scores')
+    logger.info('Running update_cached_scores')
 
     # ----- logic ----- #
     course.rating_table.update_cached_scores()
@@ -272,7 +274,7 @@ def update_cached_scores():
 
 @bp.post('/report_source')
 @requires_token
-def report_source():
+def report_source() -> ResponseReturnValue:
     course: Course = current_app.course
 
     # ----- get and validate request parameters ----- #
@@ -293,12 +295,12 @@ def report_source():
         print('file', file)
         # file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
 
-    pass
+    return 'Not implemented', 500
 
 
 @bp.get('/solutions')
 @requires_token
-def get_solutions():
+def get_solutions() -> ResponseReturnValue:
     course: Course = current_app.course
 
     # ----- get and validate request parameters ----- #
@@ -308,5 +310,4 @@ def get_solutions():
 
     # ----- logic ----- #
 
-    pass
-
+    return 'Not implemented', 500
