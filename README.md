@@ -15,15 +15,20 @@ Small web application for managing courses: store students' grades, maintain dea
 
 ### Debug and development 
 
-Clone repo
+1. Clone repo
 ```shell
 git clone https://github.com/yandexdataschool/manytask
 ```
 
-Create `.env` file with dev/production environment
+2. Create `.env` file with dev/production environment
 ```shell
 cp .env.example .env
 ```
+
+3. Generate credentials for accessing google spreadsheets API
+    1. Follow the steps described in [this article](https://medium.com/@a.marenkov/how-to-get-credentials-for-google-sheets-456b7e88c430)
+    2. Base64 encode the created JSON key (using tools online, `base64` lib in python, or `btoa` function in the browser)
+    3. Put it in the .env file by GDOC_ACCOUNT_CREDENTIALS_BASE64 key
 
 ### Production
 
