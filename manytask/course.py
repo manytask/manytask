@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
+
 
 logger = logging.getLogger(__name__)
 MOSCOW_TIMEZONE = ZoneInfo('Europe/Moscow')
@@ -35,7 +37,14 @@ def validate_commit_time(commit_time: datetime | None, current_time: datetime) -
 
 class Task:
     def __init__(
-            self, name: str, score: int, tags, start: str, deadline: str, second_deadline: str, scoring_func: str
+            self,
+            name: str,
+            score: int,
+            tags: list[str],
+            start: str,
+            deadline: str,
+            second_deadline: str,
+            scoring_func: str,
     ):
         self.name = name
         self.score = score
@@ -46,7 +55,7 @@ class Task:
         self.scoring_func = scoring_func
 
     def is_started(self) -> bool:
-        return datetime.now(tz=MOSCOW_TIMEZONE) > self.start
+        return get_current_time() > self.start
 
     def is_overdue(self, extra_time: timedelta = timedelta(), submit_time: datetime | None = None) -> bool:
         submit_time = submit_time or get_current_time()
@@ -75,15 +84,15 @@ class Group:
         return get_current_time() > self.start
 
 
-from . import deadlines, gdoc, glab
+from . import deadlines, gdoc, glab  # noqa: E402, F401
 
 
 class Course:
     def __init__(
             self,
             deadlines_api: 'deadlines.DeadlinesAPI',
-            googledoc_api: 'gdoc.GoogleDocAPI',
-            gitlab_api: 'glab.GitLabApi',
+            googledoc_api: gdoc.GoogleDocAPI,
+            gitlab_api: glab.GitLabApi,
             registration_secret: str,
             lms_url: str,
             tg_invite_link: str,
@@ -114,9 +123,9 @@ class Course:
         else:
             return self.deadlines_api.fetch()
 
-    def store_deadlines(self, content):
+    def store_deadlines(self, content: list[dict[str, Any]]) -> None:
         self.deadlines_api.store(content)
 
     @property
-    def rating_table(self):
+    def rating_table(self) -> 'gdoc.RatingTable':
         return self.googledoc_api.fetch_rating_table()

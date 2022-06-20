@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import logging
 from collections import namedtuple
 from datetime import datetime, timedelta
 from typing import Any
 
-import yaml
 from cachelib import BaseCache
 
 from . import course
+
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +18,7 @@ class DeadlinesAPI:
         self._file_path = '.deadlines.yml'
         self._cache = cache
 
-    def store(self, content: list[dict]) -> None:
+    def store(self, content: list[dict[str, Any]]) -> None:
         logger.info('Store deadlines...')
         Deadlines(content)  # For validation purposes
         self._cache.set('__deadlines__', content)
@@ -54,7 +56,7 @@ class DeadlinesAPI:
 class Deadlines:
     Task = namedtuple('Task', ('name', 'group', 'score'))
 
-    def __init__(self, config: list[dict]):
+    def __init__(self, config: list[dict[str, Any]] | None):
         self.groups = self._parse_groups(config)
 
     @staticmethod
@@ -72,9 +74,9 @@ class Deadlines:
         return min(demand_multiplier, 2)
 
     @staticmethod
-    def _parse_groups(config: list[dict]) -> list[course.Group]:
-        task_names = []
-        groups = []
+    def _parse_groups(config: list[dict[str, Any]] | None) -> list[course.Group]:
+        task_names: list[str] = []
+        groups: list[course.Group] = []
         if config is None:
             return []
         for group_config in config:
