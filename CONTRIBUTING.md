@@ -25,6 +25,9 @@ TBA
 
 ### Git Commit Messages
 
+This project uses light version of [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/). 
+tl;dr
+
 * Use the present tense ("Add feature" not "Added feature")
 * Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
 * Limit the first line to 72 characters or less
@@ -44,7 +47,8 @@ TBA
 For example  
 
 Good:
-* `feat: improve performance with lazy load implementation for images`
+* `feat: create new api endpoint for student scores reporting`
+* `perf: improve performance with lazy load implementation for images`
 * `chore: update flask dependency to 2.1 version`
 
 Bad:
