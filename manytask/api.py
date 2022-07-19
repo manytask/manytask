@@ -6,10 +6,12 @@ import os
 import secrets
 from datetime import datetime, timedelta
 from typing import Any, Callable
+import tempfile
 
 import yaml
-from flask import Blueprint, abort, current_app, request
+from flask import Blueprint, abort, current_app, request, send_from_directory, Response
 from flask.typing import ResponseReturnValue
+from werkzeug.utils import secure_filename
 
 from manytask.course import Course, Task, get_current_time, validate_commit_time
 
@@ -291,11 +293,27 @@ def report_source() -> ResponseReturnValue:
     files = request.files.getlist('files')
 
     # ----- logic ----- #
-    for file in files:
-        print('file', file)
-        # file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
+    try:
+        task = course.deadlines.find_task(task_name)
+    except KeyError:
+        return f'There is no task with name `{task_name}` (or it is closed)', 404
 
-    return 'Not implemented', 500
+    try:
+        student = course.gitlab_api.get_student(user_id)
+    except Exception:
+        return f'There is no student with user_id {user_id}', 404
+    username = student.username
+
+    with tempfile.TemporaryDirectory() as temp_folder:
+        print('created temporary directory', temp_folder)
+        for file in files:
+            secured_filename = secure_filename(file.filename)
+            print('file', type(file), file, secured_filename)
+            file.save(temp_folder / secured_filename)
+
+        course.solutions_api.store_task_from_folder(task_name, username, temp_folder)
+
+    return 'Stored', 201
 
 
 @bp.get('/solutions')
@@ -308,6 +326,21 @@ def get_solutions() -> ResponseReturnValue:
         return 'You didn\'t provide required attribute `task`', 400
     task_name = request.form['task']
 
-    # ----- logic ----- #
+    # TODO: parameter to return not aggregated solutions
 
-    return 'Not implemented', 500
+    # ----- logic ----- #
+    try:
+        task = course.deadlines.find_task(task_name)
+    except KeyError:
+        return f'There is no task with name `{task_name}` (or it is closed)', 404
+
+    zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)
+
+    _now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+    filename = f'aggregated-solutions-{task_name}-{_now_str}.zip'
+
+    return Response(
+        zip_bytes_io.getvalue(),
+        mimetype='application/zip',
+        headers={'Content-Disposition': f'attachment;filename={filename}'}
+    )
