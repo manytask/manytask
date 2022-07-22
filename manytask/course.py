@@ -84,7 +84,7 @@ class Group:
         return get_current_time() > self.start
 
 
-from . import deadlines, gdoc, glab, solution  # noqa: E402, F401
+from . import deadlines, gdoc, glab, solutions  # noqa: E402, F401
 
 
 class Course:
@@ -93,7 +93,7 @@ class Course:
             deadlines_api: 'deadlines.DeadlinesAPI',
             googledoc_api: gdoc.GoogleDocAPI,
             gitlab_api: glab.GitLabApi,
-            solutions_api: solution.SolutionsApi,
+            solutions_api: solutions.SolutionsApi,
             registration_secret: str,
             lms_url: str,
             tg_invite_link: str,

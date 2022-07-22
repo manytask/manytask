@@ -7,21 +7,25 @@ import pytest
 from manytask.solutions import SolutionsApi
 
 
-@pytest.fixture(scope='function')
-def solutions_api(tmp_path: Path) -> SolutionsApi:
-    return SolutionsApi(tmp_path)
-
-
 TEST_FILES_NAMES = ['a.tmp', 'b.tmp', 'c.tmp']
 
 
 @pytest.fixture(scope='function')
-def dummy_solutions_folder(tmp_path: Path) -> Path:
+def solutions_api(tmp_path_factory: pytest.TempPathFactory) -> SolutionsApi:
+    tmp_path: Path = tmp_path_factory.mktemp('solutions')
+    return SolutionsApi(tmp_path)
+
+
+@pytest.fixture(scope='function')
+def dummy_solutions_folder(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    tmp_path: Path = tmp_path_factory.mktemp('solutions')
+
     for test_file_name in TEST_FILES_NAMES:
         test_file = tmp_path / test_file_name
 
         with open(test_file, 'w') as f:
             f.writelines([f'\t{test_file_name}\n'] * 10)
+
     return tmp_path
 
 
@@ -44,13 +48,14 @@ class TestSolutionsApi:
             dummy_solutions_folder: Path,
             solutions_api: SolutionsApi,
     ) -> None:
-        zip_bytes_io = io.BytesIO = solutions_api._compress_folder(dummy_solutions_folder)
+        zip_bytes_io: io.BytesIO = solutions_api._compress_folder(dummy_solutions_folder)
 
         with open(tmp_path / 'tmp.zip', 'wb') as f:
-            f.write(zip_bytes_io.read())
+            f.write(zip_bytes_io.getvalue())
+
         zip_file = zipfile.ZipFile(tmp_path / 'tmp.zip')
 
-        assert zip_file.namelist() == TEST_FILES_NAMES
+        assert sorted(zip_file.namelist()) == sorted(TEST_FILES_NAMES)
 
     def test_store_task_from_folder(
             self,

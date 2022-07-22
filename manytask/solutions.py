@@ -27,7 +27,7 @@ class SolutionsApi:
     ) -> io.BytesIO:
         zip_buffer = io.BytesIO()
 
-        with zipfile.ZipFile(zip_buffer, 'a', zipfile.ZIP_DEFLATED, False) as zip_file:
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED, False) as zip_file:
             for file in folder.glob('**/*'):
                 if file.is_file():
                     zip_file.write(file.absolute(), arcname=str(file.relative_to(folder)))
@@ -57,7 +57,7 @@ class SolutionsApi:
         if task_user_folder.exists():
             shutil.rmtree(task_user_folder)
             # TODO: save all versions, not only last
-        task_user_folder.mkdir()
+        task_user_folder.mkdir(parents=True)
 
         for file in files:
             shutil.copy(file, task_user_folder / file.name)
