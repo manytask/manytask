@@ -122,14 +122,14 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     _gdoc_credentials_string = base64.decodebytes(
         os.environ['GDOC_ACCOUNT_CREDENTIALS_BASE64'].encode()
     )
-    gdoc_api = gdoc.GoogleDocAPI(
+    gdoc_api = gdoc.GoogleDocApi(
         base_url=os.environ['GDOC_URL'],
         gdoc_credentials=json.loads(_gdoc_credentials_string),
         public_worksheet_id=os.environ['GDOC_SPREADSHEET_ID'],
         public_scoreboard_sheet=int(os.environ['GDOC_SCOREBOARD_SHEET']),
         cache=cache,
     )
-    deadlines_api = deadlines.DeadlinesAPI(
+    deadlines_api = deadlines.DeadlinesApi(
         cache=cache
     )
 
@@ -137,10 +137,18 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     registration_secret = os.environ['REGISTRATION_SECRET']
     lms_url = os.environ.get('LMS_URL', 'https://lk.yandexdataschool.ru/')
     tg_invite_link = os.environ.get('TELEGRAM_INVITE_LINK', None)
+    course_name = os.environ.get('COURSE_NAME', None)
 
     # create course
     _course = course.Course(
-        deadlines_api, gdoc_api, gitlab_api, registration_secret, lms_url, tg_invite_link, debug=app.debug,
+        deadlines_api,
+        gdoc_api,
+        gitlab_api,
+        registration_secret,
+        lms_url,
+        tg_invite_link,
+        course_name,
+        debug=app.debug,
     )
     app.course = _course
 

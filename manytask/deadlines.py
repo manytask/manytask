@@ -13,7 +13,7 @@ from . import course
 logger = logging.getLogger(__name__)
 
 
-class DeadlinesAPI:
+class DeadlinesApi:
     def __init__(self, cache: BaseCache):
         self._file_path = '.deadlines.yml'
         self._cache = cache

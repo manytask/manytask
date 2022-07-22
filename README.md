@@ -34,8 +34,10 @@ cp .env.example .env
 
 TBA - docker pull
 
-Create `.env` file with production environment  
-See example on https://github.com/yandexdataschool/manytask
+* Create `.env` file with production environment  
+  See example on https://github.com/yandexdataschool/manytask/.env.example
+
+
 
 
 ## Run application

@@ -83,7 +83,7 @@ class TaskNotFound(KeyError):
     pass
 
 
-class GoogleDocAPI:
+class GoogleDocApi:
     def __init__(
             self,
             base_url: str,
