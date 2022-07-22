@@ -6,6 +6,7 @@ import logging.handlers
 import os
 import secrets
 
+import yaml
 from authlib.integrations.flask_client import OAuth
 from cachelib import FileSystemCache
 from dotenv import load_dotenv
@@ -165,7 +166,9 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
 
     # debug updates
     if app.course.debug:
-        app.course.deadlines_api.fetch_debug()
+        with open('deadlines_example.yml', 'r') as f:
+            debug_deadlines_data = yaml.load(f, Loader=yaml.SafeLoader)
+        app.course.store_deadlines(debug_deadlines_data)
 
     logger.info('Init success')
 

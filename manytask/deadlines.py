@@ -28,30 +28,6 @@ class DeadlinesApi:
         deadlines = self._cache.get('__deadlines__')
         return Deadlines(deadlines)
 
-    def fetch_debug(self) -> 'Deadlines':
-        logger.info('Fetching debug deadlines...')
-        total_groups = 11
-        _now = datetime.now()
-        deadlines = [
-            {
-                'group': f'group_{i}',
-                'start': (_now + timedelta(days=i-10)).strftime('%d-%m-%Y 18:00'),
-                'deadline': (_now + timedelta(days=i-5)).strftime('%d-%m-%Y 23:59'),
-                'second_deadline': (_now + timedelta(days=i-5+(i % 2))).strftime('%d-%m-%Y 23:59'),
-                'hw': i == 2,
-                'tasks': [
-                    {
-                        'task': f'task_{i}_{j}',
-                        'score': (j+1)*10,
-                    }
-                    for j in range(total_groups-i)
-                ],
-            }
-            for i in range(total_groups)
-        ]
-        self._cache.set('__deadlines__', deadlines)
-        return Deadlines(deadlines[::-1])
-
 
 class Deadlines:
     Task = namedtuple('Task', ('name', 'group', 'score'))
@@ -86,7 +62,7 @@ class Deadlines:
                 name=group_config['group'],
                 start=group_config['start'],
                 deadline=group_config['deadline'],
-                second_deadline=group_config['second_deadline'],
+                second_deadline=group_config.get('second_deadline', group_config['deadline']),
                 tasks=Deadlines._parse_tasks(group_config),
                 hw=group_config.get('hw', False),
             )
@@ -107,7 +83,7 @@ class Deadlines:
                 tags=c.get('tags', []),
                 start=config['start'],
                 deadline=config['deadline'],
-                second_deadline=config['second_deadline'],
+                second_deadline=config.get('second_deadline', config['deadline']),
                 scoring_func=c.get('scoring_func', 'max')
             ) for c in tasks_config
             if c.get('enabled', True)

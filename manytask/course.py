@@ -120,10 +120,7 @@ class Course:
 
     @property
     def deadlines(self) -> 'deadlines.Deadlines':
-        if self.debug:
-            return self.deadlines_api.fetch_debug()
-        else:
-            return self.deadlines_api.fetch()
+        return self.deadlines_api.fetch()
 
     def store_deadlines(self, content: list[dict[str, Any]]) -> None:
         self.deadlines_api.store(content)
