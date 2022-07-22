@@ -90,13 +90,14 @@ from . import deadlines, gdoc, glab, solutions  # noqa: E402, F401
 class Course:
     def __init__(
             self,
-            deadlines_api: 'deadlines.DeadlinesAPI',
-            googledoc_api: gdoc.GoogleDocAPI,
+            deadlines_api: 'deadlines.DeadlinesApi',
+            googledoc_api: gdoc.GoogleDocApi,
             gitlab_api: glab.GitLabApi,
             solutions_api: solutions.SolutionsApi,
             registration_secret: str,
             lms_url: str,
             tg_invite_link: str,
+            course_name: str | None = None,
             *,
             debug: bool = False,
     ):
@@ -108,6 +109,7 @@ class Course:
         self.registration_secret = registration_secret
         self.lms_url = lms_url
         self.tg_invite_link = tg_invite_link
+        self.course_name = course_name or 'manytask'
 
         self.debug = debug
 
@@ -117,14 +119,11 @@ class Course:
 
     @property
     def name(self) -> str:
-        return 'python'
+        return self.course_name
 
     @property
     def deadlines(self) -> 'deadlines.Deadlines':
-        if self.debug:
-            return self.deadlines_api.fetch_debug()
-        else:
-            return self.deadlines_api.fetch()
+        return self.deadlines_api.fetch()
 
     def store_deadlines(self, content: list[dict[str, Any]]) -> None:
         self.deadlines_api.store(content)

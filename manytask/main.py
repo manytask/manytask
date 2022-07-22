@@ -6,6 +6,7 @@ import logging.handlers
 import os
 import secrets
 
+import yaml
 from authlib.integrations.flask_client import OAuth
 from cachelib import FileSystemCache
 from dotenv import load_dotenv
@@ -122,14 +123,14 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     _gdoc_credentials_string = base64.decodebytes(
         os.environ['GDOC_ACCOUNT_CREDENTIALS_BASE64'].encode()
     )
-    gdoc_api = gdoc.GoogleDocAPI(
+    gdoc_api = gdoc.GoogleDocApi(
         base_url=os.environ['GDOC_URL'],
         gdoc_credentials=json.loads(_gdoc_credentials_string),
         public_worksheet_id=os.environ['GDOC_SPREADSHEET_ID'],
         public_scoreboard_sheet=int(os.environ['GDOC_SCOREBOARD_SHEET']),
         cache=cache,
     )
-    deadlines_api = deadlines.DeadlinesAPI(
+    deadlines_api = deadlines.DeadlinesApi(
         cache=cache
     )
     solutions_api = solutions.SolutionsApi(
@@ -140,6 +141,7 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     registration_secret = os.environ['REGISTRATION_SECRET']
     lms_url = os.environ.get('LMS_URL', 'https://lk.yandexdataschool.ru/')
     tg_invite_link = os.environ.get('TELEGRAM_INVITE_LINK', None)
+    course_name = os.environ.get('COURSE_NAME', None)
 
     # create course
     _course = course.Course(
@@ -150,6 +152,7 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         registration_secret,
         lms_url,
         tg_invite_link,
+        course_name,
         debug=app.debug,
     )
     app.course = _course
@@ -167,7 +170,9 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
 
     # debug updates
     if app.course.debug:
-        app.course.deadlines_api.fetch_debug()
+        with open('deadlines_example.yml', 'r') as f:
+            debug_deadlines_data = yaml.load(f, Loader=yaml.SafeLoader)
+        app.course.store_deadlines(debug_deadlines_data)
 
     logger.info('Init success')
 

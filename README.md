@@ -20,12 +20,12 @@ Small web application for managing courses: store students' grades, maintain dea
 git clone https://github.com/yandexdataschool/manytask
 ```
 
-2. Create `.env` file with dev/production environment
+2. Create `.env` file with dev environment
 ```shell
 cp .env.example .env
 ```
 
-3. Generate credentials for accessing google spreadsheets API
+3. Generate credentials for accessing google spreadsheets API (for [this test table](https://docs.google.com/spreadsheets/d/1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM/edit#gid=0))
     1. Follow the steps described in [this article](https://medium.com/@a.marenkov/how-to-get-credentials-for-google-sheets-456b7e88c430)
     2. Base64 encode the created JSON key (using tools online, `base64` lib in python, or `btoa` function in the browser)
     3. Put it in the .env file by GDOC_ACCOUNT_CREDENTIALS_BASE64 key
@@ -34,8 +34,11 @@ cp .env.example .env
 
 TBA - docker pull
 
-Create `.env` file with production environment  
-See example on https://github.com/yandexdataschool/manytask
+1. Create docker/docker-compose script with latest manytask version
+   (better to specify version, not to use `latest`) 
+
+3. Create `.env` file with production environment  
+   See example on https://github.com/yandexdataschool/manytask/.env.example
 
 
 ## Run application
