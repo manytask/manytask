@@ -5,7 +5,7 @@
   enabled: true
   tasks:
     - task: task_7_0
-      score: 60
+      score: 70
 
 - group: group_6
   start: 01-05-2020 18:00

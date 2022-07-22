@@ -193,7 +193,7 @@ class RatingTable:
             expected_headers=[],
         )
         all_users_scores = {
-            scores_dict["login"]: {
+            scores_dict['login']: {
                 k: int(v) for i, (k, v) in enumerate(scores_dict.items())
                 if i >= PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1 and isinstance(v, int)
             }
