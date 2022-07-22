@@ -7,7 +7,7 @@ RUN pip install -r /tmp/requirements.txt
 
 COPY ./manytask/ /app/manytask
 
-ENV CACHE_DIR=/cache SOLUTIONS_DIR=/cache
+ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions
 VOLUME ["/cache", "/solutions"]
 
 CMD python -m gunicorn \
