@@ -1,11 +1,11 @@
 # linters
 flake8==4.0.1
-mypy==0.961
+mypy==0.971
 isort==5.10.1
 
 # stubs
-types-requests==2.27.30
-types-PyYAML==6.0.8
+types-requests==2.28.3
+types-PyYAML==6.0.10
 
 # testing
 pytest==7.1.2
