@@ -1,0 +1,91 @@
+name-template: '$RESOLVED_VERSION'
+tag-template: '$RESOLVED_VERSION'
+
+change-template: '- $TITLE (#$NUMBER) by @$AUTHOR'
+
+
+autolabeler:
+  - label: 'feature'
+    title:
+      - '/feat:.*/'
+      - '/feature:.*/'
+  - label: 'fix'
+    branch:
+      - '/fix.+/'
+      - '/bug.+/'
+    title:
+      - '/fix:.*/'
+      - '/bugfix:.*/'
+      - '/bug:.*/'
+  - label: 'chore'
+    files:
+      - '*.md'
+      - '*.txt'
+  - label: 'docs'
+    branch:
+      - '/docs.+/'
+    title:
+      - '/docs:.*/'
+  - label: 'refactor'
+    title:
+      - '/ref:.*/'
+      - '/refactor:.*/'
+  - label: 'style'
+    title:
+      - '/style:.*/'
+  - label: 'performance'
+    title:
+      - '/perf:.*/'
+      - '/performance:.*/'
+  - label: 'test'
+    title:
+      - '/test:.*/'
+      - '/tests:.*/'
+    files:
+      - 'tests/*'
+  - label: 'ci'
+    title:
+      - '/ci:.*/'
+    files:
+      - '.github/*'
+
+
+categories:
+  - title: 'Breaking'
+    label: 'breaking'
+  - title: 'Features'
+    label: 'feature'
+  - title: 'Fixes'
+    label: 'fix'
+  - title: 'Documentation'
+    label: 'docs'
+  - title: 'CI/CD'
+    labels:
+      - 'test'
+      - 'ci'
+  - title: 'CI/CD'
+    labels:
+      - 'test'
+      - 'ci'
+  - title: 'Enhancement'
+    labels:
+      - 'refactor'
+      - 'performance'
+      - 'style'
+  - title: 'Other changes'
+
+version-resolver:
+  major:
+    labels:
+      - 'breaking'
+  minor:
+    labels:
+      - 'feature'
+  default: patch
+
+template: |
+  ## What’s Changed
+
+  $CHANGES
+    
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...$RESOLVED_VERSION
