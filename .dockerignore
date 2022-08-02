@@ -4,10 +4,14 @@
 .git
 .gitignore
 .dockerignore
+.tmp
+.github
 
 *.env
 
-.gitlab-ci.yml
-
 venv
 .venv
+.mypy_cache
+.pytest_cache
+.coverage
+coverage.xml
