@@ -9,8 +9,8 @@ volumes:
 
 services:
     nginx-certbot:
-        image: jonasal/nginx-certbot:3.0.0-nginx1.21.3
-        restart: unless-stopped
+        image: jonasal/nginx-certbot:3.1.2-nginx1.21.6
+        restart: always
         environment:
             CERTBOT_EMAIL: no-reply@gitlab.manytask.org
         ports:
@@ -22,7 +22,11 @@ services:
             - ./configs/nginx_server.conf:/etc/nginx/user_conf.d/nginx_server.conf:ro
 
     manytask:
+        image: manytask:latest
         container_name: manytask
+        restart: always
+        expose:
+            - "5050"
         env_file: .env
         environment:
             FLASK_ENV: production
