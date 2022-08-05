@@ -22,7 +22,7 @@ services:
             - ./configs/nginx_server.conf:/etc/nginx/user_conf.d/nginx_server.conf:ro
 
     manytask:
-        image: manytask:latest
+        image: manytask/manytask:latest
         container_name: manytask
         restart: always
         expose:

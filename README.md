@@ -34,6 +34,8 @@ cp .env.example .env
 
 TBA - docker pull
 
+The latest manytask image can be found at docker hub: https://hub.docker.com/r/manytask/manytask
+
 1. Create docker/docker-compose script with latest manytask version
    (better to specify version, not to use `latest`) 
 
