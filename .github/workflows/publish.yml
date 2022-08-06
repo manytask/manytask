@@ -12,7 +12,7 @@ on:
 
 
 jobs:
-  update-version-and-chengelog-files:
+  update-version-and-changelog-files:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -34,7 +34,7 @@ jobs:
       - name: Commit updated files
         run: |
           git add VERSION CHANGELOG.md
-          git commit -m "chore: auto version and changelog update (${{ github.ref_name }}) \n[no ci]" || true
+          git commit -m "chore: auto version and changelog update (${{ github.ref_name }})" -m "[no ci]" || true
           git push origin
       - name: Tag new commit
         run: |
@@ -42,7 +42,7 @@ jobs:
           git push origin ${{ github.ref_name }} --force
 
   release-docker:
-    needs: update-version-and-chengelog-files
+    needs: update-version-and-changelog-files
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
