@@ -4,7 +4,7 @@
 [![Publish](https://github.com/yandexdataschool/manytask/actions/workflows/publish.yml/badge.svg)](https://github.com/yandexdataschool/manytask/actions/workflows/publish.yml)
 [![codecov](https://codecov.io/gh/yandexdataschool/manytask/branch/main/graph/badge.svg?token=3F9J850FX2)](https://codecov.io/gh/yandexdataschool/manytask)
 [![github](https://img.shields.io/github/v/release/yandexdataschool/manytask?logo=github&display_name=tag&sort=semver)](https://github.com/yandexdataschool/manytask/releases)
-[![docker](https://img.shields.io/docker/v/yandexdataschool/manytask?label=docker&logo=docker&sort=semver)](https://hub.docker.com/yandexdataschool/manytask?sort=semver)
+[![docker](https://img.shields.io/docker/v/manytask/manytask?label=docker&logo=docker&sort=semver)](https://hub.docker.com/manytask/manytask?sort=semver)
 
 
 Small web application for managing courses: store students' grades, maintain deadlines, provide scoreboard etc.
