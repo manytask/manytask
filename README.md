@@ -34,6 +34,8 @@ cp .env.example .env
 
 TBA - docker pull
 
+The latest manytask image can be found at docker hub: https://hub.docker.com/r/manytask/manytask
+
 1. Create docker/docker-compose script with latest manytask version
    (better to specify version, not to use `latest`) 
 
@@ -60,10 +62,10 @@ python -m pip install -U -r requirements.txt
 ```
 Run it
 ```shell
-CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5000 --reload --without-threads
+CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5050 --reload --without-threads
 ```
 
-So, now it's available at `localhost:5000`
+So, now it's available at `localhost:5050`
 
 #### Docker (manytask only)
 ```shell
@@ -72,38 +74,48 @@ docker rm manytask || true
 docker run \
     --name manytask \
     --restart always \
-    --publish "5000:5000" \
+    --publish "5050:5050" \
     --env-file .env \
     --env FLASK_ENV=development \
     manytask:latest
 ```
 
-So, now it's available at `localhost:5000` 
+So, now it's available at `localhost:5050` 
 
 
 #### Docker-compose (manytask only)
 ```shell
-docker-compose -f docker-compose.yml -f docker-compose.override.yml up --build
-```
-or just
-```shell
-docker-compose up --build
+docker-compose -f docker-compose.development.yml up --build
 ```
 
-So, now it's available at `localhost:5000` 
+So, now it's available at `localhost:5050` 
 
 
 ### Production 
 
-#### Docker (manytask only)
+#### Docker build (manytask only)
 ```shell
-docker build --tag manytask .
+docker build --tag manytask:build .
 docker stop manytask && docker rm manytask || true
 docker run \
     -d \
     --name manytask \
     --restart always \
-    --publish "5000:5000" \
+    --publish "5050:5050" \
+    --env-file .env \
+    --env FLASK_ENV=production \
+    manytask:build && docker logs -f manytask
+```
+
+#### Docker registry (manytask only)
+```shell
+docker pull manytask:latest
+docker stop manytask && docker rm manytask || true
+docker run \
+    -d \
+    --name manytask \
+    --restart always \
+    --publish "5050:5050" \
     --env-file .env \
     --env FLASK_ENV=production \
     manytask:latest && docker logs -f manytask
@@ -112,9 +124,8 @@ docker run \
 
 #### Docker-compose (manytask with certs)
 ```shell
-docker-compose -f docker-compose.yml -f docker-compose.production.yml up --build
+docker-compose -f docker-compose.development.yml -f docker-compose.production.yml up --build
 ```
-
 
 
 ## API and Testing Script Interface 

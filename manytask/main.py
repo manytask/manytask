@@ -166,7 +166,7 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
 
     # debug updates
     if app.course.debug:
-        with open('deadlines_example.yml', 'r') as f:
+        with open('deadlines.example.yml', 'r') as f:
             debug_deadlines_data = yaml.load(f, Loader=yaml.SafeLoader)
         app.course.store_deadlines(debug_deadlines_data)
 
