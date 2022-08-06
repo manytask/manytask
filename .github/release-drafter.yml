@@ -5,11 +5,11 @@ change-template: '- $TITLE (#$NUMBER) by @$AUTHOR'
 
 
 autolabeler:
-  - label: 'feature'
+  - label: 'type: feature'
     title:
       - '/feat:.*/'
       - '/feature:.*/'
-  - label: 'fix'
+  - label: 'type: fix'
     branch:
       - '/fix.+/'
       - '/bug.+/'
@@ -17,33 +17,33 @@ autolabeler:
       - '/fix:.*/'
       - '/bugfix:.*/'
       - '/bug:.*/'
-  - label: 'chore'
+  - label: 'type: chore'
     files:
       - '*.md'
       - '*.txt'
-  - label: 'docs'
+  - label: 'type: docs'
     branch:
       - '/docs.+/'
     title:
       - '/docs:.*/'
-  - label: 'refactor'
+  - label: 'type: refactor'
     title:
       - '/ref:.*/'
       - '/refactor:.*/'
-  - label: 'style'
+  - label: 'type: style'
     title:
       - '/style:.*/'
-  - label: 'performance'
+  - label: 'type: performance'
     title:
       - '/perf:.*/'
       - '/performance:.*/'
-  - label: 'test'
+  - label: 'type: test'
     title:
       - '/test:.*/'
       - '/tests:.*/'
     files:
       - 'tests/*'
-  - label: 'ci'
+  - label: 'type: ci'
     title:
       - '/ci:.*/'
     files:
@@ -52,35 +52,35 @@ autolabeler:
 
 categories:
   - title: 'Breaking'
-    label: 'breaking'
+    label: 'type: breaking'
   - title: 'Features'
-    label: 'feature'
+    label: 'type: feature'
   - title: 'Fixes'
-    label: 'fix'
+    label: 'type: fix'
   - title: 'Documentation'
-    label: 'docs'
+    label: 'type: docs'
   - title: 'CI/CD'
     labels:
-      - 'test'
-      - 'ci'
+      - 'type: test'
+      - 'type: ci'
   - title: 'CI/CD'
     labels:
-      - 'test'
-      - 'ci'
+      - 'type: test'
+      - 'type: ci'
   - title: 'Enhancement'
     labels:
-      - 'refactor'
-      - 'performance'
-      - 'style'
+      - 'type: refactor'
+      - 'type: performance'
+      - 'type: style'
   - title: 'Other changes'
 
 version-resolver:
   major:
     labels:
-      - 'breaking'
+      - 'type: breaking'
   minor:
     labels:
-      - 'feature'
+      - 'type: feature'
   default: patch
 
 template: |
