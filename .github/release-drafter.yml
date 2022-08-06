@@ -63,10 +63,6 @@ categories:
     labels:
       - 'type: test'
       - 'type: ci'
-  - title: 'CI/CD'
-    labels:
-      - 'type: test'
-      - 'type: ci'
   - title: 'Enhancement'
     labels:
       - 'type: refactor'
@@ -84,8 +80,6 @@ version-resolver:
   default: patch
 
 template: |
-  ## What’s Changed
-
   $CHANGES
     
   **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...$RESOLVED_VERSION

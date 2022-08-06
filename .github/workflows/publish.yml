@@ -1,9 +1,14 @@
 name: Publish
 
+# on release created (tag auto created)
 on:
-  release:
-    types:
-      - created
+#  release:
+#    types:
+#      - created
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+      - '*.*.*' # i.e. 1.0.0, 20.15.10
 
 
 jobs:
