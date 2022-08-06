@@ -34,7 +34,7 @@ jobs:
       - name: Commit updated files
         run: |
           git add VERSION CHANGELOG.md
-          git commit -m "chore: auto version and changelog update (${{ github.ref_name }})" || true
+          git commit -m "chore: auto version and changelog update (${{ github.ref_name }}) \n[no ci]" || true
           git push origin
       - name: Tag new commit
         run: |
@@ -58,13 +58,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: .
           push: true
           tags: | 
-            manytask:${{ github.ref_name }}
-            manytask:latest
+            manytask/manytask:${{ github.ref_name }}
+            manytask/manytask:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # https://github.com/docker/build-push-action/blob/master/docs/advanced/cache.md#cache-backend-api
