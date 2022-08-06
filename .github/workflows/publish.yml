@@ -34,7 +34,7 @@ jobs:
       - name: Commit updated files
         run: |
           git add VERSION CHANGELOG.md
-          git commit -m "chore: auto version and changelog update (${{ github.ref_name }})"
+          git commit -m "chore: auto version and changelog update (${{ github.ref_name }})" || true
           git push origin
       - name: Tag new commit
         run: |
