@@ -11,6 +11,38 @@ Small web application for managing courses: store students' grades, maintain dea
 
 ---
 
+## How it works
+
+In a nutshell, `manytask` is a wrapper around google sheets (as database, storing students' scores) and some bunch of functions to interact with gitlab.
+
+The full `manytask` setup roughly looks as follows
+
+* `google sheet` - in readable format, store students' scores/grades
+* self-hosted `gitlab` instance - storing repos with assignments and students' repo  
+  * private repo - a repository with tasks, public and private tests, gold solutions, ect.
+  * public repo - a repository available to students with tasks and solution templates
+  * students' group - the group where `manytask` will create repositories for students  
+    each students' repo - fork from public repo
+* `gitlab runners` - place where students' solutions likely to be tested 
+* `checker` script - some script to test students' solutions and push scores/grades to the `manytask`  
+* `manytask` instance - web application managing students' grades (in google sheet) and deadlines (web page)  
+
+So the main aims of `manytask`:
+* Store amd manage students' grades 
+* Show web page with grades and deadlines for student
+* Manage users and repositories creation
+
+Functions for which `manytask` is NOT intended:
+* Test students' solutions
+* Be language/course specific
+
+
+So basically, manytask will store and display grades for you, but not test solutions' correctness in any way. 
+
+
+---
+
+
 ## Setup
 
 ### Debug and development 
@@ -30,17 +62,10 @@ cp .env.example .env
     2. Base64 encode the created JSON key (using tools online, `base64` lib in python, or `btoa` function in the browser)
     3. Put it in the .env file by GDOC_ACCOUNT_CREDENTIALS_BASE64 key
 
+
 ### Production
 
-TBA - docker pull
-
-The latest manytask image can be found at docker hub: https://hub.docker.com/r/manytask/manytask
-
-1. Create docker/docker-compose script with latest manytask version
-   (better to specify version, not to use `latest`) 
-
-3. Create `.env` file with production environment  
-   See example on https://github.com/yandexdataschool/manytask/.env.example
+Please refer to the [system setup documentation](./docs/system_setup.md).
 
 
 ## Run application
@@ -93,48 +118,16 @@ So, now it's available at `localhost:5050`
 
 ### Production 
 
-#### Docker build (manytask only)
-```shell
-docker build --tag manytask:build .
-docker stop manytask && docker rm manytask || true
-docker run \
-    -d \
-    --name manytask \
-    --restart always \
-    --publish "5050:5050" \
-    --env-file .env \
-    --env FLASK_ENV=production \
-    manytask:build && docker logs -f manytask
-```
-
-#### Docker registry (manytask only)
-```shell
-docker pull manytask:latest
-docker stop manytask && docker rm manytask || true
-docker run \
-    -d \
-    --name manytask \
-    --restart always \
-    --publish "5050:5050" \
-    --env-file .env \
-    --env FLASK_ENV=production \
-    manytask:latest && docker logs -f manytask
-```
-
-
-#### Docker-compose (manytask with certs)
-```shell
-docker-compose -f docker-compose.development.yml -f docker-compose.production.yml up --build
-```
+Please, refer to the [production documentation](./docs/production.md).
 
 
 ## API and Testing Script Interface 
 
-### Standard script 
+### Checker script 
 
-There is already implemented lib [yandexdataschool/checker](https://github.com/yandexdataschool/checker) for testing.  
+There is already implemented python lib [yandexdataschool/checker](https://github.com/yandexdataschool/checker) for testing students' solutions with manytask integration.  
 The basic idea: `checker` is a script running in a gitlab-ci that performs students' solutions testing and call `manytask` api to set scores achieved;
-More info in the `checker` repo;
+More info in the [yandexdataschool/checker repo](https://github.com/yandexdataschool/checker);
 
 ### Custom script 
 However, you can implement your own checker just following `manytask` api:
@@ -151,8 +144,10 @@ However, you can implement your own checker just following `manytask` api:
 | POST   | `/api/update_cached_scores` | update cached scores for all users                | -                                                            | -                                                                                          | -                                                                    |
 | GET    | `/api/solutions`            | get all solutions for the task                    | `task`                                                       | -                                                                                          | zip archive file with solutions                                      |
 
+Please refer [yandexdataschool/checker repo](https://github.com/yandexdataschool/checker) for instructions and  tips
 
-## About
+
+## Additional information
 
 Originally was developed at gitlab as [shad-ts](https://gitlab.com/slon/shad-ts/) by [Fedor Korotkiy](https://github.com/slon) for [Yandex School of Data Analysis](https://yandexdataschool.com/) 
 

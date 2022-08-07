@@ -1,9 +1,9 @@
 # Production setup
 
-There are some steps you need to takle to whole system to operates
+There are some steps you need to tackle to whole system to operates
 * `pre-setup` - one-time actions for repo setup 
 * `new course` - one-time actions for new course on manytask to operate 
-* `new semester` - every-semester actions for each course to setup manytask
+* `new semester` - every-semester actions for each course to set up manytask
 
 ---
 
@@ -192,24 +192,18 @@ You need to create a public repository with students assignments and group where
 
 ### Manytask deploy 
 
-Finally, (almost) you need manytask instance itself 
+Finally, (almost) you need manytask instance itself
 
-1. You should use official docker image, available at [docker hub](https://hub.docker.com/r/manytask/manytask)
-   Check it's available anf you can pull it  
-   Note: Best practice is to use version tag (e.g. `manytask/manytask:1.3.4`) **not** `latest` tag
+You should use official docker image, available at [docker hub](https://hub.docker.com/r/manytask/manytask)
 
-
-2. Create docker-compose (see [docker-compose.production.yml](./docker-compose.production.yml) as an example)
-
-
-3. Setup `certbot` to update https certificates   
+Please refer to the [production documentation](./production.md)
 
 
 ### Testing script 
 
 In the future, you need to create a testing script to test students' solutions and actually push scores obtained to the manytask instance.  
 You have the following options:
-* Use [checker](https://github.com/yandexdataschool/checker) - python lib developed for checking students' assignments and manytask integration
+* Use [yandexdataschool/checker](https://github.com/yandexdataschool/checker) - python lib developed for checking students' assignments and manytask integration
 * Write your own script following manytask api
 
-Please refer to the [checker documentation](https://github.com/yandexdataschool/checker) for further information and tips in both cases.
+Please refer to the [yandexdataschool/checker documentation](https://github.com/yandexdataschool/checker) for further information and tips in both cases.
