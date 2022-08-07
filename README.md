@@ -28,7 +28,7 @@ The full `manytask` setup roughly looks as follows
 * `manytask` instance - web application managing students' grades (in google sheet) and deadlines (web page)  
 
 So the main aims of `manytask`:
-* Store amd manage students' grades 
+* Store and manage students' grades (store, provide, show, edit, ect)
 * Show web page with grades and deadlines for student
 * Manage users and repositories creation
 
