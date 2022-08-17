@@ -36,18 +36,20 @@ class Deadlines:
         self.groups = self._parse_groups(config)
 
     @staticmethod
-    def get_low_demand_multiplier(demand: float) -> float:
-        # if demand <= 0.5:
-        #     demand_multiplier = 1 + 0.1 * 2 * (0.5 - demand)
-        # else:
-        #     demand_multiplier = 1
+    def get_low_demand_multiplier(demand: float, max_demand_multiplier: float = 1.1) -> float:
+        """
+        @param demand: 'percent' of people who solved the task; less - fewer people solved it
+        @param max_demand_multiplier: percent of people who solved the task
+        @return: [1, max_demand_multiplier] multiplier to the final score
+        """
+        assert 0. <= demand <= 1.
 
         if demand <= 0.25:
-            demand_multiplier = 1 + 0.1 * (1 - demand)
+            demand_multiplier = max_demand_multiplier - (max_demand_multiplier - 1) * demand
         else:
-            demand_multiplier = 1
+            demand_multiplier = 1.
 
-        return min(demand_multiplier, 2)
+        return min(max(1., demand_multiplier), max_demand_multiplier)
 
     @staticmethod
     def _parse_groups(config: list[dict[str, Any]] | None) -> list[course.Group]:

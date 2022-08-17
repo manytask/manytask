@@ -97,6 +97,9 @@ class Course:
             lms_url: str,
             tg_invite_link: str,
             course_name: str | None = None,
+            deadlines_style: str = 'hard',
+            second_deadline_formula: float = 0.5,
+            max_demand_multiplier: float = 1.1,
             *,
             debug: bool = False,
     ):
@@ -107,6 +110,9 @@ class Course:
         self.lms_url = lms_url
         self.tg_invite_link = tg_invite_link
         self.course_name = course_name or 'manytask'
+        self.deadlines_style = deadlines_style
+        self.second_deadline_formula = second_deadline_formula
+        self.max_demand_multiplier = max_demand_multiplier
 
         self.debug = debug
 

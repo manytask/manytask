@@ -165,17 +165,25 @@ class RatingTable:
             all_scores = {}
         return all_scores
 
-    def get_stats(self) -> dict[str, dict[str, int]]:
+    def get_stats(self) -> dict[str, float]:
         stats = self._cache.get(f'{self.ws.id}:stats')
         if stats is None:
             stats = {}
         return stats
 
-    def get_demands(self) -> dict[str, dict[str, int]]:
-        demands = self._cache.get(f'{self.ws.id}:demands')
-        if demands is None:
-            demands = {}
-        return demands
+    def get_demands_multipliers(self, max_demand_multiplier: float) -> dict[str, float]:
+        tasks_stats = self._cache.get(f'{self.ws.id}:stats')
+
+        if tasks_stats is None:
+            demand_multipliers: dict[str, float] = {}
+        else:
+            demand_multipliers: dict[str, float] = {
+                task_name: Deadlines.get_low_demand_multiplier(task_stat, max_demand_multiplier=max_demand_multiplier)
+                for task_name, task_stat in tasks_stats.items()
+                if Deadlines.get_low_demand_multiplier(task_stat, max_demand_multiplier=max_demand_multiplier) != 1.
+            }
+
+        return demand_multipliers
 
     def get_scores_update_timestamp(self) -> str:
         timestamp = self._cache.get(f'{self.ws.id}:update-timestamp')
@@ -215,17 +223,11 @@ class RatingTable:
             task.name: _tasks_stats[task.name] / len(all_users_scores)
             for task in deadlines.tasks
         }
-        demand_multipliers: dict[str, float] = {
-            task_name: deadlines.get_low_demand_multiplier(task_stat)
-            for task_name, task_stat in tasks_stats.items()
-            if deadlines.get_low_demand_multiplier(task_stat) != 1
-        }
 
         self._cache.clear()
         self._cache.set('__deadlines__', _deadlines)
         self._cache.set(f'{self.ws.id}:scores', all_users_scores)
         self._cache.set(f'{self.ws.id}:stats', tasks_stats)
-        self._cache.set(f'{self.ws.id}:demands', demand_multipliers)
         self._cache.set(f'{self.ws.id}:update-timestamp', _current_timestamp)
         self._cache.set_many(users_score_cache)
 

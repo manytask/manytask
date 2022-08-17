@@ -139,6 +139,10 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
     lms_url = os.environ.get('LMS_URL', 'https://lk.yandexdataschool.ru/')
     tg_invite_link = os.environ.get('TELEGRAM_INVITE_LINK', None)
     course_name = os.environ.get('COURSE_NAME', None)
+    # course info
+    deadlines_style = os.environ.get('DEADLINES_STYLE', 'hard')
+    second_deadline_formula = float(os.environ.get('SECOND_DEADLINE_FORMULA', 0.5))
+    max_demand_multiplier = os.environ.get('MAX_DEMAND_MULTIPLIER', 1.1)
 
     # create course
     _course = course.Course(
@@ -149,6 +153,9 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
         lms_url,
         tg_invite_link,
         course_name,
+        deadlines_style,
+        second_deadline_formula,
+        max_demand_multiplier,
         debug=app.debug,
     )
     app.course = _course

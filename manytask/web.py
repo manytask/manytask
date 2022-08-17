@@ -53,7 +53,7 @@ def course_page() -> ResponseReturnValue:
     tasks_scores = rating_table.get_scores(student_username)
 
     tasks_stats = rating_table.get_stats()
-    tasks_demands = rating_table.get_demands()
+    tasks_demands = rating_table.get_demands_multipliers(max_demand_multiplier=course.max_demand_multiplier)
 
     return render_template(
         'tasks.html',
