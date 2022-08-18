@@ -44,27 +44,27 @@ class GitLabApi:
             self,
             base_url: str,
             admin_token: str,
+            course_private_repo: str,
             course_public_repo: str,
             course_students_group: str,
-            course_admins_group: str,
             *,
             dry_run: bool = False,
     ):
         """
         :param base_url:
         :param admin_token:
+        :param course_private_repo:
         :param course_public_repo:
         :param course_students_group:
-        :param course_admins_group:
         """
         self.dry_run = dry_run
 
         self._url = base_url
         self._gitlab = gitlab.Gitlab(self._url, private_token=admin_token)
 
+        self._course_private_repo = course_private_repo
         self._course_public_repo = course_public_repo
         self._course_group = course_students_group
-        self._admins_group = course_admins_group
 
     def register_new_user(
             self,

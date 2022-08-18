@@ -128,7 +128,9 @@ def report_score() -> ResponseReturnValue:
         except ValueError:
             commit_time = None
 
-    tasks_demands = course.rating_table.get_demands_multipliers(max_demand_multiplier=course.max_demand_multiplier)
+    tasks_demands = course.rating_table.get_demands_multipliers(
+        max_demand_multiplier=course.course_config.max_low_demand_bonus,
+    )
     if use_demand_multiplier:
         task_demand_multiplier = tasks_demands.get(task_name, 1.)
     else:

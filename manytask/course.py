@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .config import CourseConfig
+
 
 logger = logging.getLogger(__name__)
 MOSCOW_TIMEZONE = ZoneInfo('Europe/Moscow')
@@ -94,25 +96,16 @@ class Course:
             googledoc_api: gdoc.GoogleDocApi,
             gitlab_api: glab.GitLabApi,
             registration_secret: str,
-            lms_url: str,
-            tg_invite_link: str,
-            course_name: str | None = None,
-            deadlines_style: str = 'hard',
-            second_deadline_formula: float = 0.5,
-            max_demand_multiplier: float = 1.1,
+            course_config: CourseConfig,
             *,
             debug: bool = False,
     ):
         self.deadlines_api = deadlines_api
         self.googledoc_api = googledoc_api
         self.gitlab_api = gitlab_api
+
         self.registration_secret = registration_secret
-        self.lms_url = lms_url
-        self.tg_invite_link = tg_invite_link
-        self.course_name = course_name or 'manytask'
-        self.deadlines_style = deadlines_style
-        self.second_deadline_formula = second_deadline_formula
-        self.max_demand_multiplier = max_demand_multiplier
+        self.course_config = course_config
 
         self.debug = debug
 
@@ -122,7 +115,7 @@ class Course:
 
     @property
     def name(self) -> str:
-        return self.course_name
+        return self.course_config.name
 
     @property
     def deadlines(self) -> 'deadlines.Deadlines':

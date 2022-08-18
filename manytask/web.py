@@ -53,7 +53,9 @@ def course_page() -> ResponseReturnValue:
     tasks_scores = rating_table.get_scores(student_username)
 
     tasks_stats = rating_table.get_stats()
-    tasks_demands = rating_table.get_demands_multipliers(max_demand_multiplier=course.max_demand_multiplier)
+    tasks_demands = rating_table.get_demands_multipliers(
+        max_demand_multiplier=course.course_config.max_low_demand_bonus,
+    )
 
     return render_template(
         'tasks.html',
@@ -64,8 +66,8 @@ def course_page() -> ResponseReturnValue:
         student_repo_url=student_repo,
         student_ci_url=f'{student_repo}/pipelines',
         gdoc_url=course.googledoc_api.get_spreadsheet_url(),
-        lms_url=course.lms_url,
-        tg_invite_link=course.tg_invite_link,
+        lms_url=course.course_config.lms_url,
+        tg_invite_link=course.course_config.telegram_chat_invite,
         scores=tasks_scores,
         now=get_current_time(),
         task_stats=tasks_stats,

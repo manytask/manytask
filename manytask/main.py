@@ -13,28 +13,36 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import course, deadlines, gdoc, glab
+from . import course, deadlines, gdoc, glab, config
 
 
 load_dotenv('../.env')  # take environment variables from .env.
 
 
-def create_app(*, debug: bool = False, test: bool = False) -> Flask:
+def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
     app = Flask(__name__)
+    app.ready = False
+    if debug:
+        app.debug = debug
 
     # configuration
-    # app.env = os.environ.get('FLASK_ENV', 'development')
-    # app.debug = app.env == 'development'
+    if app.debug:
+        app.app_config = config.DebugConfig()
+    else:
+        app.app_config = config.Config()  # read config from env
+
     app.testing = os.environ.get('TESTING', test)
+    if 'FLASK_SECRET_KEY' not in os.environ and not debug:
+        raise EnvironmentError('Unable to find FLASK_SECRET_KEY env in production mode')
     app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex())
 
     # oauth
     oauth = OAuth(app)
-    _gitlab_base_url = os.environ['GITLAB_URL']
+    _gitlab_base_url = app.app_config.gitlab_url
     oauth.register(
         name='gitlab',
-        client_id=os.environ['GITLAB_CLIENT_ID'],
-        client_secret=os.environ['GITLAB_CLIENT_SECRET'],
+        client_id=app.app_config.gitlab_client_id,
+        client_secret=app.app_config.gitlab_client_secret,
         authorize_url=f'{_gitlab_base_url}/oauth/authorize',
         access_token_url=f'{_gitlab_base_url}/oauth/token',
         userinfo_endpoint=f'{_gitlab_base_url}/oauth/userinfo',
@@ -107,55 +115,40 @@ def create_app(*, debug: bool = False, test: bool = False) -> Flask:
 
     # cache
     cache = FileSystemCache(
-        os.environ['CACHE_DIR'],
+        app.app_config.cache_dir,
         threshold=0,
         default_timeout=0
     )
 
     # api objects
     gitlab_api = glab.GitLabApi(
-        base_url=os.environ['GITLAB_URL'],
-        admin_token=os.environ['GITLAB_ADMIN_TOKEN'],
-        course_public_repo=os.environ['GITLAB_COURSE_PUBLIC_REPO'],
-        course_students_group=os.environ['GITLAB_COURSE_STUDENTS_GROUP'],
-        course_admins_group=os.environ['GITLAB_COURSE_ADMINS_GROUP'],
+        base_url=app.app_config.gitlab_url,
+        admin_token=app.app_config.gitlab_admin_token,
+        course_private_repo=app.app_config.gitlab_course_private_repo,
+        course_public_repo=app.app_config.gitlab_course_public_repo,
+        course_students_group=app.app_config.gitlab_course_students_group,
     )
     _gdoc_credentials_string = base64.decodebytes(
-        os.environ['GDOC_ACCOUNT_CREDENTIALS_BASE64'].encode()
+        app.app_config.gdoc_account_credentials_base64.encode()
     )
     gdoc_api = gdoc.GoogleDocApi(
-        base_url=os.environ['GDOC_URL'],
+        base_url=app.app_config.gdoc_url,
         gdoc_credentials=json.loads(_gdoc_credentials_string),
-        public_worksheet_id=os.environ['GDOC_SPREADSHEET_ID'],
-        public_scoreboard_sheet=int(os.environ['GDOC_SCOREBOARD_SHEET']),
+        public_worksheet_id=app.app_config.gdoc_spreadsheet_id,
+        public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
         cache=cache,
     )
     deadlines_api = deadlines.DeadlinesApi(
         cache=cache
     )
 
-    # get additional info
-    registration_secret = os.environ['REGISTRATION_SECRET']
-    lms_url = os.environ.get('LMS_URL', 'https://lk.yandexdataschool.ru/')
-    tg_invite_link = os.environ.get('TELEGRAM_INVITE_LINK', None)
-    course_name = os.environ.get('COURSE_NAME', None)
-    # course info
-    deadlines_style = os.environ.get('DEADLINES_STYLE', 'hard')
-    second_deadline_formula = float(os.environ.get('SECOND_DEADLINE_FORMULA', 0.5))
-    max_demand_multiplier = os.environ.get('MAX_DEMAND_MULTIPLIER', 1.1)
-
     # create course
     _course = course.Course(
         deadlines_api,
         gdoc_api,
         gitlab_api,
-        registration_secret,
-        lms_url,
-        tg_invite_link,
-        course_name,
-        deadlines_style,
-        second_deadline_formula,
-        max_demand_multiplier,
+        app.app_config.registration_secret,
+        app.app_config.course_config,
         debug=app.debug,
     )
     app.course = _course
