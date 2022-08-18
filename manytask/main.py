@@ -21,13 +21,25 @@ load_dotenv('../.env')  # take environment variables from .env.
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
     app = Flask(__name__)
-    app.ready = False
+    app.ready = False  # Ready to get api responses
     if debug:
         app.debug = debug
 
     # configuration
+    course_config: config.CourseConfig | None = None
     if app.debug:
         app.app_config = config.DebugConfig()
+        course_config = config.CourseConfig(
+            name='CourseName',
+            deadlines='hard',
+            second_deadline_max=0.5,
+            low_demand_bonus_bound=0.4,
+            max_low_demand_bonus=1.2,
+            lms_url='https://lk.yandexdataschool.ru/',
+            telegram_channel_invite='https://telegram.org/',
+            telegram_chat_invite='https://telegram.org/',
+        )
+        app.ready = True
     else:
         app.app_config = config.Config()  # read config from env
 
@@ -148,7 +160,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
         gdoc_api,
         gitlab_api,
         app.app_config.registration_secret,
-        app.app_config.course_config,
+        course_config,
         debug=app.debug,
     )
     app.course = _course

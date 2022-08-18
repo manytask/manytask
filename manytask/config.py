@@ -10,6 +10,7 @@ class CourseConfig:
 
     deadlines: str
     second_deadline_max: float = 0.5
+    low_demand_bonus_bound: float = 0.2
     max_low_demand_bonus: float = 1.0
 
     lms_url: str | None = None
@@ -45,9 +46,6 @@ class Config:
     gdoc_spreadsheet_id: str = os.environ.get('GDOC_SPREADSHEET_ID')
     gdoc_scoreboard_sheet: int = os.environ.get('GDOC_SCOREBOARD_SHEET', 0)
 
-    # course config
-    course_config: CourseConfig | None = None
-
 
 @dataclass
 class DebugConfig(Config):
@@ -76,14 +74,3 @@ class DebugConfig(Config):
     # google public sheet
     gdoc_spreadsheet_id: str = os.environ.get('GDOC_SPREADSHEET_ID', '1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM')
     gdoc_scoreboard_sheet: int = os.environ.get('GDOC_SCOREBOARD_SHEET', 0)
-
-    # course config
-    course_config: CourseConfig | None = CourseConfig(
-        name='CourseName',
-        deadlines='hard',
-        second_deadline_max=0.5,
-        max_low_demand_bonus=1.2,
-        lms_url='https://lk.yandexdataschool.ru/',
-        telegram_channel_invite='https://telegram.org/',
-        telegram_chat_invite='https://telegram.org/',
-    )

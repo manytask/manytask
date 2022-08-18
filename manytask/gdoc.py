@@ -171,16 +171,20 @@ class RatingTable:
             stats = {}
         return stats
 
-    def get_demands_multipliers(self, max_demand_multiplier: float) -> dict[str, float]:
+    def get_demands_multipliers(self, low_demand_bonus_bound: float, max_demand_multiplier: float) -> dict[str, float]:
         tasks_stats = self._cache.get(f'{self.ws.id}:stats')
 
         if tasks_stats is None:
             demand_multipliers: dict[str, float] = {}
         else:
             demand_multipliers: dict[str, float] = {
-                task_name: Deadlines.get_low_demand_multiplier(task_stat, max_demand_multiplier=max_demand_multiplier)
+                task_name: multiplier
                 for task_name, task_stat in tasks_stats.items()
-                if Deadlines.get_low_demand_multiplier(task_stat, max_demand_multiplier=max_demand_multiplier) != 1.
+                if (multiplier := Deadlines.get_low_demand_multiplier(
+                    task_stat,
+                    low_demand_bonus_bound=low_demand_bonus_bound,
+                    max_demand_multiplier=max_demand_multiplier,
+                )) != 1.
             }
 
         return demand_multipliers

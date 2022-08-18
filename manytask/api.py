@@ -35,6 +35,16 @@ def requires_token(f: Callable[[Any, ], Any]) -> Callable[[Any, ], Any]:
     return decorated
 
 
+def requires_ready(f: Callable[[Any, ], Any]) -> Callable[[Any, ], Any]:
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        if not current_app.ready:
+            abort(403)
+
+        return f(*args, **kwargs)
+    return decorated
+
+
 def _parse_flags(flags: str | None) -> timedelta:
     flags = flags or ''
 
@@ -90,6 +100,7 @@ def _update_score(
 
 @bp.post('/report')
 @requires_token
+@requires_ready
 def report_score() -> ResponseReturnValue:
     course: Course = current_app.course
 
@@ -129,6 +140,7 @@ def report_score() -> ResponseReturnValue:
             commit_time = None
 
     tasks_demands = course.rating_table.get_demands_multipliers(
+        low_demand_bonus_bound=course.course_config.low_demand_bonus_bound,
         max_demand_multiplier=course.course_config.max_low_demand_bonus,
     )
     if use_demand_multiplier:
@@ -176,6 +188,7 @@ def report_score() -> ResponseReturnValue:
 
 @bp.get('/score')
 @requires_token
+@requires_ready
 def get_score() -> ResponseReturnValue:
     course: Course = current_app.course
 
@@ -213,12 +226,12 @@ def get_score() -> ResponseReturnValue:
     }, 200
 
 
-@bp.post('/update_task_columns')
+@bp.post('/update_deadlines')
 @requires_token
-def update_task_columns() -> ResponseReturnValue:
+def update_deadlines() -> ResponseReturnValue:
     course: Course = current_app.course
 
-    logger.info('Running update_task_columns')
+    logger.info('Running update_deadlines')
 
     # ----- get and validate request parameters ----- #
     try:
@@ -238,12 +251,35 @@ def update_task_columns() -> ResponseReturnValue:
     return '', 200
 
 
+@bp.post('/update_course_config')
+@requires_token
+def update_course_config() -> ResponseReturnValue:
+    course: Course = current_app.course
+
+    logger.info('Running update_course_config')
+
+    # ----- get and validate request parameters ----- #
+    try:
+        config_raw_data = request.get_data()
+        config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
+        course.store_course_config(config_data)
+    except Exception as e:
+        logger.exception(e)
+        return 'Invalid course config', 400
+
+    # ----- logic ----- #
+    current_app.ready = True
+
+    return '', 200
+
+
+# DEPRECATED
 @bp.post('/sync_task_columns')
 @requires_token
 def sync_task_columns() -> ResponseReturnValue:
     course: Course = current_app.course
 
-    logger.info('Running sync_task_columns')
+    logger.info('Running DEPRECATED sync_task_columns')
 
     # ----- get and validate request parameters ----- #
     try:
@@ -261,12 +297,12 @@ def sync_task_columns() -> ResponseReturnValue:
     return '', 200
 
 
-@bp.post('/update_cached_scores')
+@bp.post('/update_cache')
 @requires_token
-def update_cached_scores() -> ResponseReturnValue:
+def update_cache() -> ResponseReturnValue:
     course: Course = current_app.course
 
-    logger.info('Running update_cached_scores')
+    logger.info('Running update_cache')
 
     # ----- logic ----- #
     course.rating_table.update_cached_scores()
@@ -276,6 +312,7 @@ def update_cached_scores() -> ResponseReturnValue:
 
 @bp.post('/report_source')
 @requires_token
+@requires_ready
 def report_source() -> ResponseReturnValue:
     course: Course = current_app.course
 
@@ -302,6 +339,7 @@ def report_source() -> ResponseReturnValue:
 
 @bp.get('/solutions')
 @requires_token
+@requires_ready
 def get_solutions() -> ResponseReturnValue:
     course: Course = current_app.course
 

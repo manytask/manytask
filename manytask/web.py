@@ -32,6 +32,9 @@ def valid_session(user_session: session) -> bool:
 
 @bp.route('/')
 def course_page() -> ResponseReturnValue:
+    if not current_app.ready:
+        return redirect(url_for('web.not_ready'))
+
     course: Course = current_app.course
 
     if current_app.debug:
@@ -54,6 +57,7 @@ def course_page() -> ResponseReturnValue:
 
     tasks_stats = rating_table.get_stats()
     tasks_demands = rating_table.get_demands_multipliers(
+        low_demand_bonus_bound=course.course_config.low_demand_bonus_bound,
         max_demand_multiplier=course.course_config.max_low_demand_bonus,
     )
 
@@ -79,6 +83,9 @@ def course_page() -> ResponseReturnValue:
 
 @bp.route('/signup', methods=['GET', 'POST'])
 def signup() -> ResponseReturnValue:
+    if not current_app.ready:
+        return redirect(url_for('web.not_ready'))
+
     course: Course = current_app.course
 
     # ---- render page ---- #
@@ -120,6 +127,9 @@ def signup() -> ResponseReturnValue:
 @bp.route('/login', methods=['GET'])
 def login() -> ResponseReturnValue:
     """Only way to login - gitlab oauth"""
+    if not current_app.ready:
+        return redirect(url_for('web.not_ready'))
+
     oauth: OAuth = current_app.oauth
 
     redirect_uri = url_for('web.login_finish', _external=True)
@@ -130,6 +140,9 @@ def login() -> ResponseReturnValue:
 @bp.route('/login_finish')
 def login_finish() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
+    if not current_app.ready:
+        return redirect(url_for('web.not_ready'))
+
     course: Course = current_app.course
     oauth: OAuth = current_app.oauth
 
@@ -188,3 +201,11 @@ def login_finish() -> ResponseReturnValue:
 def logout() -> ResponseReturnValue:
     session.pop('gitlab', None)
     return redirect(url_for('web.course_page'))
+
+
+@bp.route('/not_ready')
+def not_ready() -> ResponseReturnValue:
+    if current_app.ready:
+        return redirect(url_for('web.course_page'))
+
+    return render_template('not_ready.html')

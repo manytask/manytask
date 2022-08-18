@@ -36,15 +36,22 @@ class Deadlines:
         self.groups = self._parse_groups(config)
 
     @staticmethod
-    def get_low_demand_multiplier(demand: float, max_demand_multiplier: float = 1.1) -> float:
+    def get_low_demand_multiplier(
+            demand: float,
+            low_demand_bonus_bound: float = 0.25,
+            max_demand_multiplier: float = 1.1
+    ) -> float:
         """
         @param demand: 'percent' of people who solved the task; less - fewer people solved it
+        @param low_demand_bonus_bound: less this percent - bonus, more - no bonus
         @param max_demand_multiplier: percent of people who solved the task
         @return: [1, max_demand_multiplier] multiplier to the final score
         """
         assert 0. <= demand <= 1.
+        assert 0. <= low_demand_bonus_bound <= 1.
+        assert 0. <= max_demand_multiplier <= 2.
 
-        if demand <= 0.25:
+        if demand <= low_demand_bonus_bound:
             demand_multiplier = max_demand_multiplier - (max_demand_multiplier - 1) * demand
         else:
             demand_multiplier = 1.
