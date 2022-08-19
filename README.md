@@ -4,7 +4,7 @@
 [![Publish](https://github.com/yandexdataschool/manytask/actions/workflows/publish.yml/badge.svg)](https://github.com/yandexdataschool/manytask/actions/workflows/publish.yml)
 [![codecov](https://codecov.io/gh/yandexdataschool/manytask/branch/main/graph/badge.svg?token=3F9J850FX2)](https://codecov.io/gh/yandexdataschool/manytask)
 [![github](https://img.shields.io/github/v/release/yandexdataschool/manytask?logo=github&display_name=tag&sort=semver)](https://github.com/yandexdataschool/manytask/releases)
-[![docker](https://img.shields.io/docker/v/manytask/manytask?label=docker&logo=docker&sort=semver)](https://hub.docker.com/manytask/manytask?sort=semver)
+[![docker](https://img.shields.io/docker/v/manytask/manytask?label=docker&logo=docker&sort=semver)](https://hub.docker.com/r/manytask/manytask)
 
 
 Small web application for managing courses: store students' grades, maintain deadlines, provide scoreboard etc.
@@ -85,9 +85,10 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install -U -r requirements.txt
 ```
+
 Run it
 ```shell
-CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5050 --reload --without-threads
+FLASK_DEBUG=1 FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5050 --reload --without-threads
 ```
 
 So, now it's available at `localhost:5050`
@@ -101,7 +102,7 @@ docker run \
     --restart always \
     --publish "5050:5050" \
     --env-file .env \
-    --env FLASK_ENV=development \
+    --env FLASK_DEBUG=1 \
     manytask:latest
 ```
 

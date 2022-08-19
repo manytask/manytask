@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import Iterable, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass
 from itertools import islice
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 import gspread
 from authlib.integrations.requests_client import AssertionSession
