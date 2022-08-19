@@ -9,7 +9,7 @@ volumes:
 
 services:
     nginx-certbot:
-        image: jonasal/nginx-certbot:3.1.2-nginx1.21.6
+        image: jonasal/nginx-certbot:3.2.0-nginx1.23.1
         restart: always
         environment:
             CERTBOT_EMAIL: no-reply@gitlab.manytask.org
@@ -22,7 +22,7 @@ services:
             - ./configs/nginx_server.conf:/etc/nginx/user_conf.d/nginx_server.conf:ro
 
     manytask:
-        image: manytask/manytask:latest
+        image: manytask/manytask:latest  # set SPECIFIC version you'll use
         container_name: manytask
         restart: always
         expose:
@@ -30,6 +30,12 @@ services:
         env_file: .env
         environment:
             FLASK_ENV: production
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:5050/healthcheck" ]
+            interval: 1m
+            timeout: 15s
+            retries: 3
+            start_period: 30s
         volumes:
             - cache:/cache
             - solutions:/solutions
