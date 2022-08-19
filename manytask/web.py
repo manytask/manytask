@@ -1,6 +1,7 @@
 import logging
 import secrets
 
+import flask.sessions
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('web', __name__)
 
 
-def valid_session(user_session: session) -> bool:
+def valid_session(user_session: flask.sessions.SessionMixin) -> bool:
     return (
         'gitlab' in user_session
         and 'version' in user_session['gitlab']
@@ -32,7 +33,10 @@ def valid_session(user_session: session) -> bool:
 
 @bp.route('/')
 def course_page() -> ResponseReturnValue:
-    course: Course = current_app.course
+    if not current_app.ready:  # type: ignore
+        return redirect(url_for('web.not_ready'))
+
+    course: Course = current_app.course  # type: ignore
 
     if current_app.debug:
         student_username = 'guest'
@@ -53,7 +57,10 @@ def course_page() -> ResponseReturnValue:
     tasks_scores = rating_table.get_scores(student_username)
 
     tasks_stats = rating_table.get_stats()
-    tasks_demands = rating_table.get_demands()
+    tasks_demands = rating_table.get_demands_multipliers(
+        low_demand_bonus_bound=course.course_config.low_demand_bonus_bound,
+        max_demand_multiplier=course.course_config.max_low_demand_bonus,
+    )
 
     return render_template(
         'tasks.html',
@@ -64,19 +71,24 @@ def course_page() -> ResponseReturnValue:
         student_repo_url=student_repo,
         student_ci_url=f'{student_repo}/pipelines',
         gdoc_url=course.googledoc_api.get_spreadsheet_url(),
-        lms_url=course.lms_url,
-        tg_invite_link=course.tg_invite_link,
+        lms_url=course.course_config.lms_url,
+        telegram_channel_invite=course.course_config.telegram_channel_invite,
+        telegram_chat_invite=course.course_config.telegram_chat_invite,
         scores=tasks_scores,
         now=get_current_time(),
         task_stats=tasks_stats,
         demand_multipliers=tasks_demands,
         scores_update_timestamp=rating_table.get_scores_update_timestamp(),
-        course_favicon=course.favicon
+        second_deadline_percent=f'{int(course.course_config.second_deadline_max*100):>3}',
+        course_favicon=course.favicon,
     )
 
 
 @bp.route('/signup', methods=['GET', 'POST'])
 def signup() -> ResponseReturnValue:
+    if not current_app.ready:
+        return redirect(url_for('web.not_ready'))
+
     course: Course = current_app.course
 
     # ---- render page ---- #
@@ -118,6 +130,9 @@ def signup() -> ResponseReturnValue:
 @bp.route('/login', methods=['GET'])
 def login() -> ResponseReturnValue:
     """Only way to login - gitlab oauth"""
+    if not current_app.ready:
+        return redirect(url_for('web.not_ready'))
+
     oauth: OAuth = current_app.oauth
 
     redirect_uri = url_for('web.login_finish', _external=True)
@@ -128,6 +143,9 @@ def login() -> ResponseReturnValue:
 @bp.route('/login_finish')
 def login_finish() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
+    if not current_app.ready:
+        return redirect(url_for('web.not_ready'))
+
     course: Course = current_app.course
     oauth: OAuth = current_app.oauth
 
@@ -186,3 +204,11 @@ def login_finish() -> ResponseReturnValue:
 def logout() -> ResponseReturnValue:
     session.pop('gitlab', None)
     return redirect(url_for('web.course_page'))
+
+
+@bp.route('/not_ready')
+def not_ready() -> ResponseReturnValue:
+    if current_app.ready:
+        return redirect(url_for('web.course_page'))
+
+    return render_template('not_ready.html')
