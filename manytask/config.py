@@ -74,3 +74,7 @@ class DebugConfig(Config):
     # google public sheet
     gdoc_spreadsheet_id: str = os.environ.get('GDOC_SPREADSHEET_ID', '1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM')
     gdoc_scoreboard_sheet: int = os.environ.get('GDOC_SCOREBOARD_SHEET', 0)
+
+@dataclass
+class TestConfig(DebugConfig):
+    gdoc_account: str = ''

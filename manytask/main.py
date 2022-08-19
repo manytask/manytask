@@ -29,6 +29,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
     course_config: config.CourseConfig | None = None
     if app.debug:
         app.app_config = config.DebugConfig()
+    elif test:
+        app.app_config = config.TestConfig()
     else:
         app.app_config = config.Config()  # read config from env
 
