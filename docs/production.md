@@ -6,7 +6,9 @@ Note: Please first refer to the [system setup documentation](./system_setup.md)
 
 There are different varints how to setup manytask for you  
 
-## Manually (recommended) 
+## Deploy 
+
+### Manually (recommended) 
 
 Better option is to create some files in place and run manytask **without** cloning the repo.
 
@@ -24,7 +26,7 @@ The latest manytask image can be found at docker hub: https://hub.docker.com/r/m
 3. Setup `certbot` to update https certificates    
 
 
-## From repo (not recommended)
+### From repo (not recommended)
 
 You can use this repo to setup manytask in production mode 
 
@@ -39,7 +41,7 @@ You can use this repo to setup manytask in production mode
     nano .env
     ```
 
-### Docker build (manytask only)
+#### Docker build (manytask only)
 ```shell
 docker build --tag manytask:build .
 docker stop manytask && docker rm manytask || true
@@ -52,7 +54,7 @@ docker run \
     manytask:build && docker logs -f manytask
 ```
 
-### Docker registry (manytask only)
+#### Docker registry (manytask only)
 ```shell
 docker pull manytask:latest
 docker stop manytask && docker rm manytask || true
@@ -66,7 +68,15 @@ docker run \
 ```
 
 
-### Docker-compose (manytask with certs)
+#### Docker-compose (manytask with certs)
 ```shell
 docker-compose -f docker-compose.production.yml up --build
 ```
+
+
+## Setup 
+
+Just after deploy the manytask will show `not_ready` page.  
+So first you need to push `.deadlines.yml` and `.course.yml` files via api requests from your repo.
+
+Please, refer to the example files and api docs. 
