@@ -60,9 +60,10 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install -U -r requirements.txt
 ```
+
 Run it
 ```shell
-CACHE_DIR=.tmp/cache/ FLASK_ENV=development FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5050 --reload --without-threads
+FLASK_DEBUG=1 FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5050 --reload --without-threads
 ```
 
 So, now it's available at `localhost:5050`
@@ -76,7 +77,7 @@ docker run \
     --restart always \
     --publish "5050:5050" \
     --env-file .env \
-    --env FLASK_ENV=development \
+    --env FLASK_DEBUG=1 \
     manytask:latest
 ```
 
@@ -103,7 +104,6 @@ docker run \
     --restart always \
     --publish "5050:5050" \
     --env-file .env \
-    --env FLASK_ENV=production \
     manytask:build && docker logs -f manytask
 ```
 
@@ -117,7 +117,6 @@ docker run \
     --restart always \
     --publish "5050:5050" \
     --env-file .env \
-    --env FLASK_ENV=production \
     manytask:latest && docker logs -f manytask
 ```
 

@@ -28,11 +28,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
     # configuration
     course_config: config.CourseConfig | None = None
     if app.debug:
-        app.app_config = config.DebugConfig()
+        app.app_config = config.DebugConfig.from_env()
     elif test:
         app.app_config = config.TestConfig()
     else:
-        app.app_config = config.Config()  # read config from env
+        app.app_config = config.Config.from_env()  # read config from env
 
     app.testing = os.environ.get('TESTING', test)
     if 'FLASK_SECRET_KEY' not in os.environ and not debug:

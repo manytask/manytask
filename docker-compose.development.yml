@@ -9,7 +9,7 @@ services:
         container_name: manytask
         env_file: .env
         environment:
-            FLASK_ENV: development
+            FLASK_DEBUG: 1
         ports:
             - "5050:5050"
         volumes:
