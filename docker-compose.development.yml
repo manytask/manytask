@@ -3,10 +3,15 @@ version: "3.8"
 
 services:
     manytask:
+        build:
+            dockerfile: Dockerfile
+            context: .
+        container_name: manytask
+        env_file: .env
         environment:
             FLASK_ENV: development
         ports:
-            - "5000:5000"
+            - "5050:5050"
         volumes:
             - ./manytask/:/app/manytask
             - .tmp/cache/:/cache
