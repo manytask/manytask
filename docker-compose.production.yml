@@ -28,8 +28,6 @@ services:
         expose:
             - "5050"
         env_file: .env
-        environment:
-            FLASK_ENV: production
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:5050/healthcheck" ]
             interval: 1m
