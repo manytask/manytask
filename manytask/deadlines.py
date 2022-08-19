@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from collections import namedtuple
-from datetime import datetime, timedelta
 from typing import Any
 
 from cachelib import BaseCache

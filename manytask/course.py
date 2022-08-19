@@ -118,7 +118,7 @@ class Course:
         return self.course_config.name
 
     @property
-    def deadlines(self) -> 'deadlines.Deadlines':
+    def deadlines(self) -> 'deadlines.Deadlines':  # noqa: F811
         return self.deadlines_api.fetch()
 
     def store_deadlines(self, content: list[dict[str, Any]]) -> None:

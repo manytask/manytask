@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import course, deadlines, gdoc, glab, config
+from . import config, course, deadlines, gdoc, glab
 
 
 load_dotenv('../.env')  # take environment variables from .env.

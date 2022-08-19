@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 import gitlab
 import gitlab.v4.objects
@@ -142,7 +143,7 @@ class GitLabApi:
 
     def _parse_user_to_student(
             self,
-            user: dict,
+            user: dict[str, Any],
     ) -> Student:
         return Student(
             id=user['id'],

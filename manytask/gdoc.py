@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import defaultdict
+from collections import Iterable, defaultdict
 from dataclasses import dataclass
 from itertools import islice
 from typing import Any, Callable
@@ -239,7 +239,7 @@ class RatingTable:
             self,
             student: Student,
             task_name: str,
-            update_fn: Callable,
+            update_fn: Callable[..., Any],
     ) -> int:
         try:
             student_row = self._find_login_row(student.username)
@@ -332,7 +332,7 @@ class RatingTable:
             row: int,
             start: int | None = None,
             with_index: bool = False,
-    ):
+    ) -> Iterable[Any]:
         values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
         if with_index:
             values = enumerate(values, start=1)
@@ -343,7 +343,7 @@ class RatingTable:
     def _list_tasks(
             self,
             with_index: bool = False,
-    ):
+    ) -> Iterable[Any]:
         return self._get_row_values(
             PublicAccountsSheetOptions.HEADER_ROW,
             start=PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1, with_index=with_index

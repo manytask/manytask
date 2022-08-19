@@ -44,7 +44,7 @@ class Config:
     gdoc_account_credentials_base64: str = os.environ['GDOC_ACCOUNT_CREDENTIALS_BASE64']
     # google public sheet
     gdoc_spreadsheet_id: str = os.environ['GDOC_SPREADSHEET_ID']
-    gdoc_scoreboard_sheet: int = os.environ.get('GDOC_SCOREBOARD_SHEET', 0)
+    gdoc_scoreboard_sheet: int = int(os.environ.get('GDOC_SCOREBOARD_SHEET', 0))
 
 
 @dataclass
@@ -73,7 +73,8 @@ class DebugConfig(Config):
     gdoc_account: str = os.environ['GDOC_ACCOUNT']
     # google public sheet
     gdoc_spreadsheet_id: str = os.environ.get('GDOC_SPREADSHEET_ID', '1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM')
-    gdoc_scoreboard_sheet: int = os.environ.get('GDOC_SCOREBOARD_SHEET', 0)
+    gdoc_scoreboard_sheet: int = int(os.environ.get('GDOC_SCOREBOARD_SHEET', 0))
+
 
 @dataclass
 class TestConfig(DebugConfig):

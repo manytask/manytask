@@ -1,6 +1,7 @@
 import logging
 import secrets
 
+import flask.sessions
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('web', __name__)
 
 
-def valid_session(user_session: session) -> bool:
+def valid_session(user_session: flask.sessions.SessionMixin) -> bool:
     return (
         'gitlab' in user_session
         and 'version' in user_session['gitlab']
@@ -32,10 +33,10 @@ def valid_session(user_session: session) -> bool:
 
 @bp.route('/')
 def course_page() -> ResponseReturnValue:
-    if not current_app.ready:
+    if not current_app.ready:  # type: ignore
         return redirect(url_for('web.not_ready'))
 
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     if current_app.debug:
         student_username = 'guest'

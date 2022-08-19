@@ -4,6 +4,7 @@ import functools
 import logging
 import os
 import secrets
+import typing
 from datetime import datetime, timedelta
 from typing import Any, Callable
 
@@ -21,7 +22,7 @@ bp = Blueprint('api', __name__, url_prefix='/api')
 TESTER_TOKEN = os.environ['TESTER_TOKEN']
 
 
-def requires_token(f: Callable[[Any, ], Any]) -> Callable[[Any, ], Any]:
+def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         token = request.form.get('token', request.headers.get('Authorization', ''))
@@ -35,10 +36,10 @@ def requires_token(f: Callable[[Any, ], Any]) -> Callable[[Any, ], Any]:
     return decorated
 
 
-def requires_ready(f: Callable[[Any, ], Any]) -> Callable[[Any, ], Any]:
+def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        if not current_app.ready:
+        if not current_app.ready:  # type: ignore
             abort(403)
 
         return f(*args, **kwargs)
@@ -104,7 +105,7 @@ def _update_score(
 @requires_token
 @requires_ready
 def report_score() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
@@ -197,7 +198,7 @@ def report_score() -> ResponseReturnValue:
 @requires_token
 @requires_ready
 def get_score() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
@@ -236,7 +237,7 @@ def get_score() -> ResponseReturnValue:
 @bp.post('/update_deadlines')
 @requires_token
 def update_deadlines() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     logger.info('Running update_deadlines')
 
@@ -261,7 +262,7 @@ def update_deadlines() -> ResponseReturnValue:
 @bp.post('/update_course_config')
 @requires_token
 def update_course_config() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     logger.info('Running update_course_config')
 
@@ -284,13 +285,14 @@ def update_course_config() -> ResponseReturnValue:
 @bp.post('/sync_task_columns')
 @requires_token
 def sync_task_columns() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     logger.info('Running DEPRECATED sync_task_columns')
 
     # ----- get and validate request parameters ----- #
     try:
-        course.store_deadlines(request.get_json(force=True, silent=False))
+        deadlines_data = typing.cast(list[dict[str, Any]], request.get_json(force=True, silent=False))
+        course.store_deadlines(deadlines_data)
     except Exception as e:
         logger.exception(e)
         return 'Invalid deadlines', 400
@@ -307,7 +309,7 @@ def sync_task_columns() -> ResponseReturnValue:
 @bp.post('/update_cache')
 @requires_token
 def update_cache() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     logger.info('Running update_cache')
 
@@ -317,11 +319,12 @@ def update_cache() -> ResponseReturnValue:
     return '', 200
 
 
+# flake8: noqa: F841
 @bp.post('/report_source')
 @requires_token
 @requires_ready
 def report_source() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
@@ -332,7 +335,7 @@ def report_source() -> ResponseReturnValue:
         return 'You didn\'t provide required attribute `user_id`', 400
     user_id = int(request.form['user_id'])
 
-    if 'files' not in request.files.getlist:
+    if 'files' not in request.files.getlist:  # type: ignore
         return 'You didn\'t provide required attribute `files`', 400
     files = request.files.getlist('files')
 
@@ -348,7 +351,7 @@ def report_source() -> ResponseReturnValue:
 @requires_token
 @requires_ready
 def get_solutions() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
