@@ -71,12 +71,14 @@ def _update_score(
         old_score: int,
         submit_time: datetime | None = None,
         check_deadline: bool = True,
+        second_deadline_max: float = 0.5,
         demand_multiplier: float = 1.
 ) -> int:
     if old_score < 0:
         return old_score
 
-    assert 0 <= demand_multiplier <= 2
+    assert 0 <= second_deadline_max <= 1.
+    assert 0 <= demand_multiplier <= 2.
 
     extra_time = _parse_flags(flags)
 
@@ -84,7 +86,7 @@ def _update_score(
         if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
             new_score = 0
         elif check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            new_score = int(0.5 * score * demand_multiplier)
+            new_score = int(second_deadline_max * score * demand_multiplier)
         else:
             new_score = int(score * demand_multiplier)
         return max(new_score, old_score)
@@ -92,7 +94,7 @@ def _update_score(
         if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
             return old_score
         if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            return int(0.5 * score * demand_multiplier)
+            return int(second_deadline_max * score * demand_multiplier)
         return int(score * demand_multiplier)
     else:
         raise ValueError(f'Wrong scoring func: {task.scoring_func}')
@@ -170,8 +172,13 @@ def report_score() -> ResponseReturnValue:
         f'verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
     )
     update_function = functools.partial(
-        _update_score, task, reported_score,
-        submit_time=submit_time, check_deadline=check_deadline, demand_multiplier=task_demand_multiplier,
+        _update_score,
+        task,
+        reported_score,
+        submit_time=submit_time,
+        check_deadline=check_deadline,
+        second_deadline_max=course.course_config.second_deadline_max,
+        demand_multiplier=task_demand_multiplier,
     )
     final_score = course.rating_table.store_score(student, task.name, update_function)
 
@@ -265,7 +272,7 @@ def update_course_config() -> ResponseReturnValue:
         course.store_course_config(config_data)
     except Exception as e:
         logger.exception(e)
-        return 'Invalid course config', 400
+        return f'Invalid course config\n {e}', 400
 
     # ----- logic ----- #
     current_app.ready = True

@@ -71,13 +71,15 @@ def course_page() -> ResponseReturnValue:
         student_ci_url=f'{student_repo}/pipelines',
         gdoc_url=course.googledoc_api.get_spreadsheet_url(),
         lms_url=course.course_config.lms_url,
-        tg_invite_link=course.course_config.telegram_chat_invite,
+        telegram_channel_invite=course.course_config.telegram_channel_invite,
+        telegram_chat_invite=course.course_config.telegram_chat_invite,
         scores=tasks_scores,
         now=get_current_time(),
         task_stats=tasks_stats,
         demand_multipliers=tasks_demands,
         scores_update_timestamp=rating_table.get_scores_update_timestamp(),
-        course_favicon=course.favicon
+        second_deadline_percent=f'{int(course.course_config.second_deadline_max*100):>3}',
+        course_favicon=course.favicon,
     )
 
 

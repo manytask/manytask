@@ -1,0 +1,31 @@
+name: some_course
+
+# course
+deadlines: hard
+second_deadline_max: 0.4
+low_demand_bonus_bound: 0.4
+max_low_demand_bonus: 1.2
+
+
+# checker (useless for manytask, important for checker)
+system: python
+layout: groups
+executor: sandbox
+
+
+# gitlab
+gitlab_url: https://gitlab.manytask.org
+default_branch: master
+private_repo: py-tasks/private-tasks
+public_repo: py-tasks/public-2022-spring
+#lectures_repo: py-tasks/lectures-2022-spring
+students_group: python-spring-2022
+
+# manytask
+manytask_url: https://py.manytask.org
+
+
+# info
+lms_url: https://lk.yandexdataschool.ru/
+telegram_channel_invite: https://t.me/joinchat/
+telegram_chat_invite: https://t.me/joinchat/

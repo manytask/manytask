@@ -125,6 +125,9 @@ class Course:
         self.deadlines_api.store(content)
 
     def store_course_config(self, content: dict[str, Any]) -> None:
+        if content.get('deadlines') != 'hard':
+            raise RuntimeError('Obly deadlines=hard available')
+
         self.course_config = CourseConfig(
             name=content.get('name'),
             deadlines=content.get('deadlines'),

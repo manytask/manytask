@@ -29,17 +29,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
     course_config: config.CourseConfig | None = None
     if app.debug:
         app.app_config = config.DebugConfig()
-        course_config = config.CourseConfig(
-            name='CourseName',
-            deadlines='hard',
-            second_deadline_max=0.5,
-            low_demand_bonus_bound=0.4,
-            max_low_demand_bonus=1.2,
-            lms_url='https://lk.yandexdataschool.ru/',
-            telegram_channel_invite='https://telegram.org/',
-            telegram_chat_invite='https://telegram.org/',
-        )
-        app.ready = True
     else:
         app.app_config = config.Config()  # read config from env
 
@@ -178,9 +167,14 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
 
     # debug updates
     if app.course.debug:
-        with open('deadlines.example.yml', 'r') as f:
+        with open('.deadlines.example.yml', 'r') as f:
             debug_deadlines_data = yaml.load(f, Loader=yaml.SafeLoader)
         app.course.store_deadlines(debug_deadlines_data)
+
+        with open('.course.example.yml', 'r') as f:
+            debug_course_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+        app.course.store_course_config(debug_course_config_data)
+        app.ready = True
 
     logger.info('Init success')
 
