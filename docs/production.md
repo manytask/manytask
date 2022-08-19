@@ -49,7 +49,6 @@ docker run \
     --restart always \
     --publish "5050:5050" \
     --env-file .env \
-    --env FLASK_ENV=production \
     manytask:build && docker logs -f manytask
 ```
 
@@ -63,7 +62,6 @@ docker run \
     --restart always \
     --publish "5050:5050" \
     --env-file .env \
-    --env FLASK_ENV=production \
     manytask:latest && docker logs -f manytask
 ```
 
