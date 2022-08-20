@@ -31,6 +31,7 @@ services:
         restart: always
         environment:
             DEFAULT_EMAIL: no-reply@manytask.org
+            NGINX_PROXY_CONTAINER: nginx-proxy
         volumes:
             - acme:/etc/acme.sh
             - certs:/etc/nginx/certs
