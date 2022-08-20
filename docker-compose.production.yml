@@ -36,7 +36,7 @@ services:
             - certs:/etc/nginx/certs
             - vhost:/etc/nginx/vhost.d
             - html:/usr/share/nginx/html
-            - /var/run/docker.sock:/tmp/docker.sock:ro
+            - /var/run/docker.sock:/var/run/docker.sock:ro
 
     manytask:
         image: manytask/manytask:latest  # set SPECIFIC version you'll use
