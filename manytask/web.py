@@ -33,10 +33,10 @@ def valid_session(user_session: flask.sessions.SessionMixin) -> bool:
 
 @bp.route('/')
 def course_page() -> ResponseReturnValue:
-    if not current_app.ready:  # type: ignore
-        return redirect(url_for('web.not_ready'))
-
     course: Course = current_app.course  # type: ignore
+
+    if not course.course_config:
+        return redirect(url_for('web.not_ready'))
 
     if current_app.debug:
         student_username = 'guest'
@@ -86,10 +86,10 @@ def course_page() -> ResponseReturnValue:
 
 @bp.route('/signup', methods=['GET', 'POST'])
 def signup() -> ResponseReturnValue:
-    if not current_app.ready:
-        return redirect(url_for('web.not_ready'))
+    course: Course = current_app.course  # type: ignore
 
-    course: Course = current_app.course
+    if not course.course_config:
+        return redirect(url_for('web.not_ready'))
 
     # ---- render page ---- #
     if request.method == 'GET':
@@ -130,7 +130,9 @@ def signup() -> ResponseReturnValue:
 @bp.route('/login', methods=['GET'])
 def login() -> ResponseReturnValue:
     """Only way to login - gitlab oauth"""
-    if not current_app.ready:
+    course: Course = current_app.course  # type: ignore
+
+    if not course.course_config:
         return redirect(url_for('web.not_ready'))
 
     oauth: OAuth = current_app.oauth
@@ -143,10 +145,11 @@ def login() -> ResponseReturnValue:
 @bp.route('/login_finish')
 def login_finish() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
-    if not current_app.ready:
+    course: Course = current_app.course  # type: ignore
+
+    if not course.course_config:
         return redirect(url_for('web.not_ready'))
 
-    course: Course = current_app.course
     oauth: OAuth = current_app.oauth
 
     # ----- get args ----- #
@@ -208,7 +211,9 @@ def logout() -> ResponseReturnValue:
 
 @bp.route('/not_ready')
 def not_ready() -> ResponseReturnValue:
-    if current_app.ready:
+    course: Course = current_app.course  # type: ignore
+
+    if course.course_config:
         return redirect(url_for('web.course_page'))
 
     return render_template('not_ready.html')

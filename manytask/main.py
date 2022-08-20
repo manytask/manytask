@@ -21,12 +21,10 @@ load_dotenv('../.env')  # take environment variables from .env.
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
     app = Flask(__name__)
-    app.ready = False  # Ready to get api responses
     if debug:
         app.debug = debug
 
     # configuration
-    course_config: config.CourseConfig | None = None
     if app.debug:
         app.app_config = config.DebugConfig.from_env()
     elif test:
@@ -151,7 +149,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
         gdoc_api,
         gitlab_api,
         app.app_config.registration_secret,
-        course_config,
+        cache,
         debug=app.debug,
     )
     app.course = _course
@@ -176,7 +174,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
         with open('.course.example.yml', 'r') as f:
             debug_course_config_data = yaml.load(f, Loader=yaml.SafeLoader)
         app.course.store_course_config(debug_course_config_data)
-        app.ready = True
 
     logger.info('Init success')
 

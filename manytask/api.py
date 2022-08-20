@@ -39,7 +39,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
 def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        if not current_app.ready:  # type: ignore
+        if not current_app.course.course_config:  # type: ignore
             abort(403)
 
         return f(*args, **kwargs)
@@ -276,7 +276,7 @@ def update_course_config() -> ResponseReturnValue:
         return f'Invalid course config\n {e}', 400
 
     # ----- logic ----- #
-    current_app.ready = True
+    # TODO: fix this shit. may work one thread only =(
 
     return '', 200
 
