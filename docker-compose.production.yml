@@ -27,6 +27,7 @@ services:
         environment:
             VIRTUAL_HOST: py.manytask.org
             VIRTUAL_PORT: 5050
+            VIRTUAL_PROTO: https
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:5050/healthcheck" ]
             interval: 1m
