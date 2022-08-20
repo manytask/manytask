@@ -19,6 +19,8 @@ services:
         ports:
             - "80:80"
             - "433:433"
+        environment:
+            DHPARAM_GENERATION: false
         volumes:
             - certs:/etc/nginx/certs
             - vhost:/etc/nginx/vhost.d
