@@ -26,6 +26,9 @@ Better option is to create some files in place and run manytask **without** clon
 
 The latest manytask image can be found at docker hub: https://hub.docker.com/r/manytask/manytask
 
+Here is the way you can go if you have 1 server with 1 manytask instance (1 course). If you have multiple, it's worth to separate nginx-proxy dockers.
+
+
 1. Create docker/docker-compose script with latest manytask version  
    Note: Best practice is to use version tag (e.g. `manytask/manytask:1.3.4`) **not** `latest` tag
 
@@ -33,7 +36,6 @@ The latest manytask image can be found at docker hub: https://hub.docker.com/r/m
    ```shell
    curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/docker-compose.development.yml -o docker-compose.yml 
    ```
- 
 
 2. Create `.env` file with production environment  
 
@@ -42,14 +44,14 @@ The latest manytask image can be found at docker hub: https://hub.docker.com/r/m
    curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/.env.example -o .env
    ```
 
-3. Setup `certbot` to update https certificates   
+3. Setup `nginx-proxy`/`letencrypt`/`certbot` to update https certificates automatically  
    
    If you are using [docker-compose.production.yml](../docker-compose.production.yml) example, it's already set up.
 
 
 ### From repo (not recommended)
 
-You can use this repo to setup manytask in production mode 
+You can use this repo to set up manytask in production mode 
 
 1. Copy latest manytask repo
     ```shell
