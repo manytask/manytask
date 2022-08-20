@@ -20,16 +20,16 @@ services:
             - "80:80"
             - "433:433"
         environment:
-            DHPARAM_GENERATION: false
+            DHPARAM_SKIP: true
         volumes:
-            - certs:/etc/nginx/certs
+            - certs:/etc/nginx/certs:ro
             - vhost:/etc/nginx/vhost.d
             - html:/usr/share/nginx/html
             - /var/run/docker.sock:/tmp/docker.sock:ro
 
     acme-companion:
         image: nginxproxy/acme-companion:2.2.1
-        container_name: acme-companion
+        container_name: nginx-proxy-acme
         restart: always
         environment:
             DEFAULT_EMAIL: no-reply@manytask.org
