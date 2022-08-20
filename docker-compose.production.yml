@@ -4,22 +4,16 @@ version: "3.8"
 volumes:
     cache:
     solutions:
-    letsencrypt:
 
 
 services:
-    nginx-certbot:
-        image: jonasal/nginx-certbot:3.2.0-nginx1.23.1
-        restart: always
-        environment:
-            CERTBOT_EMAIL: no-reply@gitlab.manytask.org
+    nginx-proxy:
+        image: nginxproxy/nginx-proxy:1.0.1
         ports:
             - "80:80"
-            - "443:443"
+            - "433:433"
         volumes:
-            - letsencrypt:/etc/letsencrypt
-#            - ./configs/nginx.conf:/etc/nginx/conf.d/nginx.conf:ro
-            - ./configs/nginx_server.conf:/etc/nginx/user_conf.d/nginx_server.conf:ro
+            - /var/run/docker.sock:/tmp/docker.sock:ro
 
     manytask:
         image: manytask/manytask:latest  # set SPECIFIC version you'll use
@@ -28,6 +22,9 @@ services:
         expose:
             - "5050"
         env_file: .env
+        environment:
+            VIRTUAL_HOST: py.manytask.org
+            VIRTUAL_PORT: 5050
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:5050/healthcheck" ]
             interval: 1m
