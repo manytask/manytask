@@ -129,9 +129,10 @@ class Course:
 
     @property
     def course_config(self) -> CourseConfig | None:
+        logger.info('Fetching config...')
         content = self._cache.get('__config__')
 
-        logger.info('Reading config... got' + str(content))
+        logger.info('got' + str(content))
 
         if not content:
             return None
@@ -150,11 +151,13 @@ class Course:
         self.deadlines_api.store(content)
 
     def store_course_config(self, content: dict[str, Any]) -> None:
+        logger.info('Storing course config...')
+        print('!')
+
         # TODO: make it better. read from git?
         if content.get('deadlines') != 'hard':
             raise RuntimeError('Only deadlines=hard available')
 
-        logger.info('Store course config...')
         # For validation purposes
         CourseConfig(
             name=content.get('name'),
