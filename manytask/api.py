@@ -276,7 +276,7 @@ def update_course_config() -> ResponseReturnValue:
         return f'Invalid course config\n {e}', 400
 
     # ----- logic ----- #
-    # TODO: fix this shit. may work one thread only =(
+    # TODO: fix course config storing. may work one thread only =(
 
     return '', 200
 
