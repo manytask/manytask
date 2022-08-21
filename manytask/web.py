@@ -131,11 +131,10 @@ def signup() -> ResponseReturnValue:
 def login() -> ResponseReturnValue:
     """Only way to login - gitlab oauth"""
     course: Course = current_app.course  # type: ignore
+    oauth: OAuth = current_app.oauth  # type: ignore
 
     if not course.course_config:
         return redirect(url_for('web.not_ready'))
-
-    oauth: OAuth = current_app.oauth
 
     redirect_uri = url_for('web.login_finish', _external=True)
 
@@ -146,11 +145,10 @@ def login() -> ResponseReturnValue:
 def login_finish() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
     course: Course = current_app.course  # type: ignore
+    oauth: OAuth = current_app.oauth  # type: ignore
 
     if not course.course_config:
         return redirect(url_for('web.not_ready'))
-
-    oauth: OAuth = current_app.oauth
 
     # ----- get args ----- #
     is_create_project = True
@@ -212,6 +210,8 @@ def logout() -> ResponseReturnValue:
 @bp.route('/not_ready')
 def not_ready() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
+
+    logger.info('course.course_config' + type(course.course_config))
 
     if course.course_config:
         return redirect(url_for('web.course_page'))

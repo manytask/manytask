@@ -275,8 +275,11 @@ def update_course_config() -> ResponseReturnValue:
         logger.exception(e)
         return f'Invalid course config\n {e}', 400
 
+    logger.info('course.course_config' + type(course.course_config))
+    logger.info(str(course.course_config))
+
     # ----- logic ----- #
-    # TODO: fix this shit. may work one thread only =(
+    # TODO: fix course config storing. may work one thread only =(
 
     return '', 200
 
