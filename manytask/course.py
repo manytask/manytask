@@ -131,6 +131,8 @@ class Course:
     def course_config(self) -> CourseConfig | None:
         content = self._cache.get('__config__')
 
+        logger.info('Reading config... got' + str(content))
+
         if not content:
             return None
 
@@ -152,6 +154,17 @@ class Course:
         if content.get('deadlines') != 'hard':
             raise RuntimeError('Only deadlines=hard available')
 
+        logger.info('Store course config...')
+        # For validation purposes
+        CourseConfig(
+            name=content.get('name'),
+            deadlines=content.get('deadlines'),
+            second_deadline_max=float(content.get('second_deadline_max')),
+            max_low_demand_bonus=float(content.get('max_low_demand_bonus')),
+            lms_url=content.get('lms_url', None),
+            telegram_channel_invite=content.get('telegram_channel_invite', None),
+            telegram_chat_invite=content.get('telegram_chat_invite', None),
+        )
         self._cache.set('__config__', content)
 
     @property
