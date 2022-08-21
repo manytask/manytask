@@ -212,6 +212,7 @@ def not_ready() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
     logger.info('course.course_config' + str(type(course.course_config)))
+    logger.info('course.deadlines' + str(type(course.deadlines)))
 
     if course.course_config:
         return redirect(url_for('web.course_page'))
