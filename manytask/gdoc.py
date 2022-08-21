@@ -227,8 +227,11 @@ class RatingTable:
             task.name: _tasks_stats[task.name] / len(all_users_scores)
             for task in deadlines.tasks
         }
+        # clear cache saving config
+        _config = self._cache.get('__config__')
 
         self._cache.clear()
+        self._cache.set('__config__', _config)
         self._cache.set('__deadlines__', _deadlines)
         self._cache.set(f'{self.ws.id}:scores', all_users_scores)
         self._cache.set(f'{self.ws.id}:stats', tasks_stats)

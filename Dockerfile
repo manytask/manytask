@@ -10,11 +10,10 @@ COPY ./manytask/ /app/manytask
 ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions
 VOLUME ["/cache", "/solutions"]
 
-# TODO: set multiple workers/threads
 CMD python -m gunicorn \
     --bind 0.0.0.0:5050 \
-    --workers 1 \
-    --threads 1 \
+    --workers 4 \
+    --threads 4 \
     "manytask:create_app()"
 #    --worker-class gthread \
 #    --access-logfile - \
