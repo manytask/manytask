@@ -407,7 +407,7 @@ class RatingTable:
         # fill empty columns with None
         row_values = [
             column_to_values_dict.get(i-1, None)
-            for i in range(max(column_to_values_dict.items()))
+            for i in range(max(column_to_values_dict.keys()))
         ]
 
         result = self.ws.append_row(
