@@ -6,10 +6,10 @@ Werkzeug==2.2.2
 
 # api interaction (gitlab, google sheets)
 gspread==5.5.0
-python-gitlab==3.8.1
+python-gitlab==3.9.0
 
 # utils
 authlib==1.0.1  # 'gitlab oauth2' and 'gspread login'
-python-dotenv==0.20.0
+python-dotenv==0.21.0
 PyYAML==6.0
 requests==2.28.1
