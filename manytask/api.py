@@ -172,6 +172,14 @@ def report_score() -> ResponseReturnValue:
     logger.info(
         f'verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
     )
+
+    if reported_score is None:
+        reported_score = task.score
+        logger.info(
+            f'Got score=None; set max score for {task.name} of {task.score}'
+        )
+    assert reported_score is not None
+
     update_function = functools.partial(
         _update_score,
         task,
