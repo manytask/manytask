@@ -58,7 +58,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
         'disable_existing_loggers': True,
         'formatters': {
             'default': {
-                'format': '%(asctime)s %(levelname)s - process-%(process)d:%(thread)d app in %(filename)s : %(message)s',
+                'format': '%(asctime)s %(levelname)s - '
+                          'process-%(process)d:%(thread)d app in %(filename)s : %(message)s',
             },
             'access': {
                 'format': '%(message)s',
