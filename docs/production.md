@@ -1,7 +1,7 @@
 # Production
 
 On this page you can find documentation on how to run `manytask` itself  
-Note: Please first refer to the [system setup documentation](./system_setup.md)
+NB: Please first refer to the [system setup documentation](./system_setup.md)
 
 
 There are different varints how to set up manytask for you  
@@ -17,7 +17,7 @@ For example: `py.manytask.org` - domain for python course
 
 ## Deploy 
 
-Than you need to set up manytask docker itself 
+Then you need to set up manytask docker itself 
 
 
 ### Manually (recommended) 
@@ -30,7 +30,7 @@ Here is the way you can go if you have 1 server with 1 manytask instance (1 cour
 
 
 1. Create docker/docker-compose script with latest manytask version  
-   Note: Best practice is to use version tag (e.g. `manytask/manytask:1.3.4`) **not** `latest` tag
+   Note: Best practice is to use version tag (e.g. `manytask/manytask:9.9.9`) **not** `latest` tag
 
    See [docker-compose.production.yml](../docker-compose.production.yml) file as an example  
    ```shell
