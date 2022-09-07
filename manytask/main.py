@@ -129,6 +129,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
         course_group=app.app_config.gitlab_course_group,
         course_public_repo=app.app_config.gitlab_course_public_repo,
         course_students_group=app.app_config.gitlab_course_students_group,
+        default_branch=app.app_config.gitlab_default_branch,
     )
     _gdoc_credentials_string = base64.decodebytes(
         app.app_config.gdoc_account_credentials_base64.encode()

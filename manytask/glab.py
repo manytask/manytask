@@ -48,6 +48,7 @@ class GitLabApi:
             course_group: str,
             course_public_repo: str,
             course_students_group: str,
+            default_branch: str = 'main',
             *,
             dry_run: bool = False,
     ):
@@ -57,6 +58,7 @@ class GitLabApi:
         :param course_group:
         :param course_public_repo:
         :param course_students_group:
+        :param default_branch:
         """
         self.dry_run = dry_run
 
@@ -66,6 +68,8 @@ class GitLabApi:
         self._course_group = course_group
         self._course_public_repo = course_public_repo
         self._course_students_group = course_students_group
+
+        self._default_branch = default_branch
 
         # test can find groups and repos
         if self._course_group:
@@ -203,7 +207,7 @@ class GitLabApi:
         return self._parse_user_to_student(response.json())
 
     def get_url_for_task_base(self) -> str:
-        return f'{self._url}/{self._course_public_repo}/blob/master'
+        return f'{self._url}/{self._course_public_repo}/blob/{self._default_branch}'
 
     def get_url_for_repo(
             self,
