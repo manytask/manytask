@@ -1,4 +1,4 @@
-name: some_course
+name: python
 
 # course
 deadlines: hard
@@ -11,15 +11,16 @@ max_low_demand_bonus: 1.2
 system: python
 layout: groups
 executor: sandbox
+templates: create
 
 
 # gitlab
 gitlab_url: https://gitlab.manytask.org
-default_branch: master
-private_repo: py-tasks/private-tasks
-public_repo: py-tasks/public-2022-spring
+default_branch: main
+course_group: python
+public_repo: python/public-2022-fall
+students_group: python/students-fall-2022
 #lectures_repo: py-tasks/lectures-2022-spring
-students_group: python-spring-2022
 
 # manytask
 manytask_url: https://py.manytask.org

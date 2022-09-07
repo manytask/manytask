@@ -32,7 +32,7 @@ class Config:
     gitlab_url: str
     gitlab_admin_token: str
     # gitlab course repos
-    gitlab_course_private_repo: str
+    gitlab_course_group: str
     gitlab_course_public_repo: str
     gitlab_course_students_group: str
     # gitlab oauth2
@@ -61,7 +61,7 @@ class Config:
             gitlab_url=os.environ.get('GITLAB_URL', 'https://gitlab.manytask.org'),
             gitlab_admin_token=os.environ['GITLAB_ADMIN_TOKEN'],
             # gitlab course repos
-            gitlab_course_private_repo=os.environ['GITLAB_COURSE_PUBLIC_REPO'],
+            gitlab_course_group=os.environ['GITLAB_COURSE_GROUP'],
             gitlab_course_public_repo=os.environ['GITLAB_COURSE_PUBLIC_REPO'],
             gitlab_course_students_group=os.environ['GITLAB_COURSE_STUDENTS_GROUP'],
             # gitlab oauth2
@@ -91,7 +91,7 @@ class DebugConfig(Config):
     gitlab_url: str = 'https://gitlab.manytask.org'
     gitlab_admin_token: str = ''
     # gitlab course repos
-    gitlab_course_private_repo: str = ''
+    gitlab_course_group: str = ''
     gitlab_course_public_repo: str = ''
     gitlab_course_students_group: str = ''
     # gitlab oauth2

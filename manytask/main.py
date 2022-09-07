@@ -126,7 +126,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
     gitlab_api = glab.GitLabApi(
         base_url=app.app_config.gitlab_url,
         admin_token=app.app_config.gitlab_admin_token,
-        course_private_repo=app.app_config.gitlab_course_private_repo,
+        course_group=app.app_config.gitlab_course_group,
         course_public_repo=app.app_config.gitlab_course_public_repo,
         course_students_group=app.app_config.gitlab_course_students_group,
     )
