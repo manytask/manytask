@@ -133,7 +133,7 @@ class SolutionsApi:
 
         if task_folder.exists() and task_folder.is_dir():
             with tempfile.TemporaryDirectory() as temp_folder:
-                self._aggregate_task_files(task_folder, temp_folder)
+                self._aggregate_task_files(task_folder, Path(temp_folder))
 
             return self._compress_folder(temp_folder)
 
