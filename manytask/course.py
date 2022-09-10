@@ -5,6 +5,10 @@ from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from cachelib import BaseCache
+
+from .config import CourseConfig
+
 
 logger = logging.getLogger(__name__)
 MOSCOW_TIMEZONE = ZoneInfo('Europe/Moscow')
@@ -95,9 +99,7 @@ class Course:
             gitlab_api: glab.GitLabApi,
             solutions_api: solutions.SolutionsApi,
             registration_secret: str,
-            lms_url: str,
-            tg_invite_link: str,
-            course_name: str | None = None,
+            cache: BaseCache,
             *,
             debug: bool = False,
     ):
@@ -107,9 +109,8 @@ class Course:
         self.solutions_api = solutions_api
 
         self.registration_secret = registration_secret
-        self.lms_url = lms_url
-        self.tg_invite_link = tg_invite_link
-        self.course_name = course_name or 'manytask'
+
+        self._cache = cache
 
         self.debug = debug
 
@@ -119,14 +120,54 @@ class Course:
 
     @property
     def name(self) -> str:
-        return self.course_name
+        if self.course_config:
+            return self.course_config.name
+        else:
+            return 'not_ready'
 
     @property
-    def deadlines(self) -> 'deadlines.Deadlines':
+    def deadlines(self) -> 'deadlines.Deadlines':  # noqa: F811
         return self.deadlines_api.fetch()
+
+    @property
+    def course_config(self) -> CourseConfig | None:
+        logger.info('Fetching config...')
+        content = self._cache.get('__config__')
+
+        if not content:
+            return None
+
+        return CourseConfig(
+            name=content['name'],
+            deadlines=content['deadlines'],
+            second_deadline_max=float(content['second_deadline_max']),
+            max_low_demand_bonus=float(content['max_low_demand_bonus']),
+            lms_url=content.get('lms_url', None),
+            telegram_channel_invite=content.get('telegram_channel_invite', None),
+            telegram_chat_invite=content.get('telegram_chat_invite', None),
+        )
 
     def store_deadlines(self, content: list[dict[str, Any]]) -> None:
         self.deadlines_api.store(content)
+
+    def store_course_config(self, content: dict[str, Any]) -> None:
+        logger.info('Storing course config...')
+
+        # TODO: make it better. read from git?
+        if content.get('deadlines') != 'hard':
+            raise RuntimeError('Only deadlines=hard available')
+
+        # For validation purposes
+        CourseConfig(
+            name=content['name'],
+            deadlines=content['deadlines'],
+            second_deadline_max=float(content['second_deadline_max']),
+            max_low_demand_bonus=float(content['max_low_demand_bonus']),
+            lms_url=content.get('lms_url', None),
+            telegram_channel_invite=content.get('telegram_channel_invite', None),
+            telegram_chat_invite=content.get('telegram_chat_invite', None),
+        )
+        self._cache.set('__config__', content)
 
     @property
     def rating_table(self) -> 'gdoc.RatingTable':

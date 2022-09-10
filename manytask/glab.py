@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 import gitlab
 import gitlab.v4.objects
@@ -44,27 +45,39 @@ class GitLabApi:
             self,
             base_url: str,
             admin_token: str,
+            course_group: str,
             course_public_repo: str,
             course_students_group: str,
-            course_admins_group: str,
+            default_branch: str = 'main',
             *,
             dry_run: bool = False,
     ):
         """
         :param base_url:
         :param admin_token:
+        :param course_group:
         :param course_public_repo:
         :param course_students_group:
-        :param course_admins_group:
+        :param default_branch:
         """
         self.dry_run = dry_run
 
         self._url = base_url
         self._gitlab = gitlab.Gitlab(self._url, private_token=admin_token)
 
+        self._course_group = course_group
         self._course_public_repo = course_public_repo
-        self._course_group = course_students_group
-        self._admins_group = course_admins_group
+        self._course_students_group = course_students_group
+
+        self._default_branch = default_branch
+
+        # test can find groups and repos
+        if self._course_group:
+            self._get_group_by_name(self._course_group)
+        if self._course_public_repo:
+            self._get_project_by_name(self._course_public_repo)
+        if self._course_students_group:
+            self._get_group_by_name(self._course_students_group)
 
     def register_new_user(
             self,
@@ -85,25 +98,42 @@ class GitLabApi:
             'name': user.firstname + ' ' + user.lastname,
             'external': False,
             'password': user.password,
-            'skip_confirmation': True
+            'skip_confirmation': True,
         })
         logger.info(f'Gitlab user created {new_user}')
 
         return new_user
 
+    def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
+        short_group_name = group_name.split('/')[-1]
+        group_name_with_spaces = ' / '.join(group_name.split('/'))
+
+        try:
+            return next(
+                group for group in self._gitlab.groups.list(search=group_name)
+                if group.name == short_group_name and group.full_name == group_name_with_spaces
+            )
+        except StopIteration:
+            raise RuntimeError(f'Unable to find group {group_name}')
+
+    def _get_project_by_name(self, project_name: str) -> gitlab.v4.objects.Project:
+        short_project_name = project_name.split('/')[-1]
+
+        try:
+            return next(
+                project for project in self._gitlab.projects.list(search=short_project_name)
+                if project.path_with_namespace == project_name
+            )
+        except StopIteration:
+            raise RuntimeError(f'Unable to find project {project_name}')
+
     def create_project(
             self,
             student: Student,
     ) -> None:
-        try:
-            course_group = next(
-                group for group in self._gitlab.groups.list(search=self._course_group)
-                if group.name == self._course_group
-            )
-        except StopIteration:
-            raise ValueError(f'Gitlab group {self._course_group} not found')
+        course_group = self._get_group_by_name(self._course_students_group)
 
-        gitlab_project_path = f'{self._course_group}/{student.username}'
+        gitlab_project_path = f'{self._course_students_group}/{student.username}'
         logger.info(f'Gitlab project path: {gitlab_project_path}')
 
         for project in self._gitlab.projects.list(search=student.username):
@@ -112,13 +142,13 @@ class GitLabApi:
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f'Project {student.username} for group {self._course_group} already exists')
+                logger.info(f'Project {student.username} for group {self._course_students_group} already exists')
                 return
 
         logger.info(f'Student username {student.username}')
         logger.info(f'Course group {course_group.name}')
 
-        course_public_project = self._gitlab.projects.get(self._course_public_repo)
+        course_public_project = self._get_project_by_name(self._course_public_repo)
         fork = course_public_project.forks.create({
             'name': student.username,
             'path': student.username,
@@ -126,7 +156,7 @@ class GitLabApi:
         })
         project = self._gitlab.projects.get(fork.id)
         project.shared_runners_enabled = True
-        project.ci_config_path = ''
+        # project.ci_config_path = ''
         project.save()
 
         logger.info(f'Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}')
@@ -138,11 +168,11 @@ class GitLabApi:
             })
             logger.info(f'Access to fork granted for {member.username}')
         except gitlab.GitlabCreateError:
-            logger.info(f'Access already granted for {student.username}')
+            logger.info(f'Access already granted for {student.username} or smth happened')
 
     def _parse_user_to_student(
             self,
-            user: dict,
+            user: dict[str, Any],
     ) -> Student:
         return Student(
             id=user['id'],
@@ -177,13 +207,13 @@ class GitLabApi:
         return self._parse_user_to_student(response.json())
 
     def get_url_for_task_base(self) -> str:
-        return f'{self._url}/{self._course_public_repo}/blob/master'
+        return f'{self._url}/{self._course_public_repo}/blob/{self._default_branch}'
 
     def get_url_for_repo(
             self,
             username: str,
     ) -> str:
-        return f'{self._url}/{self._course_group}/{username}'
+        return f'{self._url}/{self._course_students_group}/{username}'
 
 
 def map_gitlab_user_to_student(

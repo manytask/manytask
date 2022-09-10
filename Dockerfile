@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 WORKDIR /app
 ENV PYTHONPATH "${PYTHONPATH}:/app:/app/manytask"
 
@@ -11,7 +11,7 @@ ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions
 VOLUME ["/cache", "/solutions"]
 
 CMD python -m gunicorn \
-    --bind 0.0.0.0:5000 \
+    --bind 0.0.0.0:5050 \
     --workers 4 \
     --threads 4 \
     "manytask:create_app()"

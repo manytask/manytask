@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from collections import namedtuple
-from datetime import datetime, timedelta
 from typing import Any
 
 from cachelib import BaseCache
@@ -36,18 +35,27 @@ class Deadlines:
         self.groups = self._parse_groups(config)
 
     @staticmethod
-    def get_low_demand_multiplier(demand: float) -> float:
-        # if demand <= 0.5:
-        #     demand_multiplier = 1 + 0.1 * 2 * (0.5 - demand)
-        # else:
-        #     demand_multiplier = 1
+    def get_low_demand_multiplier(
+            demand: float,
+            low_demand_bonus_bound: float = 0.25,
+            max_demand_multiplier: float = 1.1
+    ) -> float:
+        """
+        @param demand: 'percent' of people who solved the task; less - fewer people solved it
+        @param low_demand_bonus_bound: less this percent - bonus, more - no bonus
+        @param max_demand_multiplier: percent of people who solved the task
+        @return: [1, max_demand_multiplier] multiplier to the final score
+        """
+        assert 0. <= demand <= 1.
+        assert 0. <= low_demand_bonus_bound <= 1.
+        assert 0. <= max_demand_multiplier <= 2.
 
-        if demand <= 0.25:
-            demand_multiplier = 1 + 0.1 * (1 - demand)
+        if demand <= low_demand_bonus_bound:
+            demand_multiplier = max_demand_multiplier - (max_demand_multiplier - 1) * demand
         else:
-            demand_multiplier = 1
+            demand_multiplier = 1.
 
-        return min(demand_multiplier, 2)
+        return min(max(1., demand_multiplier), max_demand_multiplier)
 
     @staticmethod
     def _parse_groups(config: list[dict[str, Any]] | None) -> list[course.Group]:

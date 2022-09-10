@@ -5,7 +5,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from itertools import islice
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 import gspread
 from authlib.integrations.requests_client import AssertionSession
@@ -172,17 +172,29 @@ class RatingTable:
             all_scores = {}
         return all_scores
 
-    def get_stats(self) -> dict[str, dict[str, int]]:
+    def get_stats(self) -> dict[str, float]:
         stats = self._cache.get(f'{self.ws.id}:stats')
         if stats is None:
             stats = {}
         return stats
 
-    def get_demands(self) -> dict[str, dict[str, int]]:
-        demands = self._cache.get(f'{self.ws.id}:demands')
-        if demands is None:
-            demands = {}
-        return demands
+    def get_demands_multipliers(self, low_demand_bonus_bound: float, max_demand_multiplier: float) -> dict[str, float]:
+        tasks_stats = self._cache.get(f'{self.ws.id}:stats')
+
+        if tasks_stats is None:
+            demand_multipliers: dict[str, float] = {}
+        else:
+            demand_multipliers: dict[str, float] = {
+                task_name: multiplier
+                for task_name, task_stat in tasks_stats.items()
+                if (multiplier := Deadlines.get_low_demand_multiplier(
+                    task_stat,
+                    low_demand_bonus_bound=low_demand_bonus_bound,
+                    max_demand_multiplier=max_demand_multiplier,
+                )) != 1.
+            }
+
+        return demand_multipliers
 
     def get_scores_update_timestamp(self) -> str:
         timestamp = self._cache.get(f'{self.ws.id}:update-timestamp')
@@ -219,20 +231,17 @@ class RatingTable:
             for task_name in tasks.keys():
                 _tasks_stats[task_name] += 1
         tasks_stats: dict[str, float] = {
-            task.name: _tasks_stats[task.name] / len(all_users_scores)
+            task.name: _tasks_stats[task.name] / len(all_users_scores) if len(all_users_scores) != 0 else 0
             for task in deadlines.tasks
         }
-        demand_multipliers: dict[str, float] = {
-            task_name: deadlines.get_low_demand_multiplier(task_stat)
-            for task_name, task_stat in tasks_stats.items()
-            if deadlines.get_low_demand_multiplier(task_stat) != 1
-        }
+        # clear cache saving config
+        _config = self._cache.get('__config__')
 
         self._cache.clear()
+        self._cache.set('__config__', _config)
         self._cache.set('__deadlines__', _deadlines)
         self._cache.set(f'{self.ws.id}:scores', all_users_scores)
         self._cache.set(f'{self.ws.id}:stats', tasks_stats)
-        self._cache.set(f'{self.ws.id}:demands', demand_multipliers)
         self._cache.set(f'{self.ws.id}:update-timestamp', _current_timestamp)
         self._cache.set_many(users_score_cache)
 
@@ -240,7 +249,7 @@ class RatingTable:
             self,
             student: Student,
             task_name: str,
-            update_fn: Callable,
+            update_fn: Callable[..., Any],
     ) -> int:
         try:
             student_row = self._find_login_row(student.username)
@@ -333,7 +342,7 @@ class RatingTable:
             row: int,
             start: int | None = None,
             with_index: bool = False,
-    ):
+    ) -> Iterable[Any]:
         values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
         if with_index:
             values = enumerate(values, start=1)
@@ -344,7 +353,7 @@ class RatingTable:
     def _list_tasks(
             self,
             with_index: bool = False,
-    ):
+    ) -> Iterable[Any]:
         return self._get_row_values(
             PublicAccountsSheetOptions.HEADER_ROW,
             start=PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1, with_index=with_index
@@ -405,7 +414,7 @@ class RatingTable:
         # fill empty columns with None
         row_values = [
             column_to_values_dict.get(i-1, None)
-            for i in range(max(column_to_values_dict.items()))
+            for i in range(max(column_to_values_dict.keys()))
         ]
 
         result = self.ws.append_row(

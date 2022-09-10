@@ -4,6 +4,7 @@ import functools
 import logging
 import os
 import secrets
+import typing
 from datetime import datetime, timedelta
 from typing import Any, Callable
 import tempfile
@@ -23,7 +24,7 @@ bp = Blueprint('api', __name__, url_prefix='/api')
 TESTER_TOKEN = os.environ['TESTER_TOKEN']
 
 
-def requires_token(f: Callable[[Any, ], Any]) -> Callable[[Any, ], Any]:
+def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         token = request.form.get('token', request.headers.get('Authorization', ''))
@@ -31,6 +32,16 @@ def requires_token(f: Callable[[Any, ], Any]) -> Callable[[Any, ], Any]:
             abort(403)
         token = token.split()[-1]
         if not secrets.compare_digest(token, TESTER_TOKEN):
+            abort(403)
+
+        return f(*args, **kwargs)
+    return decorated
+
+
+def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        if not current_app.course.course_config:  # type: ignore
             abort(403)
 
         return f(*args, **kwargs)
@@ -63,12 +74,14 @@ def _update_score(
         old_score: int,
         submit_time: datetime | None = None,
         check_deadline: bool = True,
+        second_deadline_max: float = 0.5,
         demand_multiplier: float = 1.
 ) -> int:
     if old_score < 0:
         return old_score
 
-    assert 0 <= demand_multiplier <= 2
+    assert 0 <= second_deadline_max <= 1.
+    assert 0 <= demand_multiplier <= 2.
 
     extra_time = _parse_flags(flags)
 
@@ -76,7 +89,7 @@ def _update_score(
         if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
             new_score = 0
         elif check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            new_score = int(0.5 * score * demand_multiplier)
+            new_score = int(second_deadline_max * score * demand_multiplier)
         else:
             new_score = int(score * demand_multiplier)
         return max(new_score, old_score)
@@ -84,7 +97,7 @@ def _update_score(
         if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
             return old_score
         if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            return int(0.5 * score * demand_multiplier)
+            return int(second_deadline_max * score * demand_multiplier)
         return int(score * demand_multiplier)
     else:
         raise ValueError(f'Wrong scoring func: {task.scoring_func}')
@@ -92,8 +105,9 @@ def _update_score(
 
 @bp.post('/report')
 @requires_token
+@requires_ready
 def report_score() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
@@ -130,11 +144,14 @@ def report_score() -> ResponseReturnValue:
         except ValueError:
             commit_time = None
 
-    tasks_demands = course.rating_table.get_demands()
+    tasks_demands = course.rating_table.get_demands_multipliers(
+        low_demand_bonus_bound=course.course_config.low_demand_bonus_bound,
+        max_demand_multiplier=course.course_config.max_low_demand_bonus,
+    )
     if use_demand_multiplier:
-        task_demand_multiplier = tasks_demands.get(task_name, 1)
+        task_demand_multiplier = tasks_demands.get(task_name, 1.)
     else:
-        task_demand_multiplier = 1
+        task_demand_multiplier = 1.
 
     # ----- logic ----- #
     try:
@@ -157,9 +174,22 @@ def report_score() -> ResponseReturnValue:
     logger.info(
         f'verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
     )
+
+    if reported_score is None:
+        reported_score = task.score
+        logger.info(
+            f'Got score=None; set max score for {task.name} of {task.score}'
+        )
+    assert reported_score is not None
+
     update_function = functools.partial(
-        _update_score, task, reported_score,
-        submit_time=submit_time, check_deadline=check_deadline, demand_multiplier=task_demand_multiplier,
+        _update_score,
+        task,
+        reported_score,
+        submit_time=submit_time,
+        check_deadline=check_deadline,
+        second_deadline_max=course.course_config.second_deadline_max,
+        demand_multiplier=task_demand_multiplier,
     )
     final_score = course.rating_table.store_score(student, task.name, update_function)
 
@@ -176,8 +206,9 @@ def report_score() -> ResponseReturnValue:
 
 @bp.get('/score')
 @requires_token
+@requires_ready
 def get_score() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
@@ -213,12 +244,12 @@ def get_score() -> ResponseReturnValue:
     }, 200
 
 
-@bp.post('/update_task_columns')
+@bp.post('/update_deadlines')
 @requires_token
-def update_task_columns() -> ResponseReturnValue:
-    course: Course = current_app.course
+def update_deadlines() -> ResponseReturnValue:
+    course: Course = current_app.course  # type: ignore
 
-    logger.info('Running update_task_columns')
+    logger.info('Running update_deadlines')
 
     # ----- get and validate request parameters ----- #
     try:
@@ -238,16 +269,40 @@ def update_task_columns() -> ResponseReturnValue:
     return '', 200
 
 
-@bp.post('/sync_task_columns')
+@bp.post('/update_course_config')
 @requires_token
-def sync_task_columns() -> ResponseReturnValue:
-    course: Course = current_app.course
+def update_course_config() -> ResponseReturnValue:
+    course: Course = current_app.course  # type: ignore
 
-    logger.info('Running sync_task_columns')
+    logger.info('Running update_course_config')
 
     # ----- get and validate request parameters ----- #
     try:
-        course.store_deadlines(request.get_json(force=True, silent=False))
+        config_raw_data = request.get_data()
+        config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
+        course.store_course_config(config_data)
+    except Exception as e:
+        logger.exception(e)
+        return f'Invalid course config\n {e}', 400
+
+    # ----- logic ----- #
+    # TODO: fix course config storing. may work one thread only =(
+
+    return '', 200
+
+
+# DEPRECATED
+@bp.post('/sync_task_columns')
+@requires_token
+def sync_task_columns() -> ResponseReturnValue:
+    course: Course = current_app.course  # type: ignore
+
+    logger.info('Running DEPRECATED sync_task_columns')
+
+    # ----- get and validate request parameters ----- #
+    try:
+        deadlines_data = typing.cast(list[dict[str, Any]], request.get_json(force=True, silent=False))
+        course.store_deadlines(deadlines_data)
     except Exception as e:
         logger.exception(e)
         return 'Invalid deadlines', 400
@@ -261,12 +316,12 @@ def sync_task_columns() -> ResponseReturnValue:
     return '', 200
 
 
-@bp.post('/update_cached_scores')
+@bp.post('/update_cache')
 @requires_token
-def update_cached_scores() -> ResponseReturnValue:
-    course: Course = current_app.course
+def update_cache() -> ResponseReturnValue:
+    course: Course = current_app.course  # type: ignore
 
-    logger.info('Running update_cached_scores')
+    logger.info('Running update_cache')
 
     # ----- logic ----- #
     course.rating_table.update_cached_scores()
@@ -274,10 +329,12 @@ def update_cached_scores() -> ResponseReturnValue:
     return '', 200
 
 
+# flake8: noqa: F841
 @bp.post('/report_source')
 @requires_token
+@requires_ready
 def report_source() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
@@ -288,7 +345,7 @@ def report_source() -> ResponseReturnValue:
         return 'You didn\'t provide required attribute `user_id`', 400
     user_id = int(request.form['user_id'])
 
-    if 'files' not in request.files.getlist:
+    if 'files' not in request.files.getlist:  # type: ignore
         return 'You didn\'t provide required attribute `files`', 400
     files = request.files.getlist('files')
 
@@ -318,8 +375,9 @@ def report_source() -> ResponseReturnValue:
 
 @bp.get('/solutions')
 @requires_token
+@requires_ready
 def get_solutions() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
 
     # ----- get and validate request parameters ----- #
     if 'task' not in request.form:
