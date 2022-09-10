@@ -114,7 +114,7 @@ def signup() -> ResponseReturnValue:
             raise Exception('Invalid registration secret')
         _ = course.gitlab_api.register_new_user(user)
     except Exception as e:
-        logger.exception(f'User registration failed: {e}')
+        logger.warning(f'User registration failed: {e}')
         return render_template(
             'signup.html',
             error_message=str(e),
