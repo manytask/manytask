@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import yaml
-from flask import Blueprint, Response, abort, current_app, request, send_from_directory
+from flask import Blueprint, Response, abort, current_app, request
 from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
@@ -356,7 +356,7 @@ def get_solutions() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        task = course.deadlines.find_task(task_name)
+        _ = course.deadlines.find_task(task_name)
     except KeyError:
         return f'There is no task with name `{task_name}` (or it is closed)', 404
 
