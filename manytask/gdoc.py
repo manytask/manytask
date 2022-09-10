@@ -224,7 +224,7 @@ class RatingTable:
             for task_name in tasks.keys():
                 _tasks_stats[task_name] += 1
         tasks_stats: dict[str, float] = {
-            task.name: _tasks_stats[task.name] / len(all_users_scores)
+            task.name: _tasks_stats[task.name] / len(all_users_scores) if len(all_users_scores) != 0 else 0
             for task in deadlines.tasks
         }
         # clear cache saving config
