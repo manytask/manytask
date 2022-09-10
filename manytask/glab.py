@@ -155,8 +155,7 @@ class GitLabApi:
             'namespace': course_group.id
         })
         project = self._gitlab.projects.get(fork.id)
-        project.shared_runners_enabled = True
-        # project.ci_config_path = ''
+        project.shared_runners_enabled = True  # TODO: edit with .evn config value
         project.save()
 
         logger.info(f'Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}')
@@ -164,7 +163,7 @@ class GitLabApi:
         try:
             member = project.members.create({
                 'user_id': student.id,
-                'access_level': gitlab.MAINTAINER_ACCESS,
+                'access_level': gitlab.const.AccessLevel.DEVELOPER,
             })
             logger.info(f'Access to fork granted for {member.username}')
         except gitlab.GitlabCreateError:
