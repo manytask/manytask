@@ -4,14 +4,16 @@ import functools
 import logging
 import os
 import secrets
+import tempfile
 import typing
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable
-import tempfile
 
 import yaml
-from flask import Blueprint, abort, current_app, request, send_from_directory, Response
+from flask import Blueprint, Response, abort, current_app, request, send_from_directory
 from flask.typing import ResponseReturnValue
+from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
 from manytask.course import Course, Task, get_current_time, validate_commit_time
@@ -153,6 +155,8 @@ def report_score() -> ResponseReturnValue:
     else:
         task_demand_multiplier = 1.
 
+    files: dict[str, FileStorage] = request.files.to_dict()  # may be empty
+
     # ----- logic ----- #
     try:
         task = course.deadlines.find_task(task_name)
@@ -192,6 +196,14 @@ def report_score() -> ResponseReturnValue:
         demand_multiplier=task_demand_multiplier,
     )
     final_score = course.rating_table.store_score(student, task.name, update_function)
+
+    # save pushed files if sent
+    with tempfile.TemporaryDirectory() as temp_folder:
+        temp_folder = Path(temp_folder)
+        for file in files.values():
+            secured_filename = secure_filename(file.filename)
+            file.save(temp_folder / secured_filename)
+        course.solutions_api.store_task_from_folder(task_name, student.username, temp_folder)
 
     return {
         'user_id': student.id,
@@ -327,50 +339,6 @@ def update_cache() -> ResponseReturnValue:
     course.rating_table.update_cached_scores()
 
     return '', 200
-
-
-# flake8: noqa: F841
-@bp.post('/report_source')
-@requires_token
-@requires_ready
-def report_source() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
-
-    # ----- get and validate request parameters ----- #
-    if 'task' not in request.form:
-        return 'You didn\'t provide required attribute `task`', 400
-    task_name = request.form['task']
-
-    if 'user_id' not in request.form:
-        return 'You didn\'t provide required attribute `user_id`', 400
-    user_id = int(request.form['user_id'])
-
-    if 'files' not in request.files.getlist:  # type: ignore
-        return 'You didn\'t provide required attribute `files`', 400
-    files = request.files.getlist('files')
-
-    # ----- logic ----- #
-    try:
-        task = course.deadlines.find_task(task_name)
-    except KeyError:
-        return f'There is no task with name `{task_name}` (or it is closed)', 404
-
-    try:
-        student = course.gitlab_api.get_student(user_id)
-    except Exception:
-        return f'There is no student with user_id {user_id}', 404
-    username = student.username
-
-    with tempfile.TemporaryDirectory() as temp_folder:
-        print('created temporary directory', temp_folder)
-        for file in files:
-            secured_filename = secure_filename(file.filename)
-            print('file', type(file), file, secured_filename)
-            file.save(temp_folder / secured_filename)
-
-        course.solutions_api.store_task_from_folder(task_name, username, temp_folder)
-
-    return 'Stored', 201
 
 
 @bp.get('/solutions')
