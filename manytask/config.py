@@ -86,8 +86,8 @@ class DebugConfig(Config):
     tester_token: str = 'tester_token'
 
     # utils
-    cache_dir: str = './tmp/cache'
-    solutions_dir: str = './tmp/solutions'
+    cache_dir: str = '.tmp/cache'
+    solutions_dir: str = '.tmp/solutions'
 
     # gitlab
     gitlab_url: str = 'https://gitlab.manytask.org'
