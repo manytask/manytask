@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import config, course, deadlines, gdoc, glab
+from . import config, course, deadlines, gdoc, glab, solutions
 
 
 load_dotenv('../.env')  # take environment variables from .env.
@@ -144,12 +144,16 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
     deadlines_api = deadlines.DeadlinesApi(
         cache=cache
     )
+    solutions_api = solutions.SolutionsApi(
+        base_folder='.tmp/solution' if app.debug else os.environ.get('SOLUTIONS_DIR', '/solutions'),
+    )
 
     # create course
     _course = course.Course(
         deadlines_api,
         gdoc_api,
         gitlab_api,
+        solutions_api,
         app.app_config.registration_secret,
         cache,
         debug=app.debug,

@@ -92,6 +92,13 @@ class GoogleDocApi:
             public_scoreboard_sheet: int,
             cache: BaseCache,
     ):
+        """
+        :param base_url:
+        :param gdoc_credentials:
+        :param public_worksheet_id:
+        :param public_scoreboard_sheet:
+        :param cache:
+        """
         self._url = base_url
         self._gdoc_credentials = gdoc_credentials
         self._public_worksheet_id = public_worksheet_id

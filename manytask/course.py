@@ -88,7 +88,7 @@ class Group:
         return get_current_time() > self.start
 
 
-from . import deadlines, gdoc, glab  # noqa: E402, F401
+from . import deadlines, gdoc, glab, solutions  # noqa: E402, F401
 
 
 class Course:
@@ -97,6 +97,7 @@ class Course:
             deadlines_api: 'deadlines.DeadlinesApi',
             googledoc_api: gdoc.GoogleDocApi,
             gitlab_api: glab.GitLabApi,
+            solutions_api: solutions.SolutionsApi,
             registration_secret: str,
             cache: BaseCache,
             *,
@@ -105,6 +106,7 @@ class Course:
         self.deadlines_api = deadlines_api
         self.googledoc_api = googledoc_api
         self.gitlab_api = gitlab_api
+        self.solutions_api = solutions_api
 
         self.registration_secret = registration_secret
 
