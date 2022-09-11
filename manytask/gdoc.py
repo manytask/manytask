@@ -406,9 +406,9 @@ class RatingTable:
                 f'+ INDIRECT(ADDRESS(ROW(); {PublicAccountsSheetOptions.BONUS_COLUMN}))',
             PublicAccountsSheetOptions.PERCENTAGE_COLUMN:
                 # percentage: TOTAL_COLUMN / max_score cell (1st row of TOTAL_COLUMN)
-                f'=INDIRECT(ADDRESS(ROW(); {PublicAccountsSheetOptions.TOTAL_COLUMN})) '
+                f'=IFERROR(INDIRECT(ADDRESS(ROW(); {PublicAccountsSheetOptions.TOTAL_COLUMN})) '
                 f'/ INDIRECT(ADDRESS({PublicAccountsSheetOptions.HEADER_ROW - 1}; '
-                f'{PublicAccountsSheetOptions.TOTAL_COLUMN}))'  # percentage
+                f'{PublicAccountsSheetOptions.TOTAL_COLUMN})); 0)'  # percentage
         }
 
         # fill empty columns with None
