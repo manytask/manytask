@@ -6,6 +6,7 @@
   tasks:
     - task: task_7_0
       score: 70
+      url: https://www.python.org/about/gettingstarted/
 
 - group: group_6
   start: 01-05-2020 18:00
