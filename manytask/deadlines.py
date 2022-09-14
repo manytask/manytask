@@ -92,7 +92,8 @@ class Deadlines:
                 start=config['start'],
                 deadline=config['deadline'],
                 second_deadline=config.get('second_deadline', config['deadline']),
-                scoring_func=c.get('scoring_func', 'max')
+                scoring_func=c.get('scoring_func', 'max'),
+                url=c.get('url'),
             ) for c in tasks_config
             if c.get('enabled', True)
         ]
