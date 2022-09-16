@@ -23,9 +23,9 @@
     {% if task.url %}
       {% set task_link = task.url %}
     {% else %}
-      {% set task_link = task_base_url + "/" + group.name + "/" + task.name %}
+      {% set task_link = task_base_url + "/" + group.name + "/" + task.name + "/" %}
     {% endif %}
-    <a href="{{ task_link }}/">
+    <a href="{{ task_link }}">
       <div class="task {{ ('solved' if scores.get(task.name) >= task.score else 'solved_partially') if scores.get(task.name, '-') != '-' else 'unsolved' }}">
         <div class="name">{{ task.name if (task.name | length <= MAX_TASK_LENGTH) else task.name[:MAX_TASK_LENGTH-1] + '…' }}</div>
         <div class="score">{{ scores.get(task.name, '0') }}/{{ task.score }}</div>
