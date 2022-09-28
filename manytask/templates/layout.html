@@ -20,7 +20,7 @@
     <nav id="navmenu">
       <ul class="main-menu">
       <div>
-          [ {{ username }} ] #
+          [ {{ username }} {{ '| admin' if is_course_admin }} ] #
       </div>
         {% for href, id, caption in navbar %}
             {% if href is not none and href|length > 0 %}

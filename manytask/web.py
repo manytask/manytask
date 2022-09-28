@@ -1,11 +1,12 @@
 import logging
 import secrets
+from datetime import datetime
 
 import flask.sessions
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, redirect, render_template, request, session, url_for, Response
 from flask.typing import ResponseReturnValue
 
 from . import glab
@@ -41,15 +42,13 @@ def course_page() -> ResponseReturnValue:
     if current_app.debug:
         student_username = 'guest'
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
-        student_course_admin = request.args.get('admin', None) is not None
+        student_course_admin = True  # request.args.get('admin', None) is not None
     else:
         if not valid_session(session):
             return redirect(url_for('web.signup'))
         student_username = session['gitlab']['username']
         student_repo = session['gitlab']['repo']
         student_course_admin = session['gitlab']['course_admin']
-
-    print(student_course_admin)
 
     rating_table = course.rating_table
     if course.debug:
@@ -81,6 +80,53 @@ def course_page() -> ResponseReturnValue:
         scores_update_timestamp=rating_table.get_scores_update_timestamp(),
         second_deadline_percent=f'{int(course.course_config.second_deadline_max*100):>3}',
         course_favicon=course.favicon,
+        is_course_admin=student_course_admin,
+    )
+
+
+@bp.get('/solutions')
+def get_solutions() -> ResponseReturnValue:
+    course: Course = current_app.course  # type: ignore
+
+    if not course.course_config:
+        return redirect(url_for('web.not_ready'))
+
+    if current_app.debug:
+        student_username = 'guest'
+        student_course_admin = True  # request.args.get('admin', None) is not None
+    else:
+        if not valid_session(session):
+            return redirect(url_for('web.signup'))
+        student_username = session['gitlab']['username']
+        student_course_admin = session['gitlab']['course_admin']
+
+    if not student_course_admin:
+        return 'Possible only for admins', 403
+
+    # ----- get and validate request parameters ----- #
+    if 'task' not in request.args:
+        return 'You didn\'t provide required param `task`', 400
+    task_name = request.args['task']
+
+    # TODO: parameter to return not aggregated solutions
+
+    # ----- logic ----- #
+    try:
+        _ = course.deadlines.find_task(task_name)
+    except KeyError:
+        return f'There is no task with name `{task_name}` (or it is disabled)', 404
+
+    zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)
+    if not zip_bytes_io:
+        return f'Unable to get zip for {task_name}', 500
+
+    _now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+    filename = f'aggregated-solutions-{task_name}-{_now_str}.zip'
+
+    return Response(
+        zip_bytes_io.getvalue(),
+        mimetype='application/zip',
+        headers={'Content-Disposition': f'attachment;filename={filename}'}
     )
 
 

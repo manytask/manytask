@@ -358,9 +358,11 @@ def get_solutions() -> ResponseReturnValue:
     try:
         _ = course.deadlines.find_task(task_name)
     except KeyError:
-        return f'There is no task with name `{task_name}` (or it is closed)', 404
+        return f'There is no task with name `{task_name}` (or it is disabled)', 404
 
     zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)
+    if not zip_bytes_io:
+        return f'Unable to get zip for {task_name}', 500
 
     _now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
     filename = f'aggregated-solutions-{task_name}-{_now_str}.zip'

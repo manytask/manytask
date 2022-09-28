@@ -25,7 +25,7 @@
     {% else %}
       {% set task_link = task_base_url + "/" + group.name + "/" + task.name + "/" %}
     {% endif %}
-    <a href="{{ task_link }}">
+    <a href="{{ task_link if not is_course_admin }}">
       <div class="task {{ ('solved' if scores.get(task.name) >= task.score else 'solved_partially') if scores.get(task.name, '-') != '-' else 'unsolved' }}">
         <div class="name">{{ task.name if (task.name | length <= MAX_TASK_LENGTH) else task.name[:MAX_TASK_LENGTH-1] + '…' }}</div>
         <div class="score">{{ scores.get(task.name, '0') }}/{{ task.score }}</div>
@@ -36,7 +36,11 @@
             <div class="demand-mult">{{ demand_multipliers.get(task.name, '1') }}</div>
               <div class="demand-text">Low demand!<br>You score will be multiplied by {{ demand_multipliers.get(task.name, '1') | round(3, 'common') }}</div>
           </div>
-        {%  endif %}
+        {% endif %}
+        {% if is_course_admin %}
+{#            <div><a onclick="window.open('solutions?task={{ task.name }}')"><i class="fa-solid fa-download"></i> solutions</a></div>#}
+            <button onclick="window.open('solutions?task={{ task.name }}')"><i class="fa-solid fa-download"></i> solutions</button>
+        {% endif %}
       </div>
     </a>
     {% endfor %}
