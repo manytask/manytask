@@ -169,6 +169,15 @@ class GitLabApi:
         except gitlab.GitlabCreateError:
             logger.info(f'Access already granted for {student.username} or smth happened')
 
+    def _check_is_course_admin(self, user_id: int) -> bool:
+        admin_group = self._get_group_by_name(self._course_group)
+        admin_group_member = admin_group.members.get(user_id)
+
+        if not admin_group_member:
+            return False
+
+        return True
+
     def _parse_user_to_student(
             self,
             user: dict[str, Any],
@@ -177,7 +186,8 @@ class GitLabApi:
             id=user['id'],
             username=user['username'],
             name=user['name'],
-            repo=self.get_url_for_repo(user['username'])
+            repo=self.get_url_for_repo(user['username']),
+            course_admin=self._check_is_course_admin(user['id'])
         )
 
     def get_students_by_username(
