@@ -92,12 +92,10 @@ def get_solutions() -> ResponseReturnValue:
         return redirect(url_for('web.not_ready'))
 
     if current_app.debug:
-        student_username = 'guest'
         student_course_admin = True  # request.args.get('admin', None) is not None
     else:
         if not valid_session(session):
             return redirect(url_for('web.signup'))
-        student_username = session['gitlab']['username']
         student_course_admin = session['gitlab']['course_admin']
 
     if not student_course_admin:
