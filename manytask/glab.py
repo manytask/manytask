@@ -170,8 +170,11 @@ class GitLabApi:
             logger.info(f'Access already granted for {student.username} or smth happened')
 
     def _check_is_course_admin(self, user_id: int) -> bool:
-        admin_group = self._get_group_by_name(self._course_group)
-        admin_group_member = admin_group.members.get(user_id)
+        try:
+            admin_group = self._get_group_by_name(self._course_group)
+            admin_group_member = admin_group.members.get(user_id)
+        except Exception:
+            return False
 
         if not admin_group_member:
             return False
