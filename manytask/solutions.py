@@ -92,8 +92,8 @@ class SolutionsApi:
     ) -> None:
         assert task_folder.exists() and task_folder.is_dir()
 
-        filename_to_hashes: dict[str, list[str]] = defaultdict(list)
-        hash_to_users: dict[str, list[str]] = defaultdict(list)
+        filename_to_hashes: dict[str, set[str]] = defaultdict(set)
+        hash_to_users: dict[str, set[str]] = defaultdict(set)
         hash_to_file_bytes: dict[str, bytes] = {}
 
         # collect all unique files
@@ -111,14 +111,14 @@ class SolutionsApi:
                 file_bytes = file.read_bytes()
                 filehash_md5 = hashlib.md5(file_bytes).hexdigest()
 
-                filename_to_hashes[filename].append(filehash_md5)
-                hash_to_users[filehash_md5].append(username)
+                filename_to_hashes[filename].add(filehash_md5)
+                hash_to_users[filehash_md5].add(username)
                 hash_to_file_bytes[filehash_md5] = file_bytes
 
         # store unique files
         for filename, filehashes in filename_to_hashes.items():
-            for filehash in filehashes:
-                with open(temp_folder / filename, 'w') as f:
+            with open(temp_folder / filename, 'w') as f:
+                for filehash in filehashes:
                     f.write('Users: ' + ', '.join(hash_to_users[filehash]) + '\n')
                     f.write('Number of Users: ' + str(len(hash_to_users[filehash])) + '\n')
                     f.write('-' * 120 + '\n')

@@ -1,6 +1,7 @@
 import io
 import zipfile
 from pathlib import Path
+import uuid
 
 import pytest
 
@@ -16,15 +17,29 @@ def solutions_api(tmp_path_factory: pytest.TempPathFactory) -> SolutionsApi:
     return SolutionsApi(tmp_path)
 
 
+def _generate_random_files(path: Path, files_list: list[str]) -> None:
+    for test_file_name in files_list:
+        test_file = path / test_file_name
+
+        with open(test_file, 'w') as f:
+            f.write(f'{test_file_name}\n')
+            f.write(f'{uuid.uuid4()}\n\n')
+
+
 @pytest.fixture(scope='function')
 def dummy_solutions_folder(tmp_path_factory: pytest.TempPathFactory) -> Path:
     tmp_path: Path = tmp_path_factory.mktemp('solutions')
 
-    for test_file_name in TEST_FILES_NAMES:
-        test_file = tmp_path / test_file_name
+    _generate_random_files(tmp_path, TEST_FILES_NAMES)
 
-        with open(test_file, 'w') as f:
-            f.writelines([f'\t{test_file_name}\n'] * 10)
+    return tmp_path
+
+
+@pytest.fixture(scope='function')
+def other_dummy_solutions_folder(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    tmp_path: Path = tmp_path_factory.mktemp('others_solutions')
+
+    _generate_random_files(tmp_path, TEST_FILES_NAMES)
 
     return tmp_path
 
@@ -88,3 +103,24 @@ class TestSolutionsApi:
 
         assert [f.name for f in (base_folder / 'task_name' / 'username').iterdir()] == \
                [f.name for f in (base_folder / 'other_task_name' / 'username').iterdir()]
+
+    def test_get_task_aggregated_zip_io(
+            self,
+            tmp_path: Path,
+            dummy_solutions_folder: Path,
+            other_dummy_solutions_folder: Path,
+            solutions_api: SolutionsApi,
+    ) -> None:
+        solutions_api.store_task_from_folder('task_name', 'username_1', dummy_solutions_folder)
+        solutions_api.store_task_from_folder('task_name', 'username_2', other_dummy_solutions_folder)
+
+        compressed_folder_io: io.BytesIO = solutions_api.get_task_aggregated_zip_io('task_name')
+
+        assert compressed_folder_io is not None
+
+        with zipfile.ZipFile(compressed_folder_io) as zf:
+            assert sorted(zf.namelist()) == sorted(TEST_FILES_NAMES)
+
+            for name in zf.namelist():
+                file_content = zf.read(name)
+                assert 'username_1' in file_content.decode('utf-8') and 'username_2' in file_content.decode('utf-8')
