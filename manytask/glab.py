@@ -155,7 +155,7 @@ class GitLabApi:
             'namespace': course_group.id
         })
         project = self._gitlab.projects.get(fork.id)
-        project.shared_runners_enabled = True  # TODO: edit with .evn config value
+        project.shared_runners_enabled = course_public_project.shared_runners_enabled  # TODO: think .evn config value
         project.save()
 
         logger.info(f'Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}')
