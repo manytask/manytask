@@ -172,7 +172,7 @@ class GitLabApi:
     def _check_is_course_admin(self, user_id: int) -> bool:
         try:
             admin_group = self._get_group_by_name(self._course_group)
-            admin_group_member = admin_group.members.get(user_id)
+            admin_group_member = admin_group.members_all.get(user_id)
         except Exception:
             return False
 
