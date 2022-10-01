@@ -120,7 +120,7 @@ def report_score() -> ResponseReturnValue:
         return 'You didn\'t provide required attribute `user_id`', 400
     user_id = int(request.form['user_id'])
 
-    check_deadline = False
+    check_deadline = True
     if 'check_deadline' in request.form:
         check_deadline = request.form['check_deadline'] is True or request.form['check_deadline'] == 'True'
 
