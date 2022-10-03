@@ -110,7 +110,7 @@ class GitLabApi:
 
         try:
             return next(
-                group for group in self._gitlab.groups.list(search=group_name)
+                group for group in self._gitlab.groups.list(get_all=True, search=group_name)
                 if group.name == short_group_name and group.full_name == group_name_with_spaces
             )
         except StopIteration:
@@ -121,7 +121,7 @@ class GitLabApi:
 
         try:
             return next(
-                project for project in self._gitlab.projects.list(search=short_project_name)
+                project for project in self._gitlab.projects.list(get_all=True, search=short_project_name)
                 if project.path_with_namespace == project_name
             )
         except StopIteration:
@@ -136,7 +136,7 @@ class GitLabApi:
         gitlab_project_path = f'{self._course_students_group}/{student.username}'
         logger.info(f'Gitlab project path: {gitlab_project_path}')
 
-        for project in self._gitlab.projects.list(search=student.username):
+        for project in self._gitlab.projects.list(get_all=True, search=student.username):
             logger.info(f'Check project path: {project.path_with_namespace}')
 
             # Because of implicit conversion
@@ -197,7 +197,7 @@ class GitLabApi:
             self,
             username: str,
     ) -> list[Student]:
-        users = self._gitlab.users.list(username=username)
+        users = self._gitlab.users.list(get_all=True, username=username)
         return [self._parse_user_to_student(user._attrs) for user in users]
 
     def get_student(
