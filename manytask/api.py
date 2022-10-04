@@ -16,8 +16,7 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from manytask.course import Course, Task, get_current_time, validate_commit_time
-
+from manytask.course import Course, Task, get_current_time, validate_commit_time, MOSCOW_TIMEZONE
 
 logger = logging.getLogger(__name__)
 bp = Blueprint('api', __name__, url_prefix='/api')
@@ -60,7 +59,7 @@ def _parse_flags(flags: str | None) -> timedelta:
         parsed = None
         date_string = flags[right_colon + 1:]
         try:
-            parsed = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
+            parsed = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S').replace(tzinfo=MOSCOW_TIMEZONE)
         except ValueError:
             logger.error(f'Could not parse date from flag {flags}')
         if parsed is not None and get_current_time() <= parsed:
