@@ -94,6 +94,7 @@ class Deadlines:
                 second_deadline=config.get('second_deadline', config['deadline']),
                 scoring_func=c.get('scoring_func', 'max'),
                 url=c.get('url'),
+                is_bonus=c.get('is_bonus', False),
             ) for c in tasks_config
             if c.get('enabled', True)
         ]
@@ -129,8 +130,9 @@ class Deadlines:
 
     @property
     def max_score(self) -> int:
-        return sum(task.score for group in self.groups for task in group.tasks)
+        return sum(task.score for group in self.groups for task in group.tasks if not task.is_bonus)
 
     @property
     def max_score_started(self) -> int:
-        return sum(task.score for group in self.groups for task in group.tasks if task.is_started())
+        return sum(task.score for group in self.groups for task in group.tasks
+                   if task.is_started() and not task.is_bonus)

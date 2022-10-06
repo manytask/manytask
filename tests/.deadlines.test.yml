@@ -1,0 +1,20 @@
+- group: group_0
+  start: 01-01-2000 18:00
+  deadline: 01-02-2000 23:59
+  second_deadline: 01-02-2000 23:59
+  enabled: true
+  tasks:
+    - task: task_0_0
+      score: 10
+      is_bonus: true
+    - task: task_0_1
+      score: 10
+    - task: task_0_2
+      score: 10
+    - task: task_0_3
+      score: 10
+      is_bonus: true
+    - task: task_0_4
+      score: 10
+    - task: task_0_5
+      score: 10
