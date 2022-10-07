@@ -49,7 +49,8 @@ class Task:
             deadline: str,
             second_deadline: str,
             scoring_func: str,
-            url: str | None
+            url: str | None,
+            is_bonus: bool
     ):
         self.name = name
         self.score = score
@@ -59,6 +60,7 @@ class Task:
         self.second_deadline = parse_time(second_deadline)
         self.scoring_func = scoring_func
         self.url = url
+        self.is_bonus = is_bonus
 
     def is_started(self) -> bool:
         return get_current_time() > self.start
