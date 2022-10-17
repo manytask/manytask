@@ -22,6 +22,8 @@
     {% for task in group.tasks %}
     {% if task.url %}
       {% set task_link = task.url %}
+    {% elif layout == "flat" %}
+      {% set task_link = task_base_url + "/" + task.name + "/" %}
     {% else %}
       {% set task_link = task_base_url + "/" + group.name + "/" + task.name + "/" %}
     {% endif %}

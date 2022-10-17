@@ -146,6 +146,7 @@ class Course:
             deadlines=content['deadlines'],
             second_deadline_max=float(content['second_deadline_max']),
             max_low_demand_bonus=float(content['max_low_demand_bonus']),
+            layout=content.get('layout', 'groups'),
             lms_url=content.get('lms_url', None),
             telegram_channel_invite=content.get('telegram_channel_invite', None),
             telegram_chat_invite=content.get('telegram_chat_invite', None),

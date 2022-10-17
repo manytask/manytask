@@ -13,6 +13,8 @@ class CourseConfig:
     low_demand_bonus_bound: float = 0.2
     max_low_demand_bonus: float = 1.0
 
+    layout: str = 'groups'
+
     lms_url: str | None = None
     telegram_channel_invite: str | None = None
     telegram_chat_invite: str | None = None

@@ -81,6 +81,7 @@ def course_page() -> ResponseReturnValue:
         second_deadline_percent=f'{int(course.course_config.second_deadline_max*100):>3}',
         course_favicon=course.favicon,
         is_course_admin=student_course_admin,
+        layout=course.course_config.layout,
     )
 
 
