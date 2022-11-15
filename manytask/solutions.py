@@ -122,7 +122,7 @@ class SolutionsApi:
                     f.write('Users: ' + ', '.join(hash_to_users[filehash]) + '\n')
                     f.write('Number of Users: ' + str(len(hash_to_users[filehash])) + '\n')
                     f.write('-' * 120 + '\n')
-                    f.write(hash_to_file_bytes[filehash].decode('utf-8'))
+                    f.write(hash_to_file_bytes[filehash].decode('utf-8', 'backslashreplace'))
                     f.write('=' * 120 + '\n')
 
     def get_task_aggregated_zip_io(
