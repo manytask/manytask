@@ -1,6 +1,6 @@
 # api and web
 gunicorn==20.1.0
-flask==2.2.2
+flask==2.3.2
 cachelib==0.9.0
 Werkzeug==2.2.2
 
