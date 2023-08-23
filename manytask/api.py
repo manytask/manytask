@@ -16,8 +16,7 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from manytask.course import MOSCOW_TIMEZONE, Course, Task, get_current_time, validate_commit_time
-
+from .course import MOSCOW_TIMEZONE, Course, Task, get_current_time, validate_commit_time
 
 logger = logging.getLogger(__name__)
 bp = Blueprint('api', __name__, url_prefix='/api')
@@ -198,12 +197,13 @@ def report_score() -> ResponseReturnValue:
     final_score = course.rating_table.store_score(student, task.name, update_function)
 
     # save pushed files if sent
-    with tempfile.TemporaryDirectory() as temp_folder:
-        temp_folder = Path(temp_folder)
+    with tempfile.TemporaryDirectory() as temp_folder_str:
+        temp_folder_path = Path(temp_folder_str)
         for file in files.values():
+            assert file is not None and file.filename is not None
             secured_filename = secure_filename(file.filename)
-            file.save(temp_folder / secured_filename)
-        course.solutions_api.store_task_from_folder(task_name, student.username, temp_folder)
+            file.save(temp_folder_path / secured_filename)
+        course.solutions_api.store_task_from_folder(task_name, student.username, temp_folder_path)
 
     return {
         'user_id': student.id,

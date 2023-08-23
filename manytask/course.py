@@ -140,12 +140,11 @@ class Course:
         return self.deadlines_api.fetch()
 
     @property
-    def course_config(self) -> CourseConfig | None:
+    def course_config(self) -> CourseConfig:
         logger.info('Fetching config...')
         content = self._cache.get('__config__')
 
-        if not content:
-            return None
+        assert content is not None, 'Course config is not set'
 
         return CourseConfig(
             name=content['name'],

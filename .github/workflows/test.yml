@@ -27,7 +27,7 @@ jobs:
       - name: Run isort
         run: python -m isort manytask --check
       - name: Run flake8
-        run: python -m flake8 manytask
+        run: python -m ruff manytask
       - name: Run mypy
         run: python -m mypy manytask
 

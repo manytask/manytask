@@ -11,6 +11,23 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unreachable = true
 allow_untyped_decorators = true
+exclude = [
+    "tests/",
+    ".tmp/",
+    ".venv/"
+]
+
+
+[tool.pyright]
+include = ["manytask"]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    ".venv",
+    "venv",
+    ".tmp",
+    "tests"
+]
 
 
 [tool.isort]
@@ -25,6 +42,7 @@ python_files = "test_*.py"
 addopts = "--cov=manytask/ --cov-report=term-missing tests/"
 testpaths = [
     "tests",
+    ".tmp"
 ]
 
 
@@ -59,6 +77,9 @@ exclude = [
     "dist",
     "node_modules",
     "venv",
+
+    "tests",
+    ".tmp"
 ]
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.

@@ -115,7 +115,6 @@ class TestSolutionsApi:
         solutions_api.store_task_from_folder('task_name', 'username_2', other_dummy_solutions_folder)
 
         compressed_folder_io: io.BytesIO = solutions_api.get_task_aggregated_zip_io('task_name')
-
         assert compressed_folder_io is not None
 
         with zipfile.ZipFile(compressed_folder_io) as zf:
