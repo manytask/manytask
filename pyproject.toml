@@ -1,0 +1,70 @@
+
+[tool.mypy]
+no_incremental = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_any_generics = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+allow_untyped_decorators = true
+
+
+[tool.isort]
+profile = "hug"
+line_length = 120
+lines_after_imports = 2
+
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+python_files = "test_*.py"
+addopts = "--cov=manytask/ --cov-report=term-missing tests/"
+testpaths = [
+    "tests",
+]
+
+
+[tool.ruff]
+target-version = "py311"
+
+# Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
+# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
+# McCabe complexity (`C901`) by default.
+select = ["E", "F"]
+ignore = []
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+line-length = 120
+
+
