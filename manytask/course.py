@@ -17,6 +17,8 @@ CONFIDENCE_INTERVAL = timedelta(minutes=10)
 
 def parse_time(time: str) -> datetime:
     date = datetime.strptime(time, '%d-%m-%Y %H:%M')
+    # TODO: check: set 59 seconds for students not to suffer from rounding; e.g. 23:59:59
+    date = date.replace(second=59)
     return date.replace(tzinfo=MOSCOW_TIMEZONE)
 
 

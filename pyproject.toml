@@ -30,12 +30,6 @@ exclude = [
 ]
 
 
-[tool.isort]
-profile = "hug"
-line_length = 120
-lines_after_imports = 2
-
-
 [tool.pytest.ini_options]
 minversion = "6.0"
 python_files = "test_*.py"
@@ -89,3 +83,10 @@ unfixable = []
 line-length = 120
 
 
+[tool.isort]
+profile = "black"
+line_length = 120
+lines_after_imports = 2
+combine_as_imports = true
+default_section = "THIRDPARTY"
+known_first_party = "checker,tests"
