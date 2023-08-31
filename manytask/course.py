@@ -78,7 +78,14 @@ class Task:
 
 class Group:
     def __init__(
-            self, name: str, start: str, deadline: str, second_deadline: str, tasks: list[Task], special: bool = False, hw: bool = False
+            self,
+            name: str,
+            start: str,
+            deadline: str,
+            second_deadline: str,
+            tasks: list[Task],
+            special: bool = False,
+            hw: bool = False,
     ):
         self.name = name
         self.start = parse_time(start)
