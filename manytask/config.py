@@ -108,7 +108,7 @@ class DebugConfig(Config):
     gdoc_account_credentials_base64: str = ''
     # google public sheet
     gdoc_spreadsheet_id: str = ''
-    gdoc_scoreboard_sheet: int = ''
+    gdoc_scoreboard_sheet: int = 0
 
     @classmethod
     def from_env(cls) -> Config:

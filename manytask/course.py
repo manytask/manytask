@@ -17,6 +17,8 @@ CONFIDENCE_INTERVAL = timedelta(minutes=10)
 
 def parse_time(time: str) -> datetime:
     date = datetime.strptime(time, '%d-%m-%Y %H:%M')
+    # TODO: check: set 59 seconds for students not to suffer from rounding; e.g. 23:59:59
+    date = date.replace(second=59)
     return date.replace(tzinfo=MOSCOW_TIMEZONE)
 
 
@@ -76,7 +78,14 @@ class Task:
 
 class Group:
     def __init__(
-            self, name: str, start: str, deadline: str, second_deadline: str, tasks: list[Task], special: bool = False, hw: bool = False
+            self,
+            name: str,
+            start: str,
+            deadline: str,
+            second_deadline: str,
+            tasks: list[Task],
+            special: bool = False,
+            hw: bool = False,
     ):
         self.name = name
         self.start = parse_time(start)
@@ -140,12 +149,11 @@ class Course:
         return self.deadlines_api.fetch()
 
     @property
-    def course_config(self) -> CourseConfig | None:
+    def course_config(self) -> CourseConfig:
         logger.info('Fetching config...')
         content = self._cache.get('__config__')
 
-        if not content:
-            return None
+        assert content is not None, 'Course config is not set'
 
         return CourseConfig(
             name=content['name'],

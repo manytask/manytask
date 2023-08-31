@@ -102,14 +102,14 @@ class GitLabApi:
         })
         logger.info(f'Gitlab user created {new_user}')
 
-        return new_user
+        return new_user  # type: ignore
 
     def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
         short_group_name = group_name.split('/')[-1]
         group_name_with_spaces = ' / '.join(group_name.split('/'))
 
         try:
-            return next(
+            return next(  # type: ignore
                 group for group in self._gitlab.groups.list(get_all=True, search=group_name)
                 if group.name == short_group_name and group.full_name == group_name_with_spaces
             )
@@ -120,7 +120,7 @@ class GitLabApi:
         short_project_name = project_name.split('/')[-1]
 
         try:
-            return next(
+            return next(  # type: ignore
                 project for project in self._gitlab.projects.list(get_all=True, search=short_project_name)
                 if project.path_with_namespace == project_name
             )

@@ -19,8 +19,15 @@ from . import config, course, deadlines, gdoc, glab, solutions
 load_dotenv('../.env')  # take environment variables from .env.
 
 
-def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
-    app = Flask(__name__)
+class CustomFlask(Flask):
+    course: course.Course
+    oauth: OAuth
+    app_config: config.Config  # TODO: check if we need it
+
+
+def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
+    app = CustomFlask(__name__)
+
     if debug:
         app.debug = debug
 
