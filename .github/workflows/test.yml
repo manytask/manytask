@@ -20,7 +20,7 @@ jobs:
           python -m pip install -U -r requirements.txt -r requirements.test.txt
       - name: Run isort
         run: python -m isort manytask --check
-      - name: Run flake8
+      - name: Run ruff
         run: python -m ruff manytask
       - name: Run mypy
         run: python -m mypy manytask
