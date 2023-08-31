@@ -6,7 +6,7 @@ import flask.sessions
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for, Response
+from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
 from . import glab

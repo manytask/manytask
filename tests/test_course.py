@@ -1,6 +1,6 @@
 import pytest
 
-from manytask.course import Task, Group, Course
+from manytask.course import Course, Group, Task
 
 
 class TestTask:
