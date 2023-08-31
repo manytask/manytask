@@ -6,6 +6,7 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
 COPY ./manytask/ /app/manytask
+COPY VERSION /app/VERSION
 
 ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions
 VOLUME ["/cache", "/solutions"]

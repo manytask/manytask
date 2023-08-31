@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 
 {% block body %}
-<div class="site">
+<div class="container-fluid d-flex flex-column justify-content-center align-items-center" style="height: 100vh">
     <h1>Manytask is NOT ready</h1>
     <h3>You need configure it first with api request</h3>
+    <hr>
     <p>You can update the page once it ready</p>
+    <button onClick="window.location.reload()" class="btn btn-warning">Refresh</button>
 </div>
 {% endblock %}
 

@@ -62,8 +62,8 @@ class GitLabApi:
         """
         self.dry_run = dry_run
 
-        self._url = base_url
-        self._gitlab = gitlab.Gitlab(self._url, private_token=admin_token)
+        self.base_url = base_url
+        self._gitlab = gitlab.Gitlab(self.base_url, private_token=admin_token)
 
         self._course_group = course_group
         self._course_public_repo = course_public_repo
@@ -214,18 +214,18 @@ class GitLabApi:
             oauth_token: str,
     ) -> Student:
         headers = {'Authorization': 'Bearer ' + oauth_token}
-        response = requests.get(f'{self._url}/api/v4/user', headers=headers)
+        response = requests.get(f'{self.base_url}/api/v4/user', headers=headers)
         response.raise_for_status()
         return self._parse_user_to_student(response.json())
 
     def get_url_for_task_base(self) -> str:
-        return f'{self._url}/{self._course_public_repo}/blob/{self._default_branch}'
+        return f'{self.base_url}/{self._course_public_repo}/blob/{self._default_branch}'
 
     def get_url_for_repo(
             self,
             username: str,
     ) -> str:
-        return f'{self._url}/{self._course_students_group}/{username}'
+        return f'{self.base_url}/{self._course_students_group}/{username}'
 
 
 def map_gitlab_user_to_student(
