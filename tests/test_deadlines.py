@@ -1,9 +1,8 @@
 import pathlib
+import typing
 from typing import Any
 
 import yaml
-
-import typing
 
 from manytask.deadlines import Deadlines
 

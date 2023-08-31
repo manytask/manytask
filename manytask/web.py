@@ -6,7 +6,7 @@ import flask.sessions
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for, Response
+from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
 from . import glab
@@ -67,12 +67,17 @@ def course_page() -> ResponseReturnValue:
         username=student_username,
         course_name=course.name,
         current_course=course,
+        gitlab_url=course.gitlab_api.base_url,
+        gdoc_url=course.googledoc_api.get_spreadsheet_url(),
         student_repo_url=student_repo,
         student_ci_url=f'{student_repo}/pipelines',
-        gdoc_url=course.googledoc_api.get_spreadsheet_url(),
-        lms_url=course.course_config.lms_url,
-        telegram_channel_invite=course.course_config.telegram_channel_invite,
-        telegram_chat_invite=course.course_config.telegram_chat_invite,
+        manytask_version=course.manytask_version,
+        links={
+            'TG Channel': course.course_config.telegram_channel_invite,
+            'TG Chat': course.course_config.telegram_chat_invite,
+            'LMS': course.course_config.lms_url,
+            'Contribute': 'https://github.com/yandexdataschool/manytask',
+        },
         scores=tasks_scores,
         now=get_current_time(),
         task_stats=tasks_stats,
@@ -133,7 +138,7 @@ def get_solutions() -> ResponseReturnValue:
 def signup() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    if not course.course_config:
+    if not course.course_config and not current_app.debug:
         return redirect(url_for('web.not_ready'))
 
     # ---- render page ---- #
@@ -141,7 +146,8 @@ def signup() -> ResponseReturnValue:
         return render_template(
             'signup.html',
             course_name=course.name,
-            course_favicon=course.favicon
+            course_favicon=course.favicon,
+            manytask_version=course.manytask_version,
         )
 
     # ----  register a new user ---- #
@@ -256,7 +262,10 @@ def logout() -> ResponseReturnValue:
 def not_ready() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    if course.course_config:
+    if course.course_config and not current_app.debug:
         return redirect(url_for('web.course_page'))
 
-    return render_template('not_ready.html')
+    return render_template(
+        'not_ready.html',
+        manytask_version=course.manytask_version,
+    )

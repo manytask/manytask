@@ -1,7 +1,7 @@
 import io
+import uuid
 import zipfile
 from pathlib import Path
-import uuid
 
 import pytest
 

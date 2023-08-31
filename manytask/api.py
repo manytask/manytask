@@ -16,7 +16,8 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from manytask.course import Course, Task, get_current_time, validate_commit_time, MOSCOW_TIMEZONE
+from manytask.course import MOSCOW_TIMEZONE, Course, Task, get_current_time, validate_commit_time
+
 
 logger = logging.getLogger(__name__)
 bp = Blueprint('api', __name__, url_prefix='/api')

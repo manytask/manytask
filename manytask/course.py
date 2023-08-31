@@ -76,7 +76,7 @@ class Task:
 
 class Group:
     def __init__(
-            self, name: str, start: str, deadline: str, second_deadline: str, tasks: list[Task], hw: bool = False
+            self, name: str, start: str, deadline: str, second_deadline: str, tasks: list[Task], special: bool = False, hw: bool = False
     ):
         self.name = name
         self.start = parse_time(start)
@@ -85,7 +85,11 @@ class Group:
         self.pretty_deadline = deadline
         self.pretty_second_deadline = second_deadline
         self.tasks = tasks
-        self.hw = hw
+        self.special = special
+        self.hw = special
+        if hw:
+            logger.warning('hw is deprecated, use special instead')
+            self.special = hw
 
     @property
     def is_open(self) -> bool:
@@ -104,6 +108,7 @@ class Course:
             solutions_api: solutions.SolutionsApi,
             registration_secret: str,
             cache: BaseCache,
+            manytask_version: str | None = None,
             *,
             debug: bool = False,
     ):
@@ -116,6 +121,7 @@ class Course:
 
         self._cache = cache
 
+        self.manytask_version = manytask_version
         self.debug = debug
 
     @property

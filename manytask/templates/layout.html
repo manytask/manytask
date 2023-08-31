@@ -1,45 +1,120 @@
 {% extends "base.html" %}
 
 {% block body %}
-<div class="site">
-  <header class="header-container">
 
-    {% block header %}
-    {% set navbar = [
-        ("/", "tasks", "Tasks"),
-        (student_repo_url, "repo", "My Repo"),
-        (student_ci_url, "submits", "Submits"),
-        (gdoc_url, "gdoc", "GDoc"),
-        (lms_url, "wiki", "LMS"),
-        (telegram_channel_invite, "telegram-channel", "TG CHANNEL"),
-        (telegram_chat_invite, "telegram-chat", "TG CHAT"),
-        ("/logout", "logout", "Logout"),
-    ] -%}
-    {% set active_page = active_page|default("tasks") -%}
 
-    <nav id="navmenu">
-      <ul class="main-menu">
-      <div>
-          [ {{ username }} {{ '| admin' if is_course_admin }} ] #
-      </div>
-        {% for href, id, caption in navbar %}
-            {% if href is not none and href|length > 0 %}
-                <li>
-                  <a href="{{ href }}"
-                     class="{{ 'current' if id == active_page else '' }}">
-                    {{ caption }}
-                  </a>
-                </li>
-                {% if not loop.last %}<li>|</li>{% endif %}
-            {% endif %}
-        {% endfor %}
-      </ul>
+{% set solved_score = scores.values() | sum() %}
+{% set solved_percent = (solved_score / current_course.deadlines.max_score_started * 100) | round(1, 'common') %}
+
+
+    <style>
+        .admin-label {
+            position: fixed;
+            bottom: 23px;
+            right: 7px;
+            background: orange;
+            padding: 0 4px;
+            border-radius: 5px;
+            opacity: 0.4;
+        }
+
+
+
+     {#Floating div with total score #}
+    .total_score {
+{#        position: fixed;#}
+{#        top: 70px;#}
+{#        right: 10px;#}
+{#        padding: 10px;#}
+        background-color: var(--bs-tertiary-bg);
+        border-radius: 10px;
+        padding: 0 5px;
+        font-size: 0.8rem;
+        {#box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);#}
+{#        z-index: 1000;#}
+    }
+    </style>
+
+
+    <nav class="border-bottom navbar navbar-expand-lg bg-body fixed-top">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <a href="/" class="d-flex align-items-center text-decoration-none navbar-brand me-0">
+                <img class="d-none d-sm-block" src="{{ url_for('static', filename=course_favicon) }}" style="border-radius: 50%; border-style: solid" alt="favicon" width="32" height="32">
+                <span class="fs-4 mb-0 ms-1 h1">Manytask</span>
+{#                <span class="fs-4 mb-0 ms-1 h1">Manytask: {{ course_name }}</span>#}
+                {#                <button class="fs-4 mb-0 ms-1">python</button>#}
+            </a>
+
+            <div class="collapse navbar-collapse ms-2" id="navbar">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link px-3 active" aria-current="page" href="#">Assignments</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" target="_blank" href="{{ student_repo_url }}">My&nbsp;Repo</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" target="_blank" href="{{ student_ci_url }}">My&nbsp;Submits</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" target="_blank" href="{{ gdoc_url }}">All&nbsp;Scores</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_links" data-bs-toggle="dropdown" aria-expanded="false">Links</a>
+                        <ul class="dropdown-menu" aria-labelledby="navbar_links">
+                            {% for link_name, link_url in links.items() %}
+                                <li>
+                                    <a class="dropdown-item" target="_blank" href="{{ link_url }}">{{ link_name }}</a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="dropdown text-end d-flex align-items-center justify-content-center">
+                <div class="total_score round d-flex flex-column align-items-center justify-content-center ms-2 me-2">
+                    <span class="fs-7">{{ solved_score }}/{{ current_course.deadlines.max_score_started }}</span>
+                    <span class="fs-7">{{ solved_percent }}%</span>
+                </div>
+
+                <a href="#" class="d-block link-body-emphasis text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    {#                        <img src="https://github.com/mdo.png" alt="mdo" width="32" height="32" class="rounded-circle">#}
+                    <span class="d-inline-block fw-bold">[{{ username }}]</span>
+                </a>
+                <ul class="dropdown-menu text-small dropdown-menu-end">
+                    <li><a class="dropdown-item" target="_blank" href="{{ gitlab_url }}/-/profile">Account Settings</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" data-bs-theme-value="light"><i class="fa-fw fa-solid fa-sun "></i>&nbsp;Light Theme</a></li>
+                    <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i class="fa-fw fa-solid fa-moon"></i>&nbsp;Dark Theme</a></li>
+                    <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i class="fa-fw fa-solid fa-wand-magic-sparkles"></i>&nbsp;Auto Theme</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="/logout">Sign out</a></li>
+                </ul>
+            </div>
+
+        </div>
     </nav>
-    {% endblock %}
-  </header>
-  <main class="main">
-    {% block content %}
-    {% endblock %}
-  </main>
-</div>
+
+    {#  Floating form with ADMIN label if so  #}
+    {% if is_course_admin %}
+        <div class="admin-label fs-7">ADMIN</div>
+    {% endif %}
+
+    <div class="px-3 container-lg">
+        {# Add bootstrap empty space for header  #}
+        <div class="container-fluid" style="height: 80px;"></div>
+
+        {#        <main class="main">#}
+        {% block content %}
+        {% endblock %}
+        {#        </main>#}
+
+        <div class="container-fluid" style="height: 10px;"></div>
+    </div>
+
 {% endblock %}

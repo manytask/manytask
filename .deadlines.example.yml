@@ -6,7 +6,6 @@
   tasks:
     - task: task_7_0
       score: 70
-      url: https://www.python.org/about/gettingstarted/
 
 - group: group_6
   start: 01-05-2020 18:00
@@ -16,6 +15,7 @@
   tasks:
     - task: task_6_0
       score: 60
+      url: https://www.python.org/about/gettingstarted/
     - task: task_6_1
       score: 60
 
@@ -33,6 +33,7 @@
       score: 50
 
 - group: group_4
+  special: true
   start: 01-03-2020 18:00
   deadline: 01-04-2020 23:59
   second_deadline: 01-05-2020 23:59

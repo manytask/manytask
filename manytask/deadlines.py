@@ -72,6 +72,7 @@ class Deadlines:
                 deadline=group_config['deadline'],
                 second_deadline=group_config.get('second_deadline', group_config['deadline']),
                 tasks=Deadlines._parse_tasks(group_config),
+                special=group_config.get('special', False),
                 hw=group_config.get('hw', False),
             )
             groups.append(group)
@@ -117,22 +118,33 @@ class Deadlines:
     @property
     def tasks(self) -> list[Task]:
         return [
-            self.Task(task.name, group.name, task.score) for group in reversed(self.groups)
+            self.Task(task.name, group.name, task.score)
+            for group in reversed(self.groups)
             for task in group.tasks
         ]
 
     @property
     def tasks_started(self) -> list[Task]:
         return [
-            self.Task(task.name, group.name, task.score) for group in reversed(self.groups)
+            self.Task(task.name, group.name, task.score)
+            for group in reversed(self.groups)
             for task in group.tasks if task.is_started()
         ]
 
     @property
     def max_score(self) -> int:
-        return sum(task.score for group in self.groups for task in group.tasks if not task.is_bonus)
+        return sum(
+            task.score
+            for group in self.groups
+            for task in group.tasks
+            if not task.is_bonus
+        )
 
     @property
     def max_score_started(self) -> int:
-        return sum(task.score for group in self.groups for task in group.tasks
-                   if task.is_started() and not task.is_bonus)
+        return sum(
+            task.score
+            for group in self.groups
+            for task in group.tasks
+            if task.is_started() and not task.is_bonus
+        )

@@ -148,6 +148,14 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
         base_folder='.tmp/solution' if app.debug else os.environ.get('SOLUTIONS_DIR', '/solutions'),
     )
 
+    # read VERSION file to get a version
+    manytask_version = ''
+    try:
+        with open('VERSION', 'r') as f:
+            manytask_version = f.read().strip()
+    except FileNotFoundError:
+        pass
+
     # create course
     _course = course.Course(
         deadlines_api,
@@ -156,6 +164,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> Flask:
         solutions_api,
         app.app_config.registration_secret,
         cache,
+        manytask_version=manytask_version,
         debug=app.debug,
     )
     app.course = _course
