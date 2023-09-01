@@ -155,15 +155,23 @@ class Course:
 
         assert content is not None, 'Course config is not set'
 
+        old_links: dict[str, str] = {}
+        if lms_url := content.get('lms_url', None):
+            old_links['lms'] = lms_url
+        if telegram_channel_invite := content.get('telegram_channel_invite', None):
+            old_links['telegram_channel_invite'] = telegram_channel_invite
+        if telegram_chat_invite := content.get('telegram_chat_invite', None):
+            old_links['telegram_chat_invite'] = telegram_chat_invite
+        if old_links:
+            logging.warning('lms_url/telegram_channel_invite/telegram_chat_invite is deprecated, use links instead')
+
         return CourseConfig(
             name=content['name'],
             deadlines=content['deadlines'],
             second_deadline_max=float(content['second_deadline_max']),
             max_low_demand_bonus=float(content['max_low_demand_bonus']),
             layout=content.get('layout', 'groups'),
-            lms_url=content.get('lms_url', None),
-            telegram_channel_invite=content.get('telegram_channel_invite', None),
-            telegram_chat_invite=content.get('telegram_chat_invite', None),
+            links=content.get('links', old_links),
         )
 
     def store_deadlines(self, content: list[dict[str, Any]]) -> None:
@@ -176,15 +184,23 @@ class Course:
         if content.get('deadlines') != 'hard':
             raise RuntimeError('Only deadlines=hard available')
 
+        old_links: dict[str, str] = {}
+        if lms_url := content.get('lms_url', None):
+            old_links['lms'] = lms_url
+        if telegram_channel_invite := content.get('telegram_channel_invite', None):
+            old_links['telegram_channel_invite'] = telegram_channel_invite
+        if telegram_chat_invite := content.get('telegram_chat_invite', None):
+            old_links['telegram_chat_invite'] = telegram_chat_invite
+        if old_links:
+            logging.warning('lms_url/telegram_channel_invite/telegram_chat_invite is deprecated, use links instead')
+
         # For validation purposes
         CourseConfig(
             name=content['name'],
             deadlines=content['deadlines'],
             second_deadline_max=float(content['second_deadline_max']),
             max_low_demand_bonus=float(content['max_low_demand_bonus']),
-            lms_url=content.get('lms_url', None),
-            telegram_channel_invite=content.get('telegram_channel_invite', None),
-            telegram_chat_invite=content.get('telegram_chat_invite', None),
+            links=content.get('links', old_links),
         )
         self._cache.set('__config__', content)
 

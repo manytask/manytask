@@ -27,6 +27,8 @@ manytask_url: https://py.manytask.org
 
 
 # info
-lms_url: https://lk.yandexdataschool.ru/
-telegram_channel_invite: https://t.me/joinchat/
-telegram_chat_invite: https://t.me/joinchat/
+links:  # optional, any number of links
+  "TG Channel": https://t.me/joinchat/
+  "TG Chat": https://t.me/joinchat/
+  "LMS": https://lk.yandexdataschool.ru/
+  "Contribute Manytask": https://github.com/yandexdataschool/manytask
