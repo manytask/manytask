@@ -157,6 +157,8 @@
                   {% set task_link = task.url %}
                 {% elif layout == "flat" %}
                   {% set task_link = task_base_url + "/" + task.name + "/" %}
+                {%  elif layout == "lectures" %}
+                  {% set task_link = task_base_url + "/" + group.name + "/tasks/" + task.name + "/" %}
                 {% else %}
                   {% set task_link = task_base_url + "/" + group.name + "/" + task.name + "/" %}
                 {% endif %}
@@ -175,7 +177,6 @@
                     <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
                         <span class="fs-5 name">{{ task.name }}</span>
                         <span class="fs-1 fw-bold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
-
 {#                        {% if not group.hw and demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}#}
 {#                            <div class="demand">#}
 {#                                <div class="fs-6 stat"><i class="fa-solid fa-bolt"></i>{{ task_stats.get(task.name, '0') }}</div>#}
