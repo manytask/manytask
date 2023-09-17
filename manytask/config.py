@@ -15,9 +15,7 @@ class CourseConfig:
 
     layout: str = 'groups'
 
-    lms_url: str | None = None
-    telegram_channel_invite: str | None = None
-    telegram_chat_invite: str | None = None
+    links: dict[str, str] | None = None
 
 
 @dataclass
