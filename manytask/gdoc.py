@@ -380,7 +380,7 @@ class RatingTable:
         )
 
         for row, found_login in islice(enumerate(all_logins, start=1), PublicAccountsSheetOptions.HEADER_ROW, None):
-            if found_login == login:
+            if str(found_login) == login:
                 return row
 
         raise LoginNotFound(f'Login {login} not found in spreadsheet')
