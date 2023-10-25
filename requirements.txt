@@ -2,7 +2,7 @@
 gunicorn==21.2.0
 flask==2.3.3
 cachelib==0.10.2
-Werkzeug==2.3.7
+Werkzeug==3.0.1
 
 # api interaction (gitlab, google sheets)
 gspread==5.10.0
