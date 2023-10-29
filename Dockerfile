@@ -1,4 +1,7 @@
 FROM python:3.11-slim
+
+RUN apt-get update && apt-get install --yes curl
+
 WORKDIR /app
 ENV PYTHONPATH "${PYTHONPATH}:/app:/app/manytask"
 
