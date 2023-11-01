@@ -15,7 +15,7 @@ jobs:
   update-version-and-changelog-files:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ secrets.MANYTASK_BOT_TOKEN }}
@@ -45,7 +45,7 @@ jobs:
     needs: update-version-and-changelog-files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
       - name: Set up QEMU
@@ -74,7 +74,7 @@ jobs:
 #    needs: update-version-and-changelog-files
 #    runs-on: ubuntu-latest
 #    steps:
-#      - uses: actions/checkout@v3
+#      - uses: actions/checkout@v4
 #        with:
 #          ref: ${{ github.ref_name }}
 #      - name: Setup Python 3.9
