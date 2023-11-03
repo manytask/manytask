@@ -4,7 +4,8 @@ on:
   workflow_call:
     inputs:
       dockerfile:
-        required: true
+        required: false
+        default: 'Dockerfile'
         type: string
       target:
         required: false
@@ -15,7 +16,8 @@ on:
         default: '.'
         type: string
       registry:
-        required: true
+        required: false
+        default: 'docker.io'
         type: string
       tags:
         required: true
