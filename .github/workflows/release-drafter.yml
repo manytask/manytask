@@ -1,23 +1,23 @@
 name: Release Drafter
 
+
 on:
   push:
     branches:
       - main
-  # pull_request events is required only for autolabeler
-  pull_request:
-    types: [opened, reopened, synchronize]
-  pull_request_target:
-    types: [opened, reopened, synchronize]
+
 
 permissions:
-  contents: read
+  contents: write
+
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
 
 jobs:
   update_release_draft:
-    permissions:
-      contents: write  # for release-drafter/release-drafter to create a github release
-      pull-requests: write  # for release-drafter/release-drafter to add label to PR
     runs-on: ubuntu-latest
     steps:
       - uses: release-drafter/release-drafter@v5
