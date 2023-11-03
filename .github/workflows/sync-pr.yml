@@ -1,0 +1,36 @@
+name: Sync PR
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - labeled
+      - unlabeled
+      - reopened
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+
+jobs:
+  autolabel_pr:
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'edited'
+    steps:
+      - uses: release-drafter/release-drafter@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  validate_pr:
+    needs: [autolabel_pr]
+    if: ${{ always() && !failure() && !cancelled() }}  # no needs jobs are failed or cancelled
+    uses: manytask/.github/.github/workflows/reusable-validate-pr.yml@main
+    permissions:
+      pull-requests: read
+      contents: read
