@@ -1,1 +1,1 @@
-_extends: .github:.github/release-drafter.yml
+_extends: manytask/.github:.github/release-drafter.yml
