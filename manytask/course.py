@@ -12,7 +12,7 @@ from .config import CourseConfig
 
 logger = logging.getLogger(__name__)
 MOSCOW_TIMEZONE = ZoneInfo('Europe/Moscow')
-CONFIDENCE_INTERVAL = timedelta(minutes=10)
+CONFIDENCE_INTERVAL = timedelta(hours=2)
 
 
 def parse_time(time: str) -> datetime:
