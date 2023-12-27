@@ -157,8 +157,9 @@ class GitLabApi:
             'forking_access_level': 'disabled',
         })
         project = self._gitlab.projects.get(fork.id)
-        project.shared_runners_enabled = course_public_project.shared_runners_enabled  # TODO: think .evn config value
-        project.ci_config_path = f'.gitlab-ci.yml@{course_public_project.path_with_namespace}'  # TODO: think .evn config value
+        # TODO: think .evn config value
+        project.shared_runners_enabled = course_public_project.shared_runners_enabled
+        project.ci_config_path = f'.gitlab-ci.yml@{course_public_project.path_with_namespace}'
         project.save()
 
         logger.info(f'Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}')
