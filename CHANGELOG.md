@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.8.0](https://github.com/manytask/manytask/releases/tag/0.8.0) - 2023-12-27
+
+BREAKING ci_config_path for fork repositories will point to the `.gitlab-ci.yml@path/to/public/repo`
+
+### Features
+
+- feat: add ci_config_path from public repo (.gitlab-ci.yml@path/to/repo) by @k4black in [#94](https://github.com/$OWNER/$REPOSITORY/pull/94)
+
+### Tests and CI/CD
+
+- feat: add ci_config_path from public repo (.gitlab-ci.yml@path/to/repo) by @k4black in [#94](https://github.com/$OWNER/$REPOSITORY/pull/94)
+
+### Dependency Updates
+
+- chore(deps): bump python-gitlab from 3.15.0 to 4.2.0 by @dependabot in [#84](https://github.com/$OWNER/$REPOSITORY/pull/84)
+- chore(deps): bump mypy from 1.7.0 to 1.8.0 by @dependabot in [#92](https://github.com/$OWNER/$REPOSITORY/pull/92)
+- chore(deps): bump authlib from 1.2.1 to 1.3.0 by @dependabot in [#91](https://github.com/$OWNER/$REPOSITORY/pull/91)
+- chore(deps): bump black from 23.11.0 to 23.12.1 by @dependabot in [#93](https://github.com/$OWNER/$REPOSITORY/pull/93)
+- chore(deps): bump isort from 5.12.0 to 5.13.2 by @dependabot in [#90](https://github.com/$OWNER/$REPOSITORY/pull/90)
+- chore(deps): bump actions/setup-python from 4 to 5 by @dependabot in [#86](https://github.com/$OWNER/$REPOSITORY/pull/86)
+- chore(deps): bump mypy from 1.6.1 to 1.7.0 by @dependabot in [#81](https://github.com/$OWNER/$REPOSITORY/pull/81)
+- chore(deps): bump ruff from 0.1.3 to 0.1.5 by @dependabot in [#80](https://github.com/$OWNER/$REPOSITORY/pull/80)
+- chore(deps): bump flask from 2.3.3 to 3.0.0 by @dependabot in [#73](https://github.com/$OWNER/$REPOSITORY/pull/73)
+- chore(deps): bump python from 3.11-slim to 3.12-slim by @dependabot in [#61](https://github.com/$OWNER/$REPOSITORY/pull/61)
+- chore(deps): bump black from 23.10.1 to 23.11.0 by @dependabot in [#79](https://github.com/$OWNER/$REPOSITORY/pull/79)
+
+**Full Changelog**: [0.7.0...0.8.0](https://github.com/manytask/manytask/compare/0.7.0...0.8.0)
+
 ## [0.7.0](https://github.com/manytask/manytask/releases/tag/0.7.0) - 2023-11-08
 
 ### Fixes
