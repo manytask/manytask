@@ -1,7 +1,7 @@
 # linters
 flake8==6.1.0
 ruff==0.1.5
-mypy==1.7.0
+mypy==1.8.0
 isort==5.13.2
 black==23.12.1
 
