@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import gitlab
+import gitlab.const
 import gitlab.v4.objects
 import requests
 
@@ -152,10 +153,13 @@ class GitLabApi:
         fork = course_public_project.forks.create({
             'name': student.username,
             'path': student.username,
-            'namespace': course_group.id
+            'namespace_id': course_group.id,
+            'forking_access_level': 'disabled',
         })
         project = self._gitlab.projects.get(fork.id)
-        project.shared_runners_enabled = course_public_project.shared_runners_enabled  # TODO: think .evn config value
+        # TODO: think .evn config value
+        project.shared_runners_enabled = course_public_project.shared_runners_enabled
+        project.ci_config_path = f'.gitlab-ci.yml@{course_public_project.path_with_namespace}'
         project.save()
 
         logger.info(f'Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}')
