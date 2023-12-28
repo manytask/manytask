@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.1](https://github.com/manytask/manytask/releases/tag/0.8.1) - 2023-12-28
+
+Accept `username` and `submit_time` and deprecate `user_id` and `commit_time` as api inputs
+
+**Full Changelog**: [0.8.0...0.8.1](https://github.com/manytask/manytask/compare/0.8.0...0.8.1)
+
 ## [0.8.0](https://github.com/manytask/manytask/releases/tag/0.8.0) - 2023-12-27
 
 BREAKING ci_config_path for fork repositories will point to the `.gitlab-ci.yml@path/to/public/repo`
