@@ -16,7 +16,7 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from .course import MOSCOW_TIMEZONE, Course, Task, get_current_time, validate_commit_time
+from .course import MOSCOW_TIMEZONE, Course, Task, get_current_time, validate_submit_time
 
 
 logger = logging.getLogger(__name__)
@@ -116,9 +116,14 @@ def report_score() -> ResponseReturnValue:
         return 'You didn\'t provide required attribute `task`', 400
     task_name = request.form['task']
 
-    if 'user_id' not in request.form:
-        return 'You didn\'t provide required attribute `user_id`', 400
-    user_id = int(request.form['user_id'])
+    if 'user_id' not in request.form and 'username' not in request.form:
+        return 'You didn\'t provide required attribute `user_id` or `username`', 400
+    user_id = None
+    username = None
+    if 'user_id' in request.form:
+        user_id = int(request.form['user_id'])
+    if 'username' in request.form:
+        username = request.form['username']
 
     check_deadline = True
     if 'check_deadline' in request.form:
@@ -137,14 +142,17 @@ def report_score() -> ResponseReturnValue:
         except ValueError:
             return f'Cannot parse `score` <{reported_score}> to int`', 400
 
-    commit_time = None
+    submit_time = None
+    submit_time_str = None
     if 'commit_time' in request.form:
-        commit_time_str = request.form['commit_time']
+        submit_time_str = request.form['commit_time']
+    if 'submit_time' in request.form:
+        submit_time_str = request.form['submit_time']
+    if submit_time_str:
         try:
-            commit_time = datetime.strptime(commit_time_str, '%Y-%m-%d %H:%M:%S%z')
-            # TODO: commit_time = commit_time.astimezone(MOSCOW_TIMEZONE)
+            submit_time = datetime.strptime(submit_time_str, '%Y-%m-%d %H:%M:%S%z')
         except ValueError:
-            commit_time = None
+            submit_time = None
 
     tasks_demands = course.rating_table.get_demands_multipliers(
         low_demand_bonus_bound=course.course_config.low_demand_bonus_bound,
@@ -164,19 +172,24 @@ def report_score() -> ResponseReturnValue:
         return f'There is no task with name `{task_name}` (or it is closed for submission)', 404
 
     try:
-        student = course.gitlab_api.get_student(user_id)
+        if username:
+            student = course.gitlab_api.get_student_by_username(username)
+        elif user_id:
+            student = course.gitlab_api.get_student(user_id)
+        else:
+            assert False, 'unreachable'
     except Exception:
-        return f'There is no student with user_id {user_id}', 404
+        return f'There is no student with user_id {user_id} or username {username}', 404
 
     current_time = get_current_time()
-    submit_time = validate_commit_time(commit_time, current_time)
+    submit_time = submit_time or current_time
 
     logger.info(
         f'Save score {reported_score} for @{student} on task {task.name} \n'
         f'check_deadline {check_deadline} task_demand_multiplier {task_demand_multiplier}'
     )
     logger.info(
-        f'verify deadline: current_time={current_time} and commit_time={commit_time}. Got submit_time={submit_time}'
+        f'verify deadline: Use submit_time={submit_time}'
     )
 
     if reported_score is None:
@@ -212,7 +225,7 @@ def report_score() -> ResponseReturnValue:
         'task': task.name,
         'score': final_score,
         'demand_multiplier': task_demand_multiplier,
-        'commit_time': commit_time.isoformat(sep=' ') if commit_time else 'None',
+        'commit_time': submit_time.isoformat(sep=' ') if submit_time else 'None',
         'submit_time': submit_time.isoformat(sep=' '),
     }, 200
 
@@ -228,9 +241,14 @@ def get_score() -> ResponseReturnValue:
         return 'You didn\'t provide required attribute `task`', 400
     task_name = request.form['task']
 
-    if 'user_id' not in request.form:
-        return 'You didn\'t provide required attribute `user_id`', 400
-    user_id = int(request.form['user_id'])
+    if 'user_id' not in request.form and 'username' not in request.form:
+        return 'You didn\'t provide required attribute `user_id` or `username`', 400
+    user_id = None
+    username = None
+    if 'user_id' in request.form:
+        user_id = int(request.form['user_id'])
+    if 'username' in request.form:
+        username = request.form['username']
 
     # ----- logic ----- #
     try:
@@ -239,10 +257,15 @@ def get_score() -> ResponseReturnValue:
         return f'There is no task with name `{task_name}` (or it is closed for submission)', 404
 
     try:
-        student = course.gitlab_api.get_student(user_id)
+        if username:
+            student = course.gitlab_api.get_student_by_username(username)
+        elif user_id:
+            student = course.gitlab_api.get_student(user_id)
+        else:
+            assert False, 'unreachable'
         student_scores = course.rating_table.get_scores(student.username)
     except Exception:
-        return f'There is no student with user_id {user_id}', 404
+        return f'There is no student with user_id {user_id} or username {username}', 404
 
     try:
         student_task_score = student_scores[task.name]

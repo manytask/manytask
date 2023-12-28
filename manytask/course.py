@@ -26,7 +26,7 @@ def get_current_time() -> datetime:
     return datetime.now(tz=MOSCOW_TIMEZONE)
 
 
-def validate_commit_time(commit_time: datetime | None, current_time: datetime) -> datetime:
+def validate_submit_time(commit_time: datetime | None, current_time: datetime) -> datetime:
     """Check if commit_time 'to far' from current_time, use current_time, else use commit_time"""
     if not commit_time:
         return current_time

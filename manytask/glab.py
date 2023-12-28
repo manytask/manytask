@@ -213,6 +213,19 @@ class GitLabApi:
         logger.info(f'User found: "{user.username}"')
         return self._parse_user_to_student(user._attrs)
 
+    def get_student_by_username(
+            self,
+            username: str,
+    ) -> Student:
+        potential_students = self.get_students_by_username(username)
+        potential_students = [student for student in potential_students if student.username == username]
+        if len(potential_students) == 0:
+            raise GitLabApiException(f'No students found for username {username}')
+
+        student = potential_students[0]
+        logger.info(f'User found: "{student.username}"')
+        return student
+
     def get_authenticated_student(
             self,
             oauth_token: str,
