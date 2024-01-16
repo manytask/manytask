@@ -4,12 +4,12 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"  # Workflow files stored in the default location of `.github/workflows`
     schedule:
-      interval: "daily"
+      interval: "weekly"
 
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
@@ -17,7 +17,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
