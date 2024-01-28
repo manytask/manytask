@@ -13,8 +13,8 @@ from cachelib import BaseCache
 from gspread import Cell as GCell
 from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
+from .config import ManytaskConfig, ManytaskTaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
-from .deadlines import Deadlines
 from .glab import Student
 
 
@@ -178,23 +178,6 @@ class RatingTable:
             stats = {}
         return stats
 
-    def get_demands_multipliers(self, low_demand_bonus_bound: float, max_demand_multiplier: float) -> dict[str, float]:
-        tasks_stats = self._cache.get(f'{self.ws.id}:stats')
-
-        demand_multipliers: dict[str, float] = {}
-        if tasks_stats:
-            demand_multipliers = {
-                task_name: multiplier
-                for task_name, task_stat in tasks_stats.items()
-                if (multiplier := Deadlines.get_low_demand_multiplier(
-                    task_stat,
-                    low_demand_bonus_bound=low_demand_bonus_bound,
-                    max_demand_multiplier=max_demand_multiplier,
-                )) != 1.
-            }
-
-        return demand_multipliers
-
     def get_scores_update_timestamp(self) -> str:
         timestamp = self._cache.get(f'{self.ws.id}:update-timestamp')
         if timestamp is None:
@@ -221,24 +204,23 @@ class RatingTable:
             f'{self.ws.id}:{username}': scores_cache
             for username, scores_cache in all_users_scores.items()
         }
-        # clear cache saving deadlines
-        _deadlines = self._cache.get('__deadlines__')
-        deadlines = Deadlines(_deadlines)
 
+        # clear cache saving config
+        _config = self._cache.get('__config__')
+        config = ManytaskConfig(**_config)
+
+        # get all tasks stats
         _tasks_stats: defaultdict[str, int] = defaultdict(int)
         for tasks in all_users_scores.values():
             for task_name in tasks.keys():
                 _tasks_stats[task_name] += 1
         tasks_stats: dict[str, float] = {
             task.name: _tasks_stats[task.name] / len(all_users_scores) if len(all_users_scores) != 0 else 0
-            for task in deadlines.tasks
+            for task in config.get_tasks(enabled=True, started=True)
         }
-        # clear cache saving config
-        _config = self._cache.get('__config__')
 
         self._cache.clear()
         self._cache.set('__config__', _config)
-        self._cache.set('__deadlines__', _deadlines)
         self._cache.set(f'{self.ws.id}:scores', all_users_scores)
         self._cache.set(f'{self.ws.id}:stats', tasks_stats)
         self._cache.set(f'{self.ws.id}:update-timestamp', _current_timestamp)
@@ -284,9 +266,18 @@ class RatingTable:
 
     def sync_columns(
             self,
-            tasks: list[Deadlines.Task],
-            max_score: int | None = None,
+            deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
+        max_score = deadlines_config.max_score_started
+        groups = deadlines_config.get_groups(enabled=True, started=True)
+        tasks = deadlines_config.get_tasks(enabled=True, started=True)
+        task_name_to_group_name = {
+            task.name: group.name
+            for group in groups
+            for task in group.tasks
+            if task in tasks
+        }
+
         # TODO: maintain group orger when adding new task in added group
         logger.info('Syncing rating columns...')
         existing_tasks = list(self._list_tasks(with_index=False))
@@ -306,9 +297,11 @@ class RatingTable:
                 cells_to_update.append(GCell(PublicAccountsSheetOptions.HEADER_ROW, col, task.name))
                 cells_to_update.append(GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, task.score))
 
-                if task.group != current_group:
-                    cells_to_update.append(GCell(PublicAccountsSheetOptions.GROUPS_ROW, col, task.group))
-                    current_group = task.group
+                task_group_name = task_name_to_group_name[task.name]
+
+                if task_group_name != current_group:
+                    cells_to_update.append(GCell(PublicAccountsSheetOptions.GROUPS_ROW, col, task_group_name))
+                    current_group = task_group_name
         else:
             cells_to_update = []
 
