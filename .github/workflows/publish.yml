@@ -5,6 +5,9 @@ on:
   release:
     types:
       - released
+  push:
+    branches:
+      - main
 
 
 concurrency:
