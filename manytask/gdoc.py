@@ -13,7 +13,7 @@ from cachelib import BaseCache
 from gspread import Cell as GCell
 from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
-from .config import ManytaskConfig, ManytaskTaskConfig, ManytaskDeadlinesConfig
+from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
 from .glab import Student
 

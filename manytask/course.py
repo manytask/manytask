@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from cachelib import BaseCache
 
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
+
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEZONE = ZoneInfo('Europe/Moscow')
@@ -78,7 +79,7 @@ class Course:
         return self.config.deadlines
 
     @property
-    def config(self) -> ManytaskConfig:
+    def config(self) -> ManytaskConfig:  # noqa: F811
         logger.info('Fetching config...')
         content = self._cache.get('__config__')
 

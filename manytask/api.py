@@ -5,7 +5,6 @@ import logging
 import os
 import secrets
 import tempfile
-import typing
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
