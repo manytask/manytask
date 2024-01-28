@@ -16,7 +16,7 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from .course import MOSCOW_TIMEZONE, Course, Task, get_current_time, validate_submit_time
+from .course import MOSCOW_TIMEZONE, Course, Task, get_current_time
 
 
 logger = logging.getLogger(__name__)
