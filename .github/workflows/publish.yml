@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   update-version-changelog:
+    if: github.event_name == 'release'
     uses: manytask/.github/.github/workflows/reusable-update-changelog-version.yml@main
     permissions:
       contents: write
@@ -26,15 +27,14 @@ jobs:
       token: ${{ secrets.MANYTASK_SERVICE_PUSH_TOKEN }}
 
   release-docker:
-    needs: update-version-changelog
-    uses: ./.github/workflows/reusable-docker-build-push.yml
+    uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
+      platforms: linux/amd64,linux/arm64
       tags: manytask/manytask:${{ github.ref_name }}
       push: true
     secrets:
       registry_username: ${{ secrets.DOCKERHUB_USERNAME }}
       registry_password: ${{ secrets.DOCKERHUB_TOKEN }}
-
 
 #  release-github-pages:
 #    needs: update-version-and-changelog-files

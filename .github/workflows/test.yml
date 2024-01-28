@@ -1,8 +1,9 @@
 name: Lint and Test
 
 on:
-#  push:
   pull_request:
+    branches: [ main ]
+  push:
     branches: [ main ]
 
 
@@ -53,7 +54,6 @@ jobs:
           verbose: true  # optional (default = false)
 
   build-docker:
-    uses: ./.github/workflows/reusable-docker-build-push.yml
+    uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
-      tags: manytask/manytask:${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.sha }}
-      push: false
+      tags: manytask:${{ github.sha }}
