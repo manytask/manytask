@@ -36,7 +36,7 @@ def valid_session(user_session: flask.sessions.SessionMixin) -> bool:
 def course_page() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    if not course.course_config:
+    if not course.config:
         return redirect(url_for('web.not_ready'))
 
     if current_app.debug:
@@ -56,10 +56,6 @@ def course_page() -> ResponseReturnValue:
     tasks_scores = rating_table.get_scores(student_username)
 
     tasks_stats = rating_table.get_stats()
-    tasks_demands = rating_table.get_demands_multipliers(
-        low_demand_bonus_bound=course.course_config.low_demand_bonus_bound,
-        max_demand_multiplier=course.course_config.max_low_demand_bonus,
-    )
 
     return render_template(
         'tasks.html',
@@ -72,16 +68,13 @@ def course_page() -> ResponseReturnValue:
         student_repo_url=student_repo,
         student_ci_url=f'{student_repo}/pipelines',
         manytask_version=course.manytask_version,
-        links=course.course_config.links,
+        links=course.config.ui.links,
         scores=tasks_scores,
         now=get_current_time(),
         task_stats=tasks_stats,
-        demand_multipliers=tasks_demands,
         scores_update_timestamp=rating_table.get_scores_update_timestamp(),
-        second_deadline_percent=f'{int(course.course_config.second_deadline_max*100):>3}',
         course_favicon=course.favicon,
         is_course_admin=student_course_admin,
-        layout=course.course_config.layout,
     )
 
 
@@ -89,7 +82,7 @@ def course_page() -> ResponseReturnValue:
 def get_solutions() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    if not course.course_config:
+    if not course.config:
         return redirect(url_for('web.not_ready'))
 
     if current_app.debug:
@@ -111,7 +104,7 @@ def get_solutions() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        _ = course.deadlines.find_task(task_name)
+        _, _ = course.deadlines.find_task(task_name)
     except KeyError:
         return f'There is no task with name `{task_name}` (or it is disabled)', 404
 
@@ -133,7 +126,7 @@ def get_solutions() -> ResponseReturnValue:
 def signup() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    if not course.course_config and not current_app.debug:
+    if not course.config and not current_app.debug:
         return redirect(url_for('web.not_ready'))
 
     # ---- render page ---- #
@@ -179,7 +172,7 @@ def login() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
     oauth: OAuth = current_app.oauth  # type: ignore
 
-    if not course.course_config:
+    if not course.config:
         return redirect(url_for('web.not_ready'))
 
     redirect_uri = url_for('web.login_finish', _external=True)
@@ -193,7 +186,7 @@ def login_finish() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
     oauth: OAuth = current_app.oauth  # type: ignore
 
-    if not course.course_config:
+    if not course.config:
         return redirect(url_for('web.not_ready'))
 
     # ----- get args ----- #
@@ -257,7 +250,7 @@ def logout() -> ResponseReturnValue:
 def not_ready() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    if course.course_config and not current_app.debug:
+    if course.config and not current_app.debug:
         return redirect(url_for('web.course_page'))
 
     return render_template(

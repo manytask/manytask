@@ -5,10 +5,10 @@ import logging
 import os
 import secrets
 import tempfile
-import typing
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 import yaml
 from flask import Blueprint, Response, abort, current_app, request
@@ -16,7 +16,8 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from .course import MOSCOW_TIMEZONE, Course, Task, get_current_time
+from .config import ManytaskGroupConfig, ManytaskTaskConfig
+from .course import DEFAULT_TIMEZONE, Course, get_current_time
 
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
 def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        if not current_app.course.course_config:  # type: ignore
+        if not current_app.course.config:  # type: ignore
             abort(403)
 
         return f(*args, **kwargs)
@@ -60,7 +61,7 @@ def _parse_flags(flags: str | None) -> timedelta:
         parsed = None
         date_string = flags[right_colon + 1:]
         try:
-            parsed = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S').replace(tzinfo=MOSCOW_TIMEZONE)
+            parsed = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S').replace(tzinfo=DEFAULT_TIMEZONE)
         except ValueError:
             logger.error(f'Could not parse date from flag {flags}')
         if parsed is not None and get_current_time() <= parsed:
@@ -70,39 +71,33 @@ def _parse_flags(flags: str | None) -> timedelta:
 
 
 def _update_score(
-        task: Task,
+        group: ManytaskGroupConfig,
+        task: ManytaskTaskConfig,
         score: int,
         flags: str,
         old_score: int,
-        submit_time: datetime | None = None,
+        submit_time: datetime,
         check_deadline: bool = True,
-        second_deadline_max: float = 0.5,
-        demand_multiplier: float = 1.
 ) -> int:
     if old_score < 0:
         return old_score
 
-    assert 0 <= second_deadline_max <= 1.
-    assert 0 <= demand_multiplier <= 2.
+    if check_deadline:
+        return int(score)
 
     extra_time = _parse_flags(flags)
 
-    if task.scoring_func == 'max':
-        if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
-            new_score = 0
-        elif check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            new_score = int(second_deadline_max * score * demand_multiplier)
-        else:
-            new_score = int(score * demand_multiplier)
-        return max(new_score, old_score)
-    elif task.scoring_func == 'latest':
-        if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
-            return old_score
-        if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-            return int(second_deadline_max * score * demand_multiplier)
-        return int(score * demand_multiplier)
-    else:
-        raise ValueError(f'Wrong scoring func: {task.scoring_func}')
+    multiplier = group.get_current_percent_multiplier(now=submit_time-extra_time)
+
+    if multiplier == 0:
+        return old_score
+    return int(score * multiplier)
+
+    # if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
+    #     return old_score
+    # if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
+    #     return int(second_deadline_max * score)
+    # return int(score)
 
 
 @bp.post('/report')
@@ -129,11 +124,6 @@ def report_score() -> ResponseReturnValue:
     if 'check_deadline' in request.form:
         check_deadline = request.form['check_deadline'] is True or request.form['check_deadline'] == 'True'
 
-    use_demand_multiplier = False
-    if 'use_demand_multiplier' in request.form:
-        use_demand_multiplier = \
-            request.form['use_demand_multiplier'] is True or request.form['use_demand_multiplier'] == 'True'
-
     reported_score: int | None = None
     if 'score' in request.form:
         score_str = request.form['score']
@@ -144,8 +134,6 @@ def report_score() -> ResponseReturnValue:
 
     submit_time = None
     submit_time_str = None
-    if 'commit_time' in request.form:
-        submit_time_str = request.form['commit_time']
     if 'submit_time' in request.form:
         submit_time_str = request.form['submit_time']
     if submit_time_str:
@@ -154,20 +142,11 @@ def report_score() -> ResponseReturnValue:
         except ValueError:
             submit_time = None
 
-    tasks_demands = course.rating_table.get_demands_multipliers(
-        low_demand_bonus_bound=course.course_config.low_demand_bonus_bound,
-        max_demand_multiplier=course.course_config.max_low_demand_bonus,
-    )
-    if use_demand_multiplier:
-        task_demand_multiplier = tasks_demands.get(task_name, 1.)
-    else:
-        task_demand_multiplier = 1.
-
     files: dict[str, FileStorage] = request.files.to_dict()  # may be empty
 
     # ----- logic ----- #
     try:
-        task = course.deadlines.find_task(task_name)
+        group, task = course.deadlines.find_task(task_name)
     except KeyError:
         return f'There is no task with name `{task_name}` (or it is closed for submission)', 404
 
@@ -181,16 +160,11 @@ def report_score() -> ResponseReturnValue:
     except Exception:
         return f'There is no student with user_id {user_id} or username {username}', 404
 
-    current_time = get_current_time()
-    submit_time = submit_time or current_time
+    submit_time = submit_time or course.config.deadlines.get_now_with_timezone()
+    submit_time.replace(tzinfo=ZoneInfo(course.config.deadlines.timezone))
 
-    logger.info(
-        f'Save score {reported_score} for @{student} on task {task.name} \n'
-        f'check_deadline {check_deadline} task_demand_multiplier {task_demand_multiplier}'
-    )
-    logger.info(
-        f'verify deadline: Use submit_time={submit_time}'
-    )
+    logger.info(f'Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}')
+    logger.info(f'verify deadline: Use submit_time={submit_time}')
 
     if reported_score is None:
         reported_score = task.score
@@ -201,12 +175,11 @@ def report_score() -> ResponseReturnValue:
 
     update_function = functools.partial(
         _update_score,
+        group,
         task,
         reported_score,
         submit_time=submit_time,
         check_deadline=check_deadline,
-        second_deadline_max=course.course_config.second_deadline_max,
-        demand_multiplier=task_demand_multiplier,
     )
     final_score = course.rating_table.store_score(student, task.name, update_function)
 
@@ -224,7 +197,6 @@ def report_score() -> ResponseReturnValue:
         'username': student.username,
         'task': task.name,
         'score': final_score,
-        'demand_multiplier': task_demand_multiplier,
         'commit_time': submit_time.isoformat(sep=' ') if submit_time else 'None',
         'submit_time': submit_time.isoformat(sep=' '),
     }, 200
@@ -252,7 +224,7 @@ def get_score() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        task = course.deadlines.find_task(task_name)
+        group, task = course.deadlines.find_task(task_name)
     except KeyError:
         return f'There is no task with name `{task_name}` (or it is closed for submission)', 404
 
@@ -280,74 +252,26 @@ def get_score() -> ResponseReturnValue:
     }, 200
 
 
-@bp.post('/update_deadlines')
+@bp.post('/update_config')
 @requires_token
-def update_deadlines() -> ResponseReturnValue:
+def update_config() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    logger.info('Running update_deadlines')
-
-    # ----- get and validate request parameters ----- #
-    try:
-        deadlines_raw_data = request.get_data()
-        deadlines_data = yaml.load(deadlines_raw_data, Loader=yaml.SafeLoader)
-        course.store_deadlines(deadlines_data)
-    except Exception as e:
-        logger.exception(e)
-        return 'Invalid deadlines', 400
-
-    # ----- logic ----- #
-    # sync columns
-    tasks_started = course.deadlines.tasks_started
-    max_score_started = course.deadlines.max_score_started
-    course.rating_table.sync_columns(tasks_started, max_score_started)
-
-    return '', 200
-
-
-@bp.post('/update_course_config')
-@requires_token
-def update_course_config() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
-
-    logger.info('Running update_course_config')
+    logger.info('Running update_config')
 
     # ----- get and validate request parameters ----- #
     try:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
-        course.store_course_config(config_data)
+        course.store_config(config_data)
     except Exception as e:
         logger.exception(e)
-        return f'Invalid course config\n {e}', 400
+        return f'Invalid config\n {e}', 400
 
     # ----- logic ----- #
     # TODO: fix course config storing. may work one thread only =(
-
-    return '', 200
-
-
-# DEPRECATED
-@bp.post('/sync_task_columns')
-@requires_token
-def sync_task_columns() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
-
-    logger.info('Running DEPRECATED sync_task_columns')
-
-    # ----- get and validate request parameters ----- #
-    try:
-        deadlines_data = typing.cast(list[dict[str, Any]], request.get_json(force=True, silent=False))
-        course.store_deadlines(deadlines_data)
-    except Exception as e:
-        logger.exception(e)
-        return 'Invalid deadlines', 400
-
-    # ----- logic ----- #
     # sync columns
-    tasks_started = course.deadlines.tasks_started
-    max_score_started = course.deadlines.max_score_started
-    course.rating_table.sync_columns(tasks_started, max_score_started)
+    course.rating_table.sync_columns(course.config.deadlines)
 
     return '', 200
 
@@ -380,7 +304,7 @@ def get_solutions() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        _ = course.deadlines.find_task(task_name)
+        _, _ = course.deadlines.find_task(task_name)
     except KeyError:
         return f'There is no task with name `{task_name}` (or it is disabled)', 404
 

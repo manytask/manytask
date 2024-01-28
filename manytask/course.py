@@ -1,29 +1,28 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from cachelib import BaseCache
 
-from .config import CourseConfig
+from .config import ManytaskConfig, ManytaskDeadlinesConfig
 
 
 logger = logging.getLogger(__name__)
-MOSCOW_TIMEZONE = ZoneInfo('Europe/Moscow')
-CONFIDENCE_INTERVAL = timedelta(hours=2)
+DEFAULT_TIMEZONE = ZoneInfo('Europe/Moscow')
 
 
-def parse_time(time: str) -> datetime:
-    date = datetime.strptime(time, '%d-%m-%Y %H:%M')
-    # TODO: check: set 59 seconds for students not to suffer from rounding; e.g. 23:59:59
-    date = date.replace(second=59)
-    return date.replace(tzinfo=MOSCOW_TIMEZONE)
+def parse_time(time: str, tz: ZoneInfo = DEFAULT_TIMEZONE) -> datetime:
+    date = datetime.strptime(time, '%Y-%m-%d %H:%M')
+    date = date.replace(tzinfo=tz)
+    print('Got', time, 'return', date)
+    return date
 
 
-def get_current_time() -> datetime:
-    return datetime.now(tz=MOSCOW_TIMEZONE)
+def get_current_time(tz: ZoneInfo = DEFAULT_TIMEZONE) -> datetime:
+    return datetime.now(tz=tz)
 
 
 def validate_submit_time(commit_time: datetime | None, current_time: datetime) -> datetime:
@@ -35,83 +34,15 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
         print(f'WTF: commit_time {commit_time} > current_time {current_time}')
         return current_time
 
-    if current_time - CONFIDENCE_INTERVAL < commit_time < current_time:
-        return commit_time
-
     return current_time
 
 
-class Task:
-    def __init__(
-            self,
-            name: str,
-            score: int,
-            tags: list[str],
-            start: str,
-            deadline: str,
-            second_deadline: str,
-            scoring_func: str,
-            url: str | None,
-            is_bonus: bool
-    ):
-        self.name = name
-        self.score = score
-        self.tags = tags
-        self.start = parse_time(start)
-        self.deadline = parse_time(deadline)
-        self.second_deadline = parse_time(second_deadline)
-        self.scoring_func = scoring_func
-        self.url = url
-        self.is_bonus = is_bonus
-
-    def is_started(self) -> bool:
-        return get_current_time() > self.start
-
-    def is_overdue(self, extra_time: timedelta = timedelta(), submit_time: datetime | None = None) -> bool:
-        submit_time = submit_time or get_current_time()
-        return submit_time - extra_time > self.deadline
-
-    def is_overdue_second(self, extra_time: timedelta = timedelta(), submit_time: datetime | None = None) -> bool:
-        submit_time = submit_time or get_current_time()
-        return submit_time - extra_time > self.second_deadline
-
-
-class Group:
-    def __init__(
-            self,
-            name: str,
-            start: str,
-            deadline: str,
-            second_deadline: str,
-            tasks: list[Task],
-            special: bool = False,
-            hw: bool = False,
-    ):
-        self.name = name
-        self.start = parse_time(start)
-        self.deadline = parse_time(deadline)
-        self.second_deadline = parse_time(second_deadline)
-        self.pretty_deadline = deadline
-        self.pretty_second_deadline = second_deadline
-        self.tasks = tasks
-        self.special = special
-        self.hw = special
-        if hw:
-            logger.warning('hw is deprecated, use special instead')
-            self.special = hw
-
-    @property
-    def is_open(self) -> bool:
-        return get_current_time() > self.start
-
-
-from . import deadlines, gdoc, glab, solutions  # noqa: E402, F401
+from . import config, gdoc, glab, solutions  # noqa: E402, F401
 
 
 class Course:
     def __init__(
             self,
-            deadlines_api: 'deadlines.DeadlinesApi',
             googledoc_api: gdoc.GoogleDocApi,
             gitlab_api: glab.GitLabApi,
             solutions_api: solutions.SolutionsApi,
@@ -121,7 +52,6 @@ class Course:
             *,
             debug: bool = False,
     ):
-        self.deadlines_api = deadlines_api
         self.googledoc_api = googledoc_api
         self.gitlab_api = gitlab_api
         self.solutions_api = solutions_api
@@ -139,69 +69,26 @@ class Course:
 
     @property
     def name(self) -> str:
-        if self.course_config:
-            return self.course_config.name
+        if self.config:
+            return self.config.settings.course_name
         else:
             return 'not_ready'
 
     @property
-    def deadlines(self) -> 'deadlines.Deadlines':  # noqa: F811
-        return self.deadlines_api.fetch()
+    def deadlines(self) -> ManytaskDeadlinesConfig:
+        return self.config.deadlines
 
     @property
-    def course_config(self) -> CourseConfig:
+    def config(self) -> ManytaskConfig:  # noqa: F811
         logger.info('Fetching config...')
         content = self._cache.get('__config__')
 
         assert content is not None, 'Course config is not set'
+        return ManytaskConfig(**content)
 
-        old_links: dict[str, str] = {}
-        if lms_url := content.get('lms_url', None):
-            old_links['lms'] = lms_url
-        if telegram_channel_invite := content.get('telegram_channel_invite', None):
-            old_links['telegram_channel_invite'] = telegram_channel_invite
-        if telegram_chat_invite := content.get('telegram_chat_invite', None):
-            old_links['telegram_chat_invite'] = telegram_chat_invite
-        if old_links:
-            logging.warning('lms_url/telegram_channel_invite/telegram_chat_invite is deprecated, use links instead')
-
-        return CourseConfig(
-            name=content['name'],
-            deadlines=content['deadlines'],
-            second_deadline_max=float(content['second_deadline_max']),
-            max_low_demand_bonus=float(content['max_low_demand_bonus']),
-            layout=content.get('layout', 'groups'),
-            links=content.get('links', old_links),
-        )
-
-    def store_deadlines(self, content: list[dict[str, Any]]) -> None:
-        self.deadlines_api.store(content)
-
-    def store_course_config(self, content: dict[str, Any]) -> None:
-        logger.info('Storing course config...')
-
-        # TODO: make it better. read from git?
-        if content.get('deadlines') != 'hard':
-            raise RuntimeError('Only deadlines=hard available')
-
-        old_links: dict[str, str] = {}
-        if lms_url := content.get('lms_url', None):
-            old_links['lms'] = lms_url
-        if telegram_channel_invite := content.get('telegram_channel_invite', None):
-            old_links['telegram_channel_invite'] = telegram_channel_invite
-        if telegram_chat_invite := content.get('telegram_chat_invite', None):
-            old_links['telegram_chat_invite'] = telegram_chat_invite
-        if old_links:
-            logging.warning('lms_url/telegram_channel_invite/telegram_chat_invite is deprecated, use links instead')
-
+    def store_config(self, content: dict[str, Any]) -> None:
         # For validation purposes
-        CourseConfig(
-            name=content['name'],
-            deadlines=content['deadlines'],
-            second_deadline_max=float(content['second_deadline_max']),
-            max_low_demand_bonus=float(content['max_low_demand_bonus']),
-            links=content.get('links', old_links),
-        )
+        ManytaskConfig(**content)
         self._cache.set('__config__', content)
 
     @property

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import config, course, deadlines, gdoc, glab, solutions
+from . import course, gdoc, glab, local_config, solutions
 
 
 load_dotenv('../.env')  # take environment variables from .env.
@@ -22,7 +22,7 @@ load_dotenv('../.env')  # take environment variables from .env.
 class CustomFlask(Flask):
     course: course.Course
     oauth: OAuth
-    app_config: config.Config  # TODO: check if we need it
+    app_config: local_config.LocalConfig  # TODO: check if we need it
 
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
@@ -33,11 +33,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     # configuration
     if app.debug:
-        app.app_config = config.DebugConfig.from_env()
+        app.app_config = local_config.DebugLocalConfig.from_env()
     elif test:
-        app.app_config = config.TestConfig()
+        app.app_config = local_config.TestConfig()
     else:
-        app.app_config = config.Config.from_env()  # read config from env
+        app.app_config = local_config.LocalConfig.from_env()  # read config from env
 
     app.testing = os.environ.get('TESTING', test)
     if 'FLASK_SECRET_KEY' not in os.environ and not debug:
@@ -148,9 +148,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
         cache=cache,
     )
-    deadlines_api = deadlines.DeadlinesApi(
-        cache=cache
-    )
     solutions_api = solutions.SolutionsApi(
         base_folder='.tmp/solution' if app.debug else os.environ.get('SOLUTIONS_DIR', '/solutions'),
     )
@@ -165,7 +162,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     # create course
     _course = course.Course(
-        deadlines_api,
         gdoc_api,
         gitlab_api,
         solutions_api,
@@ -189,13 +185,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     # debug updates
     if app.course.debug:
-        with open('.deadlines.example.yml', 'r') as f:
-            debug_deadlines_data = yaml.load(f, Loader=yaml.SafeLoader)
-        app.course.store_deadlines(debug_deadlines_data)
-
-        with open('.course.example.yml', 'r') as f:
-            debug_course_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-        app.course.store_course_config(debug_course_config_data)
+        with open('.manytask.example.yml', 'r') as f:
+            debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+        app.course.store_config(debug_manytask_config_data)
 
     logger.info('Init success')
 
