@@ -5,7 +5,7 @@ cachelib==0.10.2
 Werkzeug==3.0.1
 
 # api interaction (gitlab, google sheets)
-gspread==5.12.4
+gspread==6.0.0
 python-gitlab==4.4.0
 
 # utils
