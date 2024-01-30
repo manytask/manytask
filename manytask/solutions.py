@@ -16,41 +16,41 @@ logger = logging.getLogger(__name__)
 class SolutionsApi:
 
     def __init__(
-            self,
-            base_folder: str | Path,
+        self,
+        base_folder: str | Path,
     ):
         self._base_folder = Path(base_folder)
 
     @staticmethod
     def _compress_folder(
-            folder: Path,
+        folder: Path,
     ) -> io.BytesIO:
         zip_buffer = io.BytesIO()
 
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED, False) as zip_file:
-            for file in folder.glob('**/*'):
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_STORED, False) as zip_file:
+            for file in folder.glob("**/*"):
                 if file.is_file():
-                    zip_file.write(file.absolute(), arcname=str(file.relative_to(folder)))
+                    zip_file.write(
+                        file.absolute(), arcname=str(file.relative_to(folder))
+                    )
 
         return zip_buffer
 
     def store_task_from_folder(
-            self,
-            task_name: str,
-            username: str,
-            folder: Path,
+        self,
+        task_name: str,
+        username: str,
+        folder: Path,
     ) -> None:
         return self.store_task_from_files_list(
-            task_name,
-            username,
-            files=[f for f in folder.glob('**/*') if f.is_file()]
+            task_name, username, files=[f for f in folder.glob("**/*") if f.is_file()]
         )
 
     def store_task_from_files_list(
-            self,
-            task_name: str,
-            username: str,
-            files: list[Path],
+        self,
+        task_name: str,
+        username: str,
+        files: list[Path],
     ) -> None:
         task_user_folder = self._base_folder / task_name / username
 
@@ -63,9 +63,9 @@ class SolutionsApi:
             shutil.copy(file, task_user_folder / file.name)
 
     def _get_task_by_user_folder(
-            self,
-            task_name: str,
-            username: str,
+        self,
+        task_name: str,
+        username: str,
     ) -> Path | None:
         task_user_folder = self._base_folder / task_name / username
 
@@ -75,9 +75,9 @@ class SolutionsApi:
         return None
 
     def get_task_by_user_zip_io(
-            self,
-            task_name: str,
-            username: str,
+        self,
+        task_name: str,
+        username: str,
     ) -> io.BytesIO | None:
         users_solutions_folder = self._get_task_by_user_folder(task_name, username)
 
@@ -87,8 +87,8 @@ class SolutionsApi:
 
     @staticmethod
     def _aggregate_task_files(
-            task_folder: Path,
-            temp_folder: Path,
+        task_folder: Path,
+        temp_folder: Path,
     ) -> None:
         assert task_folder.exists() and task_folder.is_dir()
 
@@ -103,11 +103,11 @@ class SolutionsApi:
 
             username = user_folder.name
 
-            for file in user_folder.glob('**/*'):
+            for file in user_folder.glob("**/*"):
                 if not file.is_file():
                     continue
 
-                filename = str(file.relative_to(user_folder)).replace('/', '_')
+                filename = str(file.relative_to(user_folder)).replace("/", "_")
                 file_bytes = file.read_bytes()
                 filehash_md5 = hashlib.md5(file_bytes).hexdigest()
 
@@ -117,17 +117,21 @@ class SolutionsApi:
 
         # store unique files
         for filename, filehashes in filename_to_hashes.items():
-            with open(temp_folder / filename, 'w') as f:
+            with open(temp_folder / filename, "w") as f:
                 for filehash in filehashes:
-                    f.write('Users: ' + ', '.join(hash_to_users[filehash]) + '\n')
-                    f.write('Number of Users: ' + str(len(hash_to_users[filehash])) + '\n')
-                    f.write('-' * 120 + '\n')
-                    f.write(hash_to_file_bytes[filehash].decode('utf-8', 'backslashreplace'))
-                    f.write('=' * 120 + '\n')
+                    f.write("Users: " + ", ".join(hash_to_users[filehash]) + "\n")
+                    f.write(
+                        "Number of Users: " + str(len(hash_to_users[filehash])) + "\n"
+                    )
+                    f.write("-" * 120 + "\n")
+                    f.write(
+                        hash_to_file_bytes[filehash].decode("utf-8", "backslashreplace")
+                    )
+                    f.write("=" * 120 + "\n")
 
     def get_task_aggregated_zip_io(
-            self,
-            task_name: str,
+        self,
+        task_name: str,
     ) -> io.BytesIO | None:
         task_folder = self._base_folder / task_name
 
