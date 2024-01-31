@@ -5,7 +5,7 @@ cachelib==0.10.2
 Werkzeug==3.0.1
 
 # api interaction (gitlab, google sheets)
-gspread==6.0.0
+gspread>=5.0.0,!=6.0.0,<7.0.0  # note, version 6.0.0 is broken and can not accept session in Client
 python-gitlab==4.4.0
 
 # utils
