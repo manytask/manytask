@@ -17,7 +17,7 @@ VOLUME ["/cache", "/solutions"]
 CMD python -m gunicorn \
     --bind 0.0.0.0:5050 \
     --workers 4 \
-    --threads 4 \
+    --threads 2 \
     "manytask:create_app()"
 #    --worker-class gthread \
 #    --access-logfile - \
