@@ -1,18 +1,21 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine
 
-RUN apt-get update && apt-get install --yes curl
+RUN apk update && apk add --no-cache \
+    curl \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
-ENV PYTHONPATH "${PYTHONPATH}:/app:/app/manytask"
 
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY ./manytask/ /app/manytask
 COPY VERSION /app/VERSION
 
-ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions
+ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions PYTHONPATH="${PYTHONPATH}:/app:/app/manytask"
 VOLUME ["/cache", "/solutions"]
+
+EXPOSE 5050
 
 CMD python -m gunicorn \
     --bind 0.0.0.0:5050 \
