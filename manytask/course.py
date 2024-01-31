@@ -78,7 +78,9 @@ class Course:
 
     @property
     def deadlines(self) -> ManytaskDeadlinesConfig:
-        assert self.config is not None, "Config is not ready, we should never fetch deadlines without config"
+        assert (
+            self.config is not None
+        ), "Config is not ready, we should never fetch deadlines without config"
         return self.config.deadlines
 
     @property
