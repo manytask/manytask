@@ -3,6 +3,7 @@ FROM python:3.12-alpine as builder
 RUN apk update && apk add --no-cache \
     build-base \
     linux-headers \
+    libffi-dev \
     cargo \
     rust \
     && rm -rf /var/cache/apk/*
