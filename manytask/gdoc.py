@@ -11,12 +11,7 @@ import gspread
 from authlib.integrations.requests_client import AssertionSession
 from cachelib import BaseCache
 from gspread import Cell as GCell
-from gspread.utils import (
-    ValueInputOption,
-    ValueRenderOption,
-    a1_to_rowcol,
-    rowcol_to_a1,
-)
+from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
