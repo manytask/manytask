@@ -1,6 +1,8 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine
 
-RUN apt-get update && apt-get install --yes curl
+RUN apk update && apk add --no-cache \
+    curl \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 ENV PYTHONPATH "${PYTHONPATH}:/app:/app/manytask"
