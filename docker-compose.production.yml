@@ -52,12 +52,6 @@ services:
             VIRTUAL_HOST: py.manytask.org
             VIRTUAL_PORT: 5050
             LETSENCRYPT_HOST: py.manytask.org
-        healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:5050/healthcheck" ]
-            interval: 1m
-            timeout: 15s
-            retries: 3
-            start_period: 30s
         volumes:
             - cache:/cache
             - solutions:/solutions
