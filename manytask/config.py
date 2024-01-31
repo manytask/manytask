@@ -19,7 +19,7 @@ class ManytaskSettingsConfig(BaseModel):
 
 class ManytaskUiConfig(BaseModel):
     task_url_template: str  # $GROUP_NAME $TASK_NAME vars are available
-    links: Optional[dict[str, str]] = None  # pedantic 3.9 require Optional, not | None
+    links: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("task_url_template")
     @classmethod

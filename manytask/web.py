@@ -77,7 +77,7 @@ def course_page() -> ResponseReturnValue:
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=course.manytask_version,
-        links=course.config.ui.links,
+        links=course.config.ui.links or dict(),
         scores=tasks_scores,
         now=get_current_time(),
         task_stats=tasks_stats,
