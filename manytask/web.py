@@ -158,9 +158,7 @@ def signup() -> ResponseReturnValue:
     )
 
     try:
-        if not secrets.compare_digest(
-            request.form["secret"], course.registration_secret
-        ):
+        if not secrets.compare_digest(request.form["secret"], course.registration_secret):
             raise Exception("Invalid registration secret")
         _ = course.gitlab_api.register_new_user(user)
     except Exception as e:
@@ -229,9 +227,7 @@ def login_finish() -> ResponseReturnValue:
             course.gitlab_api.create_project(student)
         except gitlab.GitlabError as ex:
             logger.error(f"Project creation failed: {ex.error_message}")
-            return render_template(
-                "signup.html", error_message=ex.error_message, course_name=course.name
-            )
+            return render_template("signup.html", error_message=ex.error_message, course_name=course.name)
 
     # save user in session
     session["gitlab"] = {

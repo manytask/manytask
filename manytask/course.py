@@ -25,9 +25,7 @@ def get_current_time(tz: ZoneInfo = DEFAULT_TIMEZONE) -> datetime:
     return datetime.now(tz=tz)
 
 
-def validate_submit_time(
-    commit_time: datetime | None, current_time: datetime
-) -> datetime:
+def validate_submit_time(commit_time: datetime | None, current_time: datetime) -> datetime:
     """Check if commit_time 'to far' from current_time, use current_time, else use commit_time"""
     if not commit_time:
         return current_time
@@ -78,9 +76,7 @@ class Course:
 
     @property
     def deadlines(self) -> ManytaskDeadlinesConfig:
-        assert (
-            self.config is not None
-        ), "Config is not ready, we should never fetch deadlines without config"
+        assert self.config is not None, "Config is not ready, we should never fetch deadlines without config"
         return self.config.deadlines
 
     @property

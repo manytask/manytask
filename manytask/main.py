@@ -115,9 +115,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
                     "propagate": False,
                 },
                 "gunicorn.access": {
-                    "handlers": (
-                        ["console"] if app.debug else ["console", "access_file"]
-                    ),
+                    "handlers": (["console"] if app.debug else ["console", "access_file"]),
                     "level": "INFO",
                     "propagate": False,
                 },
@@ -141,9 +139,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         course_students_group=app.app_config.gitlab_course_students_group,
         default_branch=app.app_config.gitlab_default_branch,
     )
-    _gdoc_credentials_string = base64.decodebytes(
-        app.app_config.gdoc_account_credentials_base64.encode()
-    )
+    _gdoc_credentials_string = base64.decodebytes(app.app_config.gdoc_account_credentials_base64.encode())
     gdoc_api = gdoc.GoogleDocApi(
         base_url=app.app_config.gdoc_url,
         gdoc_credentials=json.loads(_gdoc_credentials_string),
@@ -152,11 +148,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         cache=cache,
     )
     solutions_api = solutions.SolutionsApi(
-        base_folder=(
-            ".tmp/solution"
-            if app.debug
-            else os.environ.get("SOLUTIONS_DIR", "/solutions")
-        ),
+        base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
     )
 
     # read VERSION file to get a version

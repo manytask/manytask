@@ -63,9 +63,7 @@ def _parse_flags(flags: str | None) -> timedelta:
         parsed = None
         date_string = flags[right_colon + 1 :]
         try:
-            parsed = datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S").replace(
-                tzinfo=DEFAULT_TIMEZONE
-            )
+            parsed = datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=DEFAULT_TIMEZONE)
         except ValueError:
             logger.error(f"Could not parse date from flag {flags}")
         if parsed is not None and get_current_time() <= parsed:
@@ -126,10 +124,7 @@ def report_score() -> ResponseReturnValue:
 
     check_deadline = True
     if "check_deadline" in request.form:
-        check_deadline = (
-            request.form["check_deadline"] is True
-            or request.form["check_deadline"] == "True"
-        )
+        check_deadline = request.form["check_deadline"] is True or request.form["check_deadline"] == "True"
 
     reported_score: int | None = None
     if "score" in request.form:
@@ -173,9 +168,7 @@ def report_score() -> ResponseReturnValue:
     submit_time = submit_time or course.deadlines.get_now_with_timezone()
     submit_time.replace(tzinfo=ZoneInfo(course.deadlines.timezone))
 
-    logger.info(
-        f"Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}"
-    )
+    logger.info(f"Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}")
     logger.info(f"verify deadline: Use submit_time={submit_time}")
 
     if reported_score is None:
@@ -200,9 +193,7 @@ def report_score() -> ResponseReturnValue:
             assert file is not None and file.filename is not None
             secured_filename = secure_filename(file.filename)
             file.save(temp_folder_path / secured_filename)
-        course.solutions_api.store_task_from_folder(
-            task_name, student.username, temp_folder_path
-        )
+        course.solutions_api.store_task_from_folder(task_name, student.username, temp_folder_path)
 
     return {
         "user_id": student.id,

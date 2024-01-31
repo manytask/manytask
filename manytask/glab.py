@@ -115,8 +115,7 @@ class GitLabApi:
             return next(  # type: ignore
                 group
                 for group in self._gitlab.groups.list(get_all=True, search=group_name)
-                if group.name == short_group_name
-                and group.full_name == group_name_with_spaces
+                if group.name == short_group_name and group.full_name == group_name_with_spaces
             )
         except StopIteration:
             raise RuntimeError(f"Unable to find group {group_name}")
@@ -127,9 +126,7 @@ class GitLabApi:
         try:
             return next(  # type: ignore
                 project
-                for project in self._gitlab.projects.list(
-                    get_all=True, search=short_project_name
-                )
+                for project in self._gitlab.projects.list(get_all=True, search=short_project_name)
                 if project.path_with_namespace == project_name
             )
         except StopIteration:
@@ -144,17 +141,13 @@ class GitLabApi:
         gitlab_project_path = f"{self._course_students_group}/{student.username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
-        for project in self._gitlab.projects.list(
-            get_all=True, search=student.username
-        ):
+        for project in self._gitlab.projects.list(get_all=True, search=student.username):
             logger.info(f"Check project path: {project.path_with_namespace}")
 
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(
-                    f"Project {student.username} for group {self._course_students_group} already exists"
-                )
+                logger.info(f"Project {student.username} for group {self._course_students_group} already exists")
                 return
 
         logger.info(f"Student username {student.username}")
@@ -172,14 +165,10 @@ class GitLabApi:
         project = self._gitlab.projects.get(fork.id)
         # TODO: think .evn config value
         project.shared_runners_enabled = course_public_project.shared_runners_enabled
-        project.ci_config_path = (
-            f".gitlab-ci.yml@{course_public_project.path_with_namespace}"
-        )
+        project.ci_config_path = f".gitlab-ci.yml@{course_public_project.path_with_namespace}"
         project.save()
 
-        logger.info(
-            f"Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}"
-        )
+        logger.info(f"Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}")
 
         try:
             member = project.members.create(
@@ -190,9 +179,7 @@ class GitLabApi:
             )
             logger.info(f"Access to fork granted for {member.username}")
         except gitlab.GitlabCreateError:
-            logger.info(
-                f"Access already granted for {student.username} or smth happened"
-            )
+            logger.info(f"Access already granted for {student.username} or smth happened")
 
     def _check_is_course_admin(self, user_id: int) -> bool:
         try:
@@ -239,9 +226,7 @@ class GitLabApi:
         username: str,
     ) -> Student:
         potential_students = self.get_students_by_username(username)
-        potential_students = [
-            student for student in potential_students if student.username == username
-        ]
+        potential_students = [student for student in potential_students if student.username == username]
         if len(potential_students) == 0:
             raise GitLabApiException(f"No students found for username {username}")
 

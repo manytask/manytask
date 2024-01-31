@@ -30,9 +30,7 @@ class SolutionsApi:
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_STORED, False) as zip_file:
             for file in folder.glob("**/*"):
                 if file.is_file():
-                    zip_file.write(
-                        file.absolute(), arcname=str(file.relative_to(folder))
-                    )
+                    zip_file.write(file.absolute(), arcname=str(file.relative_to(folder)))
 
         return zip_buffer
 
@@ -120,13 +118,9 @@ class SolutionsApi:
             with open(temp_folder / filename, "w") as f:
                 for filehash in filehashes:
                     f.write("Users: " + ", ".join(hash_to_users[filehash]) + "\n")
-                    f.write(
-                        "Number of Users: " + str(len(hash_to_users[filehash])) + "\n"
-                    )
+                    f.write("Number of Users: " + str(len(hash_to_users[filehash])) + "\n")
                     f.write("-" * 120 + "\n")
-                    f.write(
-                        hash_to_file_bytes[filehash].decode("utf-8", "backslashreplace")
-                    )
+                    f.write(hash_to_file_bytes[filehash].decode("utf-8", "backslashreplace"))
                     f.write("=" * 120 + "\n")
 
     def get_task_aggregated_zip_io(

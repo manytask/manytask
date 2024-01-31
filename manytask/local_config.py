@@ -55,9 +55,7 @@ class LocalConfig:
             gitlab_client_secret=os.environ["GITLAB_CLIENT_SECRET"],
             # google sheets (credentials base64 encoded json)
             gdoc_url=os.environ.get("GDOC_URL", "https://docs.google.com"),
-            gdoc_account_credentials_base64=os.environ[
-                "GDOC_ACCOUNT_CREDENTIALS_BASE64"
-            ],
+            gdoc_account_credentials_base64=os.environ["GDOC_ACCOUNT_CREDENTIALS_BASE64"],
             # google public sheet
             gdoc_spreadsheet_id=os.environ["GDOC_SPREADSHEET_ID"],
             gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0)),
@@ -97,12 +95,8 @@ class DebugLocalConfig(LocalConfig):
     def from_env(cls) -> LocalConfig:
         return cls(
             gdoc_url="https://docs.google.com",
-            gdoc_account_credentials_base64=os.environ[
-                "GDOC_ACCOUNT_CREDENTIALS_BASE64"
-            ],
-            gdoc_spreadsheet_id=os.environ.get(
-                "GDOC_SPREADSHEET_ID", "1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM"
-            ),
+            gdoc_account_credentials_base64=os.environ["GDOC_ACCOUNT_CREDENTIALS_BASE64"],
+            gdoc_spreadsheet_id=os.environ.get("GDOC_SPREADSHEET_ID", "1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM"),
             gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0)),
         )
 

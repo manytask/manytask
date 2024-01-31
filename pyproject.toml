@@ -39,9 +39,13 @@ testpaths = [
     ".tmp"
 ]
 
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 
 # Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or

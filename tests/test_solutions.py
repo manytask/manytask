@@ -63,9 +63,7 @@ class TestSolutionsApi:
         dummy_solutions_folder: Path,
         solutions_api: SolutionsApi,
     ) -> None:
-        zip_bytes_io: io.BytesIO = solutions_api._compress_folder(
-            dummy_solutions_folder
-        )
+        zip_bytes_io: io.BytesIO = solutions_api._compress_folder(dummy_solutions_folder)
 
         with open(tmp_path / "tmp.zip", "wb") as f:
             f.write(zip_bytes_io.getvalue())
@@ -80,9 +78,7 @@ class TestSolutionsApi:
         dummy_solutions_folder: Path,
         solutions_api: SolutionsApi,
     ) -> None:
-        solutions_api.store_task_from_folder(
-            "task_name", "username", dummy_solutions_folder
-        )
+        solutions_api.store_task_from_folder("task_name", "username", dummy_solutions_folder)
 
         base_folder = solutions_api._base_folder
 
@@ -101,9 +97,7 @@ class TestSolutionsApi:
     ) -> None:
         files = [f for f in dummy_solutions_folder.glob("**/*") if f.is_file()]
 
-        solutions_api.store_task_from_folder(
-            "task_name", "username", dummy_solutions_folder
-        )
+        solutions_api.store_task_from_folder("task_name", "username", dummy_solutions_folder)
         solutions_api.store_task_from_files_list("other_task_name", "username", files)
 
         base_folder = solutions_api._base_folder
@@ -119,16 +113,10 @@ class TestSolutionsApi:
         other_dummy_solutions_folder: Path,
         solutions_api: SolutionsApi,
     ) -> None:
-        solutions_api.store_task_from_folder(
-            "task_name", "username_1", dummy_solutions_folder
-        )
-        solutions_api.store_task_from_folder(
-            "task_name", "username_2", other_dummy_solutions_folder
-        )
+        solutions_api.store_task_from_folder("task_name", "username_1", dummy_solutions_folder)
+        solutions_api.store_task_from_folder("task_name", "username_2", other_dummy_solutions_folder)
 
-        compressed_folder_io: io.BytesIO = solutions_api.get_task_aggregated_zip_io(
-            "task_name"
-        )
+        compressed_folder_io: io.BytesIO = solutions_api.get_task_aggregated_zip_io("task_name")
         assert compressed_folder_io is not None
 
         with zipfile.ZipFile(compressed_folder_io) as zf:
@@ -136,6 +124,4 @@ class TestSolutionsApi:
 
             for name in zf.namelist():
                 file_content = zf.read(name)
-                assert "username_1" in file_content.decode(
-                    "utf-8"
-                ) and "username_2" in file_content.decode("utf-8")
+                assert "username_1" in file_content.decode("utf-8") and "username_2" in file_content.decode("utf-8")

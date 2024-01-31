@@ -21,7 +21,7 @@ ui:
 
 
 deadlines:
-  timezone: Europe/Moscow
+  timezone: Europe/Berlin
 
   deadlines: hard  # hard/interpolate
   max_submissions: 10  # optional
@@ -31,8 +31,8 @@ deadlines:
     - group: group_7
       start: 2040-03-01 18:00
       steps:
-        0.5: 2040-04-01 23:59
-      end: 2040-05-01 23:59
+        0.5: 13d 05:00:00
+      end: 13d 05:59:59
       enabled: true
       tasks:
         - task: task_7_0
@@ -41,9 +41,9 @@ deadlines:
     - group: group_6
       start: 2020-05-01 18:00
       steps:
-        0.5: 2020-06-01 23:59
-        0.3: 2040-05-01 23:59
-      end: 2040-08-01 23:59
+        0.5: 2020-05-02 23:59
+        0.3: 13d 05:00:00
+      end: 13d 05:59:59
       enabled: true
       tasks:
         - task: task_6_0

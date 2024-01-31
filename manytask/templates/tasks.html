@@ -143,7 +143,7 @@
             </div>
             <div class="d-flex flex-column align-items-end mt-2">
                 {% for percent, deadline in group.get_percents_before_deadline().items() %}
-                    <span class="fs-5 deadline {{ 'passed' if deadline < now else '' }}">{{ (percent*100)|round|int }}%: {{ deadline.strftime('%Y-%m-%d %H:%m %Z') }}</span>
+                    <span class="fs-5 deadline {{ 'passed' if deadline < now else '' }}">{{ (percent*100)|round|int }}%: {{ deadline.strftime('%Y-%m-%d %H:%M %Z') }}</span>
                 {% endfor %}
             </div>
         </div>

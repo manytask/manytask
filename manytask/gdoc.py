@@ -111,9 +111,7 @@ class GoogleDocApi:
 
         self._assertion_session = self._create_assertion_session()
 
-        self._public_scores_sheet = self._get_sheet(
-            public_worksheet_id, public_scoreboard_sheet
-        )
+        self._public_scores_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
         self._cache = cache
 
     def _create_assertion_session(self) -> AssertionSession:
@@ -207,14 +205,12 @@ class RatingTable:
             scores_dict["login"]: {
                 k: int(v)
                 for i, (k, v) in enumerate(scores_dict.items())
-                if i >= PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1
-                and isinstance(v, int)
+                if i >= PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1 and isinstance(v, int)
             }
             for scores_dict in list_of_dicts
         }
         users_score_cache = {
-            f"{self.ws.id}:{username}": scores_cache
-            for username, scores_cache in all_users_scores.items()
+            f"{self.ws.id}:{username}": scores_cache for username, scores_cache in all_users_scores.items()
         }
 
         # clear cache saving config
@@ -227,11 +223,7 @@ class RatingTable:
             for task_name in tasks.keys():
                 _tasks_stats[task_name] += 1
         tasks_stats: dict[str, float] = {
-            task.name: (
-                _tasks_stats[task.name] / len(all_users_scores)
-                if len(all_users_scores) != 0
-                else 0
-            )
+            task.name: (_tasks_stats[task.name] / len(all_users_scores) if len(all_users_scores) != 0 else 0)
             for task in config.get_tasks(enabled=True, started=True)
         }
 
@@ -278,11 +270,7 @@ class RatingTable:
             start=PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1,
             with_index=False,
         )
-        student_scores = {
-            task: score
-            for task, score in zip(tasks, scores)
-            if score or str(score) == "0"
-        }
+        student_scores = {task: score for task, score in zip(tasks, scores) if score or str(score) == "0"}
         logger.info(f"Actual scores: {student_scores}")
 
         self._cache.set(f"{self.ws.id}:{student.username}", student_scores)
@@ -295,26 +283,15 @@ class RatingTable:
         max_score = deadlines_config.max_score_started
         groups = deadlines_config.get_groups(enabled=True, started=True)
         tasks = deadlines_config.get_tasks(enabled=True, started=True)
-        task_name_to_group_name = {
-            task.name: group.name
-            for group in groups
-            for task in group.tasks
-            if task in tasks
-        }
+        task_name_to_group_name = {task.name: group.name for group in groups for task in group.tasks if task in tasks}
 
         # TODO: maintain group orger when adding new task in added group
         logger.info("Syncing rating columns...")
         existing_tasks = list(self._list_tasks(with_index=False))
         existing_task_names = set(task for task in existing_tasks if task)
-        tasks_to_create = [
-            task for task in tasks if task.name not in existing_task_names
-        ]
+        tasks_to_create = [task for task in tasks if task.name not in existing_task_names]
 
-        current_worksheet_size = (
-            PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN
-            + len(existing_tasks)
-            - 1
-        )
+        current_worksheet_size = PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN + len(existing_tasks) - 1
         required_worksheet_size = current_worksheet_size
         if tasks_to_create:
             required_worksheet_size = current_worksheet_size + len(tasks_to_create)
@@ -323,24 +300,14 @@ class RatingTable:
 
             cells_to_update = []
             current_group = None
-            for col, task in enumerate(
-                tasks_to_create, start=current_worksheet_size + 1
-            ):
-                cells_to_update.append(
-                    GCell(PublicAccountsSheetOptions.HEADER_ROW, col, task.name)
-                )
-                cells_to_update.append(
-                    GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, task.score)
-                )
+            for col, task in enumerate(tasks_to_create, start=current_worksheet_size + 1):
+                cells_to_update.append(GCell(PublicAccountsSheetOptions.HEADER_ROW, col, task.name))
+                cells_to_update.append(GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, task.score))
 
                 task_group_name = task_name_to_group_name[task.name]
 
                 if task_group_name != current_group:
-                    cells_to_update.append(
-                        GCell(
-                            PublicAccountsSheetOptions.GROUPS_ROW, col, task_group_name
-                        )
-                    )
+                    cells_to_update.append(GCell(PublicAccountsSheetOptions.GROUPS_ROW, col, task_group_name))
                     current_group = task_group_name
         else:
             cells_to_update = []
@@ -355,9 +322,7 @@ class RatingTable:
             )
 
         if cells_to_update:
-            self.ws.update_cells(
-                cells_to_update, value_input_option=ValueInputOption.user_entered
-            )
+            self.ws.update_cells(cells_to_update, value_input_option=ValueInputOption.user_entered)
 
             self.ws.format(
                 f"{rowcol_to_a1(PublicAccountsSheetOptions.GROUPS_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:"  # noqa: E501
@@ -381,9 +346,7 @@ class RatingTable:
         start: int | None = None,
         with_index: bool = False,
     ) -> Iterable[Any]:
-        values = self.ws.row_values(
-            row, value_render_option=ValueRenderOption.unformatted
-        )
+        values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
         if with_index:
             values = enumerate(values, start=1)
         if start:
@@ -422,9 +385,7 @@ class RatingTable:
             value_render_option=ValueRenderOption.unformatted,
         )
 
-        for row, found_login in islice(
-            enumerate(all_logins, start=1), PublicAccountsSheetOptions.HEADER_ROW, None
-        ):
+        for row, found_login in islice(enumerate(all_logins, start=1), PublicAccountsSheetOptions.HEADER_ROW, None):
             if str(found_login) == login:
                 return row
 
@@ -434,16 +395,12 @@ class RatingTable:
         self,
         student: Student,
     ) -> int:
-        logger.info(
-            f'Adding student "{student.username}" with name "{student.name}"...'
-        )
+        logger.info(f'Adding student "{student.username}" with name "{student.name}"...')
         if len(student.name) == 0 or re.match(r"\W", student.name, flags=re.UNICODE):
             raise ValueError(f'Name "{student.name}" looks fishy')
 
         column_to_values_dict = {
-            PublicAccountsSheetOptions.GITLAB_COLUMN: self.create_student_repo_link(
-                student
-            ),
+            PublicAccountsSheetOptions.GITLAB_COLUMN: self.create_student_repo_link(student),
             PublicAccountsSheetOptions.LOGIN_COLUMN: student.username,
             PublicAccountsSheetOptions.NAME_COLUMN: student.name,
             PublicAccountsSheetOptions.FLAGS_COLUMN: None,
@@ -460,10 +417,7 @@ class RatingTable:
         }
 
         # fill empty columns with None
-        row_values = [
-            column_to_values_dict.get(i + 1, None)
-            for i in range(max(column_to_values_dict.keys()))
-        ]
+        row_values = [column_to_values_dict.get(i + 1, None) for i in range(max(column_to_values_dict.keys()))]
 
         result = self.ws.append_row(
             values=row_values,
