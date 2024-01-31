@@ -66,6 +66,7 @@
                     <li class="nav-item dropdown">
                         <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_links" data-bs-toggle="dropdown" aria-expanded="false">Links</a>
                         <ul class="dropdown-menu" aria-labelledby="navbar_links">
+                            {% set links = links | default({}) %}
                             {% for link_name, link_url in links.items() %}
                                 <li>
                                     <a class="dropdown-item" target="_blank" href="{{ link_url }}">{{ link_name }}</a>
