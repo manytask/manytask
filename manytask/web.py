@@ -170,6 +170,7 @@ def signup() -> ResponseReturnValue:
             error_message=str(e),
             course_name=course.name,
             course_favicon=course.favicon,
+            base_url=course.gitlab_api.base_url,
         )
 
     return redirect(url_for("web.login"))
