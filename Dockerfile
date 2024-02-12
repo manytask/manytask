@@ -30,11 +30,11 @@ VOLUME ["/cache", "/solutions"]
 
 EXPOSE 5050
 HEALTHCHECK --interval=1m --timeout=15s --retries=3 --start-period=30s CMD curl -f http://localhost:5050/healthcheck
-CMD ["python", "-m", "gunicorn", "--bind", "0.0.0.0:5050", "--workers", "4", "--threads", "2", "manytask:create_app()"]
+CMD ["python", "-m", "gunicorn", "--bind", "0.0.0.0:5050", "--workers", "2", "--threads", "4", "manytask:create_app()"]
 #CMD python -m gunicorn \
 #    --bind 0.0.0.0:5050 \
-#    --workers 4 \
-#    --threads 2 \
+#    --workers 2 \
+#    --threads 4 \
 #    "manytask:create_app()"
 #    --worker-class gthread \
 #    --access-logfile - \
