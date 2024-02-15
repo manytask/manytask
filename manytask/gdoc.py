@@ -169,6 +169,15 @@ class RatingTable:
             scores = {}
         return scores
 
+    def get_bonus_score(
+        self,
+        username: str,
+    ) -> int:
+        bonus_scores = self._cache.get(f"{self.ws.id}:bonus")
+        if bonus_scores is None:
+            return 0
+        return bonus_scores.get(username, 0)
+
     def get_all_scores(self) -> dict[str, dict[str, int]]:
         all_scores = self._cache.get(f"{self.ws.id}:scores")
         if all_scores is None:
@@ -207,6 +216,10 @@ class RatingTable:
         users_score_cache = {
             f"{self.ws.id}:{username}": scores_cache for username, scores_cache in all_users_scores.items()
         }
+        all_users_bonus_scores = {
+            scores_dict["login"]: int(scores_dict["bonus"]) if scores_dict["bonus"] else 0
+            for scores_dict in list_of_dicts
+        }
 
         # clear cache saving config
         _config = self._cache.get("__config__")
@@ -225,6 +238,7 @@ class RatingTable:
         self._cache.clear()
         self._cache.set("__config__", _config)
         self._cache.set(f"{self.ws.id}:scores", all_users_scores)
+        self._cache.set(f"{self.ws.id}:bonus", all_users_bonus_scores)
         self._cache.set(f"{self.ws.id}:stats", tasks_stats)
         self._cache.set(f"{self.ws.id}:update-timestamp", _current_timestamp)
         self._cache.set_many(users_score_cache)

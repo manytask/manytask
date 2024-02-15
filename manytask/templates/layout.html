@@ -4,6 +4,8 @@
 
 
 {% set solved_score = scores.values() | sum() %}
+{% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
+{% set solved_score_string = solved_score ~ bonus_score_string %}
 {% set solved_percent = (solved_score / current_course.deadlines.max_score_started * 100) | round(1, 'common') %}
 
 
@@ -80,7 +82,7 @@
 
             <div class="dropdown text-end d-flex align-items-center justify-content-center">
                 <div class="total_score round d-flex flex-column align-items-center justify-content-center ms-2 me-2">
-                    <span class="fs-7">{{ solved_score }}/{{ current_course.deadlines.max_score_started }}</span>
+                    <span class="fs-7">{{ solved_score_string }}/{{ current_course.deadlines.max_score_started }}</span>
                     <span class="fs-7">{{ solved_percent }}%</span>
                 </div>
 

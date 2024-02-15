@@ -77,6 +77,7 @@ def course_page() -> ResponseReturnValue:
         manytask_version=course.manytask_version,
         links=course.config.ui.links or dict(),
         scores=tasks_scores,
+        bonus_score=rating_table.get_bonus_score(student_username),
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=course.favicon,
