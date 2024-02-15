@@ -80,6 +80,10 @@ class Course:
         return self.config.deadlines
 
     @property
+    def deadlines_cache_time(self) -> datetime:
+        return self._cache.get("__deadlines_cache_time__")
+
+    @property
     def config(self) -> ManytaskConfig | None:  # noqa: F811
         logger.info("Fetching config...")
         content = self._cache.get("__config__")

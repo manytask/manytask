@@ -1,6 +1,6 @@
 import logging
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import flask.sessions
 import gitlab
@@ -51,10 +51,16 @@ def course_page() -> ResponseReturnValue:
         student_course_admin = session["gitlab"]["course_admin"]
 
     rating_table = course.rating_table
-    if course.debug:
-        rating_table.update_cached_scores()
-    tasks_scores = rating_table.get_scores(student_username)
 
+    # update cache if more than 1h passed or in debug mode
+    cache_time = datetime.fromisoformat(str(rating_table.get_scores_update_timestamp()))
+    cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
+    if course.debug or cache_delta.total_seconds() > 3600:
+        rating_table.update_cached_scores()
+        cache_delta = timedelta(seconds=1)
+
+    # get scores
+    tasks_scores = rating_table.get_scores(student_username)
     tasks_stats = rating_table.get_stats()
 
     return render_template(
@@ -72,9 +78,9 @@ def course_page() -> ResponseReturnValue:
         scores=tasks_scores,
         now=get_current_time(),
         task_stats=tasks_stats,
-        scores_update_timestamp=rating_table.get_scores_update_timestamp(),
         course_favicon=course.favicon,
         is_course_admin=student_course_admin,
+        cache_time=cache_delta,
     )
 
 

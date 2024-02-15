@@ -32,6 +32,13 @@
             text-align: right;
             opacity: 0.4;
         }
+        .cache-time {
+            position: fixed;
+            bottom: 3px;
+            left: 7px;
+            text-align: left;
+            opacity: 0.2;
+        }
     </style>
 
     <meta name="robots" content="noindex">
@@ -43,6 +50,9 @@
 <body>
     {% block body %}
     {% endblock %}
+    {% if cache_time %}
+        <div class="cache-time fs-7">Cache time: {{ cache_time }}</div>
+    {% endif %}
     {% if manytask_version %}
         <div class="version-label fs-7">{{ manytask_version }}</div>
     {% endif %}
