@@ -202,7 +202,7 @@ class GitLabApi:
                 "forking_access_level": "disabled",
                 # Enable shared runners
                 # TODO: Relay on groups runners
-                "shared_runners_enabled": course_group.shared_runners_setting == "enabled",
+                # "shared_runners_enabled": course_group.shared_runners_setting == "enabled",
                 # Set external gitlab-ci config from public repo
                 "ci_config_path": f".gitlab-ci.yml@{course_public_project.path_with_namespace}",
                 # Merge method to squash
