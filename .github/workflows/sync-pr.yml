@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'edited'
     steps:
-      - uses: release-drafter/release-drafter@v5
+      - uses: release-drafter/release-drafter@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
