@@ -132,6 +132,46 @@ class GitLabApi:
         except StopIteration:
             raise RuntimeError(f"Unable to find project {project_name}")
 
+    def create_public_repo(
+        self,
+    ) -> None:
+        group = self._get_group_by_name(self._course_group)
+
+        for project in self._gitlab.projects.list(get_all=True, search=self._course_public_repo):
+            if project.path_with_namespace == self._course_public_repo:
+                logger.info(f"Project {self._course_public_repo} already exists")
+                return
+
+        self._gitlab.projects.create(
+            {
+                "name": self._course_public_repo,
+                "path": self._course_public_repo,
+                "namespace_id": group.id,
+                "visibility": "public",
+                "shared_runners_enabled": True,
+                "auto_devops_enabled": False,
+                "initialize_with_readme": True,
+            }
+        )
+
+    def create_students_group(
+        self,
+    ) -> None:
+        for group in self._gitlab.groups.list(get_all=True, search=self._course_students_group):
+            if group.name == self._course_students_group and group.full_name == self._course_students_group:
+                logger.info(f"Group {self._course_students_group} already exists")
+                return
+
+        self._gitlab.groups.create(
+            {
+                "name": self._course_students_group,
+                "path": self._course_students_group,
+                "visibility": "private",
+                "lfs_enabled": True,
+                "shared_runners_enabled": True,
+            }
+        )
+
     def create_project(
         self,
         student: Student,
@@ -160,12 +200,21 @@ class GitLabApi:
                 "path": student.username,
                 "namespace_id": course_group.id,
                 "forking_access_level": "disabled",
+                # Enable shared runners
+                # TODO: Relay on groups runners
+                "shared_runners_enabled": course_group.shared_runners_enabled,
+                # Set external gitlab-ci config from public repo
+                "ci_config_path": f".gitlab-ci.yml@{course_public_project.path_with_namespace}",
+                # Merge method to squash
+                "merge_method": "squash",
+                # Disable AutoDevOps
+                "auto_devops_enabled": False,
             }
         )
         project = self._gitlab.projects.get(fork.id)
         # TODO: think .evn config value
-        project.shared_runners_enabled = course_public_project.shared_runners_enabled
-        project.ci_config_path = f".gitlab-ci.yml@{course_public_project.path_with_namespace}"
+        # Unprotect all branches
+        project.protectedbranches.delete('*')
         project.save()
 
         logger.info(f"Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}")
