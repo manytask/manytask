@@ -127,7 +127,7 @@
     }
 </style>
 
-{% for group in current_course.config.get_groups(enabled=True, started=True) %}
+{% for group in current_course.config.get_groups(enabled=True, started=True)[::-1] %}
     {% set total_group_score = group.tasks | sum(attribute='score') %}
     {% set solved_group_scores = [] %}
     {% for task in group.tasks %}
