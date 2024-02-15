@@ -41,6 +41,7 @@ deadlines:
         - task: task_0_1
           score: 10
         - task: task_0_2
+          is_bonus: true
           score: 10
         - task: task_0_3
           score: 10
@@ -59,10 +60,12 @@ deadlines:
         - task: task_1_0
           score: 10
         - task: task_1_1
+          is_special: true
           score: 10
         - task: task_1_2
           score: 10
         - task: task_1_3
+          is_bonus: true
           score: 10
         - task: task_1_4
           score: 10
@@ -134,6 +137,8 @@ deadlines:
       enabled: true
       tasks:
         - task: task_6_0
+          is_bonus: true
+          is_special: true
           score: 60
           url: https://www.python.org/about/gettingstarted/
         - task: task_6_1

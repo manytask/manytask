@@ -42,8 +42,10 @@ class ManytaskTaskConfig(BaseModel):
     enabled: bool = True
 
     score: int
-    bonus: int = 0
     special: int = 0
+
+    is_bonus: bool = False
+    is_special: bool = False
 
     # Note: use Optional/Union[...] instead of ... | None as pydantic does not support | in older python versions
     url: Optional[AnyUrl] = None
@@ -219,6 +221,7 @@ class ManytaskDeadlinesConfig(BaseModel):
         self,
         enabled: bool | None = None,
         started: bool | None = None,
+        is_bonus: bool | None = None,
         *,
         now: datetime | None = None,
     ) -> list[ManytaskTaskConfig]:
@@ -247,14 +250,17 @@ class ManytaskDeadlinesConfig(BaseModel):
             if extra_task not in tasks:
                 tasks.append(extra_task)
 
+        if is_bonus is not None:
+            tasks = [task for task in tasks if task.is_bonus == is_bonus]
+
         return tasks
 
     def max_score(self, started: bool | None = True, *, now: datetime | None = None) -> int:
-        return sum(task.score for task in self.get_tasks(enabled=True, started=started, now=now))
+        return sum(task.score for task in self.get_tasks(enabled=True, started=started, is_bonus=False, now=now))
 
     @property
     def max_score_started(self) -> int:
-        return self.max_score(started=True)
+        return self.max_score(started=True, now=self.get_now_with_timezone())
 
 
 class ManytaskConfig(BaseModel):

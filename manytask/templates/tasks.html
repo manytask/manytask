@@ -21,12 +21,11 @@
     .assignment {
         width: 180px;
         height: 120px;
-        padding: 10px;
+        padding: 8px;
         margin: 10px;
         position: relative;
-        {#color: inherit; /* blue colors for links too */#}
-        {#text-decoration: inherit; /* no underline */#}
         box-sizing: border-box;
+        border: 2px solid #00000000;
     }
     @media (max-width: 667px) {
         .assignment {
@@ -59,6 +58,15 @@
     .assignment.solved_partially {
         background-color: #a27fdc;
     }
+    .assignment.special {
+        border: 2px solid #f0ad4e!important;
+    }
+    .assignment.bonus {
+        border: 2px solid #5bc0de;
+        {#background-color: #66cda3;#}
+        {#background-color: #a8a8a8;#}
+    }
+
 
     .assignment .name {
         text-align: center;
@@ -79,7 +87,7 @@
         margin-top: -5px;
         text-align: center;
         overflow: hidden;
-        max-width: 4ch;
+        max-width: 85%;
     }
 
     .assignment .solutions {
@@ -128,7 +136,7 @@
 </style>
 
 {% for group in current_course.config.get_groups(enabled=True, started=True)[::-1] %}
-    {% set total_group_score = group.tasks | sum(attribute='score') %}
+    {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
     {% set solved_group_scores = [] %}
     {% for task in group.tasks %}
         {% set _ = solved_group_scores.append(scores.get(task.name, 0)) %}
@@ -139,7 +147,7 @@
         <div class="d-block d-sm-flex justify-content-between align-items-start">
             <div class="d-block flex-column align-items-start">
                 <span class="fs-2 mb-0">{{ group.name }}</span>
-                <span class="fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
+                <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
             </div>
             <div class="d-flex flex-column align-items-end mt-2">
                 {% for percent, deadline in group.get_percents_before_deadline().items() %}
@@ -168,6 +176,14 @@
                     {% set task_tag = 'unsolved' %}
                 {% endif %}
 
+                {% if task.is_special %}
+                    {% set task_tag = task_tag ~ ' special' %}
+                {% endif %}
+
+                {% if task.is_bonus %}
+                    {% set task_tag = task_tag ~ ' bonus' %}
+                {% endif %}
+
                 <div class="assignment rounded {{ task_tag }}" style="position: relative">
                     <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
                         <span class="fs-5 name">{{ task.name }}</span>
@@ -180,7 +196,7 @@
 {#                        {% else %}#}
 {#                            <div class="fs-6 stat">{{ task_stats.get(task.name, '0') }}</div>#}
 {#                        {% endif %}#}
-                        <div class="fs-6 stat">{{ task_stats.get(task.name, '0') }}</div>
+                        <div class="fs-6 stat">{% if task.is_special %}special&nbsp;{% endif %}{% if task.is_bonus %}bonus&nbsp;{% endif %}{{ task_stats.get(task.name, '0') }}</div>
                     </a>
                     {% if is_course_admin %}
                         <button type="button" onclick="window.open('solutions?task={{ task.name }}')" class="solutions btn btn-outline-warning btn-sm"><i class="fa-solid fa-download"></i></button>

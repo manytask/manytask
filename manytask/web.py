@@ -1,6 +1,6 @@
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import flask.sessions
 import gitlab
@@ -57,7 +57,8 @@ def course_page() -> ResponseReturnValue:
     cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
     if course.debug or cache_delta.total_seconds() > 3600:
         rating_table.update_cached_scores()
-        cache_delta = timedelta(seconds=1)
+        cache_time = datetime.fromisoformat(str(rating_table.get_scores_update_timestamp()))
+        cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
 
     # get scores
     tasks_scores = rating_table.get_scores(student_username)
