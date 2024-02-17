@@ -214,7 +214,9 @@ class GitLabApi:
         project = self._gitlab.projects.get(fork.id)
         # TODO: think .evn config value
         # Unprotect all branches
-        project.protectedbranches.delete('*')
+        for b in project.protectedbranches.list():
+            project.protectedbranches.delete(b.id)
+
         project.save()
 
         logger.info(f"Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}")
