@@ -102,6 +102,12 @@ def _update_score(
     # return int(score)
 
 
+@bp.get("/healthcheck")
+@requires_ready
+def healthcheck() -> ResponseReturnValue:
+    return "OK", 200
+
+
 @bp.post("/report")
 @requires_token
 @requires_ready
