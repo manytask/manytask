@@ -227,11 +227,14 @@ class GitLabApi:
                 "auto_devops_enabled": False,
             }
         )
-        print(f"fork created", fork.id, fork.path_with_namespace, fork.web_url)
+        print("fork created", fork.id, fork.path_with_namespace, fork.web_url)
         project = self._gitlab.projects.get(fork.id)
+        print(f"project", project.id, project.path_with_namespace, project.web_url)
         # TODO: think .evn config value
         # Unprotect all branches
-        project.protectedbranches.delete('*')
+        for protected_branch in project.protectedbranches.list(get_all=True):
+            protected_branch.delete()
+        print("after delete protected branches are", [pb.name for pb in project.protectedbranches.list(get_all=True)])
         project.save()
 
         logger.info(f"Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}")
