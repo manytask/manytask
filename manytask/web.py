@@ -226,6 +226,7 @@ def login_finish() -> ResponseReturnValue:
             course.gitlab_api.create_project(student)
         except gitlab.GitlabError as ex:
             logger.error(f"Project creation failed: {ex.error_message}")
+            logger.error(f"-> {ex.response_body}")
             return render_template("signup.html", error_message=ex.error_message, course_name=course.name)
 
     # save user in session

@@ -200,6 +200,8 @@ class GitLabApi:
                 "path": student.username,
                 "namespace_id": course_group.id,
                 "forking_access_level": "disabled",
+                # MR target self main
+                "mr_default_target_self": True,
                 # Enable shared runners
                 # TODO: Relay on groups runners
                 # "shared_runners_enabled": course_group.shared_runners_setting == "enabled",
@@ -211,6 +213,7 @@ class GitLabApi:
                 "auto_devops_enabled": False,
             }
         )
+        print(f"fork created", fork.id, fork.path_with_namespace, fork.web_url)
         project = self._gitlab.projects.get(fork.id)
         # TODO: think .evn config value
         # Unprotect all branches
