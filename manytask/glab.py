@@ -188,6 +188,20 @@ class GitLabApi:
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
                 logger.info(f"Project {student.username} for group {self._course_students_group} already exists")
+                project = self._gitlab.projects.get(project.id)
+
+                # ensure student is a member of the project
+                try:
+                    member = project.members.create(
+                        {
+                            "user_id": student.id,
+                            "access_level": gitlab.const.AccessLevel.DEVELOPER,
+                        }
+                    )
+                    logger.info(f"Project exists, Access to fork granted for {member.username}")
+                except gitlab.GitlabCreateError:
+                    logger.info(f"Project exists, Access already granted for {student.username} or WTF")
+
                 return
 
         logger.info(f"Student username {student.username}")
