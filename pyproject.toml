@@ -45,13 +45,18 @@ target-version = ["py312"]
 
 
 [tool.ruff]
+line-length = 120
 target-version = "py312"
 
 # Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
-select = ["E", "F"]
-ignore = []
+lint.select = ["E", "F"]
+lint.ignore = []
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+lint.fixable = ["ALL"]
+lint.unfixable = []
 
 exclude = [
     ".bzr",
@@ -79,12 +84,6 @@ exclude = [
     "tests",
     ".tmp"
 ]
-
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
-unfixable = []
-
-line-length = 120
 
 
 [tool.isort]
