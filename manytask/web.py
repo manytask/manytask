@@ -1,6 +1,6 @@
 import logging
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import flask.sessions
 import gitlab
@@ -53,8 +53,11 @@ def course_page() -> ResponseReturnValue:
     rating_table = course.rating_table
 
     # update cache if more than 1h passed or in debug mode
-    cache_time = datetime.fromisoformat(str(rating_table.get_scores_update_timestamp()))
-    cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
+    try:
+        cache_time = datetime.fromisoformat(str(rating_table.get_scores_update_timestamp()))
+        cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
+    except ValueError:
+        cache_delta = timedelta(days=365)
     if course.debug or cache_delta.total_seconds() > 3600:
         rating_table.update_cached_scores()
         cache_time = datetime.fromisoformat(str(rating_table.get_scores_update_timestamp()))
