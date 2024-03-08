@@ -90,10 +90,9 @@ def _update_score(
     extra_time = _parse_flags(flags)
 
     multiplier = group.get_current_percent_multiplier(now=submit_time - extra_time)
+    new_score = int(score * multiplier)
 
-    if multiplier == 0:
-        return old_score
-    return int(score * multiplier)
+    return max(old_score, new_score)
 
     # if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
     #     return old_score
