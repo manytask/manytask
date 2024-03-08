@@ -84,7 +84,7 @@ def _update_score(
     if old_score < 0:
         return old_score
 
-    if check_deadline:
+    if not check_deadline:
         return int(score)
 
     extra_time = _parse_flags(flags)
