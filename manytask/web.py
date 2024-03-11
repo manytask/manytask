@@ -151,17 +151,41 @@ def signup() -> ResponseReturnValue:
 
     # ----  register a new user ---- #
     # render template with error... if error
+    username = request.form["username"].strip()
+
+    file = open('/home/zhmurov/git/manytask/manytask/manytask/whitelist.dat', 'r')
+    lines = file.readlines()
+
+    found = False
+    firstname = ""
+    lastname = ""
+    email = ""
+    for line in lines:
+        data = line.split()
+        if data[0] == username:
+            firstname = data[1]
+            lastname = data[2]
+            email = data[3]
+            found = True
+    if not found:
+        logger.warning(f"User not found")
+        return render_template(
+            "signup.html",
+            error_message="User not found",
+            course_name=course.name,
+            course_favicon=course.favicon,
+            base_url=course.gitlab_api.base_url,
+        )
+    
     user = glab.User(
-        username=request.form["username"].strip(),
-        firstname=request.form["firstname"].strip(),
-        lastname=request.form["lastname"].strip(),
-        email=request.form["email"].strip(),
+        username,
+        firstname,
+        lastname,
+        email,
         password=request.form["password"],
     )
 
     try:
-        if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-            raise Exception("Invalid registration secret")
         _ = course.gitlab_api.register_new_user(user)
     except Exception as e:
         logger.warning(f"User registration failed: {e}")
