@@ -113,7 +113,7 @@ class GoogleDocApi:
         self._assertion_session = self._create_assertion_session()
 
         self._public_scores_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
-        self._public_whitelist_sheet = self._get_sheet(public_whitelist_id, public_whitelist_sheet)
+        self._public_whitelist = self._get_sheet(public_whitelist_id, public_whitelist_sheet)
         self._cache = cache
 
     def _create_assertion_session(self) -> AssertionSession:
@@ -155,7 +155,7 @@ class GoogleDocApi:
         return RatingTable(self._public_scores_sheet, self._cache)
     
     def fetch_whitelist_table(self) -> "WhitelistTable":
-        return WhitelistTable(self._public_whitelist_sheet)
+        return WhitelistTable(self._public_whitelist)
 
     def get_spreadsheet_url(self) -> str:
         return f"{self._url}/spreadsheets/d/{self._public_worksheet_id}#gid={self._public_scoreboard_sheet}"
