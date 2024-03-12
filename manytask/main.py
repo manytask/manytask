@@ -145,6 +145,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         gdoc_credentials=json.loads(_gdoc_credentials_string),
         public_worksheet_id=app.app_config.gdoc_spreadsheet_id,
         public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
+        public_whitelist_id=app.app_config.gdoc_whitelist_id,
+        public_whitelist_sheet=int(app.app_config.gdoc_whitelist_sheet),
         cache=cache,
     )
     solutions_api = solutions.SolutionsApi(

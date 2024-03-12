@@ -153,49 +153,41 @@ def signup() -> ResponseReturnValue:
     # render template with error... if error
     username = request.form["username"].strip()
 
-    file = open('/home/zhmurov/git/manytask/manytask/manytask/whitelist.dat', 'r')
-    lines = file.readlines()
+    whitelisted = course.whitelist_table.get_whitelisted()
 
-    found = False
-    firstname = ""
-    lastname = ""
-    email = ""
-    for line in lines:
-        data = line.split()
-        if data[0] == username:
-            firstname = data[1]
-            lastname = data[2]
-            email = data[3]
-            found = True
-    if not found:
-        logger.warning(f"User not found")
-        return render_template(
-            "signup.html",
-            error_message="User not found",
-            course_name=course.name,
-            course_favicon=course.favicon,
-            base_url=course.gitlab_api.base_url,
-        )
+    found = username in whitelisted
     
-    user = glab.User(
-        username,
-        firstname,
-        lastname,
-        email,
-        password=request.form["password"],
-    )
-
-    try:
-        _ = course.gitlab_api.register_new_user(user)
-    except Exception as e:
-        logger.warning(f"User registration failed: {e}")
+    if not found:
+        error_message="User '" + username + "' not found"
+        logger.warning(error_message)
         return render_template(
             "signup.html",
-            error_message=str(e),
+            error_message=error_message,
             course_name=course.name,
             course_favicon=course.favicon,
             base_url=course.gitlab_api.base_url,
         )
+    else:
+        userdata = whitelisted.get(username)
+        user = glab.User(
+            username,
+            userdata["firstname"],
+            userdata["lastname"],
+            userdata["email"],
+            password=request.form["password"],
+        )
+
+        try:
+            _ = course.gitlab_api.register_new_user(user)
+        except Exception as e:
+            logger.warning(f"User registration failed: {e}")
+            return render_template(
+                "signup.html",
+                error_message=str(e),
+                course_name=course.name,
+                course_favicon=course.favicon,
+                base_url=course.gitlab_api.base_url,
+            )
 
     return redirect(url_for("web.login"))
 

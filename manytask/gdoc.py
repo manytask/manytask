@@ -90,6 +90,8 @@ class GoogleDocApi:
         gdoc_credentials: dict[str, Any],
         public_worksheet_id: str,
         public_scoreboard_sheet: int,
+        public_whitelist_id: str,
+        public_whitelist_sheet: int,
         cache: BaseCache,
     ):
         """
@@ -97,16 +99,21 @@ class GoogleDocApi:
         :param gdoc_credentials:
         :param public_worksheet_id:
         :param public_scoreboard_sheet:
+        :param public_whitelist_id:
+        :param public_whitelist_sheet:
         :param cache:
         """
         self._url = base_url
         self._gdoc_credentials = gdoc_credentials
         self._public_worksheet_id = public_worksheet_id
         self._public_scoreboard_sheet = public_scoreboard_sheet
+        self._public_whitelist_id = public_whitelist_id
+        self._public_whitelist_sheet = public_whitelist_sheet
 
         self._assertion_session = self._create_assertion_session()
 
         self._public_scores_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
+        self._public_whitelist_sheet = self._get_sheet(public_whitelist_id, public_whitelist_sheet)
         self._cache = cache
 
     def _create_assertion_session(self) -> AssertionSession:
@@ -146,9 +153,34 @@ class GoogleDocApi:
 
     def fetch_rating_table(self) -> "RatingTable":
         return RatingTable(self._public_scores_sheet, self._cache)
+    
+    def fetch_whitelist_table(self) -> "WhitelistTable":
+        return WhitelistTable(self._public_whitelist_sheet)
 
     def get_spreadsheet_url(self) -> str:
         return f"{self._url}/spreadsheets/d/{self._public_worksheet_id}#gid={self._public_scoreboard_sheet}"
+
+class WhitelistTable:
+    def __init__(
+      self,
+      worksheet: gspread.Worksheet,      
+    ):
+        self._ws = worksheet
+
+        list_of_dicts = self._ws.get_all_records(
+            empty2zero=False,
+            head=1,
+            default_blank="",
+            expected_headers=[],
+        )
+        self._whitelisted = {
+            dict["login"]: dict
+            for dict in list_of_dicts
+        }
+
+    def get_whitelisted(self) -> dict[str, dict[str,str]]:
+        return self._whitelisted
+        
 
 
 class RatingTable:
