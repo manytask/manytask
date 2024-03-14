@@ -90,6 +90,7 @@ class GoogleDocApi:
         gdoc_credentials: dict[str, Any],
         public_worksheet_id: str,
         public_scoreboard_sheet: int,
+        public_use_whitelist: bool,
         public_whitelist_id: str,
         public_whitelist_sheet: int,
         cache: BaseCache,
@@ -99,6 +100,7 @@ class GoogleDocApi:
         :param gdoc_credentials:
         :param public_worksheet_id:
         :param public_scoreboard_sheet:
+        :param public_use_whitelist:
         :param public_whitelist_id:
         :param public_whitelist_sheet:
         :param cache:
@@ -107,13 +109,16 @@ class GoogleDocApi:
         self._gdoc_credentials = gdoc_credentials
         self._public_worksheet_id = public_worksheet_id
         self._public_scoreboard_sheet = public_scoreboard_sheet
+        self._public_use_whitelist = public_use_whitelist
         self._public_whitelist_id = public_whitelist_id
         self._public_whitelist_sheet = public_whitelist_sheet
 
         self._assertion_session = self._create_assertion_session()
 
         self._public_scores_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
-        self._public_whitelist = self._get_sheet(public_whitelist_id, public_whitelist_sheet)
+
+        self._public_whitelist = self._get_sheet(public_whitelist_id, public_whitelist_sheet) if self._public_use_whitelist else None
+        
         self._cache = cache
 
     def _create_assertion_session(self) -> AssertionSession:
