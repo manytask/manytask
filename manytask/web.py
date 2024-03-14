@@ -155,19 +155,11 @@ def signup() -> ResponseReturnValue:
 
     whitelisted = course.whitelist_table.get_whitelisted()
 
-    found = username in whitelisted
+    try:
+
+        if not username in whitelisted:
+            raise Exception("User '" + username + "' is not in the whitelist")
     
-    if not found:
-        error_message="User '" + username + "' not found"
-        logger.warning(error_message)
-        return render_template(
-            "signup.html",
-            error_message=error_message,
-            course_name=course.name,
-            course_favicon=course.favicon,
-            base_url=course.gitlab_api.base_url,
-        )
-    else:
         userdata = whitelisted.get(username)
         user = glab.User(
             username,
@@ -176,18 +168,18 @@ def signup() -> ResponseReturnValue:
             userdata["email"],
             password=request.form["password"],
         )
+       
+        _ = course.gitlab_api.register_new_user(user)
 
-        try:
-            _ = course.gitlab_api.register_new_user(user)
-        except Exception as e:
-            logger.warning(f"User registration failed: {e}")
-            return render_template(
-                "signup.html",
-                error_message=str(e),
-                course_name=course.name,
-                course_favicon=course.favicon,
-                base_url=course.gitlab_api.base_url,
-            )
+    except Exception as e:
+        logger.warning(f"User registration failed: {e}")
+        return render_template(
+            "signup.html",
+            error_message=str(e),
+            course_name=course.name,
+            course_favicon=course.favicon,
+            base_url=course.gitlab_api.base_url,
+        )
 
     return redirect(url_for("web.login"))
 
