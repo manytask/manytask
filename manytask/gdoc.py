@@ -159,6 +159,9 @@ class GoogleDocApi:
     def fetch_rating_table(self) -> "RatingTable":
         return RatingTable(self._public_scores_sheet, self._cache)
     
+    def use_whitelist(self) -> bool:
+        return self._public_use_whitelist
+
     def fetch_whitelist_table(self) -> "WhitelistTable":
         return WhitelistTable(self._public_whitelist)
 

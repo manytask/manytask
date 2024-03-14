@@ -140,10 +140,13 @@ def signup() -> ResponseReturnValue:
     if not course.config and not current_app.debug:
         return redirect(url_for("web.not_ready"))
 
+    use_whitelist = course.use_whitelist()
+
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
             "signup.html",
+            use_whitelist=use_whitelist,
             course_name=course.name,
             course_favicon=course.favicon,
             manytask_version=course.manytask_version,
@@ -151,23 +154,36 @@ def signup() -> ResponseReturnValue:
 
     # ----  register a new user ---- #
     # render template with error... if error
-    username = request.form["username"].strip()
-
-    whitelisted = course.whitelist_table.get_whitelisted()
-
-    try:
-
-        if not username in whitelisted:
-            raise Exception("User '" + username + "' is not in the whitelist")
     
-        userdata = whitelisted.get(username)
-        user = glab.User(
-            username,
-            userdata["firstname"],
-            userdata["lastname"],
-            userdata["email"],
-            password=request.form["password"],
-        )
+    try:
+    
+        if use_whitelist:
+    
+            username = request.form["username"].strip()
+
+            whitelisted = course.whitelist_table.get_whitelisted()
+
+            if not username in whitelisted:
+                raise Exception("User '" + username + "' is not in the whitelist")
+        
+            userdata = whitelisted.get(username)
+            user = glab.User(
+                username,
+                userdata["firstname"],
+                userdata["lastname"],
+                userdata["email"],
+                password=request.form["password"],
+            )
+
+        else:
+
+            user = glab.User(
+                username=request.form["username"].strip(),
+                firstname=request.form["firstname"].strip(),
+                lastname=request.form["lastname"].strip(),
+                email=request.form["email"].strip(),
+                password=request.form["password"],
+            )
        
         _ = course.gitlab_api.register_new_user(user)
 
@@ -176,6 +192,7 @@ def signup() -> ResponseReturnValue:
         return render_template(
             "signup.html",
             error_message=str(e),
+            use_whitelist=use_whitelist,
             course_name=course.name,
             course_favicon=course.favicon,
             base_url=course.gitlab_api.base_url,
@@ -237,7 +254,11 @@ def login_finish() -> ResponseReturnValue:
             course.gitlab_api.create_project(student)
         except gitlab.GitlabError as ex:
             logger.error(f"Project creation failed: {ex.error_message}")
-            return render_template("signup.html", error_message=ex.error_message, course_name=course.name)
+            use_whitelist = course.use_whitelist()
+            return render_template("signup.html",
+                                   error_message=ex.error_message,
+                                   use_whitelist=use_whitelist,
+                                   course_name=course.name)
 
     # save user in session
     session["gitlab"] = {
