@@ -46,7 +46,6 @@
                     <input type="password" name="password" class="form-control" id="floatingPassword" placeholder="Password" pattern="\S*" minlength="6" required>
                     <label for="floatingPassword">Password</label>
                 </div>
-                {% if not use_whitelist %}
                 <div class="form-floating my-2">
                     <input type="text" name="secret" class="form-control" id="floatingCode" placeholder="Code" required>
                     <label for="floatingCode">Secret Code</label>
@@ -58,7 +57,6 @@
 {#                        I know that I have to link my LMS and Manytask to get a final mark#}
 {#                    </label>#}
 {#                </div>#}
-                {% endif %}
                 <button class="btn btn-primary w-100 py-2 mt-2" type="submit" value="Register">Sign up</button>
             </form>
         </div>

@@ -156,6 +156,9 @@ def signup() -> ResponseReturnValue:
     # render template with error... if error
     
     try:
+
+        if not secrets.compare_digest(request.form["secret"], course.registration_secret):
+            raise Exception("Invalid registration secret")
     
         if use_whitelist:
     
