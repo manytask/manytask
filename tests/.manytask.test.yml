@@ -2,21 +2,18 @@ version: 1
 
 
 settings:  # required
-  course_name: python
+  course_name: sreweek
 
-  gitlab_base_url: https://gitlab.manytask.org
-  public_repo: python/public-2022-fall
-  students_group: python/students-fall-2022
+  gitlab_base_url: https://gitlab.sreweek.ru
+  public_repo: sre/sre-week
+  students_group: sre/submissions
 
 
 ui:
-  task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$TASK_NAME
+  task_url_template: https://gitlab.sreweek.ru/$GROUP_NAME/$TASK_NAME
 
   # optional, any number of links
   links:
-    "TG Channel": https://t.me/joinchat/
-    "TG Chat": https://t.me/joinchat/
-    "LMS": https://lk.yandexdataschool.ru/
     "Contribute Manytask": https://github.com/manytask
 
 
@@ -29,10 +26,10 @@ deadlines:
 
   schedule:
     - group: group_0
-      start: 01-01-2000 18:00
+      start: 2024-01-01 18:00
       steps:
-        0.5: 01-02-2000 23:59
-      end: 01-02-2000 23:59
+        0.5: 2024-04-30 23:59
+      end: 2024-05-31 23:59
       enabled: true
       tasks:
         - task: task_0_0
