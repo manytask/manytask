@@ -102,3 +102,11 @@ class Course:
     @property
     def rating_table(self) -> "gdoc.RatingTable":
         return self.googledoc_api.fetch_rating_table()
+    
+    @property
+    def use_whitelist(self) -> bool:
+        return self.googledoc_api.use_whitelist
+    
+    @property
+    def whitelist_table(self) -> "gdoc.WhitelistTable":
+        return self.googledoc_api.fetch_whitelist_table()
