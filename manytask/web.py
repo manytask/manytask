@@ -162,19 +162,19 @@ def signup() -> ResponseReturnValue:
     
         if use_whitelist:
     
-            username = request.form["username"].strip()
+            email = request.form["email"].strip().lower()
 
             whitelisted = course.whitelist_table.get_whitelisted()
 
-            if not username in whitelisted:
-                raise Exception("User '" + username + "' is not in the whitelist")
+            if not email in whitelisted:
+                raise Exception("EMail '" + email + "' is not in the whitelist")
         
-            userdata = whitelisted.get(username)
+            userdata = whitelisted.get(email)
             user = glab.User(
-                username,
+                userdata["username"],
                 userdata["firstname"],
                 userdata["lastname"],
-                userdata["email"],
+                email,
                 password=request.form["password"],
             )
 

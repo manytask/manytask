@@ -182,7 +182,7 @@ class WhitelistTable:
             expected_headers=[],
         )
         self._whitelisted = {
-            dict["login"]: dict
+            dict["email"].lower(): dict
             for dict in list_of_dicts
         }
 
