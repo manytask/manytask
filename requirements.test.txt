@@ -11,7 +11,7 @@ types-PyYAML==6.0.12.12
 
 # testing
 pytest==8.1.1
-pytest-cov==4.1.0
+pytest-cov==5.0.0
 
 # utils
 pre-commit==3.6
