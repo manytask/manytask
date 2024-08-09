@@ -140,7 +140,7 @@ class GoogleDocApi:
         worksheet_id: str,
         sheet_id: int,
     ) -> gspread.Worksheet:
-        gs: gspread.Client = gspread.Client(None, session=self._assertion_session)
+        gs: gspread.Client = gspread.Client(None, session=self._assertion_session) # type: ignore
         worksheet: gspread.Spreadsheet = gs.open_by_key(worksheet_id)
         return worksheet.get_worksheet(sheet_id)
 
@@ -311,7 +311,7 @@ class RatingTable:
             current_group = None
             for col, task in enumerate(tasks_to_create, start=current_worksheet_size + 1):
                 cells_to_update.append(GCell(PublicAccountsSheetOptions.HEADER_ROW, col, task.name))
-                cells_to_update.append(GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, task.score))
+                cells_to_update.append(GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, task.score)) # type: ignore
 
                 task_group_name = task_name_to_group_name[task.name]
 
@@ -357,9 +357,9 @@ class RatingTable:
     ) -> Iterable[Any]:
         values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
         if with_index:
-            values = enumerate(values, start=1)
+            values = enumerate(values, start=1) # type: ignore
         if start:
-            values = islice(values, start, None)
+            values = islice(values, start, None) # type: ignore
         return values
 
     def _list_tasks(
@@ -429,7 +429,7 @@ class RatingTable:
         row_values = [column_to_values_dict.get(i + 1, None) for i in range(max(column_to_values_dict.keys()))]
 
         result = self.ws.append_row(
-            values=row_values,
+            values=row_values, # type: ignore
             value_input_option=ValueInputOption.user_entered,  # don't escape link
             # note logical table to upend to (gdoc implicit split it to logical tables)
             table_range=f"A{PublicAccountsSheetOptions.HEADER_ROW}",
