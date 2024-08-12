@@ -1,5 +1,5 @@
 # api and web
-gunicorn==22.0.0
+gunicorn==23.0.0
 flask==3.0.1
 cachelib==0.12.0
 Werkzeug==3.0.3
