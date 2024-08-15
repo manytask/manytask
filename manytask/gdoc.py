@@ -10,6 +10,7 @@ from typing import Any, Callable, Iterable
 import gspread
 from authlib.integrations.requests_client import AssertionSession
 from cachelib import BaseCache
+from google.auth.credentials import AnonymousCredentials
 from gspread import Cell as GCell
 from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
@@ -140,7 +141,7 @@ class GoogleDocApi:
         worksheet_id: str,
         sheet_id: int,
     ) -> gspread.Worksheet:
-        gs: gspread.Client = gspread.Client(None, session=self._assertion_session)
+        gs: gspread.Client = gspread.Client(AnonymousCredentials(), session=self._assertion_session)
         worksheet: gspread.Spreadsheet = gs.open_by_key(worksheet_id)
         return worksheet.get_worksheet(sheet_id)
 
@@ -311,7 +312,7 @@ class RatingTable:
             current_group = None
             for col, task in enumerate(tasks_to_create, start=current_worksheet_size + 1):
                 cells_to_update.append(GCell(PublicAccountsSheetOptions.HEADER_ROW, col, task.name))
-                cells_to_update.append(GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, task.score))
+                cells_to_update.append(GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, str(task.score)))
 
                 task_group_name = task_name_to_group_name[task.name]
 
@@ -355,7 +356,7 @@ class RatingTable:
         start: int | None = None,
         with_index: bool = False,
     ) -> Iterable[Any]:
-        values = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
+        values: Iterable[Any] = self.ws.row_values(row, value_render_option=ValueRenderOption.unformatted)
         if with_index:
             values = enumerate(values, start=1)
         if start:
@@ -412,8 +413,8 @@ class RatingTable:
             PublicAccountsSheetOptions.GITLAB_COLUMN: self.create_student_repo_link(student),
             PublicAccountsSheetOptions.LOGIN_COLUMN: student.username,
             PublicAccountsSheetOptions.NAME_COLUMN: student.name,
-            PublicAccountsSheetOptions.FLAGS_COLUMN: None,
-            PublicAccountsSheetOptions.BONUS_COLUMN: None,
+            PublicAccountsSheetOptions.FLAGS_COLUMN: "",
+            PublicAccountsSheetOptions.BONUS_COLUMN: "",
             PublicAccountsSheetOptions.TOTAL_COLUMN:
             # total: sum(current row: from RATINGS_COLUMN to inf) + BONUS_COLUMN
             f'=SUM(INDIRECT(ADDRESS(ROW(); {PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN}) & ":" & ROW())) '
@@ -425,8 +426,8 @@ class RatingTable:
             f"{PublicAccountsSheetOptions.TOTAL_COLUMN})); 0)",  # percentage
         }
 
-        # fill empty columns with None
-        row_values = [column_to_values_dict.get(i + 1, None) for i in range(max(column_to_values_dict.keys()))]
+        # fill empty columns with empty string
+        row_values = [column_to_values_dict.get(i + 1, "") for i in range(max(column_to_values_dict.keys()))]
 
         result = self.ws.append_row(
             values=row_values,
