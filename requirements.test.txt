@@ -6,7 +6,7 @@ isort==5.13.2
 black==24.8.0
 
 # stubs
-types-requests==2.31.0.20240125
+types-requests==2.32.0.20240712
 types-PyYAML==6.0.12.12
 
 # testing
