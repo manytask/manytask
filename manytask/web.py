@@ -199,12 +199,66 @@ def login_finish() -> ResponseReturnValue:
     if not course.config:
         return redirect(url_for("web.not_ready"))
 
-    # ----- get args ----- #
-    is_create_project = True
-    if "nocreate" in request.args:
-        is_create_project = False
-    if "not_create_project" in request.args:
-        is_create_project = False
+    # ----- oauth authorize ----- #
+    try:
+        gitlab_oauth_token = oauth.gitlab.authorize_access_token()
+    except OAuthError:
+        return redirect(url_for("web.login"))
+
+    gitlab_access_token: str = gitlab_oauth_token["access_token"]
+    gitlab_refresh_token: str = gitlab_oauth_token["refresh_token"]
+    # gitlab_openid_user = oauth.gitlab.parse_id_token(
+    #     gitlab_oauth_token,
+    #     nonce='', claims_options={'iss': {'essential': False}}
+    # )
+
+    # get oauth student
+    # TODO do not return 502 (raise_for_status below)
+    student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
+
+    # save user in session
+    session["gitlab"] = {
+        "oauth_access_token": gitlab_access_token,
+        "oauth_refresh_token": gitlab_refresh_token,
+        "username": student.username,
+        "user_id": student.id,
+        "course_admin": student.course_admin,
+        "repo": student.repo,
+        "version": SESSION_VERSION,
+    }
+    session.permanent = True
+
+    if (course.gitlab_api.check_project_exists(student)):
+        return redirect(url_for("web.course_page"))
+    else :
+        return redirect(url_for("web.create_project"))
+
+@bp.route("/create_project", methods=["GET", "POST"])
+def create_project() -> ResponseReturnValue:
+    course: Course = current_app.course  # type: ignore
+    oauth: OAuth = current_app.oauth  # type: ignore
+
+    if not course.config and not current_app.debug:
+        return redirect(url_for("web.not_ready"))
+
+    # ---- render page ---- #
+    if request.method == "GET":
+        return render_template(
+            "create_project.html",
+            course_name=course.name,
+            course_favicon=course.favicon,
+            manytask_version=course.manytask_version,
+        )
+
+    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
+        logger.warning(f"Wrong registration secret when creating project")
+        return render_template(
+            "create_project.html",
+            error_message="Wrong registration secret.",
+            course_name=course.name,
+            course_favicon=course.favicon,
+            base_url=course.gitlab_api.base_url,
+        )
 
     # ----- oauth authorize ----- #
     try:
@@ -224,12 +278,12 @@ def login_finish() -> ResponseReturnValue:
     student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
 
     # Create use if needed
-    if is_create_project and not current_app.debug:
-        try:
-            course.gitlab_api.create_project(student)
-        except gitlab.GitlabError as ex:
-            logger.error(f"Project creation failed: {ex.error_message}")
-            return render_template("signup.html", error_message=ex.error_message, course_name=course.name)
+
+    try:
+        course.gitlab_api.create_project(student)
+    except gitlab.GitlabError as ex:
+        logger.error(f"Project creation failed: {ex.error_message}")
+        return render_template("signup.html", error_message=ex.error_message, course_name=course.name)
 
     # save user in session
     session["gitlab"] = {

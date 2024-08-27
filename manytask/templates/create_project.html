@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+    <div class="d-flex align-items-center justify-content-center bg-body-tertiary container-fluid p-3">
+        <div class="d-flex flex-column align-items-center justify-content-center form-signin px-4 py-4 rounded m-auto container-sm" style="background-color: var(--bs-body-bg); max-width: 400px;">
+            <form method="post">
+                <div class="form-floating my-2">
+                    <input type="text" name="secret" class="form-control" id="floatingCode" placeholder="Code" required>
+                    <label for="floatingCode">Secret Code</label>
+                </div>
+                <button class="btn btn-primary w-100 py-2 mt-2" type="submit" value="CreateRepo">Join course</button>
+            </form>
+        </div>
+    </div>
+
+
+    <div class="dropdown position-fixed top-0 end-0 mb-2 me-2">
+        <button class="btn btn-bd-primary py-2 dropdown-toggle d-flex align-items-center" type="button" aria-expanded="false" data-bs-toggle="dropdown" aria-label="Toggle theme (dark)">
+            Toggle theme
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow" style="">
+            <li><a class="dropdown-item" href="#" data-bs-theme-value="light"><i class="fa-fw fa-solid fa-sun "></i>&nbsp;Light Theme</a></li>
+            <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i class="fa-fw fa-solid fa-moon"></i>&nbsp;Dark Theme</a></li>
+            <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i class="fa-fw fa-solid fa-wand-magic-sparkles"></i>&nbsp;Auto Theme</a></li>
+        </ul>
+    </div>
+
+{% endblock %}
