@@ -135,9 +135,9 @@ def report_score() -> ResponseReturnValue:
     if "score" in request.form:
         score_str = request.form["score"]
         try:
-            reported_score = int(score_str)
+            reported_score = int(round(float(score_str)))
         except ValueError:
-            return f"Cannot parse `score` <{reported_score}> to int`", 400
+            return f"Cannot parse `score` <{reported_score}> to a number`", 400
 
     submit_time = None
     submit_time_str = None
