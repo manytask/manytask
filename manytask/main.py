@@ -165,6 +165,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         gitlab_api,
         solutions_api,
         app.app_config.registration_secret,
+        app.app_config.show_allscores,
         cache,
         manytask_version=manytask_version,
         debug=app.debug,

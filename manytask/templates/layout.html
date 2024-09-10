@@ -63,9 +63,11 @@
                     <li class="nav-item">
                         <a class="nav-link px-3" target="_blank" href="{{ student_ci_url }}">My&nbsp;Submits</a>
                     </li>
+                    {% if show_allscores %}
                     <li class="nav-item">
                         <a class="nav-link px-3" target="_blank" href="{{ gdoc_url }}">All&nbsp;Scores</a>
                     </li>
+                    {% endif %}
                     <li class="nav-item dropdown">
                         <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_links" data-bs-toggle="dropdown" aria-expanded="false">Links</a>
                         <ul class="dropdown-menu" aria-labelledby="navbar_links">
