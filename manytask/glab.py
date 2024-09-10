@@ -176,7 +176,6 @@ class GitLabApi:
         self,
         student: Student,
     ) -> bool:
-        course_group = self._get_group_by_name(self._course_students_group)
 
         gitlab_project_path = f"{self._course_students_group}/{student.username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")

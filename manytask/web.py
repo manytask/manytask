@@ -236,7 +236,6 @@ def login_finish() -> ResponseReturnValue:
 @bp.route("/create_project", methods=["GET", "POST"])
 def create_project() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
-    oauth: OAuth = current_app.oauth  # type: ignore
 
     if not course.config and not current_app.debug:
         return redirect(url_for("web.not_ready"))
@@ -254,7 +253,7 @@ def create_project() -> ResponseReturnValue:
         )
 
     if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        logger.warning(f"Wrong registration secret when creating project")
+        logger.warning("Wrong registration secret when creating project")
         return render_template(
             "create_project.html",
             error_message="Wrong registration secret.",
