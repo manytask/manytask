@@ -190,6 +190,7 @@ class GitLabApi:
                 return True
 
         logger.info(f"Project {student.username} for group {self._course_students_group} does not exist")
+        return False
 
     def create_project(
         self,
