@@ -131,14 +131,6 @@ def report_score() -> ResponseReturnValue:
     if "check_deadline" in request.form:
         check_deadline = request.form["check_deadline"] is True or request.form["check_deadline"] == "True"
 
-    reported_score: int | None = None
-    if "score" in request.form:
-        score_str = request.form["score"]
-        try:
-            reported_score = int(score_str)
-        except ValueError:
-            return f"Cannot parse `score` <{reported_score}> to int`", 400
-
     submit_time = None
     submit_time_str = None
     if "submit_time" in request.form:
@@ -159,6 +151,21 @@ def report_score() -> ResponseReturnValue:
             f"There is no task with name `{task_name}` (or it is closed for submission)",
             404,
         )
+
+    reported_score: int | None = None
+    if "score" in request.form:
+        score_str = request.form["score"]
+        try:
+            if score_str.isdigit():
+                reported_score = int(score_str)
+            elif float(score_str) < 0.0:
+                reported_score = 0
+            elif float(score_str) > 1.0:
+                reported_score = int(round(float(score_str)))
+            else:
+                reported_score = int(round(float(score_str) * task.score))
+        except ValueError:
+            return f"Cannot parse `score` <{reported_score}> to a number`", 400
 
     try:
         if username:
