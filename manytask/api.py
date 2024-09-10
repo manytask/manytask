@@ -160,8 +160,8 @@ def report_score() -> ResponseReturnValue:
                 reported_score = int(score_str)
             elif float(score_str) < 0.0:
                 reported_score = 0
-            elif float(score_str) > 1.0:
-                reported_score = int(round(float(score_str)))
+            elif float(score_str) > 2.0:
+                return f"Reported `score` <{reported_score}> is too large. Should be ineger or float between 0.0 and 2.0`", 400
             else:
                 reported_score = int(round(float(score_str) * task.score))
         except ValueError:
