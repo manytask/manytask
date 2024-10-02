@@ -20,7 +20,7 @@ services:
             - "80:80"
             - "443:443"
         environment:
-            DHPARAM_SKIP: true
+            DHPARAM_SKIP: "true"
         volumes:
             - certs:/etc/nginx/certs:ro
             - vhost:/etc/nginx/vhost.d
