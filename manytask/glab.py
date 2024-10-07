@@ -236,6 +236,14 @@ class GitLabApi:
 
         logger.info(f"Git project forked {course_public_project.path_with_namespace} -> {project.path_with_namespace}")
 
+        # protect branches from force push
+        protected_branch = created_project.protectedbranches.create({
+            'name': '*',  # All branches protection
+            'push_access_level': gitlab.DEVELOPER_ACCESS,
+            'merge_access_level': gitlab.OWNER_ACCESS,
+            'allow_force_push': False,  
+        })
+
         try:
             member = project.members.create(
                 {
