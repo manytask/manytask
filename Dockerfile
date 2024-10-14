@@ -1,4 +1,4 @@
-FROM python:3.12-alpine as builder
+FROM python:3.13-alpine as builder
 
 RUN apk update && apk add --no-cache \
     build-base \
@@ -12,7 +12,7 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 
-FROM python:3.12-alpine
+FROM python:3.13-alpine
 
 RUN apk update && apk add --no-cache \
     curl \
