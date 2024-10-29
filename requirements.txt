@@ -2,7 +2,7 @@
 gunicorn==23.0.0
 flask==3.0.1
 cachelib==0.13.0
-Werkzeug==3.0.3
+Werkzeug==3.0.6
 
 # api interaction (gitlab, google sheets)
 gspread>=5.0.0,!=6.0.0,<7.0.0  # note, version 6.0.0 is broken and can not accept session in Client
