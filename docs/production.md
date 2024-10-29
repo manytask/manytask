@@ -101,15 +101,11 @@ docker-compose -f docker-compose.production.yml logs -f
 ## Setup 
 
 Just after deploy the manytask will show `not_ready` page.  
-So first you need to push `.deadlines.yml` and `.course.yml` files via api requests from your repo.
+To fix the list of tasks and their deadlines, you first need to push `.manytask.yml` file via api requests from your repo. You can also use an example `tests/.manytask.test.yml` file from this repo.
 
 Here is how you can make it
 ```shell
-curl --fail --silent -X POST -H "Authorization: Bearer $TESTER_TOKEN"
-     -H "Content-type: application/x-yaml" --data-binary "@tests/.course.yml"
-     "https://py.manytask.org/api/update_course_config"
-curl --fail --silent -X POST -H "Authorization: Bearer $TESTER_TOKEN"
-     -H "Content-type: application/x-yaml" --data-binary "@tests/.deadlines.yml"
-     "https://py.manytask.org/api/update_deadlines"
+curl --fail --silent -X POST -H "Authorization: Bearer $TESTER_TOKEN" -H        
+     "Content-type: application/x-yaml" --data-binary "@tests/.manytask.test.yml" "https://py.manytask.org/api/update_config"
 ```
 Please, refer to the example files and api docs. 
