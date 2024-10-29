@@ -1,17 +1,17 @@
 # linters
 flake8==7.0.0
-ruff==0.2.1
-mypy==1.8.0
+ruff==0.5.0
+mypy==1.11.1
 isort==5.13.2
-black==24.1.1
+black==24.8.0
 
 # stubs
-types-requests==2.31.0.20240125
+types-requests==2.32.0.20240907
 types-PyYAML==6.0.12.12
 
 # testing
-pytest==8.1.1
-pytest-cov==4.1.0
+pytest==8.3.2
+pytest-cov==5.0.0
 
 # utils
 pre-commit==3.6

@@ -22,7 +22,7 @@ jobs:
       - name: Run isort
         run: python -m isort manytask --check
       - name: Run ruff
-        run: python -m ruff manytask
+        run: python -m ruff check manytask
       - name: Run mypy
         run: python -m mypy manytask
 
