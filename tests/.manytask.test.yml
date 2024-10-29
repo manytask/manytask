@@ -29,10 +29,10 @@ deadlines:
 
   schedule:
     - group: group_0
-      start: 01-01-2000 18:00
+      start: 2024-01-01 18:00
       steps:
-        0.5: 01-02-2000 23:59
-      end: 01-02-2000 23:59
+        0.5: 2024-04-30 23:59
+      end: 2030-05-31 23:59
       enabled: true
       tasks:
         - task: task_0_0
