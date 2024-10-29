@@ -20,7 +20,7 @@ RUN apk update && apk add --no-cache \
 
 WORKDIR /app
 
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 
 COPY ./manytask/ /app/manytask
 COPY VERSION /app/VERSION
