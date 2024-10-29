@@ -75,6 +75,7 @@ def course_page() -> ResponseReturnValue:
         current_course=course,
         gitlab_url=course.gitlab_api.base_url,
         gdoc_url=course.googledoc_api.get_spreadsheet_url(),
+        show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=course.manytask_version,
