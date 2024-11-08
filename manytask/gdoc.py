@@ -17,6 +17,7 @@ from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, row
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
 from .glab import Student
+from .course import RatingTableAbs
 
 
 logger = logging.getLogger(__name__)
@@ -152,7 +153,7 @@ class GoogleDocApi:
         return f"{self._url}/spreadsheets/d/{self._public_worksheet_id}#gid={self._public_scoreboard_sheet}"
 
 
-class RatingTable:
+class RatingTable(RatingTableAbs):
     def __init__(
         self,
         worksheet: gspread.Worksheet,
