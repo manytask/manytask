@@ -45,7 +45,7 @@ jobs:
       - name: Run tests
         run: python -m pytest --cov-report term-missing --cov=manytask --cov-report=xml tests/
       - name: Upload coverage
-        uses: codecov/codecov-action@v4.6.0
+        uses: codecov/codecov-action@v5.0.2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}  # required
           files: coverage.xml
