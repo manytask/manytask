@@ -17,7 +17,7 @@ from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, row
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
 from .glab import Student
-from .course import RatingTableAbs
+from .table import RatingTableAbs, TableApi
 
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class TaskNotFound(KeyError):
     pass
 
 
-class GoogleDocApi:
+class GoogleDocApi(TableApi):
     def __init__(
         self,
         base_url: str,
