@@ -16,3 +16,19 @@ services:
             - ./manytask/:/app/manytask
             - .tmp/cache/:/cache
             - .tmp/solutions/:/solutions
+        depends_on:
+            - postgres
+    
+    postgres:
+        image: postgres:17
+        volumes:
+            - postgres_data:/var/lib/postgresql/data/
+        environment:
+            - POSTGRES_USER=postgres_user
+            - POSTGRES_PASSWORD=postgres_password
+            - POSTGRES_DB=postgres_db
+        ports:
+            - "5432:5432"
+
+volumes:
+    postgres_data:
