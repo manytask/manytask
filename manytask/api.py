@@ -197,7 +197,7 @@ def report_score() -> ResponseReturnValue:
         submit_time=submit_time,
         check_deadline=check_deadline,
     )
-    final_score = course.rating_table.store_score(student, task.name, update_function)
+    final_score = course.storage_api.store_score(student, task.name, update_function)
 
     # save pushed files if sent
     with tempfile.TemporaryDirectory() as temp_folder_str:
@@ -254,7 +254,7 @@ def get_score() -> ResponseReturnValue:
             student = course.gitlab_api.get_student(user_id)
         else:
             assert False, "unreachable"
-        student_scores = course.rating_table.get_scores(student.username)
+        student_scores = course.storage_api.get_scores(student.username)
     except Exception:
         return f"There is no student with user_id {user_id} or username {username}", 404
 
@@ -290,7 +290,7 @@ def update_config() -> ResponseReturnValue:
     # ----- logic ----- #
     # TODO: fix course config storing. may work one thread only =(
     # sync columns
-    course.rating_table.sync_columns(course.deadlines)
+    course.storage_api.sync_columns(course.deadlines)
 
     return "", 200
 
@@ -303,7 +303,7 @@ def update_cache() -> ResponseReturnValue:
     logger.info("Running update_cache")
 
     # ----- logic ----- #
-    course.rating_table.update_cached_scores()
+    course.storage_api.update_cached_scores()
 
     return "", 200
 
