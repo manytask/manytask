@@ -147,6 +147,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
         cache=cache,
     )
+
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
     )
@@ -161,6 +162,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     # create course
     _course = course.Course(
+        gdoc_api,
         gdoc_api,
         gitlab_api,
         solutions_api,

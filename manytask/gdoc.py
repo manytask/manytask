@@ -17,7 +17,7 @@ from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, row
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
 from .glab import Student
-from .course import RatingTableAbs
+from .abstract import ViewerApi, StorageApi
 
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class TaskNotFound(KeyError):
     pass
 
 
-class GoogleDocApi:
+class GoogleDocApi(ViewerApi, StorageApi):
     def __init__(
         self,
         base_url: str,
@@ -110,6 +110,8 @@ class GoogleDocApi:
 
         self._public_scores_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
         self._cache = cache
+
+        self.ws = self.get_scores_sheet()
 
     def _create_assertion_session(self) -> AssertionSession:
         """Create AssertionSession to auto refresh access to google api"""
@@ -146,21 +148,11 @@ class GoogleDocApi:
         worksheet: gspread.Spreadsheet = gs.open_by_key(worksheet_id)
         return worksheet.get_worksheet(sheet_id)
 
-    def fetch_rating_table(self) -> "RatingTable":
-        return RatingTable(self._public_scores_sheet, self._cache)
+    def get_scores_sheet(self) -> gspread.Worksheet:
+        return self._public_scores_sheet
 
     def get_spreadsheet_url(self) -> str:
         return f"{self._url}/spreadsheets/d/{self._public_worksheet_id}#gid={self._public_scoreboard_sheet}"
-
-
-class RatingTable(RatingTableAbs):
-    def __init__(
-        self,
-        worksheet: gspread.Worksheet,
-        cache: BaseCache,
-    ):
-        self._cache = cache
-        self.ws = worksheet
 
     def get_scores(
         self,

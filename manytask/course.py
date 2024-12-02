@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 from zoneinfo import ZoneInfo
-from abc import ABC, abstractmethod
 
 from cachelib import BaseCache
 
@@ -38,61 +37,14 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
     return current_time
 
 
-from . import config, gdoc, glab, solutions  # noqa: E402, F401
+from . import config, gdoc, glab, solutions, abstract  # noqa: E402, F401
 
-class RatingTableAbs(ABC):
-
-    @abstractmethod
-    def get_scores(
-        self,
-        username: str,
-    ) -> dict[str, int]:
-        pass
-
-    @abstractmethod
-    def get_bonus_score(
-        self,
-        username: str,
-    ) -> int:
-        pass
-
-    @abstractmethod
-    def get_all_scores(self) -> dict[str, dict[str, int]]:
-        pass
-        
-    @abstractmethod
-    def get_stats(self) -> dict[str, float]:
-        pass
-        
-    @abstractmethod
-    def get_scores_update_timestamp(self) -> str:
-        pass
-    
-    @abstractmethod
-    def update_cached_scores(self) -> None:
-        pass
-    
-    @abstractmethod
-    def store_score(
-        self,
-        student: glab.Student,
-        task_name: str,
-        update_fn: Callable[..., Any],
-    ) -> int:
-        pass
-
-    @abstractmethod
-    def sync_columns(
-        self,
-        deadlines_config: ManytaskDeadlinesConfig,
-    ) -> None:
-        pass
- 
 
 class Course:
     def __init__(
         self,
-        googledoc_api: gdoc.GoogleDocApi,
+        viewer_api: abstract.ViewerApi,
+        storage_api: abstract.StorageApi,
         gitlab_api: glab.GitLabApi,
         solutions_api: solutions.SolutionsApi,
         registration_secret: str,
@@ -102,7 +54,8 @@ class Course:
         *,
         debug: bool = False,
     ):
-        self.googledoc_api = googledoc_api
+        self.viewer_api = viewer_api
+        self.storage_api = storage_api
         self.gitlab_api = gitlab_api
         self.solutions_api = solutions_api
 
@@ -151,6 +104,3 @@ class Course:
         ManytaskConfig(**content)
         self._cache.set("__config__", content)
 
-    @property
-    def rating_table(self) -> "gdoc.RatingTable":
-        return self.googledoc_api.fetch_rating_table()
