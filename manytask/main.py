@@ -188,7 +188,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     # debug updates
     if app.course.debug:
-        with open("/app/manytask/.manytask.example.yml", "r") as f:
+        with open(".manytask.example.yml", "r") as f:
             debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
         app.course.store_config(debug_manytask_config_data)
 

@@ -17,7 +17,7 @@ from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, row
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
 from .glab import Student
-from abstract import ViewerApi, StorageApi
+from .abstract import ViewerApi, StorageApi
 
 
 logger = logging.getLogger(__name__)
@@ -85,13 +85,14 @@ class TaskNotFound(KeyError):
     pass
 
 
-class GoogleDocInit:
+class GoogleDocApi(ViewerApi, StorageApi):
     def __init__(
         self,
         base_url: str,
         gdoc_credentials: dict[str, Any],
         public_worksheet_id: str,
-        public_scoreboard_sheet: int
+        public_scoreboard_sheet: int,
+        cache: BaseCache,
     ):
         """
         :param base_url:
@@ -108,6 +109,9 @@ class GoogleDocInit:
         self._assertion_session = self._create_assertion_session()
 
         self._public_scores_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
+        self._cache = cache
+
+        self.ws = self.get_scores_sheet()
 
     def _create_assertion_session(self) -> AssertionSession:
         """Create AssertionSession to auto refresh access to google api"""
@@ -143,31 +147,13 @@ class GoogleDocInit:
         gs: gspread.Client = gspread.Client(AnonymousCredentials(), session=self._assertion_session)
         worksheet: gspread.Spreadsheet = gs.open_by_key(worksheet_id)
         return worksheet.get_worksheet(sheet_id)
-    
+
     def get_scores_sheet(self) -> gspread.Worksheet:
         return self._public_scores_sheet
 
     def get_spreadsheet_url(self) -> str:
         return f"{self._url}/spreadsheets/d/{self._public_worksheet_id}#gid={self._public_scoreboard_sheet}"
 
-
-class GoogleDocApi(ViewerApi, StorageApi):
-    def __init__(
-        self,
-        base_url: str,
-        gdoc_credentials: dict[str, Any],
-        public_worksheet_id: str,
-        public_scoreboard_sheet: int,
-        cache: BaseCache,
-    ):
-        gdoc_init = GoogleDocInit(base_url, gdoc_credentials, public_worksheet_id, public_scoreboard_sheet)
-        self.ws = gdoc_init.get_scores_sheet()
-        self._spreadsheet_url = gdoc_init.get_spreadsheet_url()
-        self._cache = cache
-    
-    def get_spreadsheet_url(self) -> str:
-        return self._spreadsheet_url
-    
     def get_scores(
         self,
         username: str,

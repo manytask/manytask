@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable
 
-from config import ManytaskDeadlinesConfig
-from glab import Student
+from .config import ManytaskDeadlinesConfig
+from .glab import Student
 
 
 class ViewerApi(ABC):
