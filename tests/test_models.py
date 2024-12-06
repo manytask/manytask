@@ -25,7 +25,7 @@ def session(engine, tables):
 
 
 def test_user_simple(session):
-    user = User(username="test_user")
+    user = User(username="test_user", gitlab_instance_host='gitlab.inst.org')
     session.add(user)
     session.commit()
 
@@ -70,7 +70,7 @@ def test_course_unique_name(session):
 
 
 def test_user_on_course(session):
-    user = User(username="user1")
+    user = User(username="user1", gitlab_instance_host='gitlab.inst.org')
     course = Course(name="course1", registration_secret="secret1")
     session.add_all([user, course])
     session.commit()
@@ -84,18 +84,18 @@ def test_user_on_course(session):
     session.commit()
 
     retrieved_user = session.query(User).filter_by(username="user1").first()
-    assert len(retrieved_user.users_on_courses) == 1
+    assert len(retrieved_user.users_on_courses.all()) == 1
     assert retrieved_user.users_on_courses[0].course.name == "course1"
 
     retrieved_course = session.query(Course).filter_by(name="course1").first()
-    assert len(retrieved_course.users_on_courses) == 1
+    assert len(retrieved_course.users_on_courses.all()) == 1
     assert retrieved_course.users_on_courses[0].user.username == "user1"
 
 
 def test_user_on_course_unique_ids(session):
-    user1 = User(username="user001")
+    user1 = User(username="user001", gitlab_instance_host='gitlab.inst.org')
     course1 = Course(name="course001", registration_secret="secret001")
-    user2 = User(username="user002")
+    user2 = User(username="user002", gitlab_instance_host='gitlab.inst.org')
     course2 = Course(name="course002", registration_secret="secret002")
 
     user_on_course1 = UserOnCourse(
@@ -169,7 +169,7 @@ def test_task(session):
 
 
 def test_grade(session):
-    user = User(username="user2")
+    user = User(username="user2", gitlab_instance_host='gitlab.inst.org')
     course = Course(name="course4", registration_secret="secret4")
     task_group = TaskGroup(name="group4")
     task = Task(name="task2", course=course, group=task_group)
@@ -194,8 +194,8 @@ def test_grade(session):
 def test_grade_unique_ids(session):
     task_group = TaskGroup(name="group101")
     course = Course(name="course101", registration_secret="secret101")
-    user1 = User(username="user101")
-    user2 = User(username="user102")
+    user1 = User(username="user101", gitlab_instance_host='gitlab.inst.org')
+    user2 = User(username="user102", gitlab_instance_host='gitlab.inst.org')
     task1 = Task(name="task101", course=course, group=task_group)
     task2 = Task(name="task102", course=course, group=task_group)
     session.add_all([task_group, course, user1, user2, task1, task2])
@@ -249,7 +249,7 @@ def test_course_tasks(session):
     session.commit()
 
     retrieved_course = session.query(Course).filter_by(name="course11").first()
-    assert len(retrieved_course.tasks) == 2
+    assert len(retrieved_course.tasks.all()) == 2
     task_names = [task.name for task in retrieved_course.tasks]
     assert "task11_1" in task_names
     assert "task11_2" in task_names
@@ -264,7 +264,7 @@ def test_task_group_tasks(session):
     session.commit()
 
     retrieved_group = session.query(TaskGroup).filter_by(name="group12").first()
-    assert len(retrieved_group.tasks) == 2
+    assert len(retrieved_group.tasks.all()) == 2
     task_names = [task.name for task in retrieved_group.tasks]
     assert "task12_1" in task_names
     assert "task12_2" in task_names

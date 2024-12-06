@@ -13,16 +13,21 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str]
-    gitlab_instance_host: Mapped[str] = mapped_column(default='gitlab.manytask.org')
+    gitlab_instance_host: Mapped[str]
     is_manytask_admin: Mapped[bool] = mapped_column(default=False)
 
     __table_args__ = (
-        UniqueConstraint('username', 'gitlab_instance_host', name='_username_gitlab_instance_uc'),
+        UniqueConstraint(
+            'username',
+            'gitlab_instance_host',
+            name='_username_gitlab_instance_uc'
+        ),
     )
 
     # relationships
-    users_on_courses: Mapped[List['UserOnCourse']] = relationship(back_populates='user')
-    grades: Mapped[List['Grade']] = relationship(back_populates='user')
+    users_on_courses: Mapped[List['UserOnCourse']] = relationship(
+        back_populates='user', lazy='dynamic')
+    grades: Mapped[List['Grade']] = relationship(back_populates='user', lazy='dynamic')
 
 
 class Course(Base):
@@ -34,8 +39,9 @@ class Course(Base):
     show_allscores: Mapped[bool] = mapped_column(default=False)
 
     # relationships
-    tasks: Mapped[List['Task']] = relationship(back_populates='course')
-    users_on_courses: Mapped[List['UserOnCourse']] = relationship(back_populates='course')
+    tasks: Mapped[List['Task']] = relationship(back_populates='course', lazy='dynamic')
+    users_on_courses: Mapped[List['UserOnCourse']] = relationship(
+        back_populates='course', lazy='dynamic')
 
 
 class UserOnCourse(Base):
@@ -76,7 +82,7 @@ class TaskGroup(Base):
 
     # relationships
     deadline: Mapped['Deadline'] = relationship(back_populates='task_group')
-    tasks: Mapped[List['Task']] = relationship(back_populates='group')
+    tasks: Mapped[List['Task']] = relationship(back_populates='group', lazy='dynamic')
 
 
 class Task(Base):
@@ -90,7 +96,7 @@ class Task(Base):
     # relationships
     course: Mapped['Course'] = relationship(back_populates='tasks')
     group: Mapped['TaskGroup'] = relationship(back_populates='tasks')
-    grades: Mapped[List['Grade']] = relationship(back_populates='task')
+    grades: Mapped[List['Grade']] = relationship(back_populates='task', lazy='dynamic')
 
 
 class Grade(Base):
@@ -109,15 +115,3 @@ class Grade(Base):
     # relationships
     user: Mapped['User'] = relationship(back_populates='grades')
     task: Mapped['Task'] = relationship(back_populates='grades')
-
-
-# Is it needed?
-#
-# class ApiRequest(Base):
-#     __tablename__ = 'api_requests'
-
-#     id: Mapped[int] = mapped_column(primary_key=True)
-#     course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
-#     date: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
-#     # type: enum...
-#     data: Mapped[JSON] = mapped_column(type_=JSON)
