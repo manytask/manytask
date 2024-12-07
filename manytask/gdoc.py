@@ -14,10 +14,10 @@ from google.auth.credentials import AnonymousCredentials
 from gspread import Cell as GCell
 from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
+from .abstract import StorageApi, ViewerApi
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
 from .glab import Student
-from .abstract import ViewerApi, StorageApi
 
 
 logger = logging.getLogger(__name__)

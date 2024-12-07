@@ -37,7 +37,7 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
     return current_time
 
 
-from . import config, gdoc, glab, solutions, abstract  # noqa: E402, F401
+from . import abstract, config, gdoc, glab, solutions  # noqa: E402, F401
 
 
 class Course:

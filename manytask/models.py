@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
-from sqlalchemy import ForeignKey, JSON, UniqueConstraint
-from typing import Optional, List
 from datetime import datetime, timezone
+from typing import List, Optional
+
+from sqlalchemy import JSON, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
