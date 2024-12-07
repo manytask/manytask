@@ -50,22 +50,22 @@ def course_page() -> ResponseReturnValue:
         student_repo = session["gitlab"]["repo"]
         student_course_admin = session["gitlab"]["course_admin"]
 
-    rating_table = course.rating_table
+    storage_api = course.storage_api
 
     # update cache if more than 1h passed or in debug mode
     try:
-        cache_time = datetime.fromisoformat(str(rating_table.get_scores_update_timestamp()))
+        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp()))
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
     except ValueError:
         cache_delta = timedelta(days=365)
     if course.debug or cache_delta.total_seconds() > 3600:
-        rating_table.update_cached_scores()
-        cache_time = datetime.fromisoformat(str(rating_table.get_scores_update_timestamp()))
+        storage_api.update_cached_scores()
+        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp()))
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
 
     # get scores
-    tasks_scores = rating_table.get_scores(student_username)
-    tasks_stats = rating_table.get_stats()
+    tasks_scores = storage_api.get_scores(student_username)
+    tasks_stats = storage_api.get_stats()
 
     return render_template(
         "tasks.html",
@@ -74,14 +74,14 @@ def course_page() -> ResponseReturnValue:
         course_name=course.name,
         current_course=course,
         gitlab_url=course.gitlab_api.base_url,
-        gdoc_url=course.googledoc_api.get_spreadsheet_url(),
+        gdoc_url=course.viewer_api.get_spreadsheet_url(),
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=course.manytask_version,
         links=course.config.ui.links or dict(),
         scores=tasks_scores,
-        bonus_score=rating_table.get_bonus_score(student_username),
+        bonus_score=storage_api.get_bonus_score(student_username),
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=course.favicon,

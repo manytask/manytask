@@ -37,13 +37,14 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
     return current_time
 
 
-from . import config, gdoc, glab, solutions  # noqa: E402, F401
+from . import abstract, config, gdoc, glab, solutions  # noqa: E402, F401
 
 
 class Course:
     def __init__(
         self,
-        googledoc_api: gdoc.GoogleDocApi,
+        viewer_api: abstract.ViewerApi,
+        storage_api: abstract.StorageApi,
         gitlab_api: glab.GitLabApi,
         solutions_api: solutions.SolutionsApi,
         registration_secret: str,
@@ -53,7 +54,8 @@ class Course:
         *,
         debug: bool = False,
     ):
-        self.googledoc_api = googledoc_api
+        self.viewer_api = viewer_api
+        self.storage_api = storage_api
         self.gitlab_api = gitlab_api
         self.solutions_api = solutions_api
 
@@ -102,6 +104,3 @@ class Course:
         ManytaskConfig(**content)
         self._cache.set("__config__", content)
 
-    @property
-    def rating_table(self) -> "gdoc.RatingTable":
-        return self.googledoc_api.fetch_rating_table()
