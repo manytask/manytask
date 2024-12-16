@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import course, gdoc, glab, local_config, solutions
+from . import abstract, course, database, gdoc, glab, local_config, solutions
 
 
 load_dotenv("../.env")  # take environment variables from .env.
@@ -140,13 +140,34 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         default_branch=app.app_config.gitlab_default_branch,
     )
     _gdoc_credentials_string = base64.decodebytes(app.app_config.gdoc_account_credentials_base64.encode())
-    gdoc_api = gdoc.GoogleDocApi(
+    viewer_api = gdoc.GoogleDocApi(
         base_url=app.app_config.gdoc_url,
         gdoc_credentials=json.loads(_gdoc_credentials_string),
         public_worksheet_id=app.app_config.gdoc_spreadsheet_id,
         public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
         cache=cache,
     )
+
+    storage_api: abstract.StorageApi
+
+    if os.environ.get("USE_DATABASE_AS_STORAGE", "false").lower() in ("true", "1", "yes"):
+        database_url = os.environ.get("DATABASE_URL", None)
+        course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
+
+        if database_url is None:
+            raise EnvironmentError("Unable to find DATABASE_URL env")
+        if course_name is None:
+            raise EnvironmentError("Unable to find UNIQUE_COURSE_NAME env")
+
+        storage_api = database.DataBaseApi(
+            database_url=database_url,
+            course_name=course_name,
+            gitlab_instance_host=app.app_config.gitlab_url,
+            registration_secret=app.app_config.registration_secret,
+            show_allscores=app.app_config.show_allscores
+        )
+    else:
+        storage_api = viewer_api
 
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
@@ -162,8 +183,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     # create course
     _course = course.Course(
-        gdoc_api,
-        gdoc_api,
+        viewer_api,
+        storage_api,
         gitlab_api,
         solutions_api,
         app.app_config.registration_secret,
