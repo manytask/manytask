@@ -1,0 +1,132 @@
+deadlines:
+  timezone: Europe/Berlin
+
+  deadlines: hard # hard/interpolate
+  max_submissions: 10 # optional
+  submission_penalty: 0.1 # optional
+
+  schedule:
+    - group: group_0
+      start: 2000-01-01 18:00
+      steps:
+        0.5: 2000-03-01 18:00
+      end: 2000-05-01 23:59
+      enabled: true
+      tasks:
+        - task: task_0_0
+          score: 10
+        - task: task_0_1
+          score: 10
+        - task: task_0_2
+          is_bonus: true
+          score: 10
+        - task: task_0_3
+          score: 10
+        - task: task_0_4
+          score: 10
+        - task: task_0_5
+          score: 10
+
+    - group: group_1
+      start: 2000-01-01 18:00
+      steps:
+        0.5: 2000-02-01 23:59
+      end: 2000-02-01 23:59
+      enabled: true
+      tasks:
+        - task: task_1_0
+          score: 10
+        - task: task_1_1
+          is_special: true
+          score: 10
+        - task: task_1_2
+          score: 10
+        - task: task_1_3
+          is_bonus: true
+          score: 10
+        - task: task_1_4
+          score: 10
+
+    - group: group_2
+      start: 2000-02-01 18:00
+      end: 2000-03-01 23:59
+      tasks:
+        - task: task_2_0
+          score: 20
+        - task: task_2_1
+          score: 20
+        - task: task_2_2
+          score: 20
+        - task: task_2_3
+          score: 20
+
+    - group: group_3
+      start: 2020-03-01 18:00
+      steps:
+        0.5: 2020-03-01 23:59
+      end: 2020-05-01 23:59
+      enabled: true
+      tasks:
+        - task: task_3_0
+          score: 30
+        - task: task_3_1
+          score: 30
+        - task: task_3_2
+          score: 30
+        - task: task_3_3
+          score: 30
+
+    - group: group_4
+      special: true
+      start: 2020-03-01 18:00
+      steps:
+        0.5: 2020-04-01 23:59
+      end: 2040-05-01 23:59
+      enabled: true
+      tasks:
+        - task: task_4_0
+          score: 40
+        - task: task_4_1
+          score: 40
+        - task: task_4_2
+          score: 40
+
+    - group: group_5
+      start: 2020-05-01 18:00
+      steps:
+        0.5: 2040-01-01 23:59
+      end: 2040-02-01 23:59
+      enabled: true
+      tasks:
+        - task: task_5_0
+          score: 50
+        - task: task_5_1
+          score: 50
+        - task: task_5_2
+          score: 50
+
+    - group: group_6
+      start: 2020-05-01 18:00
+      steps:
+        0.5: 2020-05-02 23:59
+        0.3: 13d 05:00:00
+      end: 13d 05:59:59
+      enabled: false
+      tasks:
+        - task: task_6_0
+          is_bonus: true
+          is_special: true
+          score: 60
+          url: https://www.python.org/about/gettingstarted/
+        - task: task_6_1
+          score: 60
+
+    - group: group_7
+      start: 2040-03-01 18:00
+      steps:
+        0.5: 13d 05:00:00
+      end: 13d 05:59:59
+      enabled: true
+      tasks:
+        - task: task_7_0
+          score: 70
