@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, ForeignKey, UniqueConstraint, event
+from sqlalchemy import JSON, ForeignKey, UniqueConstraint, event, func
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, Mapper, Session, mapped_column, relationship
 
@@ -27,7 +27,9 @@ class User(Base):
 
     # relationships
     users_on_courses: DynamicMapped['UserOnCourse'] = relationship(
-        back_populates='user')
+        back_populates='user',
+        cascade='all, delete-orphan'
+    )
 
 
 class Course(Base):
@@ -41,9 +43,13 @@ class Course(Base):
 
     # relationships
     task_groups: DynamicMapped['TaskGroup'] = relationship(
-        back_populates='course')
+        back_populates='course',
+        cascade='all, delete-orphan'
+    )
     users_on_courses: DynamicMapped['UserOnCourse'] = relationship(
-        back_populates='course')
+        back_populates='course',
+        cascade='all, delete-orphan'
+    )
 
 
 class UserOnCourse(Base):
@@ -53,7 +59,7 @@ class UserOnCourse(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey(User.id))
     course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
     repo_name: Mapped[str]
-    join_date: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    join_date: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint('user_id', 'course_id', name='_user_course_uc'),
@@ -63,7 +69,9 @@ class UserOnCourse(Base):
     user: Mapped['User'] = relationship(back_populates='users_on_courses')
     course: Mapped['Course'] = relationship(back_populates='users_on_courses')
     grades: DynamicMapped['Grade'] = relationship(
-        back_populates='user_on_course')
+        back_populates='user_on_course',
+        cascade='all, delete-orphan'
+    )
 
 
 @event.listens_for(UserOnCourse, 'before_insert')
@@ -107,8 +115,15 @@ class TaskGroup(Base):
 
     # relationships
     course: Mapped['Course'] = relationship(back_populates='task_groups')
-    deadline: Mapped['Deadline'] = relationship(back_populates='task_group')
-    tasks: DynamicMapped['Task'] = relationship(back_populates='group')
+    deadline: Mapped['Deadline'] = relationship(
+        back_populates='task_group',
+        cascade='all, delete-orphan',
+        single_parent=True
+    )
+    tasks: DynamicMapped['Task'] = relationship(
+        back_populates='group',
+        cascade='all, delete-orphan'
+    )
 
 
 class Task(Base):
@@ -121,7 +136,10 @@ class Task(Base):
 
     # relationships
     group: Mapped['TaskGroup'] = relationship(back_populates='tasks')
-    grades: DynamicMapped['Grade'] = relationship(back_populates='task')
+    grades: DynamicMapped['Grade'] = relationship(
+        back_populates='task',
+        cascade='all, delete-orphan'
+    )
 
 
 class Grade(Base):
@@ -131,7 +149,7 @@ class Grade(Base):
     user_on_course_id: Mapped[int] = mapped_column(ForeignKey(UserOnCourse.id))
     task_id: Mapped[int] = mapped_column(ForeignKey(Task.id))
     score: Mapped[int] = mapped_column(default=0)
-    last_submit_date: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    last_submit_date: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint('user_on_course_id', 'task_id', name='_user_on_course_task_uc'),
