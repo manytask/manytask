@@ -140,15 +140,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         default_branch=app.app_config.gitlab_default_branch,
     )
     _gdoc_credentials_string = base64.decodebytes(app.app_config.gdoc_account_credentials_base64.encode())
-    viewer_api = gdoc.GoogleDocApi(
-        base_url=app.app_config.gdoc_url,
-        gdoc_credentials=json.loads(_gdoc_credentials_string),
-        public_worksheet_id=app.app_config.gdoc_spreadsheet_id,
-        public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
-        cache=cache,
-    )
 
     storage_api: abstract.StorageApi
+    viewer_api: abstract.ViewerApi
 
     if os.environ.get("USE_DATABASE_AS_STORAGE", "false").lower() in ("true", "1", "yes"):
         database_url = os.environ.get("DATABASE_URL", None)
@@ -166,8 +160,22 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             registration_secret=app.app_config.registration_secret,
             show_allscores=app.app_config.show_allscores
         )
+
+        viewer_api = gdoc.GoogleDocApi(
+            base_url=app.app_config.gdoc_url,
+            gdoc_credentials=json.loads(_gdoc_credentials_string),
+            public_worksheet_id=app.app_config.gdoc_spreadsheet_id,
+            public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
+            cache=cache,
+        )
     else:
-        storage_api = viewer_api
+        viewer_api = storage_api = gdoc.GoogleDocApi(
+            base_url=app.app_config.gdoc_url,
+            gdoc_credentials=json.loads(_gdoc_credentials_string),
+            public_worksheet_id=app.app_config.gdoc_spreadsheet_id,
+            public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
+            cache=cache,
+        )
 
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
