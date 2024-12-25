@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, List, Optional, Type, TypeVar
 
+from psycopg2.errors import UniqueViolation
 from sqlalchemy import and_, create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
@@ -27,7 +28,8 @@ class DataBaseApi(StorageApi):
         course_name: str,
         gitlab_instance_host: str,
         registration_secret: str,
-        show_allscores: bool
+        show_allscores: bool,
+        create_tables_if_not_exist: bool = False
     ):
         """Constructor of DataBaseApi class
 
@@ -36,9 +38,17 @@ class DataBaseApi(StorageApi):
         :param gitlab_instance_host: gitlab instance host url
         :param registration_secret: secret to registering for course
         :param show_allscores: flag for showing results to all users
+        :param create_tables_if_not_exist: flag for creating database tables if they don't exist
         """
 
         self.engine = create_engine(database_url, echo=False)
+
+        if create_tables_if_not_exist:
+            try:
+                models.Base.metadata.create_all(self.engine)
+            except IntegrityError as e:  # if tables are created concurrently
+                if not isinstance(e.orig, UniqueViolation):
+                    raise
 
         with Session(self.engine) as session:
             try:
