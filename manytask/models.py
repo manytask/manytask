@@ -1,9 +1,13 @@
+import logging
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import JSON, ForeignKey, UniqueConstraint, event, func
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, Mapper, Session, mapped_column, relationship
+
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -88,7 +92,9 @@ def validate_gitlab_instance_host(mapper: Mapper[UserOnCourse], connection: Conn
             course = target.course
         else:
             course = session.query(Course).filter_by(id=target.course_id).one()
-    except Exception:
+    except Exception as e:  # TODO: fix swallowing exception
+        logger.warning(
+            f"Swallowing exception in 'before_insert' event in UserOnCourse model: {repr(e)}")
         return
 
     if user.gitlab_instance_host != course.gitlab_instance_host:
