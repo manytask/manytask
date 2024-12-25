@@ -85,12 +85,12 @@ def validate_gitlab_instance_host(mapper: Mapper[UserOnCourse], connection: Conn
     try:
         if target.user:
             user = target.user
-        else:
+        else:  # target missing user if we gave user_id or nothing
             user = session.query(User).filter_by(id=target.user_id).one()
 
         if target.course:
             course = target.course
-        else:
+        else:  # target missing course if we gave course_id or nothing
             course = session.query(Course).filter_by(id=target.course_id).one()
     except Exception as e:  # TODO: fix swallowing exception
         logger.warning(
