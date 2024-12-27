@@ -4,11 +4,16 @@ version: "3.8"
 volumes:
     cache:
     solutions:
-
     acme:
+        name: acme
     certs:
+        name: certs
     vhost:
+        name: vhost
     html:
+        name: html
+    conf:
+        name: conf
 
 
 services:
@@ -26,6 +31,7 @@ services:
             - vhost:/etc/nginx/vhost.d
             - html:/usr/share/nginx/html
             - /var/run/docker.sock:/tmp/docker.sock:ro
+            - conf:/etc/nginx/conf.d
 
     acme-companion:
         image: nginxproxy/acme-companion:2.2.8
@@ -35,23 +41,27 @@ services:
             DEFAULT_EMAIL: no-reply@manytask.org
             NGINX_PROXY_CONTAINER: nginx-proxy
         volumes:
-            - acme:/etc/acme.sh
-            - certs:/etc/nginx/certs
-            - vhost:/etc/nginx/vhost.d
-            - html:/usr/share/nginx/html
             - /var/run/docker.sock:/var/run/docker.sock:ro
+            - acme:/etc/acme.sh
+            - certs:/etc/nginx/certs:rw
+            - vhost:/etc/nginx/vhost.d:rw
+            - html:/usr/share/nginx/html:rw
 
     manytask:
-        image: manytask/manytask:latest  # set SPECIFIC version you'll use
-        container_name: manytask
+        # image: manytask/manytask:latest  # set SPECIFIC version you'll use
+        build:
+            dockerfile: Dockerfile
+            context: .
+        container_name: manytask  # change this to your project name
         restart: always
         expose:
             - "5050"
         env_file: .env
         environment:
-            VIRTUAL_HOST: py.manytask.org
+            VIRTUAL_HOST: manytask.org
             VIRTUAL_PORT: 5050
-            LETSENCRYPT_HOST: py.manytask.org
+            LETSENCRYPT_HOST: manytask.org
+            LETSENCRYPT_EMAIL: no-reply@manytask.org
         volumes:
             - cache:/cache
             - solutions:/solutions
