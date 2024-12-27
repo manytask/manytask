@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 import yaml
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from manytask.config import ManytaskDeadlinesConfig
@@ -423,3 +424,26 @@ def test_bad_requests(first_course_db_api, session):
     assert session.query(User).count() == 0
     assert session.query(UserOnCourse).count() == 0
     assert session.query(Grade).count() == 0
+
+
+def test_auto_tables_creation(engine):
+    with pytest.raises(OperationalError):
+        db_api = DataBaseApi(
+            database_url=SQLALCHEMY_DATABASE_URL,
+            course_name="Test Course",
+            gitlab_instance_host="gitlab.test.com",
+            registration_secret="secret",
+            show_allscores=True
+        )
+
+    db_api = DataBaseApi(
+        database_url=SQLALCHEMY_DATABASE_URL,
+        course_name="Test Course",
+        gitlab_instance_host="gitlab.test.com",
+        registration_secret="secret",
+        show_allscores=True,
+        create_tables_if_not_exist=True
+    )
+
+    with Session(engine) as session:
+        test_empty_course(db_api, session)
