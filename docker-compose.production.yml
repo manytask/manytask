@@ -65,3 +65,10 @@ services:
         volumes:
             - cache:/cache
             - solutions:/solutions
+        dns:
+            - 8.8.8.8
+            - 8.8.4.4
+        extra_hosts:
+            - "rc1b-ccszhe0ozcriehwo.mdb.yandexcloud.net:10.129.0.12"
+            - "rc1b-gomhenwov90duxxz.mdb.yandexcloud.net:10.129.0.35"
+

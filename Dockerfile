@@ -40,3 +40,9 @@ CMD ["python", "-m", "gunicorn", "--bind", "0.0.0.0:5050", "--workers", "2", "--
 #    --access-logfile - \
 #    --access-logformat "%(t)s %({Host}i)s %(h)s \"%(r)s\" %(s)s \"%(f)s\" \"%(a)s\" %(L)s %(b)s \"%(U)s\" \"%(q)s\"" \
 #    --error-logfile -
+
+# Set up Yandex.Cloud certificate
+RUN mkdir -p /root/.postgresql && \
+wget "https://storage.yandexcloud.net/cloud-certs/CA.pem" \
+    --output-document /root/.postgresql/root.crt && \
+chmod 0600 /root/.postgresql/root.crt
