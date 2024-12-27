@@ -44,11 +44,7 @@ class DataBaseApi(StorageApi):
         self.engine = create_engine(database_url, echo=False)
 
         if create_tables_if_not_exist:
-            try:
-                models.Base.metadata.create_all(self.engine)
-            except IntegrityError as e:  # if tables are created concurrently
-                if not isinstance(e.orig, UniqueViolation):
-                    raise
+            self._create_tables()
 
         with Session(self.engine) as session:
             try:
@@ -269,6 +265,13 @@ class DataBaseApi(StorageApi):
                         name=task.name,
                         group_id=task_group.id
                     )
+
+    def _create_tables(self) -> None:
+        try:
+            models.Base.metadata.create_all(self.engine)
+        except IntegrityError as e:  # if tables are created concurrently
+            if not isinstance(e.orig, UniqueViolation):
+                raise
 
     def _get_scores(
         self,
