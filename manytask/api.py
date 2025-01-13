@@ -334,7 +334,6 @@ def get_solutions() -> ResponseReturnValue:
 
 
 @bp.get("/database")
-@requires_token
 @requires_auth
 @requires_ready
 def get_database() -> ResponseReturnValue:
