@@ -44,6 +44,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         raise EnvironmentError("Unable to find FLASK_SECRET_KEY env in production mode")
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex())
 
+    app.config['USE_DATABASE_AS_VIEW'] = os.environ.get('USE_DATABASE_AS_VIEW', 'false').lower() in ('true', '1', 'yes')
+
     # oauth
     oauth = OAuth(app)
     _gitlab_base_url = app.app_config.gitlab_url
