@@ -9,10 +9,46 @@ services:
         container_name: manytask
         env_file: .env
         environment:
-            FLASK_DEBUG: 1
+            FLASK_DEBUG: 0
         ports:
-            - "5050:5050"
+            - "8081:5050"
         volumes:
             - ./manytask/:/app/manytask
             - .tmp/cache/:/cache
             - .tmp/solutions/:/solutions
+        dns:
+            - 8.8.8.8
+            - 8.8.4.4
+        depends_on:
+            postgres:
+                condition: service_healthy
+        networks:
+            - manytask_network
+    postgres:
+        image: postgres:17
+        container_name: manytask_postgres
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+            POSTGRES_DB: postgres
+        ports:
+            - "5432:5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+        networks:
+            - manytask_network
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U adminmanytask -d manytask"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
+networks:
+    manytask_network:
+        driver: bridge
+        name: manytask_network
+
+volumes:
+    postgres_data:
+        name: manytask_postgres_data
