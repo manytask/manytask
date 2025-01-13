@@ -147,7 +147,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     if os.environ.get("USE_DATABASE_AS_STORAGE", "false").lower() in ("true", "1", "yes"):
         database_url = os.environ.get("DATABASE_URL", None)
         course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
-
+        create_tables_if_not_exist = os.environ.get("CREATE_TABLES_IF_NOT_EXIST", "false").lower() in ("true", "1", "yes")
+        
         if database_url is None:
             raise EnvironmentError("Unable to find DATABASE_URL env")
         if course_name is None:
@@ -158,7 +159,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             course_name=course_name,
             gitlab_instance_host=app.app_config.gitlab_url,
             registration_secret=app.app_config.registration_secret,
-            show_allscores=app.app_config.show_allscores
+            show_allscores=app.app_config.show_allscores,
+            create_tables_if_not_exist=create_tables_if_not_exist
         )
 
         viewer_api = gdoc.GoogleDocApi(
