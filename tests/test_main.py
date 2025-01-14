@@ -5,6 +5,7 @@ import pytest
 from dotenv import load_dotenv
 
 from manytask.main import create_app, CustomFlask
+from manytask.gdoc import GoogleDocApi
 
 TEST_COURSE_NAME = 'test_course'
 TEST_STUDENTS_GROUP = 'test_students'
@@ -12,6 +13,14 @@ TEST_PUBLIC_REPO = 'test_public_repo'
 
 TEST_CACHE_DIR = '/tmp/manytask_test_cache'
 TEST_SOLUTIONS_DIR = '/tmp/manytask_test_solutions'
+
+
+@pytest.fixture
+def mock_gdoc():
+    with patch('manytask.gdoc.GoogleDocApi') as mock:
+        gdoc_instance = MagicMock(spec=GoogleDocApi)
+        mock.return_value = gdoc_instance
+        yield mock
 
 
 @pytest.fixture
@@ -100,7 +109,7 @@ def mock_gitlab():
         yield mock
 
 
-def test_create_app_production(mock_env, mock_gitlab):
+def test_create_app_production(mock_env, mock_gitlab, mock_gdoc):
     app = create_app()
     assert isinstance(app, CustomFlask)
     assert app.debug is False
@@ -122,20 +131,20 @@ def test_create_app_production(mock_env, mock_gitlab):
     assert hasattr(app.course, 'solutions_api')
 
 
-def test_create_app_debug(mock_env, mock_gitlab):
+def test_create_app_debug(mock_env, mock_gitlab, mock_gdoc):
     app = create_app(debug=True)
     assert isinstance(app, CustomFlask)
     assert app.debug is True
     assert app.testing == os.getenv('TESTING')
 
 
-def test_create_app_missing_secret_key(mock_gitlab):
+def test_create_app_missing_secret_key(mock_gitlab, mock_gdoc):
     os.environ.pop('FLASK_SECRET_KEY', None)
     with pytest.raises(KeyError) as exc_info:
         create_app()
 
 
-def test_create_app_database_view_config(mock_env, mock_gitlab):
+def test_create_app_database_view_config(mock_env, mock_gitlab, mock_gdoc):
     os.environ['USE_DATABASE_AS_VIEW'] = 'true'
     app = create_app()
     assert app.config['USE_DATABASE_AS_VIEW'] is True
