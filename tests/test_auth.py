@@ -1,0 +1,125 @@
+import pytest
+from flask import Flask, session
+
+from manytask.auth import valid_session, requires_auth, requires_ready
+from manytask.web import bp as web_bp
+
+
+@pytest.fixture
+def app():
+    app = Flask(__name__)
+    app.config['DEBUG'] = False
+    app.secret_key = 'test_key'
+    app.register_blueprint(web_bp)
+    return app
+
+
+def test_valid_session_with_valid_data(app):
+    with app.test_request_context():
+        session["gitlab"] = {
+            "version": 1.5,
+            "username": "test_user",
+            "user_id": 123,
+            "repo": "test_repo",
+            "course_admin": False
+        }
+        assert valid_session(session) is True
+
+
+def test_valid_session_with_invalid_version(app):
+    with app.test_request_context():
+        session["gitlab"] = {
+            "version": 1.0,
+            "username": "test_user",
+            "user_id": 123,
+            "repo": "test_repo",
+            "course_admin": False
+        }
+        assert valid_session(session) is False
+
+
+def test_valid_session_with_missing_data(app):
+    # missing user_id
+    with app.test_request_context():
+        session["gitlab"] = {
+            "version": 1.5,
+            "username": "test_user",
+            "repo": "test_repo",
+            "course_admin": False
+        }
+        assert valid_session(session) is False
+
+
+def test_valid_session_with_empty_session(app):
+    with app.test_request_context():
+        assert valid_session(session) is False
+
+
+def test_requires_auth_in_debug_mode(app):
+    @requires_auth
+    def test_route():
+        return "success"
+
+    with app.test_request_context():
+        app.config['DEBUG'] = True
+        response = test_route()
+        assert response == "success"
+
+
+def test_requires_auth_with_valid_session(app):
+    @requires_auth
+    def test_route():
+        return "success"
+
+    with app.test_request_context():
+        session["gitlab"] = {
+            "version": 1.5,
+            "username": "test_user",
+            "user_id": 123,
+            "repo": "test_repo",
+            "course_admin": False
+        }
+        response = test_route()
+        assert response == "success"
+
+
+def test_requires_auth_with_invalid_session(app):
+    # Should redirect to signup
+    @requires_auth
+    def test_route():
+        return "success"
+
+    with app.test_request_context():
+        response = test_route()
+        assert response.status_code == 302
+
+
+def test_requires_ready_with_config(app):
+    @requires_ready
+    def test_route():
+        return "success"
+
+    class MockCourse:
+        def __init__(self):
+            self.config = {"test": "config"}
+
+    with app.test_request_context():
+        app.course = MockCourse()
+        response = test_route()
+        assert response == "success"
+
+
+def test_requires_ready_without_config(app):
+    # Should redirect to not_ready
+    @requires_ready
+    def test_route():
+        return "success"
+
+    class MockCourse:
+        def __init__(self):
+            self.config = None
+
+    with app.test_request_context():
+        app.course = MockCourse()
+        response = test_route()
+        assert response.status_code == 302
