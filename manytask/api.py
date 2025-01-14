@@ -26,17 +26,15 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 
-TESTER_TOKEN = os.environ["TESTER_TOKEN"]
-
-
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
+        tester_token = os.environ["TESTER_TOKEN"]
         token = request.form.get("token", request.headers.get("Authorization", ""))
         if not token:
             abort(403)
         token = token.split()[-1]
-        if not secrets.compare_digest(token, TESTER_TOKEN):
+        if not secrets.compare_digest(token, tester_token):
             abort(403)
 
         return f(*args, **kwargs)
