@@ -107,6 +107,20 @@ def test_create_app_production(mock_env, mock_gitlab):
     assert app.testing == os.getenv('TESTING')
     assert app.secret_key == os.getenv('FLASK_SECRET_KEY')
 
+    assert hasattr(app.course, 'storage_api')
+
+    assert 'web' in app.blueprints
+    assert 'api' in app.blueprints
+
+    assert hasattr(app, 'oauth')
+    assert 'gitlab' in app.oauth._clients
+
+    assert hasattr(app, 'course')
+    assert hasattr(app.course, 'viewer_api')
+    assert hasattr(app.course, 'storage_api')
+    assert hasattr(app.course, 'gitlab_api')
+    assert hasattr(app.course, 'solutions_api')
+
 
 def test_create_app_debug(mock_env, mock_gitlab):
     app = create_app(debug=True)
@@ -129,29 +143,3 @@ def test_create_app_database_view_config(mock_env, mock_gitlab):
     os.environ['USE_DATABASE_AS_VIEW'] = 'false'
     app = create_app()
     assert app.config['USE_DATABASE_AS_VIEW'] is False
-
-
-def test_create_app_database_storage_config(mock_env, mock_gitlab):
-    app = create_app()
-    assert hasattr(app.course, 'storage_api')
-
-
-def test_create_app_blueprints(mock_env, mock_gitlab):
-    app = create_app()
-    assert 'web' in app.blueprints
-    assert 'api' in app.blueprints
-
-
-def test_create_app_oauth_config(mock_env, mock_gitlab):
-    app = create_app()
-    assert hasattr(app, 'oauth')
-    assert 'gitlab' in app.oauth._clients
-
-
-def test_create_app_course_attributes(mock_env, mock_gitlab):
-    app = create_app()
-    assert hasattr(app, 'course')
-    assert hasattr(app.course, 'viewer_api')
-    assert hasattr(app.course, 'storage_api')
-    assert hasattr(app.course, 'gitlab_api')
-    assert hasattr(app.course, 'solutions_api')
