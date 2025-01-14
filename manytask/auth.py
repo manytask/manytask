@@ -1,6 +1,6 @@
 from functools import wraps
 
-from flask import session, redirect, url_for, current_app
+from flask import current_app, redirect, session, url_for
 
 
 def valid_session(user_session) -> bool:

@@ -11,7 +11,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 import yaml
-from flask import Blueprint, Response, abort, current_app, request, jsonify
+from flask import Blueprint, Response, abort, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
@@ -20,6 +20,7 @@ from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .database_utils import get_database_table_data
+
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")

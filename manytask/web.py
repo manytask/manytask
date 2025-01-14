@@ -7,12 +7,12 @@ import flask.sessions
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for, jsonify
+from flask import Blueprint, Response, current_app, jsonify, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
 from . import glab
-from .course import Course, get_current_time
 from .auth import requires_auth, requires_ready, valid_session
+from .course import Course, get_current_time
 from .database_utils import get_database_table_data
 
 
