@@ -100,7 +100,6 @@
                             title: "Total Score",
                             field: "total_score",
                             frozen: true,
-                            formatter: "numeric",
                             sorter: "number",
                             minWidth: 1,
                             headerTooltip: "Total Score"
@@ -116,7 +115,6 @@
                         columns.push({
                             title: task.name,
                             field: `scores.${task.name}`,
-                            formatter: "numeric",
                             sorter: "number",
                             headerTooltip: task.name
                         });
@@ -142,12 +140,7 @@
                             },
                             cssClass: "text-wrap",
                             tooltip: true,
-                            tooltipGenerationMode: "hover",
-                            tooltipFormatter: function (cell) {
-                                return cell.getValue();
-                            },
-                            vertAlign: "middle",
-                            headerVertAlign: "middle"
+                            vertAlign: "middle"
                         },
                         persistenceMode: "local",
                         persistentLayout: true
