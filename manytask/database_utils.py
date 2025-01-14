@@ -1,11 +1,13 @@
+from typing import Any
+
 from flask import current_app
 
 from .course import Course
 
 
-def get_database_table_data():
+def get_database_table_data() -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints."""
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
     
     storage_api = course.storage_api
     all_scores = storage_api.get_all_scores()

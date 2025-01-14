@@ -1,13 +1,11 @@
 import logging
 import secrets
 from datetime import datetime, timedelta
-from functools import wraps
 
-import flask.sessions
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, Response, current_app, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
 from . import glab
@@ -295,7 +293,7 @@ def not_ready() -> ResponseReturnValue:
 @requires_auth
 @requires_ready
 def show_database() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course: Course = current_app.course  # type: ignore
     
     if current_app.debug:
         student_username = "guest"
