@@ -11,30 +11,30 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 import yaml
-from flask import Blueprint, Response, abort, current_app, request
+from flask import Blueprint, Response, abort, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
+from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
+from .database_utils import get_database_table_data
 
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 
-TESTER_TOKEN = os.environ["TESTER_TOKEN"]
-
-
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
+        tester_token = os.environ["TESTER_TOKEN"]
         token = request.form.get("token", request.headers.get("Authorization", ""))
         if not token:
             abort(403)
         token = token.split()[-1]
-        if not secrets.compare_digest(token, TESTER_TOKEN):
+        if not secrets.compare_digest(token, tester_token):
             abort(403)
 
         return f(*args, **kwargs)
@@ -42,15 +42,6 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     return decorated
 
 
-def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(f)
-    def decorated(*args: Any, **kwargs: Any) -> Any:
-        if not current_app.course.config:  # type: ignore
-            abort(403)
-
-        return f(*args, **kwargs)
-
-    return decorated
 
 
 def _parse_flags(flags: str | None) -> timedelta:
@@ -339,3 +330,12 @@ def get_solutions() -> ResponseReturnValue:
         mimetype="application/zip",
         headers={"Content-Disposition": f"attachment;filename={filename}"},
     )
+
+
+@bp.get("/database")
+@requires_auth
+@requires_ready
+def get_database() -> ResponseReturnValue:
+    table_data = get_database_table_data()
+    return jsonify(table_data)
+
