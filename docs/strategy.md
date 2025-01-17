@@ -6,7 +6,7 @@
 
 The general idea of Manytask project can be summarized as Course as a Code. For the teacher, all the tasks, their solutions, descriptions, build environment, run environment and deadlines are stored in a single private repository. When teacher pushes to this repository, new or updated tasks, lecture notes, deadlines are updated for students while teachers solutions and private tests are not revealed. The later stage can be automated.
 
-Students interact with the course through their own fork 
+Students interact with the course through their own fork of a stripped 'public' version of the private repository (see below). When they submit their solutions, they are tested using standard GitLab CI/CD pipeline. On success& the result is reported to Manytask web app. Later accumulate scores, showing the students their progress.
 
 ### The private repository:
 
