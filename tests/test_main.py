@@ -1,11 +1,12 @@
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from dotenv import load_dotenv
 
-from manytask.main import create_app, CustomFlask
 from manytask.gdoc import GoogleDocApi
+from manytask.main import CustomFlask, create_app
+
 
 TEST_COURSE_NAME = 'test_course'
 TEST_STUDENTS_GROUP = 'test_students'
@@ -140,7 +141,7 @@ def test_create_app_debug(mock_env, mock_gitlab, mock_gdoc):
 
 def test_create_app_missing_secret_key(mock_gitlab, mock_gdoc):
     os.environ.pop('FLASK_SECRET_KEY', None)
-    with pytest.raises(KeyError) as exc_info:
+    with pytest.raises(KeyError):
         create_app()
 
 

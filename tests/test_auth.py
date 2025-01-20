@@ -1,7 +1,7 @@
 import pytest
 from flask import Flask, session
 
-from manytask.auth import valid_session, requires_auth, requires_ready
+from manytask.auth import requires_auth, requires_ready, valid_session
 from manytask.web import bp as web_bp
 
 

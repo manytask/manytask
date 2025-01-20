@@ -82,7 +82,7 @@ def test_empty_course(first_course_db_api, session):
     assert course.name == 'Test Course'
     assert course.gitlab_instance_host == 'gitlab.test.com'
     assert course.registration_secret == 'secret'
-    assert course.show_allscores == True
+    assert course.show_allscores
 
     stats = first_course_db_api.get_stats()
     all_scores = first_course_db_api.get_all_scores()
@@ -392,21 +392,20 @@ def test_deadlines(first_course_db_api, second_course_db_api, session):
                               'steps': {'0.5': '2000-02-02T23:59:00+01:00'},
                               'end': '2000-02-02T23:59:00+01:00'}
 
-
-def test_course_change_params(first_course_db_api):
+def test_course_change_params(first_course_db_api):  # noqa
     with pytest.raises(AttributeError):
-        db_api = DataBaseApi(
+        DataBaseApi(
             database_url=SQLALCHEMY_DATABASE_URL,
-            course_name="Test Course",
+            course_name="Test Course", 
             gitlab_instance_host="gitlab.another_test.com",
             registration_secret="secret",
             show_allscores=True
         )
 
-    db_api = DataBaseApi(
+    DataBaseApi(
         database_url=SQLALCHEMY_DATABASE_URL,
         course_name="Test Course",
-        gitlab_instance_host="gitlab.test.com",
+        gitlab_instance_host="gitlab.test.com", 
         registration_secret="another_secret",
         show_allscores=False
     )

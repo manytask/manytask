@@ -6,8 +6,9 @@ import pytest
 from flask import Flask
 from pydantic import AnyUrl
 
-from manytask.config import ManytaskConfig, ManytaskSettingsConfig, ManytaskUiConfig, ManytaskDeadlinesConfig
+from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from manytask.web import bp as web_bp
+
 
 TEST_USERNAME = "test_user"
 TEST_SECRET = "test_secret"
