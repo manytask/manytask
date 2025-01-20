@@ -84,6 +84,9 @@ Create new venv and install requirements
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -U -r requirements.txt
+
+# Install pre-commit hooks
+make install-hooks
 ```
 
 Run it
