@@ -7,7 +7,7 @@
 [![docker](https://img.shields.io/docker/v/manytask/manytask?label=docker&logo=docker&sort=semver)](https://hub.docker.com/r/manytask/manytask)
 
 
-Small web application for managing courses: store students' grades, maintain deadlines, provide scoreboard etc.
+Small web application for managing courses: store students' grades, maintain [deadlines](docs/deadline_schedule.md), provide scoreboard etc.
 
 ---
 
