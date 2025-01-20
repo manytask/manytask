@@ -7,7 +7,7 @@ It's better not to set deadlines on the same day as a lecture. Students will lik
 
 ## Deadline Timing and Late Submissions
 
-Deadlines are typically set to 23:59:00. However, there's a possibility that a student might submit their code at 23:59:01, which could mistakenly be marked as late. In such cases, you can manually update the score using the CLI.
+Deadlines are typically set to 23:59:00. However, there's a possibility that a student might submit their code at 23:58:01, which could mistakenly be marked as late. In such cases, you can manually update the score using the CLI.
 
 ## Set Both Soft and Hard Deadlines
 
