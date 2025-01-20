@@ -7,11 +7,11 @@ It's better not to set deadlines on the same day as a lecture. Students will lik
 
 ## Deadline Timing and Late Submissions
 
-Deadlines are typically set to 23:59:00. However, there's a possibility that a student might submit their code at 23:58:01, which could mistakenly be marked as late. In such cases, you can manually update the score using the CLI.
+Deadlines are typically set to 23:59:00. However, there's a possibility that a student might submit their code at 23:59:01, which could mistakenly be marked as late. In such cases, you can manually update the score using the CLI.
 
 ## Set Both Soft and Hard Deadlines
 
-Always define both soft and hard deadlines. Students generally manage to stay on track until February 1st in the Fall semester and July 1st in the Spring semester. This approach provides students with a chance to achieve a passing score.
+It is generally better to define both soft and hard deadlines. If students are given a chance to get even a fractional score for the task they are more likely to solve the task and submit their solution for checks. Soft deadline is also beneficial for the testing systems since it allows to distribute the load more evenly.
 
 Example (specific to manytask, subject to version differences):
 
