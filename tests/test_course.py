@@ -1,6 +1,4 @@
-import pytest
 
-from manytask.course import Course
 
 
 class TestTask:

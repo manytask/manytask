@@ -3,6 +3,7 @@ from flask import Flask
 
 from manytask.database_utils import get_database_table_data
 
+
 TASK_1 = "task1"
 TASK_2 = "task2"
 TASK_3 = "task3"

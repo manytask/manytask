@@ -6,7 +6,7 @@ import pytest
 from dotenv import load_dotenv
 from flask import Flask, json
 
-from manytask.api import bp as api_bp, _parse_flags, _update_score
+from manytask.api import _parse_flags, _update_score, bp as api_bp
 
 
 # Constants
