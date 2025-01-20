@@ -2,7 +2,6 @@ import logging
 import secrets
 from datetime import datetime, timedelta
 
-import flask.sessions
 import gitlab
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
@@ -10,7 +9,9 @@ from flask import Blueprint, Response, current_app, redirect, render_template, r
 from flask.typing import ResponseReturnValue
 
 from . import glab
+from .auth import requires_auth, requires_ready, valid_session
 from .course import Course, get_current_time
+from .database_utils import get_database_table_data
 
 
 SESSION_VERSION = 1.5
@@ -20,16 +21,6 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("web", __name__)
 
 
-def valid_session(user_session: flask.sessions.SessionMixin) -> bool:
-    return (
-        "gitlab" in user_session
-        and "version" in user_session["gitlab"]
-        and user_session["gitlab"]["version"] >= SESSION_VERSION
-        and "username" in user_session["gitlab"]
-        and "user_id" in user_session["gitlab"]
-        and "repo" in user_session["gitlab"]
-        and "course_admin" in user_session["gitlab"]
-    )
 
 
 @bp.route("/")
@@ -87,6 +78,7 @@ def course_page() -> ResponseReturnValue:
         course_favicon=course.favicon,
         is_course_admin=student_course_admin,
         cache_time=cache_delta,
+        use_database_as_view=current_app.config.get('USE_DATABASE_AS_VIEW', False),
     )
 
 
@@ -294,4 +286,36 @@ def not_ready() -> ResponseReturnValue:
     return render_template(
         "not_ready.html",
         manytask_version=course.manytask_version,
+    )
+
+
+@bp.get("/database")
+@requires_auth
+@requires_ready
+def show_database() -> ResponseReturnValue:
+    course: Course = current_app.course  # type: ignore
+    
+    if current_app.debug:
+        student_username = "guest"
+        student_course_admin = True
+    else:
+        student_username = session["gitlab"]["username"]
+        student_course_admin = session["gitlab"]["course_admin"]
+
+    storage_api = course.storage_api
+    scores = storage_api.get_scores(student_username)
+    bonus_score = storage_api.get_bonus_score(student_username)
+    table_data = get_database_table_data()
+
+    return render_template(
+        "database.html",
+        table_data=table_data,
+        course_name=course.config.settings.course_name if course.config else "",
+        scores=scores,
+        bonus_score=bonus_score,
+        username=student_username,
+        is_course_admin=student_course_admin,
+        current_course=course,
+        course_favicon=course.favicon,
+        use_database_as_view=current_app.config.get('USE_DATABASE_AS_VIEW', False),
     )

@@ -65,7 +65,11 @@
                     </li>
                     {% if show_allscores %}
                     <li class="nav-item">
-                        <a class="nav-link px-3" target="_blank" href="{{ gdoc_url }}">All&nbsp;Scores</a>
+                        <a class="nav-link px-3" 
+                           target="_blank" 
+                           href="{% if use_database_as_view %}{{ url_for('web.show_database') }}{% else %}{{ gdoc_url }}{% endif %}">
+                            All&nbsp;Scores
+                        </a>
                     </li>
                     {% endif %}
                     <li class="nav-item dropdown">

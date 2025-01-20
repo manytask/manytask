@@ -1,0 +1,156 @@
+{% extends "layout.html" %}
+{% set active_page = "database" -%}
+
+{% block content %}
+    <div class="container-fluid">
+        <h2>Course Database</h2>
+
+        <div id="database-table" style="max-width: 800px; width: 100%; overflow-x: auto;"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
+          id="light-theme">
+    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
+          id="dark-theme" disabled>
+
+    <style>
+        [data-bs-theme="dark"] .tabulator-footer .tabulator-paginator .tabulator-page:not(.active) {
+            color: #666 !important;
+            background-color: #333 !important;
+            opacity: 1 !important;
+        }
+
+        .tabulator {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .tabulator-cell {
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
+
+        .tabulator .tabulator-header .tabulator-col-content {
+            white-space: normal !important;
+            word-break: break-word !important;
+        }
+    </style>
+
+    <script>
+        function updateTheme() {
+
+            const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+
+
+            const lightTheme = document.getElementById('light-theme');
+            const darkTheme = document.getElementById('dark-theme');
+
+
+            if (isDark) {
+                lightTheme.disabled = true;
+                darkTheme.disabled = false;
+
+            } else {
+                lightTheme.disabled = false;
+                darkTheme.disabled = true;
+
+            }
+
+            if (window.tabulatorTable) {
+
+                window.tabulatorTable.redraw(true);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Watch theme changes for database viewer
+            updateTheme();
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.attributeName === 'data-bs-theme') {
+
+                        updateTheme();
+                    }
+                });
+            });
+            observer.observe(document.documentElement, {
+                attributes: true,
+                attributeFilter: ['data-bs-theme']
+            });
+
+
+            fetch('/api/database')
+                .then(response => response.json())
+                .then(data => {
+
+
+                    let columns = [
+                        {
+                            title: "Username",
+                            field: "username",
+                            frozen: true,
+                            minWidth: 1,
+                            width: 120,
+                            headerTooltip: "Username"
+                        },
+                        {
+                            title: "Total Score",
+                            field: "total_score",
+                            frozen: true,
+                            sorter: "number",
+                            minWidth: 1,
+                            headerTooltip: "Total Score"
+                        }
+                    ];
+
+                    if (window.innerWidth < 500) {
+                        columns[1].width = 60;
+
+                    }
+
+                    data.tasks.forEach(task => {
+                        columns.push({
+                            title: task.name,
+                            field: `scores.${task.name}`,
+                            sorter: "number",
+                            headerTooltip: task.name
+                        });
+                    });
+
+                    window.tabulatorTable = new Tabulator("#database-table", {
+                        data: data.students,
+                        columns: columns,
+                        layout: "fitDataTable",
+                        height: "70vh",
+                        pagination: true,
+                        paginationSize: 100,
+                        paginationSizeSelector: [25, 50, 100, 200, true],
+                        initialSort: [{column: "total_score", dir: "desc"}],
+                        columnDefaults: {
+                            resizable: true,
+                            minWidth: 1,
+                            maxWidth: 120,
+                            formatter: "plaintext",
+                            formatterParams: {
+                                textLimit: false,
+                                htmlChars: true
+                            },
+                            cssClass: "text-wrap",
+                            tooltip: true,
+                            vertAlign: "middle"
+                        },
+                        persistenceMode: "local",
+                        persistentLayout: true
+                    });
+
+
+                })
+                .catch(error => {
+                    console.error('Error creating table:', error);
+                });
+        });
+    </script>
+{% endblock %} 
