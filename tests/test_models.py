@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
-from manytask.models import Base, Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
+from manytask.models import Base, Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse, validate_gitlab_instance_host
 
 
 SQLALCHEMY_DATABASE_URL = 'sqlite:///:memory:'
@@ -512,3 +512,8 @@ def test_cascade_delete_user_on_course(session):
 
     assert session.query(TaskGroup).filter_by(name="cascade_group5").first() is not None
     assert session.query(Task).filter_by(name="cascade_task7").first() is not None
+
+@pytest.mark.usefixtures("caplog")
+def test_validate_gitlab_instance_host_missing_course(caplog):
+    validate_result = validate_gitlab_instance_host(None, {}, None)
+    assert validate_result is None
