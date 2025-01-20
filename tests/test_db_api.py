@@ -392,12 +392,11 @@ def test_deadlines(first_course_db_api, second_course_db_api, session):
                               'steps': {'0.5': '2000-02-02T23:59:00+01:00'},
                               'end': '2000-02-02T23:59:00+01:00'}
 
-
-def test_course_change_params():
+def test_course_change_params(first_course_db_api):  # noqa
     with pytest.raises(AttributeError):
         DataBaseApi(
             database_url=SQLALCHEMY_DATABASE_URL,
-            course_name="Test Course",
+            course_name="Test Course", 
             gitlab_instance_host="gitlab.another_test.com",
             registration_secret="secret",
             show_allscores=True
@@ -406,7 +405,7 @@ def test_course_change_params():
     DataBaseApi(
         database_url=SQLALCHEMY_DATABASE_URL,
         course_name="Test Course",
-        gitlab_instance_host="gitlab.test.com",
+        gitlab_instance_host="gitlab.test.com", 
         registration_secret="another_secret",
         show_allscores=False
     )
