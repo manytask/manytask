@@ -5,3 +5,12 @@ repos:
       - name: Check semantic commit message
         id: conventional-pre-commit
         stages: [commit-msg]
+  - repo: local
+    hooks:
+      - id: check-staged
+        name: Check staged files
+        entry: scripts/check_staged.sh
+        language: script
+        pass_filenames: false
+        verbose: true
+        types: [python]
