@@ -169,7 +169,7 @@ def login() -> ResponseReturnValue:
 
     redirect_uri = url_for("web.login_finish", _external=True)
 
-    return oauth.gitlab.authorize_redirect(redirect_uri) # type: ignore
+    return oauth.gitlab.authorize_redirect(redirect_uri)
 
 
 @bp.route("/login_finish")
