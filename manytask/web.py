@@ -9,7 +9,7 @@ from flask import Blueprint, Response, current_app, redirect, render_template, r
 from flask.typing import ResponseReturnValue
 
 from . import glab
-from .auth import requires_auth, requires_ready, valid_session
+from .auth import requires_auth, requires_ready
 from .course import Course, get_current_time
 from .database_utils import get_database_table_data
 
@@ -24,19 +24,16 @@ bp = Blueprint("web", __name__)
 
 
 @bp.route("/")
+@requires_ready
+@requires_auth
 def course_page() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
-
-    if not course.config:
-        return redirect(url_for("web.not_ready"))
 
     if current_app.debug:
         student_username = "guest"
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
         student_course_admin = True  # request.args.get('admin', None) is not None
     else:
-        if not valid_session(session):
-            return redirect(url_for("web.signup"))
         student_username = session["gitlab"]["username"]
         student_repo = session["gitlab"]["repo"]
         student_course_admin = session["gitlab"]["course_admin"]
@@ -83,18 +80,13 @@ def course_page() -> ResponseReturnValue:
 
 
 @bp.get("/solutions")
+@requires_auth
+@requires_ready
 def get_solutions() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    if not course.config:
-        return redirect(url_for("web.not_ready"))
-
-    if current_app.debug:
-        student_course_admin = True  # request.args.get('admin', None) is not None
-    else:
-        if not valid_session(session):
-            return redirect(url_for("web.signup"))
-        student_course_admin = session["gitlab"]["course_admin"]
+    # request.args.get('admin', None) is not None
+    student_course_admin = True if current_app.debug else session["gitlab"]["course_admin"]
 
     if not student_course_admin:
         return "Possible only for admins", 403
@@ -127,11 +119,9 @@ def get_solutions() -> ResponseReturnValue:
 
 
 @bp.route("/signup", methods=["GET", "POST"])
+@requires_ready
 def signup() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
-
-    if not course.config and not current_app.debug:
-        return redirect(url_for("web.not_ready"))
 
     # ---- render page ---- #
     if request.method == "GET":
@@ -172,13 +162,10 @@ def signup() -> ResponseReturnValue:
 
 
 @bp.route("/login", methods=["GET"])
+@requires_ready
 def login() -> ResponseReturnValue:
     """Only way to login - gitlab oauth"""
-    course: Course = current_app.course  # type: ignore
     oauth: OAuth = current_app.oauth  # type: ignore
-
-    if not course.config:
-        return redirect(url_for("web.not_ready"))
 
     redirect_uri = url_for("web.login_finish", _external=True)
 
@@ -186,13 +173,11 @@ def login() -> ResponseReturnValue:
 
 
 @bp.route("/login_finish")
+@requires_ready
 def login_finish() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
     course: Course = current_app.course  # type: ignore
     oauth: OAuth = current_app.oauth  # type: ignore
-
-    if not course.config:
-        return redirect(url_for("web.not_ready"))
 
     # ----- oauth authorize ----- #
     try:
@@ -229,14 +214,10 @@ def login_finish() -> ResponseReturnValue:
         return redirect(url_for("web.create_project"))
 
 @bp.route("/create_project", methods=["GET", "POST"])
+@requires_ready
+@requires_auth
 def create_project() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
-
-    if not course.config and not current_app.debug:
-        return redirect(url_for("web.not_ready"))
-    
-    if not valid_session(session):
-        return redirect(url_for("web.signup"))
 
     # ---- render page ---- #
     if request.method == "GET":
