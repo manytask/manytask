@@ -67,7 +67,7 @@ def course_page() -> ResponseReturnValue:
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=course.manytask_version,
-        links=course.config.ui.links or dict(),
+        links=course.config.ui.links if course.config else dict(),
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(student_username),
         now=get_current_time(),
@@ -169,7 +169,7 @@ def login() -> ResponseReturnValue:
 
     redirect_uri = url_for("web.login_finish", _external=True)
 
-    return oauth.gitlab.authorize_redirect(redirect_uri)
+    return oauth.gitlab.authorize_redirect(redirect_uri) # type: ignore
 
 
 @bp.route("/login_finish")
