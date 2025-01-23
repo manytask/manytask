@@ -7,7 +7,7 @@ from .glab import Student
 
 class ViewerApi(ABC):
     @abstractmethod
-    def get_spreadsheet_url(self) -> str:
+    def get_scoreboard_url(self) -> str:
         ...
 
 

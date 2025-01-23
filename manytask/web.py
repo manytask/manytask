@@ -20,8 +20,11 @@ SESSION_VERSION = 1.5
 logger = logging.getLogger(__name__)
 bp = Blueprint("web", __name__)
 
-
-
+def get_allscores_url(viewer_api) -> str :
+    if viewer_api.get_scoreboard_url() == None:
+        return url_for('web.show_database')
+    else:
+        return viewer_api.get_scoreboard_url()
 
 @bp.route("/")
 def course_page() -> ResponseReturnValue:
@@ -58,6 +61,8 @@ def course_page() -> ResponseReturnValue:
     tasks_scores = storage_api.get_scores(student_username)
     tasks_stats = storage_api.get_stats()
 
+    allscores_url = get_allscores_url(course.viewer_api)
+
     return render_template(
         "tasks.html",
         task_base_url=course.gitlab_api.get_url_for_task_base(),
@@ -65,7 +70,7 @@ def course_page() -> ResponseReturnValue:
         course_name=course.name,
         current_course=course,
         gitlab_url=course.gitlab_api.base_url,
-        gdoc_url=course.viewer_api.get_spreadsheet_url(),
+        allscores_url=allscores_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
@@ -78,7 +83,6 @@ def course_page() -> ResponseReturnValue:
         course_favicon=course.favicon,
         is_course_admin=student_course_admin,
         cache_time=cache_delta,
-        use_database_as_view=current_app.config.get('USE_DATABASE_AS_VIEW', False),
     )
 
 

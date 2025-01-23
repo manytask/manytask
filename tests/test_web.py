@@ -118,7 +118,7 @@ def mock_course():
 
         class viewer_api:
             @staticmethod
-            def get_spreadsheet_url():
+            def get_scoreboard_url():
                 return "https://docs.google.com/spreadsheets"
 
         class MockSolutionsApi:

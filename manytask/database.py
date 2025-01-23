@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
 from . import models
-from .abstract import StorageApi
+from .abstract import ViewerApi, StorageApi
 from .config import ManytaskDeadlinesConfig
 from .glab import Student
 
@@ -17,7 +17,7 @@ from .glab import Student
 logger = logging.getLogger(__name__)
 
 
-class DataBaseApi(StorageApi):
+class DataBaseApi(ViewerApi, StorageApi):
     """Class for interacting with a database with the StorageApi functionality"""
 
     ModelType = TypeVar('ModelType', bound=models.Base)
@@ -66,6 +66,9 @@ class DataBaseApi(StorageApi):
                 },
                 name=self.course_name
             )
+
+    def get_scoreboard_url(self) -> str:
+        return None
 
     def get_scores(
         self,

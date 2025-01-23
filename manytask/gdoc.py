@@ -151,7 +151,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
     def get_scores_sheet(self) -> gspread.Worksheet:
         return self._public_scores_sheet
 
-    def get_spreadsheet_url(self) -> str:
+    def get_scoreboard_url(self) -> str:
         return f"{self._url}/spreadsheets/d/{self._public_worksheet_id}#gid={self._public_scoreboard_sheet}"
 
     def get_scores(
