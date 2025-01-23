@@ -7,6 +7,7 @@ from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
+from toolz import get_in
 
 from . import glab
 from .auth import requires_auth, requires_ready
@@ -67,7 +68,7 @@ def course_page() -> ResponseReturnValue:
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=course.manytask_version,
-        links=course.config.ui.links if course.config else dict(),
+        links=get_in(["config", "ui", "links"], course, dict()),
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(student_username),
         now=get_current_time(),
