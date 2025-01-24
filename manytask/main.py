@@ -143,7 +143,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     storage_api: abstract.StorageApi
     viewer_api: abstract.ViewerApi
 
-    storage = os.environ.get("STORAGE", "gsheets").lower();
+    storage = os.environ.get("STORAGE", "gsheets").lower()
 
     if storage == "db":
         database_url = os.environ.get("DATABASE_URL", None)
@@ -168,23 +168,23 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     elif storage == "gsheets":
 
         # google sheets (credentials base64 encoded json)
-        gdoc_url=os.environ.get("GDOC_URL", "https://docs.google.com"),
-        gdoc_account_credentials_base64=os.environ["GDOC_ACCOUNT_CREDENTIALS_BASE64"],
+        gdoc_url=os.environ.get("GDOC_URL", "https://docs.google.com")
+        gdoc_account_credentials_base64=os.environ.get("GDOC_ACCOUNT_CREDENTIALS_BASE64")
         # google public sheet
-        gdoc_spreadsheet_id=os.environ["GDOC_SPREADSHEET_ID"],
-        gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0)),
+        gdoc_spreadsheet_id=os.environ["GDOC_SPREADSHEET_ID"]
+        gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0))
 
         if gdoc_account_credentials_base64 is None:
             raise EnvironmentError("Unable to find GDOC_ACCOUNT_CREDENTIALS_BASE64 env")
         if gdoc_spreadsheet_id is None:
             raise EnvironmentError("Unable to find GDOC_SPREADSHEET_ID env")
 
-        _gdoc_credentials_string = base64.decodebytes(gdoc_account_credentials_base64.encode())
+        _gdoc_credentials_string = base64.decodebytes(str(gdoc_account_credentials_base64).encode())
 
         viewer_api = storage_api = gdoc.GoogleDocApi(
-            base_url=gdoc_url,
+            base_url=str(gdoc_url),
             gdoc_credentials=json.loads(_gdoc_credentials_string),
-            public_worksheet_id=gdoc_spreadsheet_id,
+            public_worksheet_id=str(gdoc_spreadsheet_id),
             public_scoreboard_sheet=gdoc_scoreboard_sheet,
             cache=cache,
         )

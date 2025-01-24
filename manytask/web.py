@@ -8,7 +8,7 @@ from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
-from . import glab
+from . import abstract, glab
 from .auth import requires_auth, requires_ready, valid_session
 from .course import Course, get_current_time
 from .database_utils import get_database_table_data
@@ -20,8 +20,14 @@ SESSION_VERSION = 1.5
 logger = logging.getLogger(__name__)
 bp = Blueprint("web", __name__)
 
-def get_allscores_url(viewer_api) -> str :
-    if viewer_api.get_scoreboard_url() == None:
+def get_allscores_url(viewer_api: abstract.ViewerApi) -> str :
+    """Function to get URL for viewing the scores
+
+     :param viewer_api: The viewer API that may hold the URL
+    
+    :return: String with an URL
+    """
+    if viewer_api.get_scoreboard_url() == "":
         return url_for('web.show_database')
     else:
         return viewer_api.get_scoreboard_url()

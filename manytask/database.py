@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
 from . import models
-from .abstract import ViewerApi, StorageApi
+from .abstract import StorageApi, ViewerApi
 from .config import ManytaskDeadlinesConfig
 from .glab import Student
 
@@ -68,7 +68,7 @@ class DataBaseApi(ViewerApi, StorageApi):
             )
 
     def get_scoreboard_url(self) -> str:
-        return None
+        return ""
 
     def get_scores(
         self,
