@@ -168,10 +168,10 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     elif storage == config.ManytaskStorageType.GoogleSheets.value:
 
         # google sheets (credentials base64 encoded json)
-        gdoc_url=os.environ.get("GDOC_URL", "https://docs.google.com")
+        gdoc_url=str(os.environ.get("GDOC_URL", "https://docs.google.com"))
         gdoc_account_credentials_base64=os.environ.get("GDOC_ACCOUNT_CREDENTIALS_BASE64")
         # google public sheet
-        gdoc_spreadsheet_id=os.environ["GDOC_SPREADSHEET_ID"]
+        gdoc_spreadsheet_id=str(os.environ["GDOC_SPREADSHEET_ID"])
         gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0))
 
         if gdoc_account_credentials_base64 is None:
@@ -182,9 +182,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         _gdoc_credentials_string = base64.decodebytes(str(gdoc_account_credentials_base64).encode())
 
         viewer_api = storage_api = gdoc.GoogleDocApi(
-            base_url=str(gdoc_url),
+            base_url=gdoc_url,
             gdoc_credentials=json.loads(_gdoc_credentials_string),
-            public_worksheet_id=str(gdoc_spreadsheet_id),
+            public_worksheet_id=gdoc_spreadsheet_id,
             public_scoreboard_sheet=gdoc_scoreboard_sheet,
             cache=cache,
         )
