@@ -57,7 +57,7 @@ def mock_env(monkeypatch):
     monkeypatch.setenv('CACHE_DIR', TEST_CACHE_DIR)
     monkeypatch.setenv('SOLUTIONS_DIR', TEST_SOLUTIONS_DIR)
     monkeypatch.setenv('DATABASE_URL', 'sqlite:///:memory:')
-    monkeypatch.setenv('USE_DATABASE_AS_STORAGE', 'true')
+    monkeypatch.setenv('STORAGE', 'DB')
     monkeypatch.setenv('UNIQUE_COURSE_NAME', 'test_course')
     monkeypatch.setenv('CREATE_TABLES_IF_NOT_EXIST', 'true')
 
@@ -142,13 +142,3 @@ def test_create_app_missing_secret_key(mock_gitlab, mock_gdoc):
     os.environ.pop('FLASK_SECRET_KEY', None)
     with pytest.raises(KeyError):
         create_app()
-
-
-#def test_create_app_database_view_config(mock_env, mock_gitlab, mock_gdoc):
-#    os.environ['USE_DATABASE_AS_VIEW'] = 'true'
-#    app = create_app()
-#    assert app.config['USE_DATABASE_AS_VIEW'] is True
-#
-#    os.environ['USE_DATABASE_AS_VIEW'] = 'false'
-#    app = create_app()
-#    assert app.config['USE_DATABASE_AS_VIEW'] is False

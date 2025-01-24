@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import abstract, course, database, gdoc, glab, local_config, solutions
+from . import abstract, config, course, database, gdoc, glab, local_config, solutions
 
 
 load_dotenv("../.env")  # take environment variables from .env.
@@ -145,7 +145,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     storage = os.environ.get("STORAGE", "gsheets").lower()
 
-    if storage == "db":
+    if storage == config.ManytaskStorageType.DataBase.value:
         database_url = os.environ.get("DATABASE_URL", None)
         course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
         create_tables_if_not_exist = os.environ.get(
@@ -165,7 +165,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             create_tables_if_not_exist=create_tables_if_not_exist,
         )
 
-    elif storage == "gsheets":
+    elif storage == config.ManytaskStorageType.GoogleSheets.value:
 
         # google sheets (credentials base64 encoded json)
         gdoc_url=os.environ.get("GDOC_URL", "https://docs.google.com")
@@ -190,7 +190,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         )
 
     else:
-        raise EnvironmentError("STORAGE should be ")
+        raise EnvironmentError("STORAGE should be either '" + config.ManytaskStorageType.GoogleSheets.value + \
+                               "' to store data in Google Sheets, or '" + config.ManytaskStorageType.DataBase.value + \
+                               "' to use database. Set to '" + storage + "'.")
 
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),

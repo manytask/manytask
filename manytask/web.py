@@ -309,5 +309,4 @@ def show_database() -> ResponseReturnValue:
         is_course_admin=student_course_admin,
         current_course=course,
         course_favicon=course.favicon,
-        use_database_as_view=current_app.config.get('USE_DATABASE_AS_VIEW', False),
     )
