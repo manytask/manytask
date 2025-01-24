@@ -390,5 +390,5 @@ def update_database() -> ResponseReturnValue:
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error updating database: {str(e)}")
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
 
