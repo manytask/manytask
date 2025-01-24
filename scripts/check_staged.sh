@@ -29,6 +29,8 @@ echo -e "${BLUE}Found staged Python files:${NC}"
 echo -e "${YELLOW}$FILES${NC}\n"
 
 echo -e "${BLUE}Checking isort...${NC}"
+echo -e "${BLUE}Attempting to fix import sorting...${NC}"
+isort $FILES
 if ! isort --check-only $FILES; then
     echo -e "${RED}isort check failed${NC}"
     exit 1
