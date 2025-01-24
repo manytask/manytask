@@ -318,4 +318,5 @@ def show_database() -> ResponseReturnValue:
         current_course=course,
         course_favicon=course.favicon,
         use_database_as_view=current_app.config.get('USE_DATABASE_AS_VIEW', False),
+        readonly_fields=['username', 'total_score'],  # Cannot be edited in database web viewer
     )
