@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from dotenv import load_dotenv
 
+from manytask.config import ManytaskStorageType
 from manytask.gdoc import GoogleDocApi
 from manytask.main import CustomFlask, create_app
 
@@ -57,7 +58,7 @@ def mock_env(monkeypatch):
     monkeypatch.setenv('CACHE_DIR', TEST_CACHE_DIR)
     monkeypatch.setenv('SOLUTIONS_DIR', TEST_SOLUTIONS_DIR)
     monkeypatch.setenv('DATABASE_URL', 'sqlite:///:memory:')
-    monkeypatch.setenv('STORAGE', 'DB')
+    monkeypatch.setenv('STORAGE', ManytaskStorageType.DataBase.value)
     monkeypatch.setenv('UNIQUE_COURSE_NAME', 'test_course')
     monkeypatch.setenv('CREATE_TABLES_IF_NOT_EXIST', 'true')
 
@@ -109,7 +110,8 @@ def mock_gitlab():
         yield mock
 
 
-def test_create_app_production(mock_env, mock_gitlab, mock_gdoc):
+def test_create_app_production_with_gsheets(mock_env, mock_gitlab, mock_gdoc, monkeypatch):
+    monkeypatch.setenv('STORAGE', ManytaskStorageType.GoogleSheets.value)
     app = create_app()
     assert isinstance(app, CustomFlask)
     assert app.debug is False
@@ -129,6 +131,34 @@ def test_create_app_production(mock_env, mock_gitlab, mock_gdoc):
     assert hasattr(app.course, 'storage_api')
     assert hasattr(app.course, 'gitlab_api')
     assert hasattr(app.course, 'solutions_api')
+    
+def test_create_app_production_with_db(mock_env, mock_gitlab, mock_gdoc, monkeypatch):
+    monkeypatch.setenv('STORAGE', ManytaskStorageType.DataBase.value)
+    app = create_app()
+    assert isinstance(app, CustomFlask)
+    assert app.debug is False
+    assert app.testing == os.getenv('TESTING')
+    assert app.secret_key == os.getenv('FLASK_SECRET_KEY')
+
+    assert hasattr(app.course, 'storage_api')
+
+    assert 'web' in app.blueprints
+    assert 'api' in app.blueprints
+
+    assert hasattr(app, 'oauth')
+    assert 'gitlab' in app.oauth._clients
+
+    assert hasattr(app, 'course')
+    assert hasattr(app.course, 'viewer_api')
+    assert hasattr(app.course, 'storage_api')
+    assert hasattr(app.course, 'gitlab_api')
+    assert hasattr(app.course, 'solutions_api')
+
+def test_create_app_production_with_something_else(mock_env, mock_gitlab, mock_gdoc, monkeypatch):
+    monkeypatch.setenv('STORAGE', "something_else")
+    with pytest.raises(Exception):
+        create_app()
+
 
 
 def test_create_app_debug(mock_env, mock_gitlab, mock_gdoc):
