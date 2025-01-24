@@ -50,6 +50,7 @@ So basically, manytask will store and display grades for you, but not test solut
 1. Clone repo
 ```shell
 git clone https://github.com/yandexdataschool/manytask
+cd manytask
 ```
 
 2. Create `.env` file with dev environment
@@ -79,22 +80,22 @@ First you need to create `.env` file with debug environment
 
 #### Local (manytask only)
 
-Create new venv and install requirements 
+1. Install Poetry (if not already installed):
 ```shell
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -U -r requirements.txt
-
-# Install pre-commit hooks
-make install-hooks
+curl -sSL https://install.python-poetry.org | python3 -
 ```
 
-Run it
+2. Install dependencies and setup development environment:
 ```shell
-FLASK_DEBUG=1 FLASK_APP="manytask:create_app()" python -m flask run --host=0.0.0.0 --port=5050 --reload --without-threads
+poetry install
 ```
 
-So, now it's available at `localhost:5050`
+3. Run the application:
+```shell
+poetry run flask --app "manytask:create_app()" run --host=0.0.0.0 --port=5050 --reload --debug
+```
+
+The application will be available at `localhost:5050`
 
 #### Docker (manytask only)
 ```shell

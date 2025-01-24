@@ -87,6 +87,10 @@ Manytask currently operates only with self-hosted gitlab instance (to easily cre
 1. Find Virtual Machine/Server to host manytask instances with public static ip 
    *2 core (2k MHz), 8 Gb RAM, 100 Gb disk - sufficient for ~100 students*
    * Install docker and docker-compose
+   * Install Poetry for local development and testing:
+     ```shell
+     curl -sSL https://install.python-poetry.org | python3 -
+     ```
 
 
 2. Set dns record to point at statis ip  
