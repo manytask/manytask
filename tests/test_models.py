@@ -104,6 +104,15 @@ def test_user_on_course(session):
     assert len(retrieved_course.users_on_courses.all()) == 1
     assert retrieved_course.users_on_courses[0].user.username == "user1"
 
+    retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
+    assert retrieved_user_on_course.is_course_admin == False
+
+    retrieved_user_on_course.is_course_admin = True
+    session.commit()
+
+    retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
+    assert retrieved_user_on_course.is_course_admin == True
+
 
 def test_user_on_course_unique_ids(session):
     user1 = User(username="user001", gitlab_instance_host='gitlab.inst.org')

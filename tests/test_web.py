@@ -6,7 +6,9 @@ import pytest
 from flask import Flask
 from pydantic import AnyUrl
 
+from manytask.abstract import StoredUser
 from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskSettingsConfig, ManytaskUiConfig
+from manytask.glab import Student
 from manytask.web import bp as web_bp
 
 
@@ -93,9 +95,16 @@ def mock_course():
                     return True
                 raise Exception("Registration failed")
 
+            @staticmethod
+            def get_student(_user_id):
+                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name='')
+
             base_url = GITLAB_BASE_URL
 
         class storage_api:
+            def __init__(self):
+                self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
+
             @staticmethod
             def get_scores_update_timestamp():
                 return datetime.now(tz=ZoneInfo("UTC"))
@@ -105,12 +114,19 @@ def mock_course():
                 return {"task1": 100, "task2": 90}
 
             @staticmethod
+            def get_all_scores():
+                return {TEST_USERNAME: {"task1": 100, "task2": 90}}
+
+            @staticmethod
             def get_stats():
                 return {"task1": {"mean": 95}, "task2": {"mean": 85}}
 
             @staticmethod
             def get_bonus_score(_username):
                 return 10
+
+            def get_stored_user(self, _student):
+                return self.stored_user
 
             @staticmethod
             def update_cached_scores():
@@ -229,3 +245,84 @@ def test_not_ready(app, mock_course):
         app.course = mock_course
         response = app.test_client().get('/not_ready')
         assert response.status_code == 302
+
+
+def check_admin_in_data(response, check_true):
+    assert response.status_code == 200
+    if check_true:
+        assert b'class="admin-label' in response.data
+    else:
+        assert b'class="admin-label' not in response.data
+
+
+def check_admin_status_code(response, check_true):
+    if check_true:
+        assert response.status_code != 403
+    else:
+        assert response.status_code == 403
+
+
+@pytest.mark.parametrize("param", [
+    ['/', check_admin_in_data],
+    ['/solutions', check_admin_status_code],
+    ['/database', check_admin_in_data]
+])
+def test_course_page_user_sync(app, mock_course, param):
+    path, check_func = param
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess['gitlab'] = {
+                    "version": TEST_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_id": TEST_USER_ID,
+                    "repo": TEST_REPO,
+                    "course_admin": False
+                }
+            app.course = mock_course
+
+            # not admin in gitlab, not admin in manytask
+            response = client.get(path)
+            check_func(response, False)
+
+            with client.session_transaction() as sess:
+                sess['gitlab'] = {
+                    "version": TEST_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_id": TEST_USER_ID,
+                    "repo": TEST_REPO,
+                    "course_admin": True
+                }
+
+            # admin in gitlab, not admin in manytask
+            response = client.get(path)
+            check_func(response, True)
+
+            with client.session_transaction() as sess:
+                sess['gitlab'] = {
+                    "version": TEST_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_id": TEST_USER_ID,
+                    "repo": TEST_REPO,
+                    "course_admin": False
+                }
+
+            app.course.storage_api.stored_user.course_admin = True
+
+            # not admin in gitlab, admin in manytask
+            response = client.get(path)
+            check_func(response, True)
+
+            with client.session_transaction() as sess:
+                sess['gitlab'] = {
+                    "version": TEST_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_id": TEST_USER_ID,
+                    "repo": TEST_REPO,
+                    "course_admin": False
+                }
+
+            # admin in gitlab, admin in manytask
+            response = client.get(path)
+            check_func(response, True)
