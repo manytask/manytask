@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar
+from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 
 from psycopg2.errors import UniqueViolation
 from sqlalchemy import and_, create_engine
@@ -524,19 +525,20 @@ class DataBaseApi(ViewerApi, StorageApi):
             kwargs.update(create_defaults)
 
         try:
-            instance = model(**kwargs)
-            session.add(instance)
+            new_instance = model(**kwargs)
+            session.add(new_instance)
             session.flush()
-            return instance
+            return new_instance
         except IntegrityError:
             session.rollback()
-            instance = DataBaseApi._query_with_for_update(session, model, allow_none=False, **kwargs)
+            existing_instance = cast(ModelType,
+                                     DataBaseApi._query_with_for_update(session, model, allow_none=False, **kwargs))
             if defaults:
                 for key, value in defaults.items():
-                    setattr(instance, key, value)
+                    setattr(existing_instance, key, value)
                 session.flush()
-            assert instance is not None
-            return instance
+            assert existing_instance is not None
+            return existing_instance
 
     @staticmethod
     def _get_or_create(
