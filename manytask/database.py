@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
 from . import models
-from .abstract import StorageApi
+from .abstract import StorageApi, StoredUser
 from .config import ManytaskDeadlinesConfig
 from .glab import Student
 
@@ -112,6 +112,50 @@ class DataBaseApi(StorageApi):
 
         return sum([grade.score for grade in grades])
 
+    def get_stored_user(
+        self,
+        student: Student,
+    ) -> StoredUser:
+        """Method for getting user's stored data
+
+        :param student: Student object
+
+        :return: created or received StoredUser object
+        """
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=self.course_name)
+            user_on_course = self._get_or_create_user_on_course(session, student, course)
+
+            return StoredUser(
+                username=user_on_course.user.username,
+                course_admin=user_on_course.is_course_admin
+            )
+
+    def sync_stored_user(
+        self,
+        student: Student,
+    ) -> StoredUser:
+        """Method for sync user's gitlab and stored data
+
+        :param student: Student object
+
+        :return: created or updated StoredUser object
+        """
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=self.course_name)
+            user_on_course = self._get_or_create_user_on_course(session, student, course)
+
+            user_on_course.is_course_admin = user_on_course.is_course_admin or student.course_admin
+
+            session.commit()
+
+            return StoredUser(
+                username=user_on_course.user.username,
+                course_admin=user_on_course.is_course_admin
+            )
+
     def get_all_scores(self) -> dict[str, dict[str, int]]:
         """Method for getting all scores for all users
 
@@ -181,7 +225,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             try:
-                course = self._get(session, models.Course, name=self.course_name)
+                # course = self._get(session, models.Course, name=self.course_name)
                 # Always create user and user_on_course
                 user = self._get_or_create(
                     session,
@@ -190,13 +234,16 @@ class DataBaseApi(StorageApi):
                     gitlab_instance_host=course.gitlab_instance_host
                 )
 
-                user_on_course = self._get_or_create(
-                    session,
-                    models.UserOnCourse,
-                    defaults={'repo_name': student.repo},
-                    user_id=user.id,
-                    course_id=course.id
-                )
+                # user_on_course = self._get_or_create(
+                #     session,
+                #     models.UserOnCourse,
+                #     defaults={'repo_name': student.repo},
+                #     user_id=user.id,
+                #     course_id=course.id
+                # )
+                course = self._get(session, models.Course, name=self.course_name)
+                user_on_course = self._get_or_create_user_on_course(session, student, course)
+
                 session.commit()
 
                 try:
@@ -270,6 +317,31 @@ class DataBaseApi(StorageApi):
         except IntegrityError as e:  # if tables are created concurrently
             if not isinstance(e.orig, UniqueViolation):
                 raise
+
+    def _get_or_create_user_on_course(
+        self,
+        session: Session,
+        student: Student,
+        course: models.Course
+    ) -> models.UserOnCourse:
+        user = self._get_or_create(
+            session,
+            models.User,
+            username=student.username,
+            gitlab_instance_host=course.gitlab_instance_host
+        )
+
+        user_on_course = self._get_or_create(
+            session,
+            models.UserOnCourse,
+            defaults={
+                'repo_name': student.repo
+            },
+            user_id=user.id,
+            course_id=course.id
+        )
+
+        return user_on_course
 
     def _get_scores(
             self,
@@ -366,7 +438,7 @@ class DataBaseApi(StorageApi):
             **kwargs: Any
     ) -> Optional[ModelType]:
         """Query a model with SELECT FOR UPDATE to prevent concurrent modifications.
-        
+
         :param session: SQLAlchemy session
         :param model: Model class to query
         :param allow_none: If True, returns None if no instance found, otherwise raises NoResultFound
@@ -387,7 +459,7 @@ class DataBaseApi(StorageApi):
             **kwargs: Any
     ) -> ModelType:
         """Create a new instance or update existing one with defaults.
-        
+
         :param session: SQLAlchemy session
         :param model: Model class
         :param instance: Existing instance if any
@@ -460,7 +532,7 @@ class DataBaseApi(StorageApi):
             task_id: int,
     ) -> models.Grade:
         """Get or create a Grade with SELECT FOR UPDATE to prevent concurrent modifications.
-        
+
         :param session: SQLAlchemy session
         :param user_on_course_id: ID of the UserOnCourse
         :param task_id: ID of the Task

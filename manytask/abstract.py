@@ -1,8 +1,19 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from .config import ManytaskDeadlinesConfig
 from .glab import Student
+
+
+@dataclass
+class StoredUser:
+    username: str
+    course_admin: bool = False
+    # we can add more fields that we store
+
+    def __repr__(self) -> str:
+        return f"StoredUser(username={self.username})"
 
 
 class ViewerApi(ABC):
@@ -24,6 +35,20 @@ class StorageApi(ABC):
         self,
         username: str,
     ) -> int:
+        ...
+
+    @abstractmethod
+    def get_stored_user(
+        self,
+        student: Student,
+    ) -> StoredUser:
+        ...
+
+    @abstractmethod
+    def sync_stored_user(
+        self,
+        student: Student,
+    ) -> StoredUser:
         ...
 
     @abstractmethod

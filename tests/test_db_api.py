@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import NoResultFound
 
 from manytask.config import ManytaskDeadlinesConfig
-from manytask.database import DataBaseApi
+from manytask.database import DataBaseApi, StoredUser
 from manytask.glab import Student
 from manytask.models import Base, Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 
@@ -290,6 +290,46 @@ def test_store_score_bonus_task(first_course_with_deadlines, session):
     assert all_scores == {'user1': {'task_1_3': 22}}
     assert bonus_score == 22
     assert scores == {'task_1_3': 22}
+
+
+def test_get_and_sync_stored_user(first_course_db_api, session):
+    load_deadlines_config_and_sync_columns(first_course_db_api, DEADLINES_CONFIG_FILES[1])
+
+    student = Student(0, 'user1', 'username1', False, 'repo1')  # default student(not admin in gitlab)
+
+    assert session.query(User).count() == 0
+    assert session.query(UserOnCourse).count() == 0
+
+    stored_user = first_course_db_api.get_stored_user(student)
+
+    assert stored_user == StoredUser(
+        username='user1',
+        course_admin=False
+    )
+
+    assert session.query(User).count() == 1
+    assert session.query(UserOnCourse).count() == 1
+
+    student.course_admin = True  # admin in gitlab
+
+    stored_user = first_course_db_api.sync_stored_user(student)
+
+    assert stored_user == StoredUser(
+        username='user1',
+        course_admin=True
+    )
+
+    student.course_admin = False  # lost admin rules in gitlab, but in database stored that user is admin
+
+    stored_user = first_course_db_api.sync_stored_user(student)
+
+    assert stored_user == StoredUser(
+        username='user1',
+        course_admin=True
+    )
+
+    assert session.query(User).count() == 1
+    assert session.query(UserOnCourse).count() == 1
 
 
 def test_many_users(first_course_with_deadlines, session):
