@@ -33,7 +33,11 @@ def course_page() -> ResponseReturnValue:
     if current_app.debug:
         student_username = "guest"
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
-        student_course_admin = True
+
+        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+            student_course_admin = True
+        else:
+            student_course_admin = False
     else:
         student_username = session["gitlab"]["username"]
         student_repo = session["gitlab"]["repo"]
@@ -89,7 +93,10 @@ def get_solutions() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
     if current_app.debug:
-        student_course_admin = True
+        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+            student_course_admin = True
+        else:
+            student_course_admin = False
     else:
         student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
         stored_user = course.storage_api.get_stored_user(student)
@@ -220,8 +227,9 @@ def login_finish() -> ResponseReturnValue:
 
     if (course.gitlab_api.check_project_exists(student)):
         return redirect(url_for("web.course_page"))
-    else :
+    else:
         return redirect(url_for("web.create_project"))
+
 
 @bp.route("/create_project", methods=["GET", "POST"])
 @requires_ready
@@ -290,7 +298,11 @@ def show_database() -> ResponseReturnValue:
 
     if current_app.debug:
         student_username = "guest"
-        student_course_admin = True
+
+        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+            student_course_admin = True
+        else:
+            student_course_admin = False
     else:
         student_username = session["gitlab"]["username"]
 

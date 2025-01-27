@@ -81,6 +81,9 @@ def mock_course():
                 return 100  # Mock value for testing
 
         class gitlab_api:
+            def __init__(self):
+                self.course_admin = False
+
             @staticmethod
             def get_url_for_repo(username):
                 return f"{GITLAB_BASE_URL}/{username}/repo"
@@ -98,6 +101,13 @@ def mock_course():
             @staticmethod
             def get_student(_user_id):
                 return Student(id=TEST_USER_ID, username=TEST_USERNAME, name='')
+
+            def get_authenticated_student(self, _gitlab_access_token):
+                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name='', course_admin=self.course_admin)
+
+            @staticmethod
+            def check_project_exists(_student):
+                return True
 
             base_url = GITLAB_BASE_URL
 
@@ -125,6 +135,10 @@ def mock_course():
             def get_bonus_score(_username):
                 return 10
 
+            def sync_stored_user(self, student):
+                if student.course_admin:
+                    self.stored_user.course_admin = True
+
             def get_stored_user(self, _student):
                 return self.stored_user
 
@@ -142,6 +156,17 @@ def mock_course():
                 pass
 
     return MockCourse()
+
+
+@pytest.fixture
+def mock_gitlab_oauth():
+    class MockGitlabOauth:
+        class gitlab:
+            @staticmethod
+            def authorize_access_token():
+                return {"access_token": "", "refresh_token": ""}
+
+    return MockGitlabOauth()
 
 
 @pytest.fixture(autouse=True)
@@ -262,13 +287,18 @@ def check_admin_status_code(response, check_true):
         assert response.status_code == 403
 
 
-@pytest.mark.parametrize("param", [
+@pytest.mark.parametrize("path_and_func", [
     ['/', check_admin_in_data],
     ['/solutions', check_admin_status_code],
     ['/database', check_admin_in_data]
 ])
-def test_course_page_user_sync(app, mock_course, param):
-    path, check_func = param
+@pytest.mark.parametrize("debug", [False, True])
+@pytest.mark.parametrize("get_param_admin", ['true', '1', 'yes', None, 'false', '0', 'no', 'random_value'])
+def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param_admin):
+    path, check_func = path_and_func
+
+    if get_param_admin is not None:
+        path += f'?admin={get_param_admin}'
 
     with app.test_request_context():
         with app.test_client() as client:
@@ -281,10 +311,16 @@ def test_course_page_user_sync(app, mock_course, param):
                     "course_admin": False
                 }
             app.course = mock_course
+            app.debug = debug
 
             # not admin in gitlab, not admin in manytask
             response = client.get(path)
-            check_func(response, False)
+
+            if app.debug:
+                # in debug admin flag is the same as get param
+                check_func(response, get_param_admin in ('true', '1', 'yes', None))
+            else:
+                check_func(response, False)
 
             with client.session_transaction() as sess:
                 sess['gitlab'] = {
@@ -297,7 +333,12 @@ def test_course_page_user_sync(app, mock_course, param):
 
             # admin in gitlab, not admin in manytask
             response = client.get(path)
-            check_func(response, True)
+
+            if app.debug:
+                # in debug admin flag is the same as get param
+                check_func(response, get_param_admin in ('true', '1', 'yes', None))
+            else:
+                check_func(response, True)
 
             with client.session_transaction() as sess:
                 sess['gitlab'] = {
@@ -312,7 +353,12 @@ def test_course_page_user_sync(app, mock_course, param):
 
             # not admin in gitlab, admin in manytask
             response = client.get(path)
-            check_func(response, True)
+
+            if app.debug:
+                # in debug admin flag is the same as get param
+                check_func(response, get_param_admin in ('true', '1', 'yes', None))
+            else:
+                check_func(response, True)
 
             with client.session_transaction() as sess:
                 sess['gitlab'] = {
@@ -325,4 +371,49 @@ def test_course_page_user_sync(app, mock_course, param):
 
             # admin in gitlab, admin in manytask
             response = client.get(path)
-            check_func(response, True)
+
+            if app.debug:
+                # in debug admin flag is the same as get param
+                check_func(response, get_param_admin in ('true', '1', 'yes', None))
+            else:
+                check_func(response, True)
+
+
+def test_login_finish_sync(app, mock_course, mock_gitlab_oauth):
+    with app.test_request_context():
+        with app.test_client() as client:
+            app.course = mock_course
+            app.oauth = mock_gitlab_oauth
+
+            assert app.course.storage_api.stored_user.course_admin == False
+
+            # not admin in gitlab so stored value shouldn't change
+            response = client.get('/login_finish')
+
+            with client.session_transaction() as sess:
+                assert 'gitlab' in sess
+                assert sess["gitlab"]["course_admin"] == False
+
+            assert app.course.storage_api.stored_user.course_admin == False
+
+            app.course.gitlab_api.course_admin = True
+
+            # admin in gitlab so stored value should change
+            response = client.get('/login_finish')
+
+            with client.session_transaction() as sess:
+                assert 'gitlab' in sess
+                assert sess["gitlab"]["course_admin"] == True
+
+            assert app.course.storage_api.stored_user.course_admin == True
+
+            app.course.gitlab_api.course_admin = False
+
+            # not admin in gitlab but also stored that admin
+            response = client.get('/login_finish')
+
+            with client.session_transaction() as sess:
+                assert 'gitlab' in sess
+                assert sess["gitlab"]["course_admin"] == False
+
+            assert app.course.storage_api.stored_user.course_admin == True

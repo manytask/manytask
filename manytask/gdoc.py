@@ -93,6 +93,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         public_worksheet_id: str,
         public_scoreboard_sheet: int,
         cache: BaseCache,
+        testing: bool = False
     ):
         """
         :param base_url:
@@ -100,7 +101,12 @@ class GoogleDocApi(ViewerApi, StorageApi):
         :param public_worksheet_id:
         :param public_scoreboard_sheet:
         :param cache:
+        :param testing:
         """
+
+        if testing:
+            return  # TODO: cover all methods
+
         self._url = base_url
         self._gdoc_credentials = gdoc_credentials
         self._public_worksheet_id = public_worksheet_id
