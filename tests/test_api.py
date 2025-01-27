@@ -64,6 +64,11 @@ def mock_course():
             def get_scores(_username):
                 return {"task1": 100, "task2": 90, "test_task": 80}
 
+            @staticmethod
+            def get_stored_user(student):
+                from manytask.abstract import StoredUser
+                return StoredUser(username=student.username, course_admin=True)
+
         class gitlab_api:
             @staticmethod
             def get_student(user_id):
@@ -179,7 +184,7 @@ def test_report_score_missing_task(app, mock_course):
         app.course = mock_course
         data = {'user_id': str(TEST_USER_ID)}
         headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
-        
+
         response = app.test_client().post('/api/report',
                                           data=data,
                                           headers=headers)
@@ -192,7 +197,7 @@ def test_report_score_missing_user(app, mock_course):
         app.course = mock_course
         data = {'task': TEST_TASK_NAME}
         headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
-        
+
         response = app.test_client().post('/api/report',
                                           data=data,
                                           headers=headers)
@@ -205,7 +210,7 @@ def test_report_score_invalid_task(app, mock_course):
         app.course = mock_course
         data = {'task': INVALID_TASK_NAME, 'user_id': str(TEST_USER_ID)}
         headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
-        
+
         response = app.test_client().post('/api/report',
                                           data=data,
                                           headers=headers)
@@ -226,7 +231,7 @@ def test_report_score_success(app, mock_course):
             'username': TEST_USERNAME,
             'score': 90
         }
-        
+
         response = app.test_client().post('/api/report',
                                           data=data,
                                           headers=headers)
@@ -250,7 +255,7 @@ def test_get_score_success(app, mock_course):
             'user_id': TEST_USER_ID,
             'username': TEST_USERNAME
         }
-        
+
         response = app.test_client().get('/api/score',
                                          data=data,
                                          headers=headers)
@@ -261,9 +266,9 @@ def test_get_score_success(app, mock_course):
 
 def test_update_database_not_json(app, mock_course, authenticated_client):
     app.course = mock_course
-    response = authenticated_client.post('/api/database/update', 
-                                    data='not json',
-                                    content_type='text/plain')
+    response = authenticated_client.post('/api/database/update',
+                                         data='not json',
+                                         content_type='text/plain')
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data['success'] is False
@@ -275,7 +280,7 @@ def test_update_database_missing_fields(app, mock_course, authenticated_client):
 
     # Empty data
     response = authenticated_client.post('/api/database/update',
-                                    json={})
+                                         json={})
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data['success'] is False
@@ -283,7 +288,7 @@ def test_update_database_missing_fields(app, mock_course, authenticated_client):
 
     # Partial data
     response = authenticated_client.post('/api/database/update',
-                                    json={'username': TEST_USERNAME})
+                                         json={'username': TEST_USERNAME})
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data['success'] is False
@@ -300,7 +305,7 @@ def test_update_database_success(app, mock_course, authenticated_client):
         }
     }
     response = authenticated_client.post('/api/database/update',
-                                    json=test_data)
+                                         json=test_data)
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data['success'] is True
@@ -316,7 +321,7 @@ def test_update_database_invalid_score_type(app, mock_course, authenticated_clie
         }
     }
     response = authenticated_client.post('/api/database/update',
-                                    json=test_data)
+                                         json=test_data)
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data['success'] is True
@@ -332,7 +337,7 @@ def test_update_database_unauthorized(app, mock_course):
         }
     }
     response = app.test_client().post('/api/database/update',
-                                    json=test_data)
+                                      json=test_data)
     # Signup
     assert response.status_code == 302
 
@@ -348,6 +353,6 @@ def test_update_database_not_ready(app, mock_course, authenticated_client):
         }
     }
     response = authenticated_client.post('/api/database/update',
-                                    json=test_data)
+                                         json=test_data)
     # Not ready
     assert response.status_code == 302
