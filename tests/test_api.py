@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
+import yaml
 from dotenv import load_dotenv
 from flask import Flask, json
 
@@ -41,6 +42,55 @@ def app():
 
 @pytest.fixture
 def mock_course():
+    class MockGroup:
+        def __init__(self):
+            self.tasks = []
+
+        @staticmethod
+        def get_current_percent_multiplier(now):
+            return 1.0
+
+        def get_tasks(self):
+            return self.tasks
+
+    class MockTask:
+        def __init__(self):
+            self.name = TEST_TASK_NAME
+            self.score = 100
+
+    class MockStudent:
+        def __init__(self, student_id, username):
+            self.id = student_id
+            self.username = username
+
+
+    class MockSolutionsApi:
+
+        def store_task_from_folder(self, task_name, username, folder_path):
+            pass
+
+        def get_task_aggregated_zip_io(self, task_name):
+            from io import BytesIO
+            return BytesIO(b"test data")
+
+    class MockDeadlines:
+        def __init__(self):
+            self.timezone = "UTC"
+            self.mock_task = MockTask()
+            self.mock_group = MockGroup()
+            self.mock_group.tasks = [self.mock_task]
+            self.groups = [self.mock_group]
+
+        @staticmethod
+        def get_now_with_timezone():
+            return datetime.now(tz=ZoneInfo("UTC"))
+
+        @staticmethod
+        def find_task(task_name):
+            if task_name == INVALID_TASK_NAME:
+                raise KeyError("Task not found")
+            return MockGroup(), MockTask()
+
     class MockCourse:
         def __init__(self):
             self.config = {"test": "config"}
@@ -49,6 +99,9 @@ def mock_course():
             self.solutions_api = MockSolutionsApi()
             self.gitlab_api = self.gitlab_api()
             self.debug = False
+
+        def store_config(self, config_data):
+            self.config = config_data
 
         class storage_api:
             def __init__(self):
@@ -64,10 +117,27 @@ def mock_course():
             def get_scores(_username):
                 return {"task1": 100, "task2": 90, "test_task": 80}
 
+            def get_all_scores(self):
+                return {"test_user": self.get_scores("test_user")}
+
             @staticmethod
             def get_stored_user(student):
                 from manytask.abstract import StoredUser
                 return StoredUser(username=student.username, course_admin=True)
+
+            def update_cached_scores(self):
+                pass
+
+            def get_solutions(self, student):
+                if student == TEST_USERNAME:
+                    return {"solutions": []}
+                raise Exception("Student not found")
+
+            def sync_columns(self, deadlines):
+                pass
+
+        def get_groups(self):
+                return self.groups
 
         class gitlab_api:
             @staticmethod
@@ -85,40 +155,6 @@ def mock_course():
             @staticmethod
             def get_url_for_repo(username):
                 return f"https://gitlab.com/{username}/test-repo"
-
-    class MockSolutionsApi:
-        def store_task_from_folder(self, task_name, username, folder_path):
-            pass
-
-    class MockDeadlines:
-        def __init__(self):
-            self.timezone = "UTC"
-
-        @staticmethod
-        def get_now_with_timezone():
-            return datetime.now(tz=ZoneInfo("UTC"))
-
-        @staticmethod
-        def find_task(task_name):
-            if task_name == INVALID_TASK_NAME:
-                raise KeyError("Task not found")
-            return MockGroup(), MockTask()
-
-    class MockStudent:
-        def __init__(self, student_id, username):
-            self.id = student_id
-            self.username = username
-
-    class MockGroup:
-        @staticmethod
-        # pylint: disable=unused-argument
-        def get_current_percent_multiplier(now):
-            return 1.0
-
-    class MockTask:
-        def __init__(self):
-            self.name = TEST_TASK_NAME
-            self.score = 100
 
     return MockCourse()
 
@@ -308,7 +344,7 @@ def test_update_database_success(app, mock_course, authenticated_client):
                                          json=test_data)
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data['success'] is True
+    assert data['success']
 
 
 def test_update_database_invalid_score_type(app, mock_course, authenticated_client):
@@ -324,7 +360,7 @@ def test_update_database_invalid_score_type(app, mock_course, authenticated_clie
                                          json=test_data)
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data['success'] is True
+    assert data['success']
 
 
 def test_update_database_unauthorized(app, mock_course):
@@ -340,6 +376,7 @@ def test_update_database_unauthorized(app, mock_course):
                                       json=test_data)
     # Signup
     assert response.status_code == 302
+    assert response.location == '/signup'
 
 
 def test_update_database_not_ready(app, mock_course, authenticated_client):
@@ -356,3 +393,225 @@ def test_update_database_not_ready(app, mock_course, authenticated_client):
                                          json=test_data)
     # Not ready
     assert response.status_code == 302
+
+
+def test_requires_token_invalid_token(app):
+    client = app.test_client()
+    headers = {'Authorization': 'Bearer invalid_token'}
+    response = client.post('/api/report', headers=headers)
+    assert response.status_code == 403
+
+
+def test_requires_token_missing_token(app):
+    client = app.test_client()
+    response = client.post('/api/report')
+    assert response.status_code == 403
+
+
+def test_parse_flags_invalid_date(app):
+    result = _parse_flags("flag:2024-13-45T25:99:99")  # Invalid date format
+    assert result == timedelta()
+
+
+def test_update_score_after_deadline(mock_course):
+    group = mock_course.deadlines.find_task(TEST_TASK_NAME)[0]
+    task = mock_course.deadlines.find_task(TEST_TASK_NAME)[1]
+    score = 100
+    flags = ""
+    old_score = 0
+    submit_time = datetime.now(ZoneInfo("UTC"))
+    
+    # Test with check_deadline=True
+    result = _update_score(group, task, score, flags, old_score, submit_time, check_deadline=True)
+    assert result == score * group.get_current_percent_multiplier(submit_time)
+
+
+def test_get_solutions_success(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    
+    response = client.get('/api/solutions', data={'task': TEST_TASK_NAME}, headers=headers)
+    assert response.status_code == 200
+
+
+def test_get_solutions_missing_student(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    
+    response = client.get('/api/solutions', headers=headers)
+    assert response.status_code == 400
+
+
+def test_update_config_success(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    
+    data = {"test": "config"}
+    response = client.post('/api/update_config', data=yaml.dump(data), headers=headers)
+    assert response.status_code == 200
+
+
+def test_update_cache_success(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    
+    response = client.post('/api/update_cache', headers=headers)
+    assert response.status_code == 200
+
+
+def test_get_database_unauthorized(app, mock_course):
+    app.debug = False  # Disable debug mode to test auth
+    app.course = mock_course
+    client = app.test_client()
+    response = client.get('/api/database')
+    assert response.status_code == 302  # Redirects to login
+
+
+def test_get_database_not_ready(app, mock_course):
+    app.debug = False  # Disable debug mode to test auth
+    mock_course.config = None
+    app.course = mock_course
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['gitlab'] = {
+            'version': 1.5,
+            'username': TEST_USERNAME,
+            'user_id': TEST_USER_ID,
+            'repo': 'test-repo',
+            'course_admin': True
+        }
+    response = client.get('/api/database')
+    assert response.status_code == 302  # Redirects to not ready page
+
+
+def test_update_database_invalid_json(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['gitlab'] = {
+            'version': 1.5,
+            'username': TEST_USERNAME,
+            'user_id': TEST_USER_ID,
+            'repo': 'test-repo',
+            'course_admin': True
+        }
+    response = client.post('/api/database/update', 
+                          data='invalid json',
+                          content_type='application/json')
+    assert response.status_code == 400
+
+
+def test_update_database_missing_student(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['gitlab'] = {
+            'version': 1.5,
+            'username': TEST_USERNAME,
+            'user_id': TEST_USER_ID,
+            'repo': 'test-repo',
+            'course_admin': True
+        }
+    data = {
+        'scores': {
+            TEST_TASK_NAME: 100
+        }
+    }
+    response = client.post('/api/database/update', json=data)
+    assert response.status_code == 400
+    assert 'Missing required fields' in json.loads(response.data)['message']
+
+
+def test_report_score_with_flags(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    
+    data = {
+        'user_id': str(TEST_USER_ID),
+        'task': TEST_TASK_NAME,
+        'score': '100',  # API expects string
+        'flags': 'flag:2024-03-20T15:30:00',
+        'submit_time': '2024-03-20T15:30:00',
+        'check_deadline': 'True'
+    }
+    response = client.post('/api/report', data=data, headers=headers)  # Use form data, not JSON
+    assert response.status_code == 200
+
+
+def test_report_score_invalid_submit_time(app, mock_course):
+    with app.test_request_context():
+        app.course = mock_course
+        client = app.test_client()
+        headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+        
+        data = {
+            'student': TEST_USERNAME,
+            'task': TEST_TASK_NAME,
+            'score': 100,
+            'flags': '',
+            'submit_time': 'invalid_time'
+        }
+        response = client.post('/api/report', json=data, headers=headers)
+        assert response.status_code == 400
+
+
+def test_get_score_invalid_student(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    
+    response = client.get('/api/score', data={'username': 'nonexistent_user', 'task': TEST_TASK_NAME}, headers=headers)
+    assert response.status_code == 404
+
+
+
+
+def test_update_database_invalid_task(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['gitlab'] = {
+            'version': 1.5,
+            'username': TEST_USERNAME,
+            'user_id': TEST_USER_ID,
+            'repo': 'test-repo',
+            'course_admin': True
+        }
+    data = {
+        'username': TEST_USERNAME,
+        'scores': {
+            INVALID_TASK_NAME: 100
+        }
+    }
+    response = client.post('/api/database/update', json=data)
+    # API silently ignores invalid tasks
+    assert response.status_code == 200
+
+
+def test_update_database_invalid_score_value(app, mock_course):
+    app.course = mock_course
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['gitlab'] = {
+            'version': 1.5,
+            'username': TEST_USERNAME,
+            'user_id': TEST_USER_ID,
+            'repo': 'test-repo',
+            'course_admin': True
+        }
+    data = {
+        'username': TEST_USERNAME,
+        'scores': {
+            TEST_TASK_NAME: -1  # Invalid score value
+        }
+    }
+    response = client.post('/api/database/update', json=data)
+    # API silently ignores invalid scores
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['success']
