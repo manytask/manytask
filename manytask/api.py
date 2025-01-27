@@ -20,6 +20,7 @@ from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .database_utils import get_database_table_data
+from .glab import Student
 
 
 logger = logging.getLogger(__name__)
@@ -338,4 +339,56 @@ def get_solutions() -> ResponseReturnValue:
 def get_database() -> ResponseReturnValue:
     table_data = get_database_table_data()
     return jsonify(table_data)
+
+
+@bp.post("/database/update")
+@requires_auth
+@requires_ready
+def update_database() -> ResponseReturnValue:
+    """
+    Update student scores in the database via API endpoint.
+
+    This endpoint accepts POST requests with JSON data containing a username and scores to update.
+    The request body should be in the format:
+    {
+        "username": str,
+        "scores": {
+            "task_name": score_value
+        }
+    }
+
+    Returns:
+        ResponseReturnValue: JSON response with success status and optional error message
+    """
+    course: Course = current_app.course  # type: ignore
+    storage_api = course.storage_api
+    
+    if not request.is_json:
+        return jsonify({"success": False, "message": "Request must be JSON"}), 400
+        
+    data = request.get_json()
+    if not data or "username" not in data or "scores" not in data:
+        return jsonify({"success": False, "message": "Missing required fields"}), 400
+        
+    username = data["username"]
+    new_scores = data["scores"]
+    
+    try:
+        student = Student(
+            id=0, 
+            username=username, 
+            name=username,
+            repo=course.gitlab_api.get_url_for_repo(username)
+        )
+        for task_name, new_score in new_scores.items():
+            if isinstance(new_score, (int, float)):
+                storage_api.store_score(
+                    student=student,
+                    task_name=task_name,
+                    update_fn=lambda _flags, _old_score: int(new_score)
+                )
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"Error updating database: {str(e)}")
+        return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
 

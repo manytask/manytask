@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from flask import Flask, json
 
 from manytask.api import _parse_flags, _update_score, bp as api_bp
+from manytask.web import bp as web_bp
 
 
 # Constants
@@ -33,6 +34,7 @@ def app():
     app.config['DEBUG'] = False
     app.config['TESTING'] = True
     app.secret_key = TEST_SECRET_KEY
+    app.register_blueprint(web_bp)
     app.register_blueprint(api_bp)
     return app
 
@@ -45,13 +47,18 @@ def mock_course():
             self.deadlines = MockDeadlines()
             self.storage_api = self.storage_api()
             self.solutions_api = MockSolutionsApi()
+            self.gitlab_api = self.gitlab_api()
             self.debug = False
 
         class storage_api:
-            @staticmethod
-            def store_score(_student, _task_name, update_function):
-                old_score = 0
-                return update_function("", old_score)
+            def __init__(self):
+                self.scores = {}
+
+            def store_score(self, student, task_name, update_fn):
+                old_score = self.scores.get(f"{student.username}_{task_name}", 0)
+                new_score = update_fn("", old_score)
+                self.scores[f"{student.username}_{task_name}"] = new_score
+                return new_score
 
             @staticmethod
             def get_scores(_username):
@@ -69,6 +76,10 @@ def mock_course():
                 if username == TEST_USERNAME:
                     return MockStudent(TEST_USER_ID, TEST_USERNAME)
                 raise Exception("Student not found")
+
+            @staticmethod
+            def get_url_for_repo(username):
+                return f"https://gitlab.com/{username}/test-repo"
 
     class MockSolutionsApi:
         def store_task_from_folder(self, task_name, username, folder_path):
@@ -105,6 +116,23 @@ def mock_course():
             self.score = 100
 
     return MockCourse()
+
+
+@pytest.fixture
+def authenticated_client(app):
+    """
+    Provides a client with anauthenticated session
+    """
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session['gitlab'] = {
+                "version": 1.5,
+                "username": TEST_USERNAME,
+                "user_id": TEST_USER_ID,
+                "repo": "test_repo",
+                "course_admin": False
+            }
+        yield client
 
 
 def test_parse_flags_no_flags():
@@ -229,3 +257,97 @@ def test_get_score_success(app, mock_course):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data == expected_data
+
+
+def test_update_database_not_json(app, mock_course, authenticated_client):
+    app.course = mock_course
+    response = authenticated_client.post('/api/database/update', 
+                                    data='not json',
+                                    content_type='text/plain')
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data['success'] is False
+    assert 'Request must be JSON' in data['message']
+
+
+def test_update_database_missing_fields(app, mock_course, authenticated_client):
+    app.course = mock_course
+
+    # Empty data
+    response = authenticated_client.post('/api/database/update',
+                                    json={})
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data['success'] is False
+    assert 'Missing required fields' in data['message']
+
+    # Partial data
+    response = authenticated_client.post('/api/database/update',
+                                    json={'username': TEST_USERNAME})
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data['success'] is False
+    assert 'Missing required fields' in data['message']
+
+
+def test_update_database_success(app, mock_course, authenticated_client):
+    app.course = mock_course
+    test_data = {
+        'username': TEST_USERNAME,
+        'scores': {
+            'task1': 90,
+            'task2': 85
+        }
+    }
+    response = authenticated_client.post('/api/database/update',
+                                    json=test_data)
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['success'] is True
+
+
+def test_update_database_invalid_score_type(app, mock_course, authenticated_client):
+    app.course = mock_course
+    test_data = {
+        'username': TEST_USERNAME,
+        'scores': {
+            'task1': 'not a number',  # invalid score type
+            'task2': 85
+        }
+    }
+    response = authenticated_client.post('/api/database/update',
+                                    json=test_data)
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['success'] is True
+
+
+def test_update_database_unauthorized(app, mock_course):
+    app.course = mock_course
+    test_data = {
+        'username': TEST_USERNAME,
+        'scores': {
+            'task1': 90,
+            'task2': 85
+        }
+    }
+    response = app.test_client().post('/api/database/update',
+                                    json=test_data)
+    # Signup
+    assert response.status_code == 302
+
+
+def test_update_database_not_ready(app, mock_course, authenticated_client):
+    mock_course.config = None
+    app.course = mock_course
+    test_data = {
+        'username': TEST_USERNAME,
+        'scores': {
+            'task1': 90,
+            'task2': 85
+        }
+    }
+    response = authenticated_client.post('/api/database/update',
+                                    json=test_data)
+    # Not ready
+    assert response.status_code == 302
