@@ -11,7 +11,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 import yaml
-from flask import Blueprint, Response, abort, current_app, jsonify, request
+from flask import Blueprint, Response, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
@@ -362,6 +362,14 @@ def update_database() -> ResponseReturnValue:
     """
     course: Course = current_app.course  # type: ignore
     storage_api = course.storage_api
+
+    student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
+    stored_user = storage_api.get_stored_user(student)
+    student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
+
+    if not student_course_admin:
+        return jsonify({"success": False, "message": "Only course admins can update scores"}), 403
+
 
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), 400

@@ -7,6 +7,7 @@
 
         <div id="database-table" style="max-width: 800px; width: 100%; overflow-x: auto;"></div>
 
+        {% if is_course_admin %}
         <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -29,6 +30,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
@@ -69,6 +71,11 @@
         function editCell(cell) {
             const readonlyFields = {{ readonly_fields|tojson }};
             if (readonlyFields.includes(cell.getField())) {
+                return;
+            }
+            
+            const isAdmin = {{ is_course_admin|tojson }};
+            if (!isAdmin) {
                 return;
             }
             
@@ -156,12 +163,14 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            {% if is_course_admin %}
             editModal = new bootstrap.Modal(document.getElementById('editModal'));
             
             document.getElementById('editForm').addEventListener('submit', function(e) {
                 e.preventDefault();
                 saveChanges();
             });
+            {% endif %}
             
             // Watch theme changes for database viewer
             updateTheme();
@@ -209,9 +218,11 @@
                             field: `scores.${task.name}`,
                             sorter: "number",
                             headerTooltip: task.name,
+                            {% if is_course_admin %}
                             cellClick: function(e, cell) {
                                 editCell(cell);
                             }
+                            {% endif %}
                         });
                     });
 
@@ -235,6 +246,14 @@
                             },
                             cssClass: "text-wrap",
                             tooltip: true,
+                            tooltipGenerationMode: "hover",
+                            tooltipFormatter: function(cell) {
+                                const isAdmin = {{ is_course_admin|tojson }};
+                                if (!isAdmin && cell.getField() !== "username" && cell.getField() !== "total_score") {
+                                    return "Only course admins can edit scores";
+                                }
+                                return cell.getValue();
+                            },
                             vertAlign: "middle"
                         },
                         persistenceMode: "local",
