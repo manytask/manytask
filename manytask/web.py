@@ -22,24 +22,30 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("web", __name__)
 
 
-
-
 @bp.route("/")
 @requires_ready
 @requires_auth
 def course_page() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
+    storage_api = course.storage_api
+
     if current_app.debug:
         student_username = "guest"
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
-        student_course_admin = True  # request.args.get('admin', None) is not None
+
+        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+            student_course_admin = True
+        else:
+            student_course_admin = False
     else:
         student_username = session["gitlab"]["username"]
         student_repo = session["gitlab"]["repo"]
-        student_course_admin = session["gitlab"]["course_admin"]
 
-    storage_api = course.storage_api
+        student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
+        stored_user = storage_api.get_stored_user(student)
+
+        student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
 
     # update cache if more than 1h passed or in debug mode
     try:
@@ -86,8 +92,16 @@ def course_page() -> ResponseReturnValue:
 def get_solutions() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
-    # request.args.get('admin', None) is not None
-    student_course_admin = True if current_app.debug else session["gitlab"]["course_admin"]
+    if current_app.debug:
+        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+            student_course_admin = True
+        else:
+            student_course_admin = False
+    else:
+        student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
+        stored_user = course.storage_api.get_stored_user(student)
+
+        student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
 
     if not student_course_admin:
         return "Possible only for admins", 403
@@ -197,6 +211,8 @@ def login_finish() -> ResponseReturnValue:
     # TODO do not return 502 (raise_for_status below)
     student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
 
+    course.storage_api.sync_stored_user(student)
+
     # save user in session
     session["gitlab"] = {
         "oauth_access_token": gitlab_access_token,
@@ -211,8 +227,9 @@ def login_finish() -> ResponseReturnValue:
 
     if (course.gitlab_api.check_project_exists(student)):
         return redirect(url_for("web.course_page"))
-    else :
+    else:
         return redirect(url_for("web.create_project"))
+
 
 @bp.route("/create_project", methods=["GET", "POST"])
 @requires_ready
@@ -276,15 +293,24 @@ def not_ready() -> ResponseReturnValue:
 @requires_ready
 def show_database() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
-    
-    if current_app.debug:
-        student_username = "guest"
-        student_course_admin = True
-    else:
-        student_username = session["gitlab"]["username"]
-        student_course_admin = session["gitlab"]["course_admin"]
 
     storage_api = course.storage_api
+
+    if current_app.debug:
+        student_username = "guest"
+
+        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+            student_course_admin = True
+        else:
+            student_course_admin = False
+    else:
+        student_username = session["gitlab"]["username"]
+
+        student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
+        stored_user = storage_api.get_stored_user(student)
+
+        student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
+
     scores = storage_api.get_scores(student_username)
     bonus_score = storage_api.get_bonus_score(student_username)
     table_data = get_database_table_data()
