@@ -546,7 +546,7 @@ def test_auto_tables_creation(engine):
             show_allscores=True
         )
 
-    DataBaseApi(
+    db_api = DataBaseApi(
         database_url=SQLALCHEMY_DATABASE_URL,
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",

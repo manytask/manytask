@@ -129,6 +129,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
             user_on_course = self._get_or_create_user_on_course(session, student, course)
+            session.commit()
 
             return StoredUser(
                 username=user_on_course.user.username,
@@ -230,15 +231,6 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             try:
                 course = self._get(session, models.Course, name=self.course_name)
-                # Always create user and user_on_course
-                # fixme
-                user = self._get_or_create(
-                    session,
-                    models.User,
-                    username=student.username,
-                    gitlab_instance_host=course.gitlab_instance_host
-                )
-
                 user_on_course = self._get_or_create_user_on_course(session, student, course)
                 session.commit()
 

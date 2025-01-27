@@ -22,13 +22,13 @@ def test_get_stored_user(empty_google_doc_api):
     stored_user1 = empty_google_doc_api.get_stored_user(student1)
 
     assert stored_user1.username == 'user1'
-    assert stored_user1.course_admin == False
+    assert not stored_user1.course_admin
 
     student2 = Student(id=0, username='user2', name='', course_admin=True)
     stored_user2 = empty_google_doc_api.get_stored_user(student2)
 
     assert stored_user2.username == 'user2'
-    assert stored_user2.course_admin == False
+    assert not stored_user2.course_admin
 
 
 def test_sync_stored_user(empty_google_doc_api):
