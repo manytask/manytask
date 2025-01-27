@@ -494,6 +494,9 @@ def test_deadlines(first_course_with_deadlines, second_course_with_deadlines, se
                               'steps': {'0.5': '2000-02-02T23:59:00+01:00'},
                               'end': '2000-02-02T23:59:00+01:00'}
 
+    assert deadline1.data == {'start': '2000-01-02T18:00:00+01:00',
+                              'steps': {'0.5': '2000-02-02T23:59:00+01:00'},
+                              'end': '2000-02-02T23:59:00+01:00'}
     deadline2 = session.query(Deadline).join(TaskGroup).filter(
         TaskGroup.name == 'group_1').join(Course).filter(Course.name == 'Another Test Course').one()
 

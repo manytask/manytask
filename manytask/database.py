@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
+from typing import Any, Callable, Iterable, Optional, Type, TypeVar
 
 from psycopg2.errors import UniqueViolation
 from sqlalchemy import and_, create_engine
@@ -129,6 +130,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
             user_on_course = self._get_or_create_user_on_course(session, student, course)
+            session.commit()
 
             return StoredUser(
                 username=user_on_course.user.username,
@@ -228,23 +230,15 @@ class DataBaseApi(ViewerApi, StorageApi):
 
         with Session(self.engine) as session:
             try:
-                # course = self._get(session, models.Course, name=self.course_name)
+                course = self._get(session, models.Course, name=self.course_name)
                 # Always create user and user_on_course
-                user = self._get_or_create(
+                self._get_or_create(
                     session,
                     models.User,
                     username=student.username,
                     gitlab_instance_host=course.gitlab_instance_host
                 )
 
-                # user_on_course = self._get_or_create(
-                #     session,
-                #     models.UserOnCourse,
-                #     defaults={'repo_name': student.repo},
-                #     user_id=user.id,
-                #     course_id=course.id
-                # )
-                course = self._get(session, models.Course, name=self.course_name)
                 user_on_course = self._get_or_create_user_on_course(session, student, course)
 
                 session.commit()
@@ -452,6 +446,52 @@ class DataBaseApi(ViewerApi, StorageApi):
         query = session.query(model).with_for_update().filter_by(**kwargs)
         return query.one_or_none() if allow_none else query.one()
 
+    # @staticmethod
+    # def _create_or_update_instance(
+    #         session: Session,
+    #         model: Type[ModelType],
+    #         instance: Optional[ModelType],
+    #         defaults: Optional[dict[str, Any]] = None,
+    #         create_defaults: Optional[dict[str, Any]] = None,
+    #         **kwargs: Any
+    # ) -> ModelType:
+    #     """Create a new instance or update existing one with defaults.
+    #
+    #     :param session: SQLAlchemy session
+    #     :param model: Model class
+    #     :param instance: Existing instance if any
+    #     :param defaults: Default values to update on the instance
+    #     :param create_defaults: Additional defaults to use only for creation
+    #     :param kwargs: Parameters for instance creation
+    #     :return: Created or updated instance
+    #     """
+    #     if instance:
+    #         if defaults:
+    #             for key, value in defaults.items():
+    #                 setattr(instance, key, value)
+    #             session.flush()
+    #         return instance
+    #
+    #     if defaults is not None:
+    #         kwargs.update(defaults)
+    #     if create_defaults is not None:
+    #         kwargs.update(create_defaults)
+    #
+    #     try:
+    #         new_instance = model(**kwargs)
+    #         session.add(new_instance)
+    #         session.flush()
+    #         return new_instance
+    #     except IntegrityError:
+    #         session.rollback()
+    #         existing_instance = cast(ModelType,
+    #                                  DataBaseApi._query_with_for_update(session, model, allow_none=False, **kwargs))
+    #         if defaults:
+    #             for key, value in defaults.items():
+    #                 setattr(existing_instance, key, value)
+    #             session.flush()
+    #         return existing_instance
+
     @staticmethod
     def _create_or_update_instance(
             session: Session,
@@ -484,19 +524,19 @@ class DataBaseApi(ViewerApi, StorageApi):
             kwargs.update(create_defaults)
 
         try:
-            new_instance = model(**kwargs)
-            session.add(new_instance)
+            instance = model(**kwargs)
+            session.add(instance)
             session.flush()
-            return new_instance
+            return instance
         except IntegrityError:
             session.rollback()
-            existing_instance = cast(ModelType,
-                                     DataBaseApi._query_with_for_update(session, model, allow_none=False, **kwargs))
+            instance = DataBaseApi._query_with_for_update(session, model, allow_none=False, **kwargs)
             if defaults:
                 for key, value in defaults.items():
-                    setattr(existing_instance, key, value)
+                    setattr(instance, key, value)
                 session.flush()
-            return existing_instance
+            assert instance is not None
+            return instance
 
     @staticmethod
     def _get_or_create(

@@ -362,21 +362,21 @@ def update_database() -> ResponseReturnValue:
     """
     course: Course = current_app.course  # type: ignore
     storage_api = course.storage_api
-    
+
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), 400
-        
+
     data = request.get_json()
     if not data or "username" not in data or "scores" not in data:
         return jsonify({"success": False, "message": "Missing required fields"}), 400
-        
+
     username = data["username"]
     new_scores = data["scores"]
-    
+
     try:
         student = Student(
-            id=0, 
-            username=username, 
+            id=0,
+            username=username,
             name=username,
             repo=course.gitlab_api.get_url_for_repo(username)
         )
