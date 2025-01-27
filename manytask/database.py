@@ -480,7 +480,7 @@ class DataBaseApi(ViewerApi, StorageApi):
             if defaults:
                 for key, value in defaults.items():
                     setattr(existing_instance, key, value)
-                session.flush()
+            session.flush()
             return existing_instance
 
     @staticmethod

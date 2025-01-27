@@ -332,7 +332,6 @@ def test_get_and_sync_stored_user(first_course_db_api, session):
     assert session.query(UserOnCourse).count() == 1
 
 
-
 def test_many_users(first_course_with_deadlines, session):
     student1 = Student(0, 'user1', 'username1', False, 'repo1')
     first_course_with_deadlines.store_score(student1, 'task_0_0', update_func(1))
@@ -558,6 +557,7 @@ def test_auto_tables_creation(engine):
     with Session(engine) as session:
         test_empty_course(db_api, session)
 
+
 def test_viewer_api():
     db_api = DataBaseApi(
         database_url=SQLALCHEMY_DATABASE_URL,
@@ -568,3 +568,31 @@ def test_viewer_api():
         create_tables_if_not_exist=True
     )
     assert db_api.get_scoreboard_url() == ""
+
+
+def test_store_score_integrity_error(first_course_with_deadlines, session):
+    student = Student(0, 'user1', 'username1', False, 'repo1')
+
+    user = User(username=student.username, gitlab_instance_host='gitlab.test.com')
+    session.add(user)
+    session.commit()
+
+    score = first_course_with_deadlines.store_score(student, 'task_0_0', update_func(1))
+    assert score == 1
+
+    assert session.query(User).count() == 1
+    assert session.query(UserOnCourse).count() == 1
+    assert session.query(Grade).count() == 1
+
+
+def test_store_score_update_error(first_course_with_deadlines, session):
+    student = Student(0, 'user1', 'username1', False, 'repo1')
+
+    def failing_update(_, score):
+        raise ValueError("Update failed")
+
+    with pytest.raises(ValueError) as exc_info:
+        first_course_with_deadlines.store_score(student, 'task_0_0', failing_update)
+    assert "Update failed" in str(exc_info.value)
+
+    assert session.query(Grade).count() == 0
