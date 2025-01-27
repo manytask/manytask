@@ -561,3 +561,14 @@ def test_auto_tables_creation(engine):
         assert course.gitlab_instance_host == 'gitlab.test.com'
         assert course.registration_secret == 'secret'
         assert course.show_allscores
+
+def test_viewer_api():
+    db_api = DataBaseApi(
+        database_url=SQLALCHEMY_DATABASE_URL,
+        course_name="Test Course",
+        gitlab_instance_host="gitlab.test.com",
+        registration_secret="secret",
+        show_allscores=True,
+        create_tables_if_not_exist=True
+    )
+    assert db_api.get_scoreboard_url() == ""

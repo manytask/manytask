@@ -3,13 +3,13 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from flask import Flask
+from flask import Flask, url_for
 from pydantic import AnyUrl
 
 from manytask.abstract import StoredUser
 from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from manytask.glab import Student
-from manytask.web import bp as web_bp
+from manytask.web import bp as web_bp, get_allscores_url
 
 
 TEST_USERNAME = "test_user"
@@ -148,7 +148,7 @@ def mock_course():
 
         class viewer_api:
             @staticmethod
-            def get_spreadsheet_url():
+            def get_scoreboard_url():
                 return "https://docs.google.com/spreadsheets"
 
         class MockSolutionsApi:
@@ -271,6 +271,20 @@ def test_not_ready(app, mock_course):
         response = app.test_client().get('/not_ready')
         assert response.status_code == 302
 
+def test_get_allscores_url(app, mock_course):
+    with app.test_request_context():
+        test_url = "https://docs.google.com/spreadsheets"
+        class viewer_api_gsheets:
+            @staticmethod
+            def get_scoreboard_url():
+                return test_url
+            
+        class viewer_api_db:
+            @staticmethod
+            def get_scoreboard_url():
+                return ""
+        assert get_allscores_url(viewer_api_gsheets) == test_url
+        assert get_allscores_url(viewer_api_db) == url_for('web.show_database')
 
 def check_admin_in_data(response, check_true):
     assert response.status_code == 200

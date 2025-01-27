@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import abstract, course, database, gdoc, glab, local_config, solutions
+from . import abstract, config, course, database, gdoc, glab, local_config, solutions
 
 
 load_dotenv("../.env")  # take environment variables from .env.
@@ -43,8 +43,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     if "FLASK_SECRET_KEY" not in os.environ and not debug:
         raise EnvironmentError("Unable to find FLASK_SECRET_KEY env in production mode")
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex())
-
-    app.config['USE_DATABASE_AS_VIEW'] = os.environ.get('USE_DATABASE_AS_VIEW', 'false').lower() in ('true', '1', 'yes')
 
     # oauth
     oauth = OAuth(app)
@@ -141,12 +139,13 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         course_students_group=app.app_config.gitlab_course_students_group,
         default_branch=app.app_config.gitlab_default_branch,
     )
-    _gdoc_credentials_string = base64.decodebytes(app.app_config.gdoc_account_credentials_base64.encode())
 
     storage_api: abstract.StorageApi
     viewer_api: abstract.ViewerApi
 
-    if os.environ.get("USE_DATABASE_AS_STORAGE", "false").lower() in ("true", "1", "yes"):
+    storage = os.environ.get("STORAGE", "gsheets").lower()
+
+    if storage == config.ManytaskStorageType.DataBase.value:
         database_url = os.environ.get("DATABASE_URL", None)
         course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
         create_tables_if_not_exist = os.environ.get(
@@ -157,30 +156,43 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         if course_name is None:
             raise EnvironmentError("Unable to find UNIQUE_COURSE_NAME env")
 
-        storage_api = database.DataBaseApi(
+        viewer_api = storage_api = database.DataBaseApi(
             database_url=database_url,
             course_name=course_name,
             gitlab_instance_host=app.app_config.gitlab_url,
             registration_secret=app.app_config.registration_secret,
             show_allscores=app.app_config.show_allscores,
-            create_tables_if_not_exist=create_tables_if_not_exist
+            create_tables_if_not_exist=create_tables_if_not_exist,
         )
 
-        viewer_api = gdoc.GoogleDocApi(
-            base_url=app.app_config.gdoc_url,
-            gdoc_credentials=json.loads(_gdoc_credentials_string),
-            public_worksheet_id=app.app_config.gdoc_spreadsheet_id,
-            public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
-            cache=cache,
-        )
-    else:
+    elif storage == config.ManytaskStorageType.GoogleSheets.value:
+
+        # google sheets (credentials base64 encoded json)
+        gdoc_url=str(os.environ.get("GDOC_URL", "https://docs.google.com"))
+        gdoc_account_credentials_base64=os.environ.get("GDOC_ACCOUNT_CREDENTIALS_BASE64")
+        # google public sheet
+        gdoc_spreadsheet_id=str(os.environ["GDOC_SPREADSHEET_ID"])
+        gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0))
+
+        if gdoc_account_credentials_base64 is None:
+            raise EnvironmentError("Unable to find GDOC_ACCOUNT_CREDENTIALS_BASE64 env")
+        if gdoc_spreadsheet_id is None:
+            raise EnvironmentError("Unable to find GDOC_SPREADSHEET_ID env")
+
+        _gdoc_credentials_string = base64.decodebytes(str(gdoc_account_credentials_base64).encode())
+
         viewer_api = storage_api = gdoc.GoogleDocApi(
-            base_url=app.app_config.gdoc_url,
+            base_url=gdoc_url,
             gdoc_credentials=json.loads(_gdoc_credentials_string),
-            public_worksheet_id=app.app_config.gdoc_spreadsheet_id,
-            public_scoreboard_sheet=int(app.app_config.gdoc_scoreboard_sheet),
+            public_worksheet_id=gdoc_spreadsheet_id,
+            public_scoreboard_sheet=gdoc_scoreboard_sheet,
             cache=cache,
         )
+
+    else:
+        raise EnvironmentError("STORAGE should be either '" + config.ManytaskStorageType.GoogleSheets.value + \
+                               "' to store data in Google Sheets, or '" + config.ManytaskStorageType.DataBase.value + \
+                               "' to use database. Set to '" + storage + "'.")
 
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
