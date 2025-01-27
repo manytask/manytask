@@ -64,6 +64,11 @@ def mock_course():
             def get_scores(_username):
                 return {"task1": 100, "task2": 90, "test_task": 80}
 
+            @staticmethod
+            def get_stored_user(student):
+                from manytask.abstract import StoredUser
+                return StoredUser(username=student.username, course_admin=True)
+
         class gitlab_api:
             @staticmethod
             def get_student(user_id):

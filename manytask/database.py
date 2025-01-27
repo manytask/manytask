@@ -1,8 +1,6 @@
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
-from typing import Any, Callable, Iterable, Optional, Type, TypeVar
-from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 
 from psycopg2.errors import UniqueViolation
 from sqlalchemy import and_, create_engine
