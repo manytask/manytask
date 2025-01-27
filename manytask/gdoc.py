@@ -14,7 +14,7 @@ from google.auth.credentials import AnonymousCredentials
 from gspread import Cell as GCell
 from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
 
-from .abstract import StorageApi, ViewerApi
+from .abstract import StorageApi, StoredUser, ViewerApi
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
 from .glab import Student
@@ -93,6 +93,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         public_worksheet_id: str,
         public_scoreboard_sheet: int,
         cache: BaseCache,
+        testing: bool = False
     ):
         """
         :param base_url:
@@ -100,7 +101,12 @@ class GoogleDocApi(ViewerApi, StorageApi):
         :param public_worksheet_id:
         :param public_scoreboard_sheet:
         :param cache:
+        :param testing:
         """
+
+        if testing:
+            return  # TODO: cover all methods
+
         self._url = base_url
         self._gdoc_credentials = gdoc_credentials
         self._public_worksheet_id = public_worksheet_id
@@ -171,6 +177,21 @@ class GoogleDocApi(ViewerApi, StorageApi):
         if bonus_scores is None:
             return 0
         return bonus_scores.get(username, 0)
+
+    def get_stored_user(
+        self,
+        student: Student,
+    ) -> StoredUser:
+        return StoredUser(
+            username=student.username,
+            course_admin=False
+        )
+
+    def sync_stored_user(
+        self,
+        student: Student,
+    ) -> StoredUser:
+        return self.get_stored_user(student)
 
     def get_all_scores(self) -> dict[str, dict[str, int]]:
         all_scores = self._cache.get(f"{self.ws.id}:scores")

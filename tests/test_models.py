@@ -5,8 +5,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
-from manytask.models import Base, Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
-
+from manytask.models import (
+    Base,
+    Course,
+    Deadline,
+    Grade,
+    Task,
+    TaskGroup,
+    User,
+    UserOnCourse,
+    validate_gitlab_instance_host,
+)
 
 SQLALCHEMY_DATABASE_URL = 'sqlite:///:memory:'
 
@@ -103,6 +112,15 @@ def test_user_on_course(session):
     retrieved_course = session.query(Course).filter_by(name="course1").first()
     assert len(retrieved_course.users_on_courses.all()) == 1
     assert retrieved_course.users_on_courses[0].user.username == "user1"
+
+    retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
+    assert retrieved_user_on_course.is_course_admin == False
+
+    retrieved_user_on_course.is_course_admin = True
+    session.commit()
+
+    retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
+    assert retrieved_user_on_course.is_course_admin == True
 
 
 def test_user_on_course_unique_ids(session):
@@ -512,3 +530,8 @@ def test_cascade_delete_user_on_course(session):
 
     assert session.query(TaskGroup).filter_by(name="cascade_group5").first() is not None
     assert session.query(Task).filter_by(name="cascade_task7").first() is not None
+
+
+def test_validate_gitlab_instance_host_missing_course():
+    validate_result = validate_gitlab_instance_host(None, {}, None)
+    assert validate_result is None
