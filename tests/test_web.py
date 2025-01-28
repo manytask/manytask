@@ -171,7 +171,7 @@ def mock_gitlab_oauth():
 
 @pytest.fixture(autouse=True)
 def setup_environment(monkeypatch):
-    monkeypatch.setenv('TESTER_TOKEN', TEST_TOKEN)
+    monkeypatch.setenv('MANYTASK_COURSE_TOKEN', TEST_TOKEN)
     monkeypatch.setenv('REGISTRATION_SECRET', TEST_SECRET)
     monkeypatch.setenv('FLASK_SECRET_KEY', TEST_KEY)
     monkeypatch.setenv('TESTING', 'true')
@@ -399,35 +399,35 @@ def test_login_finish_sync(app, mock_course, mock_gitlab_oauth):
             app.course = mock_course
             app.oauth = mock_gitlab_oauth
 
-            assert app.course.storage_api.stored_user.course_admin == False
+            assert app.course.storage_api.stored_user.course_admin is False
 
             # not admin in gitlab so stored value shouldn't change
-            response = client.get('/login_finish')
+            client.get('/login_finish')
 
             with client.session_transaction() as sess:
                 assert 'gitlab' in sess
-                assert sess["gitlab"]["course_admin"] == False
+                assert sess["gitlab"]["course_admin"] is False
 
-            assert app.course.storage_api.stored_user.course_admin == False
+            assert app.course.storage_api.stored_user.course_admin is False
 
             app.course.gitlab_api.course_admin = True
 
             # admin in gitlab so stored value should change
-            response = client.get('/login_finish')
+            client.get('/login_finish')
 
             with client.session_transaction() as sess:
                 assert 'gitlab' in sess
-                assert sess["gitlab"]["course_admin"] == True
+                assert sess["gitlab"]["course_admin"] is True
 
-            assert app.course.storage_api.stored_user.course_admin == True
+            assert app.course.storage_api.stored_user.course_admin is True
 
             app.course.gitlab_api.course_admin = False
 
             # not admin in gitlab but also stored that admin
-            response = client.get('/login_finish')
+            client.get('/login_finish')
 
             with client.session_transaction() as sess:
                 assert 'gitlab' in sess
-                assert sess["gitlab"]["course_admin"] == False
+                assert sess["gitlab"]["course_admin"] is False
 
-            assert app.course.storage_api.stored_user.course_admin == True
+            assert app.course.storage_api.stored_user.course_admin is True
