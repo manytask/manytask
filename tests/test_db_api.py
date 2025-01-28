@@ -95,6 +95,7 @@ def load_deadlines_config_and_sync_columns(db_api: DataBaseApi, yaml_file_file_p
                 name=db_api.course_name,
                 gitlab_instance_host="gitlab.test.com",
                 registration_secret="secret",
+                token="token",
                 show_allscores=True
             )
             session.commit()
@@ -132,8 +133,8 @@ def second_course_with_deadlines(second_course_db_api, second_course_deadlines_c
 @pytest.fixture(autouse=True)
 def setup_environment(monkeypatch):
     load_dotenv()
-    if not os.getenv('TESTER_TOKEN'):
-        monkeypatch.setenv('TESTER_TOKEN', 'test_token')
+    if not os.getenv('MANYTASK_COURSE_TOKEN'):
+        monkeypatch.setenv('MANYTASK_COURSE_TOKEN', 'test_token')
     monkeypatch.setenv('FLASK_SECRET_KEY', 'test_key')
     monkeypatch.setenv('TESTING', 'true')
     yield
