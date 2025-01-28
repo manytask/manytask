@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -8,6 +9,8 @@ from dotenv import load_dotenv
 from flask import Flask, json
 
 from manytask.api import _parse_flags, _update_score, bp as api_bp
+from manytask.database import DataBaseApi
+from manytask.models import Course as DBCourse
 
 
 # Constants
@@ -237,3 +240,34 @@ def test_get_score_success(app, mock_course):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data == expected_data
+
+def test_no_course_in_db(app, mock_course):
+    """Test the decorator when no course information is present in the database, leading to an abort."""
+
+    with patch('manytask.api.abort', side_effect=Exception('Aborted')) as mock_abort:
+        app.course = mock_course
+        app.course.storage_api = MagicMock(DataBaseApi)
+        app.course.storage_api.course_name = "NoSuchCourse"
+        app.course.storage_api.get_course.return_value = None
+        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
+
+        with pytest.raises(Exception, match='Aborted'):
+            app.test_client().get('/api/score', headers=headers)
+        
+        mock_abort.assert_called_once_with(403)
+
+def test_invalid_token(app, mock_course):
+    """Test the decorator when an invalid token is provided, leading to an abort."""
+    with patch('manytask.api.abort', side_effect=Exception('Aborted')) as mock_abort:
+        app.course = mock_course
+        app.course.storage_api = MagicMock(DataBaseApi)
+        app.course.storage_api.course_name = "Course"
+        db_course = MagicMock(DBCourse)
+        db_course.token = os.environ["MANYTASK_COURSE_TOKEN"]
+        app.course.storage_api.get_course.return_value = db_course
+        headers = {'Authorization': 'Bearer invalid_token'}
+
+        with pytest.raises(Exception, match='Aborted'):
+            app.test_client().get('/api/score', headers=headers)
+        
+        mock_abort.assert_called_once_with(403)
