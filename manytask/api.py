@@ -32,7 +32,7 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        course: Course = current_app.course  # type: ignore
+        course: Course = current_app.course if hasattr(current_app, 'course') else abort(403)  # type: ignore
         course_token: str = ""
         # TODO: unneed check when depricate googlesheet interface
         if isinstance(course.storage_api, DataBaseApi):
