@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -20,8 +21,8 @@ TEST_SECRET_KEY = "test_key"
 @pytest.fixture(autouse=True)
 def setup_environment(monkeypatch):
     load_dotenv()
-    if not os.getenv('TESTER_TOKEN'):
-        monkeypatch.setenv('TESTER_TOKEN', 'test_token')
+    if not os.getenv('MANYTASK_COURSE_TOKEN'):
+        monkeypatch.setenv('MANYTASK_COURSE_TOKEN', 'test_token')
     monkeypatch.setenv('FLASK_SECRET_KEY', 'test_key')
     monkeypatch.setenv('TESTING', 'true')
     yield
@@ -56,6 +57,13 @@ def mock_course():
             @staticmethod
             def get_scores(_username):
                 return {"task1": 100, "task2": 90, "test_task": 80}
+            
+            @staticmethod
+            def get_course(_name):
+                @dataclass
+                class Course:
+                    token: str
+                return Course(os.getenv('MANYTASK_COURSE_TOKEN'))
 
         class gitlab_api:
             @staticmethod
@@ -150,7 +158,7 @@ def test_report_score_missing_task(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         data = {'user_id': str(TEST_USER_ID)}
-        headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
+        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
         
         response = app.test_client().post('/api/report',
                                           data=data,
@@ -163,7 +171,7 @@ def test_report_score_missing_user(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         data = {'task': TEST_TASK_NAME}
-        headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
+        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
         
         response = app.test_client().post('/api/report',
                                           data=data,
@@ -176,7 +184,7 @@ def test_report_score_invalid_task(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         data = {'task': INVALID_TASK_NAME, 'user_id': str(TEST_USER_ID)}
-        headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
+        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
         
         response = app.test_client().post('/api/report',
                                           data=data,
@@ -193,7 +201,7 @@ def test_report_score_success(app, mock_course):
             'score': '90',
             'check_deadline': 'True'
         }
-        headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
+        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
         expected_data = {
             'username': TEST_USERNAME,
             'score': 90
@@ -215,7 +223,7 @@ def test_get_score_success(app, mock_course):
             'task': TEST_TASK_NAME,
             'username': TEST_USERNAME
         }
-        headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
+        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
         expected_data = {
             'score': 80,
             'task': TEST_TASK_NAME,
