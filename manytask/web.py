@@ -24,7 +24,7 @@ def get_allscores_url(viewer_api: abstract.ViewerApi) -> str :
     """Function to get URL for viewing the scores
 
      :param viewer_api: The viewer API that may hold the URL
-
+    
     :return: String with an URL
     """
     if viewer_api.get_scoreboard_url() == "":
@@ -73,6 +73,7 @@ def course_page() -> ResponseReturnValue:
     tasks_stats = storage_api.get_stats()
 
     allscores_url = get_allscores_url(course.viewer_api)
+
     return render_template(
         "tasks.html",
         task_base_url=course.gitlab_api.get_url_for_task_base(),
