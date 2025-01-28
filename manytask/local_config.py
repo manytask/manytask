@@ -57,7 +57,7 @@ class LocalConfig:
 class DebugLocalConfig(LocalConfig):
     # tokens
     registration_secret: str = "registration_secret"
-    tester_token: str = "tester_token"
+    token: str = "course_token"
 
     # utils
     cache_dir: str = ".tmp/cache"
