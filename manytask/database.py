@@ -28,6 +28,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         course_name: str,
         gitlab_instance_host: str,
         registration_secret: str,
+        token: str,
         show_allscores: bool,
         create_tables_if_not_exist: bool = False
     ):
@@ -37,6 +38,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         :param course_name: unique course name
         :param gitlab_instance_host: gitlab instance host url
         :param registration_secret: secret to registering for course
+        :param token: token for course in manytask
         :param show_allscores: flag for showing results to all users
         :param create_tables_if_not_exist: flag for creating database tables if they don't exist
         """
@@ -62,6 +64,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                 defaults={
                     'gitlab_instance_host': gitlab_instance_host,
                     'registration_secret': registration_secret,
+                    'token': token,
                     'show_allscores': show_allscores
                 },
                 name=self.course_name
@@ -297,6 +300,16 @@ class DataBaseApi(ViewerApi, StorageApi):
                         name=task.name,
                         group_id=task_group.id
                     )
+
+    def get_course(
+        self,
+        course_name: str,
+    ) -> models.Course | None:
+        try:
+            with Session(self.engine) as session:
+                return self._get(session, models.Course, name=course_name)
+        except NoResultFound:
+            return None
 
     def _create_tables(self) -> None:
         try:
