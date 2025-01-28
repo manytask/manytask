@@ -4,7 +4,6 @@
 {% block content %}
     <div class="container-fluid">
         <h2>Course Database</h2>
-
         <div id="database-table" style="max-width: 800px; width: 100%; overflow-x: auto;"></div>
 
         {% if is_course_admin %}
@@ -259,6 +258,24 @@
                         persistenceMode: "local",
                         persistentLayout: true
                     });
+
+                    // Wait for a short delay to ensure table is rendered
+                    setTimeout(() => {
+                        const footer = document.querySelector(".tabulator-footer .tabulator-paginator");
+                        if (footer) {
+                            const exportButton = document.createElement("button");
+                            exportButton.id = "export-csv";
+                            exportButton.className = "tabulator-page";
+                            exportButton.style.marginRight = "10px";
+                            exportButton.textContent = "Export as CSV";
+                            
+                            exportButton.addEventListener("click", function() {
+                                window.tabulatorTable.download("csv", "database_export.csv");
+                            });
+
+                            footer.insertBefore(exportButton, footer.firstChild);
+                        }
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Error creating table:', error);
