@@ -45,6 +45,7 @@ def first_course_db_api(tables):
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
+        token="test_token",
         show_allscores=True
     )
 
@@ -55,6 +56,7 @@ def second_course_db_api(tables):
         database_url=SQLALCHEMY_DATABASE_URL,
         course_name="Another Test Course",
         gitlab_instance_host="gitlab.test.com",
+        token="another_test_token",
         registration_secret="secret",
         show_allscores=True
     )
@@ -82,6 +84,7 @@ def test_empty_course(first_course_db_api, session):
     assert course.name == 'Test Course'
     assert course.gitlab_instance_host == 'gitlab.test.com'
     assert course.registration_secret == 'secret'
+    assert course.token == 'test_token'
     assert course.show_allscores
 
     stats = first_course_db_api.get_stats()
@@ -440,6 +443,7 @@ def test_course_change_params(first_course_db_api):  # noqa
             course_name="Test Course",
             gitlab_instance_host="gitlab.another_test.com",
             registration_secret="secret",
+            token="test_token",
             show_allscores=True
         )
 
@@ -448,6 +452,7 @@ def test_course_change_params(first_course_db_api):  # noqa
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="another_secret",
+        token="test_token",
         show_allscores=False
     )
 
@@ -473,6 +478,7 @@ def test_auto_tables_creation(engine):
             course_name="Test Course",
             gitlab_instance_host="gitlab.test.com",
             registration_secret="secret",
+            token="test_token",
             show_allscores=True
         )
 
@@ -481,6 +487,7 @@ def test_auto_tables_creation(engine):
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
+        token="test_token",
         show_allscores=True,
         create_tables_if_not_exist=True
     )
@@ -494,6 +501,7 @@ def test_viewer_api():
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
+        token="test_token",
         show_allscores=True,
         create_tables_if_not_exist=True
     )
