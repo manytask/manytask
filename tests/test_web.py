@@ -171,7 +171,7 @@ def mock_gitlab_oauth():
 
 @pytest.fixture(autouse=True)
 def setup_environment(monkeypatch):
-    monkeypatch.setenv('TESTER_TOKEN', TEST_TOKEN)
+    monkeypatch.setenv('MANYTASK_COURSE_TOKEN', TEST_TOKEN)
     monkeypatch.setenv('REGISTRATION_SECRET', TEST_SECRET)
     monkeypatch.setenv('FLASK_SECRET_KEY', TEST_KEY)
     monkeypatch.setenv('TESTING', 'true')

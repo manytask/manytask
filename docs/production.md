@@ -105,7 +105,7 @@ To fix the list of tasks and their deadlines, you first need to push `.manytask.
 
 Here is how you can make it
 ```shell
-curl --fail --silent -X POST -H "Authorization: Bearer $TESTER_TOKEN" -H        
+curl --fail --silent -X POST -H "Authorization: Bearer $MANYTASK_COURSE_TOKEN" -H        
      "Content-type: application/x-yaml" --data-binary "@tests/.manytask.test.yml" "https://py.manytask.org/api/update_config"
 ```
 Please, refer to the example files and api docs. 

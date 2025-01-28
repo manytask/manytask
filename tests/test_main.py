@@ -36,7 +36,7 @@ def mock_env(monkeypatch):
 
     set_if_missing('FLASK_SECRET_KEY', 'test_secret_key')
     set_if_missing('TESTING', 'true')
-    set_if_missing('TESTER_TOKEN', 'test_tester_token')
+    set_if_missing('MANYTASK_COURSE_TOKEN', 'test_token')
 
     set_if_missing('GITLAB_URL', 'https://gitlab.com')
     set_if_missing('GITLAB_ADMIN_TOKEN', 'test_admin_token')
