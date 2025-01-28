@@ -605,3 +605,11 @@ def test_store_score_update_error(first_course_with_deadlines, session):
     assert "Update failed" in str(exc_info.value)
 
     assert session.query(Grade).count() == 0
+
+def test_get_course_success(first_course_db_api):
+    course = first_course_db_api.get_course(first_course_db_api.course_name)
+    assert course.name == first_course_db_api.course_name
+
+def test_get_course_unknown(first_course_db_api):
+    course = first_course_db_api.get_course("Unknown course")
+    assert not course
