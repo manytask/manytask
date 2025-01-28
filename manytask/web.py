@@ -337,4 +337,5 @@ def show_database() -> ResponseReturnValue:
         is_course_admin=student_course_admin,
         current_course=course,
         course_favicon=course.favicon,
+        readonly_fields=['username', 'total_score'],  # Cannot be edited in database web viewer
     )

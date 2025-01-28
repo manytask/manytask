@@ -6,6 +6,31 @@
         <h2>Course Database</h2>
 
         <div id="database-table" style="max-width: 800px; width: 100%; overflow-x: auto;"></div>
+
+        {% if is_course_admin %}
+        <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editModalLabel">Edit Score</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editForm">
+                            <div class="mb-3">
+                                <label class="form-label">Score</label>
+                                <input type="number" class="form-control" id="scoreInput">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" onclick="saveChanges()">Save changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
@@ -40,38 +65,118 @@
     </style>
 
     <script>
+        let currentEditCell = null;
+        let editModal = null;
+
+        function editCell(cell) {
+            const readonlyFields = {{ readonly_fields|tojson }};
+            if (readonlyFields.includes(cell.getField())) {
+                return;
+            }
+
+            const isAdmin = {{ is_course_admin|tojson }};
+            if (!isAdmin) {
+                return;
+            }
+
+            currentEditCell = cell;
+            const value = cell.getValue() || 0;
+            const scoreInput = document.getElementById('scoreInput');
+            scoreInput.value = value;
+            document.getElementById('editModalLabel').textContent = `Edit Score for ${cell.getColumn().getDefinition().title}`;
+            editModal.show();
+
+            // Immediately select input field after modal is shown
+            editModal._element.addEventListener('shown.bs.modal', function () {
+                scoreInput.select();
+            }, { once: true });
+        }
+
+        function saveChanges() {
+            if (!currentEditCell) return;
+
+            const newScore = parseFloat(document.getElementById('scoreInput').value);
+            if (isNaN(newScore)) {
+                alert('Please enter a valid number');
+                return;
+            }
+
+            const row = currentEditCell.getRow();
+            const rowData = row.getData();
+            const username = rowData.username;
+            const taskName = currentEditCell.getColumn().getDefinition().title;
+
+            // Update database
+            const scores = {};
+            scores[taskName] = newScore;
+            fetch('/api/database/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: username,
+                    scores: scores
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentEditCell.setValue(newScore);
+
+                    // Recalculate total score - update total score column
+                    let totalScore = 0;
+                    for (const key in rowData.scores) {
+                        if (rowData.scores[key]) {
+                            totalScore += rowData.scores[key];
+                        }
+                    }
+                    row.update({ total_score: totalScore });
+                    editModal.hide();
+                } else {
+                    alert('Failed to update: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error updating entry:', error);
+                alert('Failed to update entry');
+            });
+        }
+
         function updateTheme() {
-
             const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-
 
             const lightTheme = document.getElementById('light-theme');
             const darkTheme = document.getElementById('dark-theme');
 
-
             if (isDark) {
                 lightTheme.disabled = true;
                 darkTheme.disabled = false;
-
             } else {
                 lightTheme.disabled = false;
                 darkTheme.disabled = true;
-
             }
 
             if (window.tabulatorTable) {
-
                 window.tabulatorTable.redraw(true);
             }
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            {% if is_course_admin %}
+            editModal = new bootstrap.Modal(document.getElementById('editModal'));
+
+            document.getElementById('editForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveChanges();
+            });
+            {% endif %}
+
             // Watch theme changes for database viewer
             updateTheme();
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     if (mutation.attributeName === 'data-bs-theme') {
-
                         updateTheme();
                     }
                 });
@@ -81,12 +186,9 @@
                 attributeFilter: ['data-bs-theme']
             });
 
-
             fetch('/api/database')
                 .then(response => response.json())
                 .then(data => {
-
-
                     let columns = [
                         {
                             title: "Username",
@@ -108,7 +210,6 @@
 
                     if (window.innerWidth < 500) {
                         columns[1].width = 60;
-
                     }
 
                     data.tasks.forEach(task => {
@@ -116,7 +217,12 @@
                             title: task.name,
                             field: `scores.${task.name}`,
                             sorter: "number",
-                            headerTooltip: task.name
+                            headerTooltip: task.name,
+                            {% if is_course_admin %}
+                            cellClick: function(e, cell) {
+                                editCell(cell);
+                            }
+                            {% endif %}
                         });
                     });
 
@@ -140,13 +246,19 @@
                             },
                             cssClass: "text-wrap",
                             tooltip: true,
+                            tooltipGenerationMode: "hover",
+                            tooltipFormatter: function(cell) {
+                                const isAdmin = {{ is_course_admin|tojson }};
+                                if (!isAdmin && cell.getField() !== "username" && cell.getField() !== "total_score") {
+                                    return "Only course admins can edit scores";
+                                }
+                                return cell.getValue();
+                            },
                             vertAlign: "middle"
                         },
                         persistenceMode: "local",
                         persistentLayout: true
                     });
-
-
                 })
                 .catch(error => {
                     console.error('Error creating table:', error);

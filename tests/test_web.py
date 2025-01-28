@@ -399,16 +399,16 @@ def test_login_finish_sync(app, mock_course, mock_gitlab_oauth):
             app.course = mock_course
             app.oauth = mock_gitlab_oauth
 
-            assert app.course.storage_api.stored_user.course_admin is False
+            assert not app.course.storage_api.stored_user.course_admin
 
             # not admin in gitlab so stored value shouldn't change
             client.get('/login_finish')
 
             with client.session_transaction() as sess:
                 assert 'gitlab' in sess
-                assert sess["gitlab"]["course_admin"] is False
+                assert not sess["gitlab"]["course_admin"]
 
-            assert app.course.storage_api.stored_user.course_admin is False
+            assert not app.course.storage_api.stored_user.course_admin
 
             app.course.gitlab_api.course_admin = True
 
@@ -417,9 +417,9 @@ def test_login_finish_sync(app, mock_course, mock_gitlab_oauth):
 
             with client.session_transaction() as sess:
                 assert 'gitlab' in sess
-                assert sess["gitlab"]["course_admin"] is True
+                assert sess["gitlab"]["course_admin"]
 
-            assert app.course.storage_api.stored_user.course_admin is True
+            assert app.course.storage_api.stored_user.course_admin
 
             app.course.gitlab_api.course_admin = False
 
@@ -428,6 +428,6 @@ def test_login_finish_sync(app, mock_course, mock_gitlab_oauth):
 
             with client.session_transaction() as sess:
                 assert 'gitlab' in sess
-                assert sess["gitlab"]["course_admin"] is False
+                assert not sess["gitlab"]["course_admin"]
 
-            assert app.course.storage_api.stored_user.course_admin is True
+            assert app.course.storage_api.stored_user.course_admin

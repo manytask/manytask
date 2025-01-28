@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterable, List, Optional, Type, TypeVar
+from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 
 from psycopg2.errors import UniqueViolation
 from sqlalchemy import and_, create_engine
@@ -14,13 +14,13 @@ from .config import ManytaskDeadlinesConfig
 from .glab import Student
 
 
+ModelType = TypeVar('ModelType', bound=models.Base)
+
 logger = logging.getLogger(__name__)
 
 
 class DataBaseApi(ViewerApi, StorageApi):
     """Class for interacting with a database with the StorageApi functionality"""
-
-    ModelType = TypeVar('ModelType', bound=models.Base)
 
     def __init__(
         self,
@@ -33,6 +33,8 @@ class DataBaseApi(ViewerApi, StorageApi):
         create_tables_if_not_exist: bool = False
     ):
         """Constructor of DataBaseApi class
+
+        Creates a couse with specified parameters if it doesn't exist yet
 
         :param database_url: full url for database connection
         :param course_name: unique course name
@@ -54,8 +56,19 @@ class DataBaseApi(ViewerApi, StorageApi):
                 if course.gitlab_instance_host != gitlab_instance_host:
                     raise AttributeError(
                         "Can't update gitlab_instance_host param on created course")
+                course.registration_secret = registration_secret
+                course.show_allscores = show_allscores
+                session.commit()
             except NoResultFound:
-                pass
+                self._create(
+                    session,
+                    models.Course,
+                    name=course_name,
+                    gitlab_instance_host=gitlab_instance_host,
+                    registration_secret=registration_secret,
+                    show_allscores=show_allscores
+                )
+                session.commit()
 
             self.course_name = course_name
             self._update_or_create(
@@ -74,8 +87,8 @@ class DataBaseApi(ViewerApi, StorageApi):
         return ""
 
     def get_scores(
-        self,
-        username: str,
+            self,
+            username: str,
     ) -> dict[str, int]:
         """Method for getting all user scores
 
@@ -97,8 +110,8 @@ class DataBaseApi(ViewerApi, StorageApi):
         return scores
 
     def get_bonus_score(
-        self,
-        username: str,
+            self,
+            username: str,
     ) -> int:
         """Method for getting user's total bonus score
 
@@ -129,6 +142,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
             user_on_course = self._get_or_create_user_on_course(session, student, course)
+            session.commit()
 
             return StoredUser(
                 username=user_on_course.user.username,
@@ -209,10 +223,10 @@ class DataBaseApi(ViewerApi, StorageApi):
         return
 
     def store_score(
-        self,
-        student: Student,
-        task_name: str,
-        update_fn: Callable[..., Any],
+            self,
+            student: Student,
+            task_name: str,
+            update_fn: Callable[..., Any],
     ) -> int:
         """Method for storing user's task score
 
@@ -223,42 +237,38 @@ class DataBaseApi(ViewerApi, StorageApi):
         :return: saved score
         """
 
-        flags = ''  # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
+        # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
+        # flags = ''
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self.course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course)
 
             try:
-                task = self._get_task_by_name_and_course_id(session, task_name, course.id)
-            except NoResultFound:
-                return 0
+                course = self._get(session, models.Course, name=self.course_name)
+                user_on_course = self._get_or_create_user_on_course(session, student, course)
+                session.commit()
 
-            grade = self._get_or_create(
-                session,
-                models.Grade,
-                user_on_course_id=user_on_course.id,
-                task_id=task.id
-            )
+                try:
+                    task = self._get_task_by_name_and_course_id(session, task_name, course.id)
+                except NoResultFound:
+                    return 0
 
-            new_score = update_fn(flags, grade.score)
-            self._update(
-                session,
-                models.Grade,
-                defaults={
-                    'score': new_score,
-                    'last_submit_date': datetime.now(timezone.utc)
-                },
-                id=grade.id
-            )
+                grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
+                new_score = update_fn('', grade.score)
+                grade.score = new_score
+                grade.last_submit_date = datetime.now(timezone.utc)
 
-        logger.info(f"Setting score = {new_score}")
+                session.commit()
+                logger.info(f"Setting score = {new_score}")
+                return new_score
 
-        return new_score
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to update score for {student.username} on {task_name}: {str(e)}")
+                raise
 
     def sync_columns(
-        self,
-        deadlines_config: ManytaskDeadlinesConfig,
+            self,
+            deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
         """Method for updating deadlines config
 
@@ -300,6 +310,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                         name=task.name,
                         group_id=task_group.id
                     )
+            session.commit()
 
     def get_course(
         self,
@@ -344,10 +355,10 @@ class DataBaseApi(ViewerApi, StorageApi):
         return user_on_course
 
     def _get_scores(
-        self,
-        session: Session,
-        username: str,
-        only_bonus: bool = False
+            self,
+            session: Session,
+            username: str,
+            only_bonus: bool = False
     ) -> Optional[Iterable['models.Grade']]:
         try:
             course = self._get(session, models.Course, name=self.course_name)
@@ -372,9 +383,9 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _serialize_deadline_data(  # serialize data to json from config.ManytaskGroupConfig params
-        start: datetime,
-        steps: dict[float, datetime | timedelta],
-        end: datetime | timedelta
+            start: datetime,
+            steps: dict[float, datetime | timedelta],
+            end: datetime | timedelta
     ) -> dict[str, str | dict[str, str]]:
         def convert(value: datetime | timedelta) -> str:
             if isinstance(value, datetime):
@@ -391,9 +402,9 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _get(
-        session: Session,
-        model: Type[ModelType],
-        **kwargs: Any  # params for get
+            session: Session,
+            model: Type[ModelType],
+            **kwargs: Any  # params for get
     ) -> ModelType:
         try:
             return session.query(model).filter_by(**kwargs).one()
@@ -402,10 +413,10 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _update(
-        session: Session,
-        model: Type[ModelType],
-        defaults: Optional[dict[str, Any]] = None,  # params for update
-        **kwargs: Any  # params for get
+            session: Session,
+            model: Type[ModelType],
+            defaults: Optional[dict[str, Any]] = None,  # params for update
+            **kwargs: Any  # params for get
     ) -> ModelType:
         instance = DataBaseApi._get(session, model, **kwargs)
 
@@ -417,9 +428,9 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _create(
-        session: Session,
-        model: Type[ModelType],
-        **kwargs: Any  # params for create
+            session: Session,
+            model: Type[ModelType],
+            **kwargs: Any  # params for create
     ) -> ModelType:
         try:
             instance = model(**kwargs)
@@ -431,35 +442,48 @@ class DataBaseApi(ViewerApi, StorageApi):
             return session.query(model).filter_by(**kwargs).one()
 
     @staticmethod
-    def _get_or_create(
-        session: Session,
-        model: Type[ModelType],
-        defaults: Optional[dict[str, Any]] = None,  # params for create
-        **kwargs: Any  # params for get
-    ) -> ModelType:
-        instance = session.query(model).filter_by(**kwargs).one_or_none()
-        if instance:
-            return instance
-
-        if defaults is not None:
-            kwargs.update(defaults)
-
-        return DataBaseApi._create(session, model, **kwargs)
+    def _query_with_for_update(
+            session: Session,
+            model: Type[ModelType],
+            allow_none: bool = True,
+            **kwargs: Any
+    ) -> Optional[ModelType]:
+        """Query a model with SELECT FOR UPDATE to prevent concurrent modifications.
+        
+        :param session: SQLAlchemy session
+        :param model: Model class to query
+        :param allow_none: If True, returns None if no instance found, otherwise raises NoResultFound
+        :param kwargs: Filter parameters
+        :return: Model instance or None if allow_none is True and no instance found
+        :raises: NoResultFound if allow_none is False and no instance found
+        """
+        query = session.query(model).with_for_update().filter_by(**kwargs)
+        return query.one_or_none() if allow_none else query.one()
 
     @staticmethod
-    def _update_or_create(
-        session: Session,
-        model: Type[ModelType],
-        defaults: Optional[dict[str, Any]] = None,  # params for update
-        create_defaults: Optional[dict[str, Any]] = None,  # params for create
-        **kwargs: Any  # params for get
+    def _create_or_update_instance(
+            session: Session,
+            model: Type[ModelType],
+            instance: Optional[ModelType],
+            defaults: Optional[dict[str, Any]] = None,
+            create_defaults: Optional[dict[str, Any]] = None,
+            **kwargs: Any
     ) -> ModelType:
-        instance = session.query(model).filter_by(**kwargs).one_or_none()
+        """Create a new instance or update existing one with defaults.
+        
+        :param session: SQLAlchemy session
+        :param model: Model class
+        :param instance: Existing instance if any
+        :param defaults: Default values to update on the instance
+        :param create_defaults: Additional defaults to use only for creation
+        :param kwargs: Parameters for instance creation
+        :return: Created or updated instance
+        """
         if instance:
             if defaults:
                 for key, value in defaults.items():
                     setattr(instance, key, value)
-                session.commit()
+                session.flush()
             return instance
 
         if defaults is not None:
@@ -467,22 +491,97 @@ class DataBaseApi(ViewerApi, StorageApi):
         if create_defaults is not None:
             kwargs.update(create_defaults)
 
-        return DataBaseApi._create(session, model, **kwargs)
+        try:
+            new_instance = model(**kwargs)
+            session.add(new_instance)
+            session.flush()
+            return new_instance
+        except IntegrityError:
+            session.rollback()
+            existing_instance = cast(ModelType,
+                                     DataBaseApi._query_with_for_update(session, model, allow_none=False, **kwargs))
+            if defaults:
+                for key, value in defaults.items():
+                    setattr(existing_instance, key, value)
+            session.flush()
+            return existing_instance
+
+    @staticmethod
+    def _get_or_create(
+            session: Session,
+            model: Type[ModelType],
+            defaults: Optional[dict[str, Any]] = None,  # params for create
+            **kwargs: Any  # params for get
+    ) -> ModelType:
+        try:
+            instance = DataBaseApi._query_with_for_update(session, model, **kwargs)
+            return DataBaseApi._create_or_update_instance(session, model, instance, defaults, **kwargs)
+        except Exception:
+            session.rollback()
+            raise
+
+    @staticmethod
+    def _update_or_create(
+            session: Session,
+            model: Type[ModelType],
+            defaults: Optional[dict[str, Any]] = None,  # params for update
+            create_defaults: Optional[dict[str, Any]] = None,  # params for create
+            **kwargs: Any  # params for get
+    ) -> ModelType:
+        try:
+            instance = DataBaseApi._query_with_for_update(session, model, **kwargs)
+            return DataBaseApi._create_or_update_instance(
+                session, model, instance, defaults, create_defaults, **kwargs)
+        except Exception:
+            session.rollback()
+            raise
+
+    @staticmethod
+    def _get_or_create_sfu_grade(
+            session: Session,
+            user_on_course_id: int,
+            task_id: int,
+    ) -> models.Grade:
+        """Get or create a Grade with SELECT FOR UPDATE to prevent concurrent modifications.
+        
+        :param session: SQLAlchemy session
+        :param user_on_course_id: ID of the UserOnCourse
+        :param task_id: ID of the Task
+        :return: The existing or newly created Grade
+        """
+        try:
+            grade = DataBaseApi._query_with_for_update(
+                session,
+                models.Grade,
+                user_on_course_id=user_on_course_id,
+                task_id=task_id
+            )
+            return DataBaseApi._create_or_update_instance(
+                session,
+                models.Grade,
+                grade,
+                create_defaults={'score': 0},
+                user_on_course_id=user_on_course_id,
+                task_id=task_id
+            )
+        except Exception:
+            session.rollback()
+            raise
 
     @staticmethod
     def _get_task_by_name_and_course_id(
-        session: Session,
-        name: str,
-        course_id: int
+            session: Session,
+            name: str,
+            course_id: int
     ) -> models.Task:
         return session.query(models.Task).filter_by(name=name).join(
             models.TaskGroup).filter_by(course_id=course_id).one()
 
     @staticmethod
     def _update_deadline_for_task_group(
-        session: Session,
-        task_group: models.TaskGroup,
-        deadline_data: dict[Any, Any]  # json data
+            session: Session,
+            task_group: models.TaskGroup,
+            deadline_data: dict[Any, Any]  # json data
     ) -> None:
 
         if task_group.deadline_id is None:
@@ -507,8 +606,8 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _get_all_grades(
-        user_on_course: models.UserOnCourse,
-        only_bonus: bool = False
+            user_on_course: models.UserOnCourse,
+            only_bonus: bool = False
     ) -> Iterable['models.Grade']:
         if only_bonus:
             return user_on_course.grades.join(models.Task).filter_by(is_bonus=True).all()
@@ -516,8 +615,8 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _get_all_users(
-        session: Session,
-        course_name: str,
+            session: Session,
+            course_name: str,
     ) -> Iterable[str]:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
@@ -525,21 +624,21 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _get_all_tasks(
-        session: Session,
-        course_name: str,
+            session: Session,
+            course_name: str,
     ) -> Iterable['models.Task']:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
-        tasks: List['models.Task'] = []
-        for task_group in course.task_groups.all():
-            tasks.extend(task_group.tasks.all())
-
-        return tasks
+        return session.query(models.Task).join(
+            models.TaskGroup
+        ).filter(
+            models.TaskGroup.course_id == course.id
+        ).all()
 
     @staticmethod
     def _get_course_users_on_courses_count(
-        session: Session,
-        course_name: str,
+            session: Session,
+            course_name: str,
     ) -> int:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
@@ -547,8 +646,8 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _get_task_submits_count(
-        session: Session,
-        task_id: int,
+            session: Session,
+            task_id: int,
     ) -> int:
         return session.query(func.count(models.Grade.id)).filter(
             and_(models.Grade.task_id == task_id, models.Grade.score > 0)).one()[0]
