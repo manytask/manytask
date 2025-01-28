@@ -7,7 +7,6 @@ from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
-from toolz import get_in
 
 from . import abstract, glab
 from .auth import requires_auth, requires_ready
@@ -87,7 +86,7 @@ def course_page() -> ResponseReturnValue:
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=course.manytask_version,
-        links=get_in(["config", "ui", "links"], course, dict()),
+        links=(course.config.ui.links if course.config else {}),
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(student_username),
         now=get_current_time(),
@@ -310,6 +309,7 @@ def show_database() -> ResponseReturnValue:
 
     if current_app.debug:
         student_username = "guest"
+        student_repo = course.gitlab_api.get_url_for_repo(student_username)
 
         if request.args.get('admin', None) in ('true', '1', 'yes', None):
             student_course_admin = True
@@ -317,6 +317,7 @@ def show_database() -> ResponseReturnValue:
             student_course_admin = False
     else:
         student_username = session["gitlab"]["username"]
+        student_repo = session["gitlab"]["repo"]
 
         student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
         stored_user = storage_api.get_stored_user(student)
@@ -338,4 +339,9 @@ def show_database() -> ResponseReturnValue:
         current_course=course,
         course_favicon=course.favicon,
         readonly_fields=['username', 'total_score'],  # Cannot be edited in database web viewer
+        links=(course.config.ui.links if course.config else {}),
+        gitlab_url=course.gitlab_api.base_url,
+        show_allscores=course.show_allscores,
+        student_repo_url=student_repo,
+        student_ci_url=f"{student_repo}/pipelines",
     )
