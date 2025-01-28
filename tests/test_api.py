@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -11,7 +11,6 @@ from flask import Flask, json
 
 from manytask.api import _parse_flags, _update_score, bp as api_bp
 from manytask.database import DataBaseApi
-from manytask.models import Course as DBCourse
 from manytask.web import bp as web_bp
 
 
@@ -230,7 +229,7 @@ def test_report_score_missing_task(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         data = {'user_id': str(TEST_USER_ID)}
-        headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
+        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
         
         response = app.test_client().post('/api/report',
                                           data=data,
@@ -243,7 +242,7 @@ def test_report_score_missing_user(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         data = {'task': TEST_TASK_NAME}
-        headers = {'Authorization': f'Bearer {os.environ["TESTER_TOKEN"]}'}
+        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
         
         response = app.test_client().post('/api/report',
                                           data=data,
@@ -406,15 +405,17 @@ def test_update_database_not_ready(app, mock_course, authenticated_client):
     assert response.status_code == 302
 
 
-def test_requires_token_invalid_token(app):
+def test_requires_token_invalid_token(app, mock_course):
     client = app.test_client()
+    app.course = mock_course
     headers = {'Authorization': 'Bearer invalid_token'}
     response = client.post('/api/report', headers=headers)
     assert response.status_code == 403
 
 
-def test_requires_token_missing_token(app):
+def test_requires_token_missing_token(app, mock_course):
     client = app.test_client()
+    app.course = mock_course
     response = client.post('/api/report')
     assert response.status_code == 403
 
@@ -440,7 +441,7 @@ def test_update_score_after_deadline(mock_course):
 def test_get_solutions_success(app, mock_course):
     app.course = mock_course
     client = app.test_client()
-    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    headers = {'Authorization': f'Bearer {os.getenv("MANYTASK_COURSE_TOKEN")}'}
     
     response = client.get('/api/solutions', data={'task': TEST_TASK_NAME}, headers=headers)
     assert response.status_code == 200
@@ -449,7 +450,7 @@ def test_get_solutions_success(app, mock_course):
 def test_get_solutions_missing_student(app, mock_course):
     app.course = mock_course
     client = app.test_client()
-    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    headers = {'Authorization': f'Bearer {os.getenv("MANYTASK_COURSE_TOKEN")}'}
     
     response = client.get('/api/solutions', headers=headers)
     assert response.status_code == 400
@@ -458,7 +459,7 @@ def test_get_solutions_missing_student(app, mock_course):
 def test_update_config_success(app, mock_course):
     app.course = mock_course
     client = app.test_client()
-    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    headers = {'Authorization': f'Bearer {os.getenv("MANYTASK_COURSE_TOKEN")}'}
     
     data = {"test": "config"}
     response = client.post('/api/update_config', data=yaml.dump(data), headers=headers)
@@ -468,7 +469,7 @@ def test_update_config_success(app, mock_course):
 def test_update_cache_success(app, mock_course):
     app.course = mock_course
     client = app.test_client()
-    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    headers = {'Authorization': f'Bearer {os.getenv("MANYTASK_COURSE_TOKEN")}'}
     
     response = client.post('/api/update_cache', headers=headers)
     assert response.status_code == 200
@@ -540,7 +541,7 @@ def test_update_database_missing_student(app, mock_course):
 def test_report_score_with_flags(app, mock_course):
     app.course = mock_course
     client = app.test_client()
-    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    headers = {'Authorization': f'Bearer {os.getenv("MANYTASK_COURSE_TOKEN")}'}
     
     data = {
         'user_id': str(TEST_USER_ID),
@@ -558,7 +559,7 @@ def test_report_score_invalid_submit_time(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         client = app.test_client()
-        headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+        headers = {'Authorization': f'Bearer {os.getenv("MANYTASK_COURSE_TOKEN")}'}
         
         data = {
             'student': TEST_USERNAME,
@@ -574,7 +575,7 @@ def test_report_score_invalid_submit_time(app, mock_course):
 def test_get_score_invalid_student(app, mock_course):
     app.course = mock_course
     client = app.test_client()
-    headers = {'Authorization': f'Bearer {os.getenv("TESTER_TOKEN")}'}
+    headers = {'Authorization': f'Bearer {os.getenv("MANYTASK_COURSE_TOKEN")}'}
     
     response = client.get('/api/score', data={'username': 'nonexistent_user', 'task': TEST_TASK_NAME}, headers=headers)
     assert response.status_code == 404
@@ -630,30 +631,19 @@ def test_update_database_invalid_score_value(app, mock_course):
 def test_no_course_in_db(app, mock_course):
     """Test the decorator when no course information is present in the database, leading to an abort."""
 
-    with patch('manytask.api.abort', side_effect=Exception('Aborted')) as mock_abort:
-        app.course = mock_course
-        app.course.storage_api = MagicMock(DataBaseApi)
-        app.course.storage_api.course_name = "NoSuchCourse"
-        app.course.storage_api.get_course.return_value = None
-        headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
+    app.course = mock_course
+    app.course.storage_api = MagicMock(DataBaseApi)
+    app.course.storage_api.course_name = "NoSuchCourse"
+    app.course.storage_api.get_course.return_value = None
+    headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
+    client = app.test_client()
+    response = client.post('/api/report', headers=headers)
+    assert response.status_code == 403
 
-        with pytest.raises(Exception, match='Aborted'):
-            app.test_client().get('/api/score', headers=headers)
-        
-        mock_abort.assert_called_once_with(403)
+def test_token_when_no_course(app):
+    """Test the decorator when no course information is present in the database, leading to an abort."""
 
-def test_invalid_token(app, mock_course):
-    """Test the decorator when an invalid token is provided, leading to an abort."""
-    with patch('manytask.api.abort', side_effect=Exception('Aborted')) as mock_abort:
-        app.course = mock_course
-        app.course.storage_api = MagicMock(DataBaseApi)
-        app.course.storage_api.course_name = "Course"
-        db_course = MagicMock(DBCourse)
-        db_course.token = os.environ["MANYTASK_COURSE_TOKEN"]
-        app.course.storage_api.get_course.return_value = db_course
-        headers = {'Authorization': 'Bearer invalid_token'}
-
-        with pytest.raises(Exception, match='Aborted'):
-            app.test_client().get('/api/score', headers=headers)
-        
-        mock_abort.assert_called_once_with(403)
+    headers = {'Authorization': f'Bearer {os.environ["MANYTASK_COURSE_TOKEN"]}'}
+    client = app.test_client()
+    response = client.post('/api/report', headers=headers)
+    assert response.status_code == 403
