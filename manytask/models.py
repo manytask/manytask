@@ -43,6 +43,7 @@ class Course(Base):
     name: Mapped[str] = mapped_column(unique=True)
     gitlab_instance_host: Mapped[str]
     registration_secret: Mapped[str]
+    token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
 
     # relationships
