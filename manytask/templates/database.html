@@ -270,7 +270,14 @@
                             exportButton.textContent = "Export as CSV";
                             
                             exportButton.addEventListener("click", function() {
-                                window.tabulatorTable.download("csv", "database_export.csv");
+                                const now = new Date();
+                                const timestamp = now.getFullYear() + '-' + 
+                                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                                    String(now.getDate()).padStart(2, '0') + '_' +
+                                    String(now.getHours()).padStart(2, '0') + '-' +
+                                    String(now.getMinutes()).padStart(2, '0') + '-' +
+                                    String(now.getSeconds()).padStart(2, '0');
+                                window.tabulatorTable.download("csv", `database_export_${timestamp}.csv`);
                             });
 
                             footer.insertBefore(exportButton, footer.firstChild);
