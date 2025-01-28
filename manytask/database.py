@@ -66,6 +66,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                     name=course_name,
                     gitlab_instance_host=gitlab_instance_host,
                     registration_secret=registration_secret,
+                    token=token,
                     show_allscores=show_allscores
                 )
                 session.commit()
