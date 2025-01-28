@@ -17,6 +17,7 @@ from manytask.models import (
     validate_gitlab_instance_host,
 )
 
+
 SQLALCHEMY_DATABASE_URL = 'sqlite:///:memory:'
 
 
@@ -114,13 +115,13 @@ def test_user_on_course(session):
     assert retrieved_course.users_on_courses[0].user.username == "user1"
 
     retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
-    assert retrieved_user_on_course.is_course_admin == False
+    assert not retrieved_user_on_course.is_course_admin
 
     retrieved_user_on_course.is_course_admin = True
     session.commit()
 
     retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
-    assert retrieved_user_on_course.is_course_admin == True
+    assert retrieved_user_on_course.is_course_admin
 
 
 def test_user_on_course_unique_ids(session):
