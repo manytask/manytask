@@ -204,7 +204,8 @@ def test_course_page_valid_session(app, mock_course):
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": False
+                    "course_admin": False,
+                    "oauth_access_token": TEST_TOKEN,
                 }
             app.course = mock_course
             response = client.get('/')
@@ -322,7 +323,11 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": False
+                    "course_admin": False,
+                    "oauth_access_token": TEST_TOKEN,
+                }
+                sess['course'] = {
+                    "secret": TEST_SECRET,
                 }
             app.course = mock_course
             app.debug = debug
@@ -342,7 +347,11 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": True
+                    "course_admin": True,
+                    "oauth_access_token": TEST_TOKEN,
+                }
+                sess['course'] = {
+                    "secret": TEST_SECRET,
                 }
 
             # admin in gitlab, not admin in manytask
@@ -360,7 +369,11 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": False
+                    "course_admin": False,
+                    "oauth_access_token": TEST_TOKEN,
+                }
+                sess['course'] = {
+                    "secret": TEST_SECRET,
                 }
 
             app.course.storage_api.stored_user.course_admin = True
@@ -380,7 +393,11 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": False
+                    "course_admin": False,
+                    "oauth_access_token": TEST_TOKEN,
+                }
+                sess['course'] = {
+                    "secret": TEST_SECRET,
                 }
 
             # admin in gitlab, admin in manytask
