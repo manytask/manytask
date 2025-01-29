@@ -44,7 +44,7 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def requires_secret(template: str) -> Callable[..., Any]:
-    def decorator(f: Callable[..., Any]):
+    def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(f)
         def decorated(*args: Any, **kwargs: Any) -> Any:
             course = current_app.course  # type: ignore
