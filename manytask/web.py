@@ -331,7 +331,6 @@ def show_database() -> ResponseReturnValue:
         "database.html",
         table_data=table_data,
         course_name=course.config.settings.course_name if course.config else "",
-        unique_course_name=storage_api.course_name,
         scores=scores,
         bonus_score=bonus_score,
         username=student_username,

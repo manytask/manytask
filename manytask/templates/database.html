@@ -297,7 +297,7 @@
                             
                             exportButton.addEventListener("click", function() {
                                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                                const courseName = "{{ unique_course_name }}".replace(/[^a-zA-Z0-9]/g, '_');
+                                const courseName = "{{ course_name }}".replace(/[^a-zA-Z0-9]/g, '_');
                                 window.tabulatorTable.download("csv", `${courseName}_database_export_${timestamp}.csv`);
                             });
 
