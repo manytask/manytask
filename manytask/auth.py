@@ -52,13 +52,9 @@ def requires_secret(template: str) -> Callable[..., Any]:
             try:
                 student = course.gitlab_api.get_authenticated_student(session["gitlab"]["oauth_access_token"])
                 # if user already have fork we let him in with out secret
+                #TODO change on checking user->course in db
                 if course.gitlab_api.check_project_exists(student):
                     ...
-
-                # secret already in session
-                elif "course" in session:
-                    if not secrets.compare_digest(session["course"]["secret"], course.registration_secret):
-                        raise Exception("Invalid registration secret")
 
                 # secret was entered in form
                 elif "secret" in request.form:

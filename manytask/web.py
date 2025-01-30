@@ -43,10 +43,6 @@ def course_page() -> ResponseReturnValue:
 
     storage_api = course.storage_api
 
-    # it is redirect flow after entering secret token
-    if request.method == "POST":
-        session["course"] = {"secret": request.form["secret"]}
-
     if current_app.debug:
         student_username = "guest"
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
@@ -191,7 +187,6 @@ def signup() -> ResponseReturnValue:
             base_url=course.gitlab_api.base_url,
         )
 
-    session["course"]["secret"] = request.form["secret"]
     return redirect(url_for("web.login"))
 
 
@@ -291,8 +286,6 @@ def create_project() -> ResponseReturnValue:
 @bp.route("/logout")
 def logout() -> ResponseReturnValue:
     session.pop("gitlab", None)
-    session.pop("course", None)
-    session.clear()
     return redirect(url_for("web.course_page"))
 
 
