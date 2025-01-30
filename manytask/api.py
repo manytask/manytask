@@ -22,7 +22,6 @@ from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .database_utils import get_database_table_data
 from .glab import Student
 
-
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -41,8 +40,6 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         return f(*args, **kwargs)
 
     return decorated
-
-
 
 
 def _parse_flags(flags: str | None) -> timedelta:
@@ -153,8 +150,11 @@ def report_score() -> ResponseReturnValue:
             elif float(score_str) < 0.0:
                 reported_score = 0
             elif float(score_str) > 2.0:
-                return f"Reported `score` <{reported_score}> is too large. " + \
-                        "Should be integer or float between 0.0 and 2.0.", 400
+                return (
+                    f"Reported `score` <{reported_score}> is too large. "
+                    + "Should be integer or float between 0.0 and 2.0.",
+                    400,
+                )
             else:
                 reported_score = round(float(score_str) * task.score)
         except ValueError:
@@ -369,33 +369,25 @@ def update_database() -> ResponseReturnValue:
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), 403
-    
+
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), 400
-        
+
     data = request.get_json()
     if not data or "username" not in data or "scores" not in data:
         return jsonify({"success": False, "message": "Missing required fields"}), 400
-        
+
     username = data["username"]
     new_scores = data["scores"]
-    
+
     try:
-        student = Student(
-            id=0, 
-            username=username, 
-            name=username,
-            repo=course.gitlab_api.get_url_for_repo(username)
-        )
+        student = Student(id=0, username=username, name=username, repo=course.gitlab_api.get_url_for_repo(username))
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
                 storage_api.store_score(
-                    student=student,
-                    task_name=task_name,
-                    update_fn=lambda _flags, _old_score: int(new_score)
+                    student=student, task_name=task_name, update_fn=lambda _flags, _old_score: int(new_score)
                 )
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error updating database: {str(e)}")
         return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
-

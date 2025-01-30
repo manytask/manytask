@@ -7,7 +7,6 @@ import pytest
 
 from manytask.solutions import SolutionsApi
 
-
 TEST_FILES_NAMES = ["a.tmp", "b.tmp", "c.tmp"]
 
 

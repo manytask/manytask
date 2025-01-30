@@ -8,8 +8,8 @@ from manytask.web import bp as web_bp
 @pytest.fixture
 def app():
     app = Flask(__name__)
-    app.config['DEBUG'] = False
-    app.secret_key = 'test_key'
+    app.config["DEBUG"] = False
+    app.secret_key = "test_key"
     app.register_blueprint(web_bp)
     return app
 
@@ -21,7 +21,7 @@ def test_valid_session_with_valid_data(app):
             "username": "test_user",
             "user_id": 123,
             "repo": "test_repo",
-            "course_admin": False
+            "course_admin": False,
         }
         assert valid_session(session) is True
 
@@ -33,7 +33,7 @@ def test_valid_session_with_invalid_version(app):
             "username": "test_user",
             "user_id": 123,
             "repo": "test_repo",
-            "course_admin": False
+            "course_admin": False,
         }
         assert valid_session(session) is False
 
@@ -41,12 +41,7 @@ def test_valid_session_with_invalid_version(app):
 def test_valid_session_with_missing_data(app):
     # missing user_id
     with app.test_request_context():
-        session["gitlab"] = {
-            "version": 1.5,
-            "username": "test_user",
-            "repo": "test_repo",
-            "course_admin": False
-        }
+        session["gitlab"] = {"version": 1.5, "username": "test_user", "repo": "test_repo", "course_admin": False}
         assert valid_session(session) is False
 
 
@@ -61,7 +56,7 @@ def test_requires_auth_in_debug_mode(app):
         return "success"
 
     with app.test_request_context():
-        app.config['DEBUG'] = True
+        app.config["DEBUG"] = True
         response = test_route()
         assert response == "success"
 
@@ -77,7 +72,7 @@ def test_requires_auth_with_valid_session(app):
             "username": "test_user",
             "user_id": 123,
             "repo": "test_repo",
-            "course_admin": False
+            "course_admin": False,
         }
         response = test_route()
         assert response == "success"

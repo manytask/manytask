@@ -9,12 +9,10 @@ import zipfile
 from collections import defaultdict
 from pathlib import Path
 
-
 logger = logging.getLogger(__name__)
 
 
 class SolutionsApi:
-
     def __init__(
         self,
         base_folder: str | Path,

@@ -9,7 +9,6 @@ import gitlab.const
 import gitlab.v4.objects
 import requests
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -176,7 +175,6 @@ class GitLabApi:
         self,
         student: Student,
     ) -> bool:
-
         gitlab_project_path = f"{self._course_students_group}/{student.username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 

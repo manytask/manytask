@@ -13,7 +13,6 @@ from .auth import requires_auth, requires_ready, requires_secret
 from .course import Course, get_current_time
 from .database_utils import get_database_table_data
 
-
 SESSION_VERSION = 1.5
 
 

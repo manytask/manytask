@@ -8,7 +8,6 @@ from requests import HTTPError
 
 from manytask.glab import GitLabApi, GitLabApiException, Student, User, map_gitlab_user_to_student
 
-
 # Constants for test data
 EXAMPLE_REPO_OWNER = "example_owner"
 EXAMPLE_REPO_NAME = "example_repo"
