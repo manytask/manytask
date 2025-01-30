@@ -9,7 +9,7 @@ from flask import Blueprint, Response, current_app, redirect, render_template, r
 from flask.typing import ResponseReturnValue
 
 from . import abstract, glab
-from .auth import requires_auth, requires_ready
+from .auth import requires_auth, requires_ready, requires_secret
 from .course import Course, get_current_time
 from .database_utils import get_database_table_data
 
@@ -20,21 +20,24 @@ SESSION_VERSION = 1.5
 logger = logging.getLogger(__name__)
 bp = Blueprint("web", __name__)
 
-def get_allscores_url(viewer_api: abstract.ViewerApi) -> str :
+
+def get_allscores_url(viewer_api: abstract.ViewerApi) -> str:
     """Function to get URL for viewing the scores
 
      :param viewer_api: The viewer API that may hold the URL
-    
+
     :return: String with an URL
     """
     if viewer_api.get_scoreboard_url() == "":
-        return url_for('web.show_database')
+        return url_for("web.show_database")
     else:
         return viewer_api.get_scoreboard_url()
 
-@bp.route("/")
+
+@bp.route("/", methods=["GET", "POST"])
 @requires_ready
 @requires_auth
+@requires_secret(template="create_project.html")
 def course_page() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
@@ -44,7 +47,7 @@ def course_page() -> ResponseReturnValue:
         student_username = "guest"
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
 
-        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+        if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
@@ -104,7 +107,7 @@ def get_solutions() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
     if current_app.debug:
-        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+        if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
@@ -198,7 +201,7 @@ def login() -> ResponseReturnValue:
     return oauth.gitlab.authorize_redirect(redirect_uri)
 
 
-@bp.route("/login_finish")
+@bp.route("/login_finish", methods=["GET", "POST"])
 @requires_ready
 def login_finish() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
@@ -236,7 +239,7 @@ def login_finish() -> ResponseReturnValue:
     }
     session.permanent = True
 
-    if (course.gitlab_api.check_project_exists(student)):
+    if course.gitlab_api.check_project_exists(student):
         return redirect(url_for("web.course_page"))
     else:
         return redirect(url_for("web.create_project"))
@@ -311,7 +314,7 @@ def show_database() -> ResponseReturnValue:
         student_username = "guest"
         student_repo = course.gitlab_api.get_url_for_repo(student_username)
 
-        if request.args.get('admin', None) in ('true', '1', 'yes', None):
+        if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
@@ -338,7 +341,7 @@ def show_database() -> ResponseReturnValue:
         is_course_admin=student_course_admin,
         current_course=course,
         course_favicon=course.favicon,
-        readonly_fields=['username', 'total_score'],  # Cannot be edited in database web viewer
+        readonly_fields=["username", "total_score"],  # Cannot be edited in database web viewer
         links=(course.config.ui.links if course.config else {}),
         gitlab_url=course.gitlab_api.base_url,
         show_allscores=course.show_allscores,
