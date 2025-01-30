@@ -52,7 +52,7 @@ def requires_secret(template: str) -> Callable[..., Any]:
             try:
                 student = course.gitlab_api.get_authenticated_student(session["gitlab"]["oauth_access_token"])
                 # if user already have fork we let him in with out secret
-                #TODO change on checking user->course in db
+                # TODO change on checking user->course in db
                 if course.gitlab_api.check_project_exists(student):
                     ...
 

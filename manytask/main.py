@@ -15,7 +15,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import abstract, config, course, database, gdoc, glab, local_config, solutions
 
-
 load_dotenv("../.env")  # take environment variables from .env.
 
 
@@ -148,8 +147,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     if storage == config.ManytaskStorageType.DataBase.value:
         database_url = os.environ.get("DATABASE_URL", None)
         course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
-        create_tables_if_not_exist = os.environ.get(
-            "CREATE_TABLES_IF_NOT_EXIST", "false").lower() in ("true", "1", "yes")
+        create_tables_if_not_exist = os.environ.get("CREATE_TABLES_IF_NOT_EXIST", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
         if database_url is None:
             raise EnvironmentError("Unable to find DATABASE_URL env")
@@ -166,13 +168,12 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         )
 
     elif storage == config.ManytaskStorageType.GoogleSheets.value:
-
         # google sheets (credentials base64 encoded json)
-        gdoc_url=str(os.environ.get("GDOC_URL", "https://docs.google.com"))
-        gdoc_account_credentials_base64=os.environ.get("GDOC_ACCOUNT_CREDENTIALS_BASE64")
+        gdoc_url = str(os.environ.get("GDOC_URL", "https://docs.google.com"))
+        gdoc_account_credentials_base64 = os.environ.get("GDOC_ACCOUNT_CREDENTIALS_BASE64")
         # google public sheet
-        gdoc_spreadsheet_id=str(os.environ["GDOC_SPREADSHEET_ID"])
-        gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0))
+        gdoc_spreadsheet_id = str(os.environ["GDOC_SPREADSHEET_ID"])
+        gdoc_scoreboard_sheet = int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0))
 
         if gdoc_account_credentials_base64 is None:
             raise EnvironmentError("Unable to find GDOC_ACCOUNT_CREDENTIALS_BASE64 env")
@@ -190,9 +191,15 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         )
 
     else:
-        raise EnvironmentError("STORAGE should be either '" + config.ManytaskStorageType.GoogleSheets.value + \
-                               "' to store data in Google Sheets, or '" + config.ManytaskStorageType.DataBase.value + \
-                               "' to use database. Set to '" + storage + "'.")
+        raise EnvironmentError(
+            "STORAGE should be either '"
+            + config.ManytaskStorageType.GoogleSheets.value
+            + "' to store data in Google Sheets, or '"
+            + config.ManytaskStorageType.DataBase.value
+            + "' to use database. Set to '"
+            + storage
+            + "'."
+        )
 
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),

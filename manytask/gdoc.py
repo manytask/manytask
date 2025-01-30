@@ -19,7 +19,6 @@ from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .course import get_current_time
 from .glab import Student
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -93,7 +92,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         public_worksheet_id: str,
         public_scoreboard_sheet: int,
         cache: BaseCache,
-        testing: bool = False
+        testing: bool = False,
     ):
         """
         :param base_url:
@@ -182,10 +181,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         self,
         student: Student,
     ) -> StoredUser:
-        return StoredUser(
-            username=student.username,
-            course_admin=False
-        )
+        return StoredUser(username=student.username, course_admin=False)
 
     def sync_stored_user(
         self,
