@@ -327,7 +327,7 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
                     "course_admin": False,
                     "oauth_access_token": TEST_TOKEN,
                 }
-                sess['course'] = {
+                sess["course"] = {
                     "secret": TEST_SECRET,
                 }
             app.course = mock_course
@@ -351,7 +351,7 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
                     "course_admin": True,
                     "oauth_access_token": TEST_TOKEN,
                 }
-                sess['course'] = {
+                sess["course"] = {
                     "secret": TEST_SECRET,
                 }
 
@@ -373,7 +373,7 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
                     "course_admin": False,
                     "oauth_access_token": TEST_TOKEN,
                 }
-                sess['course'] = {
+                sess["course"] = {
                     "secret": TEST_SECRET,
                 }
 
@@ -397,7 +397,7 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
                     "course_admin": False,
                     "oauth_access_token": TEST_TOKEN,
                 }
-                sess['course'] = {
+                sess["course"] = {
                     "secret": TEST_SECRET,
                 }
 
