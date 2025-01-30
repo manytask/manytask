@@ -4,7 +4,6 @@
 {% block content %}
     <div class="container-fluid">
         <h2>Course Database</h2>
-
         <div id="database-table" style="max-width: 800px; width: 100%; overflow-x: auto;"></div>
 
         {% if is_course_admin %}
@@ -41,9 +40,36 @@
 
     <style>
         [data-bs-theme="dark"] .tabulator-footer .tabulator-paginator .tabulator-page:not(.active) {
-            color: #666 !important;
-            background-color: #333 !important;
+            color: #666666 !important;
+            background-color: #333333 !important;
             opacity: 1 !important;
+        }
+
+        /* Export button styles */
+        #export-csv {
+            border: 1px solid #aaaaaa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #ffffff33;
+            color: #212529;
+        }
+
+        [data-bs-theme="dark"] #export-csv {
+            background-color: #5c5c5c;
+            color: #ffffff;
+            border-color: #6c757d;
+        }
+
+        [data-bs-theme="dark"] #export-csv:hover {
+            background-color: #202020;
+            border-color: #adb5bd;
+        }
+
+        #export-csv:hover {
+            background-color: #9e9e9e;
+            border-color: #ced4da;
         }
 
         .tabulator {
@@ -259,6 +285,25 @@
                         persistenceMode: "local",
                         persistentLayout: true
                     });
+
+                    // Wait for a short delay to ensure table is rendered
+                    setTimeout(() => {
+                        const footer = document.querySelector(".tabulator-footer .tabulator-paginator");
+                        if (footer) {
+                            const exportButton = document.createElement("button");
+                            exportButton.id = "export-csv";
+                            exportButton.style.marginRight = "10px";
+                            exportButton.textContent = "Export as CSV";
+                            
+                            exportButton.addEventListener("click", function() {
+                                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                                const courseName = "{{ course_name }}".replace(/[^a-zA-Z0-9]/g, '_');
+                                window.tabulatorTable.download("csv", `${courseName}_database_export_${timestamp}.csv`);
+                            });
+
+                            footer.insertBefore(exportButton, footer.firstChild);
+                        }
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Error creating table:', error);
