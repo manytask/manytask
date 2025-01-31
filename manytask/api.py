@@ -274,6 +274,11 @@ def update_config() -> ResponseReturnValue:
     try:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
+
+        # Update task groups (if necessary -- if there is an override) first
+        course.storage_api.update_task_groups_from_config(config_data)
+
+        # Store the new config
         course.store_config(config_data)
     except Exception as e:
         logger.exception(e)
