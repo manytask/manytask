@@ -238,8 +238,19 @@
                         columns[1].width = 60;
                     }
 
+                    const taskGroups = {};
+
                     data.tasks.forEach(task => {
-                        columns.push({
+                        const groupName = task.group || 'ungrouped';
+                        if (!taskGroups[groupName]) {
+                            taskGroups[groupName] = [];
+                        }
+                        taskGroups[groupName].push(task);
+                    });
+
+                    Object.entries(taskGroups).forEach(([groupName, tasks]) => {
+                        // Mini-columns for each task
+                        const groupColumns = tasks.map(task => ({
                             title: task.name,
                             field: `scores.${task.name}`,
                             sorter: "number",
@@ -247,8 +258,61 @@
                             {% if is_course_admin %}
                             cellClick: function(e, cell) {
                                 editCell(cell);
-                            }
+                            },
                             {% endif %}
+                        }));
+
+                        // Add grouped columns
+                        columns.push({
+                            title: `${groupName} ▼`,
+                            columns: groupColumns,
+                            headerClick: function(e, column) {
+                                const table = column.getTable();
+                                const allCols = column.getSubColumns();
+
+                                // Create collapsed column definition
+                                const collapsedColumnDef = {
+                                    title: `${groupName} ►`,
+                                    field: `${groupName}_collapsed`,
+                                    width: 120,
+                                    headerSort: false,
+                                    visible: false,
+                                    headerClick: function(e, col) {
+                                        // Show all columns in the group and hide the collapsed column
+                                        allCols.forEach(subcol => subcol.show());
+                                        col.hide();
+                                        table.redraw(true);
+                                    },
+                                    formatter: function(cell) {
+                                        let sum = 0;
+                                        const rowData = cell.getRow().getData();
+                                        allCols.forEach(col => {
+                                            const field = col.getField();
+                                            const value = field.split('.').reduce((obj, key) => obj && obj[key], rowData);
+                                            if (value) sum += value;
+                                        });
+                                        // Store the sum in the row data
+                                        const newData = {};
+                                        newData[cell.getField()] = sum;
+                                        cell.getRow().update(newData);
+                                        return sum;
+                                    }
+                                };
+
+                                // Add collapsed column if it doesn't exist
+                                let collapsedCol = table.getColumn(`${groupName}_collapsed`);
+                                if (!collapsedCol) {
+                                    // Find the index where this group's columns start
+                                    const firstColInGroup = allCols[0];
+                                    table.addColumn(collapsedColumnDef, true, firstColInGroup);
+                                    collapsedCol = table.getColumn(`${groupName}_collapsed`);
+                                }
+                                // Hide all columns in the group and show the collapsed column
+                                allCols.forEach(col => col.hide());
+                                collapsedCol.show();
+
+                                table.redraw(true);
+                            }
                         });
                     });
 
@@ -261,6 +325,80 @@
                         paginationSize: 100,
                         paginationSizeSelector: [25, 50, 100, 200, true],
                         initialSort: [{column: "total_score", dir: "desc"}],
+                        groupBy: false,
+                        downloadConfig: {
+                            columnHeaders: true,
+                            columnGroups: false,
+                            rowGroups: false,
+                            columnOutput: function(column) {
+
+                                return column.getField();
+                            },
+                            dataOutput: function(value, column, row, rowData) {
+
+
+                                if (column.getField().endsWith('_collapsed')) {
+                                    const groupName = column.getField().replace('_collapsed', '');
+                                    const groupCol = window.tabulatorTable.getColumns().find(col =>
+                                        col.getDefinition().title.replace(' ▼', '') === groupName
+                                    );
+
+                                    if (groupCol && groupCol.getSubColumns) {
+                                        const subCols = groupCol.getSubColumns();
+                                        let sum = 0;
+
+                                        subCols.forEach(col => {
+                                            const field = col.getField();
+                                            const taskName = field.split('.')[1];
+                                            const taskValue = rowData.scores && rowData.scores[taskName] || 0;
+                                            sum += taskValue;
+                                        });
+
+
+                                        return sum.toFixed(1);
+                                    }
+                                }
+
+                                return value;
+                            }
+                        },
+                        rowFormatter: function(row) {
+
+                            const data = row.getData();
+
+                            // Add individual task scores and group totals
+                            const groupColumns = window.tabulatorTable.getColumns().filter(col => col.getDefinition().columns);
+                            groupColumns.forEach(groupCol => {
+                                const subCols = groupCol.getSubColumns();
+                                const groupName = groupCol.getDefinition().title.replace(' ▼', '');
+
+
+                                if (subCols && subCols.length > 0) {
+                                    let sum = 0;
+                                    const collapsedCol = window.tabulatorTable.getColumn(`${groupName}_collapsed`);
+                                    const isCollapsed = collapsedCol && collapsedCol.isVisible();
+
+
+                                    subCols.forEach(col => {
+                                        const field = col.getField();
+                                        const taskName = field.split('.')[1];
+                                        const value = data.scores && data.scores[taskName] || 0;
+
+                                        if (value) sum += value;
+                                    });
+
+                                    if (isCollapsed && collapsedCol) {
+
+                                        const cell = row.getCell(`${groupName}_collapsed`);
+                                        if (cell) {
+                                            cell.setValue(sum.toFixed(1));
+                                        } else {
+
+                                        }
+                                    }
+                                }
+                            });
+                        },
                         columnDefaults: {
                             resizable: true,
                             minWidth: 1,
@@ -271,14 +409,20 @@
                                 htmlChars: true
                             },
                             cssClass: "text-wrap",
-                            tooltip: true,
-                            tooltipGenerationMode: "hover",
-                            tooltipFormatter: function(cell) {
-                                const isAdmin = {{ is_course_admin|tojson }};
-                                if (!isAdmin && cell.getField() !== "username" && cell.getField() !== "total_score") {
-                                    return "Only course admins can edit scores";
+                            tooltip: function(cell) {
+                                if (!cell || typeof cell.getField !== 'function') return "";
+                                try {
+                                    const isAdmin = {{ is_course_admin|tojson }};
+                                    const field = cell.getField();
+                                    if (!isAdmin && field !== "username" && field !== "total_score") {
+                                        return "Only course admins can edit scores";
+                                    }
+                                    const value = cell.getValue();
+                                    return value !== undefined && value !== null ? value.toString() : "";
+                                } catch (e) {
+
+                                    return "";
                                 }
-                                return cell.getValue();
                             },
                             vertAlign: "middle"
                         },
@@ -294,12 +438,92 @@
                             exportButton.id = "export-csv";
                             exportButton.style.marginRight = "10px";
                             exportButton.textContent = "Export as CSV";
-                            
-                            exportButton.addEventListener("click", function() {
+
+                            exportButton.onclick = function() {
+
+                                if (!window.tabulatorTable) {
+                                    console.error('Tabulator instance not found!');
+                                    return;
+                                }
+
+
                                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
                                 const courseName = "{{ course_name }}".replace(/[^a-zA-Z0-9]/g, '_');
-                                window.tabulatorTable.download("csv", `${courseName}_database_export_${timestamp}.csv`);
-                            });
+
+                                try {
+
+                                    const table = window.tabulatorTable;
+
+                                    // Get current data with all calculated values
+                                    const currentData = table.getData();
+
+
+                                    // Get visible columns
+                                    const visibleColumns = table.getColumns()
+                                        .filter(col => col.isVisible())
+                                        .map(col => col.getField());
+
+
+                                    // Prepare data for export
+                                    const exportData = currentData.map(row => {
+                                        const exportRow = {};
+                                        visibleColumns.forEach(field => {
+                                            if (field.endsWith('_collapsed')) {
+
+                                                const groupName = field.replace('_collapsed', '');
+                                                const groupCol = table.getColumn(field);
+                                                if (groupCol) {
+                                                    const cell = groupCol.getCells().find(c =>
+                                                        c.getRow().getData().username === row.username
+                                                    );
+                                                    if (cell) {
+                                                        exportRow[field] = parseInt(cell.getValue()) || 0;
+
+                                                    }
+                                                }
+                                            } else if (field.startsWith('scores.')) {
+                                                // Handle nested scores data
+
+                                                const taskName = field.split('.')[1];
+                                                const value = row.scores && row.scores[taskName] || 0;
+                                                exportRow[field] = value;
+
+                                            } else {
+                                                exportRow[field] = row[field];
+                                            }
+                                        });
+
+                                        return exportRow;
+                                    });
+
+
+                                    // Create CSV content
+                                    const headers = visibleColumns;
+                                    const csv = [
+                                        headers.join(','),
+                                        ...exportData.map(row =>
+                                            headers.map(field =>
+                                                JSON.stringify(row[field] || '')
+                                            ).join(',')
+                                        )
+                                    ].join('\n');
+
+                                    // Trigger download
+                                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                    const link = document.createElement('a');
+                                    if (link.download !== undefined) {
+                                        const url = URL.createObjectURL(blob);
+                                        link.setAttribute('href', url);
+                                        link.setAttribute('download', `${courseName}_database_export_${timestamp}.csv`);
+                                        link.style.visibility = 'hidden';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }
+                                } catch (error) {
+                                    console.error('Error exporting CSV:', error);
+                                }
+                            };
 
                             footer.insertBefore(exportButton, footer.firstChild);
                         }
