@@ -60,6 +60,8 @@ def requires_secret(template: str) -> Callable[..., Any]:
                 elif "secret" in request.form:
                     if not secrets.compare_digest(request.form["secret"], course.registration_secret):
                         raise Exception("Invalid registration secret")
+                    else:
+                        return redirect(url_for("web.create_project", secret=request.form["secret"]))
 
                 # gently asking for a secret
                 else:
