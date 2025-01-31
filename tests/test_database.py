@@ -1,9 +1,16 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy.orm import Session
-
 from manytask.models import Course, Task, TaskGroup
+
+# ruff: noqa
+from tests.test_db_api import (
+    engine,
+    first_course_db_api,
+    second_course_db_api,
+    session,
+    tables,
+)
 
 
 def create_test_config(tasks_config):
@@ -40,7 +47,7 @@ def create_task_entry(task_name: str, enabled: bool = True, score: int = 100):
 
 
 def setup_course_with_tasks(
-    session: Session, course_name: str, tasks_data: list[tuple[str, str, str]]
+    session, course_name: str, tasks_data: list[tuple[str, str, str]]
 ) -> tuple[Course, list[Task]]:
     """Helper function to set up a course with tasks
 
@@ -69,7 +76,7 @@ def setup_course_with_tasks(
     return course, tasks
 
 
-def test_move_task_between_groups(first_course_db_api, session: Session):
+def test_move_task_between_groups(first_course_db_api, session):
     """Test moving a task from one group to another"""
 
     _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
@@ -83,7 +90,7 @@ def test_move_task_between_groups(first_course_db_api, session: Session):
     assert task.group.name == "group2"
 
 
-def test_create_missing_group(first_course_db_api, session: Session):
+def test_create_missing_group(first_course_db_api, session):
     """Test creating a new group when moving task to non-existent group"""
 
     _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
@@ -98,7 +105,7 @@ def test_create_missing_group(first_course_db_api, session: Session):
     assert session.query(TaskGroup).filter_by(name="new_group").count() == 1
 
 
-def test_multiple_courses(first_course_db_api, second_course_db_api, session: Session):
+def test_multiple_courses(first_course_db_api, second_course_db_api, session):
     """Test that tasks are only moved in the correct course"""
 
     tasks_data = [("task1", "group1", "Test Course"), ("task1", "group1", "Another Test Course")]
@@ -124,7 +131,7 @@ def test_multiple_courses(first_course_db_api, second_course_db_api, session: Se
     assert task1_c2.group.name == "group1"
 
 
-def test_disabled_tasks_not_moved(first_course_db_api, session: Session):
+def test_disabled_tasks_not_moved(first_course_db_api, session):
     """Test that disabled tasks are not moved between groups"""
 
     _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
@@ -143,7 +150,7 @@ def test_disabled_tasks_not_moved(first_course_db_api, session: Session):
     assert task.group.name == "group1"
 
 
-def test_disabled_groups_not_processed(first_course_db_api, session: Session):
+def test_disabled_groups_not_processed(first_course_db_api, session):
     """Test that tasks in disabled groups are not processed"""
 
     _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
@@ -162,7 +169,7 @@ def test_disabled_groups_not_processed(first_course_db_api, session: Session):
     assert task.group.name == "group1"
 
 
-def test_multiple_task_moves(first_course_db_api, session: Session):
+def test_multiple_task_moves(first_course_db_api, session):
     """Test moving multiple tasks between groups"""
 
     tasks_data = [
