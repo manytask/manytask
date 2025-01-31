@@ -62,6 +62,7 @@ def first_course_db_api(tables):
         registration_secret="secret",
         show_allscores=True,
         create_tables_if_not_exist=True,
+        testing=True
     )
 
 
@@ -74,6 +75,7 @@ def second_course_db_api(tables):
         registration_secret="secret",
         show_allscores=True,
         create_tables_if_not_exist=True,
+        testing=True
     )
 
 
@@ -691,6 +693,7 @@ def test_auto_tables_creation(engine):
         registration_secret="secret",
         show_allscores=True,
         create_tables_if_not_exist=True,
+        testing=True
     )
 
     with Session(engine) as session:
@@ -705,6 +708,7 @@ def test_viewer_api():
         registration_secret="secret",
         show_allscores=True,
         create_tables_if_not_exist=True,
+        testing=True
     )
     assert db_api.get_scoreboard_url() == ""
 

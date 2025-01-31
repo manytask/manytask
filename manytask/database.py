@@ -1,8 +1,11 @@
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 
-from psycopg2.errors import UniqueViolation
+from alembic import command
+from alembic.config import Config
+from psycopg2.errors import DuplicateTable, UniqueViolation
 from sqlalchemy import and_, create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
@@ -29,6 +32,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         registration_secret: str,
         show_allscores: bool,
         create_tables_if_not_exist: bool = False,
+        testing: bool = False
     ):
         """Constructor of DataBaseApi class
 
@@ -40,12 +44,13 @@ class DataBaseApi(ViewerApi, StorageApi):
         :param registration_secret: secret to registering for course
         :param show_allscores: flag for showing results to all users
         :param create_tables_if_not_exist: flag for creating database tables if they don't exist
+        :param testing: flag for testing
         """
 
         self.engine = create_engine(database_url, echo=False)
 
         if create_tables_if_not_exist:
-            self._create_tables()
+            self._create_tables(database_url, testing=testing)
 
         with Session(self.engine) as session:
             try:
@@ -280,12 +285,23 @@ class DataBaseApi(ViewerApi, StorageApi):
                     )
             session.commit()
 
-    def _create_tables(self) -> None:
+    def _create_tables(self, database_url: str, testing: bool) -> None:
+        alembic_cfg = Config(Path(__file__).parent / 'alembic.ini', config_args={
+            'sqlalchemy.url': database_url
+        })
+
         try:
-            models.Base.metadata.create_all(self.engine)
+            if testing:
+                models.Base.metadata.create_all(self.engine)
+            else:
+                with self.engine.begin() as connection:
+                    alembic_cfg.attributes['connection'] = connection
+                    command.upgrade(alembic_cfg, "head")
         except IntegrityError as e:  # if tables are created concurrently
             if not isinstance(e.orig, UniqueViolation):
                 raise
+        except DuplicateTable:  # if tables are created concurrently
+            pass
 
     def _get_or_create_user_on_course(
         self, session: Session, student: Student, course: models.Course
