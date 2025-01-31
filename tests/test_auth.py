@@ -1,7 +1,9 @@
-import pytest
-from flask import Flask, session
+from unittest.mock import MagicMock
 
-from manytask.auth import requires_auth, requires_ready, valid_session
+import pytest
+from flask import Flask, request, session
+
+from manytask.auth import requires_auth, requires_ready, requires_secret, valid_session
 from manytask.web import bp as web_bp
 
 
@@ -116,5 +118,22 @@ def test_requires_ready_without_config(app):
 
     with app.test_request_context():
         app.course = MockCourse()
+        response = test_route()
+        assert response.status_code == 302
+
+
+def test_requires_secret_with_valid_secret(app):
+    # Should redirect to create_project
+    @requires_secret(template="create_project.html")
+    def test_route():
+        return "success"
+
+    with app.test_request_context():
+        session["gitlab"] = {"oauth_access_token": "token"}
+        app.course = MagicMock()
+        app.course.registration_secret = "test_code"
+        request.form = {"secret": "test_code"}
+        app.course.gitlab_api.get_authenticated_student.return_value = None
+        app.course.gitlab_api.check_project_exists.return_value = False
         response = test_route()
         assert response.status_code == 302
