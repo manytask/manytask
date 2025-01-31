@@ -102,6 +102,7 @@ def course_page() -> ResponseReturnValue:
 @bp.get("/solutions")
 @requires_auth
 @requires_ready
+@requires_secret(template="create_project.html")
 def get_solutions() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
@@ -304,6 +305,7 @@ def not_ready() -> ResponseReturnValue:
 @bp.get("/database")
 @requires_auth
 @requires_ready
+@requires_secret(template="create_project.html")
 def show_database() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
