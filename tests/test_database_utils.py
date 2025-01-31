@@ -37,6 +37,7 @@ def mock_course():
         class MockGroup:
             def __init__(self, tasks):
                 self.tasks = tasks
+                self.name = "test_group"
 
         class MockTask:
             def __init__(self, name, enabled):
