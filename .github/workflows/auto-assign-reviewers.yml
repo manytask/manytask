@@ -11,3 +11,4 @@ jobs:
       - uses: johnmanjiro13/auto-reviewer-assign@v0.2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          config-file-path: .github/auto-assign.yml
