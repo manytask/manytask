@@ -136,6 +136,9 @@ def mock_course():
             def sync_columns(self, deadlines):
                 pass
 
+            def update_task_groups_from_config(self, config_data):
+                pass
+
         def get_groups(self):
             return self.groups
 

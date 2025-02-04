@@ -456,3 +456,14 @@ class GoogleDocApi(ViewerApi, StorageApi):
         student: Student,
     ) -> str:
         return f'=HYPERLINK("{student.repo}";"git")'
+
+    def update_task_groups_from_config(
+        self,
+        config_data: dict[str, Any],
+    ) -> None:
+        """Empty implementation for GoogleDocApi as it doesn't need task group management.
+        Task groups are managed directly in the spreadsheet during sync_columns.
+
+        :param config_data: Raw config data from yaml
+        """
+        pass
