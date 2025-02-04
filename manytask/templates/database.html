@@ -75,24 +75,36 @@
         .tabulator {
             width: 100% !important;
             max-width: 100% !important;
+            --min-col-width: 30px;
+        }
+
+        .tabulator .tabulator-header .tabulator-col {
+            min-width: var(--min-col-width) !important;
+        }
+
+        .tabulator .tabulator-cell {
+            min-width: var(--min-col-width) !important;
         }
 
         .tabulator-cell {
-            white-space: normal !important;
-            word-break: break-word !important;
-            overflow: visible !important;
-            text-overflow: clip !important;
+            white-space: nowrap !important;
+            word-break: normal !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
         }
 
         .tabulator .tabulator-header .tabulator-col-content {
-            white-space: normal !important;
-            word-break: break-word !important;
+            white-space: nowrap !important;
+            word-break: normal !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
         }
     </style>
 
     <script>
         let currentEditCell = null;
         let editModal = null;
+        const mincolwidth = 30;
 
         function editCell(cell) {
             const readonlyFields = {{ readonly_fields|tojson }};
@@ -399,8 +411,9 @@
                         },
                         columnDefaults: {
                             resizable: true,
-                            minWidth: 1,
-                            maxWidth: 120,
+                            minWidth: mincolwidth,
+                            maxWidth: 300,
+                            headerMinWidth: mincolwidth,
                             formatter: "plaintext",
                             formatterParams: {
                                 textLimit: false,
