@@ -43,7 +43,7 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     return decorated
 
 
-def requires_secret(template: str) -> Callable[..., Any]:
+def requires_secret(template: str = "create_project.html") -> Callable[..., Any]:
     def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(f)
         def decorated(*args: Any, **kwargs: Any) -> Any:
