@@ -1,13 +1,13 @@
-name: 'Auto Assign Reviewers'
-
+name: Auto Reviewer Assign
 on:
   pull_request:
-    types: [opened, ready_for_review, reopened]
+    types: [opened, review_requested]
 
 jobs:
-  add-reviewers:
+  auto-reviewer-assign:
     runs-on: ubuntu-latest
     steps:
-      - uses: kentaro-m/auto-assign-action@v0.2.0
+      - uses: actions/checkout@v3
+      - uses: johnmanjiro13/auto-reviewer-assign@v0.2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
