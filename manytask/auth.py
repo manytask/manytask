@@ -43,7 +43,7 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     return decorated
 
 
-def requires_secret(template: str) -> Callable[..., Any]:
+def requires_secret(template: str = "create_project.html") -> Callable[..., Any]:
     def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(f)
         def decorated(*args: Any, **kwargs: Any) -> Any:
@@ -58,7 +58,9 @@ def requires_secret(template: str) -> Callable[..., Any]:
 
                 # secret was entered in form
                 elif "secret" in request.form:
-                    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
+                    if secrets.compare_digest(request.form["secret"], course.registration_secret):
+                        return redirect(url_for("web.create_project", secret=request.form["secret"]))
+                    else:
                         raise Exception("Invalid registration secret")
 
                 # gently asking for a secret
