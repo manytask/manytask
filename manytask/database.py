@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 class DataBaseApi(ViewerApi, StorageApi):
     """Class for interacting with a database with the StorageApi functionality"""
 
+    DEFAULT_ALEMBIC_PATH = Path(__file__).parent / "alembic.ini"
+
     def __init__(
         self,
         database_url: str,
@@ -32,7 +34,6 @@ class DataBaseApi(ViewerApi, StorageApi):
         registration_secret: str,
         show_allscores: bool,
         create_tables_if_not_exist: bool = False,
-        testing: bool = False
     ):
         """Constructor of DataBaseApi class
 
@@ -44,13 +45,12 @@ class DataBaseApi(ViewerApi, StorageApi):
         :param registration_secret: secret to registering for course
         :param show_allscores: flag for showing results to all users
         :param create_tables_if_not_exist: flag for creating database tables if they don't exist
-        :param testing: flag for testing
         """
 
         self.engine = create_engine(database_url, echo=False)
 
         if create_tables_if_not_exist:
-            self._create_tables(database_url, testing=testing)
+            self._create_tables(database_url)
 
         with Session(self.engine) as session:
             try:
@@ -285,18 +285,13 @@ class DataBaseApi(ViewerApi, StorageApi):
                     )
             session.commit()
 
-    def _create_tables(self, database_url: str, testing: bool) -> None:
-        alembic_cfg = Config(Path(__file__).parent / 'alembic.ini', config_args={
-            'sqlalchemy.url': database_url
-        })
+    def _create_tables(self, database_url: str) -> None:
+        alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
         try:
-            if testing:
-                models.Base.metadata.create_all(self.engine)
-            else:
-                with self.engine.begin() as connection:
-                    alembic_cfg.attributes['connection'] = connection
-                    command.upgrade(alembic_cfg, "head")
+            with self.engine.begin() as connection:
+                alembic_cfg.attributes["connection"] = connection
+                command.upgrade(alembic_cfg, "head")  # models.Base.metadata.create_all(self.engine)
         except IntegrityError as e:  # if tables are created concurrently
             if not isinstance(e.orig, UniqueViolation):
                 raise

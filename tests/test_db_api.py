@@ -6,18 +6,22 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import yaml
+from alembic import command
+from alembic.config import Config
 from dotenv import load_dotenv
+from psycopg2.errors import UndefinedTable
 from sqlalchemy import create_engine
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import NoResultFound
+from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskDeadlinesConfig
 from manytask.database import DataBaseApi, StoredUser
 from manytask.glab import Student
-from manytask.models import Base, Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
+from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///file::memory:?cache=shared"
+ALEMBIC_PATH = "manytask/alembic.ini"
 
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",
@@ -34,17 +38,34 @@ def mock_current_time():
         yield mock
 
 
-@pytest.fixture
-def engine():
-    return create_engine(SQLALCHEMY_DATABASE_URL, echo=False)
+@pytest.fixture(scope="session")
+def postgres_container():
+    with PostgresContainer("postgres:17") as postgres:
+        yield postgres
+
+
+@pytest.fixture()
+def engine(postgres_container):
+    return create_engine(postgres_container.get_connection_url(), echo=False)
 
 
 @pytest.fixture
-def tables(engine):
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+def alembic_cfg(postgres_container):
+    return Config(ALEMBIC_PATH, config_args={"sqlalchemy.url": postgres_container.get_connection_url()})
+
+
+@pytest.fixture
+def tables(engine, alembic_cfg):
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
+        command.upgrade(alembic_cfg, "head")  # Base.metadata.create_all(engine)
+
     yield
-    Base.metadata.drop_all(engine)
+
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
 
 
 @pytest.fixture
@@ -54,28 +75,26 @@ def session(engine, tables):
 
 
 @pytest.fixture
-def first_course_db_api(tables):
+def first_course_db_api(tables, postgres_container):
     return DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
         create_tables_if_not_exist=True,
-        testing=True
     )
 
 
 @pytest.fixture
-def second_course_db_api(tables):
+def second_course_db_api(tables, postgres_container):
     return DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Another Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
         create_tables_if_not_exist=True,
-        testing=True
     )
 
 
@@ -643,10 +662,10 @@ def test_deadlines(first_course_with_deadlines, second_course_with_deadlines, se
     }
 
 
-def test_course_change_params(first_course_db_api):
+def test_course_change_params(first_course_db_api, postgres_container):
     with pytest.raises(AttributeError):
         DataBaseApi(
-            database_url=SQLALCHEMY_DATABASE_URL,
+            database_url=postgres_container.get_connection_url(),
             course_name="Test Course",
             gitlab_instance_host="gitlab.another_test.com",
             registration_secret="secret",
@@ -654,7 +673,7 @@ def test_course_change_params(first_course_db_api):
         )
 
     DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="another_secret",
@@ -674,41 +693,43 @@ def test_bad_requests(first_course_with_deadlines, session):
     assert session.query(Grade).count() == 0
 
 
-def test_auto_tables_creation(engine):
-    Base.metadata.drop_all(engine)
+def test_auto_tables_creation(engine, alembic_cfg, postgres_container):
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
 
-    with pytest.raises(OperationalError):
+    with pytest.raises(ProgrammingError) as exc_info:
         DataBaseApi(
-            database_url=SQLALCHEMY_DATABASE_URL,
+            database_url=postgres_container.get_connection_url(),
             course_name="Test Course",
             gitlab_instance_host="gitlab.test.com",
             registration_secret="secret",
             show_allscores=True,
         )
 
+    assert isinstance(exc_info.value.orig, UndefinedTable)
+
     db_api = DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
         create_tables_if_not_exist=True,
-        testing=True
     )
 
     with Session(engine) as session:
         test_empty_course(db_api, session)
 
 
-def test_viewer_api():
+def test_viewer_api(postgres_container):
     db_api = DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
         create_tables_if_not_exist=True,
-        testing=True
     )
     assert db_api.get_scoreboard_url() == ""
 

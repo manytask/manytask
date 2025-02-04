@@ -165,7 +165,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             registration_secret=app.app_config.registration_secret,
             show_allscores=app.app_config.show_allscores,
             create_tables_if_not_exist=create_tables_if_not_exist,
-            testing=app.testing
         )
 
     elif storage == config.ManytaskStorageType.GoogleSheets.value:

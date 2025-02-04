@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from dotenv import load_dotenv
+from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskStorageType
 from manytask.gdoc import GoogleDocApi
@@ -25,7 +26,13 @@ def mock_gdoc():
 
 
 @pytest.fixture
-def mock_env(monkeypatch):
+def postgres_container():
+    with PostgresContainer("postgres:17") as postgres:
+        yield postgres
+
+
+@pytest.fixture
+def mock_env(monkeypatch, postgres_container):
     load_dotenv()
 
     # Set env var only if not already present
@@ -56,7 +63,7 @@ def mock_env(monkeypatch):
 
     monkeypatch.setenv("CACHE_DIR", TEST_CACHE_DIR)
     monkeypatch.setenv("SOLUTIONS_DIR", TEST_SOLUTIONS_DIR)
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", postgres_container.get_connection_url())
     monkeypatch.setenv("STORAGE", ManytaskStorageType.DataBase.value)
     monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course")
     monkeypatch.setenv("CREATE_TABLES_IF_NOT_EXIST", "true")
