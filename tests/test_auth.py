@@ -124,7 +124,7 @@ def test_requires_ready_without_config(app):
 
 def test_requires_secret_with_valid_secret(app):
     # Should redirect to create_project
-    @requires_secret(template="create_project.html")
+    @requires_secret()
     def test_route():
         return "success"
 
@@ -137,3 +137,4 @@ def test_requires_secret_with_valid_secret(app):
         app.course.gitlab_api.check_project_exists.return_value = False
         response = test_route()
         assert response.status_code == 302
+        assert response.location == "/create_project?secret=test_code"
