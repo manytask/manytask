@@ -5,7 +5,7 @@ import logging
 import os
 import secrets
 import tempfile
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -323,7 +323,7 @@ def get_solutions() -> ResponseReturnValue:
     if not zip_bytes_io:
         return f"Unable to get zip for {task_name}", 500
 
-    _now_str = datetime.utcnow().strftime("%Y-%m-%d-%H-%M-%S")
+    _now_str = datetime.now(UTC).strftime("%Y-%m-%d-%H-%M-%S")
     filename = f"aggregated-solutions-{task_name}-{_now_str}.zip"
 
     return Response(
