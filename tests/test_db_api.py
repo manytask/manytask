@@ -8,6 +8,7 @@ import pytest
 import yaml
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from dotenv import load_dotenv
 from psycopg2.errors import UndefinedTable
 from sqlalchemy import create_engine
@@ -82,7 +83,7 @@ def first_course_db_api(tables, postgres_container):
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
-        create_tables_if_not_exist=True,
+        apply_migrations=True,
     )
 
 
@@ -94,7 +95,7 @@ def second_course_db_api(tables, postgres_container):
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
-        create_tables_if_not_exist=True,
+        apply_migrations=True,
     )
 
 
@@ -715,11 +716,36 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container):
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
-        create_tables_if_not_exist=True,
+        apply_migrations=True,
     )
 
     with Session(engine) as session:
         test_empty_course(db_api, session)
+
+
+def test_auto_database_migration(engine, alembic_cfg, postgres_container):
+    script = ScriptDirectory.from_config(alembic_cfg)
+    revisions = list(script.walk_revisions("base", "head"))
+    revisions.reverse()
+
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+
+        for revision in revisions:
+            command.downgrade(alembic_cfg, "base")
+            command.upgrade(alembic_cfg, revision.revision)
+
+            db_api = DataBaseApi(
+                database_url=postgres_container.get_connection_url(),
+                course_name="Test Course",
+                gitlab_instance_host="gitlab.test.com",
+                registration_secret="secret",
+                show_allscores=True,
+                apply_migrations=True,
+            )
+
+            with Session(engine) as session:
+                test_empty_course(db_api, session)
 
 
 def test_viewer_api(postgres_container):
@@ -729,7 +755,7 @@ def test_viewer_api(postgres_container):
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
-        create_tables_if_not_exist=True,
+        apply_migrations=True,
     )
     assert db_api.get_scoreboard_url() == ""
 

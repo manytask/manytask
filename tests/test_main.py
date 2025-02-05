@@ -66,7 +66,7 @@ def mock_env(monkeypatch, postgres_container):
     monkeypatch.setenv("DATABASE_URL", postgres_container.get_connection_url())
     monkeypatch.setenv("STORAGE", ManytaskStorageType.DataBase.value)
     monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course")
-    monkeypatch.setenv("CREATE_TABLES_IF_NOT_EXIST", "true")
+    monkeypatch.setenv("APPLY_MIGRATIONS", "true")
 
     os.makedirs(TEST_CACHE_DIR, exist_ok=True)
     os.makedirs(TEST_SOLUTIONS_DIR, exist_ok=True)

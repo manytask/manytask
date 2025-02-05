@@ -3,7 +3,7 @@ DOCKER_COMPOSE_DEV := docker-compose.development.yml
 TEST_REQUIREMENTS := requirements.test.txt
 TESTS_DIR := tests
 
-.PHONY: dev test reset-dev clean-db lint lint-fix setup install-deps check format install-hooks run-hooks
+.PHONY: dev test reset-dev clean-db lint lint-fix setup install-deps check format install-hooks run-hooks makemigrations
 
 check: format lint test
 
@@ -44,3 +44,10 @@ format:
 
 setup: install-deps install-hooks
 	mypy --install-types --non-interactive $(ROOT_DIR) $(TESTS_DIR)
+
+makemigrations:
+	@ if [ -z "$(msg)" ]; then \
+		echo "Environment variable msg not set"; \
+		exit 1; \
+	fi
+	docker-compose -f $(DOCKER_COMPOSE_DEV) run -e EMPTY_APP=true --rm -w /app/manytask/ manytask python -m alembic revision -m "$(msg)" --autogenerate

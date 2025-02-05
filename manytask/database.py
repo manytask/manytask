@@ -5,9 +5,9 @@ from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 
 from alembic import command
 from alembic.config import Config
-from psycopg2.errors import DuplicateTable, UniqueViolation
+from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from sqlalchemy import and_, create_engine
-from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
@@ -33,7 +33,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         gitlab_instance_host: str,
         registration_secret: str,
         show_allscores: bool,
-        create_tables_if_not_exist: bool = False,
+        apply_migrations: bool = False,
     ):
         """Constructor of DataBaseApi class
 
@@ -44,13 +44,13 @@ class DataBaseApi(ViewerApi, StorageApi):
         :param gitlab_instance_host: gitlab instance host url
         :param registration_secret: secret to registering for course
         :param show_allscores: flag for showing results to all users
-        :param create_tables_if_not_exist: flag for creating database tables if they don't exist
+        :param apply_migrations: flag for applying migrations
         """
 
         self.engine = create_engine(database_url, echo=False)
 
-        if create_tables_if_not_exist:
-            self._create_tables(database_url)
+        if apply_migrations:
+            self._apply_migrations(database_url)
 
         with Session(self.engine) as session:
             try:
@@ -285,7 +285,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                     )
             session.commit()
 
-    def _create_tables(self, database_url: str) -> None:
+    def _apply_migrations(self, database_url: str) -> None:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
         try:
@@ -294,6 +294,9 @@ class DataBaseApi(ViewerApi, StorageApi):
                 command.upgrade(alembic_cfg, "head")  # models.Base.metadata.create_all(self.engine)
         except IntegrityError as e:  # if tables are created concurrently
             if not isinstance(e.orig, UniqueViolation):
+                raise
+        except ProgrammingError as e:  # if tables are created concurrently
+            if not isinstance(e.orig, DuplicateColumn):
                 raise
         except DuplicateTable:  # if tables are created concurrently
             pass
