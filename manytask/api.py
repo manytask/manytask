@@ -5,7 +5,7 @@ import logging
 import os
 import secrets
 import tempfile
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -274,6 +274,11 @@ def update_config() -> ResponseReturnValue:
     try:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
+
+        # Update task groups (if necessary -- if there is an override) first
+        course.storage_api.update_task_groups_from_config(config_data)
+
+        # Store the new config
         course.store_config(config_data)
     except Exception as e:
         logger.exception(e)
@@ -323,7 +328,7 @@ def get_solutions() -> ResponseReturnValue:
     if not zip_bytes_io:
         return f"Unable to get zip for {task_name}", 500
 
-    _now_str = datetime.utcnow().strftime("%Y-%m-%d-%H-%M-%S")
+    _now_str = datetime.now(UTC).strftime("%Y-%m-%d-%H-%M-%S")
     filename = f"aggregated-solutions-{task_name}-{_now_str}.zip"
 
     return Response(

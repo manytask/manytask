@@ -71,3 +71,9 @@ class StorageApi(ABC):
         self,
         deadlines_config: ManytaskDeadlinesConfig,
     ) -> None: ...
+
+    @abstractmethod
+    def update_task_groups_from_config(
+        self,
+        config_data: dict[str, Any],
+    ) -> None: ...

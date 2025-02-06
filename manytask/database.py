@@ -15,7 +15,7 @@ from sqlalchemy.sql.functions import func
 
 from . import models
 from .abstract import StorageApi, StoredUser, ViewerApi
-from .config import ManytaskDeadlinesConfig
+from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .glab import Student
 
 ModelType = TypeVar("ModelType", bound=models.Base)
@@ -288,6 +288,69 @@ class DataBaseApi(ViewerApi, StorageApi):
                         name=task.name,
                         group_id=task_group.id,
                     )
+            session.commit()
+
+    def update_task_groups_from_config(
+        self,
+        config_data: dict[str, Any],
+    ) -> None:
+        """Update task groups based on new config data.
+
+        This method:
+        1. Finds tasks that need to be moved to different groups
+        2. Creates any missing groups
+        3. Updates task group assignments
+
+        :param config_data: Raw config data from yaml
+        """
+        with Session(self.engine) as session:
+            new_config = ManytaskConfig(**config_data)
+            new_task_names = set()
+            new_task_to_group = {}
+            for group in new_config.deadlines.get_groups(enabled=True, started=True):
+                for task_config in group.tasks:
+                    if task_config.enabled:
+                        new_task_names.add(task_config.name)
+                        new_task_to_group[task_config.name] = group.name
+
+            existing_tasks = session.query(models.Task).join(models.TaskGroup).all()
+
+            # Check for duplicates (name + course)
+            tasks_to_update = {}
+            for existing_task in existing_tasks:
+                if existing_task.name in new_task_names:
+                    task_group = existing_task.group
+                    task_course = task_group.course
+
+                    if task_course.name == self.course_name:
+                        new_group_name = new_task_to_group[existing_task.name]
+                        if task_group.name != new_group_name:
+                            tasks_to_update[existing_task.id] = new_group_name
+
+            # Create any missing groups
+            course = self._get(session, models.Course, name=self.course_name)
+            needed_group_names = set(tasks_to_update.values())
+            existing_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
+            existing_group_names = {g.name for g in existing_groups}
+
+            for group_name in needed_group_names:
+                if group_name not in existing_group_names:
+                    new_group = models.TaskGroup(name=group_name, course_id=course.id)
+                    session.add(new_group)
+
+            session.commit()
+
+            # Update groups for existing tasks
+            for task_id, new_group_name in tasks_to_update.items():
+                existing_task = session.query(models.Task).filter_by(id=task_id).one()
+
+                new_group = (
+                    session.query(models.TaskGroup)
+                    .filter_by(name=new_group_name, course_id=existing_task.group.course_id)
+                    .one()
+                )
+                existing_task.group = new_group
+
             session.commit()
 
     def _check_pending_migrations(self, database_url: str) -> bool:
