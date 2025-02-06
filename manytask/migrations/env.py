@@ -1,39 +1,38 @@
-import os
+from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 from sqlalchemy import engine_from_config, pool
 
 from manytask.models import Base
 
-load_dotenv("../.env")
-
+ENV_PATH = Path(__file__).parent.parent.parent / ".env"
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# config.set_main_option("DATABASE_URL", os.environ["DATABASE_URL"])
-# config.set_main_option("SCRIPT_LOCATION", str(Path(__file__).parent / 'migrations'))
-
+# if run from cli sqlalchemy.url is None
 if config.get_main_option("sqlalchemy.url") is None:
-    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+    # is running from cli
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-# if config.config_file_name is not None:
-#     fileConfig(config.config_file_name)
+    if config.config_file_name is not None:  # for logging
+        fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
+    dotenv_config = dotenv_values(ENV_PATH)
+
+    database_url = dotenv_config.get("DATABASE_URL_EXTERNAL", "")
+
+    if not database_url:
+        database_url = dotenv_config.get("DATABASE_URL", None)
+
+    if database_url is None:
+        raise EnvironmentError("Unable to find DATABASE_URL and DATABASE_URL_EXTERNAL env")
+
+    config.set_main_option("sqlalchemy.url", database_url)
+
 target_metadata = Base.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
 
 def run_migrations_offline() -> None:

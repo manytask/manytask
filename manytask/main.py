@@ -27,9 +27,6 @@ class CustomFlask(Flask):
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app = CustomFlask(__name__)
 
-    if os.environ.get("EMPTY_APP", False) in ("true", "1", "yes"):  # skip app creation, using for migrations
-        return app
-
     if debug:
         app.debug = debug
 

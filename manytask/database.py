@@ -5,6 +5,8 @@ from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 
 from alembic import command
 from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from sqlalchemy import and_, create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
@@ -49,8 +51,11 @@ class DataBaseApi(ViewerApi, StorageApi):
 
         self.engine = create_engine(database_url, echo=False)
 
-        if apply_migrations:
-            self._apply_migrations(database_url)
+        if self._check_pending_migrations(database_url):
+            if apply_migrations:
+                self._apply_migrations(database_url)
+            else:
+                logger.error("There are pending migrations that have not been applied")
 
         with Session(self.engine) as session:
             try:
@@ -284,6 +289,23 @@ class DataBaseApi(ViewerApi, StorageApi):
                         group_id=task_group.id,
                     )
             session.commit()
+
+    def _check_pending_migrations(self, database_url: str) -> bool:
+        alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
+
+        with self.engine.begin() as connection:
+            alembic_cfg.attributes["connection"] = connection
+
+            context = MigrationContext.configure(connection)
+            current_rev = context.get_current_revision()
+
+            script = ScriptDirectory.from_config(alembic_cfg)
+            head_rev = script.get_current_head()
+
+            if current_rev == head_rev:
+                return False
+
+            return True
 
     def _apply_migrations(self, database_url: str) -> None:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})

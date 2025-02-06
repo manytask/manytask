@@ -1,3 +1,5 @@
+exclude: ^manytask/migrations/versions
+
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v3.1.0
