@@ -147,7 +147,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     if storage == config.ManytaskStorageType.DataBase.value:
         database_url = os.environ.get("DATABASE_URL", None)
         course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
-        create_tables_if_not_exist = os.environ.get("CREATE_TABLES_IF_NOT_EXIST", "false").lower() in (
+
+        apply_migrations = os.environ.get("APPLY_MIGRATIONS", "false").lower() in (
             "true",
             "1",
             "yes",
@@ -164,7 +165,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             gitlab_instance_host=app.app_config.gitlab_url,
             registration_secret=app.app_config.registration_secret,
             show_allscores=app.app_config.show_allscores,
-            create_tables_if_not_exist=create_tables_if_not_exist,
+            apply_migrations=apply_migrations,
         )
 
     elif storage == config.ManytaskStorageType.GoogleSheets.value:

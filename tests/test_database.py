@@ -10,6 +10,8 @@ from tests.test_db_api import (
     second_course_db_api,
     session,
     tables,
+    postgres_container,
+    alembic_cfg,
 )
 
 

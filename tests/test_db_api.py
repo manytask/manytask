@@ -6,18 +6,22 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import yaml
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from dotenv import load_dotenv
+from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import create_engine
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.exc import NoResultFound
+from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskDeadlinesConfig
 from manytask.database import DataBaseApi, StoredUser
 from manytask.glab import Student
-from manytask.models import Base, Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
+from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///file::memory:?cache=shared"
+ALEMBIC_PATH = "manytask/alembic.ini"
 
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",
@@ -27,6 +31,10 @@ DEADLINES_CONFIG_FILES = [  # part of manytask config file
 FIXED_CURRENT_TIME = datetime(2025, 4, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
 
 
+class TestException(Exception):
+    pass
+
+
 @pytest.fixture(autouse=True)
 def mock_current_time():
     with patch("manytask.config.ManytaskDeadlinesConfig.get_now_with_timezone") as mock:
@@ -34,17 +42,34 @@ def mock_current_time():
         yield mock
 
 
-@pytest.fixture
-def engine():
-    return create_engine(SQLALCHEMY_DATABASE_URL, echo=False)
+@pytest.fixture(scope="session")
+def postgres_container():
+    with PostgresContainer("postgres:17") as postgres:
+        yield postgres
+
+
+@pytest.fixture()
+def engine(postgres_container):
+    return create_engine(postgres_container.get_connection_url(), echo=False)
 
 
 @pytest.fixture
-def tables(engine):
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+def alembic_cfg(postgres_container):
+    return Config(ALEMBIC_PATH, config_args={"sqlalchemy.url": postgres_container.get_connection_url()})
+
+
+@pytest.fixture
+def tables(engine, alembic_cfg):
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
+        command.upgrade(alembic_cfg, "head")  # Base.metadata.create_all(engine)
+
     yield
-    Base.metadata.drop_all(engine)
+
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
 
 
 @pytest.fixture
@@ -54,26 +79,26 @@ def session(engine, tables):
 
 
 @pytest.fixture
-def first_course_db_api(tables):
+def first_course_db_api(tables, postgres_container):
     return DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
-        create_tables_if_not_exist=True,
+        apply_migrations=True,
     )
 
 
 @pytest.fixture
-def second_course_db_api(tables):
+def second_course_db_api(tables, postgres_container):
     return DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Another Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
-        create_tables_if_not_exist=True,
+        apply_migrations=True,
     )
 
 
@@ -641,10 +666,10 @@ def test_deadlines(first_course_with_deadlines, second_course_with_deadlines, se
     }
 
 
-def test_course_change_params(first_course_db_api):
+def test_course_change_params(first_course_db_api, postgres_container):
     with pytest.raises(AttributeError):
         DataBaseApi(
-            database_url=SQLALCHEMY_DATABASE_URL,
+            database_url=postgres_container.get_connection_url(),
             course_name="Test Course",
             gitlab_instance_host="gitlab.another_test.com",
             registration_secret="secret",
@@ -652,7 +677,7 @@ def test_course_change_params(first_course_db_api):
         )
 
     DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="another_secret",
@@ -672,39 +697,68 @@ def test_bad_requests(first_course_with_deadlines, session):
     assert session.query(Grade).count() == 0
 
 
-def test_auto_tables_creation(engine):
-    Base.metadata.drop_all(engine)
+def test_auto_tables_creation(engine, alembic_cfg, postgres_container):
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
 
-    with pytest.raises(OperationalError):
+    with pytest.raises(ProgrammingError) as exc_info:
         DataBaseApi(
-            database_url=SQLALCHEMY_DATABASE_URL,
+            database_url=postgres_container.get_connection_url(),
             course_name="Test Course",
             gitlab_instance_host="gitlab.test.com",
             registration_secret="secret",
             show_allscores=True,
         )
 
+    assert isinstance(exc_info.value.orig, UndefinedTable)
+
     db_api = DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
-        create_tables_if_not_exist=True,
+        apply_migrations=True,
     )
 
     with Session(engine) as session:
         test_empty_course(db_api, session)
 
 
-def test_viewer_api():
+def test_auto_database_migration(engine, alembic_cfg, postgres_container):
+    script = ScriptDirectory.from_config(alembic_cfg)
+    revisions = list(script.walk_revisions("base", "head"))
+    revisions.reverse()
+
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+
+        for revision in revisions:
+            command.downgrade(alembic_cfg, "base")
+            command.upgrade(alembic_cfg, revision.revision)
+
+            db_api = DataBaseApi(
+                database_url=postgres_container.get_connection_url(),
+                course_name="Test Course",
+                gitlab_instance_host="gitlab.test.com",
+                registration_secret="secret",
+                show_allscores=True,
+                apply_migrations=True,
+            )
+
+            with Session(engine) as session:
+                test_empty_course(db_api, session)
+
+
+def test_viewer_api(postgres_container):
     db_api = DataBaseApi(
-        database_url=SQLALCHEMY_DATABASE_URL,
+        database_url=postgres_container.get_connection_url(),
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
         show_allscores=True,
-        create_tables_if_not_exist=True,
+        apply_migrations=True,
     )
     assert db_api.get_scoreboard_url() == ""
 
@@ -735,3 +789,30 @@ def test_store_score_update_error(first_course_with_deadlines, session):
     assert "Update failed" in str(exc_info.value)
 
     assert session.query(Grade).count() == 0
+
+
+def test_apply_migrations_exceptions(first_course_db_api, postgres_container):
+    with patch.object(command, "upgrade", side_effect=TestException()):
+        with pytest.raises(TestException):
+            first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+    with patch.object(command, "upgrade", side_effect=IntegrityError(None, None, TestException())):
+        with pytest.raises(IntegrityError) as exc_info:
+            first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+        assert isinstance(exc_info.value.orig, TestException)
+
+    with patch.object(command, "upgrade", side_effect=IntegrityError(None, None, UniqueViolation())):
+        first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+    with patch.object(command, "upgrade", side_effect=ProgrammingError(None, None, TestException())):
+        with pytest.raises(ProgrammingError) as exc_info:
+            first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+        assert isinstance(exc_info.value.orig, TestException)
+
+    with patch.object(command, "upgrade", side_effect=ProgrammingError(None, None, DuplicateColumn())):
+        first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+    with patch.object(command, "upgrade", side_effect=DuplicateTable()):
+        first_course_db_api._apply_migrations(postgres_container.get_connection_url())

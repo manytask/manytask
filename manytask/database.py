@@ -1,10 +1,15 @@
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 
-from psycopg2.errors import UniqueViolation
+from alembic import command
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from sqlalchemy import and_, create_engine
-from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
@@ -21,6 +26,8 @@ logger = logging.getLogger(__name__)
 class DataBaseApi(ViewerApi, StorageApi):
     """Class for interacting with a database with the StorageApi functionality"""
 
+    DEFAULT_ALEMBIC_PATH = Path(__file__).parent / "alembic.ini"
+
     def __init__(
         self,
         database_url: str,
@@ -28,7 +35,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         gitlab_instance_host: str,
         registration_secret: str,
         show_allscores: bool,
-        create_tables_if_not_exist: bool = False,
+        apply_migrations: bool = False,
     ):
         """Constructor of DataBaseApi class
 
@@ -39,13 +46,16 @@ class DataBaseApi(ViewerApi, StorageApi):
         :param gitlab_instance_host: gitlab instance host url
         :param registration_secret: secret to registering for course
         :param show_allscores: flag for showing results to all users
-        :param create_tables_if_not_exist: flag for creating database tables if they don't exist
+        :param apply_migrations: flag for applying migrations
         """
 
         self.engine = create_engine(database_url, echo=False)
 
-        if create_tables_if_not_exist:
-            self._create_tables()
+        if self._check_pending_migrations(database_url):
+            if apply_migrations:
+                self._apply_migrations(database_url)
+            else:
+                logger.error("There are pending migrations that have not been applied")
 
         with Session(self.engine) as session:
             try:
@@ -343,12 +353,38 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             session.commit()
 
-    def _create_tables(self) -> None:
+    def _check_pending_migrations(self, database_url: str) -> bool:
+        alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
+
+        with self.engine.begin() as connection:
+            alembic_cfg.attributes["connection"] = connection
+
+            context = MigrationContext.configure(connection)
+            current_rev = context.get_current_revision()
+
+            script = ScriptDirectory.from_config(alembic_cfg)
+            head_rev = script.get_current_head()
+
+            if current_rev == head_rev:
+                return False
+
+            return True
+
+    def _apply_migrations(self, database_url: str) -> None:
+        alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
+
         try:
-            models.Base.metadata.create_all(self.engine)
+            with self.engine.begin() as connection:
+                alembic_cfg.attributes["connection"] = connection
+                command.upgrade(alembic_cfg, "head")  # models.Base.metadata.create_all(self.engine)
         except IntegrityError as e:  # if tables are created concurrently
             if not isinstance(e.orig, UniqueViolation):
                 raise
+        except ProgrammingError as e:  # if tables are created concurrently
+            if not isinstance(e.orig, DuplicateColumn):
+                raise
+        except DuplicateTable:  # if tables are created concurrently
+            pass
 
     def _get_or_create_user_on_course(
         self, session: Session, student: Student, course: models.Course
