@@ -10,11 +10,10 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from dotenv import load_dotenv
-from psycopg2.errors import UndefinedTable
+from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import create_engine
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.exc import NoResultFound
 from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskDeadlinesConfig
@@ -30,6 +29,10 @@ DEADLINES_CONFIG_FILES = [  # part of manytask config file
 ]
 
 FIXED_CURRENT_TIME = datetime(2025, 4, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+
+
+class TestException(Exception):
+    pass
 
 
 @pytest.fixture(autouse=True)
@@ -786,3 +789,30 @@ def test_store_score_update_error(first_course_with_deadlines, session):
     assert "Update failed" in str(exc_info.value)
 
     assert session.query(Grade).count() == 0
+
+
+def test_apply_migrations_exceptions(first_course_db_api, postgres_container):
+    with patch.object(command, "upgrade", side_effect=TestException()):
+        with pytest.raises(TestException):
+            first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+    with patch.object(command, "upgrade", side_effect=IntegrityError(None, None, TestException())):
+        with pytest.raises(IntegrityError) as exc_info:
+            first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+        assert isinstance(exc_info.value.orig, TestException)
+
+    with patch.object(command, "upgrade", side_effect=IntegrityError(None, None, UniqueViolation())):
+        first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+    with patch.object(command, "upgrade", side_effect=ProgrammingError(None, None, TestException())):
+        with pytest.raises(ProgrammingError) as exc_info:
+            first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+        assert isinstance(exc_info.value.orig, TestException)
+
+    with patch.object(command, "upgrade", side_effect=ProgrammingError(None, None, DuplicateColumn())):
+        first_course_db_api._apply_migrations(postgres_container.get_connection_url())
+
+    with patch.object(command, "upgrade", side_effect=DuplicateTable()):
+        first_course_db_api._apply_migrations(postgres_container.get_connection_url())
