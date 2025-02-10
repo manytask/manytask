@@ -1,4 +1,3 @@
-
 [tool.mypy]
 no_incremental = true
 ignore_missing_imports = true
@@ -14,7 +13,8 @@ allow_untyped_decorators = true
 exclude = [
     "tests/",
     ".tmp/",
-    ".venv/"
+    ".venv/",
+    "manytask/migrations/versions"
 ]
 
 
@@ -47,17 +47,9 @@ target-version = ["py312"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+src = ["manytask", "tests"]
 
-# Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
-# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
-# McCabe complexity (`C901`) by default.
-lint.select = ["E", "F"]
-lint.ignore = []
-
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-lint.fixable = ["ALL"]
-lint.unfixable = []
-
+# Exclude patterns
 exclude = [
     ".bzr",
     ".direnv",
@@ -72,6 +64,7 @@ exclude = [
     ".ruff_cache",
     ".svn",
     ".tox",
+    "*.ipynb",
     ".venv",
     "__pypackages__",
     "_build",
@@ -80,16 +73,18 @@ exclude = [
     "dist",
     "node_modules",
     "venv",
-
-    "tests",
-    ".tmp"
+    ".tmp",
+    "manytask/migrations/versions"
 ]
 
+[tool.ruff.lint]
+# Combine both configurations' rules
+select = ["E", "F", "I", "TID252", "TID253"]
+ignore = []
 
-[tool.isort]
-profile = "black"
-line_length = 120
-lines_after_imports = 2
-combine_as_imports = true
-default_section = "THIRDPARTY"
-known_first_party = "checker,tests"
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["manytask", "tests"]

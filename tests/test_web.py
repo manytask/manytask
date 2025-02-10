@@ -9,8 +9,8 @@ from pydantic import AnyUrl
 from manytask.abstract import StoredUser
 from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from manytask.glab import Student
-from manytask.web import bp as web_bp, get_allscores_url
-
+from manytask.web import bp as web_bp
+from manytask.web import get_allscores_url
 
 TEST_USERNAME = "test_user"
 TEST_SECRET = "test_secret"
@@ -25,11 +25,12 @@ TEST_REPO = "test_repo"
 
 @pytest.fixture
 def app():
-    app = Flask(__name__,
-                template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'manytask/templates'))
-    app.config['DEBUG'] = False
-    app.config['TESTING'] = True
-    app.secret_key = 'test_key'
+    app = Flask(
+        __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
+    )
+    app.config["DEBUG"] = False
+    app.config["TESTING"] = True
+    app.secret_key = "test_key"
     app.register_blueprint(web_bp)
     return app
 
@@ -45,16 +46,10 @@ def mock_course():
                     course_name=TEST_COURSE_NAME,
                     gitlab_base_url=AnyUrl(GITLAB_BASE_URL),
                     public_repo="test/repo",
-                    students_group="test/students"
+                    students_group="test/students",
                 ),
-                ui=ManytaskUiConfig(
-                    task_url_template=f"{GITLAB_BASE_URL}/test/$GROUP_NAME/$TASK_NAME",
-                    links={}
-                ),
-                deadlines=ManytaskDeadlinesConfig(
-                    timezone="UTC",
-                    schedule=[]
-                )
+                ui=ManytaskUiConfig(task_url_template=f"{GITLAB_BASE_URL}/test/$GROUP_NAME/$TASK_NAME", links={}),
+                deadlines=ManytaskDeadlinesConfig(timezone="UTC", schedule=[]),
             )
             self.show_allscores = True
             self.manytask_version = "1.0.0"
@@ -100,10 +95,10 @@ def mock_course():
 
             @staticmethod
             def get_student(_user_id):
-                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name='')
+                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
             def get_authenticated_student(self, _gitlab_access_token):
-                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name='', course_admin=self.course_admin)
+                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
             @staticmethod
             def check_project_exists(_student):
@@ -171,10 +166,10 @@ def mock_gitlab_oauth():
 
 @pytest.fixture(autouse=True)
 def setup_environment(monkeypatch):
-    monkeypatch.setenv('MANYTASK_COURSE_TOKEN', TEST_TOKEN)
-    monkeypatch.setenv('REGISTRATION_SECRET', TEST_SECRET)
-    monkeypatch.setenv('FLASK_SECRET_KEY', TEST_KEY)
-    monkeypatch.setenv('TESTING', 'true')
+    monkeypatch.setenv("MANYTASK_COURSE_TOKEN", TEST_TOKEN)
+    monkeypatch.setenv("REGISTRATION_SECRET", TEST_SECRET)
+    monkeypatch.setenv("FLASK_SECRET_KEY", TEST_KEY)
+    monkeypatch.setenv("TESTING", "true")
     yield
 
 
@@ -182,109 +177,117 @@ def test_course_page_not_ready(app, mock_course):
     mock_course.config = None
     with app.test_request_context():
         app.course = mock_course
-        response = app.test_client().get('/')
+        response = app.test_client().get("/")
         assert response.status_code == 302
-        assert response.headers['Location'] == '/not_ready'
+        assert response.headers["Location"] == "/not_ready"
 
 
 def test_course_page_invalid_session(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
-        response = app.test_client().get('/')
+        response = app.test_client().get("/")
         assert response.status_code == 302
-        assert response.headers['Location'] == '/signup'
+        assert response.headers["Location"] == "/signup"
 
 
 def test_course_page_valid_session(app, mock_course):
     with app.test_request_context():
         with app.test_client() as client:
             with client.session_transaction() as sess:
-                sess['gitlab'] = {
+                sess["gitlab"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": False
+                    "course_admin": False,
+                    "oauth_access_token": TEST_TOKEN,
                 }
             app.course = mock_course
-            response = client.get('/')
+            response = client.get("/")
             assert response.status_code == 200
 
 
 def test_signup_get(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
-        response = app.test_client().get('/signup')
+        response = app.test_client().get("/signup")
         assert response.status_code == 200
 
 
 def test_signup_post_invalid_secret(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
-        response = app.test_client().post('/signup', data={
-            'username': TEST_USERNAME,
-            'firstname': 'Test',
-            'lastname': 'User',
-            'email': 'test@example.com',
-            'password': 'password123',
-            'password2': 'password123',
-            'secret': 'wrong_secret'
-        })
+        response = app.test_client().post(
+            "/signup",
+            data={
+                "username": TEST_USERNAME,
+                "firstname": "Test",
+                "lastname": "User",
+                "email": "test@example.com",
+                "password": "password123",
+                "password2": "password123",
+                "secret": "wrong_secret",
+            },
+        )
         assert response.status_code == 200
-        assert b'Invalid registration secret' in response.data
+        assert b"Invalid registration secret" in response.data
 
 
 def test_signup_post_password_mismatch(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
-        response = app.test_client().post('/signup', data={
-            'username': TEST_USERNAME,
-            'firstname': 'Test',
-            'lastname': 'User',
-            'email': 'test@example.com',
-            'password': 'password123',
-            'password2': 'password456',
-            'secret': mock_course.registration_secret
-        })
+        response = app.test_client().post(
+            "/signup",
+            data={
+                "username": TEST_USERNAME,
+                "firstname": "Test",
+                "lastname": "User",
+                "email": "test@example.com",
+                "password": "password123",
+                "password2": "password456",
+                "secret": mock_course.registration_secret,
+            },
+        )
         assert response.status_code == 200
-        assert b'Passwords don&#39;t match' in response.data
+        assert b"Passwords don&#39;t match" in response.data
 
 
 def test_logout(app):
     with app.test_request_context():
         with app.test_client() as client:
             with client.session_transaction() as sess:
-                sess['gitlab'] = {
-                    "version": TEST_VERSION,
-                    "username": TEST_USERNAME
-                }
-            response = client.get('/logout')
+                sess["gitlab"] = {"version": TEST_VERSION, "username": TEST_USERNAME}
+            response = client.get("/logout")
             assert response.status_code == 302
-            assert response.headers['Location'] == '/'
+            assert response.headers["Location"] == "/"
             with client.session_transaction() as sess:
-                assert 'gitlab' not in sess
+                assert "gitlab" not in sess
 
 
 def test_not_ready(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
-        response = app.test_client().get('/not_ready')
+        response = app.test_client().get("/not_ready")
         assert response.status_code == 302
+
 
 def test_get_allscores_url(app, mock_course):
     with app.test_request_context():
         test_url = "https://docs.google.com/spreadsheets"
+
         class viewer_api_gsheets:
             @staticmethod
             def get_scoreboard_url():
                 return test_url
-            
+
         class viewer_api_db:
             @staticmethod
             def get_scoreboard_url():
                 return ""
+
         assert get_allscores_url(viewer_api_gsheets) == test_url
-        assert get_allscores_url(viewer_api_db) == url_for('web.show_database')
+        assert get_allscores_url(viewer_api_db) == url_for("web.show_database")
+
 
 def check_admin_in_data(response, check_true):
     assert response.status_code == 200
@@ -301,28 +304,31 @@ def check_admin_status_code(response, check_true):
         assert response.status_code == 403
 
 
-@pytest.mark.parametrize("path_and_func", [
-    ['/', check_admin_in_data],
-    ['/solutions', check_admin_status_code],
-    ['/database', check_admin_in_data]
-])
+@pytest.mark.parametrize(
+    "path_and_func",
+    [["/", check_admin_in_data], ["/solutions", check_admin_status_code], ["/database", check_admin_in_data]],
+)
 @pytest.mark.parametrize("debug", [False, True])
-@pytest.mark.parametrize("get_param_admin", ['true', '1', 'yes', None, 'false', '0', 'no', 'random_value'])
+@pytest.mark.parametrize("get_param_admin", ["true", "1", "yes", None, "false", "0", "no", "random_value"])
 def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param_admin):
     path, check_func = path_and_func
 
     if get_param_admin is not None:
-        path += f'?admin={get_param_admin}'
+        path += f"?admin={get_param_admin}"
 
     with app.test_request_context():
         with app.test_client() as client:
             with client.session_transaction() as sess:
-                sess['gitlab'] = {
+                sess["gitlab"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": False
+                    "course_admin": False,
+                    "oauth_access_token": TEST_TOKEN,
+                }
+                sess["course"] = {
+                    "secret": TEST_SECRET,
                 }
             app.course = mock_course
             app.debug = debug
@@ -332,17 +338,21 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
 
             if app.debug:
                 # in debug admin flag is the same as get param
-                check_func(response, get_param_admin in ('true', '1', 'yes', None))
+                check_func(response, get_param_admin in ("true", "1", "yes", None))
             else:
                 check_func(response, False)
 
             with client.session_transaction() as sess:
-                sess['gitlab'] = {
+                sess["gitlab"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": True
+                    "course_admin": True,
+                    "oauth_access_token": TEST_TOKEN,
+                }
+                sess["course"] = {
+                    "secret": TEST_SECRET,
                 }
 
             # admin in gitlab, not admin in manytask
@@ -350,17 +360,21 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
 
             if app.debug:
                 # in debug admin flag is the same as get param
-                check_func(response, get_param_admin in ('true', '1', 'yes', None))
+                check_func(response, get_param_admin in ("true", "1", "yes", None))
             else:
                 check_func(response, True)
 
             with client.session_transaction() as sess:
-                sess['gitlab'] = {
+                sess["gitlab"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": False
+                    "course_admin": False,
+                    "oauth_access_token": TEST_TOKEN,
+                }
+                sess["course"] = {
+                    "secret": TEST_SECRET,
                 }
 
             app.course.storage_api.stored_user.course_admin = True
@@ -370,17 +384,21 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
 
             if app.debug:
                 # in debug admin flag is the same as get param
-                check_func(response, get_param_admin in ('true', '1', 'yes', None))
+                check_func(response, get_param_admin in ("true", "1", "yes", None))
             else:
                 check_func(response, True)
 
             with client.session_transaction() as sess:
-                sess['gitlab'] = {
+                sess["gitlab"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "repo": TEST_REPO,
-                    "course_admin": False
+                    "course_admin": False,
+                    "oauth_access_token": TEST_TOKEN,
+                }
+                sess["course"] = {
+                    "secret": TEST_SECRET,
                 }
 
             # admin in gitlab, admin in manytask
@@ -388,7 +406,7 @@ def test_course_page_user_sync(app, mock_course, path_and_func, debug, get_param
 
             if app.debug:
                 # in debug admin flag is the same as get param
-                check_func(response, get_param_admin in ('true', '1', 'yes', None))
+                check_func(response, get_param_admin in ("true", "1", "yes", None))
             else:
                 check_func(response, True)
 
@@ -402,10 +420,10 @@ def test_login_finish_sync(app, mock_course, mock_gitlab_oauth):
             assert not app.course.storage_api.stored_user.course_admin
 
             # not admin in gitlab so stored value shouldn't change
-            client.get('/login_finish')
+            client.get("/login_finish")
 
             with client.session_transaction() as sess:
-                assert 'gitlab' in sess
+                assert "gitlab" in sess
                 assert not sess["gitlab"]["course_admin"]
 
             assert not app.course.storage_api.stored_user.course_admin
@@ -413,10 +431,10 @@ def test_login_finish_sync(app, mock_course, mock_gitlab_oauth):
             app.course.gitlab_api.course_admin = True
 
             # admin in gitlab so stored value should change
-            client.get('/login_finish')
+            client.get("/login_finish")
 
             with client.session_transaction() as sess:
-                assert 'gitlab' in sess
+                assert "gitlab" in sess
                 assert sess["gitlab"]["course_admin"]
 
             assert app.course.storage_api.stored_user.course_admin
@@ -424,10 +442,10 @@ def test_login_finish_sync(app, mock_course, mock_gitlab_oauth):
             app.course.gitlab_api.course_admin = False
 
             # not admin in gitlab but also stored that admin
-            client.get('/login_finish')
+            client.get("/login_finish")
 
             with client.session_transaction() as sess:
-                assert 'gitlab' in sess
+                assert "gitlab" in sess
                 assert not sess["gitlab"]["course_admin"]
 
             assert app.course.storage_api.stored_user.course_admin

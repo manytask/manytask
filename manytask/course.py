@@ -9,7 +9,6 @@ from cachelib import BaseCache
 
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 
-
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEZONE = ZoneInfo("Europe/Moscow")
 

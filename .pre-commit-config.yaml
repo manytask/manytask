@@ -1,3 +1,5 @@
+exclude: ^manytask/migrations/versions
+
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v3.1.0
@@ -7,10 +9,15 @@ repos:
         stages: [commit-msg]
   - repo: local
     hooks:
-      - id: check-staged
-        name: Check staged files
-        entry: scripts/check_staged.sh
-        language: script
-        pass_filenames: false
-        verbose: true
+      - id: ruff
+        name: ruff
+        entry: ruff check --fix
+        language: system
         types: [python]
+        pass_filenames: true
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format
+        language: system
+        types: [python]
+        pass_filenames: true

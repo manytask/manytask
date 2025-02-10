@@ -5,7 +5,7 @@ import logging
 import os
 import secrets
 import tempfile
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -24,7 +24,6 @@ from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .database_utils import get_database_table_data
 from .glab import Student
 
-
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -32,7 +31,7 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        course: Course = current_app.course if hasattr(current_app, 'course') else abort(403)
+        course: Course = current_app.course if hasattr(current_app, "course") else abort(403)
         course_token: str = ""
         # TODO: unneed check when depricate googlesheet interface
         if isinstance(course.storage_api, DataBaseApi):
@@ -40,7 +39,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
             if not db_course:
                 abort(403)
             course_token = db_course.token
-        
+
         # TODO: delete when depricate googlesheet interface
         else:
             course_token = os.environ["MANYTASK_COURSE_TOKEN"]
@@ -165,8 +164,11 @@ def report_score() -> ResponseReturnValue:
             elif float(score_str) < 0.0:
                 reported_score = 0
             elif float(score_str) > 2.0:
-                return f"Reported `score` <{reported_score}> is too large. " + \
-                        "Should be integer or float between 0.0 and 2.0.", 400
+                return (
+                    f"Reported `score` <{reported_score}> is too large. "
+                    + "Should be integer or float between 0.0 and 2.0.",
+                    400,
+                )
             else:
                 reported_score = round(float(score_str) * task.score)
         except ValueError:
@@ -286,6 +288,11 @@ def update_config() -> ResponseReturnValue:
     try:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
+
+        # Update task groups (if necessary -- if there is an override) first
+        course.storage_api.update_task_groups_from_config(config_data)
+
+        # Store the new config
         course.store_config(config_data)
     except Exception as e:
         logger.exception(e)
@@ -335,7 +342,7 @@ def get_solutions() -> ResponseReturnValue:
     if not zip_bytes_io:
         return f"Unable to get zip for {task_name}", 500
 
-    _now_str = datetime.utcnow().strftime("%Y-%m-%d-%H-%M-%S")
+    _now_str = datetime.now(UTC).strftime("%Y-%m-%d-%H-%M-%S")
     filename = f"aggregated-solutions-{task_name}-{_now_str}.zip"
 
     return Response(
@@ -381,33 +388,25 @@ def update_database() -> ResponseReturnValue:
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), 403
-    
+
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), 400
-        
+
     data = request.get_json()
     if not data or "username" not in data or "scores" not in data:
         return jsonify({"success": False, "message": "Missing required fields"}), 400
-        
+
     username = data["username"]
     new_scores = data["scores"]
-    
+
     try:
-        student = Student(
-            id=0, 
-            username=username, 
-            name=username,
-            repo=course.gitlab_api.get_url_for_repo(username)
-        )
+        student = Student(id=0, username=username, name=username, repo=course.gitlab_api.get_url_for_repo(username))
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
                 storage_api.store_score(
-                    student=student,
-                    task_name=task_name,
-                    update_fn=lambda _flags, _old_score: int(new_score)
+                    student=student, task_name=task_name, update_fn=lambda _flags, _old_score: int(new_score)
                 )
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error updating database: {str(e)}")
         return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
-

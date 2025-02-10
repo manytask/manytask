@@ -8,7 +8,7 @@ from dataclasses import dataclass
 class LocalConfig:
     # tokens
     registration_secret: str
-    token: str
+    course_token: str
 
     # utils
     cache_dir: str
@@ -33,7 +33,7 @@ class LocalConfig:
         return cls(
             # tokens
             registration_secret=os.environ["REGISTRATION_SECRET"],
-            token=os.environ["MANYTASK_COURSE_TOKEN"],
+            course_token=os.environ["MANYTASK_COURSE_TOKEN"],
             # utils
             cache_dir=os.environ["CACHE_DIR"],
             solutions_dir=os.environ["SOLUTIONS_DIR"],
@@ -57,7 +57,7 @@ class LocalConfig:
 class DebugLocalConfig(LocalConfig):
     # tokens
     registration_secret: str = "registration_secret"
-    token: str = "token"
+    course_token: str = "token"
 
     # utils
     cache_dir: str = ".tmp/cache"
