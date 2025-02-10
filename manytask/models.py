@@ -36,7 +36,10 @@ class Course(Base):
     token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
 
-    __table_args__ = (UniqueConstraint("token", name="uq_courses_token"),)
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_courses_name"),
+        UniqueConstraint("token", name="uq_courses_token"),
+    )
 
     # relationships
     task_groups: DynamicMapped["TaskGroup"] = relationship(back_populates="course", cascade="all, delete-orphan")
