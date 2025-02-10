@@ -1,16 +1,21 @@
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 
-from psycopg2.errors import UniqueViolation
+from alembic import command
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from sqlalchemy import and_, create_engine
-from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
 from . import models
 from .abstract import StorageApi, StoredUser, ViewerApi
-from .config import ManytaskDeadlinesConfig
+from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .glab import Student
 
 ModelType = TypeVar("ModelType", bound=models.Base)
@@ -21,6 +26,8 @@ logger = logging.getLogger(__name__)
 class DataBaseApi(ViewerApi, StorageApi):
     """Class for interacting with a database with the StorageApi functionality"""
 
+    DEFAULT_ALEMBIC_PATH = Path(__file__).parent / "alembic.ini"
+
     def __init__(
         self,
         database_url: str,
@@ -29,7 +36,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         registration_secret: str,
         token: str,
         show_allscores: bool,
-        create_tables_if_not_exist: bool = False,
+        apply_migrations: bool = False,
     ):
         """Constructor of DataBaseApi class
 
@@ -41,13 +48,16 @@ class DataBaseApi(ViewerApi, StorageApi):
         :param registration_secret: secret to registering for course
         :param token: token for course in manytask
         :param show_allscores: flag for showing results to all users
-        :param create_tables_if_not_exist: flag for creating database tables if they don't exist
+        :param apply_migrations: flag for applying migrations
         """
 
         self.engine = create_engine(database_url, echo=False)
 
-        if create_tables_if_not_exist:
-            self._create_tables()
+        if self._check_pending_migrations(database_url):
+            if apply_migrations:
+                self._apply_migrations(database_url)
+            else:
+                logger.error("There are pending migrations that have not been applied")
 
         with Session(self.engine) as session:
             try:
@@ -294,22 +304,101 @@ class DataBaseApi(ViewerApi, StorageApi):
                     )
             session.commit()
 
-    def get_course(
+    def update_task_groups_from_config(
         self,
-        course_name: str,
-    ) -> models.Course | None:
-        try:
-            with Session(self.engine) as session:
-                return self._get(session, models.Course, name=course_name)
-        except NoResultFound:
-            return None
+        config_data: dict[str, Any],
+    ) -> None:
+        """Update task groups based on new config data.
 
-    def _create_tables(self) -> None:
+        This method:
+        1. Finds tasks that need to be moved to different groups
+        2. Creates any missing groups
+        3. Updates task group assignments
+
+        :param config_data: Raw config data from yaml
+        """
+        with Session(self.engine) as session:
+            new_config = ManytaskConfig(**config_data)
+            new_task_names = set()
+            new_task_to_group = {}
+            for group in new_config.deadlines.get_groups(enabled=True, started=True):
+                for task_config in group.tasks:
+                    if task_config.enabled:
+                        new_task_names.add(task_config.name)
+                        new_task_to_group[task_config.name] = group.name
+
+            existing_tasks = session.query(models.Task).join(models.TaskGroup).all()
+
+            # Check for duplicates (name + course)
+            tasks_to_update = {}
+            for existing_task in existing_tasks:
+                if existing_task.name in new_task_names:
+                    task_group = existing_task.group
+                    task_course = task_group.course
+
+                    if task_course.name == self.course_name:
+                        new_group_name = new_task_to_group[existing_task.name]
+                        if task_group.name != new_group_name:
+                            tasks_to_update[existing_task.id] = new_group_name
+
+            # Create any missing groups
+            course = self._get(session, models.Course, name=self.course_name)
+            needed_group_names = set(tasks_to_update.values())
+            existing_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
+            existing_group_names = {g.name for g in existing_groups}
+
+            for group_name in needed_group_names:
+                if group_name not in existing_group_names:
+                    new_group = models.TaskGroup(name=group_name, course_id=course.id)
+                    session.add(new_group)
+
+            session.commit()
+
+            # Update groups for existing tasks
+            for task_id, new_group_name in tasks_to_update.items():
+                existing_task = session.query(models.Task).filter_by(id=task_id).one()
+
+                new_group = (
+                    session.query(models.TaskGroup)
+                    .filter_by(name=new_group_name, course_id=existing_task.group.course_id)
+                    .one()
+                )
+                existing_task.group = new_group
+
+            session.commit()
+
+    def _check_pending_migrations(self, database_url: str) -> bool:
+        alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
+
+        with self.engine.begin() as connection:
+            alembic_cfg.attributes["connection"] = connection
+
+            context = MigrationContext.configure(connection)
+            current_rev = context.get_current_revision()
+
+            script = ScriptDirectory.from_config(alembic_cfg)
+            head_rev = script.get_current_head()
+
+            if current_rev == head_rev:
+                return False
+
+            return True
+
+    def _apply_migrations(self, database_url: str) -> None:
+        alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
+
         try:
-            models.Base.metadata.create_all(self.engine)
+            with self.engine.begin() as connection:
+                alembic_cfg.attributes["connection"] = connection
+                command.upgrade(alembic_cfg, "head")  # models.Base.metadata.create_all(self.engine)
         except IntegrityError as e:  # if tables are created concurrently
             if not isinstance(e.orig, UniqueViolation):
                 raise
+        except ProgrammingError as e:  # if tables are created concurrently
+            if not isinstance(e.orig, DuplicateColumn):
+                raise
+        except DuplicateTable:  # if tables are created concurrently
+            pass
 
     def _get_or_create_user_on_course(
         self, session: Session, student: Student, course: models.Course
