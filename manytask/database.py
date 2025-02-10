@@ -304,6 +304,16 @@ class DataBaseApi(ViewerApi, StorageApi):
                     )
             session.commit()
 
+    def get_course(
+        self,
+        course_name: str,
+    ) -> models.Course | None:
+        try:
+            with Session(self.engine) as session:
+                return self._get(session, models.Course, name=course_name)
+        except NoResultFound:
+            return None
+
     def update_task_groups_from_config(
         self,
         config_data: dict[str, Any],
