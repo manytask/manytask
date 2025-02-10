@@ -18,8 +18,7 @@ class StoredUser:
 
 class ViewerApi(ABC):
     @abstractmethod
-    def get_scoreboard_url(self) -> str:
-        ...
+    def get_scoreboard_url(self) -> str: ...
 
 
 class StorageApi(ABC):
@@ -27,45 +26,37 @@ class StorageApi(ABC):
     def get_scores(
         self,
         username: str,
-    ) -> dict[str, int]:
-        ...
+    ) -> dict[str, int]: ...
 
     @abstractmethod
     def get_bonus_score(
         self,
         username: str,
-    ) -> int:
-        ...
+    ) -> int: ...
 
     @abstractmethod
     def get_stored_user(
         self,
         student: Student,
-    ) -> StoredUser:
-        ...
+    ) -> StoredUser: ...
 
     @abstractmethod
     def sync_stored_user(
         self,
         student: Student,
-    ) -> StoredUser:
-        ...
+    ) -> StoredUser: ...
 
     @abstractmethod
-    def get_all_scores(self) -> dict[str, dict[str, int]]:
-        ...
+    def get_all_scores(self) -> dict[str, dict[str, int]]: ...
 
     @abstractmethod
-    def get_stats(self) -> dict[str, float]:
-        ...
+    def get_stats(self) -> dict[str, float]: ...
 
     @abstractmethod
-    def get_scores_update_timestamp(self) -> str:
-        ...
+    def get_scores_update_timestamp(self) -> str: ...
 
     @abstractmethod
-    def update_cached_scores(self) -> None:
-        ...
+    def update_cached_scores(self) -> None: ...
 
     @abstractmethod
     def store_score(
@@ -73,12 +64,16 @@ class StorageApi(ABC):
         student: Student,
         task_name: str,
         update_fn: Callable[..., Any],
-    ) -> int:
-        ...
+    ) -> int: ...
 
     @abstractmethod
     def sync_columns(
         self,
         deadlines_config: ManytaskDeadlinesConfig,
-    ) -> None:
-        ...
+    ) -> None: ...
+
+    @abstractmethod
+    def update_task_groups_from_config(
+        self,
+        config_data: dict[str, Any],
+    ) -> None: ...
