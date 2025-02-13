@@ -3,7 +3,9 @@ from zoneinfo import ZoneInfo
 
 from manytask.models import Course, Task, TaskGroup
 
-# Import only the fixtures that are specific to test_db_api
+
+# ruff: noqa
+from tests.test_db_api import first_course_db_api, second_course_db_api
 
 
 def create_test_config(tasks_config):
