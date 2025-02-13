@@ -363,14 +363,14 @@ class DataBaseApi(ViewerApi, StorageApi):
             )
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
             if student.course_admin != user_on_course.is_course_admin and student.course_admin:
-                self._update(
+                user_on_course = self._update(
                     session=session,
                     model=models.UserOnCourse,
                     defaults={"is_course_admin": student.course_admin},
                     user_id=user.id,
                     course_id=course.id,
                 )
-                session.commit()
+                session.refresh(user_on_course)
             return user_on_course.is_course_admin
 
     def check_user_on_course(self, course_name: str, student: Student) -> bool:
