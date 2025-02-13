@@ -52,8 +52,7 @@ def requires_secret(template: str = "create_project.html") -> Callable[..., Any]
             try:
                 student = course.gitlab_api.get_authenticated_student(session["gitlab"]["oauth_access_token"])
                 # if user already have fork we let him in with out secret
-                # TODO change on checking user->course in db
-                if course.gitlab_api.check_project_exists(student):
+                if course.storage_api.check_user_on_course(course.storage_api.course_name, student):
                     ...
 
                 # secret was entered in form

@@ -134,7 +134,7 @@ def test_requires_secret_with_valid_secret(app):
         app.course.registration_secret = "test_code"
         request.form = {"secret": "test_code"}
         app.course.gitlab_api.get_authenticated_student.return_value = None
-        app.course.gitlab_api.check_project_exists.return_value = False
+        app.course.storage_api.check_user_on_course.return_value = False
         response = test_route()
         assert response.status_code == 302
         assert response.location == "/create_project?secret=test_code"
