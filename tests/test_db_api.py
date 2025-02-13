@@ -849,3 +849,17 @@ def test_sync_user_on_course_admin_no_update(first_course_db_api, session):
 
     updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
     assert updated_user_on_course.is_course_admin
+
+
+def test_check_user_on_course(first_course_db_api, session):
+    course_name = "Test Course"
+    student = Student(id=1, username="user1", name="username1", course_admin=False, repo="repo1")
+
+    user = User(id=1, username="user1", gitlab_instance_host="gitlab.test.com")
+    user_on_course = UserOnCourse(user_id=user.id, course_id=1, repo_name="repo1", is_course_admin=True)
+
+    session.add(user)
+    session.add(user_on_course)
+    session.commit()
+
+    assert first_course_db_api.check_user_on_course(course_name, student)
