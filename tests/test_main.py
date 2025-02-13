@@ -1,11 +1,8 @@
 import os
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
-from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskStorageType
 from manytask.gdoc import GoogleDocApi
@@ -25,37 +22,6 @@ def mock_gdoc():
         gdoc_instance = MagicMock(spec=GoogleDocApi)
         mock.return_value = gdoc_instance
         yield mock
-
-
-@pytest.fixture(scope="session")
-def postgres_container():
-    postgres = PostgresContainer("postgres:17")
-    postgres.with_env("POSTGRES_USER", "test")
-    postgres.with_env("POSTGRES_PASSWORD", "test")
-    postgres.with_env("POSTGRES_DB", "test")
-
-    postgres.start()
-
-    # Wait for PostgreSQL to be ready
-    max_retries = 30
-    retry_interval = 1
-    for _ in range(max_retries):
-        try:
-            engine = create_engine(postgres.get_connection_url())
-            with engine.connect() as connection:
-                connection.execute(text("DROP SCHEMA public CASCADE"))
-                connection.execute(text("CREATE SCHEMA public"))
-                connection.execute(text("SELECT 1"))
-                break
-        except Exception:
-            time.sleep(retry_interval)
-    else:
-        raise Exception("PostgreSQL container not ready after maximum retries")
-
-    try:
-        yield postgres
-    finally:
-        postgres.stop()
 
 
 @pytest.fixture
