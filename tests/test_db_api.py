@@ -818,7 +818,7 @@ def test_apply_migrations_exceptions(first_course_db_api, postgres_container):
         first_course_db_api._apply_migrations(postgres_container.get_connection_url())
 
 
-def test_sync_user_on_course_admin_update(first_course_db_api, session):
+def test_sync_and_get_admin_status_admin_update(first_course_db_api, session):
     course_name = "Test Course"
     student = Student(id=1, username="user1", name="username1", course_admin=True, repo="repo1")
     user = User(id=1, username="user1", gitlab_instance_host="gitlab.test.com")
@@ -828,13 +828,13 @@ def test_sync_user_on_course_admin_update(first_course_db_api, session):
     session.add(user_on_course)
     session.commit()
 
-    first_course_db_api.sync_user_on_course(course_name, student)
+    first_course_db_api.sync_and_get_admin_status(course_name, student)
 
     updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
     assert updated_user_on_course.is_course_admin
 
 
-def test_sync_user_on_course_admin_no_update(first_course_db_api, session):
+def test_sync_and_get_admin_status_admin_no_update(first_course_db_api, session):
     course_name = "Test Course"
     student = Student(id=1, username="user1", name="username1", course_admin=False, repo="repo1")
 
@@ -845,7 +845,7 @@ def test_sync_user_on_course_admin_no_update(first_course_db_api, session):
     session.add(user_on_course)
     session.commit()
 
-    first_course_db_api.sync_user_on_course(course_name, student)
+    first_course_db_api.sync_and_get_admin_status(course_name, student)
 
     updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
     assert updated_user_on_course.is_course_admin

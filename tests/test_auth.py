@@ -194,8 +194,6 @@ def test_requires_secret_user_auth_error(app):
         app.course.registration_secret = "test_code"
         request.form = {"secret": "test_code"}
         app.course.gitlab_api.get_authenticated_student.side_effect = Unauthorized()
-        # app.course.storage_api.check_user_on_course.return_value = True
-        # app.course.gitlab_api.check_project_exists.return_value = True
         response = test_route()
         assert response.status_code == 302
         assert response.location == url_for("web.signup")

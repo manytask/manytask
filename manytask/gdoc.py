@@ -468,7 +468,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         """
         pass
 
-    def sync_user_on_course(self, course_name: str, student: Student) -> bool:
+    def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
         return False
 
     def check_user_on_course(self, course_name: str, student: Student) -> bool:

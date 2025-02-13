@@ -353,7 +353,7 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             session.commit()
 
-    def sync_user_on_course(self, course_name: str, student: Student) -> bool:
+    def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
         """Sync admin flag in gitlab and db"""
 
         with Session(self.engine) as session:
@@ -374,7 +374,7 @@ class DataBaseApi(ViewerApi, StorageApi):
             return user_on_course.is_course_admin
 
     def check_user_on_course(self, course_name: str, student: Student) -> bool:
-        """Checking tath user has been enrolled on course"""
+        """Checking that user has been enrolled on course"""
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
