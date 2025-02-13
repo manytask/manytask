@@ -48,19 +48,19 @@ def requires_secret(template: str = "create_project.html") -> Callable[..., Any]
         @wraps(f)
         def decorated(*args: Any, **kwargs: Any) -> Any:
             course = current_app.course  # type: ignore
+            secret: str = ""
 
             try:
                 student = course.gitlab_api.get_authenticated_student(session["gitlab"]["oauth_access_token"])
-                # if user already have fork we let him in with out secret
+                # if user already in db we let him in with out secret
                 if course.storage_api.check_user_on_course(course.storage_api.course_name, student):
-                    ...
+                    secret = course.registration_secret
 
                 # secret was entered in form
                 elif "secret" in request.form:
-                    if secrets.compare_digest(request.form["secret"], course.registration_secret):
-                        return redirect(url_for("web.create_project", secret=request.form["secret"]))
-                    else:
+                    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
                         raise Exception("Invalid registration secret")
+                    secret = request.form["secret"]
 
                 # gently asking for a secret
                 else:
@@ -70,6 +70,10 @@ def requires_secret(template: str = "create_project.html") -> Callable[..., Any]
                         course_favicon=course.favicon,
                         base_url=course.gitlab_api.base_url,
                     )
+
+                # user have secret but dont have gitlab fork
+                if not course.gitlab_api.check_project_exists(student) and secret:
+                    return redirect(url_for("web.create_project", secret=secret))
 
             except Exception as e:
                 return render_template(
