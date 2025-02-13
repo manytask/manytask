@@ -136,7 +136,7 @@ More info in the [yandexdataschool/checker repo](https://github.com/yandexdatasc
 ### Custom script 
 However, you can implement your own checker just following `manytask` api:
 
-* All the endpoints require `Authorization: Bearer <token>` or `Authorization: <token>` (deprecated) header contain `TESTER_TOKEN`, to validate it's authorized checker. 
+* All the endpoints require `Authorization: Bearer <token>` or `Authorization: <token>` (deprecated) header contain `MANYTASK_COURSE_TOKEN`, to validate it's authorized checker. 
 * Or, alternatively, being admin (session with admin field) 
   
 | method | api endpoint                | description                                       | required in body                                                          | optional in body                                                                                                      | return                                                               |
