@@ -381,11 +381,9 @@ class DataBaseApi(ViewerApi, StorageApi):
             user = self._get(
                 session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
             )
-            try:
-                self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-                return True
-            except Exception:
-                return False
+
+            user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+            return user_on_course is not None
 
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})

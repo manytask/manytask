@@ -1,9 +1,13 @@
+import logging
 import secrets
 from functools import wraps
 from typing import Any, Callable
 
 from flask import current_app, redirect, render_template, request, session, url_for
 from flask.sessions import SessionMixin
+from werkzeug.exceptions import Unauthorized
+
+logger = logging.getLogger(__name__)
 
 
 def valid_session(user_session: SessionMixin) -> bool:
@@ -75,7 +79,10 @@ def requires_secret(template: str = "create_project.html") -> Callable[..., Any]
                 if not course.gitlab_api.check_project_exists(student) and secret:
                     return redirect(url_for("web.create_project", secret=secret))
 
+            except Unauthorized:
+                return redirect(url_for("web.signup"))
             except Exception as e:
+                logger.error(f"Error in requires_secret: {e}", exc_info=True)
                 return render_template(
                     template,
                     error_message=str(e),
