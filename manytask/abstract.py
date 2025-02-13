@@ -77,3 +77,9 @@ class StorageApi(ABC):
         self,
         config_data: dict[str, Any],
     ) -> None: ...
+
+    @abstractmethod
+    def sync_user_on_course(self, course_name: str, student: Student) -> bool: ...
+
+    @abstractmethod
+    def check_user_on_course(self, course_name: str, student: Student) -> bool: ...

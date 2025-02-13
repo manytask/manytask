@@ -467,3 +467,9 @@ class GoogleDocApi(ViewerApi, StorageApi):
         :param config_data: Raw config data from yaml
         """
         pass
+
+    def sync_user_on_course(self, course_name: str, student: Student) -> bool:
+        return False
+
+    def check_user_on_course(self, course_name: str, student: Student) -> bool:
+        return False
