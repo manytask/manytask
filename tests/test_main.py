@@ -1,8 +1,10 @@
 import os
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskStorageType
@@ -25,15 +27,46 @@ def mock_gdoc():
         yield mock
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def postgres_container():
-    with PostgresContainer("postgres:17") as postgres:
+    postgres = PostgresContainer("postgres:17")
+    postgres.with_env("POSTGRES_USER", "test")
+    postgres.with_env("POSTGRES_PASSWORD", "test")
+    postgres.with_env("POSTGRES_DB", "test")
+
+    postgres.start()
+
+    # Wait for PostgreSQL to be ready
+    max_retries = 30
+    retry_interval = 1
+    for _ in range(max_retries):
+        try:
+            engine = create_engine(postgres.get_connection_url())
+            with engine.connect() as connection:
+                connection.execute(text("DROP SCHEMA public CASCADE"))
+                connection.execute(text("CREATE SCHEMA public"))
+                connection.execute(text("SELECT 1"))
+                break
+        except Exception:
+            time.sleep(retry_interval)
+    else:
+        raise Exception("PostgreSQL container not ready after maximum retries")
+
+    try:
         yield postgres
+    finally:
+        postgres.stop()
 
 
 @pytest.fixture
 def mock_env(monkeypatch, postgres_container):
     load_dotenv()
+
+    class MockEnv:
+        def __init__(self, monkeypatch):
+            self.monkeypatch = monkeypatch
+
+    mock_env = MockEnv(monkeypatch)
 
     # Set env var only if not already present
     def set_if_missing(key, value):
@@ -70,6 +103,8 @@ def mock_env(monkeypatch, postgres_container):
 
     os.makedirs(TEST_CACHE_DIR, exist_ok=True)
     os.makedirs(TEST_SOLUTIONS_DIR, exist_ok=True)
+
+    return mock_env
 
 
 @pytest.fixture
@@ -169,6 +204,7 @@ def test_create_app_production_with_something_else(mock_env, mock_gitlab, mock_g
 
 
 def test_create_app_debug(mock_env, mock_gitlab, mock_gdoc):
+    mock_env.monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course_debug")
     app = create_app(debug=True)
     assert isinstance(app, CustomFlask)
     assert app.debug is True

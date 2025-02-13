@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 from typing import Any
 from unittest.mock import patch
@@ -14,6 +15,7 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, Uni
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import text
 from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskDeadlinesConfig
@@ -44,8 +46,31 @@ def mock_current_time():
 
 @pytest.fixture(scope="session")
 def postgres_container():
-    with PostgresContainer("postgres:17") as postgres:
+    postgres = PostgresContainer("postgres:17")
+    postgres.with_env("POSTGRES_USER", "test")
+    postgres.with_env("POSTGRES_PASSWORD", "test")
+    postgres.with_env("POSTGRES_DB", "test")
+
+    postgres.start()
+
+    # Wait for PostgreSQL to be ready
+    max_retries = 30
+    retry_interval = 1
+    for _ in range(max_retries):
+        try:
+            engine = create_engine(postgres.get_connection_url())
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+                break
+        except Exception:
+            time.sleep(retry_interval)
+    else:
+        raise Exception("PostgreSQL container not ready after maximum retries")
+
+    try:
         yield postgres
+    finally:
+        postgres.stop()
 
 
 @pytest.fixture()
