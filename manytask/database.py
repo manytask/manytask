@@ -353,6 +353,40 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             session.commit()
 
+    def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
+        """Sync admin flag in gitlab and db"""
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            user = self._get(
+                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+            )
+            user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+            if student.course_admin != user_on_course.is_course_admin and student.course_admin:
+                user_on_course = self._update(
+                    session=session,
+                    model=models.UserOnCourse,
+                    defaults={"is_course_admin": student.course_admin},
+                    user_id=user.id,
+                    course_id=course.id,
+                )
+                session.refresh(user_on_course)
+            return user_on_course.is_course_admin
+
+    def check_user_on_course(self, course_name: str, student: Student) -> bool:
+        """Checking that user has been enrolled on course"""
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            user = self._get(
+                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+            )
+            try:
+                self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+                return True
+            except Exception:
+                return False
+
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
