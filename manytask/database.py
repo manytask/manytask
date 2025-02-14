@@ -388,6 +388,8 @@ class DataBaseApi(ViewerApi, StorageApi):
                 return False
 
     def get_or_create_user(self, student: Student, course_name: str):
+        """Get user in DB or create if not"""
+
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
             user = self._get_or_create(
