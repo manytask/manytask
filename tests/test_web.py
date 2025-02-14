@@ -109,6 +109,7 @@ def mock_course():
         class storage_api:
             def __init__(self):
                 self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
+                self.course_name = TEST_COURSE_NAME
 
             @staticmethod
             def get_scores_update_timestamp():
@@ -140,6 +141,9 @@ def mock_course():
             @staticmethod
             def update_cached_scores():
                 pass
+
+            def check_user_on_course(self, *a, **k):
+                return True
 
         class viewer_api:
             @staticmethod
