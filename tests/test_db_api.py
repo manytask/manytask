@@ -753,6 +753,7 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container):
                 registration_secret="secret",
                 show_allscores=True,
                 apply_migrations=True,
+                token="test_token",
             )
 
             with Session(engine) as session:
