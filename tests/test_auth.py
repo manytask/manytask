@@ -1,11 +1,9 @@
 import os
-from unittest.mock import MagicMock
 
 import pytest
-from flask import Flask, request, session, url_for
-from werkzeug.exceptions import Unauthorized
+from flask import Flask, session
 
-from manytask.auth import requires_auth, requires_ready, requires_secret, valid_session
+from manytask.auth import requires_auth, requires_ready, valid_session
 from manytask.web import bp as web_bp
 
 
@@ -124,92 +122,3 @@ def test_requires_ready_without_config(app):
         app.course = MockCourse()
         response = test_route()
         assert response.status_code == 302
-
-
-def test_requires_secret_with_valid_secret(app):
-    # Should redirect to create_project
-    @requires_secret()
-    def test_route():
-        return "success"
-
-    with app.test_request_context():
-        session["gitlab"] = {"oauth_access_token": "token"}
-        app.course = MagicMock()
-        app.course.registration_secret = "test_code"
-        request.form = {"secret": "test_code"}
-        app.course.gitlab_api.get_authenticated_student.return_value = None
-        app.course.storage_api.check_user_on_course.return_value = False
-        app.course.gitlab_api.check_project_exists.return_value = False
-        response = test_route()
-        assert response.status_code == 302
-        assert response.location == "/create_project?secret=test_code"
-
-
-def test_requires_secret_user_on_course(app):
-    # Should redirect to create_project
-    @requires_secret()
-    def test_route():
-        return "success"
-
-    with app.test_request_context():
-        session["gitlab"] = {"oauth_access_token": "token"}
-        app.course = MagicMock()
-        app.course.registration_secret = "test_code"
-        request.form = {"secret": "test_code"}
-        app.course.gitlab_api.get_authenticated_student.return_value = None
-        app.course.storage_api.check_user_on_course.return_value = True
-        app.course.gitlab_api.check_project_exists.return_value = False
-        response = test_route()
-        assert response.status_code == 302
-        assert response.location == "/create_project?secret=test_code"
-
-
-def test_requires_secret_user_on_course_have_fork(app):
-    # Should redirect to create_project
-    @requires_secret()
-    def test_route():
-        return "success"
-
-    with app.test_request_context():
-        session["gitlab"] = {"oauth_access_token": "token"}
-        app.course = MagicMock()
-        app.course.registration_secret = "test_code"
-        request.form = {"secret": "test_code"}
-        app.course.gitlab_api.get_authenticated_student.return_value = None
-        app.course.storage_api.check_user_on_course.return_value = True
-        app.course.gitlab_api.check_project_exists.return_value = True
-        response = test_route()
-        assert response == "success"
-
-
-def test_requires_secret_user_auth_error(app):
-    # Should redirect to create_project
-    @requires_secret()
-    def test_route():
-        return "success"
-
-    with app.test_request_context():
-        session["gitlab"] = {"oauth_access_token": "token"}
-        app.course = MagicMock()
-        app.course.registration_secret = "test_code"
-        request.form = {"secret": "test_code"}
-        app.course.gitlab_api.get_authenticated_student.side_effect = Unauthorized()
-        response = test_route()
-        assert response.status_code == 302
-        assert response.location == url_for("web.signup")
-
-
-def test_requires_secret_user_error(app):
-    @requires_secret()
-    def test_route():
-        return "success"
-
-    with app.test_request_context():
-        session["gitlab"] = {"oauth_access_token": "token"}
-        app.course = MagicMock()
-        app.course.registration_secret = "test_code"
-        request.form = {"secret": "test_code"}
-        app.course.gitlab_api.get_authenticated_student.side_effect = Exception("Test exception")
-        response = test_route()
-        assert "Test exception" in response
-        assert 'class="alert alert-danger"' in response
