@@ -387,7 +387,7 @@ class DataBaseApi(ViewerApi, StorageApi):
             except Exception:
                 return False
 
-    def get_or_create_user(self, student: Student, course_name: str):
+    def get_or_create_user(self, student: Student, course_name: str) -> models.User:
         """Get user in DB or create if not"""
 
         with Session(self.engine) as session:
