@@ -25,10 +25,12 @@ def valid_session(user_session: SessionMixin) -> bool:
     )
 
 
-def set_oauth_session(student: Student, oauth_tokens: dict[str, str] | None = None, version: float = 1.5):
+def set_oauth_session(
+    student: Student, oauth_tokens: dict[str, str] | None = None, version: float = 1.5
+) -> dict[str, Any]:
     """Set oauth creds in session for student"""
 
-    result = {
+    result: dict[str, Any] = {
         "username": student.username,
         "user_id": student.id,
         "course_admin": student.course_admin,
