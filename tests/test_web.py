@@ -216,9 +216,12 @@ def test_course_page_invalid_session(app, mock_course, mock_gitlab_oauth):
         assert response.location == "/login"
 
 
-def test_course_page_щonly_with_valid_session(app, mock_course, mock_gitlab_oauth):
+def test_course_page_only_with_valid_session(app, mock_course, mock_gitlab_oauth):
     with app.test_request_context():
-        with app.test_client() as client:
+        with (
+            app.test_client() as client,
+            patch.object(mock_course.storage_api, "check_user_on_course") as mock_check_user_on_course,
+        ):
             with client.session_transaction() as sess:
                 sess["gitlab"] = {
                     "version": TEST_VERSION,
@@ -230,8 +233,10 @@ def test_course_page_щonly_with_valid_session(app, mock_course, mock_gitlab_oau
                 }
             app.course = mock_course
             app.oauth = mock_gitlab_oauth
+            mock_check_user_on_course.return_value = False
             response = client.get("/")
-            assert response.status_code == 302
+            assert response.status_code == 200
+            assert b"Secret Code" in response.data
 
 
 def test_signup_get(app, mock_course):
