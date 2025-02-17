@@ -7,21 +7,16 @@ from zoneinfo import ZoneInfo
 import pytest
 import yaml
 from alembic import command
-from alembic.config import Config
 from alembic.script import ScriptDirectory
 from dotenv import load_dotenv
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
-from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
-from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskDeadlinesConfig
 from manytask.database import DataBaseApi, StoredUser
 from manytask.glab import Student
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
-
-ALEMBIC_PATH = "manytask/alembic.ini"
 
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",
@@ -40,42 +35,6 @@ def mock_current_time():
     with patch("manytask.config.ManytaskDeadlinesConfig.get_now_with_timezone") as mock:
         mock.return_value = FIXED_CURRENT_TIME
         yield mock
-
-
-@pytest.fixture(scope="session")
-def postgres_container():
-    with PostgresContainer("postgres:17") as postgres:
-        yield postgres
-
-
-@pytest.fixture()
-def engine(postgres_container):
-    return create_engine(postgres_container.get_connection_url(), echo=False)
-
-
-@pytest.fixture
-def alembic_cfg(postgres_container):
-    return Config(ALEMBIC_PATH, config_args={"sqlalchemy.url": postgres_container.get_connection_url()})
-
-
-@pytest.fixture
-def tables(engine, alembic_cfg):
-    with engine.begin() as connection:
-        alembic_cfg.attributes["connection"] = connection
-        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
-        command.upgrade(alembic_cfg, "head")  # Base.metadata.create_all(engine)
-
-    yield
-
-    with engine.begin() as connection:
-        alembic_cfg.attributes["connection"] = connection
-        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
-
-
-@pytest.fixture
-def session(engine, tables):
-    with Session(engine) as session:
-        yield session
 
 
 @pytest.fixture
