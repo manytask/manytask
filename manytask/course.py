@@ -47,6 +47,7 @@ class Course:
         gitlab_api: glab.GitLabApi,
         solutions_api: solutions.SolutionsApi,
         registration_secret: str,
+        token: str,
         show_allscores: bool,
         cache: BaseCache,
         manytask_version: str | None = None,
@@ -59,6 +60,7 @@ class Course:
         self.solutions_api = solutions_api
 
         self.registration_secret = registration_secret
+        self.token = token
 
         self.show_allscores = show_allscores
 

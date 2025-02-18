@@ -7,21 +7,16 @@ from zoneinfo import ZoneInfo
 import pytest
 import yaml
 from alembic import command
-from alembic.config import Config
 from alembic.script import ScriptDirectory
 from dotenv import load_dotenv
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
-from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
-from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskDeadlinesConfig
 from manytask.database import DataBaseApi, StoredUser
 from manytask.glab import Student
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
-
-ALEMBIC_PATH = "manytask/alembic.ini"
 
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",
@@ -42,42 +37,6 @@ def mock_current_time():
         yield mock
 
 
-@pytest.fixture(scope="session")
-def postgres_container():
-    with PostgresContainer("postgres:17") as postgres:
-        yield postgres
-
-
-@pytest.fixture()
-def engine(postgres_container):
-    return create_engine(postgres_container.get_connection_url(), echo=False)
-
-
-@pytest.fixture
-def alembic_cfg(postgres_container):
-    return Config(ALEMBIC_PATH, config_args={"sqlalchemy.url": postgres_container.get_connection_url()})
-
-
-@pytest.fixture
-def tables(engine, alembic_cfg):
-    with engine.begin() as connection:
-        alembic_cfg.attributes["connection"] = connection
-        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
-        command.upgrade(alembic_cfg, "head")  # Base.metadata.create_all(engine)
-
-    yield
-
-    with engine.begin() as connection:
-        alembic_cfg.attributes["connection"] = connection
-        command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
-
-
-@pytest.fixture
-def session(engine, tables):
-    with Session(engine) as session:
-        yield session
-
-
 @pytest.fixture
 def first_course_db_api(tables, postgres_container):
     return DataBaseApi(
@@ -85,6 +44,7 @@ def first_course_db_api(tables, postgres_container):
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
+        token="test_token",
         show_allscores=True,
         apply_migrations=True,
     )
@@ -96,6 +56,7 @@ def second_course_db_api(tables, postgres_container):
         database_url=postgres_container.get_connection_url(),
         course_name="Another Test Course",
         gitlab_instance_host="gitlab.test.com",
+        token="another_test_token",
         registration_secret="secret",
         show_allscores=True,
         apply_migrations=True,
@@ -117,6 +78,7 @@ def load_deadlines_config_and_sync_columns(db_api: DataBaseApi, yaml_file_file_p
                 name=db_api.course_name,
                 gitlab_instance_host="gitlab.test.com",
                 registration_secret="secret",
+                token="token",
                 show_allscores=True,
             )
             session.commit()
@@ -175,6 +137,7 @@ def test_empty_course(first_course_db_api, session):
     assert course.name == "Test Course"
     assert course.gitlab_instance_host == "gitlab.test.com"
     assert course.registration_secret == "secret"
+    assert course.token == "test_token"
     assert course.show_allscores
 
     stats = first_course_db_api.get_stats()
@@ -673,6 +636,7 @@ def test_course_change_params(first_course_db_api, postgres_container):
             course_name="Test Course",
             gitlab_instance_host="gitlab.another_test.com",
             registration_secret="secret",
+            token="test_token",
             show_allscores=True,
         )
 
@@ -681,6 +645,7 @@ def test_course_change_params(first_course_db_api, postgres_container):
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="another_secret",
+        token="test_token",
         show_allscores=False,
     )
 
@@ -708,6 +673,7 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container):
             course_name="Test Course",
             gitlab_instance_host="gitlab.test.com",
             registration_secret="secret",
+            token="test_token",
             show_allscores=True,
         )
 
@@ -718,6 +684,7 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container):
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
+        token="test_token",
         show_allscores=True,
         apply_migrations=True,
     )
@@ -745,6 +712,7 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container):
                 registration_secret="secret",
                 show_allscores=True,
                 apply_migrations=True,
+                token="test_token",
             )
 
             with Session(engine) as session:
@@ -757,6 +725,7 @@ def test_viewer_api(postgres_container):
         course_name="Test Course",
         gitlab_instance_host="gitlab.test.com",
         registration_secret="secret",
+        token="test_token",
         show_allscores=True,
         apply_migrations=True,
     )
@@ -789,6 +758,16 @@ def test_store_score_update_error(first_course_with_deadlines, session):
     assert "Update failed" in str(exc_info.value)
 
     assert session.query(Grade).count() == 0
+
+
+def test_get_course_success(first_course_db_api):
+    course = first_course_db_api.get_course(first_course_db_api.course_name)
+    assert course.name == first_course_db_api.course_name
+
+
+def test_get_course_unknown(first_course_db_api):
+    course = first_course_db_api.get_course("Unknown course")
+    assert not course
 
 
 def test_apply_migrations_exceptions(first_course_db_api, postgres_container):

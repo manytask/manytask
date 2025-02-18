@@ -16,6 +16,8 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
+from manytask.database import DataBaseApi
+
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
@@ -29,9 +31,21 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        course_token = os.environ["MANYTASK_COURSE_TOKEN"]
+        course: Course = current_app.course if hasattr(current_app, "course") else abort(403)
+        course_token: str = ""
+        # TODO: unneed check when depricate googlesheet interface
+        if isinstance(course.storage_api, DataBaseApi):
+            db_course = course.storage_api.get_course(course.storage_api.course_name)
+            if not db_course:
+                abort(403)
+            course_token = db_course.token
+
+        # TODO: delete when depricate googlesheet interface
+        else:
+            course_token = os.environ["MANYTASK_COURSE_TOKEN"]
+
         token = request.form.get("token", request.headers.get("Authorization", ""))
-        if not token:
+        if not token or not course_token:
             abort(403)
         token = token.split()[-1]
         if not secrets.compare_digest(token, course_token):

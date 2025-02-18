@@ -2,15 +2,23 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, ForeignKey, UniqueConstraint, event, func
+from sqlalchemy import JSON, ForeignKey, MetaData, UniqueConstraint, event, func
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, Mapper, Session, mapped_column, relationship
 
 logger = logging.getLogger(__name__)
 
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention=convention)
 
 
 class User(Base):
@@ -33,7 +41,13 @@ class Course(Base):
     name: Mapped[str] = mapped_column(unique=True)
     gitlab_instance_host: Mapped[str]
     registration_secret: Mapped[str]
+    token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
+
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_courses_name"),
+        UniqueConstraint("token", name="uq_courses_token"),
+    )
 
     # relationships
     task_groups: DynamicMapped["TaskGroup"] = relationship(back_populates="course", cascade="all, delete-orphan")

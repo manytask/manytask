@@ -1,7 +1,8 @@
 import os
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -12,6 +13,7 @@ from flask import Flask, Response, json, url_for
 from manytask.abstract import StoredUser
 from manytask.api import _parse_flags, _update_score
 from manytask.api import bp as api_bp
+from manytask.database import DataBaseApi
 from manytask.glab import Student
 from manytask.web import bp as web_bp
 
@@ -122,6 +124,14 @@ def mock_course():
             @staticmethod
             def get_scores(_username):
                 return {"task1": 100, "task2": 90, "test_task": 80}
+
+            @staticmethod
+            def get_course(_name):
+                @dataclass
+                class Course:
+                    token: str
+
+                return Course(os.getenv("MANYTASK_COURSE_TOKEN"))
 
             def get_all_scores(self):
                 return {"test_user": self.get_scores("test_user")}
@@ -415,15 +425,17 @@ def test_update_database_not_ready(app, mock_course, authenticated_client):
     assert response.status_code == 302
 
 
-def test_requires_token_invalid_token(app):
+def test_requires_token_invalid_token(app, mock_course):
     client = app.test_client()
+    app.course = mock_course
     headers = {"Authorization": "Bearer invalid_token"}
     response = client.post("/api/report", headers=headers)
     assert response.status_code == 403
 
 
-def test_requires_token_missing_token(app):
+def test_requires_token_missing_token(app, mock_course):
     client = app.test_client()
+    app.course = mock_course
     response = client.post("/api/report")
     assert response.status_code == 403
 
@@ -628,3 +640,25 @@ def test_update_database_invalid_score_value(app, authenticated_client, mock_cou
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["success"]
+
+
+def test_no_course_in_db(app, mock_course):
+    """Test the decorator when no course information is present in the database, leading to an abort."""
+
+    app.course = mock_course
+    app.course.storage_api = MagicMock(DataBaseApi)
+    app.course.storage_api.course_name = "NoSuchCourse"
+    app.course.storage_api.get_course.return_value = None
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+    client = app.test_client()
+    response = client.post("/api/report", headers=headers)
+    assert response.status_code == 403
+
+
+def test_token_when_no_course(app):
+    """Test the decorator when no course information is present in the database, leading to an abort."""
+
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+    client = app.test_client()
+    response = client.post("/api/report", headers=headers)
+    assert response.status_code == 403

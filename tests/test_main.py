@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from dotenv import load_dotenv
-from testcontainers.postgres import PostgresContainer
 
 from manytask.config import ManytaskStorageType
 from manytask.gdoc import GoogleDocApi
@@ -26,14 +25,14 @@ def mock_gdoc():
 
 
 @pytest.fixture
-def postgres_container():
-    with PostgresContainer("postgres:17") as postgres:
-        yield postgres
-
-
-@pytest.fixture
 def mock_env(monkeypatch, postgres_container):
     load_dotenv()
+
+    class MockEnv:
+        def __init__(self, monkeypatch):
+            self.monkeypatch = monkeypatch
+
+    mock_env = MockEnv(monkeypatch)
 
     # Set env var only if not already present
     def set_if_missing(key, value):
@@ -70,6 +69,8 @@ def mock_env(monkeypatch, postgres_container):
 
     os.makedirs(TEST_CACHE_DIR, exist_ok=True)
     os.makedirs(TEST_SOLUTIONS_DIR, exist_ok=True)
+
+    return mock_env
 
 
 @pytest.fixture
@@ -169,6 +170,7 @@ def test_create_app_production_with_something_else(mock_env, mock_gitlab, mock_g
 
 
 def test_create_app_debug(mock_env, mock_gitlab, mock_gdoc):
+    mock_env.monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course_debug")
     app = create_app(debug=True)
     assert isinstance(app, CustomFlask)
     assert app.debug is True
