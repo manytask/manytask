@@ -34,6 +34,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         course_name: str,
         gitlab_instance_host: str,
         registration_secret: str,
+        token: str,
         show_allscores: bool,
         apply_migrations: bool = False,
     ):
@@ -45,6 +46,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         :param course_name: unique course name
         :param gitlab_instance_host: gitlab instance host url
         :param registration_secret: secret to registering for course
+        :param token: token for course in manytask
         :param show_allscores: flag for showing results to all users
         :param apply_migrations: flag for applying migrations
         """
@@ -72,11 +74,23 @@ class DataBaseApi(ViewerApi, StorageApi):
                     name=course_name,
                     gitlab_instance_host=gitlab_instance_host,
                     registration_secret=registration_secret,
+                    token=token,
                     show_allscores=show_allscores,
                 )
                 session.commit()
 
             self.course_name = course_name
+            self._update_or_create(
+                session,
+                models.Course,
+                defaults={
+                    "gitlab_instance_host": gitlab_instance_host,
+                    "registration_secret": registration_secret,
+                    "token": token,
+                    "show_allscores": show_allscores,
+                },
+                name=self.course_name,
+            )
 
     def get_scoreboard_url(self) -> str:
         return ""
@@ -289,6 +303,16 @@ class DataBaseApi(ViewerApi, StorageApi):
                         group_id=task_group.id,
                     )
             session.commit()
+
+    def get_course(
+        self,
+        course_name: str,
+    ) -> models.Course | None:
+        try:
+            with Session(self.engine) as session:
+                return self._get(session, models.Course, name=course_name)
+        except NoResultFound:
+            return None
 
     def update_task_groups_from_config(
         self,

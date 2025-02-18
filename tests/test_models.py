@@ -67,7 +67,12 @@ def test_user_unique_username_and_gitlab_instance(session):
 
 
 def test_course(session):
-    course = Course(name="test_course", registration_secret="test_secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="test_course",
+        registration_secret="test_secret",
+        token="test_token",
+        gitlab_instance_host="gitlab.inst.org",
+    )
     session.add(course)
     session.commit()
 
@@ -78,8 +83,12 @@ def test_course(session):
 
 
 def test_course_unique_name(session):
-    course1 = Course(name="unique_course", registration_secret="secret1", gitlab_instance_host="gitlab.inst.org")
-    course2 = Course(name="unique_course", registration_secret="secret2", gitlab_instance_host="gitlab.inst.org")
+    course1 = Course(
+        name="unique_course", registration_secret="secret1", token="test_token1", gitlab_instance_host="gitlab.inst.org"
+    )
+    course2 = Course(
+        name="unique_course", registration_secret="secret2", token="test_token2", gitlab_instance_host="gitlab.inst.org"
+    )
     session.add(course1)
     session.commit()
     session.add(course2)
@@ -89,7 +98,9 @@ def test_course_unique_name(session):
 
 def test_user_on_course(session):
     user = User(username="user1", gitlab_instance_host="gitlab.inst.org")
-    course = Course(name="course1", registration_secret="secret1", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course1", registration_secret="secret1", token="test_token1_", gitlab_instance_host="gitlab.inst.org"
+    )
     session.add_all([user, course])
     session.commit()
 
@@ -106,20 +117,24 @@ def test_user_on_course(session):
     assert retrieved_course.users_on_courses[0].user.username == "user1"
 
     retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
-    assert not retrieved_user_on_course.is_course_admin
+    assert retrieved_user_on_course.is_course_admin is False
 
     retrieved_user_on_course.is_course_admin = True
     session.commit()
 
     retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
-    assert retrieved_user_on_course.is_course_admin
+    assert retrieved_user_on_course.is_course_admin is True
 
 
 def test_user_on_course_unique_ids(session):
     user1 = User(username="user001", gitlab_instance_host="gitlab.inst.org")
-    course1 = Course(name="course001", registration_secret="secret001", gitlab_instance_host="gitlab.inst.org")
+    course1 = Course(
+        name="course001", registration_secret="secret001", token="test_token001", gitlab_instance_host="gitlab.inst.org"
+    )
     user2 = User(username="user002", gitlab_instance_host="gitlab.inst.org")
-    course2 = Course(name="course002", registration_secret="secret002", gitlab_instance_host="gitlab.inst.org")
+    course2 = Course(
+        name="course002", registration_secret="secret002", token="test_token002", gitlab_instance_host="gitlab.inst.org"
+    )
 
     user_on_course1 = UserOnCourse(user=user1, course=course1, repo_name="user_repo01")
     user_on_course2 = UserOnCourse(user=user1, course=course2, repo_name="user_repo02")
@@ -136,7 +151,9 @@ def test_user_on_course_unique_ids(session):
 
 
 def test_deadline(session):
-    course = Course(name="course0001", registration_secret="secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course0001", registration_secret="secret", token="test_token0001", gitlab_instance_host="gitlab.inst.org"
+    )
     session.add(course)
     session.commit()
 
@@ -152,7 +169,9 @@ def test_deadline(session):
 
 
 def test_task_group(session):
-    course = Course(name="course0002", registration_secret="secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course0002", registration_secret="secret", token="test_token2", gitlab_instance_host="gitlab.inst.org"
+    )
     session.add(course)
     task_group = TaskGroup(name="group2", course=course)
     session.add(task_group)
@@ -163,7 +182,9 @@ def test_task_group(session):
 
 
 def test_deadline_data(session, fixed_current_time):
-    course = Course(name="course0003", registration_secret="secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course0003", registration_secret="secret", token="test_token3", gitlab_instance_host="gitlab.inst.org"
+    )
     session.add(course)
     session.commit()
 
@@ -200,7 +221,9 @@ def test_deadline_data(session, fixed_current_time):
 
 
 def test_task(session):
-    course = Course(name="course3", registration_secret="secret3", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course3", registration_secret="secret3", token="test_token3_", gitlab_instance_host="gitlab.inst.org"
+    )
     task_group = TaskGroup(name="group3", course=course)
     session.add_all([course, task_group])
     session.commit()
@@ -216,7 +239,9 @@ def test_task(session):
 
 def test_grade(session, fixed_current_time):
     user = User(username="user2", gitlab_instance_host="gitlab.inst.org")
-    course = Course(name="course4", registration_secret="secret4", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course4", registration_secret="secret4", token="test_token4", gitlab_instance_host="gitlab.inst.org"
+    )
     user_on_course = UserOnCourse(user=user, course=course, repo_name="repo_name1")
     task_group = TaskGroup(name="group4", course=course)
     task = Task(name="task2", group=task_group)
@@ -234,7 +259,9 @@ def test_grade(session, fixed_current_time):
 
 
 def test_grade_unique_ids(session, fixed_current_time):
-    course = Course(name="course101", registration_secret="secret101", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course101", registration_secret="secret101", token="test_token101", gitlab_instance_host="gitlab.inst.org"
+    )
     task_group = TaskGroup(name="group101", course=course)
     user1 = User(username="user101", gitlab_instance_host="gitlab.inst.org")
     user2 = User(username="user102", gitlab_instance_host="gitlab.inst.org")
@@ -260,7 +287,9 @@ def test_grade_unique_ids(session, fixed_current_time):
 
 
 def test_course_tasks(session):
-    course = Course(name="course11", registration_secret="secret11", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course11", registration_secret="secret11", token="test_token11", gitlab_instance_host="gitlab.inst.org"
+    )
     task_group = TaskGroup(name="group11", course=course)
     task1 = Task(name="task11_1", group=task_group)
     task2 = Task(name="task11_2", group=task_group)
@@ -277,7 +306,9 @@ def test_course_tasks(session):
 
 
 def test_task_group_tasks(session):
-    course = Course(name="course12", registration_secret="secret12", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course12", registration_secret="secret12", token="test_token12", gitlab_instance_host="gitlab.inst.org"
+    )
     task_group = TaskGroup(name="group12", course=course)
     task1 = Task(name="task12_1", group=task_group)
     task2 = Task(name="task12_2", group=task_group)
@@ -292,7 +323,9 @@ def test_task_group_tasks(session):
 
 
 def test_users_on_course_validate_gitlab_instance(session):
-    course = Course(name="course21", registration_secret="secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="course21", registration_secret="secret", token="test_token21", gitlab_instance_host="gitlab.inst.org"
+    )
     user = User(username="user21", gitlab_instance_host="another.gitlab.inst.org")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="user21_repo")
 
@@ -302,7 +335,12 @@ def test_users_on_course_validate_gitlab_instance(session):
 
 
 def test_cascade_delete_course(session):
-    course = Course(name="cascade_course", registration_secret="secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="cascade_course",
+        registration_secret="secret",
+        token="test_token__",
+        gitlab_instance_host="gitlab.inst.org",
+    )
     task_group1 = TaskGroup(name="cascade_group1", course=course)
     task_group2 = TaskGroup(name="cascade_group2", course=course)
     user1 = User(username="cascade_user1", gitlab_instance_host="gitlab.inst.org")
@@ -348,7 +386,12 @@ def test_cascade_delete_course(session):
 
 
 def test_cascade_delete_task_group(session):
-    course = Course(name="cascade_course2", registration_secret="secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="cascade_course2",
+        registration_secret="secret",
+        token="test_token2__",
+        gitlab_instance_host="gitlab.inst.org",
+    )
     deadline = Deadline(id=12345, data={"test_key": "test_value"})
     task_group = TaskGroup(name="cascade_group3", course=course, deadline=deadline)
     task1 = Task(name="cascade_task4", group=task_group)
@@ -387,7 +430,12 @@ def test_cascade_delete_task_group(session):
 
 def test_cascade_delete_user(session):
     user = User(username="cascade_user4", gitlab_instance_host="gitlab.inst.org")
-    course = Course(name="cascade_course3", registration_secret="secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="cascade_course3",
+        registration_secret="secret",
+        token="test_token3__",
+        gitlab_instance_host="gitlab.inst.org",
+    )
     user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo4")
     task_group = TaskGroup(name="cascade_group4", course=course)
     task = Task(name="cascade_task6", group=task_group)
@@ -412,7 +460,12 @@ def test_cascade_delete_user(session):
 
 def test_cascade_delete_user_on_course(session):
     user = User(username="cascade_user5", gitlab_instance_host="gitlab.inst.org")
-    course = Course(name="cascade_course4", registration_secret="secret", gitlab_instance_host="gitlab.inst.org")
+    course = Course(
+        name="cascade_course4",
+        registration_secret="secret",
+        token="test_token5",
+        gitlab_instance_host="gitlab.inst.org",
+    )
     user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo5")
     task_group = TaskGroup(name="cascade_group5", course=course)
     task = Task(name="cascade_task7", group=task_group)

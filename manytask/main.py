@@ -164,6 +164,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             course_name=course_name,
             gitlab_instance_host=app.app_config.gitlab_url,
             registration_secret=app.app_config.registration_secret,
+            token=app.app_config.course_token,
             show_allscores=app.app_config.show_allscores,
             apply_migrations=apply_migrations,
         )
@@ -221,6 +222,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         gitlab_api,
         solutions_api,
         app.app_config.registration_secret,
+        app.app_config.course_token,
         app.app_config.show_allscores,
         cache,
         manytask_version=manytask_version,
