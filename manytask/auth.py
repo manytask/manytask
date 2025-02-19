@@ -61,8 +61,8 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
             try:
                 gitlab_oauth_token = oauth.gitlab.authorize_access_token()
                 student = course.gitlab_api.get_authenticated_student(gitlab_oauth_token["access_token"])
-            except Exception as e:
-                logger.error(f"Gitlab authorization failed: {e!r}")
+            except Exception:
+                logger.error("Gitlab authorization failed", exc_info=True)
                 return redirect(url_for("web.login"))
 
             session.setdefault("gitlab", {}).update(set_oauth_session(student, gitlab_oauth_token))
@@ -110,8 +110,8 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
                 course.storage_api.get_or_create_user(student, course.storage_api.course_name)
                 return redirect(url_for("web.login"))
 
-            except Exception as e:
-                logger.error(f"Failed login while working with db {e!r}")
+            except Exception:
+                logger.error("Failed login while working with db", exc_info=True)
                 return redirect(url_for("web.signup"))
         else:
             logger.info("Redirect to login in Gitlab")
