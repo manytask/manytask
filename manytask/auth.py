@@ -3,6 +3,7 @@ import secrets
 from functools import wraps
 from typing import Any, Callable
 
+from authlib.integrations.flask_client import OAuth
 from flask import current_app, redirect, render_template, request, session, url_for
 from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
@@ -47,7 +48,7 @@ def set_oauth_session(
     return result
 
 
-def handle_course_membership(course: Course, student) -> bool | str | Response:
+def handle_course_membership(course: Course, student: Student) -> bool | str | Response:
     """Checking user on course and sync admin role"""
 
     try:
@@ -68,7 +69,7 @@ def handle_course_membership(course: Course, student) -> bool | str | Response:
         return redirect(url_for("web.signup"))
 
 
-def check_secret(course: Course, student) -> None | str:
+def check_secret(course: Course, student: Student) -> str | None:
     """Checking course secret for user if he is entering"""
 
     if "secret" in request.form:
@@ -83,9 +84,10 @@ def check_secret(course: Course, student) -> None | str:
                 course_favicon=course.favicon,
                 base_url=course.gitlab_api.base_url,
             )
+    return None
 
 
-def handle_oauth_callback(oauth, course) -> None | Response:
+def handle_oauth_callback(oauth: OAuth, course: Course) -> None | Response:
     """Process oauth2 callback with code for auth, if success set auth session"""
 
     try:
@@ -100,7 +102,7 @@ def handle_oauth_callback(oauth, course) -> None | Response:
     return redirect(url_for("web.login"))
 
 
-def get_authenticate_student(oauth, course) -> Student:
+def get_authenticate_student(oauth: OAuth, course: Course) -> Student:
     """Getting student and update session"""
 
     try:
