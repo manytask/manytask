@@ -8,6 +8,7 @@ from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
+from manytask.course import Course
 from manytask.glab import Student
 
 logger = logging.getLogger(__name__)
@@ -46,20 +47,20 @@ def set_oauth_session(
     return result
 
 
-def handle_course_membership(course, student) -> bool | str | Response:
+def handle_course_membership(course: Course, student) -> bool | str | Response:
     """Checking user on course and sync admin role"""
 
     try:
-        if course.storage_api.check_user_on_course(course.storage_api.course_name, student):
+        if course.storage_api.check_user_on_course(course.storage_api.course_name, student):  # type: ignore
             # sync admin flag with gitlab
-            course.storage_api.sync_and_get_admin_status(course.storage_api.course_name, student)
+            course.storage_api.sync_and_get_admin_status(course.storage_api.course_name, student)  # type: ignore
             return True
         else:
-            logger.info(f"No user {student.username} on course {course.storage_api.course_name} asking secret")
+            logger.info(f"No user {student.username} on course {course.storage_api.course_name} asking secret")  # type: ignore
             return False
     except NoResultFound:
         logger.info(f"Creating User: {student.username} that we already have in gitlab")
-        course.storage_api.get_or_create_user(student, course.storage_api.course_name)
+        course.storage_api.get_or_create_user(student, course.storage_api.course_name)  # type: ignore
         return redirect(url_for("web.login"))
 
     except Exception:
@@ -67,14 +68,14 @@ def handle_course_membership(course, student) -> bool | str | Response:
         return redirect(url_for("web.signup"))
 
 
-def check_secret(course, student) -> None | str:
+def check_secret(course: Course, student) -> None | str:
     """Checking course secret for user if he is entering"""
 
     if "secret" in request.form:
         if secrets.compare_digest(request.form["secret"], course.registration_secret):
             course.storage_api.sync_stored_user(student)
         else:
-            logger.error(f"Wrong secret user {student.username} on course {course.storage_api.course_name}")
+            logger.error(f"Wrong secret user {student.username} on course {course.storage_api.course_name}")  # type: ignore
             return render_template(
                 "create_project.html",
                 error_message="Invalid registration secret",
