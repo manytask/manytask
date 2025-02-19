@@ -3,13 +3,11 @@ import secrets
 from functools import wraps
 from typing import Any, Callable
 
-from authlib.integrations.flask_client import OAuth
 from flask import current_app, redirect, render_template, request, session, url_for
 from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
-from manytask.course import Course
 from manytask.glab import Student
 
 logger = logging.getLogger(__name__)
@@ -48,21 +46,17 @@ def set_oauth_session(
     return result
 
 
-def handle_course_membership(course: Course, student: Student) -> None | str | Response:
+def handle_course_membership(course, student) -> bool | str | Response:
     """Checking user on course and sync admin role"""
 
     try:
         if course.storage_api.check_user_on_course(course.storage_api.course_name, student):
             # sync admin flag with gitlab
             course.storage_api.sync_and_get_admin_status(course.storage_api.course_name, student)
+            return True
         else:
             logger.info(f"No user {student.username} on course {course.storage_api.course_name} asking secret")
-            return render_template(
-                "create_project.html",
-                course_name=course.name,
-                course_favicon=course.favicon,
-                base_url=course.gitlab_api.base_url,
-            )
+            return False
     except NoResultFound:
         logger.info(f"Creating User: {student.username} that we already have in gitlab")
         course.storage_api.get_or_create_user(student, course.storage_api.course_name)
@@ -73,7 +67,7 @@ def handle_course_membership(course: Course, student: Student) -> None | str | R
         return redirect(url_for("web.signup"))
 
 
-def check_secret(course: Course, student: Student) -> None | str:
+def check_secret(course, student) -> None | str:
     """Checking course secret for user if he is entering"""
 
     if "secret" in request.form:
@@ -90,7 +84,7 @@ def check_secret(course: Course, student: Student) -> None | str:
             )
 
 
-def handle_oauth_callback(oauth: OAuth, course: Course) -> None | Response:
+def handle_oauth_callback(oauth, course) -> None | Response:
     """Process oauth2 callback with code for auth, if success set auth session"""
 
     try:
@@ -105,7 +99,7 @@ def handle_oauth_callback(oauth: OAuth, course: Course) -> None | Response:
     return redirect(url_for("web.login"))
 
 
-def get_authenticate_student(oauth: OAuth, course: Course) -> Student:
+def get_authenticate_student(oauth, course) -> Student:
     """Getting student and update session"""
 
     try:
@@ -135,7 +129,13 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if valid_session(session):
             student = get_authenticate_student(oauth, course)
             check_secret(course, student)
-            handle_course_membership(course, student)
+            if not handle_course_membership(course, student):
+                return render_template(
+                    "create_project.html",
+                    course_name=course.name,
+                    course_favicon=course.favicon,
+                    base_url=course.gitlab_api.base_url,
+                )
         else:
             logger.info("Redirect to login in Gitlab")
             redirect_uri = url_for("web.login", _external=True)
