@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from authlib.integrations.base_client import OAuthError
-from flask import Flask, Response, url_for
+from flask import Flask, url_for
 from pydantic import AnyUrl
 
 from manytask.abstract import StoredUser
@@ -170,23 +170,6 @@ def mock_course():
                 pass
 
     return MockCourse()
-
-
-@pytest.fixture
-def mock_gitlab_oauth():
-    class MockGitlabOauth:
-        class gitlab:
-            @staticmethod
-            def authorize_access_token():
-                return {"access_token": "", "refresh_token": ""}
-
-            @staticmethod
-            def authorize_redirect(redirect_uri: str):
-                resp = Response(status=302)
-                resp.location = url_for("web.login")
-                return resp
-
-    return MockGitlabOauth()
 
 
 @pytest.fixture(autouse=True)

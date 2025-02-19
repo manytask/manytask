@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 import yaml
 from dotenv import load_dotenv
-from flask import Flask, Response, json, url_for
+from flask import Flask, json
 
 from manytask.abstract import StoredUser
 from manytask.api import _parse_flags, _update_score
@@ -202,23 +202,6 @@ def mock_course():
                 return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
     return MockCourse()
-
-
-@pytest.fixture
-def mock_gitlab_oauth():
-    class MockGitlabOauth:
-        class gitlab:
-            @staticmethod
-            def authorize_access_token():
-                return {"access_token": "", "refresh_token": ""}
-
-            @staticmethod
-            def authorize_redirect(redirect_uri: str):
-                resp = Response(status=302)
-                resp.location = url_for("web.login")
-                return resp
-
-    return MockGitlabOauth()
 
 
 @pytest.fixture

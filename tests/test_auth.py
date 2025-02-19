@@ -5,7 +5,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import pytest
-from flask import Flask, Response, request, session, url_for
+from flask import Flask, request, session, url_for
 from pydantic import AnyUrl
 
 from manytask.abstract import StoredUser
@@ -34,23 +34,6 @@ def app():
     app.secret_key = "test_key"
     app.register_blueprint(web_bp)
     return app
-
-
-@pytest.fixture
-def mock_gitlab_oauth():
-    class MockGitlabOauth:
-        class gitlab:
-            @staticmethod
-            def authorize_access_token():
-                return {"access_token": "", "refresh_token": ""}
-
-            @staticmethod
-            def authorize_redirect(redirect_uri: str):
-                resp = Response(status=302)
-                resp.location = url_for("web.login")
-                return resp
-
-    return MockGitlabOauth()
 
 
 @pytest.fixture
