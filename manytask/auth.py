@@ -38,12 +38,10 @@ def set_oauth_session(
         "version": version,
     }
     if oauth_tokens:
-        result.update(
-            {
-                "access_token": oauth_tokens.get("access_token", ""),
-                "refresh_token": oauth_tokens.get("refresh_token", ""),
-            }
-        )
+        result |= {
+            "access_token": oauth_tokens.get("access_token", ""),
+            "refresh_token": oauth_tokens.get("refresh_token", ""),
+        }
     return result
 
 
