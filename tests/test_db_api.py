@@ -844,7 +844,7 @@ def test_check_user_on_course(first_course_db_api, session):
     assert first_course_db_api.check_user_on_course(course_name, student)
 
 
-def test_get_or_create_user_get(first_course_db_api, session):
+def test_get_or_create_user_existing_get(first_course_db_api, session):
     course_name = "Test Course"
     student = Student(id=1, username="user1", name="username1", course_admin=False, repo="repo1")
     user = User(id=1, username="user1", gitlab_instance_host="gitlab.test.com")
@@ -855,7 +855,7 @@ def test_get_or_create_user_get(first_course_db_api, session):
     assert get_user.id == user.id
 
 
-def test_get_or_create_user_create(first_course_db_api, session):
+def test_get_or_create_user_nonexisting_create(first_course_db_api, session):
     course_name = "Test Course"
     student = Student(id=1, username="user1", name="username1", course_admin=False, repo="repo1")
 
