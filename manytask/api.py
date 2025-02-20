@@ -220,7 +220,7 @@ def report_score() -> ResponseReturnValue:
 
     submit_time = _process_submit_time(submit_time_str, course.deadlines)
 
-    # Log with sanitized values
+    # fixme: sanitize input
     logger.info(f"Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}")
     logger.info(f"verify deadline: Use submit_time={submit_time}")
 
