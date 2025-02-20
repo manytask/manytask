@@ -411,6 +411,19 @@ class DataBaseApi(ViewerApi, StorageApi):
             except Exception:
                 return False
 
+    def get_or_create_user(self, student: Student, course_name: str) -> models.User:
+        """Get user in DB or create if not"""
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            user = self._get_or_create(
+                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+            )
+            session.commit()
+            session.refresh(user)
+
+        return user
+
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 

@@ -1,7 +1,8 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from typing import Any
+from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -9,9 +10,11 @@ import yaml
 from dotenv import load_dotenv
 from flask import Flask, json
 
+from manytask.abstract import StoredUser
 from manytask.api import _parse_flags, _update_score
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi
+from manytask.glab import Student
 from manytask.web import bp as web_bp
 
 # Constants
@@ -20,6 +23,7 @@ TEST_USERNAME = "test_user"
 INVALID_TASK_NAME = "invalid_task"
 TEST_TASK_NAME = "test_task"
 TEST_SECRET_KEY = "test_key"
+TEST_COURSE_NAME = "Test Course"
 
 
 @pytest.fixture(autouse=True)
@@ -108,6 +112,8 @@ def mock_course():
         class storage_api:
             def __init__(self):
                 self.scores = {}
+                self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
+                self.course_name = TEST_COURSE_NAME
 
             def store_score(self, student, task_name, update_fn):
                 old_score = self.scores.get(f"{student.username}_{task_name}", 0)
@@ -150,10 +156,24 @@ def mock_course():
             def update_task_groups_from_config(self, config_data):
                 pass
 
+            def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
+                self.stored_user.course_admin = (
+                    student.course_admin
+                    if self.stored_user.course_admin != student.course_admin and student.course_admin
+                    else self.stored_user.course_admin
+                )
+                return self.stored_user.course_admin
+
+            def check_user_on_course(self, *a, **k):
+                return True
+
         def get_groups(self):
             return self.groups
 
         class gitlab_api:
+            def __init__(self):
+                self.course_admin = False
+
             @staticmethod
             def get_student(user_id):
                 if user_id == TEST_USER_ID:
@@ -170,15 +190,42 @@ def mock_course():
             def get_url_for_repo(username):
                 return f"https://gitlab.com/{username}/test-repo"
 
+            def get_authenticated_student(self, _gitlab_access_token):
+                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
+
+            @staticmethod
+            def check_project_exists(_student):
+                return True
+
+            @staticmethod
+            def _parse_user_to_student(user: dict[str, Any]):
+                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+
     return MockCourse()
 
 
 @pytest.fixture
-def authenticated_client(app):
+def authenticated_client(app, mock_course, mock_gitlab_oauth):
     """
     Provides a client with anauthenticated session
     """
-    with app.test_client() as client:
+    with (
+        app.test_client() as client,
+        patch.object(mock_course.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(mock_course.gitlab_api, "check_project_exists") as mock_check_project_exists,
+        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+    ):
+        app.course = mock_course
+        app.oauth = mock_gitlab_oauth
+
+        mock_get_authenticated_student.return_value = Student(
+            id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=False
+        )
+        mock_check_project_exists.return_value = True
+        mock_authorize_access_token.return_value = {
+            "access_token": "test_token",
+            "refresh_token": "test_token",
+        }
         with client.session_transaction() as session:
             session["gitlab"] = {
                 "version": 1.5,
@@ -186,6 +233,8 @@ def authenticated_client(app):
                 "user_id": TEST_USER_ID,
                 "repo": "test_repo",
                 "course_admin": False,
+                "access_token": "",
+                "refresh_token": "",
             }
         yield client
 
@@ -288,8 +337,9 @@ def test_get_score_success(app, mock_course):
         assert data == expected_data
 
 
-def test_update_database_not_json(app, mock_course, authenticated_client):
+def test_update_database_not_json(app, mock_course, authenticated_client, mock_gitlab_oauth):
     app.course = mock_course
+    app.oauth = mock_gitlab_oauth
     response = authenticated_client.post("/api/database/update", data="not json", content_type="text/plain")
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -339,13 +389,14 @@ def test_update_database_invalid_score_type(app, mock_course, authenticated_clie
     assert data["success"]
 
 
-def test_update_database_unauthorized(app, mock_course):
+def test_update_database_unauthorized(app, mock_course, mock_gitlab_oauth):
     app.course = mock_course
+    app.oauth = mock_gitlab_oauth
     test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
     response = app.test_client().post("/api/database/update", json=test_data)
     # Signup
     assert response.status_code == 302
-    assert response.location == "/signup"
+    assert response.location == "/login"
 
 
 def test_update_database_not_ready(app, mock_course, authenticated_client):
@@ -427,18 +478,20 @@ def test_update_cache_success(app, mock_course):
     assert response.status_code == 200
 
 
-def test_get_database_unauthorized(app, mock_course):
+def test_get_database_unauthorized(app, mock_course, mock_gitlab_oauth):
     app.debug = False  # Disable debug mode to test auth
     app.course = mock_course
+    app.oauth = mock_gitlab_oauth
     client = app.test_client()
     response = client.get("/api/database")
     assert response.status_code == 302  # Redirects to login
 
 
-def test_get_database_not_ready(app, mock_course):
+def test_get_database_not_ready(app, mock_course, mock_gitlab_oauth):
     app.debug = False  # Disable debug mode to test auth
     mock_course.config = None
     app.course = mock_course
+    app.oauth = mock_gitlab_oauth
     client = app.test_client()
     with client.session_transaction() as session:
         session["gitlab"] = {
@@ -452,8 +505,9 @@ def test_get_database_not_ready(app, mock_course):
     assert response.status_code == 302  # Redirects to not ready page
 
 
-def test_update_database_invalid_json(app, mock_course):
+def test_update_database_invalid_json(app, authenticated_client, mock_course, mock_gitlab_oauth):
     app.course = mock_course
+    app.oauth = mock_gitlab_oauth
     client = app.test_client()
     with client.session_transaction() as session:
         session["gitlab"] = {
@@ -463,12 +517,13 @@ def test_update_database_invalid_json(app, mock_course):
             "repo": "test-repo",
             "course_admin": True,
         }
-    response = client.post("/api/database/update", data="invalid json", content_type="application/json")
+    response = authenticated_client.post("/api/database/update", data="invalid json", content_type="application/json")
     assert response.status_code == 400
 
 
-def test_update_database_missing_student(app, mock_course):
+def test_update_database_missing_student(app, authenticated_client, mock_course, mock_gitlab_oauth):
     app.course = mock_course
+    app.oauth = mock_gitlab_oauth
     client = app.test_client()
     with client.session_transaction() as session:
         session["gitlab"] = {
@@ -479,7 +534,7 @@ def test_update_database_missing_student(app, mock_course):
             "course_admin": True,
         }
     data = {"scores": {TEST_TASK_NAME: 100}}
-    response = client.post("/api/database/update", json=data)
+    response = authenticated_client.post("/api/database/update", json=data)
     assert response.status_code == 400
     assert "Missing required fields" in json.loads(response.data)["message"]
 
@@ -527,8 +582,9 @@ def test_get_score_invalid_student(app, mock_course):
     assert response.status_code == 404
 
 
-def test_update_database_invalid_task(app, mock_course):
+def test_update_database_invalid_task(app, authenticated_client, mock_course, mock_gitlab_oauth):
     app.course = mock_course
+    app.oauth = mock_gitlab_oauth
     client = app.test_client()
     with client.session_transaction() as session:
         session["gitlab"] = {
@@ -539,13 +595,14 @@ def test_update_database_invalid_task(app, mock_course):
             "course_admin": True,
         }
     data = {"username": TEST_USERNAME, "scores": {INVALID_TASK_NAME: 100}}
-    response = client.post("/api/database/update", json=data)
+    response = authenticated_client.post("/api/database/update", json=data)
     # API silently ignores invalid tasks
     assert response.status_code == 200
 
 
-def test_update_database_invalid_score_value(app, mock_course):
+def test_update_database_invalid_score_value(app, authenticated_client, mock_course, mock_gitlab_oauth):
     app.course = mock_course
+    app.oauth = mock_gitlab_oauth
     client = app.test_client()
     with client.session_transaction() as session:
         session["gitlab"] = {
@@ -561,7 +618,7 @@ def test_update_database_invalid_score_value(app, mock_course):
             TEST_TASK_NAME: -1  # Invalid score value
         },
     }
-    response = client.post("/api/database/update", json=data)
+    response = authenticated_client.post("/api/database/update", json=data)
     # API silently ignores invalid scores
     assert response.status_code == 200
     data = json.loads(response.data)
