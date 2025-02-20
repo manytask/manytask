@@ -64,25 +64,29 @@ def mock_gitlab_api():
             self.course_admin = False
             self.base_url = GITLAB_BASE_URL
 
-        def get_url_for_repo(self, username):
-            return f"{self.base_url}/{username}/repo"
+        @staticmethod
+        def get_url_for_repo(username):
+            return f"{GITLAB_BASE_URL}/{username}/repo"
 
-        def get_url_for_task_base(self):
-            return f"{self.base_url}/tasks"
+        @staticmethod
+        def get_url_for_task_base():
+            return f"{GITLAB_BASE_URL}/tasks"
 
-        def register_new_user(self, user):
+        @staticmethod
+        def register_new_user(user):
             if user.username == TEST_USERNAME:
                 return True
             raise Exception("Registration failed")
 
-        def get_student(self, _user_id):
+        @staticmethod
+        def get_student(_user_id):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
         def get_authenticated_student(self, _gitlab_access_token):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
-        # fixme convert all to staticmethod
-        def check_project_exists(self, _student):
+        @staticmethod
+        def check_project_exists(_student):
             return True
 
         @staticmethod
