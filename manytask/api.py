@@ -18,6 +18,7 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
 from manytask.database import DataBaseApi
+from manytask.utils import sanitize_log_value
 
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
@@ -220,9 +221,14 @@ def report_score() -> ResponseReturnValue:
 
     submit_time = _process_submit_time(submit_time_str, course.deadlines)
 
-    # fixme: sanitize input
-    logger.info(f"Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}")
-    logger.info(f"verify deadline: Use submit_time={submit_time}")
+    # Log with sanitized values
+    logger.info(
+        f"Save score {sanitize_log_value(reported_score)} for @"
+        f"{sanitize_log_value(student)} on task "
+        f"{sanitize_log_value(task.name)} "
+        f"check_deadline {sanitize_log_value(check_deadline)}"
+    )
+    logger.info(f"verify deadline: Use submit_time={sanitize_log_value(submit_time)}")
 
     update_function = functools.partial(
         _update_score,
