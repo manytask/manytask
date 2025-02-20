@@ -10,9 +10,10 @@ import pytest
 import yaml
 from dotenv import load_dotenv
 from flask import Flask, json
+from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import StoredUser
-from manytask.api import _parse_flags, _update_score
+from manytask.api import _parse_flags, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi
 from manytask.glab import Student
@@ -689,3 +690,46 @@ def test_token_when_no_course(app):
     client = app.test_client()
     response = client.post("/api/report", headers=headers)
     assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+
+def test_validate_and_extract_params_full():
+    """Test with all possible parameters."""
+    form_data = {
+        "task": "test_task",
+        "user_id": "123",
+        "username": "test_user",
+        "check_deadline": "False",
+        "submit_time": "2024-03-20 10:00:00"
+    }
+    task_name, user_id, username, check_deadline, submit_time = _validate_and_extract_params(form_data)
+    assert task_name == "test_task"
+    assert user_id == 123
+    assert username == "test_user"
+    assert check_deadline is False
+    assert submit_time == "2024-03-20 10:00:00"
+
+
+def test_validate_and_extract_params_missing_task():
+    """Test when task parameter is missing."""
+    form_data = {
+        "username": "test_user"
+    }
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data)
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+    assert "task" in str(exc_info.value.description)
+
+
+def test_validate_and_extract_params_user_id_only():
+    """Test when only user_id is provided (no username)."""
+    form_data = {
+        "task": "test_task",
+        "user_id": "123"
+    }
+    task_name, user_id, username, check_deadline, submit_time = _validate_and_extract_params(form_data)
+    assert task_name == "test_task"
+    assert user_id == 123
+    assert username is None
+    assert check_deadline is True
+    assert submit_time is None
