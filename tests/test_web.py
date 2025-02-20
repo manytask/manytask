@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -39,7 +40,132 @@ def app():
 
 
 @pytest.fixture
-def mock_course():
+def mock_deadlines():
+    class MockDeadlines:
+        @staticmethod
+        def get_now_with_timezone():
+            return datetime.now(tz=ZoneInfo("UTC"))
+
+        @staticmethod
+        def get_groups():
+            return []
+
+        @property
+        def max_score_started(self):
+            return 100
+
+    return MockDeadlines()
+
+
+@pytest.fixture
+def mock_gitlab_api():
+    class MockGitlabApi:
+        def __init__(self):
+            self.course_admin = False
+            self.base_url = GITLAB_BASE_URL
+
+        def get_url_for_repo(self, username):
+            return f"{self.base_url}/{username}/repo"
+
+        def get_url_for_task_base(self):
+            return f"{self.base_url}/tasks"
+
+        def register_new_user(self, user):
+            if user.username == TEST_USERNAME:
+                return True
+            raise Exception("Registration failed")
+
+        def get_student(self, _user_id):
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+
+        def get_authenticated_student(self, _gitlab_access_token):
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
+
+        # fixme convert all to staticmethod
+        def check_project_exists(self, _student):
+            return True
+
+        @staticmethod
+        def _parse_user_to_student(user: dict[str, Any]):
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+
+    return MockGitlabApi()
+
+
+@pytest.fixture
+def mock_storage_api():
+    class MockStorageApi:
+        def __init__(self):
+            self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
+            self.course_name = TEST_COURSE_NAME
+
+        @staticmethod
+        def get_scores_update_timestamp():
+            return datetime.now(tz=ZoneInfo("UTC"))
+
+        @staticmethod
+        def get_scores(_username):
+            return {"task1": 100, "task2": 90}
+
+        @staticmethod
+        def get_all_scores():
+            return {TEST_USERNAME: {"task1": 100, "task2": 90}}
+
+        @staticmethod
+        def get_stats():
+            return {"task1": {"mean": 95}, "task2": {"mean": 85}}
+
+        @staticmethod
+        def get_bonus_score(_username):
+            return 10
+
+        def sync_stored_user(self, student):
+            if student.course_admin:
+                self.stored_user.course_admin = True
+
+        def get_stored_user(self, _student):
+            return self.stored_user
+
+        @staticmethod
+        def update_cached_scores():
+            pass
+
+        @staticmethod
+        def check_user_on_course(*a, **k):
+            return True
+
+        def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
+            self.stored_user.course_admin = (
+                student.course_admin
+                if self.stored_user.course_admin != student.course_admin and student.course_admin
+                else self.stored_user.course_admin
+            )
+            return self.stored_user.course_admin
+
+    return MockStorageApi()
+
+
+@pytest.fixture
+def mock_viewer_api():
+    class MockViewerApi:
+        @staticmethod
+        def get_scoreboard_url():
+            return "https://docs.google.com/spreadsheets"
+
+    return MockViewerApi()
+
+
+@pytest.fixture
+def mock_solutions_api():
+    class MockSolutionsApi:
+        def store_task_from_folder(self, task_name, username, folder_path):
+            pass
+
+    return MockSolutionsApi()
+
+
+@pytest.fixture
+def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutions_api):
     class MockCourse:
         def __init__(self):
             self.name = TEST_COURSE_NAME
@@ -59,115 +185,11 @@ def mock_course():
             self.favicon = "test_favicon"
             self.registration_secret = TEST_SECRET
             self.debug = False
-            self.deadlines = self.MockDeadlines()
-            self.storage_api = self.storage_api()
-            self.viewer_api = self.viewer_api()
-            self.gitlab_api = self.gitlab_api()
-            self.solutions_api = self.MockSolutionsApi()
-
-        class MockDeadlines:
-            @staticmethod
-            def get_now_with_timezone():
-                return datetime.now(tz=ZoneInfo("UTC"))
-
-            @staticmethod
-            def get_groups():
-                return []
-
-            @property
-            def max_score_started(self):
-                return 100  # Mock value for testing
-
-        class gitlab_api:
-            def __init__(self):
-                self.course_admin = False
-
-            @staticmethod
-            def get_url_for_repo(username):
-                return f"{GITLAB_BASE_URL}/{username}/repo"
-
-            @staticmethod
-            def get_url_for_task_base():
-                return f"{GITLAB_BASE_URL}/tasks"
-
-            @staticmethod
-            def register_new_user(user):
-                if user.username == TEST_USERNAME:
-                    return True
-                raise Exception("Registration failed")
-
-            @staticmethod
-            def get_student(_user_id):
-                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-
-            def get_authenticated_student(self, _gitlab_access_token):
-                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
-
-            @staticmethod
-            def check_project_exists(_student):
-                return True
-
-            @staticmethod
-            def _parse_user_to_student(user: dict[str, Any]):
-                return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-
-            base_url = GITLAB_BASE_URL
-
-        class storage_api:
-            def __init__(self):
-                self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
-                self.course_name = TEST_COURSE_NAME
-
-            @staticmethod
-            def get_scores_update_timestamp():
-                return datetime.now(tz=ZoneInfo("UTC"))
-
-            @staticmethod
-            def get_scores(_username):
-                return {"task1": 100, "task2": 90}
-
-            @staticmethod
-            def get_all_scores():
-                return {TEST_USERNAME: {"task1": 100, "task2": 90}}
-
-            @staticmethod
-            def get_stats():
-                return {"task1": {"mean": 95}, "task2": {"mean": 85}}
-
-            @staticmethod
-            def get_bonus_score(_username):
-                return 10
-
-            def sync_stored_user(self, student):
-                if student.course_admin:
-                    self.stored_user.course_admin = True
-
-            def get_stored_user(self, _student):
-                return self.stored_user
-
-            def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
-                self.stored_user.course_admin = (
-                    student.course_admin
-                    if self.stored_user.course_admin != student.course_admin and student.course_admin
-                    else self.stored_user.course_admin
-                )
-                return self.stored_user.course_admin
-
-            def check_user_on_course(self, *a, **k):
-                return True
-
-            @staticmethod
-            def update_cached_scores():
-                pass
-
-        class viewer_api:
-            @staticmethod
-            def get_scoreboard_url():
-                return "https://docs.google.com/spreadsheets"
-
-        class MockSolutionsApi:
-            def store_task_from_folder(self, task_name, username, folder_path):
-                pass
+            self.deadlines = mock_deadlines
+            self.storage_api = mock_storage_api
+            self.viewer_api = mock_viewer_api
+            self.gitlab_api = mock_gitlab_api
+            self.solutions_api = mock_solutions_api
 
     return MockCourse()
 
@@ -186,7 +208,7 @@ def test_course_page_not_ready(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         response = app.test_client().get("/")
-        assert response.status_code == 302
+        assert response.status_code == HTTPStatus.FOUND
         assert response.headers["Location"] == "/not_ready"
 
 
@@ -195,7 +217,7 @@ def test_course_page_invalid_session(app, mock_course, mock_gitlab_oauth):
         app.course = mock_course
         app.oauth = mock_gitlab_oauth
         response = app.test_client().get("/")
-        assert response.status_code == 302
+        assert response.status_code == HTTPStatus.FOUND
         assert response.location == "/login"
 
 
@@ -218,7 +240,7 @@ def test_course_page_only_with_valid_session(app, mock_course, mock_gitlab_oauth
             app.oauth = mock_gitlab_oauth
             mock_check_user_on_course.return_value = False
             response = client.get("/")
-            assert response.status_code == 200
+            assert response.status_code == HTTPStatus.OK
             assert b"Secret Code" in response.data
 
 
@@ -226,7 +248,7 @@ def test_signup_get(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         response = app.test_client().get("/signup")
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
 
 
 def test_signup_post_invalid_secret(app, mock_course):
@@ -244,7 +266,7 @@ def test_signup_post_invalid_secret(app, mock_course):
                 "secret": "wrong_secret",
             },
         )
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         assert b"Invalid registration secret" in response.data
 
 
@@ -263,7 +285,7 @@ def test_signup_post_password_mismatch(app, mock_course):
                 "secret": mock_course.registration_secret,
             },
         )
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         assert b"Passwords don&#39;t match" in response.data
 
 
@@ -273,7 +295,7 @@ def test_logout(app):
             with client.session_transaction() as sess:
                 sess["gitlab"] = {"version": TEST_VERSION, "username": TEST_USERNAME}
             response = client.get("/logout")
-            assert response.status_code == 302
+            assert response.status_code == HTTPStatus.FOUND
             assert response.headers["Location"] == "/signup"
             with client.session_transaction() as sess:
                 assert "gitlab" not in sess
@@ -283,7 +305,7 @@ def test_not_ready(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
         response = app.test_client().get("/not_ready")
-        assert response.status_code == 302
+        assert response.status_code == HTTPStatus.FOUND
 
 
 def test_get_allscores_url(app, mock_course):
@@ -305,7 +327,7 @@ def test_get_allscores_url(app, mock_course):
 
 
 def check_admin_in_data(response, check_true):
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     if check_true:
         assert b'class="admin-label' in response.data
     else:
@@ -314,9 +336,9 @@ def check_admin_in_data(response, check_true):
 
 def check_admin_status_code(response, check_true):
     if check_true:
-        assert response.status_code != 403
+        assert response.status_code != HTTPStatus.FORBIDDEN
     else:
-        assert response.status_code == 403
+        assert response.status_code == HTTPStatus.FORBIDDEN
 
 
 @pytest.mark.parametrize(
@@ -518,7 +540,7 @@ def test_signup_post_success(app, mock_course, mock_gitlab_oauth):
         }
 
         response = app.test_client().post(url_for("web.signup"), data=data)
-        assert response.status_code == 302
+        assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("web.login")
 
         mock_register_new_user.assert_called_once()
@@ -571,7 +593,7 @@ def test_login_get_with_code(app, mock_course, mock_gitlab_oauth):
 
         response = app.test_client().get(url_for("web.login"), query_string={"code": "test_code"})
 
-        assert response.status_code == 302
+        assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("web.login")
 
         mock_authorize_access_token.assert_called_once()
@@ -589,5 +611,5 @@ def test_login_oauth_error(app, mock_gitlab_oauth, mock_course):
         app.course = mock_course
         app.oauth = mock_gitlab_oauth
         response = app.test_client().get(url_for("web.login"), query_string={"code": "test_code"})
-        assert response.status_code == 302
+        assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("web.login")

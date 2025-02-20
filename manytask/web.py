@@ -1,6 +1,7 @@
 import logging
 import secrets
 from datetime import datetime, timedelta
+from http import HTTPStatus
 
 import gitlab
 from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
@@ -62,7 +63,9 @@ def course_page() -> ResponseReturnValue:
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
     except ValueError:
         cache_delta = timedelta(days=365)
-    if course.debug or cache_delta.total_seconds() > 3600:
+
+    hours_in_seconds = 3600
+    if course.debug or cache_delta.total_seconds() > hours_in_seconds:
         storage_api.update_cached_scores()
         cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp()))
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
@@ -114,11 +117,11 @@ def get_solutions() -> ResponseReturnValue:
         student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
 
     if not student_course_admin:
-        return "Possible only for admins", 403
+        return "Possible only for admins", HTTPStatus.FORBIDDEN
 
     # ----- get and validate request parameters ----- #
     if "task" not in request.args:
-        return "You didn't provide required param `task`", 400
+        return "You didn't provide required param `task`", HTTPStatus.BAD_REQUEST
     task_name = request.args["task"]
 
     # TODO: parameter to return not aggregated solutions
@@ -127,7 +130,7 @@ def get_solutions() -> ResponseReturnValue:
     try:
         _, _ = course.deadlines.find_task(task_name)
     except KeyError:
-        return f"There is no task with name `{task_name}` (or it is disabled)", 404
+        return f"There is no task with name `{task_name}` (or it is disabled)", HTTPStatus.NOT_FOUND
 
     zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)
     if not zip_bytes_io:
