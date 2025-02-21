@@ -823,7 +823,7 @@ def test_process_score_integer():
 def test_process_score_float_multiplier():
     """Test when score is a float multiplier"""
     score_float = 0.8
-    form_data = {"score": score_float}
+    form_data = {"score": str(score_float)}
     task_score = 100
     assert _process_score(form_data, task_score) == score_float * task_score
 
