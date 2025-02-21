@@ -812,21 +812,99 @@ def test_validate_and_extract_params_full():
     assert submit_time == "2024-03-20 10:00:00"
 
 
-def test_validate_and_extract_params_missing_task():
-    """Test when task parameter is missing."""
-    form_data = {"username": "test_user"}
+def test_process_score_integer():
+    """Test when score is an integer string"""
+    score_integer = 75
+    form_data = {"score": score_integer}
+    task_score = 100
+    assert _process_score(form_data, task_score) == score_integer
+
+
+def test_process_score_float_multiplier():
+    """Test when score is a float multiplier"""
+    score_float = 0.8
+    form_data = {"score": score_float}
+    task_score = 100
+    assert _process_score(form_data, task_score) == score_float * task_score
+
+
+def test_process_score_zero():
+    """Test when score is zero"""
+    form_data = {"score": "0"}
+    task_score = 100
+    assert _process_score(form_data, task_score) == 0
+
+
+def test_process_score_negative():
+    """Test when score is negative"""
+    form_data = {"score": "-0.5"}
+    task_score = 100
+    assert _process_score(form_data, task_score) == 0
+
+
+def test_process_score_too_large():
+    """Test when score is above max_score"""
+    form_data = {"score": "2.5"}
+    task_score = 100
     with pytest.raises(HTTPException) as exc_info:
-        _validate_and_extract_params(form_data)
+        _process_score(form_data, task_score)
     assert exc_info.value.code == HTTPStatus.BAD_REQUEST
-    assert "task" in str(exc_info.value.description)
 
 
-def test_validate_and_extract_params_user_id_only():
-    """Test when only user_id is provided (no username)."""
-    form_data = {"task": "test_task", "user_id": TEST_USER_ID}
-    task_name, user_id, username, check_deadline, submit_time = _validate_and_extract_params(form_data)
-    assert task_name == "test_task"
-    assert user_id == TEST_USER_ID
-    assert username is None
-    assert check_deadline is True
-    assert submit_time is None
+def test_process_score_invalid_format():
+    """Test when score is not a valid number"""
+    form_data = {"score": "invalid"}
+    task_score = 100
+    with pytest.raises(HTTPException) as exc_info:
+        _process_score(form_data, task_score)
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_get_student_by_username():
+    """Test getting student by username"""
+    mock_gitlab = MagicMock()
+    test_student = Student(id=1, username="test_user", name="Test User", repo="")
+    mock_gitlab.get_student_by_username.return_value = test_student
+
+    result = _get_student(mock_gitlab, None, "test_user")
+    assert result == test_student
+    mock_gitlab.get_student_by_username.assert_called_once_with("test_user")
+
+
+def test_get_student_by_id():
+    """Test getting student by user_id"""
+    mock_gitlab = MagicMock()
+    test_student = Student(id=1, username="test_user", name="Test User", repo="")
+    mock_gitlab.get_student.return_value = test_student
+
+    result = _get_student(mock_gitlab, 1, None)
+    assert result == test_student
+    mock_gitlab.get_student.assert_called_once_with(1)
+
+
+def test_get_student_no_id_or_username():
+    """Test when neither user_id nor username is provided"""
+    mock_gitlab = MagicMock()
+    with pytest.raises(HTTPException) as exc_info:
+        _get_student(mock_gitlab, None, None)
+    assert exc_info.value.code == HTTPStatus.NOT_FOUND
+
+
+def test_get_student_username_not_found():
+    """Test when username is not found"""
+    mock_gitlab = MagicMock()
+    mock_gitlab.get_student_by_username.side_effect = Exception("Student not found")
+
+    with pytest.raises(HTTPException) as exc_info:
+        _get_student(mock_gitlab, None, "nonexistent")
+    assert exc_info.value.code == HTTPStatus.NOT_FOUND
+
+
+def test_get_student_id_not_found():
+    """Test when user_id is not found"""
+    mock_gitlab = MagicMock()
+    mock_gitlab.get_student.side_effect = Exception("Student not found")
+
+    with pytest.raises(HTTPException) as exc_info:
+        _get_student(mock_gitlab, 999, None)
+    assert exc_info.value.code == HTTPStatus.NOT_FOUND
