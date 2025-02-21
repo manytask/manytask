@@ -40,36 +40,38 @@ class GitLabApiException(Exception):
     pass
 
 
+@dataclass
+class GitLabConfig:
+    """Configuration for GitLab API connection and course settings."""
+
+    base_url: str
+    admin_token: str
+    course_group: str
+    course_public_repo: str
+    course_students_group: str
+    default_branch: str = "main"
+    dry_run: bool = False
+
+
 class GitLabApi:
     def __init__(
         self,
-        base_url: str,
-        admin_token: str,
-        course_group: str,
-        course_public_repo: str,
-        course_students_group: str,
-        default_branch: str = "main",
-        *,
-        dry_run: bool = False,
+        config: GitLabConfig,
     ):
+        """Initialize GitLab API client with configuration.
+
+        :param config: GitLabConfig instance containing all necessary settings
         """
-        :param base_url:
-        :param admin_token:
-        :param course_group:
-        :param course_public_repo:
-        :param course_students_group:
-        :param default_branch:
-        """
-        self.dry_run = dry_run
+        self.dry_run = config.dry_run
 
-        self.base_url = base_url
-        self._gitlab = gitlab.Gitlab(self.base_url, private_token=admin_token)
+        self.base_url = config.base_url
+        self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token)
 
-        self._course_group = course_group
-        self._course_public_repo = course_public_repo
-        self._course_students_group = course_students_group
+        self._course_group = config.course_group
+        self._course_public_repo = config.course_public_repo
+        self._course_students_group = config.course_students_group
 
-        self._default_branch = default_branch
+        self._default_branch = config.default_branch
 
         # test can find groups and repos
         if self._course_group:

@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
@@ -23,6 +24,19 @@ ModelType = TypeVar("ModelType", bound=models.Base)
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class DatabaseConfig:
+    """Configuration for Database connection and settings."""
+
+    database_url: str
+    course_name: str
+    gitlab_instance_host: str
+    registration_secret: str
+    token: str
+    show_allscores: bool
+    apply_migrations: bool = False
+
+
 class DataBaseApi(ViewerApi, StorageApi):
     """Class for interacting with a database with the StorageApi functionality"""
 
@@ -30,64 +44,56 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     def __init__(
         self,
-        database_url: str,
-        course_name: str,
-        gitlab_instance_host: str,
-        registration_secret: str,
-        token: str,
-        show_allscores: bool,
-        apply_migrations: bool = False,
+        config: DatabaseConfig,
     ):
-        """Constructor of DataBaseApi class
+        """Initialize Database connection with configuration.
 
-        Creates a couse with specified parameters if it doesn't exist yet
-
-        :param database_url: full url for database connection
-        :param course_name: unique course name
-        :param gitlab_instance_host: gitlab instance host url
-        :param registration_secret: secret to registering for course
-        :param token: token for course in manytask
-        :param show_allscores: flag for showing results to all users
-        :param apply_migrations: flag for applying migrations
+        :param config: DatabaseConfig instance containing all necessary settings
         """
+        self.database_url = config.database_url
+        self.course_name = config.course_name
+        self.gitlab_instance_host = config.gitlab_instance_host
+        self.registration_secret = config.registration_secret
+        self.token = config.token
+        self.show_allscores = config.show_allscores
+        self.apply_migrations = config.apply_migrations
 
-        self.engine = create_engine(database_url, echo=False)
+        self.engine = create_engine(self.database_url, echo=False)
 
-        if self._check_pending_migrations(database_url):
-            if apply_migrations:
-                self._apply_migrations(database_url)
+        if self._check_pending_migrations(self.database_url):
+            if self.apply_migrations:
+                self._apply_migrations(self.database_url)
             else:
                 logger.error("There are pending migrations that have not been applied")
 
         with Session(self.engine) as session:
             try:
-                course = self._get(session, models.Course, name=course_name)
-                if course.gitlab_instance_host != gitlab_instance_host:
+                course = self._get(session, models.Course, name=self.course_name)
+                if course.gitlab_instance_host != self.gitlab_instance_host:
                     raise AttributeError("Can't update gitlab_instance_host param on created course")
-                course.registration_secret = registration_secret
-                course.show_allscores = show_allscores
+                course.registration_secret = self.registration_secret
+                course.show_allscores = self.show_allscores
                 session.commit()
             except NoResultFound:
                 self._create(
                     session,
                     models.Course,
-                    name=course_name,
-                    gitlab_instance_host=gitlab_instance_host,
-                    registration_secret=registration_secret,
-                    token=token,
-                    show_allscores=show_allscores,
+                    name=self.course_name,
+                    gitlab_instance_host=self.gitlab_instance_host,
+                    registration_secret=self.registration_secret,
+                    token=self.token,
+                    show_allscores=self.show_allscores,
                 )
                 session.commit()
 
-            self.course_name = course_name
             self._update_or_create(
                 session,
                 models.Course,
                 defaults={
-                    "gitlab_instance_host": gitlab_instance_host,
-                    "registration_secret": registration_secret,
-                    "token": token,
-                    "show_allscores": show_allscores,
+                    "gitlab_instance_host": self.gitlab_instance_host,
+                    "registration_secret": self.registration_secret,
+                    "token": self.token,
+                    "show_allscores": self.show_allscores,
                 },
                 name=self.course_name,
             )

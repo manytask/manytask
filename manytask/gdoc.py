@@ -84,37 +84,40 @@ class TaskNotFound(KeyError):
     pass
 
 
+@dataclass
+class GDocConfig:
+    """Configuration for Google Docs API connection and spreadsheet settings."""
+
+    base_url: str
+    gdoc_credentials: dict[str, Any]
+    public_worksheet_id: str
+    public_scoreboard_sheet: int
+    cache: BaseCache
+    testing: bool = False
+
+
 class GoogleDocApi(ViewerApi, StorageApi):
     def __init__(
         self,
-        base_url: str,
-        gdoc_credentials: dict[str, Any],
-        public_worksheet_id: str,
-        public_scoreboard_sheet: int,
-        cache: BaseCache,
-        testing: bool = False,
+        config: GDocConfig,
     ):
-        """
-        :param base_url:
-        :param gdoc_credentials:
-        :param public_worksheet_id:
-        :param public_scoreboard_sheet:
-        :param cache:
-        :param testing:
-        """
+        """Initialize Google Docs client with configuration.
 
-        if testing:
+        :param config: GDocConfig instance containing all necessary settings
+        """
+        self.base_url = config.base_url
+        self.gdoc_credentials = config.gdoc_credentials
+        self.public_worksheet_id = config.public_worksheet_id
+        self.public_scoreboard_sheet = config.public_scoreboard_sheet
+        self.cache = config.cache
+        self.testing = config.testing
+
+        if self.testing:
             return  # TODO: cover all methods
-
-        self._url = base_url
-        self._gdoc_credentials = gdoc_credentials
-        self._public_worksheet_id = public_worksheet_id
-        self._public_scoreboard_sheet = public_scoreboard_sheet
 
         self._assertion_session = self._create_assertion_session()
 
-        self._public_scores_sheet = self._get_sheet(public_worksheet_id, public_scoreboard_sheet)
-        self._cache = cache
+        self._public_scores_sheet = self._get_sheet(self.public_worksheet_id, self.public_scoreboard_sheet)
 
         self.ws = self.get_scores_sheet()
 
@@ -124,7 +127,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
             "https://spreadsheets.google.com/feeds",
             "https://www.googleapis.com/auth/drive",
         ]
-        credentials = self._gdoc_credentials
+        credentials = self.gdoc_credentials
 
         header = {"alg": "RS256"}
         if key_id := credentials.get("private_key_id", None):
@@ -157,13 +160,13 @@ class GoogleDocApi(ViewerApi, StorageApi):
         return self._public_scores_sheet
 
     def get_scoreboard_url(self) -> str:
-        return f"{self._url}/spreadsheets/d/{self._public_worksheet_id}#gid={self._public_scoreboard_sheet}"
+        return f"{self.base_url}/spreadsheets/d/{self.public_worksheet_id}#gid={self.public_scoreboard_sheet}"
 
     def get_scores(
         self,
         username: str,
     ) -> dict[str, int]:
-        scores = self._cache.get(f"{self.ws.id}:{username}")
+        scores = self.cache.get(f"{self.ws.id}:{username}")
         if scores is None:
             scores = {}
         return scores
@@ -172,7 +175,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         self,
         username: str,
     ) -> int:
-        bonus_scores = self._cache.get(f"{self.ws.id}:bonus")
+        bonus_scores = self.cache.get(f"{self.ws.id}:bonus")
         if bonus_scores is None:
             return 0
         return bonus_scores.get(username, 0)
@@ -190,19 +193,19 @@ class GoogleDocApi(ViewerApi, StorageApi):
         return self.get_stored_user(student)
 
     def get_all_scores(self) -> dict[str, dict[str, int]]:
-        all_scores = self._cache.get(f"{self.ws.id}:scores")
+        all_scores = self.cache.get(f"{self.ws.id}:scores")
         if all_scores is None:
             all_scores = {}
         return all_scores
 
     def get_stats(self) -> dict[str, float]:
-        stats = self._cache.get(f"{self.ws.id}:stats")
+        stats = self.cache.get(f"{self.ws.id}:stats")
         if stats is None:
             stats = {}
         return stats
 
     def get_scores_update_timestamp(self) -> str:
-        timestamp = self._cache.get(f"{self.ws.id}:update-timestamp")
+        timestamp = self.cache.get(f"{self.ws.id}:update-timestamp")
         if timestamp is None:
             timestamp = "None"
         return timestamp
@@ -233,7 +236,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         }
 
         # clear cache saving config
-        _config = self._cache.get("__config__")
+        _config = self.cache.get("__config__")
         config = ManytaskConfig(**_config)
 
         # get all tasks stats
@@ -246,13 +249,13 @@ class GoogleDocApi(ViewerApi, StorageApi):
             for task in config.get_tasks(enabled=True, started=True)
         }
 
-        self._cache.clear()
-        self._cache.set("__config__", _config)
-        self._cache.set(f"{self.ws.id}:scores", all_users_scores)
-        self._cache.set(f"{self.ws.id}:bonus", all_users_bonus_scores)
-        self._cache.set(f"{self.ws.id}:stats", tasks_stats)
-        self._cache.set(f"{self.ws.id}:update-timestamp", _current_timestamp)
-        self._cache.set_many(users_score_cache)
+        self.cache.clear()
+        self.cache.set("__config__", _config)
+        self.cache.set(f"{self.ws.id}:scores", all_users_scores)
+        self.cache.set(f"{self.ws.id}:bonus", all_users_bonus_scores)
+        self.cache.set(f"{self.ws.id}:stats", tasks_stats)
+        self.cache.set(f"{self.ws.id}:update-timestamp", _current_timestamp)
+        self.cache.set_many(users_score_cache)
 
     def store_score(
         self,
@@ -293,7 +296,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         student_scores = {task: score for task, score in zip(tasks, scores) if score or str(score) == "0"}
         logger.info(f"Actual scores: {student_scores}")
 
-        self._cache.set(f"{self.ws.id}:{student.username}", student_scores)
+        self.cache.set(f"{self.ws.id}:{student.username}", student_scores)
         return new_score
 
     def sync_columns(
