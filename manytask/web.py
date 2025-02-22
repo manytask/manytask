@@ -252,6 +252,13 @@ def login_finish() -> ResponseReturnValue:
 def create_project() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
+    gitlab_access_token: str = session["gitlab"]["oauth_access_token"]
+    try:
+        student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
+    except requests.exceptions.HTTPError as ex:
+        logger.error(f"Authorization error: {ex.args[0]}")
+        return render_template("signup.html", error_message=ex.args[0], course_name=course.name)
+
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
@@ -271,14 +278,7 @@ def create_project() -> ResponseReturnValue:
             base_url=course.gitlab_api.base_url,
         )
 
-    gitlab_access_token: str = session["gitlab"]["oauth_access_token"]
-    try:
-        student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
-    except requests.exceptions.HTTPError as ex:
-        logger.error(f"Authorization error: {ex.args[0]}")
-        return render_template("signup.html", error_message=ex.args[0], course_name=course.name)
-
-    # Create use if needed
+    # Create project if needed
     try:
         course.gitlab_api.create_project(student)
     except gitlab.GitlabError as ex:
