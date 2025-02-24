@@ -3,7 +3,7 @@ import time
 import pytest
 from alembic import command
 from alembic.config import Config
-from flask import Flask
+from flask import Flask, Response, url_for
 from flask.testing import FlaskClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -82,3 +82,20 @@ def tables(engine, alembic_cfg):
 def session(engine, tables):
     with Session(engine) as session:
         yield session
+
+
+@pytest.fixture
+def mock_gitlab_oauth():
+    class MockGitlabOauth:
+        class gitlab:
+            @staticmethod
+            def authorize_access_token():
+                return {"access_token": "", "refresh_token": ""}
+
+            @staticmethod
+            def authorize_redirect(redirect_uri: str):
+                resp = Response(status=302)
+                resp.location = url_for("web.login")
+                return resp
+
+    return MockGitlabOauth()

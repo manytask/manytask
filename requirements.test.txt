@@ -2,7 +2,7 @@
 flake8==7.1.1
 ruff==0.9.1
 mypy==1.15.0
-isort==5.13.2
+isort==6.0.0
 black==24.8.0
 
 # stubs
@@ -15,4 +15,4 @@ pytest-cov==5.0.0
 testcontainers==4.9.1
 
 # utils
-pre-commit==3.6
+pre-commit==4.1.0

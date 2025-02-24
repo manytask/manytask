@@ -63,6 +63,9 @@ def mock_course():
 
 
 def test_get_database_table_data(app, mock_course):
+    expected_tasks_count = 2
+    expected_students_count = 2
+
     with app.test_request_context():
         app.course = mock_course
         result = get_database_table_data()
@@ -72,13 +75,13 @@ def test_get_database_table_data(app, mock_course):
 
         tasks = result["tasks"]
         # Only enabled tasks
-        assert len(tasks) == 2
+        assert len(tasks) == expected_tasks_count
         assert tasks[0]["name"] == TASK_1
         assert tasks[1]["name"] == TASK_2
         assert all(task["score"] == 0 for task in tasks)
 
         students = result["students"]
-        assert len(students) == 2
+        assert len(students) == expected_students_count
 
         for student_id in [STUDENT_1, STUDENT_2]:
             student = next(s for s in students if s["username"] == student_id)
@@ -87,6 +90,8 @@ def test_get_database_table_data(app, mock_course):
 
 
 def test_get_database_table_data_no_deadlines(app, mock_course):
+    expected_students_count = 2
+
     with app.test_request_context():
         mock_course.deadlines = None
         app.course = mock_course
@@ -95,10 +100,12 @@ def test_get_database_table_data_no_deadlines(app, mock_course):
         assert "tasks" in result
         assert "students" in result
         assert len(result["tasks"]) == 0
-        assert len(result["students"]) == 2
+        assert len(result["students"]) == expected_students_count
 
 
 def test_get_database_table_data_no_scores(app, mock_course):
+    expected_tasks_count = 2
+
     with app.test_request_context():
         mock_course.storage_api.get_all_scores = lambda: {}
         app.course = mock_course
@@ -106,5 +113,5 @@ def test_get_database_table_data_no_scores(app, mock_course):
 
         assert "tasks" in result
         assert "students" in result
-        assert len(result["tasks"]) == 2
+        assert len(result["tasks"]) == expected_tasks_count
         assert len(result["students"]) == 0

@@ -1,19 +1,21 @@
 import pytest
 from cachelib import BaseCache
 
-from manytask.gdoc import GoogleDocApi
+from manytask.gdoc import GDocConfig, GoogleDocApi
 from manytask.glab import Student
 
 
 @pytest.fixture
 def empty_google_doc_api():
     return GoogleDocApi(
-        base_url="",
-        gdoc_credentials={},
-        public_worksheet_id="",
-        public_scoreboard_sheet=0,
-        cache=BaseCache(),
-        testing=True,
+        GDocConfig(
+            base_url="",
+            gdoc_credentials={},
+            public_worksheet_id="",
+            public_scoreboard_sheet=0,
+            cache=BaseCache(),
+            testing=True,
+        )
     )
 
 

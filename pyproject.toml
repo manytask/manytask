@@ -79,12 +79,20 @@ exclude = [
 
 [tool.ruff.lint]
 # Combine both configurations' rules
-select = ["E", "F", "I", "TID252", "TID253"]
+select = ["E", "F", "I", "TID252", "TID253", "C901", "PLR"]
 ignore = []
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
+
+[tool.ruff.lint.mccabe]
+# Maximum cyclomatic complexity allowed
+max-complexity = 15
+
+[tool.ruff.lint.pylint]
+max-nested-blocks = 5
+max-args = 7
 
 [tool.ruff.lint.isort]
 known-first-party = ["manytask", "tests"]
