@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from cachelib import BaseCache
 
+from . import abstract, glab, solutions
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 
 logger = logging.getLogger(__name__)
@@ -36,36 +38,41 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
     return current_time
 
 
-from . import abstract, config, gdoc, glab, solutions  # noqa: E402, F401
+@dataclass
+class CourseConfig:
+    """Configuration for Course settings and APIs."""
+
+    viewer_api: abstract.ViewerApi
+    storage_api: abstract.StorageApi
+    gitlab_api: glab.GitLabApi
+    solutions_api: solutions.SolutionsApi
+    registration_secret: str
+    token: str
+    show_allscores: bool
+    cache: BaseCache
+    manytask_version: str | None = None
+    debug: bool = False
 
 
 class Course:
     def __init__(
         self,
-        viewer_api: abstract.ViewerApi,
-        storage_api: abstract.StorageApi,
-        gitlab_api: glab.GitLabApi,
-        solutions_api: solutions.SolutionsApi,
-        registration_secret: str,
-        show_allscores: bool,
-        cache: BaseCache,
-        manytask_version: str | None = None,
-        *,
-        debug: bool = False,
+        config: CourseConfig,
     ):
-        self.viewer_api = viewer_api
-        self.storage_api = storage_api
-        self.gitlab_api = gitlab_api
-        self.solutions_api = solutions_api
+        """Initialize Course with configuration.
 
-        self.registration_secret = registration_secret
-
-        self.show_allscores = show_allscores
-
-        self._cache = cache
-
-        self.manytask_version = manytask_version
-        self.debug = debug
+        :param config: CourseConfig instance containing all necessary settings
+        """
+        self.viewer_api = config.viewer_api
+        self.storage_api = config.storage_api
+        self.gitlab_api = config.gitlab_api
+        self.solutions_api = config.solutions_api
+        self.registration_secret = config.registration_secret
+        self.token = config.token
+        self.show_allscores = config.show_allscores
+        self._cache = config.cache
+        self.manytask_version = config.manytask_version
+        self.debug = config.debug
 
     @property
     def favicon(self) -> str:

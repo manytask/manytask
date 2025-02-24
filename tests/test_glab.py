@@ -6,7 +6,7 @@ from gitlab import GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork
 from requests import HTTPError
 
-from manytask.glab import GitLabApi, GitLabApiException, Student, User, map_gitlab_user_to_student
+from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, Student, User, map_gitlab_user_to_student
 
 # Constants for test data
 EXAMPLE_REPO_OWNER = "example_owner"
@@ -190,11 +190,13 @@ def gitlab(
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_project, mock_gitlab_public_project]
 
     api = GitLabApi(
-        base_url="http://example.com",
-        admin_token="admin-token",
-        course_group=TEST_GROUP_NAME,
-        course_public_repo=TEST_GROUP_PUBLIC_NAME,
-        course_students_group=TEST_GROUP_STUDENT_NAME,
+        GitLabConfig(
+            base_url="http://example.com",
+            admin_token="admin-token",
+            course_group=TEST_GROUP_NAME,
+            course_public_repo=TEST_GROUP_PUBLIC_NAME,
+            course_students_group=TEST_GROUP_STUDENT_NAME,
+        )
     )
     return api, mock_gitlab_instance
 

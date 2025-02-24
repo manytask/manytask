@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
 from manytask.config import ManytaskDeadlinesConfig
-from manytask.database import DataBaseApi, StoredUser
+from manytask.database import DataBaseApi, DatabaseConfig, StoredUser
 from manytask.glab import Student
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 
@@ -40,24 +40,30 @@ def mock_current_time():
 @pytest.fixture
 def first_course_db_api(tables, postgres_container):
     return DataBaseApi(
-        database_url=postgres_container.get_connection_url(),
-        course_name="Test Course",
-        gitlab_instance_host="gitlab.test.com",
-        registration_secret="secret",
-        show_allscores=True,
-        apply_migrations=True,
+        DatabaseConfig(
+            database_url=postgres_container.get_connection_url(),
+            course_name="Test Course",
+            gitlab_instance_host="gitlab.test.com",
+            registration_secret="secret",
+            token="test_token",
+            show_allscores=True,
+            apply_migrations=True,
+        )
     )
 
 
 @pytest.fixture
 def second_course_db_api(tables, postgres_container):
     return DataBaseApi(
-        database_url=postgres_container.get_connection_url(),
-        course_name="Another Test Course",
-        gitlab_instance_host="gitlab.test.com",
-        registration_secret="secret",
-        show_allscores=True,
-        apply_migrations=True,
+        DatabaseConfig(
+            database_url=postgres_container.get_connection_url(),
+            course_name="Another Test Course",
+            gitlab_instance_host="gitlab.test.com",
+            token="another_test_token",
+            registration_secret="secret",
+            show_allscores=True,
+            apply_migrations=True,
+        )
     )
 
 
@@ -76,6 +82,7 @@ def load_deadlines_config_and_sync_columns(db_api: DataBaseApi, yaml_file_file_p
                 name=db_api.course_name,
                 gitlab_instance_host="gitlab.test.com",
                 registration_secret="secret",
+                token="token",
                 show_allscores=True,
             )
             session.commit()
@@ -134,6 +141,7 @@ def test_empty_course(first_course_db_api, session):
     assert course.name == "Test Course"
     assert course.gitlab_instance_host == "gitlab.test.com"
     assert course.registration_secret == "secret"
+    assert course.token == "test_token"
     assert course.show_allscores
 
     stats = first_course_db_api.get_stats()
@@ -148,6 +156,9 @@ def test_empty_course(first_course_db_api, session):
 
 
 def test_sync_columns(first_course_with_deadlines, session):
+    expected_task_groups = 5
+    expected_tasks = 18
+
     stats = first_course_with_deadlines.get_stats()
     assert set(stats.keys()) == {
         "task_0_0",
@@ -171,8 +182,8 @@ def test_sync_columns(first_course_with_deadlines, session):
     }
     assert all(v == 0 for v in stats.values())
 
-    assert session.query(TaskGroup).count() == 5
-    assert session.query(Task).count() == 18
+    assert session.query(TaskGroup).count() == expected_task_groups
+    assert session.query(Task).count() == expected_tasks
 
     tasks = session.query(Task).all()
     for task in tasks:
@@ -180,6 +191,9 @@ def test_sync_columns(first_course_with_deadlines, session):
 
 
 def test_resync_columns(first_course_db_api, first_course_deadlines_config, second_course_deadlines_config, session):
+    expected_task_groups = 6
+    expected_tasks = 25
+
     first_course_db_api.sync_columns(first_course_deadlines_config)
     first_course_db_api.sync_columns(second_course_deadlines_config)
 
@@ -213,8 +227,8 @@ def test_resync_columns(first_course_db_api, first_course_deadlines_config, seco
     }
     assert all(v == 0 for v in stats.values())
 
-    assert session.query(TaskGroup).count() == 6
-    assert session.query(Task).count() == 25
+    assert session.query(TaskGroup).count() == expected_task_groups
+    assert session.query(Task).count() == expected_tasks
 
     tasks = session.query(Task).all()
     for task in tasks:
@@ -288,9 +302,10 @@ def test_store_score(first_course_with_deadlines, session):
 
 
 def test_store_score_bonus_task(first_course_with_deadlines, session):
+    expected_score = 22
     student = Student(0, "user1", "username1", False, "repo1")
 
-    assert first_course_with_deadlines.store_score(student, "task_1_3", update_func(22)) == 22
+    assert first_course_with_deadlines.store_score(student, "task_1_3", update_func(expected_score)) == expected_score
 
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1
@@ -298,7 +313,7 @@ def test_store_score_bonus_task(first_course_with_deadlines, session):
 
     grade = session.query(Grade).join(Task).filter(Task.name == "task_1_3").one()
     assert grade.task.name == "task_1_3"
-    assert grade.score == 22
+    assert grade.score == expected_score
 
     stats = first_course_with_deadlines.get_stats()
     all_scores = first_course_with_deadlines.get_all_scores()
@@ -328,9 +343,9 @@ def test_store_score_bonus_task(first_course_with_deadlines, session):
     assert stats["task_1_3"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_1_3")
 
-    assert all_scores == {"user1": {"task_1_3": 22}}
-    assert bonus_score == 22
-    assert scores == {"task_1_3": 22}
+    assert all_scores == {"user1": {"task_1_3": expected_score}}
+    assert bonus_score == expected_score
+    assert scores == {"task_1_3": expected_score}
 
 
 def test_get_and_sync_stored_user(first_course_db_api, session):
@@ -365,17 +380,26 @@ def test_get_and_sync_stored_user(first_course_db_api, session):
 
 
 def test_many_users(first_course_with_deadlines, session):
+    expected_score_1 = 22
+    expected_score_2 = 15
+    expected_users = 2
+    expected_user_on_course = 2
+    expected_grades = 3
+    expected_stats_ratio = 0.5
+
     student1 = Student(0, "user1", "username1", False, "repo1")
     first_course_with_deadlines.store_score(student1, "task_0_0", update_func(1))
-    first_course_with_deadlines.store_score(student1, "task_1_3", update_func(22))
+    first_course_with_deadlines.store_score(student1, "task_1_3", update_func(expected_score_1))
 
     student2 = Student(1, "user2", "username2", False, "repo2")
 
-    assert first_course_with_deadlines.store_score(student2, "task_0_0", update_func(15)) == 15
+    assert (
+        first_course_with_deadlines.store_score(student2, "task_0_0", update_func(expected_score_2)) == expected_score_2
+    )
 
-    assert session.query(User).count() == 2
-    assert session.query(UserOnCourse).count() == 2
-    assert session.query(Grade).count() == 3
+    assert session.query(User).count() == expected_users
+    assert session.query(UserOnCourse).count() == expected_user_on_course
+    assert session.query(Grade).count() == expected_grades
 
     stats = first_course_with_deadlines.get_stats()
     all_scores = first_course_with_deadlines.get_all_scores()
@@ -405,24 +429,30 @@ def test_many_users(first_course_with_deadlines, session):
         "task_4_2",
     }
     assert stats["task_0_0"] == 1.0
-    assert stats["task_1_3"] == 0.5
+    assert stats["task_1_3"] == expected_stats_ratio
     assert all(v == 0.0 for k, v in stats.items() if k not in ["task_0_0", "task_1_3"])
 
-    assert all_scores == {"user1": {"task_0_0": 1, "task_1_3": 22}, "user2": {"task_0_0": 15}}
-    assert bonus_score_user1 == 22
-    assert scores_user1 == {"task_0_0": 1, "task_1_3": 22}
+    assert all_scores == {
+        "user1": {"task_0_0": 1, "task_1_3": expected_score_1},
+        "user2": {"task_0_0": expected_score_2},
+    }
+    assert bonus_score_user1 == expected_score_1
+    assert scores_user1 == {"task_0_0": 1, "task_1_3": expected_score_1}
     assert bonus_score_user2 == 0
-    assert scores_user2 == {"task_0_0": 15}
+    assert scores_user2 == {"task_0_0": expected_score_2}
 
 
 def test_many_courses(first_course_with_deadlines, second_course_with_deadlines, session):
     student = Student(0, "user1", "username1", False, "repo1")
     first_course_with_deadlines.store_score(student, "task_0_0", update_func(30))
     second_course_with_deadlines.store_score(student, "task_1_3", update_func(40))
+    expected_users = 1
+    expected_user_on_course = 2
+    expected_grades = 2
 
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 2
-    assert session.query(Grade).count() == 2
+    assert session.query(User).count() == expected_users
+    assert session.query(UserOnCourse).count() == expected_user_on_course
+    assert session.query(Grade).count() == expected_grades
 
     stats1 = first_course_with_deadlines.get_stats()
     all_scores1 = first_course_with_deadlines.get_all_scores()
@@ -491,25 +521,33 @@ def test_many_courses(first_course_with_deadlines, second_course_with_deadlines,
     assert stats2["task_1_3"] == 1.0
     assert all(v == 0.0 for k, v in stats2.items() if k != "task_1_3")
 
-    assert all_scores2 == {"user1": {"task_1_3": 40}}
-    assert bonus_score_user2 == 40
-    assert scores_user2 == {"task_1_3": 40}
+    user2_score = 40
+    assert all_scores2 == {"user1": {"task_1_3": user2_score}}
+    assert bonus_score_user2 == user2_score
+    assert scores_user2 == {"task_1_3": user2_score}
 
 
 def test_many_users_and_courses(first_course_with_deadlines, second_course_with_deadlines, session):
+    expected_score_1 = 22
+    expected_score_2 = 15
+    expected_users = 2
+    expected_user_on_course = 4
+    expected_grades = 5
+    expected_stats_ratio = 0.5
+
     student1 = Student(0, "user1", "username1", False, "repo1")
     student2 = Student(1, "user2", "username2", False, "repo2")
 
     first_course_with_deadlines.store_score(student1, "task_0_0", update_func(1))
-    first_course_with_deadlines.store_score(student1, "task_1_3", update_func(22))
-    first_course_with_deadlines.store_score(student2, "task_0_0", update_func(15))
+    first_course_with_deadlines.store_score(student1, "task_1_3", update_func(expected_score_1))
+    first_course_with_deadlines.store_score(student2, "task_0_0", update_func(expected_score_2))
 
     second_course_with_deadlines.store_score(student1, "task_1_0", update_func(99))
     second_course_with_deadlines.store_score(student2, "task_1_1", update_func(7))
 
-    assert session.query(User).count() == 2
-    assert session.query(UserOnCourse).count() == 4
-    assert session.query(Grade).count() == 5
+    assert session.query(User).count() == expected_users
+    assert session.query(UserOnCourse).count() == expected_user_on_course
+    assert session.query(Grade).count() == expected_grades
 
     stats1 = first_course_with_deadlines.get_stats()
     all_scores1 = first_course_with_deadlines.get_all_scores()
@@ -539,14 +577,17 @@ def test_many_users_and_courses(first_course_with_deadlines, second_course_with_
         "task_4_2",
     }
     assert stats1["task_0_0"] == 1.0
-    assert stats1["task_1_3"] == 0.5
+    assert stats1["task_1_3"] == expected_stats_ratio
     assert all(v == 0.0 for k, v in stats1.items() if k not in ["task_0_0", "task_1_3"])
 
-    assert all_scores1 == {"user1": {"task_0_0": 1, "task_1_3": 22}, "user2": {"task_0_0": 15}}
-    assert bonus_score1_user1 == 22
-    assert scores1_user1 == {"task_0_0": 1, "task_1_3": 22}
+    assert all_scores1 == {
+        "user1": {"task_0_0": 1, "task_1_3": expected_score_1},
+        "user2": {"task_0_0": expected_score_2},
+    }
+    assert bonus_score1_user1 == expected_score_1
+    assert scores1_user1 == {"task_0_0": 1, "task_1_3": expected_score_1}
     assert bonus_score1_user2 == 0
-    assert scores1_user2 == {"task_0_0": 15}
+    assert scores1_user2 == {"task_0_0": expected_score_2}
 
     stats2 = second_course_with_deadlines.get_stats()
     all_scores2 = second_course_with_deadlines.get_all_scores()
@@ -582,8 +623,8 @@ def test_many_users_and_courses(first_course_with_deadlines, second_course_with_
         "task_5_1",
         "task_5_2",
     }
-    assert stats2["task_1_0"] == 0.5
-    assert stats2["task_1_1"] == 0.5
+    assert stats2["task_1_0"] == expected_stats_ratio
+    assert stats2["task_1_1"] == expected_stats_ratio
     assert all(v == 0.0 for k, v in stats2.items() if k not in ["task_1_0", "task_1_1"])
 
     assert all_scores2 == {"user1": {"task_1_0": 99}, "user2": {"task_1_1": 7}}
@@ -628,19 +669,25 @@ def test_deadlines(first_course_with_deadlines, second_course_with_deadlines, se
 def test_course_change_params(first_course_db_api, postgres_container):
     with pytest.raises(AttributeError):
         DataBaseApi(
-            database_url=postgres_container.get_connection_url(),
-            course_name="Test Course",
-            gitlab_instance_host="gitlab.another_test.com",
-            registration_secret="secret",
-            show_allscores=True,
+            DatabaseConfig(
+                database_url=postgres_container.get_connection_url(),
+                course_name="Test Course",
+                gitlab_instance_host="gitlab.another_test.com",
+                registration_secret="secret",
+                token="test_token",
+                show_allscores=True,
+            )
         )
 
     DataBaseApi(
-        database_url=postgres_container.get_connection_url(),
-        course_name="Test Course",
-        gitlab_instance_host="gitlab.test.com",
-        registration_secret="another_secret",
-        show_allscores=False,
+        DatabaseConfig(
+            database_url=postgres_container.get_connection_url(),
+            course_name="Test Course",
+            gitlab_instance_host="gitlab.test.com",
+            registration_secret="another_secret",
+            token="test_token",
+            show_allscores=False,
+        )
     )
 
 
@@ -663,22 +710,28 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container):
 
     with pytest.raises(ProgrammingError) as exc_info:
         DataBaseApi(
-            database_url=postgres_container.get_connection_url(),
-            course_name="Test Course",
-            gitlab_instance_host="gitlab.test.com",
-            registration_secret="secret",
-            show_allscores=True,
+            DatabaseConfig(
+                database_url=postgres_container.get_connection_url(),
+                course_name="Test Course",
+                gitlab_instance_host="gitlab.test.com",
+                registration_secret="secret",
+                token="test_token",
+                show_allscores=True,
+            )
         )
 
     assert isinstance(exc_info.value.orig, UndefinedTable)
 
     db_api = DataBaseApi(
-        database_url=postgres_container.get_connection_url(),
-        course_name="Test Course",
-        gitlab_instance_host="gitlab.test.com",
-        registration_secret="secret",
-        show_allscores=True,
-        apply_migrations=True,
+        DatabaseConfig(
+            database_url=postgres_container.get_connection_url(),
+            course_name="Test Course",
+            gitlab_instance_host="gitlab.test.com",
+            registration_secret="secret",
+            token="test_token",
+            show_allscores=True,
+            apply_migrations=True,
+        )
     )
 
     with Session(engine) as session:
@@ -698,12 +751,15 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container):
             command.upgrade(alembic_cfg, revision.revision)
 
             db_api = DataBaseApi(
-                database_url=postgres_container.get_connection_url(),
-                course_name="Test Course",
-                gitlab_instance_host="gitlab.test.com",
-                registration_secret="secret",
-                show_allscores=True,
-                apply_migrations=True,
+                DatabaseConfig(
+                    database_url=postgres_container.get_connection_url(),
+                    course_name="Test Course",
+                    gitlab_instance_host="gitlab.test.com",
+                    registration_secret="secret",
+                    show_allscores=True,
+                    apply_migrations=True,
+                    token="test_token",
+                )
             )
 
             with Session(engine) as session:
@@ -712,12 +768,15 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container):
 
 def test_viewer_api(postgres_container):
     db_api = DataBaseApi(
-        database_url=postgres_container.get_connection_url(),
-        course_name="Test Course",
-        gitlab_instance_host="gitlab.test.com",
-        registration_secret="secret",
-        show_allscores=True,
-        apply_migrations=True,
+        DatabaseConfig(
+            database_url=postgres_container.get_connection_url(),
+            course_name="Test Course",
+            gitlab_instance_host="gitlab.test.com",
+            registration_secret="secret",
+            token="test_token",
+            show_allscores=True,
+            apply_migrations=True,
+        )
     )
     assert db_api.get_scoreboard_url() == ""
 
@@ -748,6 +807,16 @@ def test_store_score_update_error(first_course_with_deadlines, session):
     assert "Update failed" in str(exc_info.value)
 
     assert session.query(Grade).count() == 0
+
+
+def test_get_course_success(first_course_db_api):
+    course = first_course_db_api.get_course(first_course_db_api.course_name)
+    assert course.name == first_course_db_api.course_name
+
+
+def test_get_course_unknown(first_course_db_api):
+    course = first_course_db_api.get_course("Unknown course")
+    assert not course
 
 
 def test_apply_migrations_exceptions(first_course_db_api, postgres_container):
@@ -822,3 +891,22 @@ def test_check_user_on_course(first_course_db_api, session):
     session.commit()
 
     assert first_course_db_api.check_user_on_course(course_name, student)
+
+
+def test_get_or_create_user_existing_get(first_course_db_api, session):
+    course_name = "Test Course"
+    student = Student(id=1, username="user1", name="username1", course_admin=False, repo="repo1")
+    user = User(id=1, username="user1", gitlab_instance_host="gitlab.test.com")
+    session.add(user)
+    session.commit()
+
+    get_user = first_course_db_api.get_or_create_user(student, course_name)
+    assert get_user.id == user.id
+
+
+def test_get_or_create_user_nonexisting_create(first_course_db_api, session):
+    course_name = "Test Course"
+    student = Student(id=1, username="user1", name="username1", course_admin=False, repo="repo1")
+
+    get_user = first_course_db_api.get_or_create_user(student, course_name)
+    assert get_user.username == student.username
