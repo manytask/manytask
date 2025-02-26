@@ -1,4 +1,5 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine
@@ -28,6 +29,7 @@ TEST_DEADLINE_ID = 12345
 TEST_GRADE_SCORE_2 = 123456
 TEST_GRADE_SCORE_3 = 1234567
 TEST_GRADE_SCORE_4 = 12345678
+TEST_DEADLINE_STEPS = {0.4: datetime(2000, 1, 2, 3, 4, 5, 6, tzinfo=ZoneInfo("Europe/Berlin"))}
 
 
 @pytest.fixture(scope="module")
@@ -167,7 +169,7 @@ def test_deadline(session):
     session.add(course)
     session.commit()
 
-    deadline = Deadline(data={"test_key": "test_value"})
+    deadline = Deadline(steps=TEST_DEADLINE_STEPS)
     session.add(deadline)
     task_group = TaskGroup(name="group1", deadline=deadline, course=course)
     session.add(task_group)
@@ -175,7 +177,8 @@ def test_deadline(session):
 
     retrieved = session.query(TaskGroup).filter_by(name="group1").first()
     assert retrieved.deadline is not None
-    assert retrieved.deadline.data["test_key"] == "test_value"
+
+    assert retrieved.deadline.steps == TEST_DEADLINE_STEPS
 
 
 def test_task_group(session):
@@ -191,7 +194,7 @@ def test_task_group(session):
     assert retrieved.deadline is None
 
 
-def test_deadline_data(session, fixed_current_time):
+def test_deadline_steps(session, fixed_current_time):
     course = Course(
         name="course0003", registration_secret="secret", token="test_token3", gitlab_instance_host="gitlab.inst.org"
     )
@@ -199,28 +202,27 @@ def test_deadline_data(session, fixed_current_time):
     session.commit()
 
     deadline1 = Deadline(id=1001)
-    deadline2 = Deadline(id=1002, data={})
-    deadline3 = Deadline(id=1003, data=[])
-    deadline4 = Deadline(id=1004, data=TEST_DEADLINE_DATA_INT)
-    deadline5 = Deadline(id=1005, data="some_data")
-    session.add_all([deadline1, deadline2, deadline3, deadline4, deadline5])
+    deadline2 = Deadline(id=1002, steps={})
+    deadline3 = Deadline(id=1003, steps=None)
+    session.add_all([deadline1, deadline2, deadline3])
     session.commit()
 
-    assert session.query(Deadline).filter_by(id=1001).one().data == {}
-    assert session.query(Deadline).filter_by(id=1002).one().data == {}
-    assert session.query(Deadline).filter_by(id=1003).one().data == []
-    assert session.query(Deadline).filter_by(id=1004).one().data == TEST_DEADLINE_DATA_INT
-    assert session.query(Deadline).filter_by(id=1005).one().data == "some_data"
+    assert session.query(Deadline).filter_by(id=1001).one().steps == {}
+    assert session.query(Deadline).filter_by(id=1002).one().steps == {}
+    assert session.query(Deadline).filter_by(id=1003).one().steps == {}
 
     class MyObject:
         def __init__(self, value):
             self.value = value
 
     deadlines = [
-        Deadline(id=1006, data=b"binary_data"),
-        Deadline(id=1007, data=MyObject(10)),
-        Deadline(id=1008, data={1, 2, 3}),
-        Deadline(id=1009, data=fixed_current_time),
+        Deadline(id=1004, steps=TEST_DEADLINE_DATA_INT),
+        Deadline(id=1005, steps="some_data"),
+        Deadline(id=1006, steps=b"binary_data"),
+        Deadline(id=1007, steps=MyObject(10)),
+        Deadline(id=1008, steps={1, 2, 3}),
+        Deadline(id=1009, steps=fixed_current_time),
+        Deadline(id=1010, steps=[]),
     ]
 
     for deadline in deadlines:
@@ -409,7 +411,7 @@ def test_cascade_delete_task_group(session):
         token="test_token2__",
         gitlab_instance_host="gitlab.inst.org",
     )
-    deadline = Deadline(id=TEST_DEADLINE_ID, data={"test_key": "test_value"})
+    deadline = Deadline(id=TEST_DEADLINE_ID, steps=TEST_DEADLINE_STEPS)
     task_group = TaskGroup(name="cascade_group3", course=course, deadline=deadline)
     task1 = Task(name="cascade_task4", group=task_group)
     task2 = Task(name="cascade_task5", group=task_group)

@@ -644,11 +644,9 @@ def test_deadlines(first_course_with_deadlines, second_course_with_deadlines, se
         .one()
     )
 
-    assert deadline1.data == {
-        "start": "2000-01-02T18:00:00+01:00",
-        "steps": {"0.5": "2000-02-02T23:59:00+01:00"},
-        "end": "2000-02-02T23:59:00+01:00",
-    }
+    assert deadline1.start == datetime(2000, 1, 2, 18, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    assert deadline1.steps == {0.5: datetime(2000, 2, 2, 23, 59, tzinfo=ZoneInfo("Europe/Berlin"))}
+    assert deadline1.end == datetime(2000, 2, 2, 23, 59, tzinfo=ZoneInfo("Europe/Berlin"))
 
     deadline2 = (
         session.query(Deadline)
@@ -659,11 +657,9 @@ def test_deadlines(first_course_with_deadlines, second_course_with_deadlines, se
         .one()
     )
 
-    assert deadline2.data == {
-        "start": "2000-01-01T18:00:00+01:00",
-        "steps": {"0.5": "2000-02-01T23:59:00+01:00"},
-        "end": "2000-02-01T23:59:00+01:00",
-    }
+    assert deadline2.start == datetime(2000, 1, 1, 18, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    assert deadline2.steps == {0.5: datetime(2000, 2, 1, 23, 59, tzinfo=ZoneInfo("Europe/Berlin"))}
+    assert deadline2.end == datetime(2000, 2, 1, 23, 59, tzinfo=ZoneInfo("Europe/Berlin"))
 
 
 def test_course_change_params(first_course_db_api, postgres_container):
