@@ -13,11 +13,10 @@ def get_database_table_data() -> dict[str, Any]:
     all_scores = storage_api.get_all_scores()
 
     all_tasks = []
-    if course.deadlines:
-        for group in course.deadlines.get_groups():
-            for task in group.tasks:
-                if task.enabled:
-                    all_tasks.append({"name": task.name, "score": 0, "group": group.name})
+    for group in course.storage_api.get_groups():
+        for task in group.tasks:
+            if task.enabled:
+                all_tasks.append({"name": task.name, "score": 0, "group": group.name})
 
     table_data = {"tasks": all_tasks, "students": []}
 

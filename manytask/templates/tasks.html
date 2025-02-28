@@ -135,7 +135,7 @@
     }
 </style>
 
-{% for group in current_course.config.get_groups(enabled=True, started=True)[::-1] %}
+{% for group in current_course.storage_api.get_groups(enabled=True, started=True)[::-1] %}
     {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
     {% set solved_group_scores = [] %}
     {% for task in group.tasks %}
