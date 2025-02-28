@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -143,6 +143,9 @@ def test_empty_course(first_course_db_api, session):
     assert course.registration_secret == "secret"
     assert course.token == "test_token"
     assert course.show_allscores
+    assert course.timezone == "UTC"
+    assert course.max_submissions is None
+    assert course.submission_penalty == 0
 
     stats = first_course_db_api.get_stats()
     all_scores = first_course_db_api.get_all_scores()
@@ -158,6 +161,18 @@ def test_empty_course(first_course_db_api, session):
 def test_sync_columns(first_course_with_deadlines, session):
     expected_task_groups = 5
     expected_tasks = 18
+
+    assert session.query(Course).count() == 1
+    course = session.query(Course).one()
+
+    assert course.name == "Test Course"
+    assert course.gitlab_instance_host == "gitlab.test.com"
+    assert course.registration_secret == "secret"
+    assert course.token == "test_token"
+    assert course.show_allscores
+    assert course.timezone == "Europe/Berlin"
+    assert course.max_submissions == 10  # noqa: PLR2004
+    assert course.submission_penalty == 0.1  # noqa: PLR2004
 
     stats = first_course_with_deadlines.get_stats()
     assert set(stats.keys()) == {
@@ -188,6 +203,25 @@ def test_sync_columns(first_course_with_deadlines, session):
     tasks = session.query(Task).all()
     for task in tasks:
         assert task.group.name == "group_" + task.name[len("task_")]
+        assert task.group.enabled
+
+        if task.name in ("task_0_2", "task_1_3"):
+            assert task.is_bonus
+        else:
+            assert not task.is_bonus
+
+        if task.name in ("task_1_1"):
+            assert task.is_special
+        else:
+            assert not task.is_special
+
+        # for convenience task score related to its name(exception is group_0, it has multiplier "1")
+        # for example for task_1_3 score is 10, task_3_0 score is 30
+        score_multiplier = int(task.name.split("_")[1])
+        score_multiplier = 1 if score_multiplier == 0 else score_multiplier
+        expected_task_score = score_multiplier * 10
+
+        assert task.score == expected_task_score
 
 
 def test_resync_columns(first_course_db_api, first_course_deadlines_config, second_course_deadlines_config, session):
@@ -196,6 +230,18 @@ def test_resync_columns(first_course_db_api, first_course_deadlines_config, seco
 
     first_course_db_api.sync_columns(first_course_deadlines_config)
     first_course_db_api.sync_columns(second_course_deadlines_config)
+
+    assert session.query(Course).count() == 1
+    course = session.query(Course).one()
+
+    assert course.name == "Test Course"
+    assert course.gitlab_instance_host == "gitlab.test.com"
+    assert course.registration_secret == "secret"
+    assert course.token == "test_token"
+    assert course.show_allscores
+    assert course.timezone == "Europe/Moscow"
+    assert course.max_submissions == 20  # noqa: PLR2004
+    assert course.submission_penalty == 0.2  # noqa: PLR2004
 
     stats = first_course_db_api.get_stats()
     assert set(stats.keys()) == {
@@ -233,6 +279,25 @@ def test_resync_columns(first_course_db_api, first_course_deadlines_config, seco
     tasks = session.query(Task).all()
     for task in tasks:
         assert task.group.name == "group_" + task.name[len("task_")]
+        assert task.group.enabled  # TODO in #258 issue, must store disabled tasks also
+
+        if task.name in ("task_0_2", "task_1_3", "task_6_0"):
+            assert task.is_bonus
+        else:
+            assert not task.is_bonus
+
+        if task.name in ("task_1_1", "task_6_0"):
+            assert task.is_special
+        else:
+            assert not task.is_special
+
+        # for convenience task score related to its name(exception is group_0, it has multiplier "1")
+        # for example for task_1_3 score is 10, task_3_0 score is 30
+        score_multiplier = int(task.name.split("_")[1])
+        score_multiplier = 1 if score_multiplier == 0 else score_multiplier
+        expected_task_score = score_multiplier * 10
+
+        assert task.score == expected_task_score
 
 
 def test_store_score(first_course_with_deadlines, session):
@@ -644,11 +709,9 @@ def test_deadlines(first_course_with_deadlines, second_course_with_deadlines, se
         .one()
     )
 
-    assert deadline1.data == {
-        "start": "2000-01-02T18:00:00+01:00",
-        "steps": {"0.5": "2000-02-02T23:59:00+01:00"},
-        "end": "2000-02-02T23:59:00+01:00",
-    }
+    assert deadline1.start == datetime(2000, 1, 2, 18, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    assert deadline1.steps == {0.5: datetime(2000, 2, 2, 23, 59, tzinfo=ZoneInfo("Europe/Berlin"))}
+    assert deadline1.end == datetime(2000, 2, 2, 23, 59, tzinfo=ZoneInfo("Europe/Berlin"))
 
     deadline2 = (
         session.query(Deadline)
@@ -659,11 +722,9 @@ def test_deadlines(first_course_with_deadlines, second_course_with_deadlines, se
         .one()
     )
 
-    assert deadline2.data == {
-        "start": "2000-01-01T18:00:00+01:00",
-        "steps": {"0.5": "2000-02-01T23:59:00+01:00"},
-        "end": "2000-02-01T23:59:00+01:00",
-    }
+    assert deadline2.start == datetime(2000, 1, 1, 18, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    assert deadline2.steps == {0.5: datetime(2000, 2, 1, 23, 59, tzinfo=ZoneInfo("Europe/Moscow"))}
+    assert deadline2.end == datetime(2000, 2, 1, 23, 59, tzinfo=ZoneInfo("Europe/Moscow"))
 
 
 def test_course_change_params(first_course_db_api, postgres_container):
@@ -910,3 +971,12 @@ def test_get_or_create_user_nonexisting_create(first_course_db_api, session):
 
     get_user = first_course_db_api.get_or_create_user(student, course_name)
     assert get_user.username == student.username
+
+
+def test_convert_timedelta_to_datetime():
+    start = datetime(2025, 5, 5, 5, 5, tzinfo=ZoneInfo("Europe/Berlin"))
+    value_datetime = datetime(2026, 6, 6, 6, 6, tzinfo=ZoneInfo("Europe/Berlin"))
+    value_timedelta = timedelta(days=397, hours=1, minutes=1)  # value_datetime - start
+
+    assert DataBaseApi._convert_timedelta_to_datetime(start, value_datetime) == value_datetime
+    assert DataBaseApi._convert_timedelta_to_datetime(start, value_timedelta) == value_datetime

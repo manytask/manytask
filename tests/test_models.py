@@ -1,14 +1,17 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Optional
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, StatementError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from manytask.models import (
     Base,
     Course,
     Deadline,
+    FloatDatetimeDict,
     Grade,
     Task,
     TaskGroup,
@@ -28,6 +31,10 @@ TEST_DEADLINE_ID = 12345
 TEST_GRADE_SCORE_2 = 123456
 TEST_GRADE_SCORE_3 = 1234567
 TEST_GRADE_SCORE_4 = 12345678
+TEST_TASK_SCORE = 100
+TEST_MAX_SUBMISSIONS = 10
+TEST_SUBMISSION_PENALTY = 0.1
+TEST_DEADLINE_STEPS = {0.4: datetime(2000, 1, 2, 3, 4, 5, 6, tzinfo=ZoneInfo("Europe/Berlin"))}
 
 
 @pytest.fixture(scope="module")
@@ -90,6 +97,36 @@ def test_course(session):
     assert retrieved is not None
     assert retrieved.registration_secret == "test_secret"
     assert retrieved.gitlab_instance_host == "gitlab.inst.org"
+    assert retrieved.token == "test_token"
+    assert not retrieved.show_allscores
+    assert retrieved.timezone == "UTC"
+    assert retrieved.max_submissions is None
+    assert retrieved.submission_penalty == 0
+
+
+def test_course_deadlines_parameters(session):
+    course = Course(
+        name="test_course_deadlines_parameters",
+        registration_secret="test_secret_deadlines_parameters",
+        token="test_token_deadlines_parameters",
+        gitlab_instance_host="gitlab.inst.org",
+        show_allscores=True,
+        timezone="Europe/Berlin",
+        max_submissions=TEST_MAX_SUBMISSIONS,
+        submission_penalty=TEST_SUBMISSION_PENALTY,
+    )
+    session.add(course)
+    session.commit()
+
+    retrieved = session.query(Course).filter_by(name="test_course_deadlines_parameters").first()
+    assert retrieved is not None
+    assert retrieved.registration_secret == "test_secret_deadlines_parameters"
+    assert retrieved.gitlab_instance_host == "gitlab.inst.org"
+    assert retrieved.token == "test_token_deadlines_parameters"
+    assert retrieved.show_allscores
+    assert retrieved.timezone == "Europe/Berlin"
+    assert retrieved.max_submissions == TEST_MAX_SUBMISSIONS
+    assert retrieved.submission_penalty == TEST_SUBMISSION_PENALTY
 
 
 def test_course_unique_name(session):
@@ -167,7 +204,7 @@ def test_deadline(session):
     session.add(course)
     session.commit()
 
-    deadline = Deadline(data={"test_key": "test_value"})
+    deadline = Deadline(steps=TEST_DEADLINE_STEPS)
     session.add(deadline)
     task_group = TaskGroup(name="group1", deadline=deadline, course=course)
     session.add(task_group)
@@ -175,7 +212,8 @@ def test_deadline(session):
 
     retrieved = session.query(TaskGroup).filter_by(name="group1").first()
     assert retrieved.deadline is not None
-    assert retrieved.deadline.data["test_key"] == "test_value"
+
+    assert retrieved.deadline.steps == TEST_DEADLINE_STEPS
 
 
 def test_task_group(session):
@@ -189,9 +227,10 @@ def test_task_group(session):
 
     retrieved = session.query(TaskGroup).filter_by(name="group2").first()
     assert retrieved.deadline is None
+    assert retrieved.enabled
 
 
-def test_deadline_data(session, fixed_current_time):
+def test_deadline_steps(session, fixed_current_time):
     course = Course(
         name="course0003", registration_secret="secret", token="test_token3", gitlab_instance_host="gitlab.inst.org"
     )
@@ -199,35 +238,79 @@ def test_deadline_data(session, fixed_current_time):
     session.commit()
 
     deadline1 = Deadline(id=1001)
-    deadline2 = Deadline(id=1002, data={})
-    deadline3 = Deadline(id=1003, data=[])
-    deadline4 = Deadline(id=1004, data=TEST_DEADLINE_DATA_INT)
-    deadline5 = Deadline(id=1005, data="some_data")
-    session.add_all([deadline1, deadline2, deadline3, deadline4, deadline5])
+    deadline2 = Deadline(id=1002, steps={})
+    deadline3 = Deadline(id=1003, steps=None)
+    deadline4 = Deadline(id=1004, steps=TEST_DEADLINE_STEPS)
+    session.add_all([deadline1, deadline2, deadline3, deadline4])
     session.commit()
 
-    assert session.query(Deadline).filter_by(id=1001).one().data == {}
-    assert session.query(Deadline).filter_by(id=1002).one().data == {}
-    assert session.query(Deadline).filter_by(id=1003).one().data == []
-    assert session.query(Deadline).filter_by(id=1004).one().data == TEST_DEADLINE_DATA_INT
-    assert session.query(Deadline).filter_by(id=1005).one().data == "some_data"
+    assert session.query(Deadline).filter_by(id=1001).one().steps == {}
+    assert session.query(Deadline).filter_by(id=1002).one().steps == {}
+    assert session.query(Deadline).filter_by(id=1003).one().steps == {}
+    assert session.query(Deadline).filter_by(id=1004).one().steps == TEST_DEADLINE_STEPS
 
     class MyObject:
         def __init__(self, value):
             self.value = value
 
-    deadlines = [
-        Deadline(id=1006, data=b"binary_data"),
-        Deadline(id=1007, data=MyObject(10)),
-        Deadline(id=1008, data={1, 2, 3}),
-        Deadline(id=1009, data=fixed_current_time),
+    deadlines_bad_type = [
+        Deadline(id=1005, steps="some_data"),
+        Deadline(id=1006, steps=b"binary_data"),
+        Deadline(id=1007, steps=MyObject(10)),
+        Deadline(id=1008, steps={1, 2, 3}),
+        Deadline(id=1009, steps=fixed_current_time),
+        Deadline(id=1010, steps=[]),
+        Deadline(id=1011, steps=TEST_DEADLINE_DATA_INT),
     ]
 
-    for deadline in deadlines:
-        with pytest.raises(StatementError):
+    for deadline in deadlines_bad_type:
+        with pytest.raises(StatementError) as exc_info:
             session.add(deadline)
             session.commit()
         session.rollback()
+
+        assert isinstance(exc_info.value.orig, TypeError)
+        assert "value must be a dict, not" in str(exc_info.value)
+
+    deadlines_bad_key_type = [
+        Deadline(id=1021, steps={TEST_DEADLINE_DATA_INT: TEST_DEADLINE_STEPS[0.4]}),
+        Deadline(id=1022, steps={"0.4": TEST_DEADLINE_STEPS[0.4]}),
+        Deadline(id=1023, steps={MyObject(10): TEST_DEADLINE_STEPS[0.4]}),
+    ]
+
+    for deadline in deadlines_bad_key_type:
+        with pytest.raises(StatementError) as exc_info:
+            session.add(deadline)
+            session.commit()
+        session.rollback()
+
+        assert isinstance(exc_info.value.orig, TypeError)
+        assert "must be a float, not" in str(exc_info.value)
+
+    deadlines_bad_value_type = [
+        Deadline(id=1031, steps={0.4: timedelta()}),
+        Deadline(id=1032, steps={0.4: TEST_DEADLINE_STEPS[0.4].isoformat()}),
+        Deadline(id=1033, steps={0.4: TEST_DEADLINE_STEPS}),
+    ]
+
+    for deadline in deadlines_bad_value_type:
+        with pytest.raises(StatementError) as exc_info:
+            session.add(deadline)
+            session.commit()
+        session.rollback()
+
+        assert isinstance(exc_info.value.orig, TypeError)
+        assert "must be a datetime, not" in str(exc_info.value)
+
+    deadline_no_timezone = Deadline(id=1031, steps={0.4: TEST_DEADLINE_STEPS[0.4].replace(tzinfo=None)})
+
+    with pytest.raises(StatementError) as exc_info:
+        session.add(deadline_no_timezone)
+        session.commit()
+    session.rollback()
+
+    assert isinstance(exc_info.value.orig, TypeError)
+    assert "must have timezone information" in str(exc_info.value)
 
 
 def test_task(session):
@@ -245,6 +328,29 @@ def test_task(session):
     retrieved_task = session.query(Task).filter_by(name="task1").first()
     assert retrieved_task.group.course.name == "course3"
     assert retrieved_task.group.name == "group3"
+    assert retrieved_task.score == 0
+    assert not retrieved_task.is_bonus
+    assert not retrieved_task.is_special
+    assert retrieved_task.enabled
+
+    task = Task(
+        name="task_with_all_params",
+        score=TEST_TASK_SCORE,
+        is_bonus=True,
+        is_special=True,
+        enabled=False,
+        group=task_group,
+    )
+    session.add(task)
+    session.commit()
+
+    retrieved_task = session.query(Task).filter_by(name="task_with_all_params").first()
+    assert retrieved_task.group.course.name == "course3"
+    assert retrieved_task.group.name == "group3"
+    assert retrieved_task.score == TEST_TASK_SCORE
+    assert retrieved_task.is_bonus
+    assert retrieved_task.is_special
+    assert not retrieved_task.enabled
 
 
 def test_grade(session, fixed_current_time):
@@ -409,7 +515,7 @@ def test_cascade_delete_task_group(session):
         token="test_token2__",
         gitlab_instance_host="gitlab.inst.org",
     )
-    deadline = Deadline(id=TEST_DEADLINE_ID, data={"test_key": "test_value"})
+    deadline = Deadline(id=TEST_DEADLINE_ID, steps=TEST_DEADLINE_STEPS)
     task_group = TaskGroup(name="cascade_group3", course=course, deadline=deadline)
     task1 = Task(name="cascade_task4", group=task_group)
     task2 = Task(name="cascade_task5", group=task_group)
@@ -509,3 +615,27 @@ def test_cascade_delete_user_on_course(session):
 def test_validate_gitlab_instance_host_missing_course():
     validate_result = validate_gitlab_instance_host(None, {}, None)
     assert validate_result is None
+
+
+def test_custom_dict_type_empty(engine):
+    class TestBase(DeclarativeBase):
+        pass
+
+    class TestModel(TestBase):
+        __tablename__ = "test_model"
+
+        id: Mapped[int] = mapped_column(primary_key=True)
+        data: Mapped[Optional[dict[float, datetime]]] = mapped_column(FloatDatetimeDict)
+
+    TestBase.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        test_model = TestModel()
+        session.add(test_model)
+        session.commit()
+
+        retrieved_model = session.query(TestModel).one()
+
+        assert retrieved_model.data is None
+
+    TestBase.metadata.drop_all(engine)
