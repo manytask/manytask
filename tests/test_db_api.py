@@ -32,7 +32,7 @@ class TestException(Exception):
 
 @pytest.fixture(autouse=True)
 def mock_current_time():
-    with patch("manytask.config.ManytaskDeadlinesConfig.get_now_with_timezone") as mock:
+    with patch("manytask.database.DataBaseApi.get_now_with_timezone") as mock:
         mock.return_value = FIXED_CURRENT_TIME
         yield mock
 
@@ -225,8 +225,8 @@ def test_sync_columns(first_course_with_deadlines, session):
 
 
 def test_resync_columns(first_course_db_api, first_course_deadlines_config, second_course_deadlines_config, session):
-    expected_task_groups = 6
-    expected_tasks = 25
+    expected_task_groups = 8
+    expected_tasks = 28
 
     first_course_db_api.sync_columns(first_course_deadlines_config)
     first_course_db_api.sync_columns(second_course_deadlines_config)
@@ -279,7 +279,11 @@ def test_resync_columns(first_course_db_api, first_course_deadlines_config, seco
     tasks = session.query(Task).all()
     for task in tasks:
         assert task.group.name == "group_" + task.name[len("task_")]
-        assert task.group.enabled  # TODO in #258 issue, must store disabled tasks also
+
+        if task.name in ("task_6_0", "task_6_1"):
+            assert not task.group.enabled
+        else:
+            assert task.group.enabled
 
         if task.name in ("task_0_2", "task_1_3", "task_6_0"):
             assert task.is_bonus
