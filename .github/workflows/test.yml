@@ -1,57 +1,51 @@
-name: Lint and Test
+name: Test
 
 on:
-  pull_request:
-    branches: [ main ]
   push:
     branches: [ main ]
-
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  lint-python:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.13'
-          cache: 'pip' # caching pip dependencies
+          python-version: '3.12'
+          
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.7.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          
       - name: Install dependencies
-        run: |
-          python -m pip install -U -r requirements.txt -r requirements.test.txt
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root
+        
       - name: Run ruff format
-        run: python -m ruff format --check manytask tests
+        run: poetry run ruff format --check .
+        
       - name: Run ruff check
-        run: python -m ruff check manytask tests
+        run: poetry run ruff check .
+        
       - name: Run mypy
-        run: python -m mypy manytask
-
-  test-python:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.13']
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pip' # caching pip dependencies
-      - name: Install dependencies
-        run: |
-          python -m pip install -U -r requirements.txt -r requirements.test.txt
+        run: poetry run mypy manytask
+        
       - name: Run tests
-        run: python -m pytest --cov-report term-missing --cov=manytask --cov-report=xml tests/
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5.3.1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}  # required
-          files: coverage.xml
-          flags: unittests  # optional
-          fail_ci_if_error: true  # optional (default = false)
-          verbose: true  # optional (default = false)
+        run: poetry run pytest
 
   build-docker:
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
