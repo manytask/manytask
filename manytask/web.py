@@ -128,7 +128,7 @@ def get_solutions() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        _, _ = course.deadlines.find_task(task_name)
+        _, _ = course.storage_api.find_task(task_name)
     except KeyError:
         return f"There is no task with name `{task_name}` (or it is disabled)", HTTPStatus.NOT_FOUND
 

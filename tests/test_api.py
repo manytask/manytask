@@ -99,7 +99,7 @@ def mock_solutions_api():
 
 
 @pytest.fixture
-def mock_deadlines(mock_task, mock_group):
+def mock_deadlines():
     class MockDeadlines:
         def __init__(self):
             self.timezone = "UTC"
@@ -107,21 +107,11 @@ def mock_deadlines(mock_task, mock_group):
             self.mock_group = mock_group
             self.groups = [self.mock_group]
 
-        @staticmethod
-        def get_now_with_timezone():
-            return datetime.now(tz=ZoneInfo("UTC"))
-
-        @staticmethod
-        def find_task(task_name):
-            if task_name == INVALID_TASK_NAME:
-                raise KeyError("Task not found")
-            return mock_group, mock_task
-
     return MockDeadlines()
 
 
 @pytest.fixture
-def mock_storage_api(mock_student):
+def mock_storage_api(mock_student, mock_task, mock_group):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.scores = {}
@@ -179,6 +169,16 @@ def mock_storage_api(mock_student):
 
         def check_user_on_course(self, *a, **k):
             return True
+
+        @staticmethod
+        def find_task(task_name):
+            if task_name == INVALID_TASK_NAME:
+                raise KeyError("Task not found")
+            return mock_group, mock_task
+
+        @staticmethod
+        def get_now_with_timezone():
+            return datetime.now(tz=ZoneInfo("UTC"))
 
     return MockStorageApi()
 
@@ -298,16 +298,16 @@ def test_parse_flags_past_date():
 
 
 def test_update_score_basic(mock_course):
-    group = mock_course.deadlines.find_task("test_task")[0]
-    task = mock_course.deadlines.find_task("test_task")[1]
+    group = mock_course.storage_api.find_task("test_task")[0]
+    task = mock_course.storage_api.find_task("test_task")[1]
     updated_score = 80
     score = _update_score(group, task, updated_score, "", 0, datetime.now(tz=ZoneInfo("UTC")))
     assert score == updated_score
 
 
 def test_update_score_with_old_score(mock_course):
-    group = mock_course.deadlines.find_task("test_task")[0]
-    task = mock_course.deadlines.find_task("test_task")[1]
+    group = mock_course.storage_api.find_task("test_task")[0]
+    task = mock_course.storage_api.find_task("test_task")[1]
     updated_score = 70
     old_score = 80
     score = _update_score(group, task, updated_score, "", old_score, datetime.now(tz=ZoneInfo("UTC")))
@@ -473,8 +473,8 @@ def test_parse_flags_invalid_date(app):
 
 
 def test_update_score_after_deadline(mock_course):
-    group = mock_course.deadlines.find_task(TEST_TASK_NAME)[0]
-    task = mock_course.deadlines.find_task(TEST_TASK_NAME)[1]
+    group = mock_course.storage_api.find_task(TEST_TASK_NAME)[0]
+    task = mock_course.storage_api.find_task(TEST_TASK_NAME)[1]
     score = 100
     flags = ""
     old_score = 0

@@ -11,7 +11,7 @@ from flask import Flask, url_for
 from pydantic import AnyUrl
 
 from manytask.abstract import StoredUser
-from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskSettingsConfig, ManytaskUiConfig
+from manytask.config import ManytaskConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from manytask.glab import Student
 from manytask.web import bp as web_bp
 from manytask.web import get_allscores_url
@@ -42,14 +42,6 @@ def app():
 @pytest.fixture
 def mock_deadlines():
     class MockDeadlines:
-        @staticmethod
-        def get_now_with_timezone():
-            return datetime.now(tz=ZoneInfo("UTC"))
-
-        @staticmethod
-        def get_groups():
-            return []
-
         @property
         def max_score_started(self):
             return 100
@@ -127,6 +119,14 @@ def mock_storage_api():
             if student.course_admin:
                 self.stored_user.course_admin = True
 
+        @staticmethod
+        def get_groups(*_args, **_kwargs):
+            return []
+
+        @staticmethod
+        def get_now_with_timezone():
+            return datetime.now(tz=ZoneInfo("UTC"))
+
         def get_stored_user(self, _student):
             return self.stored_user
 
@@ -182,7 +182,6 @@ def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_viewer_a
                     students_group="test/students",
                 ),
                 ui=ManytaskUiConfig(task_url_template=f"{GITLAB_BASE_URL}/test/$GROUP_NAME/$TASK_NAME", links={}),
-                deadlines=ManytaskDeadlinesConfig(timezone="UTC", schedule=[]),
             )
             self.show_allscores = True
             self.manytask_version = "1.0.0"

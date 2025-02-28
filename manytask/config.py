@@ -137,9 +137,6 @@ class ManytaskDeadlinesConfig(BaseModel):
 
     schedule: list[ManytaskGroupConfig]  # list of groups with tasks
 
-    def get_now_with_timezone(self) -> datetime:
-        return datetime.now(tz=ZoneInfo(self.timezone))
-
     @field_validator("max_submissions")
     @classmethod
     def check_max_submissions(cls, data: int | None) -> int | None:
@@ -192,80 +189,18 @@ class ManytaskDeadlinesConfig(BaseModel):
             group.replace_timezone(timezone)
         return self
 
-    def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
-        for group in self.schedule:
-            for task in group.tasks:
-                if task.name == task_name:
-                    return group, task
-        raise KeyError(f"Task {task_name} not found")
-
-    def get_groups(
-        self,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        *,
-        now: datetime | None = None,
-    ) -> list[ManytaskGroupConfig]:
-        if now is None:
-            now = self.get_now_with_timezone()
-
-        groups = [group for group in self.schedule]
-
-        if enabled is not None:
-            groups = [group for group in groups if group.enabled == enabled]
-
-        if started is not None:
-            if started:
-                groups = [group for group in groups if group.start <= now]
-            else:
-                groups = [group for group in groups if group.start > now]
-
-        return groups
-
-    def get_tasks(
-        self,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        is_bonus: bool | None = None,
-        *,
-        now: datetime | None = None,
-    ) -> list[ManytaskTaskConfig]:
-        # TODO: refactor
-        if now is None:
-            now = self.get_now_with_timezone()
-
-        groups = self.get_groups(started=started, now=now)
-
-        if enabled is True:
-            groups = [group for group in groups if group.enabled]
-            extra_tasks = []
-        elif enabled is False:
-            groups = groups
-            extra_tasks = [task for group in groups for task in group.tasks if not group.enabled]
-        else:  # None
-            groups = groups
-            extra_tasks = []
-
-        tasks = [task for group in groups for task in group.tasks]
-
-        if enabled is not None:
-            tasks = [task for task in tasks if task.enabled == enabled]
-
-        for extra_task in extra_tasks:
-            if extra_task not in tasks:
-                tasks.append(extra_task)
-
-        if is_bonus is not None:
-            tasks = [task for task in tasks if task.is_bonus == is_bonus]
-
-        return tasks
-
-    def max_score(self, started: bool | None = True, *, now: datetime | None = None) -> int:
-        return sum(task.score for task in self.get_tasks(enabled=True, started=started, is_bonus=False, now=now))
-
     @property
-    def max_score_started(self) -> int:
-        return self.max_score(started=True, now=self.get_now_with_timezone())
+    def groups(
+        self,
+    ) -> list[ManytaskGroupConfig]:
+        return self.schedule
+
+    # def max_score(self, started: bool | None = True, *, now: datetime | None = None) -> int:
+    #     return sum(task.score for task in self.parse_tasks(enabled=True, started=started, is_bonus=False, now=now))
+
+    # @property
+    # def max_score_started(self) -> int:
+    #     return self.max_score(started=True, now=self.get_now_with_timezone())
 
 
 class ManytaskConfig(BaseModel):
@@ -275,25 +210,6 @@ class ManytaskConfig(BaseModel):
 
     settings: ManytaskSettingsConfig
     ui: ManytaskUiConfig
-    deadlines: ManytaskDeadlinesConfig
-
-    def get_groups(
-        self,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        *,
-        now: datetime | None = None,
-    ) -> list[ManytaskGroupConfig]:
-        return self.deadlines.get_groups(enabled=enabled, started=started, now=now)
-
-    def get_tasks(
-        self,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        *,
-        now: datetime | None = None,
-    ) -> list[ManytaskTaskConfig]:
-        return self.deadlines.get_tasks(enabled=enabled, started=started, now=now)
 
     @field_validator("version")
     @classmethod
