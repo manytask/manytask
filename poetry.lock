@@ -2,13 +2,13 @@
 
 [[package]]
 name = "alembic"
-version = "1.13.1"
+version = "1.14.1"
 description = "A database migration tool for SQLAlchemy."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "alembic-1.13.1-py3-none-any.whl", hash = "sha256:2edcc97bed0bd3272611ce3a98d98279e9c209e7186e43e75bbb1b2bdfdbcc43"},
-    {file = "alembic-1.13.1.tar.gz", hash = "sha256:4932c8558bf68f2ee92b9bbcb8218671c627064d5b08939437af6d77dc05e595"},
+    {file = "alembic-1.14.1-py3-none-any.whl", hash = "sha256:1acdd7a3a478e208b0503cd73614d5e4c6efafa4e73518bb60e4f2846a37b1c5"},
+    {file = "alembic-1.14.1.tar.gz", hash = "sha256:496e888245a53adf1498fcab31713a469c65836f8de76e01399aa1c3e90dd213"},
 ]
 
 [package.dependencies]
@@ -17,7 +17,7 @@ SQLAlchemy = ">=1.3.0"
 typing-extensions = ">=4"
 
 [package.extras]
-tz = ["backports.zoneinfo"]
+tz = ["backports.zoneinfo", "tzdata"]
 
 [[package]]
 name = "annotated-types"
@@ -1933,4 +1933,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "abe258d827304912a6155ffa8e13523628fb2bf097bab3680823a87f05be3f04"
+content-hash = "08eba390cfb723b132ba0b6573145c6aec0e03b916179bc253abdf55c4b5b6dc"
