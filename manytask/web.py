@@ -336,9 +336,10 @@ def not_ready() -> ResponseReturnValue:
             else:
                 error_message = "No courses available in the system"
 
-    manytask_version = ""
     if hasattr(current_app, "course") and current_app.course:
         manytask_version = current_app.course.manytask_version
+    else:
+        manytask_version = ""
 
     return render_template(
         "not_ready.html", manytask_version=manytask_version, course_name=course_name, error_message=error_message
