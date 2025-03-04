@@ -13,7 +13,7 @@ from flask import Flask, json
 from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import StoredUser
-from manytask.api import _get_student, _parse_flags, _process_score, _update_score
+from manytask.api import _get_student, _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi
 from manytask.glab import Student
@@ -794,3 +794,20 @@ def test_get_student_id_not_found():
     with pytest.raises(HTTPException) as exc_info:
         _get_student(mock_gitlab, 999, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
+
+
+def test_validate_and_extract_params_full():
+    """Test with all possible parameters."""
+    form_data = {
+        "task": "test_task",
+        "user_id": TEST_USER_ID,
+        "username": "test_user",
+        "check_deadline": "False",
+        "submit_time": "2024-03-20 10:00:00",
+    }
+    task_name, user_id, username, check_deadline, submit_time = _validate_and_extract_params(form_data)
+    assert task_name == "test_task"
+    assert user_id == TEST_USER_ID
+    assert username == "test_user"
+    assert check_deadline is False
+    assert submit_time == "2024-03-20 10:00:00"

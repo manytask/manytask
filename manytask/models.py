@@ -1,8 +1,10 @@
 import logging
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from sqlalchemy import JSON, ForeignKey, MetaData, UniqueConstraint, event, func
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, Mapper, Session, mapped_column, relationship
 
@@ -39,10 +41,20 @@ class Course(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(unique=True)
+    unique_course_name: Mapped[str]
     gitlab_instance_host: Mapped[str]
     registration_secret: Mapped[str]
     token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
+    gitlab_admin_token: Mapped[str]
+    gitlab_course_group: Mapped[str]
+    gitlab_course_public_repo: Mapped[str]
+    gitlab_course_students_group: Mapped[str]
+    gitlab_default_branch: Mapped[str]
+    gitlab_client_id: Mapped[str]
+    gitlab_client_secret: Mapped[str]
+    gdoc_spreadsheet_id: Mapped[str | None]
+    gdoc_scoreboard_sheet: Mapped[str | None]
 
     __table_args__ = (
         UniqueConstraint("name", name="uq_courses_name"),
@@ -56,6 +68,12 @@ class Course(Base):
     )
 
 
+class Role(str, Enum):
+    ADMIN = "admin"
+    TEACHER = "teacher"
+    STUDENT = "student"
+
+
 class UserOnCourse(Base):
     __tablename__ = "users_on_courses"
 
@@ -64,7 +82,11 @@ class UserOnCourse(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
     repo_name: Mapped[str]
     join_date: Mapped[datetime] = mapped_column(server_default=func.now())
-    is_course_admin: Mapped[bool] = mapped_column(default=False)
+    role: Mapped[Role] = mapped_column(
+        SQLEnum("admin", "teacher", "student", name="role", create_constraint=True, validate_strings=True),
+        default=Role.STUDENT,
+    )
+    is_course_admin: Mapped[bool] = mapped_column(default=False)  # Keep for backward compatibility
 
     __table_args__ = (UniqueConstraint("user_id", "course_id", name="_user_course_uc"),)
 
@@ -113,6 +135,8 @@ class TaskGroup(Base):
     name: Mapped[str]
     course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
     deadline_id: Mapped[Optional[int]] = mapped_column(ForeignKey(Deadline.id))
+    # special flag for task groups
+    is_special: Mapped[bool] = mapped_column(default=False)
 
     # relationships
     course: Mapped["Course"] = relationship(back_populates="task_groups")
@@ -129,6 +153,9 @@ class Task(Base):
     name: Mapped[str]
     group_id: Mapped[int] = mapped_column(ForeignKey(TaskGroup.id))
     is_bonus: Mapped[bool] = mapped_column(default=False)
+    # special flag for tasks
+    is_special: Mapped[bool] = mapped_column(default=False)
+    score: Mapped[int] = mapped_column(default=100)
 
     # relationships
     group: Mapped["TaskGroup"] = relationship(back_populates="tasks")

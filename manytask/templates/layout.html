@@ -20,21 +20,12 @@
             opacity: 0.4;
         }
 
-
-
-     {#Floating div with total score #}
-    .total_score {
-{#        position: fixed;#}
-{#        top: 70px;#}
-{#        right: 10px;#}
-{#        padding: 10px;#}
-        background-color: var(--bs-tertiary-bg);
-        border-radius: 10px;
-        padding: 0 5px;
-        font-size: 0.8rem;
-        {#box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);#}
-{#        z-index: 1000;#}
-    }
+        .total_score {
+            background-color: var(--bs-tertiary-bg);
+            border-radius: 10px;
+            padding: 0 5px;
+            font-size: 0.8rem;
+        }
     </style>
 
 
@@ -72,6 +63,22 @@
                         </a>
                     </li>
                     {% endif %}
+                    {% if is_course_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link px-3 {% if active_page == 'roles' %}active{% endif %}"
+                           aria-current="{% if active_page == 'roles' %}page{% endif %}"
+                           href="{{ url_for('web.manage_roles') }}">
+                            Manage&nbsp;Roles
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3 {% if active_page == 'create_course' %}active{% endif %}"
+                           aria-current="{% if active_page == 'create_course' %}page{% endif %}"
+                           href="{{ url_for('web.create_course') }}">
+                            Create&nbsp;Course
+                        </a>
+                    </li>
+                    {% endif %}
                     <li class="nav-item dropdown">
                         <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_links" data-bs-toggle="dropdown" aria-expanded="false">Links</a>
                         <ul class="dropdown-menu" aria-labelledby="navbar_links">
@@ -86,27 +93,71 @@
                 </ul>
             </div>
 
-            <div class="dropdown text-end d-flex align-items-center justify-content-center">
+            <div class="d-flex align-items-center">
                 <div class="total_score round d-flex flex-column align-items-center justify-content-center ms-2 me-2">
                     <span class="fs-7">{{ solved_score_string }}/{{ current_course.deadlines.max_score_started }}</span>
                     <span class="fs-7">{{ solved_percent }}%</span>
                 </div>
 
-                <a href="#" class="d-block link-body-emphasis text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                    {#                        <img src="https://github.com/mdo.png" alt="mdo" width="32" height="32" class="rounded-circle">#}
-                    <span class="d-inline-block fw-bold">[{{ username }}]</span>
-                </a>
-                <ul class="dropdown-menu text-small dropdown-menu-end">
-                    <li><a class="dropdown-item" target="_blank" href="{{ gitlab_url }}/-/profile">Account Settings</a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="light"><i class="fa-fw fa-solid fa-sun "></i>&nbsp;Light Theme</a></li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i class="fa-fw fa-solid fa-moon"></i>&nbsp;Dark Theme</a></li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i class="fa-fw fa-solid fa-wand-magic-sparkles"></i>&nbsp;Auto Theme</a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="/logout">Sign out</a></li>
-                </ul>
-            </div>
+                <div class="dropdown me-3">
+                    <a href="#" class="d-block link-body-emphasis text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="d-inline-block">{{ current_course_name or 'Select Course' }}</span>
+                    </a>
+                    <ul class="dropdown-menu text-small" id="course-dropdown">
+                        <li class="dropdown-item text-center text-muted small">Loading courses...</li>
+                    </ul>
+                </div>
 
+                <script>
+                    fetch('/courses/user')
+                        .then(response => response.json())
+                        .then(data => {
+                            const dropdown = document.getElementById('course-dropdown');
+                            dropdown.innerHTML = '';
+                            
+                            if (data.courses.length === 0) {
+                                dropdown.innerHTML = '<li class="dropdown-item text-center text-muted small">No courses available</li>';
+                                return;
+                            }
+                            
+                            data.courses.forEach(course => {
+                                const li = document.createElement('li');
+                                const a = document.createElement('a');
+                                a.className = `dropdown-item ${course.unique_course_name === '{{ current_course_name }}' ? 'active' : ''}`;
+                                a.href = `/courses/switch/${course.unique_course_name}`;
+                                a.textContent = course.name;
+                                li.appendChild(a);
+                                dropdown.appendChild(li);
+                            });
+                        })
+                        .catch(error => {
+                            const dropdown = document.getElementById('course-dropdown');
+                            dropdown.innerHTML = '<li class="dropdown-item text-center text-muted small">Error loading courses</li>';
+                        });
+                </script>
+
+                <div class="dropdown text-end">
+                    <a href="#" class="d-block link-body-emphasis text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="d-inline-block fw-bold">
+                            {% if is_course_admin %}
+                            <span class="text-primary">(admin)</span>
+                            {% elif role == 'teacher' %}
+                            <span class="text-success">(teacher)</span>
+                            {% endif %}
+                            [{{ username }}]
+                        </span>
+                    </a>
+                    <ul class="dropdown-menu text-small dropdown-menu-end">
+                        <li><a class="dropdown-item" target="_blank" href="{{ gitlab_url }}/-/profile">Account Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" data-bs-theme-value="light"><i class="fa-fw fa-solid fa-sun "></i>&nbsp;Light Theme</a></li>
+                        <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i class="fa-fw fa-solid fa-moon"></i>&nbsp;Dark Theme</a></li>
+                        <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i class="fa-fw fa-solid fa-wand-magic-sparkles"></i>&nbsp;Auto Theme</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/logout">Sign out</a></li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </nav>
 

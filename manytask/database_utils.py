@@ -3,6 +3,12 @@ from typing import Any
 from flask import current_app
 
 from .course import Course
+from .web import get_course
+
+
+def get_current_course() -> Course:
+    """Get the current course from the Flask app."""
+    return get_course()
 
 
 def get_database_table_data() -> dict[str, Any]:

@@ -56,12 +56,14 @@ services:
         restart: always
         expose:
             - "5050"
-        env_file: .env
+        env_file:
+            - .env.common
         environment:
             VIRTUAL_HOST: manytask.org
             VIRTUAL_PORT: 5050
             LETSENCRYPT_HOST: manytask.org
             LETSENCRYPT_EMAIL: no-reply@manytask.org
         volumes:
+            - ./.env.common:/app/.env.common
             - cache:/cache
             - solutions:/solutions
