@@ -7,13 +7,16 @@ services:
             dockerfile: Dockerfile
             context: .
         container_name: manytask
-        env_file: .env
+        env_file:
+            - .env.common
+
         environment:
             FLASK_DEBUG: 0
         ports:
             - "8081:5050"
         volumes:
             - ./manytask/:/app/manytask
+            - ./.env.common:/app/.env.common
             - .tmp/cache/:/cache
             - .tmp/solutions/:/solutions
         dns:
