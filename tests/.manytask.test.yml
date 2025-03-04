@@ -1,16 +1,14 @@
 version: 1
 
-
 settings:  # required
-  course_name: python
-
-  gitlab_base_url: https://gitlab.manytask.org
+  unique_course_name: python
+  gitlab_base_url: https://gitlab.manytask2.org
   public_repo: python/public-2022-fall
-  students_group: python/students-fall-2022
+  students_group: python/students-2022-fall
 
 
 ui:
-  task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$TASK_NAME
+  task_url_template: https://gitlab.manytask2.org/test/$GROUP_NAME/$TASK_NAME
 
   # optional, any number of links
   links:
