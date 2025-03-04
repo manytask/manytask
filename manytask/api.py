@@ -12,7 +12,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 import yaml
-from flask import Blueprint, Response, abort, current_app, jsonify, request, session
+from flask import Blueprint, Response, abort, jsonify, request, session
 from flask.typing import ResponseReturnValue
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -22,11 +22,13 @@ from werkzeug.utils import secure_filename
 from manytask import models
 from manytask.auth import requires_auth, requires_ready
 from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
-from manytask.course import DEFAULT_TIMEZONE, Course, get_current_time
+from manytask.course import DEFAULT_TIMEZONE, get_current_time
 from manytask.database import DataBaseApi, DatabaseConfig
 from manytask.database_utils import get_database_table_data
 from manytask.glab import Student
 from manytask.role import Role
+
+from .web import get_course
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -231,7 +233,7 @@ def _handle_files(files: dict[str, FileStorage], task_name: str, username: str, 
 @requires_token
 @requires_ready
 def report_score() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     task_name, user_id, username, check_deadline, submit_time_str = _validate_and_extract_params(request.form)
 
@@ -284,7 +286,7 @@ def report_score() -> ResponseReturnValue:
 @requires_token
 @requires_ready
 def get_score() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     # ----- get and validate request parameters ----- #
     if "task" not in request.form:
@@ -399,7 +401,7 @@ def update_config() -> ResponseReturnValue:
 @bp.post("/update_cache")
 @requires_token
 def update_cache() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     logger.info("Running update_cache")
 
@@ -413,7 +415,7 @@ def update_cache() -> ResponseReturnValue:
 @requires_token
 @requires_ready
 def get_solutions() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     # ----- get and validate request parameters ----- #
     if "task" not in request.form:
@@ -469,7 +471,7 @@ def update_database() -> ResponseReturnValue:
     Returns:
         ResponseReturnValue: JSON response with success status and optional error message
     """
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
     storage_api = course.storage_api
 
     student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
@@ -504,3 +506,34 @@ def update_database() -> ResponseReturnValue:
     except Exception as e:
         logger.error(f"Error in update_database: {str(e)}", exc_info=True)
         return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
+
+
+@bp.get("/scores")
+@requires_auth
+def get_scores() -> ResponseReturnValue:
+    return jsonify(get_course().storage_api.get_scores(session["gitlab"]["username"]))
+
+
+@bp.get("/scores/all")
+@requires_auth
+def get_all_scores() -> ResponseReturnValue:
+    return jsonify(get_course().storage_api.get_all_scores())
+
+
+@bp.get("/scores/stats")
+@requires_auth
+def get_stats() -> ResponseReturnValue:
+    return jsonify(get_course().storage_api.get_stats())
+
+
+@bp.get("/scores/update_timestamp")
+@requires_auth
+def get_scores_update_timestamp() -> ResponseReturnValue:
+    return jsonify(get_course().storage_api.get_scores_update_timestamp())
+
+
+@bp.get("/scores/update")
+@requires_auth
+def update_scores() -> ResponseReturnValue:
+    get_course().storage_api.update_cached_scores()
+    return jsonify({"success": True})

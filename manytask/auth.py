@@ -12,6 +12,8 @@ from werkzeug import Response
 from manytask.course import Course
 from manytask.glab import Student
 
+from .web import get_course
+
 logger = logging.getLogger(__name__)
 
 
@@ -123,7 +125,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if current_app.debug:
             return f(*args, **kwargs)
 
-        course = current_app.course  # type: ignore
+        course = get_course()
         oauth = current_app.oauth  # type: ignore
 
         if "code" in request.args:
@@ -154,7 +156,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        course = current_app.course  # type: ignore
+        course = get_course()
         if not course.config:
             return redirect(url_for("web.not_ready"))
         return f(*args, **kwargs)

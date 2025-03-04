@@ -229,6 +229,10 @@ class DataBaseApi(ViewerApi, StorageApi):
                 user_on_course.role = models.Role.STUDENT
                 user_on_course.is_course_admin = False
 
+            if user_on_course.repo_name != student.repo and student.repo is not None:
+                user_on_course.repo_name = student.repo
+                session.flush()
+
             session.commit()
 
             stored_user = StoredUser(
@@ -627,7 +631,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                 user_id=user.id,
                 course_id=course.id,
             )
-            if user_on_course.repo_name != student.repo:
+            if user_on_course.repo_name != student.repo and student.repo is not None:
                 user_on_course.repo_name = student.repo
                 session.flush()
 

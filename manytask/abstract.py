@@ -1,16 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Callable
 
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .glab import Student
-
-
-class Role(str, Enum):
-    ADMIN = "admin"
-    TEACHER = "teacher"
-    STUDENT = "student"
+from .role import Role
 
 
 @dataclass
@@ -75,7 +69,21 @@ class StorageApi(ABC):
     def sync_stored_user(
         self,
         student: Student,
+        is_registration: bool = False,
     ) -> StoredUser: ...
+
+    @abstractmethod
+    def set_user_role(
+        self,
+        username: str,
+        role: Role,
+    ) -> StoredUser: ...
+
+    @abstractmethod
+    def get_users_by_role(
+        self,
+        role: Role,
+    ) -> list[StoredUser]: ...
 
     @abstractmethod
     def get_all_scores(self) -> dict[str, dict[str, int]]: ...

@@ -4,14 +4,26 @@ import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 from http import HTTPStatus
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
 from zoneinfo import ZoneInfo
 
 import flask
 import gitlab
 from cachelib import FileSystemCache
-from flask import Blueprint, Flask, Response, current_app, redirect, render_template, request, session, url_for
+from flask import (
+    Blueprint,
+    Response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask import (
+    current_app as flask_current_app,
+)
 from flask.typing import ResponseReturnValue
+from pydantic import AnyUrl
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLAlchemySession
 
@@ -19,6 +31,7 @@ from manytask import models
 
 from . import abstract, course, database, glab, solutions
 from .auth import requires_auth, requires_ready
+from .config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .role import Role
@@ -31,11 +44,14 @@ bp = Blueprint("web", __name__)
 
 
 if TYPE_CHECKING:
+    from flask import Flask
 
     class FlaskWithCourse(Flask):
         course: Course
 
-    current_app: FlaskWithCourse  # type: ignore
+    current_app: FlaskWithCourse
+else:
+    current_app = flask_current_app
 
 
 def get_allscores_url(viewer_api: abstract.ViewerApi) -> str:
@@ -55,7 +71,7 @@ def get_allscores_url(viewer_api: abstract.ViewerApi) -> str:
 @requires_ready
 @requires_auth
 def course_page() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
     storage_api = cast(database.DataBaseApi, course.storage_api)
 
     if current_app.debug:
@@ -94,9 +110,15 @@ def course_page() -> ResponseReturnValue:
 
     allscores_url = get_allscores_url(course.viewer_api)
 
-    with SQLAlchemySession(storage_api.engine) as session:
-        courses = session.query(models.Course).all()
-        available_courses = [{"name": c.name, "unique_course_name": c.unique_course_name} for c in courses]
+    available_courses = []
+    if isinstance(storage_api, database.DataBaseApi):
+        with SQLAlchemySession(storage_api.engine) as session:
+            courses = session.query(models.Course).all()
+            available_courses = [{"name": c.name, "unique_course_name": c.unique_course_name} for c in courses]
+
+    current_course_name = get_current_course_name()
+    if current_course_name is None:
+        current_course_name = ""
 
     return render_template(
         "tasks.html",
@@ -121,7 +143,7 @@ def course_page() -> ResponseReturnValue:
         course_favicon=course.favicon,
         is_course_admin=student_role == Role.ADMIN,
         cache_time=cache_time,
-        current_course_name=get_current_course_name(),
+        current_course_name=current_course_name,
         available_courses=available_courses,
     )
 
@@ -130,7 +152,7 @@ def course_page() -> ResponseReturnValue:
 @requires_auth
 @requires_ready
 def get_solutions() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     if current_app.debug:
         if request.args.get("admin", None) in ("true", "1", "yes", None):
@@ -173,10 +195,17 @@ def get_solutions() -> ResponseReturnValue:
     )
 
 
+def get_course() -> Course:
+    """Get the course from the current Flask app."""
+    if not hasattr(current_app, "course"):
+        raise RuntimeError("Course not initialized in Flask app")
+    return current_app.course
+
+
 @bp.route("/signup", methods=["GET", "POST"])
 @requires_ready
 def signup() -> ResponseReturnValue:
-    course: Course = current_app.course
+    course = get_course()
 
     target_course_name = request.args.get("course")
     if not target_course_name:
@@ -247,7 +276,7 @@ def signup() -> ResponseReturnValue:
 @requires_auth
 def login() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
     student = course.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
 
     if course.gitlab_api.check_project_exists(student):
@@ -260,7 +289,7 @@ def login() -> ResponseReturnValue:
 @requires_ready
 @requires_auth
 def create_project() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
@@ -320,8 +349,7 @@ def not_ready() -> ResponseReturnValue:
 @requires_auth
 @requires_ready
 def show_database() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
-
+    course = get_course()
     storage_api = course.storage_api
 
     if current_app.debug:
@@ -369,44 +397,49 @@ def show_database() -> ResponseReturnValue:
     )
 
 
-def requires_admin(f):
+T = TypeVar("T", bound=Callable[..., Any])
+
+
+def requires_admin(f: T) -> T:
     @wraps(f)
-    def decorated(*args, **kwargs):
+    def decorated(*args: Any, **kwargs: Any) -> Any:
         if current_app.debug:
             return f(*args, **kwargs)
 
-        stored_user = current_app.course.storage_api.get_stored_user(
-            current_app.course.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
+        stored_user = get_course().storage_api.get_stored_user(
+            get_course().gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
         )
         if stored_user.role != Role.ADMIN:
-            return "Access denied", 403
+            return redirect(url_for("web.course_page"))
+
         return f(*args, **kwargs)
 
-    return decorated
+    return cast(T, decorated)
 
 
-def requires_teacher_or_admin(f):
+def requires_teacher_or_admin(f: T) -> T:
     @wraps(f)
-    def decorated(*args, **kwargs):
+    def decorated(*args: Any, **kwargs: Any) -> Any:
         if current_app.debug:
             return f(*args, **kwargs)
 
-        stored_user = current_app.course.storage_api.get_stored_user(
-            current_app.course.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
+        stored_user = get_course().storage_api.get_stored_user(
+            get_course().gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
         )
         if stored_user.role not in (Role.ADMIN, Role.TEACHER):
-            return "Access denied", 403
+            return redirect(url_for("web.course_page"))
+
         return f(*args, **kwargs)
 
-    return decorated
+    return cast(T, decorated)
 
 
 @bp.route("/admin/roles", methods=["GET"])
 @requires_ready
 @requires_auth
 @requires_admin
-def manage_roles():
-    course: Course = current_app.course
+def manage_roles() -> ResponseReturnValue:
+    course = get_course()
     storage_api = course.storage_api
 
     student = course.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
@@ -449,7 +482,7 @@ def manage_roles():
 @requires_admin
 def update_role(username: str) -> ResponseReturnValue:
     """Update user role"""
-    course: Course = current_app.course
+    course = get_course()
     role = request.form.get("role")
 
     if not role or role not in [r.value for r in Role]:
@@ -472,7 +505,7 @@ def update_role(username: str) -> ResponseReturnValue:
 @requires_admin
 def create_course() -> ResponseReturnValue:
     """Admin page for creating new courses"""
-    course: Course = current_app.course
+    course = get_course()
     storage_api = course.storage_api
 
     student = course.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
@@ -483,61 +516,33 @@ def create_course() -> ResponseReturnValue:
 
     if request.method == "POST":
         try:
-            new_course = {
-                "name": request.form["name"],
-                "unique_course_name": request.form["unique_course_name"],
-                "gitlab_instance_host": request.form["gitlab_instance_host"],
-                "registration_secret": request.form["registration_secret"],
-                "token": request.form["token"],
-                "show_allscores": request.form.get("show_allscores", "false") == "true",
-                "gitlab_admin_token": request.form["gitlab_admin_token"],
-                "gitlab_course_group": request.form["gitlab_course_group"],
-                "gitlab_course_public_repo": request.form["gitlab_course_public_repo"],
-                "gitlab_course_students_group": request.form["gitlab_course_students_group"],
-                "gitlab_default_branch": request.form["gitlab_default_branch"],
-                "gitlab_client_id": request.form["gitlab_client_id"],
-                "gitlab_client_secret": request.form["gitlab_client_secret"],
-                "gdoc_spreadsheet_id": request.form["gdoc_spreadsheet_id"],
-                "gdoc_scoreboard_sheet": request.form["gdoc_scoreboard_sheet"],
-            }
-
-            required_fields = [
-                "name",
-                "gitlab_instance_host",
-                "registration_secret",
-                "token",
-                "gitlab_admin_token",
-                "gitlab_course_group",
-                "gitlab_course_public_repo",
-                "gitlab_course_students_group",
-                "gitlab_default_branch",
-                "gitlab_client_id",
-                "gitlab_client_secret",
-            ]
-
-            for field in required_fields:
-                if not new_course[field]:
-                    raise ValueError(f"Field {field} is required")
-
-            storage_api.create_course(
-                name=new_course["name"],
-                unique_course_name=new_course["unique_course_name"],
-                gitlab_instance_host=new_course["gitlab_instance_host"],
-                registration_secret=new_course["registration_secret"],
-                token=new_course["token"],
-                show_allscores=new_course["show_allscores"],
-                gitlab_admin_token=new_course["gitlab_admin_token"],
-                gitlab_course_group=new_course["gitlab_course_group"],
-                gitlab_course_public_repo=new_course["gitlab_course_public_repo"],
-                gitlab_course_students_group=new_course["gitlab_course_students_group"],
-                gitlab_default_branch=new_course["gitlab_default_branch"],
-                gitlab_client_id=new_course["gitlab_client_id"],
-                gitlab_client_secret=new_course["gitlab_client_secret"],
-                gdoc_spreadsheet_id=new_course["gdoc_spreadsheet_id"],
-                gdoc_scoreboard_sheet=new_course["gdoc_scoreboard_sheet"],
+            settings = ManytaskSettingsConfig(
+                course_name=request.form["course_name"],
+                unique_course_name=request.form["unique_course_name"],
+                gitlab_base_url=AnyUrl.build(scheme="https", host=request.form["gitlab_base_url"]),
+                public_repo=request.form["public_repo"],
+                students_group=request.form["students_group"],
+                registration_secret=request.form["registration_secret"],
+                token=request.form["token"],
+                show_allscores=request.form["show_allscores"].lower() in ("true", "1", "yes"),
+                gitlab_admin_token=request.form["gitlab_admin_token"],
+                gitlab_course_group=request.form["gitlab_course_group"],
+                gitlab_course_public_repo=request.form["gitlab_course_public_repo"],
+                gitlab_course_students_group=request.form["gitlab_course_students_group"],
+                gitlab_default_branch=request.form["gitlab_default_branch"],
+                gitlab_client_id=request.form["gitlab_client_id"],
+                gitlab_client_secret=request.form["gitlab_client_secret"],
             )
 
-            return redirect(url_for("web.manage_roles"))
+            ui = ManytaskUiConfig(
+                task_url_template=f"https://{request.form['gitlab_base_url']}/test/$GROUP_NAME/$TASK_NAME", links={}
+            )
+
+            deadlines = ManytaskDeadlinesConfig(timezone="UTC", schedule=[])
+
+            manytask_config = ManytaskConfig(version=1, settings=settings, ui=ui, deadlines=deadlines)
+            storage_api.create_course(manytask_config)
+            return redirect(url_for("web.course_page"))
         except Exception as e:
             error_message = str(e)
             return render_template(
@@ -658,7 +663,9 @@ def get_default_course_config() -> CourseConfig:
 
 
 def _get_course_name_from_request() -> str:
-    current_course_name = request.args.get("course") or get_current_course_name()
+    # Get course name from request args or session, defaulting to empty string
+    current_course_name: str = request.args.get("course", "") or get_current_course_name() or ""
+
     temp_db_config = database.DatabaseConfig(
         database_url=os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask"),
         course_name="",
@@ -685,9 +692,9 @@ def _get_course_name_from_request() -> str:
             flask.abort(redirect(url_for("web.not_ready")))
 
         if not current_course_name or not any(c.unique_course_name == current_course_name for c in courses):
-            current_course_name = courses[0].unique_course_name
+            return courses[0].unique_course_name
 
-    return current_course_name
+        return current_course_name
 
 
 def _create_course_config(course_data: models.Course) -> CourseConfig:
@@ -738,10 +745,10 @@ def _create_course_config(course_data: models.Course) -> CourseConfig:
     )
 
 
-def _build_task_configs(tasks: list[models.Task], group_start_time: datetime) -> tuple[list[dict], bool]:
+def _build_task_configs(tasks: list[models.Task], group_start_time: datetime) -> tuple[list[dict[str, Any]], bool]:
     now = datetime.now(tz=ZoneInfo("UTC"))
     has_enabled_non_bonus_task = False
-    task_configs = []
+    task_configs: list[dict[str, Any]] = []
 
     for task in tasks:
         if not task.is_bonus and group_start_time <= now:
@@ -759,14 +766,15 @@ def _build_task_configs(tasks: list[models.Task], group_start_time: datetime) ->
     return task_configs, has_enabled_non_bonus_task
 
 
-def _build_group_config(group: models.TaskGroup, tasks: list[models.Task]) -> tuple[dict, bool]:
+def _build_group_config(group: models.TaskGroup, tasks: list[models.Task]) -> tuple[dict[str, Any], bool]:
     now = datetime.now(tz=ZoneInfo("UTC"))
     group_start_time = now
 
     if group.deadline and group.deadline.data:
         deadline_data = group.deadline.data
         if isinstance(deadline_data, dict):
-            group_start_time = datetime.fromisoformat(deadline_data.get("start", now.isoformat()))
+            start_time = deadline_data.get("start", now.isoformat())
+            group_start_time = datetime.fromisoformat(str(start_time))
 
     task_configs, has_enabled_non_bonus_task = _build_task_configs(tasks, group_start_time)
 
@@ -780,18 +788,25 @@ def _build_group_config(group: models.TaskGroup, tasks: list[models.Task]) -> tu
     if group.deadline and group.deadline.data:
         deadline_data = group.deadline.data
         if isinstance(deadline_data, dict):
-            group_config["start"] = deadline_data.get("start", datetime.now(tz=ZoneInfo("UTC")))
-            group_config["end"] = deadline_data.get("end", datetime.now(tz=ZoneInfo("UTC")) + timedelta(days=30))
-            group_config.update(deadline_data)
+            current_time = datetime.now(tz=ZoneInfo("UTC"))
+            start_time = deadline_data.get("start", current_time)
+            end_time = deadline_data.get("end", current_time + timedelta(days=30))
+            group_config["start"] = str(start_time)
+            group_config["end"] = str(end_time)
+            # Copy other fields except start and end
+            for k, v in deadline_data.items():
+                if k not in ["start", "end"]:
+                    group_config[k] = v
     else:
-        group_config["start"] = datetime.now(tz=ZoneInfo("UTC"))
-        group_config["end"] = datetime.now(tz=ZoneInfo("UTC")) + timedelta(days=30)
+        current_time = datetime.now(tz=ZoneInfo("UTC"))
+        group_config["start"] = str(current_time)
+        group_config["end"] = str(current_time + timedelta(days=30))
 
     return group_config, has_enabled_non_bonus_task
 
 
-def _build_course_config(current_course: models.Course, schedule: list[dict]) -> dict:
-    return {
+def _build_course_config(current_course: models.Course, schedule: list[dict[str, Any]]) -> dict[str, Any]:
+    config = {
         "version": 1,
         "settings": {
             "course_name": current_course.name,
@@ -806,6 +821,7 @@ def _build_course_config(current_course: models.Course, schedule: list[dict]) ->
         },
         "deadlines": {"timezone": "UTC", "schedule": schedule},
     }
+    return config
 
 
 def _should_skip_request(endpoint: str | None) -> bool:
@@ -814,7 +830,10 @@ def _should_skip_request(endpoint: str | None) -> bool:
 
 def _load_course_schedule(
     storage_api: database.DataBaseApi, current_course_name: str
-) -> tuple[models.Course, list[dict], bool]:
+) -> tuple[models.Course, list[dict[str, Any]], bool]:
+    if not isinstance(storage_api, database.DataBaseApi):
+        raise TypeError("storage_api must be an instance of DataBaseApi")
+
     with SQLAlchemySession(storage_api.engine) as session:
         current_course = session.query(models.Course).filter_by(unique_course_name=current_course_name).first()
         if not current_course:
@@ -847,24 +866,23 @@ def load_current_course() -> None:
     if _should_skip_request(request.endpoint):
         return
 
-    current_course_name = _get_course_name_from_request()
-    if current_course_name:
-        set_current_course(current_course_name)
+    current_course_name = get_current_course_name()
+    if not current_course_name:
+        return
 
-        storage_api = current_app.course.storage_api if current_app.course else None  # type: ignore
-        if not storage_api:
-            current_app.course = course.Course(get_default_course_config())  # type: ignore
-        else:
-            course_data = storage_api.get_course_by_unique_name(current_course_name)
-            if course_data:
-                course_config = _create_course_config(course_data)
-                current_app.course = course.Course(course_config)  # type: ignore
+    storage_api = get_course().storage_api
+    if not isinstance(storage_api, database.DataBaseApi):
+        return
 
-                current_course, schedule, _ = _load_course_schedule(storage_api, current_course_name)
-                config_data = _build_course_config(current_course, schedule)
-                current_app.course.store_config(config_data)  # type: ignore
-            else:
-                flask.abort(redirect(url_for("web.not_ready")))
+    try:
+        current_course, schedule, has_errors = _load_course_schedule(storage_api, current_course_name)
+        course_config = _create_course_config(current_course)
+        current_app.course = course.Course(course_config)
+        config_data = _build_course_config(current_course, schedule)
+        get_course().store_config(config_data)
+    except Exception as e:
+        logger.error(f"Failed to load course schedule: {e}")
+        return
 
 
 @bp.route("/courses/switch/<unique_course_name>", methods=["GET"])
@@ -879,8 +897,11 @@ def switch_course(unique_course_name: str) -> ResponseReturnValue:
 @requires_ready
 @requires_auth
 def get_available_courses() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
     storage_api = course.storage_api
+
+    if not isinstance(storage_api, database.DataBaseApi):
+        return flask.make_response(flask.jsonify({"courses": []}))
 
     with SQLAlchemySession(storage_api.engine) as session:
         courses = session.query(models.Course).all()
@@ -888,19 +909,22 @@ def get_available_courses() -> ResponseReturnValue:
             {"name": course.name, "unique_course_name": course.unique_course_name} for course in courses
         ]
 
-    return {"courses": available_courses}
+    return flask.make_response(flask.jsonify({"courses": available_courses}))
 
 
 @bp.route("/courses/user", methods=["GET"])
 @requires_ready
 @requires_auth
 def get_user_courses() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
     storage_api = course.storage_api
     student_username = flask.session.get("gitlab", {}).get("username")
 
     if not student_username:
-        return {"courses": []}
+        return flask.make_response(flask.jsonify({"courses": []}))
+
+    if not isinstance(storage_api, database.DataBaseApi):
+        return flask.make_response(flask.jsonify({"courses": []}))
 
     with SQLAlchemySession(storage_api.engine) as session:
         user_courses = (
@@ -915,4 +939,4 @@ def get_user_courses() -> ResponseReturnValue:
             {"name": course.name, "unique_course_name": course.unique_course_name} for course in user_courses
         ]
 
-    return {"courses": user_courses_list}
+    return flask.make_response(flask.jsonify({"courses": user_courses_list}))
