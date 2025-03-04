@@ -14,6 +14,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from . import abstract, config, course, database, glab, local_config, solutions
 from .config_loader import load_environment_config
 
+
 class CustomFlask(Flask):
     course: course.Course
     oauth: OAuth

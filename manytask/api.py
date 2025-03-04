@@ -14,9 +14,12 @@ from zoneinfo import ZoneInfo
 import yaml
 from flask import Blueprint, Response, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
+from manytask import models
 from manytask.auth import requires_auth, requires_ready
 from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
 from manytask.course import DEFAULT_TIMEZONE, Course, get_current_time
@@ -24,9 +27,6 @@ from manytask.database import DataBaseApi, DatabaseConfig
 from manytask.database_utils import get_database_table_data
 from manytask.glab import Student
 from manytask.role import Role
-from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-from manytask import models
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -35,12 +35,11 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-
         try:
             config_raw_data = request.get_data()
             config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
             unique_course_name = config_data.get("settings", {}).get("unique_course_name")
-            
+
             if not unique_course_name:
                 abort(HTTPStatus.FORBIDDEN)
 
@@ -51,29 +50,30 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
                 course = session.query(models.Course).filter_by(unique_course_name=unique_course_name).first()
                 if not course:
                     abort(HTTPStatus.FORBIDDEN)
-                
-                db_api = DataBaseApi(DatabaseConfig(
-                    database_url=database_url,
-                    course_name=course.name,
-                    unique_course_name=unique_course_name,
-                    gitlab_instance_host=course.gitlab_instance_host,
-                    registration_secret="",
-                    token="",
-                    show_allscores=False,
-                    gitlab_admin_token="",
-                    gitlab_course_group="",
-                    gitlab_course_public_repo="",
-                    gitlab_course_students_group="",
-                    gitlab_default_branch="",
-                    gitlab_client_id="",
-                    gitlab_client_secret="",
-                ))
+
+                DataBaseApi(
+                    DatabaseConfig(
+                        database_url=database_url,
+                        course_name=course.name,
+                        unique_course_name=unique_course_name,
+                        gitlab_instance_host=course.gitlab_instance_host,
+                        registration_secret="",
+                        token="",
+                        show_allscores=False,
+                        gitlab_admin_token="",
+                        gitlab_course_group="",
+                        gitlab_course_public_repo="",
+                        gitlab_course_students_group="",
+                        gitlab_default_branch="",
+                        gitlab_client_id="",
+                        gitlab_client_secret="",
+                    )
+                )
 
                 course_token = course.token
 
         except Exception:
             abort(HTTPStatus.FORBIDDEN)
-
 
         token = request.form.get("token")
         if not token:
@@ -81,17 +81,15 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
 
         if not token:
             abort(HTTPStatus.FORBIDDEN)
-            
+
         if not course_token:
             abort(HTTPStatus.FORBIDDEN)
 
-
         token = token.split()[-1]
-
 
         if not secrets.compare_digest(token, course_token):
             abort(HTTPStatus.FORBIDDEN)
-            
+
         return f(*args, **kwargs)
 
     return decorated
@@ -137,12 +135,6 @@ def _update_score(
     new_score = int(score * multiplier)
 
     return max(old_score, new_score)
-
-
-
-
-
-
 
 
 @bp.get("/healthcheck")
@@ -347,16 +339,13 @@ def update_config() -> ResponseReturnValue:
     logger.info("Running update_config")
 
     try:
-
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
-
 
         settings = config_data.get("settings", {})
         unique_course_name = settings.get("unique_course_name")
         if not unique_course_name:
             return "Missing unique_course_name in settings", HTTPStatus.BAD_REQUEST
-
 
         database_url = os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask")
         engine = create_engine(database_url)
@@ -366,34 +355,33 @@ def update_config() -> ResponseReturnValue:
             if not course:
                 return f"Course {unique_course_name} not found", HTTPStatus.UNAUTHORIZED
 
-
-            db_api = DataBaseApi(DatabaseConfig(
-                database_url=database_url,
-                course_name=course.name,
-                unique_course_name=unique_course_name,
-                gitlab_instance_host=course.gitlab_instance_host,
-                registration_secret="",
-                token="",
-                show_allscores=False,
-                gitlab_admin_token="",
-                gitlab_course_group="",
-                gitlab_course_public_repo="",
-                gitlab_course_students_group="",
-                gitlab_default_branch="",
-                gitlab_client_id="",
-                gitlab_client_secret="",
-            ))
-
+            db_api = DataBaseApi(
+                DatabaseConfig(
+                    database_url=database_url,
+                    course_name=course.name,
+                    unique_course_name=unique_course_name,
+                    gitlab_instance_host=course.gitlab_instance_host,
+                    registration_secret="",
+                    token="",
+                    show_allscores=False,
+                    gitlab_admin_token="",
+                    gitlab_course_group="",
+                    gitlab_course_public_repo="",
+                    gitlab_course_students_group="",
+                    gitlab_default_branch="",
+                    gitlab_client_id="",
+                    gitlab_client_secret="",
+                )
+            )
 
             if "course_name" not in settings:
                 settings["course_name"] = course.name
                 config_data["settings"] = settings
 
             try:
-
                 from manytask.config import ManytaskConfig
-                manytask_config = ManytaskConfig(**config_data)
 
+                manytask_config = ManytaskConfig(**config_data)
 
                 db_api.update_task_groups_from_config(config_data)
 

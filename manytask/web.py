@@ -1,27 +1,26 @@
 import logging
-import secrets
 import os
+import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 from http import HTTPStatus
 from zoneinfo import ZoneInfo
 
-import gitlab
 import flask
+import gitlab
+from cachelib import FileSystemCache
 from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from manytask import models
 
-from . import abstract, glab
+from . import abstract, course, database, glab, solutions
 from .auth import requires_auth, requires_ready
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .role import Role
-from .database import DatabaseConfig
-from . import course, database, solutions
-from cachelib import FileSystemCache
 
 SESSION_VERSION = 1.5
 
@@ -57,7 +56,7 @@ def course_page() -> ResponseReturnValue:
     else:
         if not flask.session or "gitlab" not in flask.session:
             return redirect(url_for("web.logout"))
-            
+
         try:
             student_username = flask.session["gitlab"]["username"]
             student_repo = flask.session["gitlab"]["repo"]
@@ -88,13 +87,7 @@ def course_page() -> ResponseReturnValue:
 
     with SQLAlchemySession(storage_api.engine) as session:
         courses = session.query(models.Course).all()
-        available_courses = [
-            {
-                'name': c.name,
-                'unique_course_name': c.unique_course_name
-            } 
-            for c in courses
-        ]
+        available_courses = [{"name": c.name, "unique_course_name": c.unique_course_name} for c in courses]
 
     return render_template(
         "course.html",
@@ -278,24 +271,23 @@ def logout() -> ResponseReturnValue:
     session.pop("gitlab", None)
     return redirect(url_for("web.signup"))
 
-from sqlalchemy import create_engine
+
 @bp.route("/not_ready")
 def not_ready() -> ResponseReturnValue:
     current_course_name = request.args.get("course") or get_current_course_name()
-    
+
     course_name = ""
     error_message = request.args.get("error", "Course is not ready")
-    
 
     database_url = os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask")
     engine = create_engine(database_url)
-    
+
     with SQLAlchemySession(engine) as session:
         if current_course_name:
             course_data = session.query(models.Course).filter_by(unique_course_name=current_course_name).first()
             if course_data:
                 course_name = course_data.name
-                
+
                 task_groups = session.query(models.TaskGroup).filter_by(course_id=course_data.id).all()
                 if not task_groups:
                     error_message = f"Course '{course_data.name}' has no task groups defined"
@@ -307,14 +299,11 @@ def not_ready() -> ResponseReturnValue:
                 error_message = "No courses available in the system"
 
     manytask_version = ""
-    if hasattr(current_app, 'course') and current_app.course:
+    if hasattr(current_app, "course") and current_app.course:
         manytask_version = current_app.course.manytask_version
 
     return render_template(
-        "not_ready.html",
-        manytask_version=manytask_version,
-        course_name=course_name,
-        error_message=error_message
+        "not_ready.html", manytask_version=manytask_version, course_name=course_name, error_message=error_message
     )
 
 
@@ -367,7 +356,7 @@ def show_database() -> ResponseReturnValue:
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
-        current_course_name=get_current_course_name()
+        current_course_name=get_current_course_name(),
     )
 
 
@@ -500,16 +489,23 @@ def create_course() -> ResponseReturnValue:
                 "gitlab_client_id": request.form["gitlab_client_id"],
                 "gitlab_client_secret": request.form["gitlab_client_secret"],
                 "gdoc_spreadsheet_id": request.form["gdoc_spreadsheet_id"],
-                "gdoc_scoreboard_sheet": request.form["gdoc_scoreboard_sheet"]
+                "gdoc_scoreboard_sheet": request.form["gdoc_scoreboard_sheet"],
             }
 
             required_fields = [
-                "name", "gitlab_instance_host", "registration_secret", 
-                "token", "gitlab_admin_token", "gitlab_course_group",
-                "gitlab_course_public_repo", "gitlab_course_students_group",
-                "gitlab_default_branch", "gitlab_client_id", "gitlab_client_secret"
+                "name",
+                "gitlab_instance_host",
+                "registration_secret",
+                "token",
+                "gitlab_admin_token",
+                "gitlab_course_group",
+                "gitlab_course_public_repo",
+                "gitlab_course_students_group",
+                "gitlab_default_branch",
+                "gitlab_client_id",
+                "gitlab_client_secret",
             ]
-            
+
             for field in required_fields:
                 if not new_course[field]:
                     raise ValueError(f"Field {field} is required")
@@ -529,7 +525,7 @@ def create_course() -> ResponseReturnValue:
                 gitlab_client_id=new_course["gitlab_client_id"],
                 gitlab_client_secret=new_course["gitlab_client_secret"],
                 gdoc_spreadsheet_id=new_course["gdoc_spreadsheet_id"],
-                gdoc_scoreboard_sheet=new_course["gdoc_scoreboard_sheet"]
+                gdoc_scoreboard_sheet=new_course["gdoc_scoreboard_sheet"],
             )
 
             return redirect(url_for("web.manage_roles"))
@@ -551,7 +547,7 @@ def create_course() -> ResponseReturnValue:
                 course_favicon=course.favicon,
                 is_course_admin=stored_user.role == Role.ADMIN,
                 links=(course.config.ui.links if course.config else {}),
-                active_page="create_course"
+                active_page="create_course",
             )
 
     return render_template(
@@ -569,18 +565,19 @@ def create_course() -> ResponseReturnValue:
         course_favicon=course.favicon,
         is_course_admin=stored_user.role == Role.ADMIN,
         links=(course.config.ui.links if course.config else {}),
-        active_page="create_course"
+        active_page="create_course",
     )
 
 
 def get_current_course_name() -> str | None:
     return session.get("current_course")
 
+
 def set_current_course(unique_course_name: str) -> None:
     session["current_course"] = unique_course_name
 
-def get_default_course_config() -> CourseConfig:
 
+def get_default_course_config() -> CourseConfig:
     database_url = os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask")
     db_config = database.DatabaseConfig(
         database_url=database_url,
@@ -599,9 +596,9 @@ def get_default_course_config() -> CourseConfig:
         gitlab_client_secret="",
         gdoc_spreadsheet_id=None,
         gdoc_scoreboard_sheet=None,
-        apply_migrations=False
+        apply_migrations=False,
     )
-    
+
     temp_storage_api = database.DataBaseApi(db_config)
     with SQLAlchemySession(temp_storage_api.engine) as session:
         first_course = session.query(models.Course).first()
@@ -631,7 +628,7 @@ def get_default_course_config() -> CourseConfig:
             course_group=db_config.gitlab_course_group,
             course_public_repo=db_config.gitlab_course_public_repo,
             course_students_group=db_config.gitlab_course_students_group,
-            default_branch=db_config.gitlab_default_branch
+            default_branch=db_config.gitlab_default_branch,
         )
     )
     solutions_api = solutions.SolutionsApi(base_folder=".tmp/solution")
@@ -646,23 +643,24 @@ def get_default_course_config() -> CourseConfig:
         show_allscores=db_config.show_allscores,
         cache=cache,
         manytask_version="",
-        debug=True
+        debug=True,
     )
     return course_config
+
 
 @bp.before_request
 def load_current_course() -> None:
     if not request.endpoint:
         return
 
-    if request.endpoint.startswith('static'):
+    if request.endpoint.startswith("static"):
         return
-        
+
     if request.endpoint == "web.not_ready":
         return
 
     current_course_name = request.args.get("course") or get_current_course_name()
-    
+
     temp_db_config = database.DatabaseConfig(
         database_url=os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask"),
         course_name="",
@@ -679,16 +677,16 @@ def load_current_course() -> None:
         gitlab_client_id="",
         gitlab_client_secret="",
         gdoc_spreadsheet_id=None,
-        gdoc_scoreboard_sheet=None
+        gdoc_scoreboard_sheet=None,
     )
     temp_storage_api = database.DataBaseApi(temp_db_config)
-    
+
     with SQLAlchemySession(temp_storage_api.engine) as session:
         courses = session.query(models.Course).all()
         if not courses:
             flask.abort(redirect(url_for("web.not_ready")))
             return
-            
+
         if not current_course_name or not any(c.unique_course_name == current_course_name for c in courses):
             current_course_name = courses[0].unique_course_name
             set_current_course(current_course_name)
@@ -696,7 +694,7 @@ def load_current_course() -> None:
             return
 
     set_current_course(current_course_name)
-    
+
     storage_api = current_app.course.storage_api if current_app.course else None  # type: ignore
     if not storage_api:
         current_app.course = course.Course(get_default_course_config())  # type: ignore
@@ -734,7 +732,7 @@ def load_current_course() -> None:
             course_group=course_data.gitlab_course_group,
             course_public_repo=course_data.gitlab_course_public_repo,
             course_students_group=course_data.gitlab_course_students_group,
-            default_branch=course_data.gitlab_default_branch
+            default_branch=course_data.gitlab_default_branch,
         )
     )
     solutions_api = solutions.SolutionsApi(base_folder=".tmp/solution")
@@ -750,7 +748,7 @@ def load_current_course() -> None:
         show_allscores=course_data.show_allscores,
         cache=cache,
         manytask_version="",
-        debug=True
+        debug=True,
     )
 
     current_app.course = course.Course(course_config)  # type: ignore
@@ -769,24 +767,24 @@ def load_current_course() -> None:
         has_tasks = False
         has_enabled_non_bonus_tasks = False
         schedule = []
-        
+
         for group in task_groups:
             tasks = session.query(models.Task).filter_by(group_id=group.id).all()
             if tasks:
                 has_tasks = True
                 now = datetime.now(tz=ZoneInfo("UTC"))
-                
+
                 group_start_time = now
                 if group.deadline and group.deadline.data:
                     deadline_data = group.deadline.data
                     if isinstance(deadline_data, dict):
                         group_start_time = datetime.fromisoformat(deadline_data.get("start", now.isoformat()))
-                
+
                 for task in tasks:
                     if not task.is_bonus and group_start_time <= now:
                         has_enabled_non_bonus_tasks = True
                         break
-                
+
                 task_configs = []
                 for task in tasks:
                     task_config = {
@@ -794,7 +792,7 @@ def load_current_course() -> None:
                         "enabled": group_start_time <= now,  # Only enable if task has started
                         "is_bonus": task.is_bonus,
                         "score": task.score,
-                        "is_special": task.is_special
+                        "is_special": task.is_special,
                     }
                     task_configs.append(task_config)
 
@@ -802,14 +800,16 @@ def load_current_course() -> None:
                     "group": group.name,
                     "enabled": True,
                     "tasks": task_configs,
-                    "special": group.is_special
+                    "special": group.is_special,
                 }
 
                 if group.deadline and group.deadline.data:
                     deadline_data = group.deadline.data
                     if isinstance(deadline_data, dict):
                         group_config["start"] = deadline_data.get("start", datetime.now(tz=ZoneInfo("UTC")))
-                        group_config["end"] = deadline_data.get("end", datetime.now(tz=ZoneInfo("UTC")) + timedelta(days=30))
+                        group_config["end"] = deadline_data.get(
+                            "end", datetime.now(tz=ZoneInfo("UTC")) + timedelta(days=30)
+                        )
                         group_config.update(deadline_data)
                 else:
                     group_config["start"] = datetime.now(tz=ZoneInfo("UTC"))
@@ -820,7 +820,7 @@ def load_current_course() -> None:
         if not has_tasks:
             flask.abort(redirect(url_for("web.not_ready")))
             return
-            
+
         if not has_enabled_non_bonus_tasks:
             flask.abort(redirect(url_for("web.not_ready")))
             return
@@ -831,18 +831,16 @@ def load_current_course() -> None:
                 "course_name": current_course.name,  # Use current_course instead of course_data
                 "gitlab_base_url": current_course.gitlab_instance_host,
                 "public_repo": current_course.gitlab_course_public_repo,
-                "students_group": current_course.gitlab_course_students_group
+                "students_group": current_course.gitlab_course_students_group,
             },
             "ui": {
-                "task_url_template": f"{current_course.gitlab_instance_host}/{current_course.gitlab_course_group}/$GROUP_NAME/$TASK_NAME",
-                "links": {}
+                "task_url_template": f"{current_course.gitlab_instance_host}/"
+                f"{current_course.gitlab_course_group}/$GROUP_NAME/$TASK_NAME",
+                "links": {},
             },
-            "deadlines": {
-                "timezone": "UTC",
-                "schedule": schedule
-            }
+            "deadlines": {"timezone": "UTC", "schedule": schedule},
         }
-        
+
         current_app.course.store_config(config_data)  # type: ignore
 
 
@@ -853,24 +851,22 @@ def switch_course(unique_course_name: str) -> ResponseReturnValue:
     set_current_course(unique_course_name)
     return redirect(url_for("web.course_page"))
 
+
 @bp.route("/courses/available", methods=["GET"])
 @requires_ready
 @requires_auth
 def get_available_courses() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
     storage_api = course.storage_api
-    
+
     with SQLAlchemySession(storage_api.engine) as session:
         courses = session.query(models.Course).all()
         available_courses = [
-            {
-                'name': course.name,
-                'unique_course_name': course.unique_course_name
-            } 
-            for course in courses
+            {"name": course.name, "unique_course_name": course.unique_course_name} for course in courses
         ]
-    
+
     return {"courses": available_courses}
+
 
 @bp.route("/courses/user", methods=["GET"])
 @requires_ready
@@ -879,10 +875,10 @@ def get_user_courses() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
     storage_api = course.storage_api
     student_username = flask.session.get("gitlab", {}).get("username")
-    
+
     if not student_username:
         return {"courses": []}
-    
+
     with SQLAlchemySession(storage_api.engine) as session:
         user_courses = (
             session.query(models.Course)
@@ -891,13 +887,9 @@ def get_user_courses() -> ResponseReturnValue:
             .filter(models.User.username == student_username)
             .all()
         )
-        
+
         user_courses_list = [
-            {
-                'name': course.name,
-                'unique_course_name': course.unique_course_name
-            }
-            for course in user_courses
+            {"name": course.name, "unique_course_name": course.unique_course_name} for course in user_courses
         ]
-    
+
     return {"courses": user_courses_list}

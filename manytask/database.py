@@ -90,31 +90,33 @@ class DataBaseApi(ViewerApi, StorageApi):
             with Session(self.engine) as session:
                 try:
                     course = self._get(session, models.Course, unique_course_name=self.unique_course_name)
-                    
+
                     if course.gitlab_instance_host != self.gitlab_instance_host:
                         raise AttributeError("Can't update gitlab_instance_host param on created course")
-                    
-                    if (self.registration_secret and course.registration_secret != self.registration_secret):
+
+                    if self.registration_secret and course.registration_secret != self.registration_secret:
                         course.registration_secret = self.registration_secret
                         session.commit()
-                        
-                    if (isinstance(self.show_allscores, bool) and course.show_allscores != self.show_allscores):
+
+                    if isinstance(self.show_allscores, bool) and course.show_allscores != self.show_allscores:
                         course.show_allscores = self.show_allscores
                         session.commit()
-                        
+
                 except NoResultFound:
-                    if all([
-                        self.gitlab_instance_host,
-                        self.registration_secret,
-                        self.token,
-                        self.gitlab_admin_token,
-                        self.gitlab_course_group,
-                        self.gitlab_course_public_repo,
-                        self.gitlab_course_students_group,
-                        self.gitlab_default_branch,
-                        self.gitlab_client_id,
-                        self.gitlab_client_secret
-                    ]):
+                    if all(
+                        [
+                            self.gitlab_instance_host,
+                            self.registration_secret,
+                            self.token,
+                            self.gitlab_admin_token,
+                            self.gitlab_course_group,
+                            self.gitlab_course_public_repo,
+                            self.gitlab_course_students_group,
+                            self.gitlab_default_branch,
+                            self.gitlab_client_id,
+                            self.gitlab_client_secret,
+                        ]
+                    ):
                         self._create(
                             session,
                             models.Course,
@@ -220,7 +222,6 @@ class DataBaseApi(ViewerApi, StorageApi):
             course = self._get(session, models.Course, name=self.course_name)
             user_on_course = self._get_or_create_user_on_course(session, student, course)
 
-
             if student.course_admin:
                 user_on_course.role = models.Role.ADMIN
                 user_on_course.is_course_admin = True  # Keep for backward compatibility
@@ -235,7 +236,6 @@ class DataBaseApi(ViewerApi, StorageApi):
                 role=user_on_course.role,
                 course_admin=user_on_course.is_course_admin,  # Keep for backward compatibility
             )
-            
 
             return stored_user
 
@@ -244,7 +244,6 @@ class DataBaseApi(ViewerApi, StorageApi):
         username: str,
         role: models.Role,
     ) -> StoredUser:
-
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
             user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
@@ -268,7 +267,6 @@ class DataBaseApi(ViewerApi, StorageApi):
         self,
         role: models.Role,
     ) -> list[StoredUser]:
-
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
             users_on_course = (
@@ -349,7 +347,6 @@ class DataBaseApi(ViewerApi, StorageApi):
         :return: saved score
         """
 
-
         # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
         # flags = ''
 
@@ -373,7 +370,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                 session.commit()
                 return new_score
 
-            except Exception as e:
+            except Exception:
                 session.rollback()
                 raise
 
@@ -495,7 +492,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         with Session(self.engine) as session:
             if "settings" not in config_data:
                 config_data["settings"] = {}
-            
+
             settings = config_data["settings"]
             if "course_name" not in settings:
                 course = self._get(session, models.Course, unique_course_name=self.unique_course_name)
@@ -633,7 +630,6 @@ class DataBaseApi(ViewerApi, StorageApi):
     def _get_or_create_user_on_course(
         self, session: Session, student: Student, course: models.Course
     ) -> models.UserOnCourse:
-
         user = self._get_or_create(
             session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
         )
@@ -648,9 +644,9 @@ class DataBaseApi(ViewerApi, StorageApi):
             if user_on_course.repo_name != student.repo:
                 user_on_course.repo_name = student.repo
                 session.flush()
-            
+
             return user_on_course
-            
+
         except NoResultFound:
             initial_role = models.Role.ADMIN if student.course_admin else models.Role.STUDENT
             user_on_course = models.UserOnCourse(
@@ -658,11 +654,11 @@ class DataBaseApi(ViewerApi, StorageApi):
                 course_id=course.id,
                 repo_name=student.repo,
                 role=initial_role,
-                is_course_admin=student.course_admin
+                is_course_admin=student.course_admin,
             )
             session.add(user_on_course)
             session.flush()
-            
+
             return user_on_course
 
     def _get_scores(
