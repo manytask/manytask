@@ -1,0 +1,173 @@
+{% extends "layout.html" %}
+{% set active_page = "roles" -%}
+
+{% block title %}Manage Roles - {{ course_name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <style>
+        .user-hidden {
+            display: none !important;
+        }
+    </style>
+    <h1>Role Management</h1>
+
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Admins</h5>
+                        <span class="badge bg-light text-primary">{{ admins|length }}</span>
+                    </div>
+                    <div class="mt-2">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" class="form-control form-control-sm search-input" 
+                                   placeholder="Search admins..." 
+                                   data-list="admin-list">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group" id="admin-list">
+                        {% for admin in admins %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span class="username">{{ admin.username }}</span>
+                            <form action="{{ url_for('web.update_role', username=admin.username) }}" method="POST" class="d-inline">
+                                <select name="role" class="form-select form-select-sm d-inline w-auto" onchange="this.form.submit()">
+                                    <option value="admin" selected>Admin</option>
+                                    <option value="teacher">Teacher</option>
+                                    <option value="student">Student</option>
+                                </select>
+                            </form>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Teachers</h5>
+                        <span class="badge bg-light text-success">{{ teachers|length }}</span>
+                    </div>
+                    <div class="mt-2">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" class="form-control form-control-sm search-input" 
+                                   placeholder="Search teachers..." 
+                                   data-list="teacher-list">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group" id="teacher-list">
+                        {% for teacher in teachers %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span class="username">{{ teacher.username }}</span>
+                            <form action="{{ url_for('web.update_role', username=teacher.username) }}" method="POST" class="d-inline">
+                                <select name="role" class="form-select form-select-sm d-inline w-auto" onchange="this.form.submit()">
+                                    <option value="admin">Admin</option>
+                                    <option value="teacher" selected>Teacher</option>
+                                    <option value="student">Student</option>
+                                </select>
+                            </form>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Students</h5>
+                        <span class="badge bg-light text-info">{{ students|length }}</span>
+                    </div>
+                    <div class="mt-2">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" class="form-control form-control-sm search-input" 
+                                   placeholder="Search students..." 
+                                   data-list="student-list">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group" id="student-list">
+                        {% for student in students %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span class="username">{{ student.username }}</span>
+                            <form action="{{ url_for('web.update_role', username=student.username) }}" method="POST" class="d-inline">
+                                <select name="role" class="form-select form-select-sm d-inline w-auto" onchange="this.form.submit()">
+                                    <option value="admin">Admin</option>
+                                    <option value="teacher">Teacher</option>
+                                    <option value="student" selected>Student</option>
+                                </select>
+                            </form>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM Content Loaded');
+    const searchInputs = document.querySelectorAll('.search-input');
+    console.log('Found search inputs:', searchInputs.length);
+    
+    searchInputs.forEach((input, index) => {
+        console.log(`Setting up listener for input ${index}:`, input);
+        input.addEventListener('input', function() {
+            const listId = this.getAttribute('data-list');
+            console.log('Input event triggered. List ID:', listId);
+            console.log('Search text:', this.value);
+            filterUsers(this, listId);
+        });
+    });
+});
+
+function filterUsers(input, listId) {
+    const searchText = input.value.toLowerCase().trim();
+    const userList = document.getElementById(listId);
+    console.log('Filtering users for list:', listId);
+    console.log('Search text after processing:', searchText);
+    
+    if (!userList) {
+        console.error('Could not find user list with ID:', listId);
+        return;
+    }
+    
+    const userItems = userList.querySelectorAll('li');
+    console.log('Found user items:', userItems.length);
+    
+    userItems.forEach((item, index) => {
+        const usernameElement = item.querySelector('.username');
+        if (!usernameElement) {
+            console.error('No username element found in item:', index);
+            return;
+        }
+        const username = usernameElement.textContent.toLowerCase().trim();
+        console.log(`Checking username: "${username}" against search: "${searchText}"`);
+        
+        if (searchText === '' || username.startsWith(searchText)) {
+            item.classList.remove('user-hidden');
+            console.log(`Showing user: ${username}`);
+        } else {
+            item.classList.add('user-hidden');
+            console.log(`Hiding user: ${username}`);
+        }
+    });
+}
+</script>
+{% endblock %} 

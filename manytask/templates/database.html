@@ -3,10 +3,13 @@
 
 {% block content %}
     <div class="container-fluid">
-        <h2>Course Database</h2>
+        <div class="d-flex align-items-center mb-3">
+            <h2>Course Database</h2>
+            <span class="ms-3 fs-5 text-muted">{{ course_name }}</span>
+        </div>
         <div id="database-table" style="max-width: 800px; width: 100%; overflow-x: auto;"></div>
 
-        {% if is_course_admin %}
+        {% if is_course_admin or role == 'teacher' %}
         <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -113,13 +116,23 @@
             }
 
             const isAdmin = {{ is_course_admin|tojson }};
-            if (!isAdmin) {
+            const isTeacher = {{ (role == 'teacher')|tojson }};
+
+            if (!isAdmin && !isTeacher) {
+                return;
+            }
+
+            const modal = document.getElementById('editModal');
+
+            const scoreInput = document.getElementById('scoreInput');
+
+            if (!modal || !scoreInput) {
                 return;
             }
 
             currentEditCell = cell;
             const value = cell.getValue() || 0;
-            const scoreInput = document.getElementById('scoreInput');
+
             scoreInput.value = value;
             document.getElementById('editModalLabel').textContent = `Edit Score for ${cell.getColumn().getDefinition().title}`;
             editModal.show();
@@ -131,9 +144,16 @@
         }
 
         function saveChanges() {
-            if (!currentEditCell) return;
+            if (!currentEditCell) {
+                return;
+            }
 
-            const newScore = parseFloat(document.getElementById('scoreInput').value);
+            const scoreInput = document.getElementById('scoreInput');
+            if (!scoreInput) {
+                return;
+            }
+
+            const newScore = parseFloat(scoreInput.value);
             if (isNaN(newScore)) {
                 alert('Please enter a valid number');
                 return;
@@ -157,7 +177,9 @@
                     scores: scores
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     currentEditCell.setValue(newScore);
@@ -201,7 +223,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
-            {% if is_course_admin %}
+            {% if is_course_admin or role == 'teacher' %}
             editModal = new bootstrap.Modal(document.getElementById('editModal'));
 
             document.getElementById('editForm').addEventListener('submit', function(e) {
@@ -262,17 +284,26 @@
 
                     Object.entries(taskGroups).forEach(([groupName, tasks]) => {
                         // Mini-columns for each task
-                        const groupColumns = tasks.map(task => ({
-                            title: task.name,
-                            field: `scores.${task.name}`,
-                            sorter: "number",
-                            headerTooltip: task.name,
-                            {% if is_course_admin %}
-                            cellClick: function(e, cell) {
-                                editCell(cell);
-                            },
-                            {% endif %}
-                        }));
+                        const groupColumns = tasks.map(task => {
+                            const isAdmin = {{ is_course_admin|tojson }};
+
+                            const isTeacher = {{ (role == 'teacher')|tojson }};
+
+                            const column = {
+                                title: task.name,
+                                field: `scores.${task.name}`,
+                                sorter: "number",
+                                headerTooltip: task.name
+                            };
+
+                            if (isAdmin || isTeacher) {
+                                column.cellClick = function(e, cell) {
+                                    editCell(cell);
+                                };
+                            }
+
+                            return column;
+                        });
 
                         // Add grouped columns
                         columns.push({
@@ -343,12 +374,9 @@
                             columnGroups: false,
                             rowGroups: false,
                             columnOutput: function(column) {
-
                                 return column.getField();
                             },
                             dataOutput: function(value, column, row, rowData) {
-
-
                                 if (column.getField().endsWith('_collapsed')) {
                                     const groupName = column.getField().replace('_collapsed', '');
                                     const groupCol = window.tabulatorTable.getColumns().find(col =>
@@ -366,7 +394,6 @@
                                             sum += taskValue;
                                         });
 
-
                                         return sum.toFixed(1);
                                     }
                                 }
@@ -375,7 +402,6 @@
                             }
                         },
                         rowFormatter: function(row) {
-
                             const data = row.getData();
 
                             // Add individual task scores and group totals
@@ -384,12 +410,10 @@
                                 const subCols = groupCol.getSubColumns();
                                 const groupName = groupCol.getDefinition().title.replace(' ▼', '');
 
-
                                 if (subCols && subCols.length > 0) {
                                     let sum = 0;
                                     const collapsedCol = window.tabulatorTable.getColumn(`${groupName}_collapsed`);
                                     const isCollapsed = collapsedCol && collapsedCol.isVisible();
-
 
                                     subCols.forEach(col => {
                                         const field = col.getField();
@@ -400,7 +424,6 @@
                                     });
 
                                     if (isCollapsed && collapsedCol) {
-
                                         const cell = row.getCell(`${groupName}_collapsed`);
                                         if (cell) {
                                             cell.setValue(sum.toFixed(1));
@@ -424,14 +447,14 @@
                                 if (!cell || typeof cell.getField !== 'function') return "";
                                 try {
                                     const isAdmin = {{ is_course_admin|tojson }};
+                                    const isTeacher = {% if role and role %}{{ (role == 'teacher')|tojson }}{% else %}false{% endif %};
                                     const field = cell.getField();
-                                    if (!isAdmin && field !== "username" && field !== "total_score") {
-                                        return "Only course admins can edit scores";
+                                    if (!isAdmin && !isTeacher && field !== "username" && field !== "total_score") {
+                                        return "Only course admins and teachers can edit scores";
                                     }
-                                    const value = cell.getValue();
-                                    return value !== undefined && value !== null ? value.toString() : "";
+                                    const cellValue = cell.getValue();
+                                    return cellValue !== undefined && cellValue !== null ? cellValue.toString() : "";
                                 } catch (e) {
-
                                     return "";
                                 }
                             },
@@ -451,36 +474,30 @@
                             exportButton.textContent = "Export as CSV";
 
                             exportButton.onclick = function() {
-
                                 if (!window.tabulatorTable) {
                                     console.error('Tabulator instance not found!');
                                     return;
                                 }
 
-
                                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
                                 const courseName = "{{ course_name }}".replace(/[^a-zA-Z0-9]/g, '_');
 
                                 try {
-
                                     const table = window.tabulatorTable;
 
                                     // Get current data with all calculated values
                                     const currentData = table.getData();
-
 
                                     // Get visible columns
                                     const visibleColumns = table.getColumns()
                                         .filter(col => col.isVisible())
                                         .map(col => col.getField());
 
-
                                     // Prepare data for export
                                     const exportData = currentData.map(row => {
                                         const exportRow = {};
                                         visibleColumns.forEach(field => {
                                             if (field.endsWith('_collapsed')) {
-
                                                 const groupName = field.replace('_collapsed', '');
                                                 const groupCol = table.getColumn(field);
                                                 if (groupCol) {
@@ -489,16 +506,13 @@
                                                     );
                                                     if (cell) {
                                                         exportRow[field] = parseInt(cell.getValue()) || 0;
-
                                                     }
                                                 }
                                             } else if (field.startsWith('scores.')) {
                                                 // Handle nested scores data
-
                                                 const taskName = field.split('.')[1];
                                                 const value = row.scores && row.scores[taskName] || 0;
                                                 exportRow[field] = value;
-
                                             } else {
                                                 exportRow[field] = row[field];
                                             }
@@ -506,7 +520,6 @@
 
                                         return exportRow;
                                     });
-
 
                                     // Create CSV content
                                     const headers = visibleColumns;
