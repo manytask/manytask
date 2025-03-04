@@ -117,7 +117,7 @@ class Course:
                 with Session(self.storage_api.engine) as session:
                     course = session.query(CourseModel).filter_by(unique_course_name=config.settings.course_name).one()
                     course.name = config.settings.course_name
-                    course.gitlab_instance_host = config.settings.gitlab_base_url
+                    course.gitlab_instance_host = str(config.settings.gitlab_base_url)
                     session.commit()
                     logger.info(f"Updated course {config.settings.course_name} in database")
 

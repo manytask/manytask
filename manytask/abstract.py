@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
-from .config import ManytaskDeadlinesConfig
+from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .glab import Student
 
 
@@ -62,21 +62,7 @@ class StorageApi(ABC):
     @abstractmethod
     def create_course(
         self,
-        name: str,
-        unique_course_name: str,
-        gitlab_instance_host: str,
-        registration_secret: str,
-        token: str,
-        show_allscores: bool,
-        gitlab_admin_token: str,
-        gitlab_course_group: str,
-        gitlab_course_public_repo: str,
-        gitlab_course_students_group: str,
-        gitlab_default_branch: str,
-        gitlab_client_id: str,
-        gitlab_client_secret: str,
-        gdoc_spreadsheet_id: str | None = None,
-        gdoc_scoreboard_sheet: str | None = None,
+        config: "ManytaskConfig",
     ) -> None: ...
 
     @abstractmethod
