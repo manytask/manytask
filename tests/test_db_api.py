@@ -140,6 +140,17 @@ def second_course_deadlines_config():
 
 
 @pytest.fixture
+def first_course_deadlines_config_with_changed_task_name():
+    with open(DEADLINES_CONFIG_FILES[0], "r") as f:
+        deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    # change name of the first task of the first group
+    deadlines_config_data["deadlines"]["schedule"][0]["tasks"][0]["task"] += "_changed"
+
+    return ManytaskDeadlinesConfig(**deadlines_config_data["deadlines"])
+
+
+@pytest.fixture
 def first_course_with_deadlines(first_course_db_api, first_course_deadlines_config, session):
     first_course_db_api.sync_columns(first_course_deadlines_config)
     return first_course_db_api
@@ -217,6 +228,7 @@ def test_sync_columns(first_course_with_deadlines, session):
 
     tasks = session.query(Task).all()
     for task in tasks:
+        assert task.enabled
         assert task.group.name == "group_" + task.name[len("task_")]
 
 
@@ -259,6 +271,49 @@ def test_resync_columns(first_course_db_api, first_course_deadlines_config, seco
 
     tasks = session.query(Task).all()
     for task in tasks:
+        assert task.enabled
+        assert task.group.name == "group_" + task.name[len("task_")]
+
+
+def test_resync_with_changed_task_name(
+    first_course_db_api, first_course_deadlines_config, first_course_deadlines_config_with_changed_task_name, session
+):
+    first_course_db_api.sync_columns(first_course_deadlines_config)
+    first_course_db_api.sync_columns(first_course_deadlines_config_with_changed_task_name)
+
+    stats = first_course_db_api.get_stats()
+    assert set(stats.keys()) == {
+        "task_0_0_changed",
+        "task_0_1",
+        "task_0_2",
+        "task_0_3",
+        "task_1_0",
+        "task_1_1",
+        "task_1_2",
+        "task_1_3",
+        "task_1_4",
+        "task_2_1",
+        "task_2_2",
+        "task_2_3",
+        "task_3_0",
+        "task_3_1",
+        "task_3_2",
+        "task_4_0",
+        "task_4_1",
+        "task_4_2",
+    }
+    assert all(v == 0 for v in stats.values())
+
+    assert session.query(TaskGroup).count() == 5
+    assert session.query(Task).count() == 19
+
+    tasks = session.query(Task).all()
+    for task in tasks:
+        if task.name == "task_0_0":
+            assert not task.enabled
+        else:
+            assert task.enabled
+
         assert task.group.name == "group_" + task.name[len("task_")]
 
 
@@ -372,6 +427,49 @@ def test_store_score_bonus_task(first_course_with_deadlines, session):
     assert all_scores == {"user1": {"task_1_3": 22}}
     assert bonus_score == 22
     assert scores == {"task_1_3": 22}
+
+
+def test_store_score_with_changed_task_name(
+    first_course_db_api, first_course_deadlines_config, first_course_deadlines_config_with_changed_task_name
+):
+    first_course_db_api.sync_columns(first_course_deadlines_config)
+
+    student = Student(0, "user1", "username1", False, "repo1")
+    first_course_db_api.store_score(student, "task_0_0", update_func(10))
+
+    first_course_db_api.sync_columns(first_course_deadlines_config_with_changed_task_name)
+
+    stats = first_course_db_api.get_stats()
+    all_scores = first_course_db_api.get_all_scores()
+    bonus_score = first_course_db_api.get_bonus_score("user1")
+    scores = first_course_db_api.get_scores("user1")
+
+    assert set(stats.keys()) == {
+        "task_0_0_changed",
+        "task_0_1",
+        "task_0_2",
+        "task_0_3",
+        "task_1_0",
+        "task_1_1",
+        "task_1_2",
+        "task_1_3",
+        "task_1_4",
+        "task_2_1",
+        "task_2_2",
+        "task_2_3",
+        "task_3_0",
+        "task_3_1",
+        "task_3_2",
+        "task_4_0",
+        "task_4_1",
+        "task_4_2",
+    }
+
+    assert all(v == 0.0 for k, v in stats.items())
+
+    assert all_scores == {"user1": {}}
+    assert bonus_score == 0
+    assert scores == {}
 
 
 def test_get_and_sync_stored_user(first_course_db_api, session):

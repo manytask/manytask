@@ -115,6 +115,9 @@ class Task(Base):
     name: Mapped[str]
     group_id: Mapped[int] = mapped_column(ForeignKey(TaskGroup.id))
     is_bonus: Mapped[bool] = mapped_column(default=False)
+    enabled: Mapped[bool] = mapped_column(
+        server_default="False", default=False
+    )  # Not the same as ManytaskTaskConfig.enabled. A Task is enabled if it was added earlier but was later removed.
 
     # relationships
     group: Mapped["TaskGroup"] = relationship(back_populates="tasks")
