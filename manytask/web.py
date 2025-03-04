@@ -648,19 +648,8 @@ def get_default_course_config() -> CourseConfig:
     return course_config
 
 
-@bp.before_request
-def load_current_course() -> None:
-    if not request.endpoint:
-        return
-
-    if request.endpoint.startswith("static"):
-        return
-
-    if request.endpoint == "web.not_ready":
-        return
-
+def _get_course_name_from_request() -> str:
     current_course_name = request.args.get("course") or get_current_course_name()
-
     temp_db_config = database.DatabaseConfig(
         database_url=os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask"),
         course_name="",
@@ -685,26 +674,15 @@ def load_current_course() -> None:
         courses = session.query(models.Course).all()
         if not courses:
             flask.abort(redirect(url_for("web.not_ready")))
-            return
+            return ""
 
         if not current_course_name or not any(c.unique_course_name == current_course_name for c in courses):
             current_course_name = courses[0].unique_course_name
-            set_current_course(current_course_name)
-            current_app.course = course.Course(get_default_course_config())  # type: ignore
-            return
 
-    set_current_course(current_course_name)
+    return current_course_name
 
-    storage_api = current_app.course.storage_api if current_app.course else None  # type: ignore
-    if not storage_api:
-        current_app.course = course.Course(get_default_course_config())  # type: ignore
-        return
 
-    course_data = storage_api.get_course_by_unique_name(current_course_name)
-    if not course_data:
-        flask.abort(redirect(url_for("web.not_ready")))
-        return
-
+def _create_course_config(course_data: models.Course) -> CourseConfig:
     db_config = database.DatabaseConfig(
         database_url=os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask"),
         course_name=course_data.name,
@@ -738,7 +716,7 @@ def load_current_course() -> None:
     solutions_api = solutions.SolutionsApi(base_folder=".tmp/solution")
     cache = FileSystemCache(".tmp/cache", threshold=0, default_timeout=0)
 
-    course_config = CourseConfig(
+    return CourseConfig(
         viewer_api=viewer_api,
         storage_api=storage_api,
         gitlab_api=gitlab_api,
@@ -751,97 +729,134 @@ def load_current_course() -> None:
         debug=True,
     )
 
-    current_app.course = course.Course(course_config)  # type: ignore
 
+def _build_task_configs(tasks: list[models.Task], group_start_time: datetime) -> tuple[list[dict], bool]:
+    now = datetime.now(tz=ZoneInfo("UTC"))
+    has_enabled_non_bonus_task = False
+    task_configs = []
+
+    for task in tasks:
+        if not task.is_bonus and group_start_time <= now:
+            has_enabled_non_bonus_task = True
+
+        task_config = {
+            "task": task.name,
+            "enabled": group_start_time <= now,
+            "is_bonus": task.is_bonus,
+            "score": task.score,
+            "is_special": task.is_special,
+        }
+        task_configs.append(task_config)
+
+    return task_configs, has_enabled_non_bonus_task
+
+
+def _build_group_config(group: models.TaskGroup, tasks: list[models.Task]) -> tuple[dict, bool]:
+    now = datetime.now(tz=ZoneInfo("UTC"))
+    group_start_time = now
+
+    if group.deadline and group.deadline.data:
+        deadline_data = group.deadline.data
+        if isinstance(deadline_data, dict):
+            group_start_time = datetime.fromisoformat(deadline_data.get("start", now.isoformat()))
+
+    task_configs, has_enabled_non_bonus_task = _build_task_configs(tasks, group_start_time)
+
+    group_config = {
+        "group": group.name,
+        "enabled": True,
+        "tasks": task_configs,
+        "special": group.is_special,
+    }
+
+    if group.deadline and group.deadline.data:
+        deadline_data = group.deadline.data
+        if isinstance(deadline_data, dict):
+            group_config["start"] = deadline_data.get("start", datetime.now(tz=ZoneInfo("UTC")))
+            group_config["end"] = deadline_data.get("end", datetime.now(tz=ZoneInfo("UTC")) + timedelta(days=30))
+            group_config.update(deadline_data)
+    else:
+        group_config["start"] = datetime.now(tz=ZoneInfo("UTC"))
+        group_config["end"] = datetime.now(tz=ZoneInfo("UTC")) + timedelta(days=30)
+
+    return group_config, has_enabled_non_bonus_task
+
+
+def _build_course_config(current_course: models.Course, schedule: list[dict]) -> dict:
+    return {
+        "version": 1,
+        "settings": {
+            "course_name": current_course.name,
+            "gitlab_base_url": current_course.gitlab_instance_host,
+            "public_repo": current_course.gitlab_course_public_repo,
+            "students_group": current_course.gitlab_course_students_group,
+        },
+        "ui": {
+            "task_url_template": f"{current_course.gitlab_instance_host}/"
+            f"{current_course.gitlab_course_group}/$GROUP_NAME/$TASK_NAME",
+            "links": {},
+        },
+        "deadlines": {"timezone": "UTC", "schedule": schedule},
+    }
+
+
+def _should_skip_request(endpoint: str | None) -> bool:
+    return not endpoint or endpoint.startswith("static") or endpoint == "web.not_ready"
+
+
+def _load_course_schedule(
+    storage_api: database.DataBaseApi, current_course_name: str
+) -> tuple[models.Course, list[dict], bool]:
     with SQLAlchemySession(storage_api.engine) as session:
         current_course = session.query(models.Course).filter_by(unique_course_name=current_course_name).first()
         if not current_course:
             flask.abort(redirect(url_for("web.not_ready")))
-            return
 
         task_groups = session.query(models.TaskGroup).filter_by(course_id=current_course.id).all()
         if not task_groups:
             flask.abort(redirect(url_for("web.not_ready")))
-            return
 
-        has_tasks = False
         has_enabled_non_bonus_tasks = False
         schedule = []
 
         for group in task_groups:
             tasks = session.query(models.Task).filter_by(group_id=group.id).all()
-            if tasks:
-                has_tasks = True
-                now = datetime.now(tz=ZoneInfo("UTC"))
+            if not tasks:
+                continue
 
-                group_start_time = now
-                if group.deadline and group.deadline.data:
-                    deadline_data = group.deadline.data
-                    if isinstance(deadline_data, dict):
-                        group_start_time = datetime.fromisoformat(deadline_data.get("start", now.isoformat()))
+            group_config, has_enabled_task = _build_group_config(group, tasks)
+            has_enabled_non_bonus_tasks = has_enabled_non_bonus_tasks or has_enabled_task
+            schedule.append(group_config)
 
-                for task in tasks:
-                    if not task.is_bonus and group_start_time <= now:
-                        has_enabled_non_bonus_tasks = True
-                        break
-
-                task_configs = []
-                for task in tasks:
-                    task_config = {
-                        "task": task.name,
-                        "enabled": group_start_time <= now,  # Only enable if task has started
-                        "is_bonus": task.is_bonus,
-                        "score": task.score,
-                        "is_special": task.is_special,
-                    }
-                    task_configs.append(task_config)
-
-                group_config = {
-                    "group": group.name,
-                    "enabled": True,
-                    "tasks": task_configs,
-                    "special": group.is_special,
-                }
-
-                if group.deadline and group.deadline.data:
-                    deadline_data = group.deadline.data
-                    if isinstance(deadline_data, dict):
-                        group_config["start"] = deadline_data.get("start", datetime.now(tz=ZoneInfo("UTC")))
-                        group_config["end"] = deadline_data.get(
-                            "end", datetime.now(tz=ZoneInfo("UTC")) + timedelta(days=30)
-                        )
-                        group_config.update(deadline_data)
-                else:
-                    group_config["start"] = datetime.now(tz=ZoneInfo("UTC"))
-                    group_config["end"] = datetime.now(tz=ZoneInfo("UTC")) + timedelta(days=30)
-
-                schedule.append(group_config)
-
-        if not has_tasks:
+        if not schedule or not has_enabled_non_bonus_tasks:
             flask.abort(redirect(url_for("web.not_ready")))
-            return
 
-        if not has_enabled_non_bonus_tasks:
-            flask.abort(redirect(url_for("web.not_ready")))
-            return
+        return current_course, schedule, has_enabled_non_bonus_tasks
 
-        config_data = {
-            "version": 1,
-            "settings": {
-                "course_name": current_course.name,  # Use current_course instead of course_data
-                "gitlab_base_url": current_course.gitlab_instance_host,
-                "public_repo": current_course.gitlab_course_public_repo,
-                "students_group": current_course.gitlab_course_students_group,
-            },
-            "ui": {
-                "task_url_template": f"{current_course.gitlab_instance_host}/"
-                f"{current_course.gitlab_course_group}/$GROUP_NAME/$TASK_NAME",
-                "links": {},
-            },
-            "deadlines": {"timezone": "UTC", "schedule": schedule},
-        }
 
-        current_app.course.store_config(config_data)  # type: ignore
+@bp.before_request
+def load_current_course() -> None:
+    if _should_skip_request(request.endpoint):
+        return
+
+    current_course_name = _get_course_name_from_request()
+    if current_course_name:
+        set_current_course(current_course_name)
+
+        storage_api = current_app.course.storage_api if current_app.course else None  # type: ignore
+        if not storage_api:
+            current_app.course = course.Course(get_default_course_config())  # type: ignore
+        else:
+            course_data = storage_api.get_course_by_unique_name(current_course_name)
+            if course_data:
+                course_config = _create_course_config(course_data)
+                current_app.course = course.Course(course_config)  # type: ignore
+
+                current_course, schedule, _ = _load_course_schedule(storage_api, current_course_name)
+                config_data = _build_course_config(current_course, schedule)
+                current_app.course.store_config(config_data)  # type: ignore
+            else:
+                flask.abort(redirect(url_for("web.not_ready")))
 
 
 @bp.route("/courses/switch/<unique_course_name>", methods=["GET"])
