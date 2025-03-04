@@ -1,19 +1,38 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Callable
 
 from .config import ManytaskDeadlinesConfig
 from .glab import Student
 
 
+class Role(str, Enum):
+    ADMIN = "admin"
+    TEACHER = "teacher"
+    STUDENT = "student"
+
+
 @dataclass
 class StoredUser:
     username: str
-    course_admin: bool = False
-    # we can add more fields that we store
+    role: Role = Role.STUDENT
+    course_admin: bool = False  # todo remove. kept for now for backward compatibility
 
     def __repr__(self) -> str:
-        return f"StoredUser(username={self.username})"
+        return f"StoredUser(username={self.username}, role={self.role})"
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == Role.ADMIN or self.course_admin
+
+    @property
+    def is_teacher(self) -> bool:
+        return self.role == Role.TEACHER
+
+    @property
+    def is_student(self) -> bool:
+        return self.role == Role.STUDENT
 
 
 class ViewerApi(ABC):
@@ -33,6 +52,32 @@ class StorageApi(ABC):
         self,
         username: str,
     ) -> int: ...
+
+    @abstractmethod
+    def get_course_by_unique_name(
+        self,
+        unique_course_name: str,
+    ) -> Any: ...
+
+    @abstractmethod
+    def create_course(
+        self,
+        name: str,
+        unique_course_name: str,
+        gitlab_instance_host: str,
+        registration_secret: str,
+        token: str,
+        show_allscores: bool,
+        gitlab_admin_token: str,
+        gitlab_course_group: str,
+        gitlab_course_public_repo: str,
+        gitlab_course_students_group: str,
+        gitlab_default_branch: str,
+        gitlab_client_id: str,
+        gitlab_client_secret: str,
+        gdoc_spreadsheet_id: str | None = None,
+        gdoc_scoreboard_sheet: str | None = None,
+    ) -> None: ...
 
     @abstractmethod
     def get_stored_user(
