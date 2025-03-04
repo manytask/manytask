@@ -38,7 +38,6 @@ class ManytaskDeadlinesType(Enum):
 
 class ManytaskStorageType(Enum):
     DataBase = "db"
-    GoogleSheets = "gsheets"
 
 
 class ManytaskTaskConfig(BaseModel):
