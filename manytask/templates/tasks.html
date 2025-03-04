@@ -1,3 +1,9 @@
+{% extends "layout.html" %}
+{% set active_page = "tasks" -%}
+
+{% block title %}{{ course_name }}{% endblock %}
+
+{% block content %}
 
 <style>
     .lecture {
@@ -180,3 +186,5 @@
         </div>
     </div>
 {% endfor %}
+
+{% endblock %}

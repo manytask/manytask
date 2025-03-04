@@ -90,7 +90,7 @@ def course_page() -> ResponseReturnValue:
         available_courses = [{"name": c.name, "unique_course_name": c.unique_course_name} for c in courses]
 
     return render_template(
-        "course.html",
+        "tasks.html",
         task_base_url=course.gitlab_api.get_url_for_task_base(),
         username=student_username,
         course_name=course.config.settings.course_name if course.config else "",
