@@ -12,9 +12,22 @@ class ManytaskSettingsConfig(BaseModel):
     """Manytask settings."""
 
     course_name: str
+    unique_course_name: str
     gitlab_base_url: AnyUrl
     public_repo: str
     students_group: str
+    registration_secret: str
+    token: str
+    show_allscores: bool = False
+    gitlab_admin_token: str
+    gitlab_course_group: str
+    gitlab_course_public_repo: str
+    gitlab_course_students_group: str
+    gitlab_default_branch: str = "main"
+    gitlab_client_id: str
+    gitlab_client_secret: str
+    gdoc_spreadsheet_id: str | None = None
+    gdoc_scoreboard_sheet: str | None = None
 
 
 class ManytaskUiConfig(BaseModel):

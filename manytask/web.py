@@ -4,12 +4,13 @@ import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 from http import HTTPStatus
+from typing import TYPE_CHECKING, cast
 from zoneinfo import ZoneInfo
 
 import flask
 import gitlab
 from cachelib import FileSystemCache
-from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
+from flask import Blueprint, Flask, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLAlchemySession
@@ -27,6 +28,14 @@ SESSION_VERSION = 1.5
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("web", __name__)
+
+
+if TYPE_CHECKING:
+
+    class FlaskWithCourse(Flask):
+        course: Course
+
+    current_app: FlaskWithCourse  # type: ignore
 
 
 def get_allscores_url(viewer_api: abstract.ViewerApi) -> str:
@@ -47,7 +56,7 @@ def get_allscores_url(viewer_api: abstract.ViewerApi) -> str:
 @requires_auth
 def course_page() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
-    storage_api = course.storage_api
+    storage_api = cast(database.DataBaseApi, course.storage_api)
 
     if current_app.debug:
         student_username = "guest"
@@ -62,7 +71,7 @@ def course_page() -> ResponseReturnValue:
             student_repo = flask.session["gitlab"]["repo"]
             student = course.gitlab_api.get_student(flask.session["gitlab"]["user_id"])
             stored_user = storage_api.get_stored_user(student)
-            student_role = stored_user.role
+            student_role = Role(stored_user.role.value)  # Convert from abstract.Role to role.Role
         except (KeyError, TypeError):
             return redirect(url_for("web.logout"))
 
@@ -674,7 +683,6 @@ def _get_course_name_from_request() -> str:
         courses = session.query(models.Course).all()
         if not courses:
             flask.abort(redirect(url_for("web.not_ready")))
-            return ""
 
         if not current_course_name or not any(c.unique_course_name == current_course_name for c in courses):
             current_course_name = courses[0].unique_course_name

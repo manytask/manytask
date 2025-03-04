@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -79,12 +79,12 @@ def load_environment_config(unique_course_name: Optional[str] = None) -> bool:
     return True
 
 
-def get_available_courses() -> list[dict]:
+def get_available_courses() -> list[Dict[str, str]]:
     """
     Get a list of all available course configurations from database.
 
     Returns:
-        list[dict]: List of dictionaries containing course information
+        list[Dict[str, str]]: List of dictionaries containing course information
                     [{name: str, unique_course_name: str}, ...]
     """
 

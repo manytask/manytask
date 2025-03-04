@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
 from . import models
-from .abstract import StorageApi, StoredUser, ViewerApi
+from .abstract import Role, StorageApi, StoredUser, ViewerApi
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .glab import Student
 
@@ -201,7 +201,7 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             return StoredUser(
                 username=user_on_course.user.username,
-                role=user_on_course.role,
+                role=Role(user_on_course.role.value),
                 course_admin=user_on_course.is_course_admin,
             )
 
@@ -233,7 +233,7 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             stored_user = StoredUser(
                 username=user_on_course.user.username,
-                role=user_on_course.role,
+                role=Role(user_on_course.role.value),
                 course_admin=user_on_course.is_course_admin,  # Keep for backward compatibility
             )
 
@@ -242,44 +242,44 @@ class DataBaseApi(ViewerApi, StorageApi):
     def set_user_role(
         self,
         username: str,
-        role: models.Role,
+        role: Role,
     ) -> StoredUser:
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
             user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
 
-            user_on_course.role = role
-            if role == models.Role.ADMIN:
+            user_on_course.role = models.Role(role.value)
+            if role == Role.ADMIN:
                 user_on_course.is_course_admin = True
-            elif role != models.Role.ADMIN and user_on_course.is_course_admin:
+            elif role != Role.ADMIN and user_on_course.is_course_admin:
                 user_on_course.is_course_admin = False
 
             session.commit()
 
             return StoredUser(
                 username=user_on_course.user.username,
-                role=user_on_course.role,
+                role=Role(user_on_course.role.value),
                 course_admin=user_on_course.is_course_admin,
             )
 
     def get_users_by_role(
         self,
-        role: models.Role,
+        role: Role,
     ) -> list[StoredUser]:
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
             users_on_course = (
                 session.query(models.UserOnCourse)
                 .filter(models.UserOnCourse.course_id == course.id)
-                .filter(models.UserOnCourse.role == role)
+                .filter(models.UserOnCourse.role == models.Role(role.value))
                 .all()
             )
 
             return [
                 StoredUser(
                     username=user_on_course.user.username,
-                    role=user_on_course.role,
+                    role=Role(user_on_course.role.value),
                     course_admin=user_on_course.is_course_admin,
                 )
                 for user_on_course in users_on_course
