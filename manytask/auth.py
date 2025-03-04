@@ -79,7 +79,7 @@ def check_secret(course: Course, student: Student) -> str | None:
             logger.error(f"Wrong secret user {student.username} on course {course.storage_api.course_name}")  # type: ignore
             return render_template(
                 "create_project.html",
-                error_message="Invalid registration secret",
+                error_message="Invalid secret code. Please check and try again.",
                 course_name=course.name,
                 course_favicon=course.favicon,
                 base_url=course.gitlab_api.base_url,
@@ -131,7 +131,9 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 
         if valid_session(session):
             student = get_authenticate_student(oauth, course)
-            check_secret(course, student)
+            secret_check_result = check_secret(course, student)
+            if secret_check_result:
+                return secret_check_result
             if not handle_course_membership(course, student):
                 return render_template(
                     "create_project.html",
