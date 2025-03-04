@@ -1,5 +1,3 @@
-import base64
-import json
 import logging
 import logging.config
 import logging.handlers
@@ -10,14 +8,11 @@ from typing import Any
 import yaml
 from authlib.integrations.flask_client import OAuth
 from cachelib import FileSystemCache
-from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import abstract, config, course, database, gdoc, glab, local_config, solutions
-
-load_dotenv("../.env")  # take environment variables from .env.
-
+from . import abstract, config, course, database, glab, local_config, solutions
+from .config_loader import load_environment_config
 
 class CustomFlask(Flask):
     course: course.Course
@@ -30,6 +25,10 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     if debug:
         app.debug = debug
+
+    # you need to create a course in db with unique-name default
+    if not load_environment_config("default"):
+        raise EnvironmentError("Failed to load environment configuration")
 
     _create_app_config(app, debug, test)
 
@@ -53,22 +52,18 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     storage_api: abstract.StorageApi
     viewer_api: abstract.ViewerApi
-    storage = os.environ.get("STORAGE", "gsheets").lower()
+    storage = os.environ.get("STORAGE", "db").lower()
 
-    if storage == config.ManytaskStorageType.DataBase.value:
-        storage_api, viewer_api = _database_storage_setup(app)
-    elif storage == config.ManytaskStorageType.GoogleSheets.value:
-        storage_api, viewer_api = _google_sheets_helper(cache)
-    else:
+    if storage != config.ManytaskStorageType.DataBase.value:
+        # fixme for now
         raise EnvironmentError(
-            "STORAGE should be either '"
-            + config.ManytaskStorageType.GoogleSheets.value
-            + "' to store data in Google Sheets, or '"
+            "STORAGE should be '"
             + config.ManytaskStorageType.DataBase.value
             + "' to use database. Set to '"
             + storage
             + "'."
         )
+    storage_api, viewer_api = _database_storage_setup(app)
 
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
@@ -122,30 +117,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     return app
 
 
-def _google_sheets_helper(cache: FileSystemCache) -> tuple[abstract.StorageApi, abstract.ViewerApi]:
-    # google sheets (credentials base64 encoded json)
-    gdoc_url = str(os.environ.get("GDOC_URL", "https://docs.google.com"))
-    gdoc_account_credentials_base64 = os.environ.get("GDOC_ACCOUNT_CREDENTIALS_BASE64")
-    # google public sheet
-    gdoc_spreadsheet_id = str(os.environ["GDOC_SPREADSHEET_ID"])
-    gdoc_scoreboard_sheet = int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0))
-    if gdoc_account_credentials_base64 is None:
-        raise EnvironmentError("Unable to find GDOC_ACCOUNT_CREDENTIALS_BASE64 env")
-    if gdoc_spreadsheet_id is None:
-        raise EnvironmentError("Unable to find GDOC_SPREADSHEET_ID env")
-    _gdoc_credentials_string = base64.decodebytes(str(gdoc_account_credentials_base64).encode())
-    viewer_api = storage_api = gdoc.GoogleDocApi(
-        gdoc.GDocConfig(
-            base_url=gdoc_url,
-            gdoc_credentials=json.loads(_gdoc_credentials_string),
-            public_worksheet_id=gdoc_spreadsheet_id,
-            public_scoreboard_sheet=gdoc_scoreboard_sheet,
-            cache=cache,
-        )
-    )
-    return storage_api, viewer_api
-
-
 def _database_storage_setup(app: CustomFlask) -> tuple[abstract.StorageApi, abstract.ViewerApi]:
     database_url = os.environ.get("DATABASE_URL", None)
     course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
@@ -162,10 +133,20 @@ def _database_storage_setup(app: CustomFlask) -> tuple[abstract.StorageApi, abst
         database.DatabaseConfig(
             database_url=database_url,
             course_name=course_name,
+            unique_course_name=course_name,
             gitlab_instance_host=app.app_config.gitlab_url,
             registration_secret=app.app_config.registration_secret,
             token=app.app_config.course_token,
             show_allscores=app.app_config.show_allscores,
+            gitlab_admin_token=app.app_config.gitlab_admin_token,
+            gitlab_course_group=app.app_config.gitlab_course_group,
+            gitlab_course_public_repo=app.app_config.gitlab_course_public_repo,
+            gitlab_course_students_group=app.app_config.gitlab_course_students_group,
+            gitlab_default_branch=app.app_config.gitlab_default_branch,
+            gitlab_client_id=app.app_config.gitlab_client_id,
+            gitlab_client_secret=app.app_config.gitlab_client_secret,
+            gdoc_spreadsheet_id=None,
+            gdoc_scoreboard_sheet=None,
             apply_migrations=apply_migrations,
         )
     )
