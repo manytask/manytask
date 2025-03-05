@@ -28,6 +28,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from manytask import models
+from manytask.utils import get_course
 
 from . import abstract, course, database, glab, solutions
 from .auth import requires_auth, requires_ready
@@ -193,13 +194,6 @@ def get_solutions() -> ResponseReturnValue:
         mimetype="application/zip",
         headers={"Content-Disposition": f"attachment;filename={filename}"},
     )
-
-
-def get_course() -> Course:
-    """Get the course from the current Flask app."""
-    if not hasattr(current_app, "course"):
-        raise RuntimeError("Course not initialized in Flask app")
-    return current_app.course
 
 
 @bp.route("/signup", methods=["GET", "POST"])
@@ -811,9 +805,20 @@ def _build_course_config(current_course: models.Course, schedule: list[dict[str,
         "version": 1,
         "settings": {
             "course_name": current_course.name,
+            "unique_course_name": current_course.unique_course_name,
             "gitlab_base_url": current_course.gitlab_instance_host,
             "public_repo": current_course.gitlab_course_public_repo,
             "students_group": current_course.gitlab_course_students_group,
+            "registration_secret": current_course.registration_secret,
+            "token": current_course.token,
+            "show_allscores": current_course.show_allscores,
+            "gitlab_admin_token": current_course.gitlab_admin_token,
+            "gitlab_course_group": current_course.gitlab_course_group,
+            "gitlab_course_public_repo": current_course.gitlab_course_public_repo,
+            "gitlab_course_students_group": current_course.gitlab_course_students_group,
+            "gitlab_default_branch": current_course.gitlab_default_branch,
+            "gitlab_client_id": current_course.gitlab_client_id,
+            "gitlab_client_secret": current_course.gitlab_client_secret,
         },
         "ui": {
             "task_url_template": f"{current_course.gitlab_instance_host}/"

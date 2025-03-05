@@ -11,8 +11,7 @@ from werkzeug import Response
 
 from manytask.course import Course
 from manytask.glab import Student
-
-from .web import get_course
+from manytask.utils import get_course
 
 logger = logging.getLogger(__name__)
 

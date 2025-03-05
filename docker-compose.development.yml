@@ -9,7 +9,6 @@ services:
         container_name: manytask
         env_file:
             - .env.common
-
         environment:
             FLASK_DEBUG: 0
         ports:

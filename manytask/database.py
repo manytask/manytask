@@ -201,7 +201,7 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             return StoredUser(
                 username=user_on_course.user.username,
-                role=Role(user_on_course.role.value),
+                role=Role(user_on_course.role),
                 course_admin=user_on_course.is_course_admin,
             )
 
@@ -237,7 +237,7 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             stored_user = StoredUser(
                 username=user_on_course.user.username,
-                role=Role(user_on_course.role.value),
+                role=Role(user_on_course.role),
                 course_admin=user_on_course.is_course_admin,  # Keep for backward compatibility
             )
 
