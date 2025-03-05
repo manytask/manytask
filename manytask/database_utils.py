@@ -1,7 +1,5 @@
 from typing import Any
 
-from flask import current_app
-
 from .course import Course
 from .utils import get_course
 

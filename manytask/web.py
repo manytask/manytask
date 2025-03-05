@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import secrets
@@ -767,8 +768,13 @@ def _build_group_config(group: models.TaskGroup, tasks: list[models.Task]) -> tu
 
     if group.deadline and group.deadline.data:
         deadline_data = group.deadline.data
-        if isinstance(deadline_data, dict):
-            start_time = deadline_data.get("start", now.isoformat())
+        if isinstance(deadline_data, (dict, str)):
+            if isinstance(deadline_data, str):
+                try:
+                    deadline_data_loaded = json.loads(deadline_data)
+                except json.JSONDecodeError:
+                    deadline_data_loaded = {}
+            start_time = deadline_data_loaded.get("start", now.isoformat())
             group_start_time = datetime.fromisoformat(str(start_time))
 
     task_configs, has_enabled_non_bonus_task = _build_task_configs(tasks, group_start_time)
@@ -782,14 +788,19 @@ def _build_group_config(group: models.TaskGroup, tasks: list[models.Task]) -> tu
 
     if group.deadline and group.deadline.data:
         deadline_data = group.deadline.data
-        if isinstance(deadline_data, dict):
+        if isinstance(deadline_data, str):
+            try:
+                deadline_data_loaded = json.loads(deadline_data)
+            except json.JSONDecodeError:
+                deadline_data_loaded = {}
+        if isinstance(deadline_data_loaded, dict):
             current_time = datetime.now(tz=ZoneInfo("UTC"))
-            start_time = deadline_data.get("start", current_time)
-            end_time = deadline_data.get("end", current_time + timedelta(days=30))
+            start_time = deadline_data_loaded.get("start", current_time)
+            end_time = deadline_data_loaded.get("end", current_time + timedelta(days=30))
             group_config["start"] = str(start_time)
             group_config["end"] = str(end_time)
             # Copy other fields except start and end
-            for k, v in deadline_data.items():
+            for k, v in deadline_data_loaded.items():
                 if k not in ["start", "end"]:
                     group_config[k] = v
     else:

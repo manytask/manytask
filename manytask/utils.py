@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+
 from flask import current_app as flask_current_app
 
 from .course import Course
@@ -18,4 +19,4 @@ def get_course() -> Course:
     """Get the course from the current Flask app."""
     if not hasattr(current_app, "course"):
         raise RuntimeError("Course not initialized in Flask app")
-    return current_app.course 
+    return current_app.course
