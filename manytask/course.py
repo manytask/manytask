@@ -7,9 +7,12 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from cachelib import BaseCache
+from sqlalchemy.orm import Session
 
 from . import abstract, glab, solutions
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
+from .database import DataBaseApi
+from .models import Course as CourseModel
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEZONE = ZoneInfo("Europe/Moscow")
@@ -107,5 +110,19 @@ class Course:
 
     def store_config(self, content: dict[str, Any]) -> None:
         # For validation purposes
-        ManytaskConfig(**content)
+        config = ManytaskConfig(**content)
+
+        if config.settings.course_name:
+            course_data = self.storage_api.get_course_by_unique_name(config.settings.course_name)
+            if course_data:
+                if isinstance(self.storage_api, DataBaseApi):
+                    with Session(self.storage_api.engine) as session:
+                        course = (
+                            session.query(CourseModel).filter_by(unique_course_name=config.settings.course_name).one()
+                        )
+                        course.name = config.settings.course_name
+                        course.gitlab_instance_host = str(config.settings.gitlab_base_url)
+                        session.commit()
+                        logger.info(f"Updated course {config.settings.course_name} in database")
+
         self._cache.set("__config__", content)

@@ -2,18 +2,31 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .config import ManytaskDeadlinesConfig
+from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .glab import Student
+from .role import Role
 
 
 @dataclass
 class StoredUser:
     username: str
-    course_admin: bool = False
-    # we can add more fields that we store
+    role: Role = Role.STUDENT
+    course_admin: bool = False  # todo remove. kept for now for backward compatibility
 
     def __repr__(self) -> str:
-        return f"StoredUser(username={self.username})"
+        return f"StoredUser(username={self.username}, role={self.role})"
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == Role.ADMIN or self.course_admin
+
+    @property
+    def is_teacher(self) -> bool:
+        return self.role == Role.TEACHER
+
+    @property
+    def is_student(self) -> bool:
+        return self.role == Role.STUDENT
 
 
 class ViewerApi(ABC):
@@ -35,6 +48,18 @@ class StorageApi(ABC):
     ) -> int: ...
 
     @abstractmethod
+    def get_course_by_unique_name(
+        self,
+        unique_course_name: str,
+    ) -> Any: ...
+
+    @abstractmethod
+    def create_course(
+        self,
+        config: "ManytaskConfig",
+    ) -> None: ...
+
+    @abstractmethod
     def get_stored_user(
         self,
         student: Student,
@@ -44,7 +69,21 @@ class StorageApi(ABC):
     def sync_stored_user(
         self,
         student: Student,
+        is_registration: bool = False,
     ) -> StoredUser: ...
+
+    @abstractmethod
+    def set_user_role(
+        self,
+        username: str,
+        role: Role,
+    ) -> StoredUser: ...
+
+    @abstractmethod
+    def get_users_by_role(
+        self,
+        role: Role,
+    ) -> list[StoredUser]: ...
 
     @abstractmethod
     def get_all_scores(self) -> dict[str, dict[str, int]]: ...

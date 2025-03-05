@@ -2,11 +2,16 @@
 
 {% block body %}
 <div class="container-fluid d-flex flex-column justify-content-center align-items-center" style="height: 100vh">
-    <h1>Manytask is NOT ready</h1>
-    <h3>You need configure it first with api request</h3>
-    <hr>
-    <p>You can update the page once it ready</p>
-    <button onClick="window.location.reload()" class="btn btn-warning">Refresh</button>
+    <h1>{{ course_name or "Manytask" }}</h1>
+    <div class="alert alert-warning text-center" role="alert">
+        <h4 class="alert-heading">Course Not Ready</h4>
+        <p>{{ error_message }}</p>
+        <hr>
+        <p class="mb-0">Please contact the course administrator or try again later.</p>
+    </div>
+    <button onClick="window.location.reload()" class="btn btn-warning mt-3">
+        <i class="fa-solid fa-rotate-right"></i>&nbsp;Refresh
+    </button>
 </div>
 {% endblock %}
 

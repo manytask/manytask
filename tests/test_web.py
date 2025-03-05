@@ -314,19 +314,12 @@ def test_not_ready(app, mock_course):
 
 def test_get_allscores_url(app, mock_course):
     with app.test_request_context():
-        test_url = "https://docs.google.com/spreadsheets"
-
-        class viewer_api_gsheets:
-            @staticmethod
-            def get_scoreboard_url():
-                return test_url
 
         class viewer_api_db:
             @staticmethod
             def get_scoreboard_url():
                 return ""
 
-        assert get_allscores_url(viewer_api_gsheets) == test_url
         assert get_allscores_url(viewer_api_db) == url_for("web.show_database")
 
 

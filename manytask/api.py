@@ -12,18 +12,23 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 import yaml
-from flask import Blueprint, Response, abort, current_app, jsonify, request, session
+from flask import Blueprint, Response, abort, jsonify, request, session
 from flask.typing import ResponseReturnValue
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from manytask.database import DataBaseApi
+from manytask import models
+from manytask.auth import requires_auth, requires_ready
+from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.course import DEFAULT_TIMEZONE, get_current_time
+from manytask.database import DataBaseApi, DatabaseConfig
+from manytask.database_utils import get_database_table_data
+from manytask.glab import Student
+from manytask.role import Role
 
-from .auth import requires_auth, requires_ready
-from .config import ManytaskGroupConfig, ManytaskTaskConfig
-from .course import DEFAULT_TIMEZONE, Course, get_current_time
-from .database_utils import get_database_table_data
-from .glab import Student
+from .web import get_course
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -32,23 +37,58 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        course: Course = current_app.course if hasattr(current_app, "course") else abort(HTTPStatus.FORBIDDEN)
-        course_token: str = ""
-        # TODO: unneed check when depricate googlesheet interface
-        if isinstance(course.storage_api, DataBaseApi):
-            db_course = course.storage_api.get_course(course.storage_api.course_name)
-            if not db_course:
+        try:
+            config_raw_data = request.get_data()
+            config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
+            unique_course_name = config_data.get("settings", {}).get("unique_course_name")
+
+            if not unique_course_name:
                 abort(HTTPStatus.FORBIDDEN)
-            course_token = db_course.token
 
-        # TODO: delete when depricate googlesheet interface
-        else:
-            course_token = os.environ["MANYTASK_COURSE_TOKEN"]
+            database_url = os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask")
+            engine = create_engine(database_url)
 
-        token = request.form.get("token", request.headers.get("Authorization", ""))
-        if not token or not course_token:
+            with Session(engine) as session:
+                course = session.query(models.Course).filter_by(unique_course_name=unique_course_name).first()
+                if not course:
+                    abort(HTTPStatus.FORBIDDEN)
+
+                DataBaseApi(
+                    DatabaseConfig(
+                        database_url=database_url,
+                        course_name=course.name,
+                        unique_course_name=unique_course_name,
+                        gitlab_instance_host=course.gitlab_instance_host,
+                        registration_secret="",
+                        token="",
+                        show_allscores=False,
+                        gitlab_admin_token="",
+                        gitlab_course_group="",
+                        gitlab_course_public_repo="",
+                        gitlab_course_students_group="",
+                        gitlab_default_branch="",
+                        gitlab_client_id="",
+                        gitlab_client_secret="",
+                    )
+                )
+
+                course_token = course.token
+
+        except Exception:
             abort(HTTPStatus.FORBIDDEN)
+
+        token = request.form.get("token")
+        if not token:
+            token = request.headers.get("Authorization", "")
+
+        if not token:
+            abort(HTTPStatus.FORBIDDEN)
+
+        if not course_token:
+            abort(HTTPStatus.FORBIDDEN)
+
         token = token.split()[-1]
+
         if not secrets.compare_digest(token, course_token):
             abort(HTTPStatus.FORBIDDEN)
 
@@ -97,12 +137,6 @@ def _update_score(
     new_score = int(score * multiplier)
 
     return max(old_score, new_score)
-
-    # if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
-    #     return old_score
-    # if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-    #     return int(second_deadline_max * score)
-    # return int(score)
 
 
 @bp.get("/healthcheck")
@@ -199,7 +233,7 @@ def _handle_files(files: dict[str, FileStorage], task_name: str, username: str, 
 @requires_token
 @requires_ready
 def report_score() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     task_name, user_id, username, check_deadline, submit_time_str = _validate_and_extract_params(request.form)
 
@@ -252,7 +286,7 @@ def report_score() -> ResponseReturnValue:
 @requires_token
 @requires_ready
 def get_score() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     # ----- get and validate request parameters ----- #
     if "task" not in request.form:
@@ -304,36 +338,70 @@ def get_score() -> ResponseReturnValue:
 @bp.post("/update_config")
 @requires_token
 def update_config() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
-
     logger.info("Running update_config")
 
-    # ----- get and validate request parameters ----- #
     try:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
 
-        # Update task groups (if necessary -- if there is an override) first
-        course.storage_api.update_task_groups_from_config(config_data)
+        settings = config_data.get("settings", {})
+        unique_course_name = settings.get("unique_course_name")
+        if not unique_course_name:
+            return "Missing unique_course_name in settings", HTTPStatus.BAD_REQUEST
 
-        # Store the new config
-        course.store_config(config_data)
+        database_url = os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask")
+        engine = create_engine(database_url)
+
+        with Session(engine) as session:
+            course = session.query(models.Course).filter_by(unique_course_name=unique_course_name).first()
+            if not course:
+                return f"Course {unique_course_name} not found", HTTPStatus.UNAUTHORIZED
+
+            db_api = DataBaseApi(
+                DatabaseConfig(
+                    database_url=database_url,
+                    course_name=course.name,
+                    unique_course_name=unique_course_name,
+                    gitlab_instance_host=course.gitlab_instance_host,
+                    registration_secret="",
+                    token="",
+                    show_allscores=False,
+                    gitlab_admin_token="",
+                    gitlab_course_group="",
+                    gitlab_course_public_repo="",
+                    gitlab_course_students_group="",
+                    gitlab_default_branch="",
+                    gitlab_client_id="",
+                    gitlab_client_secret="",
+                )
+            )
+
+            if "course_name" not in settings:
+                settings["course_name"] = course.name
+                config_data["settings"] = settings
+
+            try:
+                from manytask.config import ManytaskConfig
+
+                manytask_config = ManytaskConfig(**config_data)
+
+                db_api.update_task_groups_from_config(config_data)
+
+                db_api.sync_columns(manytask_config.deadlines)
+
+                return "", HTTPStatus.OK
+            except Exception as e:
+                return f"Error updating task groups: {str(e)}", HTTPStatus.BAD_REQUEST
+
     except Exception as e:
-        logger.exception(e)
+        logger.exception("Error in update_config")
         return f"Invalid config\n {e}", HTTPStatus.BAD_REQUEST
-
-    # ----- logic ----- #
-    # TODO: fix course config storing. may work one thread only =(
-    # sync columns
-    course.storage_api.sync_columns(course.deadlines)
-
-    return "", HTTPStatus.OK
 
 
 @bp.post("/update_cache")
 @requires_token
 def update_cache() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     logger.info("Running update_cache")
 
@@ -347,7 +415,7 @@ def update_cache() -> ResponseReturnValue:
 @requires_token
 @requires_ready
 def get_solutions() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
 
     # ----- get and validate request parameters ----- #
     if "task" not in request.form:
@@ -403,15 +471,18 @@ def update_database() -> ResponseReturnValue:
     Returns:
         ResponseReturnValue: JSON response with success status and optional error message
     """
-    course: Course = current_app.course  # type: ignore
+    course = get_course()
     storage_api = course.storage_api
 
     student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
     stored_user = storage_api.get_stored_user(student)
     student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
+    is_teacher = stored_user.role == Role.TEACHER
 
-    if not student_course_admin:
-        return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
+    if not student_course_admin and not is_teacher:
+        return jsonify(
+            {"success": False, "message": "Only course admins and teachers can update scores"}
+        ), HTTPStatus.FORBIDDEN
 
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
@@ -430,7 +501,39 @@ def update_database() -> ResponseReturnValue:
                 storage_api.store_score(
                     student=student, task_name=task_name, update_fn=lambda _flags, _old_score: int(new_score)
                 )
+
         return jsonify({"success": True})
     except Exception as e:
-        logger.error(f"Error updating database: {str(e)}")
+        logger.error(f"Error in update_database: {str(e)}", exc_info=True)
         return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
+
+
+@bp.get("/scores")
+@requires_auth
+def get_scores() -> ResponseReturnValue:
+    return jsonify(get_course().storage_api.get_scores(session["gitlab"]["username"]))
+
+
+@bp.get("/scores/all")
+@requires_auth
+def get_all_scores() -> ResponseReturnValue:
+    return jsonify(get_course().storage_api.get_all_scores())
+
+
+@bp.get("/scores/stats")
+@requires_auth
+def get_stats() -> ResponseReturnValue:
+    return jsonify(get_course().storage_api.get_stats())
+
+
+@bp.get("/scores/update_timestamp")
+@requires_auth
+def get_scores_update_timestamp() -> ResponseReturnValue:
+    return jsonify(get_course().storage_api.get_scores_update_timestamp())
+
+
+@bp.get("/scores/update")
+@requires_auth
+def update_scores() -> ResponseReturnValue:
+    get_course().storage_api.update_cached_scores()
+    return jsonify({"success": True})

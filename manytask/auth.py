@@ -11,6 +11,7 @@ from werkzeug import Response
 
 from manytask.course import Course
 from manytask.glab import Student
+from manytask.utils import get_course
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ def check_secret(course: Course, student: Student) -> str | None:
             logger.error(f"Wrong secret user {student.username} on course {course.storage_api.course_name}")  # type: ignore
             return render_template(
                 "create_project.html",
-                error_message="Invalid registration secret",
+                error_message="Invalid secret code. Please check and try again.",
                 course_name=course.name,
                 course_favicon=course.favicon,
                 base_url=course.gitlab_api.base_url,
@@ -123,7 +124,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if current_app.debug:
             return f(*args, **kwargs)
 
-        course = current_app.course  # type: ignore
+        course = get_course()
         oauth = current_app.oauth  # type: ignore
 
         if "code" in request.args:
@@ -131,7 +132,9 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 
         if valid_session(session):
             student = get_authenticate_student(oauth, course)
-            check_secret(course, student)
+            secret_check_result = check_secret(course, student)
+            if secret_check_result:
+                return secret_check_result
             if not handle_course_membership(course, student):
                 return render_template(
                     "create_project.html",
@@ -152,7 +155,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        course = current_app.course  # type: ignore
+        course = get_course()
         if not course.config:
             return redirect(url_for("web.not_ready"))
         return f(*args, **kwargs)

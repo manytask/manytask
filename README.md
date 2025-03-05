@@ -162,3 +162,17 @@ Originally was developed at gitlab as [shad-ts](https://gitlab.com/slon/shad-ts/
 * [Vadim Mazaev](https://github.com/GreenRiverRUS) - updates for python course, 2019-2020
 * Nikita Bondartsev - minor updates for python course, 2020-2021
 * [Konstantin Chernyshev](https://github.com/k4black) - updates for python course, massive refactor and moving to github, 2020-2024
+
+## Configuration
+
+The application uses a split configuration approach to support multiple courses:
+
+1. `.env.common` - Contains common settings shared across all course instances:
+   - Database configuration
+   - Storage settings
+   - Common Google Sheets settings
+   - Migration settings
+
+To set up a new course:
+
+1. Copy `.env.common.example` to `.env.common` and fill in the common values

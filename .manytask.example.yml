@@ -2,7 +2,7 @@ version: 1
 
 
 settings:  # required
-  course_name: python
+  unique_course_name: python
 
   gitlab_base_url: https://gitlab.manytask.org
   public_repo: python/public-2022-fall
