@@ -292,6 +292,17 @@ class DataBaseApi(ViewerApi, StorageApi):
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
 
+            existing_course_tasks = (
+                session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
+            )
+            existing_course_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
+
+            # Disabling tasks and groups removed from the config
+            for existing_task in existing_course_tasks:
+                existing_task.enabled = False
+            for existing_group in existing_course_groups:
+                existing_group.enabled = False
+
             # update deadlines parameters
             course.timezone = deadlines_config.timezone
             course.max_submissions = deadlines_config.max_submissions
@@ -358,9 +369,8 @@ class DataBaseApi(ViewerApi, StorageApi):
             new_task_to_group = {}
             for group in deadlines_config.groups:
                 for task_config in group.tasks:
-                    if task_config.enabled:
-                        new_task_names.add(task_config.name)
-                        new_task_to_group[task_config.name] = group.name
+                    new_task_names.add(task_config.name)
+                    new_task_to_group[task_config.name] = group.name
 
             existing_tasks = session.query(models.Task).join(models.TaskGroup).all()
 
@@ -405,6 +415,8 @@ class DataBaseApi(ViewerApi, StorageApi):
     def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
 
+        Raise TaskDisabledError if task or its group is disabled
+
         :param task_name: task name
 
         :return: pair of ManytaskGroupConfig and ManytaskTaskConfig objects
@@ -417,7 +429,7 @@ class DataBaseApi(ViewerApi, StorageApi):
             except NoResultFound:
                 raise KeyError(f"Task {task_name} not found")
 
-            if not task.enabled:
+            if not task.enabled or not task.group.enabled:
                 raise TaskDisabledError(f"Task {task_name} is disabled")
 
             group = task.group
@@ -843,7 +855,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         query = user_on_course.grades.join(models.Task).join(models.TaskGroup).join(models.Deadline)
 
         if enabled is not None:
-            query = query.filter(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled)
+            query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
 
         if started is not None:
             if started:
@@ -878,7 +890,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         )
 
         if enabled is not None:
-            query = query.filter(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled)
+            query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
 
         if started is not None:
             if started:
