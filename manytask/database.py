@@ -288,23 +288,42 @@ class DataBaseApi(ViewerApi, StorageApi):
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
 
+            # update deadlines parameters
+            course.timezone = deadlines_config.timezone
+            course.max_submissions = deadlines_config.max_submissions
+            course.submission_penalty = deadlines_config.submission_penalty
+
+            # update deadlines for each group
             for group in groups:
                 exist_tasks = [task for task in group.tasks if task in tasks]
 
                 if len(exist_tasks) == 0:
                     continue
 
-                deadline_data = DataBaseApi._serialize_deadline_data(group.start, group.steps, group.end)
+                deadline_start = group.start
+                deadline_steps = {
+                    k: self._convert_timedelta_to_datetime(group.start, v) for k, v in group.steps.items()
+                }
+                deadline_end = self._convert_timedelta_to_datetime(group.start, group.end)
 
-                task_group = DataBaseApi._get_or_create(session, models.TaskGroup, name=group.name, course_id=course.id)
+                task_group = DataBaseApi._update_or_create(
+                    session, models.TaskGroup, defaults={"enabled": group.enabled}, name=group.name, course_id=course.id
+                )
 
-                DataBaseApi._update_deadline_for_task_group(session, task_group, deadline_data)
+                DataBaseApi._update_deadline_for_task_group(
+                    session, task_group, deadline_start, deadline_steps, deadline_end
+                )
 
                 for task in exist_tasks:
                     self._update_or_create(
                         session,
                         models.Task,
-                        defaults={"is_bonus": task.is_bonus},
+                        defaults={
+                            "score": task.score,
+                            "is_bonus": task.is_bonus,
+                            "is_special": task.is_special,
+                            "enabled": task.enabled,
+                        },
                         name=task.name,
                         group_id=task_group.id,
                     )
@@ -491,21 +510,10 @@ class DataBaseApi(ViewerApi, StorageApi):
         return grades
 
     @staticmethod
-    def _serialize_deadline_data(  # serialize data to json from config.ManytaskGroupConfig params
-        start: datetime, steps: dict[float, datetime | timedelta], end: datetime | timedelta
-    ) -> dict[str, str | dict[str, str]]:
-        def convert(value: datetime | timedelta) -> str:
-            if isinstance(value, datetime):
-                return value.isoformat()
-            return (start + value).isoformat()
-
-        serialized: dict[str, str | dict[str, str]] = {
-            "start": convert(start),
-            "steps": {str(k): convert(v) for k, v in steps.items()},
-            "end": convert(end),
-        }
-
-        return serialized
+    def _convert_timedelta_to_datetime(start: datetime, value: datetime | timedelta) -> datetime:
+        if isinstance(value, datetime):
+            return value
+        return start + value
 
     @staticmethod
     def _get(
@@ -679,13 +687,22 @@ class DataBaseApi(ViewerApi, StorageApi):
     def _update_deadline_for_task_group(
         session: Session,
         task_group: models.TaskGroup,
-        deadline_data: dict[Any, Any],  # json data
+        deadline_start: datetime,
+        deadline_steps: dict[Any, Any],  # json steps
+        deadline_end: datetime,
     ) -> None:
         if task_group.deadline_id is None:
-            deadline = DataBaseApi._create(session, models.Deadline, data=deadline_data)
+            deadline = DataBaseApi._create(
+                session, models.Deadline, start=deadline_start, steps=deadline_steps, end=deadline_end
+            )
             DataBaseApi._update(session, models.TaskGroup, defaults={"deadline_id": deadline.id}, id=task_group.id)
         else:
-            DataBaseApi._update(session, models.Deadline, defaults={"data": deadline_data}, id=task_group.deadline.id)
+            DataBaseApi._update(
+                session,
+                models.Deadline,
+                defaults={"start": deadline_start, "steps": deadline_steps, "end": deadline_end},
+                id=task_group.deadline.id,
+            )
 
     @staticmethod
     def _get_all_grades(user_on_course: models.UserOnCourse, only_bonus: bool = False) -> Iterable["models.Grade"]:
