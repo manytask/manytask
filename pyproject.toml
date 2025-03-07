@@ -39,7 +39,7 @@ types-PyYAML = "6.0.12.12"
 pytest = "8.3.2"
 pytest-cov = "5.0.0"
 pre-commit = "3.6"
-testcontainers = "3.7.1"
+testcontainers = "4.9.2"
 
 [tool.mypy]
 no_incremental = true
