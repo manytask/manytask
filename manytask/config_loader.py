@@ -29,6 +29,7 @@ def load_environment_config(unique_course_name: Optional[str] = None) -> bool:
     # load common configuration
     common_config_path = root_dir / ".env.common"
     if not common_config_path.exists():
+        logger.error(f"Environment file '{common_config_path}' does not exist")
         return False
 
     load_dotenv(common_config_path)
