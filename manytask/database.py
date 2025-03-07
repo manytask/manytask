@@ -268,6 +268,13 @@ class DataBaseApi(ViewerApi, StorageApi):
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
 
+            all_tasks = (
+                session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
+            )
+
+            for task in all_tasks:
+                task.enabled = False
+
             for group in groups:
                 exist_tasks = [task for task in group.tasks if task in tasks]
 
@@ -284,7 +291,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                     self._update_or_create(
                         session,
                         models.Task,
-                        defaults={"is_bonus": task.is_bonus},
+                        defaults={"is_bonus": task.is_bonus, "enabled": True},
                         name=task.name,
                         group_id=task_group.id,
                     )
@@ -612,9 +619,11 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     @staticmethod
     def _get_all_grades(user_on_course: models.UserOnCourse, only_bonus: bool = False) -> Iterable["models.Grade"]:
+        query = user_on_course.grades.join(models.Task).filter_by(enabled=True)
+
         if only_bonus:
-            return user_on_course.grades.join(models.Task).filter_by(is_bonus=True).all()
-        return user_on_course.grades.all()
+            return query.filter_by(is_bonus=True).all()
+        return query.all()
 
     @staticmethod
     def _get_all_users(
@@ -632,7 +641,12 @@ class DataBaseApi(ViewerApi, StorageApi):
     ) -> Iterable["models.Task"]:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
-        return session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
+        return (
+            session.query(models.Task)
+            .join(models.TaskGroup)
+            .filter(and_(models.TaskGroup.course_id == course.id, models.Task.enabled))
+            .all()
+        )
 
     @staticmethod
     def _get_course_users_on_courses_count(
