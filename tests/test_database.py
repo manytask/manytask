@@ -133,48 +133,6 @@ def test_multiple_courses(first_course_db_api, second_course_db_api, session):
     assert task1_c2.group.name == "group1"
 
 
-# def test_disabled_tasks_not_moved(first_course_db_api, session):
-#     """Test that disabled tasks are not moved between groups"""
-
-#     _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
-
-#     course = session.query(Course).filter_by(name="Test Course").one()
-#     group2 = TaskGroup(name="group2", course=course)
-#     session.add(group2)
-#     session.commit()
-
-#     tasks_config = create_base_task_config("group2")
-#     tasks_config["tasks"] = [create_task_entry("task1", enabled=False)]
-
-#     first_course_db_api.update_task_groups_from_config(
-#         ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
-#     )
-
-#     task = session.query(Task).filter_by(name="task1").one()
-#     assert task.group.name == "group1"
-
-
-# def test_disabled_groups_not_processed(first_course_db_api, session):
-#     """Test that tasks in disabled groups are not processed"""
-
-#     _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
-
-#     course = session.query(Course).filter_by(name="Test Course").one()
-#     group2 = TaskGroup(name="group2", course=course)
-#     session.add(group2)
-#     session.commit()
-
-#     tasks_config = create_base_task_config("group2", enabled=False)
-#     tasks_config["tasks"] = [create_task_entry("task1")]
-
-#     first_course_db_api.update_task_groups_from_config(
-#         ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
-#     )
-
-#     task = session.query(Task).filter_by(name="task1").one()
-#     assert task.group.name == "group1"
-
-
 def test_multiple_task_moves(first_course_db_api, session):
     """Test moving multiple tasks between groups"""
 

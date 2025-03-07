@@ -13,8 +13,8 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, Uni
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
-from manytask.config import ManytaskDeadlinesConfig
-from manytask.database import DataBaseApi, DatabaseConfig, StoredUser
+from manytask.config import ManytaskDeadlinesConfig, ManytaskGroupConfig
+from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
 from manytask.glab import Student
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 
@@ -24,6 +24,52 @@ DEADLINES_CONFIG_FILES = [  # part of manytask config file
 ]
 
 FIXED_CURRENT_TIME = datetime(2025, 4, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+
+FIRST_COURSE_EXPECTED_STATS_KEYS = {
+    "task_0_0",
+    "task_0_1",
+    "task_0_2",
+    "task_0_3",
+    "task_1_0",
+    "task_1_1",
+    "task_1_2",
+    "task_1_3",
+    "task_1_4",
+    "task_2_2",
+    "task_2_3",
+    "task_3_0",
+    "task_3_1",
+    "task_3_2",
+}
+SECOND_COURSE_EXPECTED_STATS_KEYS = {
+    "task_0_0",
+    "task_0_1",
+    "task_0_2",
+    "task_0_3",
+    "task_0_4",
+    "task_0_5",
+    "task_1_0",
+    "task_1_1",
+    "task_1_2",
+    "task_1_3",
+    "task_1_4",
+    "task_2_0",
+    "task_2_1",
+    "task_2_3",
+    "task_3_0",
+    "task_3_1",
+    "task_3_2",
+    "task_3_3",
+    "task_4_0",
+    "task_4_1",
+    "task_4_2",
+    "task_5_0",
+    "task_5_1",
+    "task_5_2",
+}
+
+FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED = 200
+SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED = 540
 
 
 class TestException(Exception):
@@ -110,7 +156,7 @@ def first_course_deadlines_config_with_changed_task_name():
     with open(DEADLINES_CONFIG_FILES[0], "r") as f:
         deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
 
-    # change name of the first task of the first group
+    # change task name: task_0_0 -> task_0_0_changed
     deadlines_config_data["deadlines"]["schedule"][0]["tasks"][0]["task"] += "_changed"
 
     return ManytaskDeadlinesConfig(**deadlines_config_data["deadlines"])
@@ -162,16 +208,22 @@ def test_empty_course(first_course_db_api, session):
     all_scores = first_course_db_api.get_all_scores()
     bonus_score = first_course_db_api.get_bonus_score("some_user")
     scores = first_course_db_api.get_scores("some_user")
+    max_score_started = first_course_db_api.max_score_started
 
     assert stats == {}
     assert all_scores == {}
     assert bonus_score == 0
     assert scores == {}
+    assert max_score_started == 0
 
 
 def test_sync_columns(first_course_with_deadlines, session):
     expected_task_groups = 5
     expected_tasks = 18
+    bonus_tasks = ("task_0_2", "task_1_3")
+    special_tasks = ("task_1_1",)
+    disabled_groups = ("group_4",)
+    disabled_tasks = ("task_2_1",)
 
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
@@ -186,27 +238,9 @@ def test_sync_columns(first_course_with_deadlines, session):
     assert course.submission_penalty == 0.1  # noqa: PLR2004
 
     stats = first_course_with_deadlines.get_stats()
-    assert set(stats.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-    }
+    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
     assert all(v == 0 for v in stats.values())
+    assert first_course_with_deadlines.max_score_started == FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED
 
     assert session.query(TaskGroup).count() == expected_task_groups
     assert session.query(Task).count() == expected_tasks
@@ -214,18 +248,11 @@ def test_sync_columns(first_course_with_deadlines, session):
     tasks = session.query(Task).all()
     for task in tasks:
         assert task.group.name == "group_" + task.name[len("task_")]
-        assert task.enabled
-        assert task.group.enabled
 
-        if task.name in ("task_0_2", "task_1_3"):
-            assert task.is_bonus
-        else:
-            assert not task.is_bonus
-
-        if task.name in ("task_1_1"):
-            assert task.is_special
-        else:
-            assert not task.is_special
+        assert task.is_bonus == (task.name in bonus_tasks)
+        assert task.is_special == (task.name in special_tasks)
+        assert task.group.enabled != (task.group.name in disabled_groups)
+        assert task.enabled != (task.name in disabled_tasks)
 
         # for convenience task score related to its name(exception is group_0, it has multiplier "1")
         # for example for task_1_3 score is 10, task_3_0 score is 30
@@ -239,6 +266,10 @@ def test_sync_columns(first_course_with_deadlines, session):
 def test_resync_columns(first_course_db_api, first_course_deadlines_config, second_course_deadlines_config, session):
     expected_task_groups = 8
     expected_tasks = 28
+    bonus_tasks = ("task_0_2", "task_1_3", "task_6_0")
+    special_tasks = ("task_1_1", "task_6_0")
+    disabled_groups = ("group_6",)
+    disabled_tasks = ("task_2_2",)
 
     first_course_db_api.sync_columns(first_course_deadlines_config)
     first_course_db_api.sync_columns(second_course_deadlines_config)
@@ -256,34 +287,9 @@ def test_resync_columns(first_course_db_api, first_course_deadlines_config, seco
     assert course.submission_penalty == 0.2  # noqa: PLR2004
 
     stats = first_course_db_api.get_stats()
-    assert set(stats.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_0_4",
-        "task_0_5",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_0",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_3_3",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-        "task_5_0",
-        "task_5_1",
-        "task_5_2",
-    }
+    assert set(stats.keys()) == SECOND_COURSE_EXPECTED_STATS_KEYS
     assert all(v == 0 for v in stats.values())
+    assert first_course_db_api.max_score_started == SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED
 
     assert session.query(TaskGroup).count() == expected_task_groups
     assert session.query(Task).count() == expected_tasks
@@ -291,22 +297,11 @@ def test_resync_columns(first_course_db_api, first_course_deadlines_config, seco
     tasks = session.query(Task).all()
     for task in tasks:
         assert task.group.name == "group_" + task.name[len("task_")]
-        assert task.enabled
 
-        if task.name in ("task_6_0", "task_6_1"):
-            assert not task.group.enabled
-        else:
-            assert task.group.enabled
-
-        if task.name in ("task_0_2", "task_1_3", "task_6_0"):
-            assert task.is_bonus
-        else:
-            assert not task.is_bonus
-
-        if task.name in ("task_1_1", "task_6_0"):
-            assert task.is_special
-        else:
-            assert not task.is_special
+        assert task.is_bonus == (task.name in bonus_tasks)
+        assert task.is_special == (task.name in special_tasks)
+        assert task.group.enabled != (task.group.name in disabled_groups)
+        assert task.enabled != (task.name in disabled_tasks)
 
         # for convenience task score related to its name(exception is group_0, it has multiplier "1")
         # for example for task_1_3 score is 10, task_3_0 score is 30
@@ -322,32 +317,15 @@ def test_resync_with_changed_task_name(
 ):
     expected_task_groups = 5
     expected_tasks = 19
+    disabled_tasks = ("task_0_0", "task_2_1")
 
     first_course_db_api.sync_columns(first_course_deadlines_config)
     first_course_db_api.sync_columns(first_course_deadlines_config_with_changed_task_name)
 
     stats = first_course_db_api.get_stats()
-    assert set(stats.keys()) == {
-        "task_0_0_changed",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-    }
+    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
     assert all(v == 0 for v in stats.values())
+    assert first_course_db_api.max_score_started == FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED
 
     assert session.query(TaskGroup).count() == expected_task_groups
     assert session.query(Task).count() == expected_tasks
@@ -356,10 +334,7 @@ def test_resync_with_changed_task_name(
     for task in tasks:
         assert task.group.name == "group_" + task.name[len("task_")]
 
-        if task.name == "task_0_0":
-            assert not task.enabled
-        else:
-            assert task.enabled
+        assert task.enabled != (task.name in disabled_tasks)
 
 
 def test_store_score(first_course_with_deadlines, session):
@@ -400,26 +375,7 @@ def test_store_score(first_course_with_deadlines, session):
     bonus_score = first_course_with_deadlines.get_bonus_score("user1")
     scores = first_course_with_deadlines.get_scores("user1")
 
-    assert set(stats.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-    }
+    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
     assert stats["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_0_0")
 
@@ -447,26 +403,7 @@ def test_store_score_bonus_task(first_course_with_deadlines, session):
     bonus_score = first_course_with_deadlines.get_bonus_score("user1")
     scores = first_course_with_deadlines.get_scores("user1")
 
-    assert set(stats.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-    }
+    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
     assert stats["task_1_3"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_1_3")
 
@@ -490,27 +427,7 @@ def test_store_score_with_changed_task_name(
     bonus_score = first_course_db_api.get_bonus_score("user1")
     scores = first_course_db_api.get_scores("user1")
 
-    assert set(stats.keys()) == {
-        "task_0_0_changed",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-    }
-
+    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
     assert all(v == 0.0 for k, v in stats.items())
 
     assert all_scores == {"user1": {}}
@@ -578,26 +495,7 @@ def test_many_users(first_course_with_deadlines, session):
     bonus_score_user2 = first_course_with_deadlines.get_bonus_score("user2")
     scores_user2 = first_course_with_deadlines.get_scores("user2")
 
-    assert set(stats.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-    }
+    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
     assert stats["task_0_0"] == 1.0
     assert stats["task_1_3"] == expected_stats_ratio
     assert all(v == 0.0 for k, v in stats.items() if k not in ["task_0_0", "task_1_3"])
@@ -629,26 +527,7 @@ def test_many_courses(first_course_with_deadlines, second_course_with_deadlines,
     bonus_score_user1 = first_course_with_deadlines.get_bonus_score("user1")
     scores_user1 = first_course_with_deadlines.get_scores("user1")
 
-    assert set(stats1.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-    }
+    assert set(stats1.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
     assert stats1["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats1.items() if k != "task_0_0")
 
@@ -661,33 +540,7 @@ def test_many_courses(first_course_with_deadlines, second_course_with_deadlines,
     bonus_score_user2 = second_course_with_deadlines.get_bonus_score("user1")
     scores_user2 = second_course_with_deadlines.get_scores("user1")
 
-    assert set(stats2.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_0_4",
-        "task_0_5",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_0",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_3_3",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-        "task_5_0",
-        "task_5_1",
-        "task_5_2",
-    }
+    assert set(stats2.keys()) == SECOND_COURSE_EXPECTED_STATS_KEYS
     assert stats2["task_1_3"] == 1.0
     assert all(v == 0.0 for k, v in stats2.items() if k != "task_1_3")
 
@@ -726,26 +579,7 @@ def test_many_users_and_courses(first_course_with_deadlines, second_course_with_
     bonus_score1_user2 = first_course_with_deadlines.get_bonus_score("user2")
     scores1_user2 = first_course_with_deadlines.get_scores("user2")
 
-    assert set(stats1.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-    }
+    assert set(stats1.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
     assert stats1["task_0_0"] == 1.0
     assert stats1["task_1_3"] == expected_stats_ratio
     assert all(v == 0.0 for k, v in stats1.items() if k not in ["task_0_0", "task_1_3"])
@@ -766,33 +600,7 @@ def test_many_users_and_courses(first_course_with_deadlines, second_course_with_
     bonus_score2_user2 = second_course_with_deadlines.get_bonus_score("user2")
     scores2_user2 = second_course_with_deadlines.get_scores("user2")
 
-    assert set(stats2.keys()) == {
-        "task_0_0",
-        "task_0_1",
-        "task_0_2",
-        "task_0_3",
-        "task_0_4",
-        "task_0_5",
-        "task_1_0",
-        "task_1_1",
-        "task_1_2",
-        "task_1_3",
-        "task_1_4",
-        "task_2_0",
-        "task_2_1",
-        "task_2_2",
-        "task_2_3",
-        "task_3_0",
-        "task_3_1",
-        "task_3_2",
-        "task_3_3",
-        "task_4_0",
-        "task_4_1",
-        "task_4_2",
-        "task_5_0",
-        "task_5_1",
-        "task_5_2",
-    }
+    assert set(stats2.keys()) == SECOND_COURSE_EXPECTED_STATS_KEYS
     assert stats2["task_1_0"] == expected_stats_ratio
     assert stats2["task_1_1"] == expected_stats_ratio
     assert all(v == 0.0 for k, v in stats2.items() if k not in ["task_1_0", "task_1_1"])
@@ -1085,3 +893,100 @@ def test_convert_timedelta_to_datetime():
 
     assert DataBaseApi._convert_timedelta_to_datetime(start, value_datetime) == value_datetime
     assert DataBaseApi._convert_timedelta_to_datetime(start, value_timedelta) == value_datetime
+
+
+def change_timedelta_to_datetime(group: ManytaskGroupConfig) -> ManytaskGroupConfig:
+    group.steps = {k: DataBaseApi._convert_timedelta_to_datetime(group.start, v) for k, v in group.steps.items()}
+    group.end = DataBaseApi._convert_timedelta_to_datetime(group.start, group.end)
+
+    return group
+
+
+@pytest.mark.parametrize("course_number", [1, 2])
+def test_find_task(
+    first_course_with_deadlines,
+    second_course_with_deadlines,
+    first_course_deadlines_config,
+    second_course_deadlines_config,
+    course_number,
+):
+    course_with_deadlines = (first_course_with_deadlines, second_course_with_deadlines)[course_number - 1]
+    course_deadlines_config = (first_course_deadlines_config, second_course_deadlines_config)[course_number - 1]
+
+    for group in course_deadlines_config.groups:
+        group = change_timedelta_to_datetime(group)
+
+        for task in group.tasks:
+            if not task.enabled:
+                with pytest.raises(TaskDisabledError) as e:
+                    course_with_deadlines.find_task(task.name)
+                assert str(e.value) == f"Task {task.name} is disabled"
+                continue
+            if not group.enabled:
+                with pytest.raises(TaskDisabledError) as e:
+                    course_with_deadlines.find_task(task.name)
+                assert str(e.value) == f"Task {task.name} group {group.name} is disabled"
+                continue
+
+            found_group, found_task = course_with_deadlines.find_task(task.name)
+
+            assert found_task == task
+            assert found_group.group == group.group
+            assert found_group.enabled == group.enabled
+            assert found_group.start == group.start
+            assert found_group.steps == group.steps
+            assert found_group.end == group.end
+            assert set(found_group.tasks) == set(group.tasks)
+
+            # TODO: do we want to check the order of ManytaskGroupConfig.tasks?
+
+
+def test_find_task_not_found(first_course_with_deadlines, second_course_with_deadlines):
+    task_name = "non-existent_task"
+
+    with pytest.raises(KeyError) as e:
+        first_course_with_deadlines.find_task(task_name)
+    assert e.value.args[0] == f"Task {task_name} not found"
+
+    with pytest.raises(KeyError) as e:
+        second_course_with_deadlines.find_task(task_name)
+    assert e.value.args[0] == f"Task {task_name} not found"
+
+
+@pytest.mark.parametrize("course_number", [1, 2])
+@pytest.mark.parametrize("enabled", [None, True, False])
+@pytest.mark.parametrize("started", [None, True, False])
+@pytest.mark.parametrize("now", [FIXED_CURRENT_TIME, None])
+def test_get_groups(  # noqa: PLR0913
+    first_course_with_deadlines,
+    second_course_with_deadlines,
+    first_course_deadlines_config,
+    second_course_deadlines_config,
+    course_number,
+    enabled,
+    started,
+    now,
+):
+    course_with_deadlines = (first_course_with_deadlines, second_course_with_deadlines)[course_number - 1]
+    course_deadlines_config = (first_course_deadlines_config, second_course_deadlines_config)[course_number - 1]
+
+    result_groups = course_with_deadlines.get_groups(enabled=enabled, started=started, now=now)
+
+    assert len([group.name for group in result_groups]) == len(set([group.name for group in result_groups]))
+
+    groups = [change_timedelta_to_datetime(group) for group in course_deadlines_config.groups]
+
+    if enabled is not None:
+        groups = [group for group in groups if group.enabled == enabled]
+        for i in range(len(groups)):
+            groups[i].tasks = [task for task in groups[i].tasks if task.enabled == enabled]
+
+    if started is not None:
+        if started:
+            groups = [group for group in groups if group.start <= FIXED_CURRENT_TIME]
+        else:
+            groups = [group for group in groups if group.start > FIXED_CURRENT_TIME]
+
+    assert set(result_groups) == set(groups)
+
+    # TODO: do we want to check the order of list[ManytaskTaskConfig]?

@@ -94,6 +94,13 @@ class StorageApi(ABC):
     def get_now_with_timezone(self) -> datetime: ...
 
     @abstractmethod
+    def max_score(self, started: bool | None = True) -> int: ...
+
+    @property
+    @abstractmethod
+    def max_score_started(self) -> int: ...
+
+    @abstractmethod
     def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool: ...
 
     @abstractmethod

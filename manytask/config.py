@@ -55,6 +55,9 @@ class ManytaskTaskConfig(BaseModel):
     # Note: use Optional/Union[...] instead of ... | None as pydantic does not support | in older python versions
     url: Optional[AnyUrl] = None
 
+    def __hash__(self) -> int:
+        return hash(self.name)
+
     @property
     def name(self) -> str:
         return self.task
@@ -71,6 +74,9 @@ class ManytaskGroupConfig(BaseModel):
     end: Union[datetime, timedelta]
 
     tasks: list[ManytaskTaskConfig] = Field(default_factory=list)
+
+    def __hash__(self) -> int:
+        return hash(self.name)
 
     @property
     def name(self) -> str:
@@ -194,13 +200,6 @@ class ManytaskDeadlinesConfig(BaseModel):
         self,
     ) -> list[ManytaskGroupConfig]:
         return self.schedule
-
-    # def max_score(self, started: bool | None = True, *, now: datetime | None = None) -> int:
-    #     return sum(task.score for task in self.parse_tasks(enabled=True, started=started, is_bonus=False, now=now))
-
-    # @property
-    # def max_score_started(self) -> int:
-    #     return self.max_score(started=True, now=self.get_now_with_timezone())
 
 
 class ManytaskConfig(BaseModel):

@@ -371,6 +371,13 @@ class GoogleDocApi(ViewerApi, StorageApi):
     def get_now_with_timezone(self) -> datetime:
         raise NotImplementedError("Deprecated api class")
 
+    def max_score(self, started: bool | None = True) -> int:
+        raise NotImplementedError("Deprecated api class")
+
+    @property
+    def max_score_started(self) -> int:
+        raise NotImplementedError("Deprecated api class")
+
     def update_task_groups_from_config(
         self,
         deadlines_config: ManytaskDeadlinesConfig,

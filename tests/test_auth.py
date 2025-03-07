@@ -11,7 +11,7 @@ from pydantic import AnyUrl
 
 from manytask.abstract import StoredUser
 from manytask.auth import requires_auth, requires_ready, set_oauth_session, valid_session
-from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskSettingsConfig, ManytaskUiConfig
+from manytask.config import ManytaskConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from manytask.glab import Student
 from manytask.web import bp as web_bp
 
@@ -35,24 +35,6 @@ def app():
     app.secret_key = "test_key"
     app.register_blueprint(web_bp)
     return app
-
-
-@pytest.fixture
-def mock_deadlines():
-    class MockDeadlines:
-        @staticmethod
-        def get_now_with_timezone():
-            return datetime.now(tz=ZoneInfo("UTC"))
-
-        @staticmethod
-        def get_groups():
-            return []
-
-        @property
-        def max_score_started(self):
-            return 100  # Mock value for testing
-
-    return MockDeadlines()
 
 
 @pytest.fixture
@@ -95,7 +77,7 @@ def mock_gitlab_api():
 
 
 @pytest.fixture
-def mock_storage_api():
+def mock_storage_api():  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
@@ -143,6 +125,18 @@ def mock_storage_api():
         def update_cached_scores():
             pass
 
+        @staticmethod
+        def get_now_with_timezone():
+            return datetime.now(tz=ZoneInfo("UTC"))
+
+        @staticmethod
+        def get_groups():
+            return []
+
+        @property
+        def max_score_started(self):
+            return 100  # Mock value for testing
+
     return MockStorageApi()
 
 
@@ -166,7 +160,7 @@ def mock_solutions_api():
 
 
 @pytest.fixture
-def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutions_api):
+def mock_course(mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutions_api):
     class MockCourse:
         def __init__(self):
             self.name = TEST_COURSE_NAME
@@ -179,14 +173,12 @@ def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_viewer_a
                     students_group="test/students",
                 ),
                 ui=ManytaskUiConfig(task_url_template=f"{GITLAB_BASE_URL}/test/$GROUP_NAME/$TASK_NAME", links={}),
-                deadlines=ManytaskDeadlinesConfig(timezone="UTC", schedule=[]),
             )
             self.show_allscores = True
             self.manytask_version = "1.0.0"
             self.favicon = "test_favicon"
             self.registration_secret = TEST_SECRET
             self.debug = False
-            self.deadlines = mock_deadlines
             self.storage_api = mock_storage_api
             self.viewer_api = mock_viewer_api
             self.gitlab_api = mock_gitlab_api

@@ -12,6 +12,7 @@ from pydantic import AnyUrl
 
 from manytask.abstract import StoredUser
 from manytask.config import ManytaskConfig, ManytaskSettingsConfig, ManytaskUiConfig
+from manytask.database import TaskDisabledError
 from manytask.glab import Student
 from manytask.web import bp as web_bp
 from manytask.web import get_allscores_url
@@ -25,6 +26,8 @@ GITLAB_BASE_URL = "https://gitlab.com"
 TEST_VERSION = 1.5
 TEST_USER_ID = 123
 TEST_REPO = "test_repo"
+INVALID_TASK_NAME = "invalid_task"
+TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 
 
 @pytest.fixture
@@ -37,16 +40,6 @@ def app():
     app.secret_key = "test_key"
     app.register_blueprint(web_bp)
     return app
-
-
-@pytest.fixture
-def mock_deadlines():
-    class MockDeadlines:
-        @property
-        def max_score_started(self):
-            return 100
-
-    return MockDeadlines()
 
 
 @pytest.fixture
@@ -89,7 +82,7 @@ def mock_gitlab_api():
 
 
 @pytest.fixture
-def mock_storage_api():
+def mock_storage_api():  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
@@ -124,6 +117,14 @@ def mock_storage_api():
             return []
 
         @staticmethod
+        def find_task(task_name):
+            if task_name == INVALID_TASK_NAME:
+                raise KeyError("Task not found")
+            if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
+                raise TaskDisabledError(f"Task {task_name} is disabled")
+            return None, None
+
+        @staticmethod
         def get_now_with_timezone():
             return datetime.now(tz=ZoneInfo("UTC"))
 
@@ -145,6 +146,10 @@ def mock_storage_api():
                 else self.stored_user.course_admin
             )
             return self.stored_user.course_admin
+
+        @property
+        def max_score_started(self):
+            return 100
 
     return MockStorageApi()
 
@@ -169,7 +174,7 @@ def mock_solutions_api():
 
 
 @pytest.fixture
-def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutions_api):
+def mock_course(mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutions_api):
     class MockCourse:
         def __init__(self):
             self.name = TEST_COURSE_NAME
@@ -188,7 +193,6 @@ def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_viewer_a
             self.favicon = "test_favicon"
             self.registration_secret = TEST_SECRET
             self.debug = False
-            self.deadlines = mock_deadlines
             self.storage_api = mock_storage_api
             self.viewer_api = mock_viewer_api
             self.gitlab_api = mock_gitlab_api
@@ -616,3 +620,17 @@ def test_login_oauth_error(app, mock_gitlab_oauth, mock_course):
         response = app.test_client().get(url_for("web.login"), query_string={"code": "test_code"})
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("web.login")
+
+
+@pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
+def test_solutions_invalid_or_disabled_task(app, mock_gitlab_oauth, mock_course, task_name):
+    with app.test_request_context():
+        app.course = mock_course
+        app.oauth = mock_gitlab_oauth
+        app.debug = True  # course_admin = True
+
+        data = {"task": task_name}
+
+        response = app.test_client().get(url_for("web.get_solutions"), query_string=data)
+
+        assert response.status_code == HTTPStatus.NOT_FOUND

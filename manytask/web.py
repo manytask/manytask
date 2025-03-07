@@ -10,6 +10,7 @@ from flask.typing import ResponseReturnValue
 from . import abstract, glab
 from .auth import requires_auth, requires_ready
 from .course import Course, get_current_time
+from .database import TaskDisabledError
 from .database_utils import get_database_table_data
 
 SESSION_VERSION = 1.5
@@ -129,7 +130,7 @@ def get_solutions() -> ResponseReturnValue:
     # ----- logic ----- #
     try:
         _, _ = course.storage_api.find_task(task_name)
-    except KeyError:
+    except (KeyError, TaskDisabledError):
         return f"There is no task with name `{task_name}` (or it is disabled)", HTTPStatus.NOT_FOUND
 
     zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)

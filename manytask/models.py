@@ -180,6 +180,7 @@ class Task(Base):
     is_bonus: Mapped[bool] = mapped_column(default=False)
     is_special: Mapped[bool] = mapped_column(server_default="false", default=False)
     enabled: Mapped[bool] = mapped_column(server_default="true", default=True)
+    url: Mapped[Optional[str]]
 
     # relationships
     group: Mapped["TaskGroup"] = relationship(back_populates="tasks")

@@ -10,6 +10,7 @@ from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
+from pydantic import AnyUrl
 from sqlalchemy import and_, create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
@@ -335,6 +336,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                             "is_bonus": task.is_bonus,
                             "is_special": task.is_special,
                             "enabled": task.enabled,
+                            "url": str(task.url) if task.url is not None else None,
                         },
                         name=task.name,
                         group_id=task_group.id,
@@ -429,8 +431,10 @@ class DataBaseApi(ViewerApi, StorageApi):
             except NoResultFound:
                 raise KeyError(f"Task {task_name} not found")
 
-            if not task.enabled or not task.group.enabled:
+            if not task.enabled:
                 raise TaskDisabledError(f"Task {task_name} is disabled")
+            if not task.group.enabled:
+                raise TaskDisabledError(f"Task {task_name} group {task.group.name} is disabled")
 
             group = task.group
             group_tasks = group.tasks.all()
@@ -449,6 +453,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                     score=group_task.score,
                     is_bonus=group_task.is_bonus,
                     is_special=group_task.is_special,
+                    url=AnyUrl(group_task.url) if group_task.url is not None else None,
                 )
                 for group_task in group_tasks
             ],
@@ -505,7 +510,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                 tasks = []
 
                 for task in group.tasks:
-                    if enabled and not task.enabled:
+                    if enabled is not None and enabled != task.enabled:
                         continue
 
                     tasks.append(
@@ -515,6 +520,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                             score=task.score,
                             is_bonus=task.is_bonus,
                             is_special=task.is_special,
+                            url=AnyUrl(task.url) if task.url is not None else None,
                         )
                     )
 
@@ -537,6 +543,16 @@ class DataBaseApi(ViewerApi, StorageApi):
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
         return datetime.now(tz=ZoneInfo(course.timezone))
+
+    def max_score(self, started: bool | None = True) -> int:
+        with Session(self.engine) as session:
+            tasks = self._get_all_tasks(session, self.course_name, enabled=True, started=started, is_bonus=False)
+
+        return sum(task.score for task in tasks)
+
+    @property
+    def max_score_started(self) -> int:
+        return self.max_score(started=True)
 
     def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
         """Sync admin flag in gitlab and db"""
@@ -878,7 +894,12 @@ class DataBaseApi(ViewerApi, StorageApi):
         return [user_on_course.user.username for user_on_course in course.users_on_courses.all()]
 
     def _get_all_tasks(
-        self, session: Session, course_name: str, enabled: bool | None = None, started: bool | None = None
+        self,
+        session: Session,
+        course_name: str,
+        enabled: bool | None = None,
+        started: bool | None = None,
+        is_bonus: bool | None = None,
     ) -> Iterable["models.Task"]:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
@@ -891,6 +912,9 @@ class DataBaseApi(ViewerApi, StorageApi):
 
         if enabled is not None:
             query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
+
+        if is_bonus is not None:
+            query = query.filter(and_(models.Task.is_bonus == is_bonus))
 
         if started is not None:
             if started:

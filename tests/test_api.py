@@ -15,13 +15,14 @@ from werkzeug.exceptions import HTTPException
 from manytask.abstract import StoredUser
 from manytask.api import _get_student, _parse_flags, _process_score, _update_score
 from manytask.api import bp as api_bp
-from manytask.database import DataBaseApi
+from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.glab import Student
 from manytask.web import bp as web_bp
 
 TEST_USER_ID = 123
 TEST_USERNAME = "test_user"
 INVALID_TASK_NAME = "invalid_task"
+TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
 TEST_SECRET_KEY = "test_key"
 TEST_COURSE_NAME = "Test Course"
@@ -99,18 +100,6 @@ def mock_solutions_api():
 
 
 @pytest.fixture
-def mock_deadlines():
-    class MockDeadlines:
-        def __init__(self):
-            self.timezone = "UTC"
-            self.mock_task = mock_task
-            self.mock_group = mock_group
-            self.groups = [self.mock_group]
-
-    return MockDeadlines()
-
-
-@pytest.fixture
 def mock_storage_api(mock_student, mock_task, mock_group):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
@@ -174,6 +163,8 @@ def mock_storage_api(mock_student, mock_task, mock_group):  # noqa: C901
         def find_task(task_name):
             if task_name == INVALID_TASK_NAME:
                 raise KeyError("Task not found")
+            if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
+                raise TaskDisabledError(f"Task {task_name} is disabled")
             return mock_group, mock_task
 
         @staticmethod
@@ -215,11 +206,10 @@ def mock_gitlab_api(mock_student):
 
 
 @pytest.fixture
-def mock_course(mock_deadlines, mock_storage_api, mock_solutions_api, mock_gitlab_api):
+def mock_course(mock_storage_api, mock_solutions_api, mock_gitlab_api, mock_group):
     class MockCourse:
         def __init__(self):
             self.config = {"test": "config"}
-            self.deadlines = mock_deadlines
             self.storage_api = mock_storage_api
             self.solutions_api = mock_solutions_api
             self.gitlab_api = mock_gitlab_api
@@ -229,7 +219,7 @@ def mock_course(mock_deadlines, mock_storage_api, mock_solutions_api, mock_gitla
             self.config = config_data
 
         def get_groups(self):
-            return self.deadlines.groups
+            return [mock_group]
 
         def get_authenticated_student(self, _gitlab_access_token):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
@@ -342,16 +332,6 @@ def test_report_score_missing_user(app, mock_course):
         response = app.test_client().post("/api/report", data=data, headers=headers)
         assert response.status_code == HTTPStatus.BAD_REQUEST
         assert b"user_id" in response.data
-
-
-def test_report_score_invalid_task(app, mock_course):
-    with app.test_request_context():
-        app.course = mock_course
-        data = {"task": INVALID_TASK_NAME, "user_id": str(TEST_USER_ID)}
-        headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
-
-        response = app.test_client().post("/api/report", data=data, headers=headers)
-        assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_report_score_success(app, mock_course):
@@ -794,3 +774,26 @@ def test_get_student_id_not_found():
     with pytest.raises(HTTPException) as exc_info:
         _get_student(mock_gitlab, 999, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
+def test_post_requests_invalid_or_disabled_task(app, mock_course, task_name):
+    with app.test_request_context():
+        app.course = mock_course
+        data = {"task": task_name, "user_id": str(TEST_USER_ID)}
+        headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+        response = app.test_client().post("/api/report", data=data, headers=headers)
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.parametrize("path", ["/api/solutions", "/api/score"])
+@pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
+def test_get_requests_invalid_or_disabled_task(app, mock_course, path, task_name):
+    with app.test_request_context():
+        app.course = mock_course
+        data = {"task": task_name, "user_id": str(TEST_USER_ID)}
+        headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+        response = app.test_client().get(path, data=data, headers=headers)
+        assert response.status_code == HTTPStatus.NOT_FOUND
