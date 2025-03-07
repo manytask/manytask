@@ -29,6 +29,7 @@ def load_environment_config(unique_course_name: Optional[str] = None) -> bool:
     # load common configuration
     common_config_path = root_dir / ".env.common"
     if not common_config_path.exists():
+        logger.error(f"Environment file '{common_config_path}' does not exist")
         return False
 
     load_dotenv(common_config_path)
@@ -139,11 +140,6 @@ def get_course_config_from_db(unique_course_name: str) -> bool:
             os.environ["GITLAB_CLIENT_ID"] = course.gitlab_client_id
             os.environ["GITLAB_CLIENT_SECRET"] = course.gitlab_client_secret
             os.environ["SHOW_ALLSCORES"] = str(course.show_allscores).lower()
-
-            if course.gdoc_spreadsheet_id:
-                os.environ["GDOC_SPREADSHEET_ID"] = course.gdoc_spreadsheet_id
-            if course.gdoc_scoreboard_sheet:
-                os.environ["GDOC_SCOREBOARD_SHEET"] = course.gdoc_scoreboard_sheet
 
             logger.info(f"Successfully loaded configuration for course: {unique_course_name}")
             return True

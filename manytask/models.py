@@ -53,8 +53,6 @@ class Course(Base):
     gitlab_default_branch: Mapped[str]
     gitlab_client_id: Mapped[str]
     gitlab_client_secret: Mapped[str]
-    gdoc_spreadsheet_id: Mapped[str | None]
-    gdoc_scoreboard_sheet: Mapped[str | None]
 
     __table_args__ = (
         UniqueConstraint("name", name="uq_courses_name"),

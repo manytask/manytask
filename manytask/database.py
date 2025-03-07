@@ -42,8 +42,6 @@ class DatabaseConfig:
     gitlab_default_branch: str
     gitlab_client_id: str
     gitlab_client_secret: str
-    gdoc_spreadsheet_id: str | None = None
-    gdoc_scoreboard_sheet: str | None = None
     apply_migrations: bool = False
 
 
@@ -74,8 +72,6 @@ class DataBaseApi(ViewerApi, StorageApi):
         self.gitlab_default_branch = config.gitlab_default_branch
         self.gitlab_client_id = config.gitlab_client_id
         self.gitlab_client_secret = config.gitlab_client_secret
-        self.gdoc_spreadsheet_id = config.gdoc_spreadsheet_id
-        self.gdoc_scoreboard_sheet = config.gdoc_scoreboard_sheet
         self.apply_migrations = config.apply_migrations
 
         self.engine = create_engine(self.database_url, echo=False)
@@ -133,8 +129,6 @@ class DataBaseApi(ViewerApi, StorageApi):
                             gitlab_default_branch=self.gitlab_default_branch,
                             gitlab_client_id=self.gitlab_client_id,
                             gitlab_client_secret=self.gitlab_client_secret,
-                            gdoc_spreadsheet_id=self.gdoc_spreadsheet_id,
-                            gdoc_scoreboard_sheet=self.gdoc_scoreboard_sheet,
                         )
                         session.commit()
 
@@ -458,8 +452,6 @@ class DataBaseApi(ViewerApi, StorageApi):
                     gitlab_default_branch=config.settings.gitlab_default_branch,
                     gitlab_client_id=config.settings.gitlab_client_id,
                     gitlab_client_secret=config.settings.gitlab_client_secret,
-                    gdoc_spreadsheet_id=config.settings.gdoc_spreadsheet_id,
-                    gdoc_scoreboard_sheet=config.settings.gdoc_scoreboard_sheet,
                 )
                 session.commit()
             except Exception:
