@@ -50,6 +50,7 @@ deadlines:
       tasks:
         - task: task_2_1
           score: 20
+          enabled: false
         - task: task_2_2
           score: 20
         - task: task_2_3
@@ -75,7 +76,7 @@ deadlines:
       steps:
         0.5: 2020-04-01 23:59
       end: 2040-05-01 23:59
-      enabled: true
+      enabled: false
       tasks:
         - task: task_4_0
           score: 40

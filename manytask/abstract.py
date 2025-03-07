@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable
 
-from .config import ManytaskDeadlinesConfig
+from .config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .glab import Student
 
 
@@ -75,8 +76,29 @@ class StorageApi(ABC):
     @abstractmethod
     def update_task_groups_from_config(
         self,
-        config_data: dict[str, Any],
+        deadlines_config: ManytaskDeadlinesConfig,
     ) -> None: ...
+
+    @abstractmethod
+    def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]: ...
+
+    @abstractmethod
+    def get_groups(
+        self,
+        enabled: bool | None = None,
+        started: bool | None = None,
+        now: datetime | None = None,
+    ) -> list[ManytaskGroupConfig]: ...
+
+    @abstractmethod
+    def get_now_with_timezone(self) -> datetime: ...
+
+    @abstractmethod
+    def max_score(self, started: bool | None = True) -> int: ...
+
+    @property
+    @abstractmethod
+    def max_score_started(self) -> int: ...
 
     @abstractmethod
     def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool: ...

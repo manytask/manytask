@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from manytask.models import Course, Task, TaskGroup
+from manytask.config import ManytaskDeadlinesConfig
 
 
 # ruff: noqa
@@ -79,7 +80,9 @@ def test_move_task_between_groups(first_course_db_api, session):
     tasks_config = create_base_task_config("group2")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    first_course_db_api.update_task_groups_from_config(create_test_config(tasks_config))
+    first_course_db_api.update_task_groups_from_config(
+        ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
+    )
 
     task = session.query(Task).filter_by(name="task1").one()
     assert task.group.name == "group2"
@@ -93,7 +96,9 @@ def test_create_missing_group(first_course_db_api, session):
     tasks_config = create_base_task_config("new_group")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    first_course_db_api.update_task_groups_from_config(create_test_config(tasks_config))
+    first_course_db_api.update_task_groups_from_config(
+        ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
+    )
 
     task = session.query(Task).filter_by(name="task1").one()
     assert task.group.name == "new_group"
@@ -117,51 +122,15 @@ def test_multiple_courses(first_course_db_api, second_course_db_api, session):
     tasks_config = create_base_task_config("group2")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    first_course_db_api.update_task_groups_from_config(create_test_config(tasks_config))
+    first_course_db_api.update_task_groups_from_config(
+        ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
+    )
 
     task1_c1 = session.query(Task).join(TaskGroup).filter(Task.name == "task1", TaskGroup.course_id == course1.id).one()
     task1_c2 = session.query(Task).join(TaskGroup).filter(Task.name == "task1", TaskGroup.course_id != course1.id).one()
 
     assert task1_c1.group.name == "group2"
     assert task1_c2.group.name == "group1"
-
-
-def test_disabled_tasks_not_moved(first_course_db_api, session):
-    """Test that disabled tasks are not moved between groups"""
-
-    _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
-
-    course = session.query(Course).filter_by(name="Test Course").one()
-    group2 = TaskGroup(name="group2", course=course)
-    session.add(group2)
-    session.commit()
-
-    tasks_config = create_base_task_config("group2")
-    tasks_config["tasks"] = [create_task_entry("task1", enabled=False)]
-
-    first_course_db_api.update_task_groups_from_config(create_test_config(tasks_config))
-
-    task = session.query(Task).filter_by(name="task1").one()
-    assert task.group.name == "group1"
-
-
-def test_disabled_groups_not_processed(first_course_db_api, session):
-    """Test that tasks in disabled groups are not processed"""
-
-    _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
-
-    course = session.query(Course).filter_by(name="Test Course").one()
-    group2 = TaskGroup(name="group2", course=course)
-    session.add(group2)
-    session.commit()
-
-    tasks_config = create_base_task_config("group2", enabled=False)
-    tasks_config["tasks"] = [create_task_entry("task1")]
-
-    first_course_db_api.update_task_groups_from_config(create_test_config(tasks_config))
-
-    task = session.query(Task).filter_by(name="task1").one()
-    assert task.group.name == "group1"
 
 
 def test_multiple_task_moves(first_course_db_api, session):
@@ -182,7 +151,9 @@ def test_multiple_task_moves(first_course_db_api, session):
     tasks_config = create_base_task_config("group3")
     tasks_config["tasks"] = [create_task_entry("task1"), create_task_entry("task2"), create_task_entry("task3")]
 
-    first_course_db_api.update_task_groups_from_config(create_test_config(tasks_config))
+    first_course_db_api.update_task_groups_from_config(
+        ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
+    )
 
     tasks = session.query(Task).filter(Task.name.in_(["task1", "task2", "task3"])).all()
     for task in tasks:

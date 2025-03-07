@@ -7,6 +7,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from cachelib import BaseCache
+from pydantic import ValidationError
 
 from . import abstract, glab, solutions
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
@@ -86,11 +87,6 @@ class Course:
             return "not_ready"
 
     @property
-    def deadlines(self) -> ManytaskDeadlinesConfig:
-        assert self.config is not None, "Config is not ready, we should never fetch deadlines without config"
-        return self.config.deadlines
-
-    @property
     def deadlines_cache_time(self) -> datetime:
         return self._cache.get("__deadlines_cache_time__")
 
@@ -108,4 +104,17 @@ class Course:
     def store_config(self, content: dict[str, Any]) -> None:
         # For validation purposes
         ManytaskConfig(**content)
-        self._cache.set("__config__", content)
+        if "deadlines" not in content:
+            raise ValidationError("Field required: deadlines")
+        deadlines_config = ManytaskDeadlinesConfig(**content["deadlines"])
+
+        # Update task groups (if necessary -- if there is an override) first
+        self.storage_api.update_task_groups_from_config(deadlines_config)
+
+        # Save deadlines to storage
+        self.storage_api.sync_columns(deadlines_config)
+
+        content_without_deadlines = {k: v for k, v in content.items() if k != "deadlines"}
+
+        # Save config to cache
+        self._cache.set("__config__", content_without_deadlines)

@@ -41,3 +41,52 @@ def test_sync_stored_user(empty_google_doc_api):
     student2 = Student(id=0, username="user2", name="", course_admin=True)
 
     assert empty_google_doc_api.sync_stored_user(student2) == empty_google_doc_api.get_stored_user(student2)
+
+
+def test_update_cached_scores_not_implemented(empty_google_doc_api):
+    with pytest.raises(NotImplementedError) as e:
+        empty_google_doc_api.update_cached_scores()
+
+    assert str(e.value) == "Deprecated api class"
+
+
+def test_sync_columns_not_implemented(empty_google_doc_api):
+    with pytest.raises(NotImplementedError) as e:
+        empty_google_doc_api.sync_columns(None)
+
+    assert str(e.value) == "Deprecated api class"
+
+
+def test_find_task_not_implemented(empty_google_doc_api):
+    with pytest.raises(NotImplementedError) as e:
+        empty_google_doc_api.find_task("")
+
+    assert str(e.value) == "Deprecated api class"
+
+
+def test_get_groups_not_implemented(empty_google_doc_api):
+    with pytest.raises(NotImplementedError) as e:
+        empty_google_doc_api.get_groups()
+
+    assert str(e.value) == "Deprecated api class"
+
+
+def test_get_now_with_timezone_not_implemented(empty_google_doc_api):
+    with pytest.raises(NotImplementedError) as e:
+        empty_google_doc_api.get_now_with_timezone()
+
+    assert str(e.value) == "Deprecated api class"
+
+
+def test_max_score_not_implemented(empty_google_doc_api):
+    with pytest.raises(NotImplementedError) as e:
+        empty_google_doc_api.max_score()
+
+    assert str(e.value) == "Deprecated api class"
+
+
+def test_max_score_started_not_implemented(empty_google_doc_api):
+    with pytest.raises(NotImplementedError) as e:
+        empty_google_doc_api.max_score_started
+
+    assert str(e.value) == "Deprecated api class"
