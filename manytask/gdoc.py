@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from itertools import islice
 from typing import Any, Callable, Iterable
 
@@ -12,11 +12,10 @@ from authlib.integrations.requests_client import AssertionSession
 from cachelib import BaseCache
 from google.auth.credentials import AnonymousCredentials
 from gspread import Cell as GCell
-from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol, rowcol_to_a1
+from gspread.utils import ValueInputOption, ValueRenderOption, a1_to_rowcol
 
 from .abstract import StorageApi, StoredUser, ViewerApi
-from .config import ManytaskConfig, ManytaskDeadlinesConfig
-from .course import get_current_time
+from .config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .glab import Student
 
 logger = logging.getLogger(__name__)
@@ -211,51 +210,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         return timestamp
 
     def update_cached_scores(self) -> None:
-        _current_timestamp = get_current_time()
-
-        list_of_dicts = self.ws.get_all_records(
-            empty2zero=False,
-            head=PublicAccountsSheetOptions.HEADER_ROW,
-            default_blank="",
-            expected_headers=[],
-        )
-        all_users_scores = {
-            scores_dict["login"]: {
-                k: int(v)
-                for i, (k, v) in enumerate(scores_dict.items())
-                if i >= PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN - 1 and isinstance(v, int)
-            }
-            for scores_dict in list_of_dicts
-        }
-        users_score_cache = {
-            f"{self.ws.id}:{username}": scores_cache for username, scores_cache in all_users_scores.items()
-        }
-        all_users_bonus_scores = {
-            scores_dict["login"]: int(scores_dict["bonus"]) if scores_dict["bonus"] else 0
-            for scores_dict in list_of_dicts
-        }
-
-        # clear cache saving config
-        _config = self.cache.get("__config__")
-        config = ManytaskConfig(**_config)
-
-        # get all tasks stats
-        _tasks_stats: defaultdict[str, int] = defaultdict(int)
-        for tasks in all_users_scores.values():
-            for task_name in tasks.keys():
-                _tasks_stats[task_name] += 1
-        tasks_stats: dict[str, float] = {
-            task.name: (_tasks_stats[task.name] / len(all_users_scores) if len(all_users_scores) != 0 else 0)
-            for task in config.get_tasks(enabled=True, started=True)
-        }
-
-        self.cache.clear()
-        self.cache.set("__config__", _config)
-        self.cache.set(f"{self.ws.id}:scores", all_users_scores)
-        self.cache.set(f"{self.ws.id}:bonus", all_users_bonus_scores)
-        self.cache.set(f"{self.ws.id}:stats", tasks_stats)
-        self.cache.set(f"{self.ws.id}:update-timestamp", _current_timestamp)
-        self.cache.set_many(users_score_cache)
+        raise NotImplementedError("Deprecated api class")
 
     def store_score(
         self,
@@ -303,65 +258,7 @@ class GoogleDocApi(ViewerApi, StorageApi):
         self,
         deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
-        max_score = deadlines_config.max_score_started
-        groups = deadlines_config.get_groups(enabled=True, started=True)
-        tasks = deadlines_config.get_tasks(enabled=True, started=True)
-        task_name_to_group_name = {task.name: group.name for group in groups for task in group.tasks if task in tasks}
-
-        # TODO: maintain group orger when adding new task in added group
-        logger.info("Syncing rating columns...")
-        existing_tasks = list(self._list_tasks(with_index=False))
-        existing_task_names = set(task for task in existing_tasks if task)
-        tasks_to_create = [task for task in tasks if task.name not in existing_task_names]
-
-        current_worksheet_size = PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN + len(existing_tasks) - 1
-        required_worksheet_size = current_worksheet_size
-        if tasks_to_create:
-            required_worksheet_size = current_worksheet_size + len(tasks_to_create)
-
-            self.ws.resize(cols=required_worksheet_size)
-
-            cells_to_update = []
-            current_group = None
-            for col, task in enumerate(tasks_to_create, start=current_worksheet_size + 1):
-                cells_to_update.append(GCell(PublicAccountsSheetOptions.HEADER_ROW, col, task.name))
-                cells_to_update.append(GCell(PublicAccountsSheetOptions.MAX_SCORES_ROW, col, str(task.score)))
-
-                task_group_name = task_name_to_group_name[task.name]
-
-                if task_group_name != current_group:
-                    cells_to_update.append(GCell(PublicAccountsSheetOptions.GROUPS_ROW, col, task_group_name))
-                    current_group = task_group_name
-        else:
-            cells_to_update = []
-
-        if max_score:
-            cells_to_update.append(
-                GCell(
-                    PublicAccountsSheetOptions.GROUPS_ROW,
-                    PublicAccountsSheetOptions.TOTAL_COLUMN,
-                    str(max_score),
-                )
-            )
-
-        if cells_to_update:
-            self.ws.update_cells(cells_to_update, value_input_option=ValueInputOption.user_entered)
-
-            self.ws.format(
-                f"{rowcol_to_a1(PublicAccountsSheetOptions.GROUPS_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:"  # noqa: E501
-                f"{rowcol_to_a1(PublicAccountsSheetOptions.GROUPS_ROW, required_worksheet_size)}",
-                GROUP_ROW_FORMATTING,
-            )
-            self.ws.format(
-                f"{rowcol_to_a1(PublicAccountsSheetOptions.HEADER_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:"  # noqa: E501
-                f"{rowcol_to_a1(PublicAccountsSheetOptions.HEADER_ROW, required_worksheet_size)}",
-                HEADER_ROW_FORMATTING,
-            )
-            self.ws.format(
-                f"{rowcol_to_a1(PublicAccountsSheetOptions.MAX_SCORES_ROW, PublicAccountsSheetOptions.TASK_SCORES_START_COLUMN)}:"  # noqa: E501
-                f"{rowcol_to_a1(PublicAccountsSheetOptions.MAX_SCORES_ROW, required_worksheet_size)}",
-                HEADER_ROW_FORMATTING,
-            )
+        raise NotImplementedError("Deprecated api class")
 
     def _get_row_values(
         self,
@@ -460,9 +357,30 @@ class GoogleDocApi(ViewerApi, StorageApi):
     ) -> str:
         return f'=HYPERLINK("{student.repo}";"git")'
 
+    def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
+        raise NotImplementedError("Deprecated api class")
+
+    def get_groups(
+        self,
+        enabled: bool | None = None,
+        started: bool | None = None,
+        now: datetime | None = None,
+    ) -> list[ManytaskGroupConfig]:
+        raise NotImplementedError("Deprecated api class")
+
+    def get_now_with_timezone(self) -> datetime:
+        raise NotImplementedError("Deprecated api class")
+
+    def max_score(self, started: bool | None = True) -> int:
+        raise NotImplementedError("Deprecated api class")
+
+    @property
+    def max_score_started(self) -> int:
+        raise NotImplementedError("Deprecated api class")
+
     def update_task_groups_from_config(
         self,
-        config_data: dict[str, Any],
+        deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
         """Empty implementation for GoogleDocApi as it doesn't need task group management.
         Task groups are managed directly in the spreadsheet during sync_columns.

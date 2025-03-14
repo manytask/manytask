@@ -1,9 +1,9 @@
 deadlines:
-  timezone: Europe/Berlin
+  timezone: Europe/Moscow
 
   deadlines: hard # hard/interpolate
-  max_submissions: 10 # optional
-  submission_penalty: 0.1 # optional
+  max_submissions: 20 # optional
+  submission_penalty: 0.2 # optional
 
   schedule:
     - group: group_0
@@ -57,6 +57,7 @@ deadlines:
           score: 20
         - task: task_2_2
           score: 20
+          enabled: false
         - task: task_2_3
           score: 20
 

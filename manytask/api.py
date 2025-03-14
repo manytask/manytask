@@ -9,7 +9,6 @@ from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Callable
-from zoneinfo import ZoneInfo
 
 import yaml
 from flask import Blueprint, Response, abort, current_app, jsonify, request, session
@@ -17,7 +16,7 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from manytask.database import DataBaseApi
+from manytask.database import DataBaseApi, TaskDisabledError
 
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
@@ -132,7 +131,7 @@ def _validate_and_extract_params(form_data: dict[str, Any]) -> tuple[str, int | 
     return task_name, user_id, username, check_deadline, submit_time_str
 
 
-def _process_submit_time(submit_time_str: str | None, deadlines: Any) -> datetime:
+def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetime) -> datetime:
     """Process and validate submit time."""
     submit_time = None
     if submit_time_str:
@@ -141,8 +140,8 @@ def _process_submit_time(submit_time_str: str | None, deadlines: Any) -> datetim
         except ValueError:
             submit_time = None
 
-    submit_time = submit_time or deadlines.get_now_with_timezone()
-    submit_time.replace(tzinfo=ZoneInfo(deadlines.timezone))
+    submit_time = submit_time or now_with_timezone
+    submit_time.replace(tzinfo=now_with_timezone.tzinfo)
     return submit_time
 
 
@@ -204,8 +203,8 @@ def report_score() -> ResponseReturnValue:
     task_name, user_id, username, check_deadline, submit_time_str = _validate_and_extract_params(request.form)
 
     try:
-        group, task = course.deadlines.find_task(task_name)
-    except KeyError:
+        group, task = course.storage_api.find_task(task_name)
+    except (KeyError, TaskDisabledError):
         return (
             f"There is no task with name `{task_name}` (or it is closed for submission)",
             HTTPStatus.NOT_FOUND,
@@ -218,7 +217,7 @@ def report_score() -> ResponseReturnValue:
 
     student = _get_student(course.gitlab_api, user_id, username)
 
-    submit_time = _process_submit_time(submit_time_str, course.deadlines)
+    submit_time = _process_submit_time(submit_time_str, course.storage_api.get_now_with_timezone())
 
     # Log with sanitized values
     logger.info(f"Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}")
@@ -270,8 +269,8 @@ def get_score() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        group, task = course.deadlines.find_task(task_name)
-    except KeyError:
+        group, task = course.storage_api.find_task(task_name)
+    except (KeyError, TaskDisabledError):
         return (
             f"There is no task with name `{task_name}` (or it is closed for submission)",
             HTTPStatus.NOT_FOUND,
@@ -313,19 +312,11 @@ def update_config() -> ResponseReturnValue:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
 
-        # Update task groups (if necessary -- if there is an override) first
-        course.storage_api.update_task_groups_from_config(config_data)
-
         # Store the new config
         course.store_config(config_data)
     except Exception as e:
         logger.exception(e)
         return f"Invalid config\n {e}", HTTPStatus.BAD_REQUEST
-
-    # ----- logic ----- #
-    # TODO: fix course config storing. may work one thread only =(
-    # sync columns
-    course.storage_api.sync_columns(course.deadlines)
 
     return "", HTTPStatus.OK
 
@@ -358,8 +349,8 @@ def get_solutions() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        _, _ = course.deadlines.find_task(task_name)
-    except KeyError:
+        _, _ = course.storage_api.find_task(task_name)
+    except (KeyError, TaskDisabledError):
         return f"There is no task with name `{task_name}` (or it is disabled)", HTTPStatus.NOT_FOUND
 
     zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)
