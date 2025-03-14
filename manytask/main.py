@@ -146,8 +146,6 @@ def _database_storage_setup(app: CustomFlask) -> tuple[abstract.StorageApi, abst
             gitlab_default_branch=app.app_config.gitlab_default_branch,
             gitlab_client_id=app.app_config.gitlab_client_id,
             gitlab_client_secret=app.app_config.gitlab_client_secret,
-            gdoc_spreadsheet_id=None,
-            gdoc_scoreboard_sheet=None,
             apply_migrations=apply_migrations,
         )
     )

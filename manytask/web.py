@@ -604,8 +604,6 @@ def get_default_course_config() -> CourseConfig:
         gitlab_default_branch="main",
         gitlab_client_id="",
         gitlab_client_secret="",
-        gdoc_spreadsheet_id=None,
-        gdoc_scoreboard_sheet=None,
         apply_migrations=False,
     )
 
@@ -627,8 +625,6 @@ def get_default_course_config() -> CourseConfig:
             db_config.gitlab_default_branch = first_course.gitlab_default_branch
             db_config.gitlab_client_id = first_course.gitlab_client_id
             db_config.gitlab_client_secret = first_course.gitlab_client_secret
-            db_config.gdoc_spreadsheet_id = first_course.gdoc_spreadsheet_id
-            db_config.gdoc_scoreboard_sheet = first_course.gdoc_scoreboard_sheet
 
     storage_api = viewer_api = database.DataBaseApi(db_config)
     gitlab_api = glab.GitLabApi(
@@ -677,8 +673,6 @@ def _get_course_name_from_request() -> str:
         gitlab_default_branch="main",
         gitlab_client_id="",
         gitlab_client_secret="",
-        gdoc_spreadsheet_id=None,
-        gdoc_scoreboard_sheet=None,
     )
     temp_storage_api = database.DataBaseApi(temp_db_config)
 
@@ -709,8 +703,6 @@ def _create_course_config(course_data: models.Course) -> CourseConfig:
         gitlab_default_branch=course_data.gitlab_default_branch,
         gitlab_client_id=course_data.gitlab_client_id,
         gitlab_client_secret=course_data.gitlab_client_secret,
-        gdoc_spreadsheet_id=course_data.gdoc_spreadsheet_id,
-        gdoc_scoreboard_sheet=course_data.gdoc_scoreboard_sheet,
     )
 
     storage_api = viewer_api = database.DataBaseApi(db_config)

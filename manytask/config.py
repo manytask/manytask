@@ -26,8 +26,6 @@ class ManytaskSettingsConfig(BaseModel):
     gitlab_default_branch: str = "main"
     gitlab_client_id: str
     gitlab_client_secret: str
-    gdoc_spreadsheet_id: str | None = None
-    gdoc_scoreboard_sheet: str | None = None
 
 
 class ManytaskUiConfig(BaseModel):
