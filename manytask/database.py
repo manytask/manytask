@@ -3,12 +3,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
+from zoneinfo import ZoneInfo
 
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
+from pydantic import AnyUrl
 from sqlalchemy import and_, create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
@@ -16,12 +18,16 @@ from sqlalchemy.sql.functions import func
 
 from . import models
 from .abstract import StorageApi, StoredUser, ViewerApi
-from .config import ManytaskConfig, ManytaskDeadlinesConfig
+from .config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .glab import Student
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
 logger = logging.getLogger(__name__)
+
+
+class TaskDisabledError(Exception):
+    pass
 
 
 @dataclass
@@ -113,7 +119,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         """
 
         with Session(self.engine) as session:
-            grades = self._get_scores(session, username, only_bonus=False)
+            grades = self._get_scores(session, username, enabled=True, started=True, only_bonus=False)
 
             if grades is None:
                 return {}
@@ -136,7 +142,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         """
 
         with Session(self.engine) as session:
-            grades = self._get_scores(session, username, only_bonus=True)
+            grades = self._get_scores(session, username, enabled=True, started=True, only_bonus=True)
 
         if grades is None:
             return 0
@@ -204,7 +210,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         """
 
         with Session(self.engine) as session:
-            tasks = self._get_all_tasks(session, self.course_name)
+            tasks = self._get_all_tasks(session, self.course_name, enabled=True, started=True)
 
             users_on_courses_count = self._get_course_users_on_courses_count(session, self.course_name)
             tasks_stats: dict[str, float] = {}
@@ -281,12 +287,22 @@ class DataBaseApi(ViewerApi, StorageApi):
         :param deadlines_config: ManytaskDeadlinesConfig object
         """
 
-        groups = deadlines_config.get_groups(enabled=True, started=True)
-        tasks = deadlines_config.get_tasks(enabled=True, started=True)
+        groups = deadlines_config.groups
 
         logger.info("Syncing database tasks...")
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=self.course_name)
+
+            existing_course_tasks = (
+                session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
+            )
+            existing_course_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
+
+            # Disabling tasks and groups removed from the config
+            for existing_task in existing_course_tasks:
+                existing_task.enabled = False
+            for existing_group in existing_course_groups:
+                existing_group.enabled = False
 
             # update deadlines parameters
             course.timezone = deadlines_config.timezone
@@ -295,10 +311,7 @@ class DataBaseApi(ViewerApi, StorageApi):
 
             # update deadlines for each group
             for group in groups:
-                exist_tasks = [task for task in group.tasks if task in tasks]
-
-                if len(exist_tasks) == 0:
-                    continue
+                tasks = group.tasks
 
                 deadline_start = group.start
                 deadline_steps = {
@@ -314,7 +327,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                     session, task_group, deadline_start, deadline_steps, deadline_end
                 )
 
-                for task in exist_tasks:
+                for task in tasks:
                     self._update_or_create(
                         session,
                         models.Task,
@@ -323,6 +336,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                             "is_bonus": task.is_bonus,
                             "is_special": task.is_special,
                             "enabled": task.enabled,
+                            "url": str(task.url) if task.url is not None else None,
                         },
                         name=task.name,
                         group_id=task_group.id,
@@ -341,26 +355,24 @@ class DataBaseApi(ViewerApi, StorageApi):
 
     def update_task_groups_from_config(
         self,
-        config_data: dict[str, Any],
+        deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
-        """Update task groups based on new config data.
+        """Update task groups based on new deadline config data.
 
         This method:
         1. Finds tasks that need to be moved to different groups
         2. Creates any missing groups
         3. Updates task group assignments
 
-        :param config_data: Raw config data from yaml
+        :param deadlines_config: ManytaskDeadlinesConfig object
         """
         with Session(self.engine) as session:
-            new_config = ManytaskConfig(**config_data)
             new_task_names = set()
             new_task_to_group = {}
-            for group in new_config.deadlines.get_groups(enabled=True, started=True):
+            for group in deadlines_config.groups:
                 for task_config in group.tasks:
-                    if task_config.enabled:
-                        new_task_names.add(task_config.name)
-                        new_task_to_group[task_config.name] = group.name
+                    new_task_names.add(task_config.name)
+                    new_task_to_group[task_config.name] = group.name
 
             existing_tasks = session.query(models.Task).join(models.TaskGroup).all()
 
@@ -401,6 +413,146 @@ class DataBaseApi(ViewerApi, StorageApi):
                 existing_task.group = new_group
 
             session.commit()
+
+    def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
+        """Find task and its group by task name. Serialize result to Config objects.
+
+        Raise TaskDisabledError if task or its group is disabled
+
+        :param task_name: task name
+
+        :return: pair of ManytaskGroupConfig and ManytaskTaskConfig objects
+        """
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=self.course_name)
+            try:
+                task = self._get_task_by_name_and_course_id(session, task_name, course.id)
+            except NoResultFound:
+                raise KeyError(f"Task {task_name} not found")
+
+            if not task.enabled:
+                raise TaskDisabledError(f"Task {task_name} is disabled")
+            if not task.group.enabled:
+                raise TaskDisabledError(f"Task {task_name} group {task.group.name} is disabled")
+
+            group = task.group
+            group_tasks = group.tasks.all()
+            group_deadlines = group.deadline
+
+        group_config = ManytaskGroupConfig(
+            group=group.name,
+            enabled=group.enabled,
+            start=group_deadlines.start,
+            steps=cast(dict[float, datetime | timedelta], group_deadlines.steps),
+            end=group_deadlines.end,
+            tasks=[
+                ManytaskTaskConfig(
+                    task=group_task.name,
+                    enabled=group_task.enabled,
+                    score=group_task.score,
+                    is_bonus=group_task.is_bonus,
+                    is_special=group_task.is_special,
+                    url=AnyUrl(group_task.url) if group_task.url is not None else None,
+                )
+                for group_task in group_tasks
+            ],
+        )
+
+        task_config = ManytaskTaskConfig(
+            task=task.name,
+            enabled=task.enabled,
+            score=task.score,
+            is_bonus=task.is_bonus,
+            is_special=task.is_special,
+        )
+
+        return group_config, task_config
+
+    def get_groups(
+        self,
+        enabled: bool | None = None,
+        started: bool | None = None,
+        now: datetime | None = None,
+    ) -> list[ManytaskGroupConfig]:
+        """Get tasks groups. Serialize result to Config object.
+
+        :param enabled: flag to check for group is enabled
+        :param started: flag to check for group is started
+        :param now: optional param for setting current time
+
+        :return: list of ManytaskGroupConfig objects
+        """
+
+        if now is None:
+            now = self.get_now_with_timezone()
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=self.course_name)
+
+            query = (
+                session.query(models.TaskGroup).join(models.Deadline).filter(models.TaskGroup.course_id == course.id)
+            )
+
+            if enabled is not None:
+                query = query.filter(models.TaskGroup.enabled == enabled)
+
+            if started is not None:
+                if started:
+                    query = query.filter(now >= models.Deadline.start)
+                else:
+                    query = query.filter(now < models.Deadline.start)
+
+            groups = query.all()
+
+            result_groups = []
+            for group in groups:
+                tasks = []
+
+                for task in group.tasks:
+                    if enabled is not None and enabled != task.enabled:
+                        continue
+
+                    tasks.append(
+                        ManytaskTaskConfig(
+                            task=task.name,
+                            enabled=task.enabled,
+                            score=task.score,
+                            is_bonus=task.is_bonus,
+                            is_special=task.is_special,
+                            url=AnyUrl(task.url) if task.url is not None else None,
+                        )
+                    )
+
+                result_groups.append(
+                    ManytaskGroupConfig(
+                        group=group.name,
+                        enabled=group.enabled,
+                        start=group.deadline.start,
+                        steps=cast(dict[float, datetime | timedelta], group.deadline.steps),
+                        end=group.deadline.end,
+                        tasks=tasks,
+                    )
+                )
+
+        return result_groups
+
+    def get_now_with_timezone(self) -> datetime:
+        """Get current time with course timezone"""
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=self.course_name)
+        return datetime.now(tz=ZoneInfo(course.timezone))
+
+    def max_score(self, started: bool | None = True) -> int:
+        with Session(self.engine) as session:
+            tasks = self._get_all_tasks(session, self.course_name, enabled=True, started=started, is_bonus=False)
+
+        return sum(task.score for task in tasks)
+
+    @property
+    def max_score_started(self) -> int:
+        return self.max_score(started=True)
 
     def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
         """Sync admin flag in gitlab and db"""
@@ -496,7 +648,12 @@ class DataBaseApi(ViewerApi, StorageApi):
         return user_on_course
 
     def _get_scores(
-        self, session: Session, username: str, only_bonus: bool = False
+        self,
+        session: Session,
+        username: str,
+        enabled: bool | None = None,
+        started: bool | None = None,
+        only_bonus: bool = False,
     ) -> Optional[Iterable["models.Grade"]]:
         try:
             course = self._get(session, models.Course, name=self.course_name)
@@ -506,7 +663,7 @@ class DataBaseApi(ViewerApi, StorageApi):
         except NoResultFound:
             return None
 
-        grades = self._get_all_grades(user_on_course, only_bonus=only_bonus)
+        grades = self._get_all_grades(user_on_course, enabled=enabled, started=started, only_bonus=only_bonus)
         return grades
 
     @staticmethod
@@ -704,11 +861,28 @@ class DataBaseApi(ViewerApi, StorageApi):
                 id=task_group.deadline.id,
             )
 
-    @staticmethod
-    def _get_all_grades(user_on_course: models.UserOnCourse, only_bonus: bool = False) -> Iterable["models.Grade"]:
+    def _get_all_grades(
+        self,
+        user_on_course: models.UserOnCourse,
+        enabled: bool | None = None,
+        started: bool | None = None,
+        only_bonus: bool = False,
+    ) -> Iterable["models.Grade"]:
+        query = user_on_course.grades.join(models.Task).join(models.TaskGroup).join(models.Deadline)
+
+        if enabled is not None:
+            query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
+
+        if started is not None:
+            if started:
+                query = query.filter(self.get_now_with_timezone() >= models.Deadline.start)
+            else:
+                query = query.filter(self.get_now_with_timezone() < models.Deadline.start)
+
         if only_bonus:
-            return user_on_course.grades.join(models.Task).filter_by(is_bonus=True).all()
-        return user_on_course.grades.all()
+            query = query.filter(models.Task.is_bonus)
+
+        return query.all()
 
     @staticmethod
     def _get_all_users(
@@ -719,14 +893,36 @@ class DataBaseApi(ViewerApi, StorageApi):
 
         return [user_on_course.user.username for user_on_course in course.users_on_courses.all()]
 
-    @staticmethod
     def _get_all_tasks(
+        self,
         session: Session,
         course_name: str,
+        enabled: bool | None = None,
+        started: bool | None = None,
+        is_bonus: bool | None = None,
     ) -> Iterable["models.Task"]:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
-        return session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
+        query = (
+            session.query(models.Task)
+            .join(models.TaskGroup)
+            .join(models.Deadline)
+            .filter(models.TaskGroup.course_id == course.id)
+        )
+
+        if enabled is not None:
+            query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
+
+        if is_bonus is not None:
+            query = query.filter(and_(models.Task.is_bonus == is_bonus))
+
+        if started is not None:
+            if started:
+                query = query.filter(self.get_now_with_timezone() >= models.Deadline.start)
+            else:
+                query = query.filter(self.get_now_with_timezone() < models.Deadline.start)
+
+        return query.all()
 
     @staticmethod
     def _get_course_users_on_courses_count(

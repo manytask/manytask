@@ -332,6 +332,7 @@ def test_task(session):
     assert not retrieved_task.is_bonus
     assert not retrieved_task.is_special
     assert retrieved_task.enabled
+    assert not retrieved_task.url
 
     task = Task(
         name="task_with_all_params",
@@ -339,6 +340,7 @@ def test_task(session):
         is_bonus=True,
         is_special=True,
         enabled=False,
+        url="https://www.python.org/about/gettingstarted/",
         group=task_group,
     )
     session.add(task)
@@ -351,6 +353,7 @@ def test_task(session):
     assert retrieved_task.is_bonus
     assert retrieved_task.is_special
     assert not retrieved_task.enabled
+    assert retrieved_task.url == "https://www.python.org/about/gettingstarted/"
 
 
 def test_grade(session, fixed_current_time):
