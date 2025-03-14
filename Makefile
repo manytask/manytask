@@ -8,6 +8,7 @@ ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 check: format lint test
 
 install-deps:
+	curl -sSL https://install.python-poetry.org | python3 -
 	poetry install
 
 install-hooks:
@@ -80,4 +81,3 @@ history:
 	poetry run alembic -c $(ALEMBIC_CONFIG_PATH) history
 	@echo ""
 	poetry run alembic -c $(ALEMBIC_CONFIG_PATH) current || { echo "\033[33mWarning: Make sure that the database is running.\033[0m"; exit 1; }
-
