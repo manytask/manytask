@@ -32,6 +32,8 @@ TEST_GRADE_SCORE_2 = 123456
 TEST_GRADE_SCORE_3 = 1234567
 TEST_GRADE_SCORE_4 = 12345678
 TEST_TASK_SCORE = 100
+TEST_TASK_POSITION = 7
+TEST_TASK_GROUP_POSITION = 5
 TEST_MAX_SUBMISSIONS = 10
 TEST_SUBMISSION_PENALTY = 0.1
 TEST_DEADLINE_STEPS = {0.4: datetime(2000, 1, 2, 3, 4, 5, 6, tzinfo=ZoneInfo("Europe/Berlin"))}
@@ -221,13 +223,14 @@ def test_task_group(session):
         name="course0002", registration_secret="secret", token="test_token2", gitlab_instance_host="gitlab.inst.org"
     )
     session.add(course)
-    task_group = TaskGroup(name="group2", course=course)
+    task_group = TaskGroup(name="group2", course=course, position=TEST_TASK_GROUP_POSITION)
     session.add(task_group)
     session.commit()
 
     retrieved = session.query(TaskGroup).filter_by(name="group2").first()
     assert retrieved.deadline is None
     assert retrieved.enabled
+    assert retrieved.position == TEST_TASK_GROUP_POSITION
 
 
 def test_deadline_steps(session, fixed_current_time):
@@ -333,6 +336,7 @@ def test_task(session):
     assert not retrieved_task.is_special
     assert retrieved_task.enabled
     assert not retrieved_task.url
+    assert retrieved_task.position == 0
 
     task = Task(
         name="task_with_all_params",
@@ -341,6 +345,7 @@ def test_task(session):
         is_special=True,
         enabled=False,
         url="https://www.python.org/about/gettingstarted/",
+        position=TEST_TASK_POSITION,
         group=task_group,
     )
     session.add(task)
@@ -354,6 +359,7 @@ def test_task(session):
     assert retrieved_task.is_special
     assert not retrieved_task.enabled
     assert retrieved_task.url == "https://www.python.org/about/gettingstarted/"
+    assert retrieved_task.position == TEST_TASK_POSITION
 
 
 def test_grade(session, fixed_current_time):

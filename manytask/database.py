@@ -301,8 +301,10 @@ class DataBaseApi(ViewerApi, StorageApi):
             # Disabling tasks and groups removed from the config
             for existing_task in existing_course_tasks:
                 existing_task.enabled = False
+                existing_task.position = 0
             for existing_group in existing_course_groups:
                 existing_group.enabled = False
+                existing_group.position = 0
 
             # update deadlines parameters
             course.timezone = deadlines_config.timezone
@@ -310,7 +312,7 @@ class DataBaseApi(ViewerApi, StorageApi):
             course.submission_penalty = deadlines_config.submission_penalty
 
             # update deadlines for each group
-            for group in groups:
+            for group_pos, group in enumerate(groups, start=1):
                 tasks = group.tasks
 
                 deadline_start = group.start
@@ -320,14 +322,18 @@ class DataBaseApi(ViewerApi, StorageApi):
                 deadline_end = self._convert_timedelta_to_datetime(group.start, group.end)
 
                 task_group = DataBaseApi._update_or_create(
-                    session, models.TaskGroup, defaults={"enabled": group.enabled}, name=group.name, course_id=course.id
+                    session,
+                    models.TaskGroup,
+                    defaults={"enabled": group.enabled, "position": group_pos},
+                    name=group.name,
+                    course_id=course.id,
                 )
 
                 DataBaseApi._update_deadline_for_task_group(
                     session, task_group, deadline_start, deadline_steps, deadline_end
                 )
 
-                for task in tasks:
+                for task_pos, task in enumerate(tasks, start=1):
                     self._update_or_create(
                         session,
                         models.Task,
@@ -337,6 +343,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                             "is_special": task.is_special,
                             "enabled": task.enabled,
                             "url": str(task.url) if task.url is not None else None,
+                            "position": task_pos,
                         },
                         name=task.name,
                         group_id=task_group.id,
@@ -503,7 +510,7 @@ class DataBaseApi(ViewerApi, StorageApi):
                 else:
                     query = query.filter(now < models.Deadline.start)
 
-            groups = query.all()
+            groups = query.order_by(models.TaskGroup.position).all()
 
             result_groups = []
             for group in groups:
