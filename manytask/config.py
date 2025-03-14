@@ -55,9 +55,6 @@ class ManytaskTaskConfig(BaseModel):
     # Note: use Optional/Union[...] instead of ... | None as pydantic does not support | in older python versions
     url: Optional[AnyUrl] = None
 
-    def __hash__(self) -> int:
-        return hash(self.name)
-
     @property
     def name(self) -> str:
         return self.task
@@ -74,9 +71,6 @@ class ManytaskGroupConfig(BaseModel):
     end: Union[datetime, timedelta]
 
     tasks: list[ManytaskTaskConfig] = Field(default_factory=list)
-
-    def __hash__(self) -> int:
-        return hash(self.name)
 
     @property
     def name(self) -> str:
