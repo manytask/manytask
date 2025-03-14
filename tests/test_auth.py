@@ -147,16 +147,6 @@ def mock_storage_api():
 
 
 @pytest.fixture
-def mock_viewer_api():
-    class MockViewerApi:
-        @staticmethod
-        def get_scoreboard_url():
-            return ""
-
-    return MockViewerApi()
-
-
-@pytest.fixture
 def mock_solutions_api():
     class MockSolutionsApi:
         def store_task_from_folder(self, task_name, username, folder_path):
@@ -166,7 +156,7 @@ def mock_solutions_api():
 
 
 @pytest.fixture
-def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutions_api):
+def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_solutions_api):
     class MockCourse:
         def __init__(self):
             self.name = TEST_COURSE_NAME
@@ -188,7 +178,6 @@ def mock_course(mock_deadlines, mock_gitlab_api, mock_storage_api, mock_viewer_a
             self.debug = False
             self.deadlines = mock_deadlines
             self.storage_api = mock_storage_api
-            self.viewer_api = mock_viewer_api
             self.gitlab_api = mock_gitlab_api
             self.solutions_api = mock_solutions_api
 

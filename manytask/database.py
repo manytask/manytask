@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
 from . import models
-from .abstract import Role, StorageApi, StoredUser, ViewerApi
+from .abstract import Role, StorageApi, StoredUser
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 from .glab import Student
 
@@ -45,7 +45,7 @@ class DatabaseConfig:
     apply_migrations: bool = False
 
 
-class DataBaseApi(ViewerApi, StorageApi):
+class DataBaseApi(StorageApi):
     """Class for interacting with a database with the StorageApi functionality"""
 
     DEFAULT_ALEMBIC_PATH = Path(__file__).parent / "alembic.ini"
