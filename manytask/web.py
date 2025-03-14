@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session as SQLAlchemySession
 from manytask import models
 from manytask.utils import get_course
 
-from . import abstract, course, database, glab, solutions
+from . import course, database, glab, solutions
 from .auth import requires_auth, requires_ready
 from .config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from .course import Course, CourseConfig, get_current_time
@@ -54,19 +54,6 @@ if TYPE_CHECKING:
     current_app: FlaskWithCourse
 else:
     current_app = flask_current_app
-
-
-def get_allscores_url(viewer_api: abstract.ViewerApi) -> str:
-    """Function to get URL for viewing the scores
-
-     :param viewer_api: The viewer API that may hold the URL
-
-    :return: String with an URL
-    """
-    if viewer_api.get_scoreboard_url() == "":
-        return url_for("web.show_database")
-    else:
-        return viewer_api.get_scoreboard_url()
 
 
 @bp.route("/", methods=["GET", "POST"])
@@ -110,7 +97,7 @@ def course_page() -> ResponseReturnValue:
     tasks_scores = storage_api.get_scores(student_username)
     tasks_stats = storage_api.get_stats()
 
-    allscores_url = get_allscores_url(course.viewer_api)
+    allscores_url = url_for("web.show_database")
 
     available_courses = []
     if isinstance(storage_api, database.DataBaseApi):
@@ -626,7 +613,7 @@ def get_default_course_config() -> CourseConfig:
             db_config.gitlab_client_id = first_course.gitlab_client_id
             db_config.gitlab_client_secret = first_course.gitlab_client_secret
 
-    storage_api = viewer_api = database.DataBaseApi(db_config)
+    storage_api = database.DataBaseApi(db_config)
     gitlab_api = glab.GitLabApi(
         glab.GitLabConfig(
             base_url=db_config.gitlab_instance_host,
@@ -640,7 +627,6 @@ def get_default_course_config() -> CourseConfig:
     solutions_api = solutions.SolutionsApi(base_folder=".tmp/solution")
     cache = FileSystemCache(".tmp/cache", threshold=0, default_timeout=0)
     course_config = CourseConfig(
-        viewer_api=viewer_api,
         storage_api=storage_api,
         gitlab_api=gitlab_api,
         solutions_api=solutions_api,
@@ -705,7 +691,7 @@ def _create_course_config(course_data: models.Course) -> CourseConfig:
         gitlab_client_secret=course_data.gitlab_client_secret,
     )
 
-    storage_api = viewer_api = database.DataBaseApi(db_config)
+    storage_api = database.DataBaseApi(db_config)
     gitlab_api = glab.GitLabApi(
         glab.GitLabConfig(
             base_url=course_data.gitlab_instance_host,
@@ -720,7 +706,6 @@ def _create_course_config(course_data: models.Course) -> CourseConfig:
     cache = FileSystemCache(".tmp/cache", threshold=0, default_timeout=0)
 
     return CourseConfig(
-        viewer_api=viewer_api,
         storage_api=storage_api,
         gitlab_api=gitlab_api,
         solutions_api=solutions_api,

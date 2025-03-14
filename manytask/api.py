@@ -348,6 +348,8 @@ def update_config() -> ResponseReturnValue:
         unique_course_name = settings.get("unique_course_name")
         if not unique_course_name:
             return "Missing unique_course_name in settings", HTTPStatus.BAD_REQUEST
+        else:
+            logger.info(f"Updating config for {unique_course_name}")
 
         database_url = os.environ.get("DATABASE_URL", "postgresql://adminmanytask:adminpass@postgres:5432/manytask")
         engine = create_engine(database_url)

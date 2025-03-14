@@ -29,11 +29,6 @@ class StoredUser:
         return self.role == Role.STUDENT
 
 
-class ViewerApi(ABC):
-    @abstractmethod
-    def get_scoreboard_url(self) -> str: ...
-
-
 class StorageApi(ABC):
     @abstractmethod
     def get_scores(
