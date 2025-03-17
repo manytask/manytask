@@ -30,7 +30,7 @@ alembic = "1.15.1"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "7.1.1"
-ruff = "0.9.1"
+ruff = "0.11.0"
 mypy = "1.15.0"
 isort = "6.0.1"
 black = "25.1.0"
