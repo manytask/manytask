@@ -1,5 +1,3 @@
-import base64
-import json
 import logging
 import logging.config
 import logging.handlers
@@ -14,7 +12,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import abstract, config, course, database, gdoc, glab, local_config, solutions
+from . import abstract, course, database, glab, local_config, solutions
 
 load_dotenv("../.env")  # take environment variables from .env.
 
@@ -53,22 +51,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     storage_api: abstract.StorageApi
     viewer_api: abstract.ViewerApi
-    storage = os.environ.get("STORAGE", "gsheets").lower()
 
-    if storage == config.ManytaskStorageType.DataBase.value:
-        storage_api, viewer_api = _database_storage_setup(app)
-    elif storage == config.ManytaskStorageType.GoogleSheets.value:
-        storage_api, viewer_api = _google_sheets_helper(cache)
-    else:
-        raise EnvironmentError(
-            "STORAGE should be either '"
-            + config.ManytaskStorageType.GoogleSheets.value
-            + "' to store data in Google Sheets, or '"
-            + config.ManytaskStorageType.DataBase.value
-            + "' to use database. Set to '"
-            + storage
-            + "'."
-        )
+    storage_api, viewer_api = _database_storage_setup(app)
 
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
@@ -120,30 +104,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     logger.info("Init success")
 
     return app
-
-
-def _google_sheets_helper(cache: FileSystemCache) -> tuple[abstract.StorageApi, abstract.ViewerApi]:
-    # google sheets (credentials base64 encoded json)
-    gdoc_url = str(os.environ.get("GDOC_URL", "https://docs.google.com"))
-    gdoc_account_credentials_base64 = os.environ.get("GDOC_ACCOUNT_CREDENTIALS_BASE64")
-    # google public sheet
-    gdoc_spreadsheet_id = str(os.environ["GDOC_SPREADSHEET_ID"])
-    gdoc_scoreboard_sheet = int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0))
-    if gdoc_account_credentials_base64 is None:
-        raise EnvironmentError("Unable to find GDOC_ACCOUNT_CREDENTIALS_BASE64 env")
-    if gdoc_spreadsheet_id is None:
-        raise EnvironmentError("Unable to find GDOC_SPREADSHEET_ID env")
-    _gdoc_credentials_string = base64.decodebytes(str(gdoc_account_credentials_base64).encode())
-    viewer_api = storage_api = gdoc.GoogleDocApi(
-        gdoc.GDocConfig(
-            base_url=gdoc_url,
-            gdoc_credentials=json.loads(_gdoc_credentials_string),
-            public_worksheet_id=gdoc_spreadsheet_id,
-            public_scoreboard_sheet=gdoc_scoreboard_sheet,
-            cache=cache,
-        )
-    )
-    return storage_api, viewer_api
 
 
 def _database_storage_setup(app: CustomFlask) -> tuple[abstract.StorageApi, abstract.ViewerApi]:
