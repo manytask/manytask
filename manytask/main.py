@@ -50,9 +50,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     )
 
     storage_api: abstract.StorageApi
-    viewer_api: abstract.ViewerApi
 
-    storage_api, viewer_api = _database_storage_setup(app)
+    storage_api = _database_storage_setup(app)
 
     solutions_api = solutions.SolutionsApi(
         base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
@@ -69,7 +68,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     # create course
     _course = course.Course(
         course.CourseConfig(
-            viewer_api,
             storage_api,
             gitlab_api,
             solutions_api,
@@ -106,7 +104,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     return app
 
 
-def _database_storage_setup(app: CustomFlask) -> tuple[abstract.StorageApi, abstract.ViewerApi]:
+def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)
     course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
     apply_migrations = os.environ.get("APPLY_MIGRATIONS", "false").lower() in (
@@ -118,7 +116,7 @@ def _database_storage_setup(app: CustomFlask) -> tuple[abstract.StorageApi, abst
         raise EnvironmentError("Unable to find DATABASE_URL env")
     if course_name is None:
         raise EnvironmentError("Unable to find UNIQUE_COURSE_NAME env")
-    viewer_api = storage_api = database.DataBaseApi(
+    storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
             course_name=course_name,
@@ -129,7 +127,7 @@ def _database_storage_setup(app: CustomFlask) -> tuple[abstract.StorageApi, abst
             apply_migrations=apply_migrations,
         )
     )
-    return storage_api, viewer_api
+    return storage_api
 
 
 def _logging_config(app: CustomFlask) -> dict[str, Any]:
