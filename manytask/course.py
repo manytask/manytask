@@ -46,6 +46,12 @@ class CourseConfig:
     viewer_api: abstract.ViewerApi
     storage_api: abstract.StorageApi
     gitlab_api: glab.GitLabApi
+
+    gitlab_course_group: str
+    gitlab_course_public_repo: str
+    gitlab_course_students_group: str
+    gitlab_default_branch: str
+
     solutions_api: solutions.SolutionsApi
     registration_secret: str
     token: str
@@ -67,6 +73,12 @@ class Course:
         self.viewer_api = config.viewer_api
         self.storage_api = config.storage_api
         self.gitlab_api = config.gitlab_api
+
+        self.gitlab_course_group = config.gitlab_course_group
+        self.gitlab_course_public_repo = config.gitlab_course_public_repo
+        self.gitlab_course_students_group = config.gitlab_course_students_group
+        self.gitlab_default_branch = config.gitlab_default_branch
+
         self.solutions_api = config.solutions_api
         self.registration_secret = config.registration_secret
         self.token = config.token
