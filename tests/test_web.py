@@ -50,7 +50,7 @@ def mock_gitlab_api():
             self.base_url = GITLAB_BASE_URL
 
         @staticmethod
-        def get_url_for_repo(username):
+        def get_url_for_repo(username, course_students_group):
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
@@ -197,6 +197,10 @@ def mock_course(mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutio
             self.viewer_api = mock_viewer_api
             self.gitlab_api = mock_gitlab_api
             self.solutions_api = mock_solutions_api
+            self.gitlab_course_group = "test_group"
+            self.gitlab_course_public_repo = "public_2025_spring"
+            self.gitlab_course_students_group = "students_2025_spring"
+            self.gitlab_default_branch = "main"
 
     return MockCourse()
 

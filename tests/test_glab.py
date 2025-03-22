@@ -507,7 +507,7 @@ def test_get_url_for_task_base(gitlab):
 
 def test_get_url_for_repo(gitlab):
     gitlab_api, _ = gitlab
-    url = gitlab_api.get_url_for_repo(TEST_USERNAME)
+    url = gitlab_api.get_url_for_repo(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert url == f"{gitlab_api.base_url}/{gitlab_api._course_students_group}/{TEST_USERNAME}"
 
