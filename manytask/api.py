@@ -170,13 +170,15 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{score_str}> to a number")
 
 
-def _get_student(gitlab_api: Any, user_id: int | None, username: str | None) -> Student:
+def _get_student(
+    gitlab_api: Any, user_id: int | None, username: str | None, course_group: str, course_students_group: str
+) -> Student:
     """Get student by user_id or username."""
     try:
         if username:
-            return gitlab_api.get_student_by_username(username)
+            return gitlab_api.get_student_by_username(username, course_group, course_students_group)
         elif user_id:
-            return gitlab_api.get_student(user_id)
+            return gitlab_api.get_student(user_id, course_group, course_students_group)
         else:
             assert False, "unreachable"
     except Exception:
@@ -215,7 +217,13 @@ def report_score() -> ResponseReturnValue:
         reported_score = task.score
         logger.info(f"Got score=None; set max score for {task.name} of {task.score}")
 
-    student = _get_student(course.gitlab_api, user_id, username)
+    student = _get_student(
+        gitlab_api=course.gitlab_api,
+        user_id=user_id,
+        username=username,
+        course_group=course.gitlab_course_group,
+        course_students_group=course.gitlab_course_students_group,
+    )
 
     submit_time = _process_submit_time(submit_time_str, course.storage_api.get_now_with_timezone())
 
@@ -278,9 +286,17 @@ def get_score() -> ResponseReturnValue:
 
     try:
         if username:
-            student = course.gitlab_api.get_student_by_username(username)
+            student = course.gitlab_api.get_student_by_username(
+                username=username,
+                course_group=course.gitlab_course_group,
+                course_students_group=course.gitlab_course_students_group,
+            )
         elif user_id:
-            student = course.gitlab_api.get_student(user_id)
+            student = course.gitlab_api.get_student(
+                user_id=user_id,
+                course_group=course.gitlab_course_group,
+                course_students_group=course.gitlab_course_students_group,
+            )
         else:
             assert False, "unreachable"
         student_scores = course.storage_api.get_scores(student.username)
@@ -397,7 +413,11 @@ def update_database() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
     storage_api = course.storage_api
 
-    student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
+    student = course.gitlab_api.get_student(
+        user_id=session["gitlab"]["user_id"],
+        course_group=course.gitlab_course_group,
+        course_students_group=course.gitlab_course_students_group,
+    )
     stored_user = storage_api.get_stored_user(student)
     student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
 
@@ -415,7 +435,14 @@ def update_database() -> ResponseReturnValue:
     new_scores = data["scores"]
 
     try:
-        student = Student(id=0, username=username, name=username, repo=course.gitlab_api.get_url_for_repo(username))
+        student = Student(
+            id=0,
+            username=username,
+            name=username,
+            repo=course.gitlab_api.get_url_for_repo(
+                username=username, course_students_group=course.gitlab_course_students_group
+            ),
+        )
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
                 storage_api.store_score(
