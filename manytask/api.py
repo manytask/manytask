@@ -218,11 +218,7 @@ def report_score() -> ResponseReturnValue:
         logger.info(f"Got score=None; set max score for {task.name} of {task.score}")
 
     student = _get_student(
-        gitlab_api=course.gitlab_api,
-        user_id=user_id,
-        username=username,
-        course_group=course.gitlab_course_group,
-        course_students_group=course.gitlab_course_students_group,
+        course.gitlab_api, user_id, username, course.gitlab_course_group, course.gitlab_course_students_group
     )
 
     submit_time = _process_submit_time(submit_time_str, course.storage_api.get_now_with_timezone())
@@ -287,15 +283,11 @@ def get_score() -> ResponseReturnValue:
     try:
         if username:
             student = course.gitlab_api.get_student_by_username(
-                username=username,
-                course_group=course.gitlab_course_group,
-                course_students_group=course.gitlab_course_students_group,
+                username, course.gitlab_course_group, course.gitlab_course_students_group
             )
         elif user_id:
             student = course.gitlab_api.get_student(
-                user_id=user_id,
-                course_group=course.gitlab_course_group,
-                course_students_group=course.gitlab_course_students_group,
+                user_id, course.gitlab_course_group, course.gitlab_course_students_group
             )
         else:
             assert False, "unreachable"
@@ -414,9 +406,7 @@ def update_database() -> ResponseReturnValue:
     storage_api = course.storage_api
 
     student = course.gitlab_api.get_student(
-        user_id=session["gitlab"]["user_id"],
-        course_group=course.gitlab_course_group,
-        course_students_group=course.gitlab_course_students_group,
+        session["gitlab"]["user_id"], course.gitlab_course_group, course.gitlab_course_students_group
     )
     stored_user = storage_api.get_stored_user(student)
     student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin

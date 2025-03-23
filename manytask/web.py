@@ -121,9 +121,7 @@ def get_solutions() -> ResponseReturnValue:
             student_course_admin = False
     else:
         student = course.gitlab_api.get_student(
-            user_id=session["gitlab"]["user_id"],
-            course_group=course.gitlab_course_group,
-            course_students_group=course.gitlab_course_students_group,
+            session["gitlab"]["user_id"], course.gitlab_course_group, course.gitlab_course_students_group
         )
         stored_user = course.storage_api.get_stored_user(student)
 
@@ -192,9 +190,7 @@ def signup() -> ResponseReturnValue:
         # register user in gitlab
         gitlab_user = course.gitlab_api.register_new_user(user)
         student = course.gitlab_api._parse_user_to_student(
-            user=gitlab_user._attrs,
-            course_group=course.gitlab_course_group,
-            course_students_group=course.gitlab_course_students_group,
+            gitlab_user._attrs, course.gitlab_course_group, course.gitlab_course_students_group
         )
         # add user->course if not in db
         course.storage_api.sync_stored_user(student)
@@ -244,11 +240,7 @@ def create_project() -> ResponseReturnValue:
 
     # Create use if needed
     try:
-        course.gitlab_api.create_project(
-            student=student,
-            course_students_group=course.gitlab_course_students_group,
-            course_public_repo=course.gitlab_course_public_repo,
-        )
+        course.gitlab_api.create_project(student, course.gitlab_course_students_group, course.gitlab_course_public_repo)
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
         return render_template("signup.html", error_message=ex.error_message, course_name=course.name)
@@ -298,9 +290,7 @@ def show_database() -> ResponseReturnValue:
         student_repo = session["gitlab"]["repo"]
 
         student = course.gitlab_api.get_student(
-            user_id=session["gitlab"]["user_id"],
-            course_group=course.gitlab_course_group,
-            course_students_group=course.gitlab_course_students_group,
+            session["gitlab"]["user_id"], course.gitlab_course_group, course.gitlab_course_students_group
         )
         stored_user = storage_api.get_stored_user(student)
 
