@@ -64,18 +64,18 @@ def mock_gitlab_api():
             raise Exception("Registration failed")
 
         @staticmethod
-        def get_student(self, user_id, _course_group, course_students_group):
+        def get_student(user_id, course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
-        def get_authenticated_student(self, _gitlab_access_token, _course_group, _course_students_group):
+        def get_authenticated_student(self, gitlab_access_token, course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
         @staticmethod
-        def check_project_exists(_student, _course_students_group):
+        def check_project_exists(student, course_students_group):
             return True
 
         @staticmethod
-        def _parse_user_to_student(user: dict[str, Any], _course_group, _course_students_group):
+        def _parse_user_to_student(user: dict[str, Any], course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
     return MockGitlabApi()

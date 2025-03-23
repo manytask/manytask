@@ -220,9 +220,7 @@ def login() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
     course: Course = current_app.course  # type: ignore
     student = course.gitlab_api.get_authenticated_student(
-        oauth_token=session["gitlab"]["access_token"],
-        course_group=course.gitlab_course_group,
-        course_students_group=course.gitlab_course_students_group,
+        session["gitlab"]["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
     )
 
     if course.gitlab_api.check_project_exists(
@@ -241,9 +239,7 @@ def create_project() -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = course.gitlab_api.get_authenticated_student(
-        oauth_token=gitlab_access_token,
-        course_group=course.gitlab_course_group,
-        course_students_group=course.gitlab_course_students_group,
+        gitlab_access_token, course.gitlab_course_group, course.gitlab_course_students_group
     )
 
     # Create use if needed

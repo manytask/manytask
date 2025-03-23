@@ -62,7 +62,7 @@ def mock_gitlab_api():
         def get_student(_user_id, course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
-        def get_authenticated_student(self, access_token, course_group, course_students_group):
+        def get_authenticated_student(self, gitlab_access_token, course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
         @staticmethod
