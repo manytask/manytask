@@ -95,7 +95,9 @@ class Course(Base):
     )
 
     # relationships
-    task_groups: DynamicMapped["TaskGroup"] = relationship(back_populates="course", cascade="all, delete-orphan")
+    task_groups: DynamicMapped["TaskGroup"] = relationship(
+        back_populates="course", cascade="all, delete-orphan", order_by="TaskGroup.position"
+    )
     users_on_courses: DynamicMapped["UserOnCourse"] = relationship(
         back_populates="course", cascade="all, delete-orphan"
     )
@@ -161,13 +163,16 @@ class TaskGroup(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
     deadline_id: Mapped[Optional[int]] = mapped_column(ForeignKey(Deadline.id))
     enabled: Mapped[bool] = mapped_column(server_default="true", default=True)
+    position: Mapped[int] = mapped_column(server_default="0", default=0)  # order number
 
     # relationships
     course: Mapped["Course"] = relationship(back_populates="task_groups")
     deadline: Mapped["Deadline"] = relationship(
         back_populates="task_group", cascade="all, delete-orphan", single_parent=True
     )
-    tasks: DynamicMapped["Task"] = relationship(back_populates="group", cascade="all, delete-orphan")
+    tasks: DynamicMapped["Task"] = relationship(
+        back_populates="group", cascade="all, delete-orphan", order_by="Task.position"
+    )
 
 
 class Task(Base):
@@ -181,6 +186,7 @@ class Task(Base):
     is_special: Mapped[bool] = mapped_column(server_default="false", default=False)
     enabled: Mapped[bool] = mapped_column(server_default="true", default=True)
     url: Mapped[Optional[str]]
+    position: Mapped[int] = mapped_column(server_default="0", default=0)  # order number
 
     # relationships
     group: Mapped["TaskGroup"] = relationship(back_populates="tasks")
