@@ -34,9 +34,10 @@ RUN apk update && apk add --no-cache \
 
 WORKDIR /app
 
-COPY --from=builder ${POETRY_VENV} ${POETRY_VENV}
+COPY --from=builder /opt/poetry-venv /opt/poetry-venv
 COPY pyproject.toml poetry.lock ./
 
+ENV PATH="/opt/poetry-venv/bin:$PATH"
 ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions PYTHONPATH="${PYTHONPATH}:/app:/app/manytask"
 
 RUN poetry config virtualenvs.create false \
