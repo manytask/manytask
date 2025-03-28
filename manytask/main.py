@@ -104,6 +104,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     return app
 
 
+
 def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)
     course_name = os.environ.get("UNIQUE_COURSE_NAME", None)

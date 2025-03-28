@@ -163,6 +163,30 @@ def first_course_deadlines_config_with_changed_task_name():
 
 
 @pytest.fixture
+def first_course_deadlines_config_with_changed_order_of_groups():
+    with open(DEADLINES_CONFIG_FILES[0], "r") as f:
+        deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    # reverse order of the groups
+    deadlines_config_data["deadlines"]["schedule"] = list(reversed(deadlines_config_data["deadlines"]["schedule"]))
+
+    return ManytaskDeadlinesConfig(**deadlines_config_data["deadlines"])
+
+
+@pytest.fixture
+def first_course_deadlines_config_with_changed_order_of_tasks():
+    with open(DEADLINES_CONFIG_FILES[0], "r") as f:
+        deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    # reverse order of the tasks of the first group
+    deadlines_config_data["deadlines"]["schedule"][0]["tasks"] = list(
+        reversed(deadlines_config_data["deadlines"]["schedule"][0]["tasks"])
+    )
+
+    return ManytaskDeadlinesConfig(**deadlines_config_data["deadlines"])
+
+
+@pytest.fixture
 def first_course_with_deadlines(first_course_db_api, first_course_deadlines_config, session):
     first_course_db_api.sync_columns(first_course_deadlines_config)
     return first_course_db_api
@@ -887,17 +911,10 @@ def change_timedelta_to_datetime(group: ManytaskGroupConfig) -> ManytaskGroupCon
     return group
 
 
-@pytest.mark.parametrize("course_number", [1, 2])
-def test_find_task(
-    first_course_with_deadlines,
-    second_course_with_deadlines,
-    first_course_deadlines_config,
-    second_course_deadlines_config,
-    course_number,
+def check_find_task(
+    course_with_deadlines,
+    course_deadlines_config,
 ):
-    course_with_deadlines = (first_course_with_deadlines, second_course_with_deadlines)[course_number - 1]
-    course_deadlines_config = (first_course_deadlines_config, second_course_deadlines_config)[course_number - 1]
-
     for group in course_deadlines_config.groups:
         group = change_timedelta_to_datetime(group)
 
@@ -915,15 +932,41 @@ def test_find_task(
 
             found_group, found_task = course_with_deadlines.find_task(task.name)
 
+            assert found_group == group
             assert found_task == task
-            assert found_group.group == group.group
-            assert found_group.enabled == group.enabled
-            assert found_group.start == group.start
-            assert found_group.steps == group.steps
-            assert found_group.end == group.end
-            assert set(found_group.tasks) == set(group.tasks)
 
-            # TODO: do we want to check the order of ManytaskGroupConfig.tasks?
+
+@pytest.mark.parametrize("course_number", [1, 2])
+def test_find_task(
+    first_course_with_deadlines,
+    second_course_with_deadlines,
+    first_course_deadlines_config,
+    second_course_deadlines_config,
+    course_number,
+):
+    course_with_deadlines = (first_course_with_deadlines, second_course_with_deadlines)[course_number - 1]
+    course_deadlines_config = (first_course_deadlines_config, second_course_deadlines_config)[course_number - 1]
+
+    check_find_task(course_with_deadlines, course_deadlines_config)
+
+
+@pytest.mark.parametrize("config_number", [1, 2, 3])
+def test_find_task_with_resync(
+    first_course_with_deadlines,
+    second_course_deadlines_config,
+    first_course_deadlines_config_with_changed_order_of_groups,
+    first_course_deadlines_config_with_changed_order_of_tasks,
+    config_number,
+):
+    course_deadlines_config = (
+        second_course_deadlines_config,
+        first_course_deadlines_config_with_changed_order_of_groups,
+        first_course_deadlines_config_with_changed_order_of_tasks,
+    )[config_number - 1]
+
+    first_course_with_deadlines.sync_columns(course_deadlines_config)
+
+    check_find_task(first_course_with_deadlines, course_deadlines_config)
 
 
 def test_find_task_not_found(first_course_with_deadlines, second_course_with_deadlines):
@@ -936,6 +979,33 @@ def test_find_task_not_found(first_course_with_deadlines, second_course_with_dea
     with pytest.raises(KeyError) as e:
         second_course_with_deadlines.find_task(task_name)
     assert e.value.args[0] == f"Task {task_name} not found"
+
+
+def check_get_groups(
+    course_with_deadlines,
+    course_deadlines_config,
+    enabled,
+    started,
+    now,
+):
+    result_groups = course_with_deadlines.get_groups(enabled=enabled, started=started, now=now)
+
+    assert len([group.name for group in result_groups]) == len(set([group.name for group in result_groups]))
+
+    groups = [change_timedelta_to_datetime(group) for group in course_deadlines_config.groups]
+
+    if enabled is not None:
+        groups = [group for group in groups if group.enabled == enabled]
+        for i in range(len(groups)):
+            groups[i].tasks = [task for task in groups[i].tasks if task.enabled == enabled]
+
+    if started is not None:
+        if started:
+            groups = [group for group in groups if group.start <= FIXED_CURRENT_TIME]
+        else:
+            groups = [group for group in groups if group.start > FIXED_CURRENT_TIME]
+
+    assert result_groups == groups
 
 
 @pytest.mark.parametrize("course_number", [1, 2])
@@ -955,23 +1025,29 @@ def test_get_groups(  # noqa: PLR0913
     course_with_deadlines = (first_course_with_deadlines, second_course_with_deadlines)[course_number - 1]
     course_deadlines_config = (first_course_deadlines_config, second_course_deadlines_config)[course_number - 1]
 
-    result_groups = course_with_deadlines.get_groups(enabled=enabled, started=started, now=now)
+    check_get_groups(course_with_deadlines, course_deadlines_config, enabled, started, now)
 
-    assert len([group.name for group in result_groups]) == len(set([group.name for group in result_groups]))
 
-    groups = [change_timedelta_to_datetime(group) for group in course_deadlines_config.groups]
+@pytest.mark.parametrize("config_number", [1, 2, 3])
+@pytest.mark.parametrize("enabled", [None, True, False])
+@pytest.mark.parametrize("started", [None, True, False])
+@pytest.mark.parametrize("now", [FIXED_CURRENT_TIME, None])
+def test_get_groups_with_resync(  # noqa: PLR0913
+    first_course_with_deadlines,
+    second_course_deadlines_config,
+    first_course_deadlines_config_with_changed_order_of_groups,
+    first_course_deadlines_config_with_changed_order_of_tasks,
+    config_number,
+    enabled,
+    started,
+    now,
+):
+    course_deadlines_config = (
+        second_course_deadlines_config,
+        first_course_deadlines_config_with_changed_order_of_groups,
+        first_course_deadlines_config_with_changed_order_of_tasks,
+    )[config_number - 1]
 
-    if enabled is not None:
-        groups = [group for group in groups if group.enabled == enabled]
-        for i in range(len(groups)):
-            groups[i].tasks = [task for task in groups[i].tasks if task.enabled == enabled]
+    first_course_with_deadlines.sync_columns(course_deadlines_config)
 
-    if started is not None:
-        if started:
-            groups = [group for group in groups if group.start <= FIXED_CURRENT_TIME]
-        else:
-            groups = [group for group in groups if group.start > FIXED_CURRENT_TIME]
-
-    assert set(result_groups) == set(groups)
-
-    # TODO: do we want to check the order of list[ManytaskTaskConfig]?
+    check_get_groups(first_course_with_deadlines, course_deadlines_config, enabled, started, now)
