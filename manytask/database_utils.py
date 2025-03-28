@@ -5,15 +5,14 @@ from flask import current_app
 from .course import Course
 
 
-def get_database_table_data() -> dict[str, Any]:
+def get_database_table_data(course: Course) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints."""
-    course: Course = current_app.course  # type: ignore
 
-    storage_api = course.storage_api
+    storage_api = current_app.storage_api
     all_scores = storage_api.get_all_scores()
 
     all_tasks = []
-    for group in course.storage_api.get_groups():
+    for group in current_app.storage_api.get_groups():
         for task in group.tasks:
             if task.enabled:
                 all_tasks.append({"name": task.name, "score": 0, "group": group.name})
