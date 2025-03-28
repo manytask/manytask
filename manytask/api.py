@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import functools
 import logging
-import os
 import secrets
 import tempfile
 from datetime import UTC, datetime, timedelta
@@ -16,39 +15,29 @@ from flask.typing import ResponseReturnValue
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from manytask.database import DataBaseApi, TaskDisabledError
+from manytask.database import TaskDisabledError
 
-from .auth import requires_auth, requires_ready
+from .auth import requires_auth
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .database_utils import get_database_table_data
 from .glab import Student
+from .utils import get_current_course
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 
-def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
+def requires_tokens(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        course: Course = current_app.course if hasattr(current_app, "course") else abort(HTTPStatus.FORBIDDEN)
-        course_token: str = ""
-        # TODO: unneed check when depricate googlesheet interface
-        if isinstance(course.storage_api, DataBaseApi):
-            db_course = course.storage_api.get_course(course.storage_api.course_name)
-            if not db_course:
-                abort(HTTPStatus.FORBIDDEN)
-            course_token = db_course.token
-
-        # TODO: delete when depricate googlesheet interface
-        else:
-            course_token = os.environ["MANYTASK_COURSE_TOKEN"]
-
         token = request.form.get("token", request.headers.get("Authorization", ""))
-        if not token or not course_token:
+        if not token:
             abort(HTTPStatus.FORBIDDEN)
+
         token = token.split()[-1]
-        if not secrets.compare_digest(token, course_token):
+
+        if not secrets.compare_digest(token, current_app.app_config.manytask_app_token):
             abort(HTTPStatus.FORBIDDEN)
 
         return f(*args, **kwargs)
@@ -105,8 +94,9 @@ def _update_score(
 
 
 @bp.get("/healthcheck")
-@requires_ready
 def healthcheck() -> ResponseReturnValue:
+    get_current_course(request.cookies)
+
     return "OK", HTTPStatus.OK
 
 
@@ -173,6 +163,9 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
 def _get_student(
     gitlab_api: Any, user_id: int | None, username: str | None, course_group: str, course_students_group: str
 ) -> Student:
+def _get_student(
+    gitlab_api: Any, user_id: int | None, username: str | None, course_group: str, course_students_group: str
+) -> Student:
     """Get student by user_id or username."""
     try:
         if username:
@@ -197,15 +190,14 @@ def _handle_files(files: dict[str, FileStorage], task_name: str, username: str, 
 
 
 @bp.post("/report")
-@requires_token
-@requires_ready
+@requires_tokens
 def report_score() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course: Course = get_current_course(request.cookies)
 
     task_name, user_id, username, check_deadline, submit_time_str = _validate_and_extract_params(request.form)
 
     try:
-        group, task = course.storage_api.find_task(task_name)
+        group, task = current_app.storage_api.find_task(task_name)
     except (KeyError, TaskDisabledError):
         return (
             f"There is no task with name `{task_name}` (or it is closed for submission)",
@@ -218,10 +210,10 @@ def report_score() -> ResponseReturnValue:
         logger.info(f"Got score=None; set max score for {task.name} of {task.score}")
 
     student = _get_student(
-        course.gitlab_api, user_id, username, course.gitlab_course_group, course.gitlab_course_students_group
+        current_app.gitlab_api, user_id, username, course.gitlab_course_group, course.gitlab_course_students_group
     )
 
-    submit_time = _process_submit_time(submit_time_str, course.storage_api.get_now_with_timezone())
+    submit_time = _process_submit_time(submit_time_str, current_app.storage_api.get_now_with_timezone())
 
     # Log with sanitized values
     logger.info(f"Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}")
@@ -235,11 +227,11 @@ def report_score() -> ResponseReturnValue:
         submit_time=submit_time,
         check_deadline=check_deadline,
     )
-    final_score = course.storage_api.store_score(student, task.name, update_function)
+    final_score = current_app.storage_api.store_score(student, task.name, update_function)
 
     files = request.files.to_dict()
     if files:
-        _handle_files(files, task_name, student.username, course.solutions_api)
+        _handle_files(files, task_name, student.username, current_app.solutions_api)
 
     return {
         "user_id": student.id,
@@ -252,10 +244,9 @@ def report_score() -> ResponseReturnValue:
 
 
 @bp.get("/score")
-@requires_token
-@requires_ready
+@requires_tokens
 def get_score() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    course: Course = get_current_course(request.cookies)
 
     # ----- get and validate request parameters ----- #
     if "task" not in request.form:
@@ -273,7 +264,7 @@ def get_score() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        group, task = course.storage_api.find_task(task_name)
+        group, task = current_app.storage_api.find_task(task_name)
     except (KeyError, TaskDisabledError):
         return (
             f"There is no task with name `{task_name}` (or it is closed for submission)",
@@ -282,16 +273,16 @@ def get_score() -> ResponseReturnValue:
 
     try:
         if username:
-            student = course.gitlab_api.get_student_by_username(
+            student = current_app.gitlab_api.get_student_by_username(
                 username, course.gitlab_course_group, course.gitlab_course_students_group
             )
         elif user_id:
-            student = course.gitlab_api.get_student(
+            student = current_app.gitlab_api.get_student(
                 user_id, course.gitlab_course_group, course.gitlab_course_students_group
             )
         else:
             assert False, "unreachable"
-        student_scores = course.storage_api.get_scores(student.username)
+        student_scores = current_app.storage_api.get_scores(student.username)
     except Exception:
         return f"There is no student with user_id {user_id} or username {username}", HTTPStatus.NOT_FOUND
 
@@ -309,10 +300,8 @@ def get_score() -> ResponseReturnValue:
 
 
 @bp.post("/update_config")
-@requires_token
+@requires_tokens
 def update_config() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
-
     logger.info("Running update_config")
 
     # ----- get and validate request parameters ----- #
@@ -321,7 +310,7 @@ def update_config() -> ResponseReturnValue:
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
 
         # Store the new config
-        course.store_config(config_data)
+        current_app.store_config(config_data)
     except Exception as e:
         logger.exception(e)
         return f"Invalid config\n {e}", HTTPStatus.BAD_REQUEST
@@ -330,23 +319,22 @@ def update_config() -> ResponseReturnValue:
 
 
 @bp.post("/update_cache")
-@requires_token
-def update_cache() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+@requires_tokens
+def update_cache() -> ResponseReturnValue:  # TODO: remove this
+    current_app.course
 
     logger.info("Running update_cache")
 
     # ----- logic ----- #
-    course.storage_api.update_cached_scores()
+    current_app.storage_api.update_cached_scores()
 
     return "", HTTPStatus.OK
 
 
 @bp.get("/solutions")
-@requires_token
-@requires_ready
+@requires_tokens
 def get_solutions() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
+    get_current_course(request.cookies)
 
     # ----- get and validate request parameters ----- #
     if "task" not in request.form:
@@ -357,11 +345,11 @@ def get_solutions() -> ResponseReturnValue:
 
     # ----- logic ----- #
     try:
-        _, _ = course.storage_api.find_task(task_name)
+        _, _ = current_app.storage_api.find_task(task_name)
     except (KeyError, TaskDisabledError):
         return f"There is no task with name `{task_name}` (or it is disabled)", HTTPStatus.NOT_FOUND
 
-    zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)
+    zip_bytes_io = current_app.solutions_api.get_task_aggregated_zip_io(task_name)
     if not zip_bytes_io:
         return f"Unable to get zip for {task_name}", 500
 
@@ -377,15 +365,15 @@ def get_solutions() -> ResponseReturnValue:
 
 @bp.get("/database")
 @requires_auth
-@requires_ready
 def get_database() -> ResponseReturnValue:
-    table_data = get_database_table_data()
+    course: Course = get_current_course(request.cookies)
+
+    table_data = get_database_table_data(course)
     return jsonify(table_data)
 
 
 @bp.post("/database/update")
 @requires_auth
-@requires_ready
 def update_database() -> ResponseReturnValue:
     """
     Update student scores in the database via API endpoint.
@@ -402,10 +390,10 @@ def update_database() -> ResponseReturnValue:
     Returns:
         ResponseReturnValue: JSON response with success status and optional error message
     """
-    course: Course = current_app.course  # type: ignore
-    storage_api = course.storage_api
+    course: Course = get_current_course(request.cookies)
+    storage_api = current_app.storage_api
 
-    student = course.gitlab_api.get_student(
+    student = current_app.gitlab_api.get_student(
         session["gitlab"]["user_id"], course.gitlab_course_group, course.gitlab_course_students_group
     )
     stored_user = storage_api.get_stored_user(student)
@@ -429,7 +417,7 @@ def update_database() -> ResponseReturnValue:
             id=0,
             username=username,
             name=username,
-            repo=course.gitlab_api.get_url_for_repo(
+            repo=current_app.gitlab_api.get_url_for_repo(
                 username=username, course_students_group=course.gitlab_course_students_group
             ),
         )

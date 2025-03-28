@@ -11,6 +11,8 @@ from werkzeug import Response
 
 from manytask.course import Course
 from manytask.glab import Student
+from manytask.main import CustomFlask
+from manytask.utils import get_current_course
 
 logger = logging.getLogger(__name__)
 
@@ -69,30 +71,30 @@ def handle_course_membership(course: Course, student: Student) -> bool | str | R
         return redirect(url_for("web.signup"))
 
 
-def check_secret(course: Course, student: Student) -> str | None:
+def check_secret(app: CustomFlask, course: Course, student: Student) -> str | None:
     """Checking course secret for user if he is entering"""
 
     if "secret" in request.form:
         if secrets.compare_digest(request.form["secret"], course.registration_secret):
-            course.storage_api.sync_stored_user(student)
+            app.storage_api.sync_stored_user(course.course_name, student)
         else:
             logger.error(f"Wrong secret user {student.username} on course {course.storage_api.course_name}")  # type: ignore
             return render_template(
                 "create_project.html",
                 error_message="Invalid registration secret",
-                course_name=course.name,
-                course_favicon=course.favicon,
-                base_url=course.gitlab_api.base_url,
+                course_name=course.course_name,
+                course_favicon=app.favicon,
+                base_url=app.gitlab_api.base_url,
             )
     return None
 
 
-def handle_oauth_callback(oauth: OAuth, course: Course) -> None | Response:
+def handle_oauth_callback(oauth: OAuth, app: CustomFlask, course: Course) -> None | Response:
     """Process oauth2 callback with code for auth, if success set auth session"""
 
     try:
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        student = course.gitlab_api.get_authenticated_student(
+        student = app.gitlab_api.get_authenticated_student(
             gitlab_oauth_token["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
         )
     except Exception:
@@ -104,11 +106,11 @@ def handle_oauth_callback(oauth: OAuth, course: Course) -> None | Response:
     return redirect(url_for("web.login"))
 
 
-def get_authenticate_student(oauth: OAuth, course: Course) -> Student:
+def get_authenticate_student(oauth: OAuth, app: CustomFlask, course: Course) -> Student:
     """Getting student and update session"""
 
     try:
-        student = course.gitlab_api.get_authenticated_student(
+        student = app.gitlab_api.get_authenticated_student(
             session["gitlab"]["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
         )
         session["gitlab"].update(set_oauth_session(student))
@@ -127,19 +129,20 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if current_app.debug:
             return f(*args, **kwargs)
 
-        course = current_app.course  # type: ignore
+        course: Course = get_current_course(request.cookies)
+
         oauth = current_app.oauth  # type: ignore
 
         if "code" in request.args:
-            return handle_oauth_callback(oauth, course)
+            return handle_oauth_callback(oauth, current_app, course)
 
         if valid_session(session):
-            student = get_authenticate_student(oauth, course)
-            check_secret(course, student)
+            student = get_authenticate_student(oauth, current_app, course)
+            check_secret(current_app, course, student)
             if not handle_course_membership(course, student):
                 return render_template(
                     "create_project.html",
-                    course_name=course.name,
+                    course_name=course.course_name,
                     course_favicon=course.favicon,
                     base_url=course.gitlab_api.base_url,
                 )
@@ -148,17 +151,6 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
             redirect_uri = url_for("web.login", _external=True)
             return oauth.gitlab.authorize_redirect(redirect_uri)
 
-        return f(*args, **kwargs)
-
-    return decorated
-
-
-def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
-    @wraps(f)
-    def decorated(*args: Any, **kwargs: Any) -> Any:
-        course = current_app.course  # type: ignore
-        if not course.config:
-            return redirect(url_for("web.not_ready"))
         return f(*args, **kwargs)
 
     return decorated
