@@ -764,21 +764,6 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container):
                 test_empty_course(db_api, session)
 
 
-def test_viewer_api(postgres_container):
-    db_api = DataBaseApi(
-        DatabaseConfig(
-            database_url=postgres_container.get_connection_url(),
-            course_name="Test Course",
-            gitlab_instance_host="gitlab.test.com",
-            registration_secret="secret",
-            token="test_token",
-            show_allscores=True,
-            apply_migrations=True,
-        )
-    )
-    assert db_api.get_scoreboard_url() == ""
-
-
 def test_store_score_integrity_error(first_course_with_deadlines, session):
     student = Student(0, "user1", "username1", False, "repo1")
 

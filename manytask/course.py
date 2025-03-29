@@ -43,7 +43,6 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
 class CourseConfig:
     """Configuration for Course settings and APIs."""
 
-    viewer_api: abstract.ViewerApi
     storage_api: abstract.StorageApi
     gitlab_api: glab.GitLabApi
     solutions_api: solutions.SolutionsApi
@@ -64,7 +63,6 @@ class Course:
 
         :param config: CourseConfig instance containing all necessary settings
         """
-        self.viewer_api = config.viewer_api
         self.storage_api = config.storage_api
         self.gitlab_api = config.gitlab_api
         self.solutions_api = config.solutions_api
