@@ -29,7 +29,7 @@ pytz = {version = ">=2022.0,<2023.4", python = "<3.9"}
 alembic = "1.15.1"
 
 [tool.poetry.group.dev.dependencies]
-flake8 = "7.1.1"
+flake8 = "7.2.0"
 ruff = "0.11.0"
 mypy = "1.15.0"
 isort = "6.0.1"
