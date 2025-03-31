@@ -24,7 +24,7 @@ authlib = "1.5.1"
 python-dotenv = "1.1.0"
 pyyaml = "6.0.1"
 requests = "2.32.3"
-pydantic = "2.10.3"
+pydantic = "2.11.1"
 pytz = {version = ">=2022.0,<2023.4", python = "<3.9"}
 alembic = "1.15.1"
 
