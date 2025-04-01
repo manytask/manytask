@@ -37,7 +37,7 @@ WORKDIR /app
 COPY --from=builder /opt/poetry-venv /opt/poetry-venv
 COPY pyproject.toml poetry.lock ./
 
-ENV PATH="/opt/poetry-venv/bin:$PATH" PYTHONPATH="${PYTHONPATH}:/app:/app/manytask"
+ENV PATH="/opt/poetry-venv/bin:$PATH" PYTHONPATH="/app:/app/manytask"
 
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --no-root
