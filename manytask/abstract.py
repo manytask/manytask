@@ -17,11 +17,6 @@ class StoredUser:
         return f"StoredUser(username={self.username})"
 
 
-class ViewerApi(ABC):
-    @abstractmethod
-    def get_scoreboard_url(self) -> str: ...
-
-
 class StorageApi(ABC):
     @abstractmethod
     def get_scores(

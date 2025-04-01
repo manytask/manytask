@@ -141,16 +141,6 @@ def mock_storage_api():  # noqa: C901
 
 
 @pytest.fixture
-def mock_viewer_api():
-    class MockViewerApi:
-        @staticmethod
-        def get_scoreboard_url():
-            return "https://docs.google.com/spreadsheets"
-
-    return MockViewerApi()
-
-
-@pytest.fixture
 def mock_solutions_api():
     class MockSolutionsApi:
         def store_task_from_folder(self, task_name, username, folder_path):
@@ -160,7 +150,7 @@ def mock_solutions_api():
 
 
 @pytest.fixture
-def mock_course(mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutions_api):
+def mock_course(mock_gitlab_api, mock_storage_api, mock_solutions_api):
     class MockCourse:
         def __init__(self):
             self.name = TEST_COURSE_NAME
@@ -180,7 +170,6 @@ def mock_course(mock_gitlab_api, mock_storage_api, mock_viewer_api, mock_solutio
             self.registration_secret = TEST_SECRET
             self.debug = False
             self.storage_api = mock_storage_api
-            self.viewer_api = mock_viewer_api
             self.gitlab_api = mock_gitlab_api
             self.solutions_api = mock_solutions_api
             self.gitlab_course_group = "test_group"

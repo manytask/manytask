@@ -7,7 +7,7 @@ import gitlab
 from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
-from . import abstract, glab
+from . import glab
 from .auth import requires_auth, requires_ready
 from .course import Course, get_current_time
 from .database import TaskDisabledError
@@ -18,19 +18,6 @@ SESSION_VERSION = 1.5
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("web", __name__)
-
-
-def get_allscores_url(viewer_api: abstract.ViewerApi) -> str:
-    """Function to get URL for viewing the scores
-
-     :param viewer_api: The viewer API that may hold the URL
-
-    :return: String with an URL
-    """
-    if viewer_api.get_scoreboard_url() == "":
-        return url_for("web.show_database")
-    else:
-        return viewer_api.get_scoreboard_url()
 
 
 @bp.route("/", methods=["GET", "POST"])
@@ -81,7 +68,7 @@ def course_page() -> ResponseReturnValue:
     tasks_scores = storage_api.get_scores(student_username)
     tasks_stats = storage_api.get_stats()
 
-    allscores_url = get_allscores_url(course.viewer_api)
+    allscores_url = url_for("web.show_database")
 
     return render_template(
         "tasks.html",
