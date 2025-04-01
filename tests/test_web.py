@@ -18,6 +18,8 @@ from manytask.web import bp as web_bp
 from manytask.web import get_allscores_url
 
 TEST_USERNAME = "test_user"
+TEST_STUDENT_NAME = "User Name"
+TEST_STUDENT_REPO = "students/test_user"
 TEST_SECRET = "test_secret"
 TEST_KEY = "test_key"
 TEST_TOKEN = "test_token"
@@ -66,6 +68,18 @@ def mock_gitlab_api():
         @staticmethod
         def get_student(_user_id):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+
+        def get_student_by_username(
+            self,
+            username: str,
+        ) -> Student:
+            return Student(
+                id=1,
+                username=username,
+                name=TEST_STUDENT_NAME,
+                course_admin=False,
+                repo=TEST_STUDENT_REPO,
+            )
 
         def get_authenticated_student(self, _gitlab_access_token):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
