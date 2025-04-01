@@ -37,7 +37,7 @@ WORKDIR /app
 COPY --from=builder /opt/poetry-venv /opt/poetry-venv
 COPY pyproject.toml poetry.lock ./
 
-ENV PATH="/opt/poetry-venv/bin:$PATH"
+ENV PATH="/opt/poetry-venv/bin:$PATH" PYTHONPATH="/app:/app/manytask"
 
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --no-root
@@ -45,7 +45,8 @@ RUN poetry config virtualenvs.create false \
 COPY ./manytask/ /app/manytask
 COPY VERSION /app/VERSION
 
-ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions PYTHONPATH="${PYTHONPATH}:/app:/app/manytask"
+ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions
+
 VOLUME ["/cache", "/solutions"]
 
 EXPOSE 5050
