@@ -42,10 +42,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         glab.GitLabConfig(
             base_url=app.app_config.gitlab_url,
             admin_token=app.app_config.gitlab_admin_token,
-            course_group=app.app_config.gitlab_course_group,
-            course_public_repo=app.app_config.gitlab_course_public_repo,
-            course_students_group=app.app_config.gitlab_course_students_group,
-            default_branch=app.app_config.gitlab_default_branch,
         )
     )
 
@@ -70,6 +66,10 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         course.CourseConfig(
             storage_api,
             gitlab_api,
+            app.app_config.gitlab_course_group,
+            app.app_config.gitlab_course_public_repo,
+            app.app_config.gitlab_course_students_group,
+            app.app_config.gitlab_default_branch,
             solutions_api,
             app.app_config.registration_secret,
             app.app_config.course_token,

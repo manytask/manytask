@@ -49,12 +49,12 @@ def mock_gitlab_api():
             self.base_url = GITLAB_BASE_URL
 
         @staticmethod
-        def get_url_for_repo(username):
+        def get_url_for_repo(username, course_students_group):
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
-        def get_url_for_task_base():
-            return f"{GITLAB_BASE_URL}/tasks"
+        def get_url_for_task_base(course_public_repo, default_branch):
+            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
 
         @staticmethod
         def register_new_user(user):
@@ -63,18 +63,18 @@ def mock_gitlab_api():
             raise Exception("Registration failed")
 
         @staticmethod
-        def get_student(_user_id):
+        def get_student(user_id, course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
-        def get_authenticated_student(self, _gitlab_access_token):
+        def get_authenticated_student(self, gitlab_access_token, course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
         @staticmethod
-        def check_project_exists(_student):
+        def check_project_exists(student, course_students_group):
             return True
 
         @staticmethod
-        def _parse_user_to_student(user: dict[str, Any]):
+        def _parse_user_to_student(user: dict[str, Any], course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
     return MockGitlabApi()
@@ -185,6 +185,10 @@ def mock_course(mock_gitlab_api, mock_storage_api, mock_solutions_api):
             self.storage_api = mock_storage_api
             self.gitlab_api = mock_gitlab_api
             self.solutions_api = mock_solutions_api
+            self.gitlab_course_group = "test_group"
+            self.gitlab_course_public_repo = "public_2025_spring"
+            self.gitlab_course_students_group = "students_2025_spring"
+            self.gitlab_default_branch = "main"
 
     return MockCourse()
 

@@ -24,6 +24,10 @@ def mock_course():
     class MockCourse:
         def __init__(self):
             self.storage_api = MockStorageApi()
+            self.gitlab_course_group = "test_group"
+            self.gitlab_course_public_repo = "public_2025_spring"
+            self.gitlab_course_students_group = "students_2025_spring"
+            self.gitlab_default_branch = "main"
 
     class MockStorageApi:
         class MockGroup:

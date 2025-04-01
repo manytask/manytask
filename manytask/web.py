@@ -30,7 +30,9 @@ def course_page() -> ResponseReturnValue:
 
     if current_app.debug:
         student_username = "guest"
-        student_repo = course.gitlab_api.get_url_for_repo(student_username)
+        student_repo = course.gitlab_api.get_url_for_repo(
+            username=student_username, course_students_group=course.gitlab_course_students_group
+        )
 
         if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
@@ -40,7 +42,11 @@ def course_page() -> ResponseReturnValue:
         student_username = session["gitlab"]["username"]
         student_repo = session["gitlab"]["repo"]
 
-        student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
+        student = course.gitlab_api.get_student(
+            user_id=session["gitlab"]["user_id"],
+            course_group=course.gitlab_course_group,
+            course_students_group=course.gitlab_course_students_group,
+        )
         stored_user = storage_api.get_stored_user(student)
 
         student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
@@ -66,7 +72,9 @@ def course_page() -> ResponseReturnValue:
 
     return render_template(
         "tasks.html",
-        task_base_url=course.gitlab_api.get_url_for_task_base(),
+        task_base_url=course.gitlab_api.get_url_for_task_base(
+            course.gitlab_course_public_repo, course.gitlab_default_branch
+        ),
         username=student_username,
         course_name=course.name,
         current_course=course,
@@ -99,7 +107,9 @@ def get_solutions() -> ResponseReturnValue:
         else:
             student_course_admin = False
     else:
-        student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
+        student = course.gitlab_api.get_student(
+            session["gitlab"]["user_id"], course.gitlab_course_group, course.gitlab_course_students_group
+        )
         stored_user = course.storage_api.get_stored_user(student)
 
         student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
@@ -166,7 +176,9 @@ def signup() -> ResponseReturnValue:
 
         # register user in gitlab
         gitlab_user = course.gitlab_api.register_new_user(user)
-        student = course.gitlab_api._parse_user_to_student(gitlab_user._attrs)
+        student = course.gitlab_api._parse_user_to_student(
+            gitlab_user._attrs, course.gitlab_course_group, course.gitlab_course_students_group
+        )
         # add user->course if not in db
         course.storage_api.sync_stored_user(student)
 
@@ -190,9 +202,13 @@ def signup() -> ResponseReturnValue:
 def login() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
     course: Course = current_app.course  # type: ignore
-    student = course.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
+    student = course.gitlab_api.get_authenticated_student(
+        session["gitlab"]["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
+    )
 
-    if course.gitlab_api.check_project_exists(student):
+    if course.gitlab_api.check_project_exists(
+        student=student, course_students_group=course.gitlab_course_students_group
+    ):
         return redirect(url_for("web.course_page"))
     else:
         return redirect(url_for("web.create_project"))
@@ -205,11 +221,13 @@ def create_project() -> ResponseReturnValue:
     course: Course = current_app.course  # type: ignore
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
-    student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
+    student = course.gitlab_api.get_authenticated_student(
+        gitlab_access_token, course.gitlab_course_group, course.gitlab_course_students_group
+    )
 
     # Create use if needed
     try:
-        course.gitlab_api.create_project(student)
+        course.gitlab_api.create_project(student, course.gitlab_course_students_group, course.gitlab_course_public_repo)
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
         return render_template("signup.html", error_message=ex.error_message, course_name=course.name)
@@ -246,7 +264,9 @@ def show_database() -> ResponseReturnValue:
 
     if current_app.debug:
         student_username = "guest"
-        student_repo = course.gitlab_api.get_url_for_repo(student_username)
+        student_repo = course.gitlab_api.get_url_for_repo(
+            username=student_username, course_students_group=course.gitlab_course_students_group
+        )
 
         if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
@@ -256,7 +276,9 @@ def show_database() -> ResponseReturnValue:
         student_username = session["gitlab"]["username"]
         student_repo = session["gitlab"]["repo"]
 
-        student = course.gitlab_api.get_student(session["gitlab"]["user_id"])
+        student = course.gitlab_api.get_student(
+            session["gitlab"]["user_id"], course.gitlab_course_group, course.gitlab_course_students_group
+        )
         stored_user = storage_api.get_stored_user(student)
 
         student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
