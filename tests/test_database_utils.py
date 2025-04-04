@@ -42,6 +42,7 @@ def mock_course():
             def __init__(self, tasks):
                 self.tasks = tasks
                 self.name = "test_group"
+                self.enabled = True
 
         class MockTask:
             def __init__(self, name, enabled):
@@ -129,3 +130,27 @@ def test_get_database_table_data_no_scores(app, mock_course):
         assert "students" in result
         assert len(result["tasks"]) == 2
         assert len(result["students"]) == 0
+
+
+def test_get_database_table_data_disabled_tasks_and_groups(app, mock_course):
+    with app.test_request_context():
+        enabled_task = mock_course.deadlines.MockTask(name="enabled_task", enabled=True)
+        disabled_task = mock_course.deadlines.MockTask(name="disabled_task", enabled=False)
+
+        group_enabled = mock_course.deadlines.MockGroup(tasks=[enabled_task, disabled_task])
+        group_enabled.enabled = True
+
+        group_disabled = mock_course.deadlines.MockGroup(tasks=[enabled_task, disabled_task])
+        group_disabled.enabled = False
+
+        mock_course.deadlines.groups = [group_enabled, group_disabled]
+        app.course = mock_course
+
+        result = get_database_table_data()
+
+        assert "tasks" in result
+        tasks = result["tasks"]
+
+        assert len(tasks) == 1
+        assert tasks[0]["name"] == enabled_task.name
+        assert tasks[0]["group"] == group_enabled.name

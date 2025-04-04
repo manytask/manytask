@@ -16,7 +16,7 @@ def get_database_table_data() -> dict[str, Any]:
     if course.deadlines:
         for group in course.deadlines.get_groups():
             for task in group.tasks:
-                if task.enabled:
+                if task.enabled and group.enabled:
                     all_tasks.append({"name": task.name, "score": 0, "group": group.name})
 
     table_data = {"tasks": all_tasks, "students": []}
