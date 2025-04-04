@@ -106,6 +106,7 @@ class Course(Base):
     registration_secret: Mapped[str]
     token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
+    is_ready: Mapped[bool] = mapped_column(server_default="true", default=True)
 
     # gitlab parameters
     gitlab_course_group: Mapped[str]

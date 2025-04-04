@@ -28,12 +28,14 @@ class StorageApi(ABC):
     @abstractmethod
     def get_scores(
         self,
+        course_name: str,
         username: str,
     ) -> dict[str, int]: ...
 
     @abstractmethod
     def get_bonus_score(
         self,
+        course_name: str,
         username: str,
     ) -> int: ...
 
@@ -93,9 +95,15 @@ class StorageApi(ABC):
     ) -> None: ...
 
     @abstractmethod
-    def update_course(
+    def create_course(
         self,
         settings_config: ManytaskSettingsConfig,
+    ) -> bool: ...
+
+    @abstractmethod
+    def update_course(
+        self,
+        course_name: str,
         ui_config: ManytaskUiConfig,
     ) -> None: ...
 

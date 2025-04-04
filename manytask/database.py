@@ -76,6 +76,7 @@ class DataBaseApi(StorageApi):
 
     def get_scores(
         self,
+        course_name: str,
         username: str,
     ) -> dict[str, int]:
         """Method for getting all user scores
@@ -86,7 +87,7 @@ class DataBaseApi(StorageApi):
         """
 
         with Session(self.engine) as session:
-            grades = self._get_scores(session, username, enabled=True, started=True, only_bonus=False)
+            grades = self._get_scores(course_name, session, username, enabled=True, started=True, only_bonus=False)
 
             if grades is None:
                 return {}
@@ -99,6 +100,7 @@ class DataBaseApi(StorageApi):
 
     def get_bonus_score(
         self,
+        course_name: str,
         username: str,
     ) -> int:
         """Method for getting user's total bonus score
@@ -109,7 +111,7 @@ class DataBaseApi(StorageApi):
         """
 
         with Session(self.engine) as session:
-            grades = self._get_scores(session, username, enabled=True, started=True, only_bonus=True)
+            grades = self._get_scores(course_name, session, username, enabled=True, started=True, only_bonus=True)
 
         if grades is None:
             return 0
@@ -168,7 +170,7 @@ class DataBaseApi(StorageApi):
 
         all_scores: dict[str, dict[str, int]] = {}
         for username in all_users:
-            all_scores[username] = self.get_scores(username)
+            all_scores[username] = self.get_scores(course_name, username)
 
         return all_scores
 
@@ -332,6 +334,7 @@ class DataBaseApi(StorageApi):
             return Course(
                 CourseConfig(
                     course_name=course.name,
+                    is_ready=course.is_ready,
                     gitlab_course_group=course.gitlab_course_group,
                     gitlab_course_public_repo=course.gitlab_course_public_repo,
                     gitlab_course_students_group=course.gitlab_course_students_group,
@@ -408,15 +411,15 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def update_course(
+    def create_course(
         self,
         settings_config: ManytaskSettingsConfig,
-        ui_config: ManytaskUiConfig,
-    ) -> None:
-        """Update course settings from config objects
+    ) -> bool:
+        """Create from config object
 
         :param settings_config: ManytaskSettingsConfig object
-        :param ui_config: ManytaskUiConfig object
+
+        :return: is course created, false if course created before
         """
 
         with Session(self.engine) as session:
@@ -429,33 +432,40 @@ class DataBaseApi(StorageApi):
                     registration_secret=settings_config.registration_secret,
                     token=settings_config.manytask_course_token,
                     show_allscores=settings_config.show_allscores,
+                    is_ready=False,
                     gitlab_course_group=settings_config.gitlab_course_group,
                     gitlab_course_public_repo=settings_config.gitlab_course_public_repo,
                     gitlab_course_students_group=settings_config.gitlab_course_students_group,
                     gitlab_default_branch=settings_config.gitlab_default_branch,
                     gitlab_instance_host=self.gitlab_instance_host,
                     name=settings_config.course_name,
-                    task_url_template=ui_config.task_url_template,
-                    links=ui_config.links,
+                    task_url_template="",
                 )
+                return True
 
-                return
+            return False
 
+    def update_course(
+        self,
+        course_name: str,
+        ui_config: ManytaskUiConfig,
+    ) -> None:
+        """Update course settings from config objects
+
+        :param settings_config: ManytaskSettingsConfig object
+        :param ui_config: ManytaskUiConfig object
+        """
+
+        with Session(self.engine) as session:
             self._update(
                 session,
                 models.Course,
                 defaults={
-                    "registration_secret": settings_config.registration_secret,
-                    "token": settings_config.manytask_course_token,
-                    "show_allscores": settings_config.show_allscores,
-                    "gitlab_course_group": settings_config.gitlab_course_group,
-                    "gitlab_course_public_repo": settings_config.gitlab_course_public_repo,
-                    "gitlab_course_students_group": settings_config.gitlab_course_students_group,
-                    "gitlab_default_branch": settings_config.gitlab_default_branch,
+                    "is_ready": True,
                     "task_url_template": ui_config.task_url_template,
                     "links": ui_config.links,
                 },
-                name=settings_config.course_name,
+                name=course_name,
             )
 
     def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
@@ -530,7 +540,7 @@ class DataBaseApi(StorageApi):
         """
 
         if now is None:
-            now = self.get_now_with_timezone()
+            now = self.get_now_with_timezone(course_name)
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)

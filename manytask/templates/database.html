@@ -467,7 +467,7 @@
 
 
                                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                                const courseName = "{{ course_name }}".replace(/[^a-zA-Z0-9]/g, '_');
+                                const courseName = "{{ course.course_name }}".replace(/[^a-zA-Z0-9]/g, '_');
 
                                 try {
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="" data-bs-theme="white">
 <head>
-    <title>{% block title %}{{course_name}}{% endblock %}</title>
+    <title>{% block title %}{{course.course_name if course else ""}}{% endblock %}</title>
     <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/7.0.0/normalize.min.css"
           integrity="sha256-HxaKz5E/eBbvhGMNwhWRPrAR9i/lG1JeT4mD6hCQ7s4=" crossorigin="anonymous" />

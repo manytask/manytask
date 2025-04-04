@@ -36,10 +36,10 @@ class CustomFlask(Flask):
     def store_config(self, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
 
-        course_name = manytask_config.settings.course_name
+        course_name = manytask_config.course_name
 
         # Update course settings
-        self.storage_api.update_course(manytask_config.settings, manytask_config.ui)
+        self.storage_api.update_course(course_name, manytask_config.ui)
 
         # Update task groups (if necessary -- if there is an override) first
         self.storage_api.update_task_groups_from_config(course_name, manytask_config.deadlines)

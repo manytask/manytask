@@ -12,7 +12,7 @@ from werkzeug import Response
 from manytask.course import Course
 from manytask.glab import Student
 from manytask.main import CustomFlask
-from manytask.utils import get_current_course
+from manytask.utils import get_current_course_from_cookies
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ def check_secret(app: CustomFlask, course: Course, student: Student) -> str | No
             return render_template(
                 "create_project.html",
                 error_message="Invalid registration secret",
-                course_name=course.course_name,
+                course=course,
                 course_favicon=app.favicon,
                 base_url=app.gitlab_api.base_url,
             )
@@ -126,30 +126,45 @@ def get_authenticate_student(oauth: OAuth, app: CustomFlask, course: Course) -> 
 def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        if current_app.debug:
+        app: CustomFlask = current_app  # type: ignore
+
+        if app.debug:
             return f(*args, **kwargs)
 
-        course: Course = get_current_course(request.cookies)
+        course: Course = get_current_course_from_cookies(request.cookies)
 
-        oauth = current_app.oauth  # type: ignore
+        oauth = app.oauth
 
         if "code" in request.args:
-            return handle_oauth_callback(oauth, current_app, course)
+            return handle_oauth_callback(oauth, app, course)
 
         if valid_session(session):
-            student = get_authenticate_student(oauth, current_app, course)
-            check_secret(current_app, course, student)
+            student = get_authenticate_student(oauth, app, course)
+            check_secret(app, course, student)
             if not handle_course_membership(course, student):
                 return render_template(
                     "create_project.html",
-                    course_name=course.course_name,
-                    course_favicon=course.favicon,
-                    base_url=course.gitlab_api.base_url,
+                    course=course,
+                    course_favicon=app.favicon,
+                    base_url=app.gitlab_api.base_url,
                 )
         else:
             logger.info("Redirect to login in Gitlab")
             redirect_uri = url_for("web.login", _external=True)
             return oauth.gitlab.authorize_redirect(redirect_uri)
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def requires_admin(f: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        if current_app.debug:
+            return f(*args, **kwargs)
+
+        # TODO: checks that user is admin
 
         return f(*args, **kwargs)
 

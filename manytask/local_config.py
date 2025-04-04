@@ -6,9 +6,6 @@ from dataclasses import dataclass
 
 @dataclass
 class LocalConfig:
-    # token
-    manytask_app_token: str
-
     # utils
     cache_dir: str
     solutions_dir: str
@@ -24,8 +21,6 @@ class LocalConfig:
     @classmethod
     def from_env(cls) -> LocalConfig:
         return cls(
-            # token
-            manytask_app_token=os.environ["MANYTASK_APP_TOKEN"],
             # utils
             cache_dir=os.environ["CACHE_DIR"],
             solutions_dir=os.environ["SOLUTIONS_DIR"],
@@ -40,9 +35,6 @@ class LocalConfig:
 
 @dataclass
 class DebugLocalConfig(LocalConfig):
-    # token
-    manytask_app_token: str = "token"
-
     # utils
     cache_dir: str = ".tmp/cache"
     solutions_dir: str = ".tmp/solutions"

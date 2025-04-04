@@ -1,17 +1,7 @@
 version: 1
 
 
-settings:  # required
-  course_name: python
-
-  registration_secret: PythonSecret
-  manytask_course_token: some_random_string
-  show_allscores: True
-
-  gitlab_course_group: python
-  gitlab_course_public_repo: python/public-2022-fall
-  gitlab_course_students_group: python/students-fall-2022
-  gitlab_default_branch: main
+course_name: python
 
 ui:
   task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$TASK_NAME
