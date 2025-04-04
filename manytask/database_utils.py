@@ -3,16 +3,19 @@ from typing import Any
 from flask import current_app
 
 from .course import Course
+from .main import CustomFlask
 
 
 def get_database_table_data(course: Course) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints."""
 
-    storage_api = current_app.storage_api
-    all_scores = storage_api.get_all_scores()
+    app: CustomFlask = current_app  # type: ignore
+
+    storage_api = app.storage_api
+    all_scores = storage_api.get_all_scores(course.course_name)
 
     all_tasks = []
-    for group in current_app.storage_api.get_groups():
+    for group in app.storage_api.get_groups(course.course_name):
         for task in group.tasks:
             if task.enabled:
                 all_tasks.append({"name": task.name, "score": 0, "group": group.name})

@@ -47,6 +47,8 @@ class CourseConfig:
     token: str
     show_allscores: bool
 
+    is_ready: bool
+
     task_url_template: str
     links: dict[str, str]
 
@@ -70,6 +72,11 @@ class Course:
         self.registration_secret = config.registration_secret
         self.token = config.token
         self.show_allscores = config.show_allscores
+
+        self.is_ready = config.is_ready
+
+        self.task_url_template = config.task_url_template
+        self.links = config.links
 
     # @property
     # def config(self) -> ManytaskConfig | None:  # noqa: F811
