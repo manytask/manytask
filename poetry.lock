@@ -1771,14 +1771,14 @@ sqlcipher = ["sqlcipher3_binary"]
 
 [[package]]
 name = "testcontainers"
-version = "4.9.2"
+version = "4.10.0"
 description = "Python library for throwaway instances of anything that can run in a Docker container"
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["dev"]
 files = [
-    {file = "testcontainers-4.9.2-py3-none-any.whl", hash = "sha256:36bd2b58d91f2fc7ac4f4a73c6ec00e5e60c259c10f208dbfe3161029889be92"},
-    {file = "testcontainers-4.9.2.tar.gz", hash = "sha256:348c72d369d0bd52b57ab4f07a965ae9562837098c28f0522b969b064b779f10"},
+    {file = "testcontainers-4.10.0-py3-none-any.whl", hash = "sha256:31ed1a81238c7e131a2a29df6db8f23717d892b592fa5a1977fd0dcd0c23fc23"},
+    {file = "testcontainers-4.10.0.tar.gz", hash = "sha256:03f85c3e505d8b4edeb192c72a961cebbcba0dd94344ae778b4a159cb6dcf8d3"},
 ]
 
 [package.dependencies]
@@ -2026,4 +2026,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "4eb42dcf84c26bddb10ba5f3f0f3d73a15308e28ac47b98a0cb12fb306ea6e8c"
+content-hash = "a95b01a3bfb276e9059c982a957da752dc4b796e5958dd8edcce2cff2af7d8f4"
