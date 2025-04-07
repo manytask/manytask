@@ -2,6 +2,7 @@ import pytest
 from flask import Flask
 
 from manytask.database_utils import get_database_table_data
+from manytask.glab import Student
 
 TASK_1 = "task1"
 TASK_2 = "task2"
@@ -9,6 +10,8 @@ TASK_3 = "task3"
 
 STUDENT_1 = "student1"
 STUDENT_2 = "student2"
+
+STUDENT_NAMES = {STUDENT_1: "Student Oneich", STUDENT_2: "Student Twoich"}
 
 SCORES = {STUDENT_1: {TASK_1: 100, TASK_2: 90, "total": 190}, STUDENT_2: {TASK_1: 80, TASK_2: 85, "total": 165}}
 
@@ -28,6 +31,7 @@ def mock_course():
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"
             self.gitlab_default_branch = "main"
+            self.gitlab_api = MockGitLabApi()
 
     class MockStorageApi:
         class MockGroup:
@@ -62,6 +66,19 @@ def mock_course():
                 STUDENT_2: {TASK_1: SCORES[STUDENT_2][TASK_1], TASK_2: SCORES[STUDENT_2][TASK_2]},
             }
 
+    class MockGitLabApi:
+        def __init__(self):
+            pass
+
+        def get_student_by_username(self, username: str, course_group: str, course_student_group: str) -> Student:
+            return Student(
+                id=1,
+                username=username,
+                name=STUDENT_NAMES[username],
+                course_admin=False,
+                repo="my repo",
+            )
+
     return MockCourse()
 
 
@@ -88,6 +105,7 @@ def test_get_database_table_data(app, mock_course):
 
         for student_id in [STUDENT_1, STUDENT_2]:
             student = next(s for s in students if s["username"] == student_id)
+            assert student["student_name"] == STUDENT_NAMES[student_id]
             assert student["total_score"] == SCORES[student_id]["total"]
             assert student["scores"] == {TASK_1: SCORES[student_id][TASK_1], TASK_2: SCORES[student_id][TASK_2]}
 
