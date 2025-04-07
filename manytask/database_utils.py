@@ -22,6 +22,11 @@ def get_database_table_data() -> dict[str, Any]:
 
     for username, student_scores in all_scores.items():
         total_score = sum(student_scores.values())
-        table_data["students"].append({"username": username, "scores": student_scores, "total_score": total_score})
+        student_name = course.gitlab_api.get_student_by_username(
+            username, course.gitlab_course_group, course.gitlab_course_students_group
+        ).name
+        table_data["students"].append(
+            {"username": username, "student_name": student_name, "scores": student_scores, "total_score": total_score}
+        )
 
     return table_data
