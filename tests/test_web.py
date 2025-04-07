@@ -68,12 +68,7 @@ def mock_gitlab_api():
         def get_student(user_id, course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
-        def get_student_by_username(
-            self,
-            username: str,
-            course_group,
-            course_students_group
-        ) -> Student:
+        def get_student_by_username(self, username: str, course_group, course_students_group) -> Student:
             return Student(
                 id=1,
                 username=username,
