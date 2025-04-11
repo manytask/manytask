@@ -5,7 +5,6 @@ import os
 import secrets
 from typing import Any
 
-import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from flask import Flask
@@ -33,10 +32,8 @@ class CustomFlask(Flask):
     def favicon(self) -> str:
         return "favicon.ico"
 
-    def store_config(self, content: dict[str, Any]) -> None:
+    def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
-
-        course_name = manytask_config.course_name
 
         # Update course settings
         self.storage_api.update_course(course_name, manytask_config.ui)
@@ -90,14 +87,10 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     app.register_blueprint(api.bp)
     app.register_blueprint(web.bp)
+    app.register_blueprint(web.root_bp)
+    app.register_blueprint(web.admin_bp)
 
     logger = logging.getLogger(__name__)
-
-    # debug updates
-    if app.debug:
-        with open(".manytask.example.yml", "r") as f:
-            debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-        app.store_config(debug_manytask_config_data)
 
     logger.info("Init success")
 

@@ -1,8 +1,6 @@
 version: 1
 
 
-course_name: python
-
 ui:
   task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$TASK_NAME
 

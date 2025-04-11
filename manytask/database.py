@@ -141,6 +141,8 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         student: Student,
+        repo_name: str,
+        course_admin: bool,
     ) -> StoredUser:
         """Method for sync user's gitlab and stored data
 
@@ -151,9 +153,9 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course)
+            user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
 
-            user_on_course.is_course_admin = user_on_course.is_course_admin or student.course_admin
+            user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
 
@@ -210,6 +212,7 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         student: Student,
+        repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
     ) -> int:
@@ -228,7 +231,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, student, course)
+                user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
                 session.commit()
 
                 try:
@@ -611,7 +614,7 @@ class DataBaseApi(StorageApi):
     def max_score_started(self, course_name: str) -> int:
         return self.max_score(started=True, course_name=course_name)
 
-    def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
+    def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
         """Sync admin flag in gitlab and db"""
 
         with Session(self.engine) as session:
@@ -620,11 +623,11 @@ class DataBaseApi(StorageApi):
                 session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
             )
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-            if student.course_admin != user_on_course.is_course_admin and student.course_admin:
+            if course_admin != user_on_course.is_course_admin and course_admin:
                 user_on_course = self._update(
                     session=session,
                     model=models.UserOnCourse,
-                    defaults={"is_course_admin": student.course_admin},
+                    defaults={"is_course_admin": course_admin},
                     user_id=user.id,
                     course_id=course.id,
                 )
@@ -657,6 +660,20 @@ class DataBaseApi(StorageApi):
             session.refresh(user)
 
         return user
+
+    def get_user_courses_names(self, student: Student) -> list[str]:
+        """Get a list of courses names that the user participates in"""
+
+        with Session(self.engine) as session:
+            try:
+                user = self._get(session, models.User, username=student.username)
+            except NoResultFound:
+                return []
+
+            user_on_courses = user.users_on_courses.all()
+
+            result = [user_on_course.course.name for user_on_course in user_on_courses]
+            return result
 
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
@@ -692,14 +709,22 @@ class DataBaseApi(StorageApi):
             pass
 
     def _get_or_create_user_on_course(
-        self, session: Session, student: Student, course: models.Course
+        self,
+        session: Session,
+        student: Student,
+        course: models.Course,
+        repo_name: str | None = None,
     ) -> models.UserOnCourse:
         user = self._get_or_create(
             session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
         )
 
+        defaults = {}
+        if repo_name:
+            defaults["repo_name"] = repo_name
+
         user_on_course = self._get_or_create(
-            session, models.UserOnCourse, defaults={"repo_name": student.repo}, user_id=user.id, course_id=course.id
+            session, models.UserOnCourse, defaults=defaults, user_id=user.id, course_id=course.id
         )
 
         return user_on_course

@@ -11,7 +11,7 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="{{ url_for('web.create_course') }}" class="needs-validation" novalidate>
+    <form method="POST" action="{{ url_for('admin.create_course') }}" class="needs-validation" novalidate>
         <div class="row">
             <div class="col-md-6 mb-4">
                 <h4>Basic Course Information</h4>
@@ -57,7 +57,6 @@
 
         <div class="mb-4">
             <button type="submit" class="btn btn-primary">Create Course</button>
-            <a href="{{ url_for('web.course_page') }}" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
 </div>

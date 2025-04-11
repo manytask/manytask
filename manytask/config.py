@@ -207,7 +207,6 @@ class ManytaskConfig(BaseModel):
 
     version: int  # if config exists, version is always present
 
-    course_name: str
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
 

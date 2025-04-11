@@ -67,7 +67,7 @@
                     <li class="nav-item">
                         <a class="nav-link px-3 {% if active_page == 'database' %}active{% endif %}" 
                            aria-current="{% if active_page == 'database' %}page{% endif %}"
-                           href="/database">
+                           href={{ url_for('web.show_database', course_name=course.course_name) }}>
                             All&nbsp;Scores
                         </a>
                     </li>
@@ -88,7 +88,7 @@
 
             <div class="dropdown text-end d-flex align-items-center justify-content-center">
                 <div class="total_score round d-flex flex-column align-items-center justify-content-center ms-2 me-2">
-                    <span class="fs-7">{{ solved_score_string }}/{{ current_app.storage_api.max_score_started(course.course_name) }}</span>
+                    <span class="fs-7">{{ solved_score_string }}/{{ app.storage_api.max_score_started(course.course_name) }}</span>
                     <span class="fs-7">{{ solved_percent }}%</span>
                 </div>
 
