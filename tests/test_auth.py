@@ -45,11 +45,11 @@ def mock_gitlab_api():
             self.base_url = GITLAB_BASE_URL
 
         @staticmethod
-        def get_url_for_repo(username, course_students_group):
+        def get_url_for_repo(username: str, course_students_group: str):
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
-        def get_url_for_task_base(course_public_repo, default_branch):
+        def get_url_for_task_base(course_public_repo: str, default_branch: str):
             return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
 
         @staticmethod
@@ -59,18 +59,18 @@ def mock_gitlab_api():
             raise Exception("Registration failed")
 
         @staticmethod
-        def get_student(_user_id, course_group, course_students_group):
+        def get_student(user_id: int, course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
-        def get_authenticated_student(self, gitlab_access_token, course_group, course_students_group):
+        def get_authenticated_student(self, gitlab_access_token: str, course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
         @staticmethod
-        def check_project_exists(_student, course_students_group):
+        def check_project_exists(student: Student, course_students_group: str):
             return True
 
         @staticmethod
-        def _parse_user_to_student(user: dict[str, Any], course_group, course_students_group):
+        def _parse_user_to_student(user: dict[str, Any], course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
     return MockGitlabApi()

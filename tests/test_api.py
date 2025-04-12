@@ -181,7 +181,7 @@ def mock_gitlab_api(mock_student):
             self.course_admin = False
             self._student_class = mock_student
 
-        def get_student(self, user_id, course_group, course_students_group):
+        def get_student(self, user_id: int, course_group: str, course_students_group: str):
             if user_id == TEST_USER_ID:
                 return self._student_class(TEST_USER_ID, TEST_USERNAME)
             raise Exception("Student not found")
@@ -225,15 +225,15 @@ def mock_course(mock_storage_api, mock_solutions_api, mock_gitlab_api, mock_grou
         def get_groups(self):
             return [mock_group]
 
-        def get_authenticated_student(self, _gitlab_access_token, course_group, course_students_group):
+        def get_authenticated_student(self, gitlab_access_token: str, course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
         @staticmethod
-        def check_project_exists(_student, _course_students_group):
+        def check_project_exists(_student: Student, course_students_group: str):
             return True
 
         @staticmethod
-        def _parse_user_to_student(user: dict[str, Any], course_group, course_students_group):
+        def _parse_user_to_student(user: dict[str, Any], course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
     return MockCourse()

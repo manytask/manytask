@@ -34,6 +34,7 @@ TEST_GROUP_ID_PUBLIC = 2
 TEST_GROUP_PUBLIC_NAME = "some/TestGroup/TestProject/Public"
 TEST_GROUP_PUBLIC_NAME_SHORT = "Public"
 TEST_GROUP_PUBLIC_NAME_FULL = "some / TestGroup / TestProject / Public"
+TEST_GROUP_PUBLIC_DEFAULT_BRANCH = "main"
 
 TEST_GROUP_ID_STUDENT = 3
 TEST_GROUP_STUDENT_NAME = "some/TestGroup/TestProject/Students"
@@ -487,9 +488,9 @@ def test_get_authenticated_student_failure(mock_get, gitlab):
 
 def test_get_url_for_task_base(gitlab):
     gitlab_api, _ = gitlab
-    url = gitlab_api.get_url_for_task_base(TEST_GROUP_PUBLIC_NAME, "main")
+    url = gitlab_api.get_url_for_task_base(TEST_GROUP_PUBLIC_NAME, TEST_GROUP_PUBLIC_DEFAULT_BRANCH)
 
-    assert url == f"{gitlab_api.base_url}/{TEST_GROUP_PUBLIC_NAME}/blob/main"
+    assert url == f"{gitlab_api.base_url}/{TEST_GROUP_PUBLIC_NAME}/blob/{TEST_GROUP_PUBLIC_DEFAULT_BRANCH}}"
 
 
 def test_get_url_for_repo(gitlab):
