@@ -330,7 +330,8 @@ def show_database() -> ResponseReturnValue:
 
     scores = storage_api.get_scores(student_username)
     bonus_score = storage_api.get_bonus_score(student_username)
-    table_data = get_database_table_data()
+    show_full_names = "show_full_names" in request.args
+    table_data = get_database_table_data(show_full_names)
 
     return render_template(
         "database.html",

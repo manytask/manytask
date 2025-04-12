@@ -72,7 +72,7 @@ def requires_secret(template: str = "create_project.html") -> Callable[..., Any]
                         base_url=course.gitlab_api.base_url,
                     )
 
-            except Exception as e:
+            except Exception:
                 return redirect(url_for("web.signup"))
             return f(*args, **kwargs)
 

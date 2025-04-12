@@ -86,7 +86,7 @@ def mock_course():
 def test_get_database_table_data(app, mock_course):
     with app.test_request_context():
         app.course = mock_course
-        result = get_database_table_data()
+        result = get_database_table_data(True)
 
         assert "tasks" in result
         assert "students" in result
@@ -108,11 +108,29 @@ def test_get_database_table_data(app, mock_course):
             assert student["scores"] == {TASK_1: SCORES[student_id][TASK_1], TASK_2: SCORES[student_id][TASK_2]}
 
 
+def test_get_database_table_data_with_student_names(app, mock_course):
+    with app.test_request_context():
+        app.course = mock_course
+        result = get_database_table_data(True)
+        students = result["students"]
+        for student in students:
+            assert "student_name" in student
+
+
+def test_get_database_table_data_without_student_names(app, mock_course):
+    with app.test_request_context():
+        app.course = mock_course
+        result = get_database_table_data(False)
+        students = result["students"]
+        for student in students:
+            assert "student_name" not in student
+
+
 def test_get_database_table_data_no_deadlines(app, mock_course):
     with app.test_request_context():
         mock_course.deadlines = None
         app.course = mock_course
-        result = get_database_table_data()
+        result = get_database_table_data(False)
 
         assert "tasks" in result
         assert "students" in result
@@ -124,7 +142,7 @@ def test_get_database_table_data_no_scores(app, mock_course):
     with app.test_request_context():
         mock_course.storage_api.get_all_scores = lambda: {}
         app.course = mock_course
-        result = get_database_table_data()
+        result = get_database_table_data(False)
 
         assert "tasks" in result
         assert "students" in result
@@ -146,7 +164,7 @@ def test_get_database_table_data_disabled_tasks_and_groups(app, mock_course):
         mock_course.deadlines.groups = [group_enabled, group_disabled]
         app.course = mock_course
 
-        result = get_database_table_data()
+        result = get_database_table_data(False)
 
         assert "tasks" in result
         tasks = result["tasks"]
