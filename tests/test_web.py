@@ -13,7 +13,7 @@ from pydantic import AnyUrl
 from manytask.abstract import StoredUser
 from manytask.config import ManytaskConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from manytask.database import TaskDisabledError
-from manytask.glab import Student
+from manytask.glab import Student, User
 from manytask.web import bp as web_bp
 
 TEST_USERNAME = "test_user"

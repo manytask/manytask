@@ -490,7 +490,7 @@ def test_get_url_for_task_base(gitlab):
     gitlab_api, _ = gitlab
     url = gitlab_api.get_url_for_task_base(TEST_GROUP_PUBLIC_NAME, TEST_GROUP_PUBLIC_DEFAULT_BRANCH)
 
-    assert url == f"{gitlab_api.base_url}/{TEST_GROUP_PUBLIC_NAME}/blob/{TEST_GROUP_PUBLIC_DEFAULT_BRANCH}}"
+    assert url == f"{gitlab_api.base_url}/{TEST_GROUP_PUBLIC_NAME}/blob/{TEST_GROUP_PUBLIC_DEFAULT_BRANCH}"
 
 
 def test_get_url_for_repo(gitlab):
