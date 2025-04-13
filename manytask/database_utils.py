@@ -35,7 +35,7 @@ def get_database_table_data(get_full_names: bool = False) -> dict[str, Any]:
                     "username": username,
                     "student_name": student_name,
                     "scores": student_scores,
-                    "total_score": total_score
+                    "total_score": total_score,
                 }
             )
         else:
