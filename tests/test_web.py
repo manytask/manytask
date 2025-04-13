@@ -13,7 +13,7 @@ from pydantic import AnyUrl
 from manytask.abstract import StoredUser
 from manytask.config import ManytaskConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from manytask.database import TaskDisabledError
-from manytask.glab import Student
+from manytask.glab import Student, User
 from manytask.web import bp as web_bp
 
 TEST_USERNAME = "test_user"
@@ -51,27 +51,24 @@ def mock_gitlab_api():
             self.base_url = GITLAB_BASE_URL
 
         @staticmethod
-        def get_url_for_repo(username):
+        def get_url_for_repo(username: str, course_students_group: str):
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
-        def get_url_for_task_base():
-            return f"{GITLAB_BASE_URL}/tasks"
+        def get_url_for_task_base(course_public_repo: str, default_branch: str):
+            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
 
         @staticmethod
-        def register_new_user(user):
+        def register_new_user(user: User):
             if user.username == TEST_USERNAME:
                 return True
             raise Exception("Registration failed")
 
         @staticmethod
-        def get_student(_user_id):
+        def get_student(user_id: int, course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
-        def get_student_by_username(
-            self,
-            username: str,
-        ) -> Student:
+        def get_student_by_username(self, username: str, course_group: str, course_students_group: str) -> Student:
             return Student(
                 id=1,
                 username=username,
@@ -80,15 +77,15 @@ def mock_gitlab_api():
                 repo=TEST_STUDENT_REPO,
             )
 
-        def get_authenticated_student(self, _gitlab_access_token):
+        def get_authenticated_student(self, gitlab_access_token: str, course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
         @staticmethod
-        def check_project_exists(_student):
+        def check_project_exists(student: Student, course_students_group: str):
             return True
 
         @staticmethod
-        def _parse_user_to_student(user: dict[str, Any]):
+        def _parse_user_to_student(user: dict[str, Any], course_group, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
     return MockGitlabApi()
@@ -199,6 +196,10 @@ def mock_course(mock_gitlab_api, mock_storage_api, mock_solutions_api):
             self.storage_api = mock_storage_api
             self.gitlab_api = mock_gitlab_api
             self.solutions_api = mock_solutions_api
+            self.gitlab_course_group = "test_group"
+            self.gitlab_course_public_repo = "public_2025_spring"
+            self.gitlab_course_students_group = "students_2025_spring"
+            self.gitlab_default_branch = "main"
 
     return MockCourse()
 

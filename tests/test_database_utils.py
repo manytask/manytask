@@ -27,6 +27,10 @@ def mock_course():
     class MockCourse:
         def __init__(self):
             self.storage_api = MockStorageApi()
+            self.gitlab_course_group = "test_group"
+            self.gitlab_course_public_repo = "public_2025_spring"
+            self.gitlab_course_students_group = "students_2025_spring"
+            self.gitlab_default_branch = "main"
             self.gitlab_api = MockGitLabApi()
 
     class MockStorageApi:
@@ -66,10 +70,7 @@ def mock_course():
         def __init__(self):
             pass
 
-        def get_student_by_username(
-            self,
-            username: str,
-        ) -> Student:
+        def get_student_by_username(self, username: str, course_group: str, course_student_group: str) -> Student:
             return Student(
                 id=1,
                 username=username,
