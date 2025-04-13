@@ -72,10 +72,10 @@ class Course:
         self.storage_api = config.storage_api
         self.gitlab_api = config.gitlab_api
 
-        self.gitlab_course_group = config.gitlab_course_group
-        self.gitlab_course_public_repo = config.gitlab_course_public_repo
-        self.gitlab_course_students_group = config.gitlab_course_students_group
-        self.gitlab_default_branch = config.gitlab_default_branch
+        self.__gitlab_course_group = config.gitlab_course_group
+        self.__gitlab_course_public_repo = config.gitlab_course_public_repo
+        self.__gitlab_course_students_group = config.gitlab_course_students_group
+        self.__gitlab_default_branch = config.gitlab_default_branch
 
         self.solutions_api = config.solutions_api
         self.registration_secret = config.registration_secret
@@ -84,6 +84,22 @@ class Course:
         self._cache = config.cache
         self.manytask_version = config.manytask_version
         self.debug = config.debug
+
+    @property
+    def gitlab_course_group(self) -> str:
+        return self.__gitlab_course_group
+
+    @property
+    def gitlab_course_public_repo(self) -> str:
+        return self.__gitlab_course_public_repo
+
+    @property
+    def gitlab_course_students_group(self) -> str:
+        return self.__gitlab_course_students_group
+
+    @property
+    def gitlab_default_branch(self) -> str:
+        return self.__gitlab_default_branch
 
     @property
     def favicon(self) -> str:
