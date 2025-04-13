@@ -123,7 +123,8 @@ def test_get_database_table_data_without_student_names(app, mock_course):
         result = get_database_table_data(False)
         students = result["students"]
         for student in students:
-            assert "student_name" not in student
+            assert "student_name" in student
+            assert student["student_name"] == "-"
 
 
 def test_get_database_table_data_no_deadlines(app, mock_course):
