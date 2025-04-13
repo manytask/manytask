@@ -336,6 +336,7 @@ def show_database() -> ResponseReturnValue:
     return render_template(
         "database.html",
         table_data=table_data,
+        show_full_names=show_full_names,
         course_name=course.config.settings.course_name if course.config else "",
         scores=scores,
         bonus_score=bonus_score,
@@ -343,7 +344,7 @@ def show_database() -> ResponseReturnValue:
         is_course_admin=student_course_admin,
         current_course=course,
         course_favicon=course.favicon,
-        readonly_fields=["username", "total_score"],  # Cannot be edited in database web viewer
+        readonly_fields=["username", "total_score", "student_name"],  # Cannot be edited in database web viewer
         links=(course.config.ui.links if course.config else {}),
         gitlab_url=course.gitlab_api.base_url,
         show_allscores=course.show_allscores,
