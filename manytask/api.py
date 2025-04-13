@@ -342,7 +342,7 @@ def get_solutions() -> ResponseReturnValue:
 @requires_auth
 @requires_ready
 def get_database() -> ResponseReturnValue:
-    table_data = get_database_table_data()
+    table_data = get_database_table_data(False)
     return jsonify(table_data)
 
 

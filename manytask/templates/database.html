@@ -236,6 +236,7 @@
                             width: 120,
                             headerTooltip: "Username"
                         },
+                        {% if show_full_names %}
                         {
                             title: "Name",
                             field: "student_name",
@@ -244,6 +245,7 @@
                             width: 200,
                             headerTooltip: "Full name"
                         },
+                        {% endif %}
                         {
                             title: "Total Score",
                             field: "total_score",

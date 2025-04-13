@@ -7,7 +7,7 @@ from manytask.glab import GitLabApiException
 from .course import Course
 
 
-def get_database_table_data() -> dict[str, Any]:
+def get_database_table_data(get_full_names: bool = False) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints."""
     course: Course = current_app.course  # type: ignore
 
@@ -25,10 +25,12 @@ def get_database_table_data() -> dict[str, Any]:
 
     for username, student_scores in all_scores.items():
         total_score = sum(student_scores.values())
-        try:
-            student_name = course.gitlab_api.get_student_by_username(username).name
-        except GitLabApiException:
-            student_name = ""
+        student_name = "-"
+        if get_full_names:
+            try:
+                student_name = course.gitlab_api.get_student_by_username(username).name
+            except GitLabApiException:
+                student_name = "x"
         table_data["students"].append(
             {"username": username, "student_name": student_name, "scores": student_scores, "total_score": total_score}
         )
