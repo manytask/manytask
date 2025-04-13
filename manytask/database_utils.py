@@ -31,6 +31,8 @@ def get_database_table_data(get_full_names: bool = False) -> dict[str, Any]:
                 student_name = course.gitlab_api.get_student_by_username(username).name
             except GitLabApiException:
                 student_name = "x"
-        table_data["students"].append({"username": username, "student_name": student_name, "scores": student_scores, "total_score": total_score})
+        table_data["students"].append(
+            {"username": username, "student_name": student_name, "scores": student_scores, "total_score": total_score}
+        )
 
     return table_data
