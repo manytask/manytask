@@ -92,7 +92,9 @@ def handle_oauth_callback(oauth: OAuth, course: Course) -> None | Response:
 
     try:
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        student = course.gitlab_api.get_authenticated_student(gitlab_oauth_token["access_token"])
+        student = course.gitlab_api.get_authenticated_student(
+            gitlab_oauth_token["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
+        )
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
         return redirect(url_for("web.login"))
@@ -106,7 +108,9 @@ def get_authenticate_student(oauth: OAuth, course: Course) -> Student:
     """Getting student and update session"""
 
     try:
-        student = course.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
+        student = course.gitlab_api.get_authenticated_student(
+            session["gitlab"]["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
+        )
         session["gitlab"].update(set_oauth_session(student))
         return student
 

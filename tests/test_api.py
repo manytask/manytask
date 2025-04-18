@@ -181,25 +181,25 @@ def mock_gitlab_api(mock_student):
             self.course_admin = False
             self._student_class = mock_student
 
-        def get_student(self, user_id):
+        def get_student(self, user_id: int, course_group: str, course_students_group: str):
             if user_id == TEST_USER_ID:
                 return self._student_class(TEST_USER_ID, TEST_USERNAME)
             raise Exception("Student not found")
 
-        def get_student_by_username(self, username):
+        def get_student_by_username(self, username, course_group, course_students_group):
             if username == TEST_USERNAME:
                 return self._student_class(TEST_USER_ID, TEST_USERNAME)
             raise Exception("Student not found")
 
-        def get_authenticated_student(self, access_token):
+        def get_authenticated_student(self, access_token, course_group, course_students_group):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
         @staticmethod
-        def get_url_for_repo(username):
+        def get_url_for_repo(username, course_students_group):
             return f"https://gitlab.com/{username}/test-repo"
 
         @staticmethod
-        def check_project_exists(_student):
+        def check_project_exists(_student, course_students_group):
             return True
 
     return MockGitlabApi()
@@ -214,6 +214,10 @@ def mock_course(mock_storage_api, mock_solutions_api, mock_gitlab_api, mock_grou
             self.solutions_api = mock_solutions_api
             self.gitlab_api = mock_gitlab_api
             self.debug = False
+            self.gitlab_course_group = "test_group"
+            self.gitlab_course_public_repo = "public_2025_spring"
+            self.gitlab_course_students_group = "students_2025_spring"
+            self.gitlab_default_branch = "main"
 
         def store_config(self, config_data):
             self.config = config_data
@@ -221,15 +225,15 @@ def mock_course(mock_storage_api, mock_solutions_api, mock_gitlab_api, mock_grou
         def get_groups(self):
             return [mock_group]
 
-        def get_authenticated_student(self, _gitlab_access_token):
+        def get_authenticated_student(self, gitlab_access_token: str, course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
 
         @staticmethod
-        def check_project_exists(_student):
+        def check_project_exists(_student: Student, course_students_group: str):
             return True
 
         @staticmethod
-        def _parse_user_to_student(user: dict[str, Any]):
+        def _parse_user_to_student(user: dict[str, Any], course_group: str, course_students_group: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
     return MockCourse()
@@ -732,9 +736,11 @@ def test_get_student_by_username():
     test_student = Student(id=1, username="test_user", name="Test User", repo="")
     mock_gitlab.get_student_by_username.return_value = test_student
 
-    result = _get_student(mock_gitlab, None, "test_user")
+    result = _get_student(mock_gitlab, None, "test_user", "test_course_group", "test_course_students_group")
     assert result == test_student
-    mock_gitlab.get_student_by_username.assert_called_once_with("test_user")
+    mock_gitlab.get_student_by_username.assert_called_once_with(
+        "test_user", "test_course_group", "test_course_students_group"
+    )
 
 
 def test_get_student_by_id():
@@ -743,16 +749,16 @@ def test_get_student_by_id():
     test_student = Student(id=1, username="test_user", name="Test User", repo="")
     mock_gitlab.get_student.return_value = test_student
 
-    result = _get_student(mock_gitlab, 1, None)
+    result = _get_student(mock_gitlab, 1, None, "test_course_group", "test_course_students_group")
     assert result == test_student
-    mock_gitlab.get_student.assert_called_once_with(1)
+    mock_gitlab.get_student.assert_called_once_with(1, "test_course_group", "test_course_students_group")
 
 
 def test_get_student_no_id_or_username():
     """Test when neither user_id nor username is provided"""
     mock_gitlab = MagicMock()
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, None, None)
+        _get_student(mock_gitlab, None, None, "test_course_group", "test_course_students_group")
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
@@ -762,7 +768,7 @@ def test_get_student_username_not_found():
     mock_gitlab.get_student_by_username.side_effect = Exception("Student not found")
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, None, "nonexistent")
+        _get_student(mock_gitlab, None, "nonexistent", "test_course_group", "test_course_students_group")
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
@@ -772,7 +778,7 @@ def test_get_student_id_not_found():
     mock_gitlab.get_student.side_effect = Exception("Student not found")
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, 999, None)
+        _get_student(mock_gitlab, 999, None, "test_course_group", "test_course_students_group")
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
