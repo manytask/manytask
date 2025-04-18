@@ -10,11 +10,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-<<<<<<< HEAD
-from . import abstract, course, database, glab, local_config, solutions
-=======
 from . import abstract, config, database, glab, local_config, solutions
->>>>>>> fe2453c (feat: add supporting for many courses on one instance)
 
 load_dotenv("../.env")  # take environment variables from .env.
 
@@ -23,7 +19,6 @@ class CustomFlask(Flask):
     oauth: OAuth
     app_config: local_config.LocalConfig  # TODO: check if we need it
     gitlab_api: glab.GitLabApi
-    viewer_api: abstract.ViewerApi
     storage_api: abstract.StorageApi
     solutions_api: solutions.SolutionsApi
     manytask_version: str | None = None
@@ -77,7 +72,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             app.manytask_version = f.read().strip()
     except FileNotFoundError:
         pass
-    
+
     # for https support
     _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
     app.wsgi_app = _wsgi_app  # type: ignore
@@ -95,6 +90,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     logger.info("Init success")
 
     return app
+
 
 def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)

@@ -94,7 +94,6 @@ class Course:
     def gitlab_default_branch(self) -> str:
         return self.__gitlab_default_branch
 
-
     # @property
     # def config(self) -> ManytaskConfig | None:  # noqa: F811
     #     logger.info("Fetching config...")

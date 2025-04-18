@@ -191,9 +191,6 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
 def _get_student(
     gitlab_api: Any, user_id: int | None, username: str | None, course_group: str, course_students_group: str
 ) -> Student:
-def _get_student(
-    gitlab_api: Any, user_id: int | None, username: str | None, course_group: str, course_students_group: str
-) -> Student:
     """Get student by user_id or username."""
     try:
         if username:
@@ -415,7 +412,7 @@ def get_database(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    table_data = get_database_table_data(course)
+    table_data = get_database_table_data(app, course)
     return jsonify(table_data)
 
 
@@ -445,7 +442,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
     stored_user = storage_api.get_stored_user(course.course_name, student)
-    student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
+    student_course_admin = stored_user.course_admin
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN

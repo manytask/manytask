@@ -7,7 +7,7 @@ import gitlab
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
-from . import abstract, glab
+from . import glab
 from .auth import requires_admin, requires_auth, requires_course_participation, requires_ready
 from .config import ManytaskSettingsConfig
 from .course import Course, get_current_time
@@ -257,8 +257,32 @@ def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
+    if request.method == "GET":
+        return render_template(
+            "create_project.html",
+            course=course,
+            course_favicon=app.favicon,
+            base_url=app.gitlab_api.base_url,
+        )
+
+    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
+        return render_template(
+            "create_project.html",
+            error_message="Invalid secret",
+            course=course,
+            course_favicon=app.favicon,
+            base_url=app.gitlab_api.base_url,
+        )
+
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
+
+    app.storage_api.sync_stored_user(
+        course.course_name,
+        student,
+        app.gitlab_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+        app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
+    )
 
     # Create use if needed
     try:
@@ -317,7 +341,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
-    table_data = get_database_table_data(course)
+    table_data = get_database_table_data(app, course)
 
     return render_template(
         "database.html",

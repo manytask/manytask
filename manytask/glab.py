@@ -44,10 +44,6 @@ class GitLabConfig:
 
     base_url: str
     admin_token: str
-    course_group: str
-    course_public_repo: str
-    course_students_group: str
-    default_branch: str = "main"
     dry_run: bool = False
 
 
@@ -64,20 +60,6 @@ class GitLabApi:
 
         self.base_url = config.base_url
         self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token)
-
-        self._course_group = config.course_group
-        self._course_public_repo = config.course_public_repo
-        self._course_students_group = config.course_students_group
-
-        self._default_branch = config.default_branch
-
-        # test can find groups and repos
-        if self._course_group:
-            self._get_group_by_name(self._course_group)
-        if self._course_public_repo:
-            self._get_project_by_name(self._course_public_repo)
-        if self._course_students_group:
-            self._get_group_by_name(self._course_students_group)
 
     def register_new_user(
         self,
@@ -133,18 +115,20 @@ class GitLabApi:
 
     def create_public_repo(
         self,
+        course_group: str,
+        course_public_repo: str,
     ) -> None:
-        group = self._get_group_by_name(self._course_group)
+        group = self._get_group_by_name(course_group)
 
-        for project in self._gitlab.projects.list(get_all=True, search=self._course_public_repo):
-            if project.path_with_namespace == self._course_public_repo:
-                logger.info(f"Project {self._course_public_repo} already exists")
+        for project in self._gitlab.projects.list(get_all=True, search=course_public_repo):
+            if project.path_with_namespace == course_public_repo:
+                logger.info(f"Project {course_public_repo} already exists")
                 return
 
         self._gitlab.projects.create(
             {
-                "name": self._course_public_repo,
-                "path": self._course_public_repo,
+                "name": course_public_repo,
+                "path": course_public_repo,
                 "namespace_id": group.id,
                 "visibility": "public",
                 "shared_runners_enabled": True,
@@ -155,16 +139,17 @@ class GitLabApi:
 
     def create_students_group(
         self,
+        course_students_group: str,
     ) -> None:
-        for group in self._gitlab.groups.list(get_all=True, search=self._course_students_group):
-            if group.name == self._course_students_group and group.full_name == self._course_students_group:
-                logger.info(f"Group {self._course_students_group} already exists")
+        for group in self._gitlab.groups.list(get_all=True, search=course_students_group):
+            if group.name == course_students_group and group.full_name == course_students_group:
+                logger.info(f"Group {course_students_group} already exists")
                 return
 
         self._gitlab.groups.create(
             {
-                "name": self._course_students_group,
-                "path": self._course_students_group,
+                "name": course_students_group,
+                "path": course_students_group,
                 "visibility": "private",
                 "lfs_enabled": True,
                 "shared_runners_enabled": True,
@@ -174,8 +159,9 @@ class GitLabApi:
     def check_project_exists(
         self,
         student: Student,
+        course_students_group: str,
     ) -> bool:
-        gitlab_project_path = f"{self._course_students_group}/{student.username}"
+        gitlab_project_path = f"{course_students_group}/{student.username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
         for project in self._gitlab.projects.list(get_all=True, search=student.username):
@@ -184,19 +170,21 @@ class GitLabApi:
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project {student.username} for group {self._course_students_group} exists")
+                logger.info(f"Project {student.username} for group {course_students_group} exists")
                 return True
 
-        logger.info(f"Project {student.username} for group {self._course_students_group} does not exist")
+        logger.info(f"Project {student.username} for group {course_students_group} does not exist")
         return False
 
     def create_project(
         self,
         student: Student,
+        course_students_group: str,
+        course_public_repo: str,
     ) -> None:
-        course_group = self._get_group_by_name(self._course_students_group)
+        course_group = self._get_group_by_name(course_students_group)
 
-        gitlab_project_path = f"{self._course_students_group}/{student.username}"
+        gitlab_project_path = f"{course_students_group}/{student.username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
         for project in self._gitlab.projects.list(get_all=True, search=student.username):
@@ -205,7 +193,7 @@ class GitLabApi:
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project {student.username} for group {self._course_students_group} already exists")
+                logger.info(f"Project {student.username} for group {course_students_group} already exists")
                 project = self._gitlab.projects.get(project.id)
 
                 # ensure student is a member of the project
@@ -225,7 +213,7 @@ class GitLabApi:
         logger.info(f"Student username {student.username}")
         logger.info(f"Course group {course_group.name}")
 
-        course_public_project = self._get_project_by_name(self._course_public_repo)
+        course_public_project = self._get_project_by_name(course_public_repo)
         fork = course_public_project.forks.create(
             {
                 "name": student.username,
@@ -277,6 +265,10 @@ class GitLabApi:
 
         return True
 
+    def check_is_gitlab_admin(self, user_id: int) -> bool:
+        user = self._gitlab.users.get(user_id)
+        return user.is_admin
+
     def _parse_user_to_student(
         self,
         user: dict[str, Any],
@@ -299,7 +291,6 @@ class GitLabApi:
     ) -> list[Student]:
         users = self._gitlab.users.list(get_all=True, username=username)
         return [self._parse_user_to_student(user._attrs) for user in users]
-        return [self._parse_user_to_student(user._attrs) for user in users]
 
     def get_student(
         self,
@@ -309,13 +300,11 @@ class GitLabApi:
         user = self._gitlab.users.get(user_id)
         logger.info(f'User found: "{user.username}"')
         return self._parse_user_to_student(user._attrs)
-        return self._parse_user_to_student(user._attrs)
 
     def get_student_by_username(
         self,
         username: str,
     ) -> Student:
-        potential_students = self.get_students_by_username(username)
         potential_students = self.get_students_by_username(username)
         potential_students = [student for student in potential_students if student.username == username]
         if len(potential_students) == 0:
@@ -333,14 +322,15 @@ class GitLabApi:
         student = self._parse_user_to_student(user_json)
         return student
 
-    def get_url_for_task_base(self) -> str:
-        return f"{self.base_url}/{self._course_public_repo}/blob/{self._default_branch}"
+    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
+        return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"
 
     def get_url_for_repo(
         self,
         username: str,
+        course_students_group: str,
     ) -> str:
-        return f"{self.base_url}/{self._course_students_group}/{username}"
+        return f"{self.base_url}/{course_students_group}/{username}"
 
 
 def map_gitlab_user_to_student(

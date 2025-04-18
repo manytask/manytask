@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
 from . import models
-from .abstract import StorageApi, StoredUser, ViewerApi
+from .abstract import StorageApi, StoredUser
 from .config import (
     ManytaskDeadlinesConfig,
     ManytaskGroupConfig,
@@ -648,7 +648,7 @@ class DataBaseApi(StorageApi):
             except Exception:
                 return False
 
-    def get_or_create_user(self, student: Student, course_name: str) -> models.User:
+    def create_user_if_not_exist(self, student: Student, course_name: str) -> None:
         """Get user in DB or create if not"""
 
         with Session(self.engine) as session:
@@ -658,8 +658,6 @@ class DataBaseApi(StorageApi):
             )
             session.commit()
             session.refresh(user)
-
-        return user
 
     def get_user_courses_names(self, student: Student) -> list[str]:
         """Get a list of courses names that the user participates in"""

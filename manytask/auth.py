@@ -1,10 +1,10 @@
 import logging
-import secrets
 from functools import wraps
+from http import HTTPStatus
 from typing import Any, Callable
 
 from authlib.integrations.flask_client import OAuth
-from flask import Response, abort, current_app, redirect, render_template, request, session, url_for
+from flask import Response, abort, current_app, redirect, request, session, url_for
 from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug.wrappers.response import Response as WerkzeugResponse
@@ -45,46 +45,25 @@ def set_oauth_session(
     return result
 
 
-def handle_course_membership(course: Course, student: Student) -> bool | str | Response | WerkzeugResponse:
+def handle_course_membership(
+    app: CustomFlask, course: Course, student: Student
+) -> bool | str | Response | WerkzeugResponse:
     """Checking user on course and sync admin role"""
 
     try:
-        if course.storage_api.check_user_on_course(course.course_name, student):  # type: ignore
+        if app.storage_api.check_user_on_course(course.course_name, student):
             return True
         else:
             logger.info(f"No user {student.username} on course {course.course_name} asking secret")
             return False
     except NoResultFound:
         logger.info(f"Creating User: {student.username} that we already have in gitlab")
-        course.storage_api.get_or_create_user(student, course.course_name)  # type: ignore
+        app.storage_api.create_user_if_not_exist(student, course.course_name)
         return redirect(url_for("root.login", course_name=course.course_name))
 
     except Exception:
         logger.error("Failed login while working with db", exc_info=True)
         return redirect(url_for("root.login", course_name=course.course_name))
-
-
-def check_secret(app: CustomFlask, course: Course, student: Student) -> str | None:
-    """Checking course secret for user if he is entering"""
-
-    if "secret" in request.form:
-        if secrets.compare_digest(request.form["secret"], course.registration_secret):
-            app.storage_api.sync_stored_user(
-                course.course_name,
-                student,
-                app.gitlab_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-                app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
-            )
-        else:
-            logger.error(f"Wrong secret user {student.username} on course {course.storage_api.course_name}")  # type: ignore
-            return render_template(
-                "create_project.html",
-                error_message="Invalid registration secret",
-                course=course,
-                course_favicon=app.favicon,
-                base_url=app.gitlab_api.base_url,
-            )
-    return None
 
 
 def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response | WerkzeugResponse:
@@ -176,27 +155,15 @@ def requires_course_participation(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
 
-        if valid_session(session):
+        if valid_session(session):  # TODO: maybe don't need
             student_or_resp = get_authenticate_student(oauth, app)
-
             if not isinstance(student_or_resp, Student):
                 return student_or_resp
-
             student = student_or_resp
-
-            check_secret_or_none = check_secret(app, course, student)
-            if check_secret_or_none is not None:
-                return check_secret_or_none
-
-            if not handle_course_membership(course, student) or not app.gitlab_api.check_project_exists(
+            if not handle_course_membership(app, course, student) or not app.gitlab_api.check_project_exists(
                 student=student, course_students_group=course.gitlab_course_students_group
             ):
-                return render_template(
-                    "create_project.html",
-                    course=course,
-                    course_favicon=app.favicon,
-                    base_url=app.gitlab_api.base_url,
-                )
+                abort(redirect(url_for("web.create_project", course_name=course.course_name)))
         else:
             logger.info("Redirect to login in Gitlab")
             redirect_uri = url_for("root.login", _external=True)
@@ -210,10 +177,23 @@ def requires_course_participation(f: Callable[..., Any]) -> Callable[..., Any]:
 def requires_admin(f: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        if current_app.debug:
+        app: CustomFlask = current_app  # type: ignore
+
+        if app.debug:
             return f(*args, **kwargs)
 
-        # TODO: checks that user is admin
+        oauth = app.oauth
+
+        if valid_session(session):  # TODO: maybe don't need
+            user_id = session["gitlab"]["user_id"]
+
+            if not app.gitlab_api.check_is_gitlab_admin(user_id):
+                logger.warning(f"Non-admin user {user_id} attempted to access admin area")
+                abort(HTTPStatus.FORBIDDEN)
+        else:
+            logger.info("Redirect to login in Gitlab")
+            redirect_uri = url_for("root.login", _external=True)
+            return oauth.gitlab.authorize_redirect(redirect_uri)
 
         return f(*args, **kwargs)
 
