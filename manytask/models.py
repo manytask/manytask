@@ -61,6 +61,29 @@ class FloatDatetimeDict(TypeDecorator[Optional[dict[float, datetime]]]):
         return result
 
 
+class StrStrDict(TypeDecorator[Optional[dict[str, str]]]):
+    impl = JSON
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[dict[str, str]], dialect: Dialect) -> Optional[dict[str, str]]:
+        if value is None:
+            return None
+
+        if not isinstance(value, dict):
+            raise TypeError(f"value must be a dict, not {type(value)}")
+
+        for k, v in value.items():
+            if not isinstance(k, str):
+                raise TypeError(f"Key {k} must be a str, not {type(k)}")
+            if not isinstance(v, str):
+                raise TypeError(f"Value {v} must be a str, not {type(v)}")
+
+        return value
+
+    def process_result_value(self, value: Optional[dict[str, str]], dialect: Dialect) -> Optional[dict[str, str]]:
+        return value
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -83,6 +106,17 @@ class Course(Base):
     registration_secret: Mapped[str]
     token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
+    is_ready: Mapped[bool] = mapped_column(server_default="true", default=True)
+
+    # gitlab parameters
+    gitlab_course_group: Mapped[str]
+    gitlab_course_public_repo: Mapped[str]
+    gitlab_course_students_group: Mapped[str]
+    gitlab_default_branch: Mapped[str]
+
+    # ui parameters
+    task_url_template: Mapped[str]
+    links: Mapped[dict[str, str]] = mapped_column(StrStrDict, server_default="{}", default=dict)
 
     # deadlines parameters
     timezone: Mapped[str] = mapped_column(default="UTC", server_default="UTC")
