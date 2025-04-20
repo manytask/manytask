@@ -123,11 +123,6 @@ def mock_storage_api(mock_student, mock_task, mock_group):  # noqa: C901
         def update_cached_scores(self):
             pass
 
-        def get_solutions(self, student):
-            if student == TEST_USERNAME:
-                return {"solutions": []}
-            raise Exception("Student not found")
-
         def sync_columns(self, deadlines):
             pass
 

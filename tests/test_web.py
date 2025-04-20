@@ -595,17 +595,3 @@ def test_login_oauth_error(app, mock_gitlab_oauth, mock_course):
         response = app.test_client().get(url_for("web.login"), query_string={"code": "test_code"})
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("web.login")
-
-
-@pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
-def test_solutions_invalid_or_disabled_task(app, mock_gitlab_oauth, mock_course, task_name):
-    with app.test_request_context():
-        app.course = mock_course
-        app.oauth = mock_gitlab_oauth
-        app.debug = True  # course_admin = True
-
-        data = {"task": task_name}
-
-        response = app.test_client().get(url_for("web.get_solutions"), query_string=data)
-
-        assert response.status_code == HTTPStatus.NOT_FOUND
