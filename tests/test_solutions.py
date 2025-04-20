@@ -10,12 +10,6 @@ from manytask.solutions import SolutionsApi
 TEST_FILES_NAMES = ["a.tmp", "b.tmp", "c.tmp"]
 
 
-@pytest.fixture(scope="function")
-def solutions_api(tmp_path_factory: pytest.TempPathFactory) -> SolutionsApi:
-    tmp_path: Path = tmp_path_factory.mktemp("solutions")
-    return SolutionsApi(tmp_path)
-
-
 def _generate_random_files(path: Path, files_list: list[str]) -> None:
     for test_file_name in files_list:
         test_file = path / test_file_name
