@@ -291,7 +291,7 @@ def get_score() -> ResponseReturnValue:
             )
         else:
             assert False, "unreachable"
-        student_scores = course.storage_api.get_scores(student.username)
+        student_scores = course.storage_api.get_scores(course.course_name, student.username)
     except Exception:
         return f"There is no student with user_id {user_id} or username {username}", HTTPStatus.NOT_FOUND
 
