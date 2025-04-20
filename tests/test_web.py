@@ -325,7 +325,7 @@ def check_admin_status_code(response, check_true):
 
 @pytest.mark.parametrize(
     "path_and_func",
-    [["/", check_admin_in_data], ["/solutions", check_admin_status_code], ["/database", check_admin_in_data]],
+    [["/", check_admin_in_data], ["/database", check_admin_in_data]],
 )
 @pytest.mark.parametrize("debug", [False, True])
 @pytest.mark.parametrize("get_param_admin", ["true", "1", "yes", None, "false", "0", "no", "random_value"])

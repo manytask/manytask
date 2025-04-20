@@ -11,7 +11,6 @@ TEST_STUDENTS_GROUP = "test_students"
 TEST_PUBLIC_REPO = "test_public_repo"
 
 TEST_CACHE_DIR = "/tmp/manytask_test_cache"
-TEST_SOLUTIONS_DIR = "/tmp/manytask_test_solutions"
 
 
 @pytest.fixture
@@ -46,13 +45,11 @@ def mock_env(monkeypatch, postgres_container):
     set_if_missing("SHOW_ALLSCORES", "true")
 
     monkeypatch.setenv("CACHE_DIR", TEST_CACHE_DIR)
-    monkeypatch.setenv("SOLUTIONS_DIR", TEST_SOLUTIONS_DIR)
     monkeypatch.setenv("DATABASE_URL", postgres_container.get_connection_url())
     monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course")
     monkeypatch.setenv("APPLY_MIGRATIONS", "true")
 
     os.makedirs(TEST_CACHE_DIR, exist_ok=True)
-    os.makedirs(TEST_SOLUTIONS_DIR, exist_ok=True)
 
     return mock_env
 

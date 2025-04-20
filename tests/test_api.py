@@ -760,7 +760,7 @@ def test_post_requests_invalid_or_disabled_task(app, mock_course, task_name):
         assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-@pytest.mark.parametrize("path", ["/api/solutions", "/api/score"])
+@pytest.mark.parametrize("path", ["/api/score"])
 @pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
 def test_get_requests_invalid_or_disabled_task(app, mock_course, path, task_name):
     with app.test_request_context():
