@@ -14,6 +14,8 @@ from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
 from manytask.config import ManytaskDeadlinesConfig, ManytaskGroupConfig
+from manytask.course import Course as ManytaskCourse
+from manytask.course import CourseConfig
 from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
 from manytask.glab import Student
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
@@ -83,34 +85,46 @@ def mock_current_time():
         yield mock
 
 
+def first_db_config(db_url):
+    return DatabaseConfig(
+        database_url=db_url,
+        course_name="Test Course",
+        gitlab_instance_host="gitlab.test.com",
+        registration_secret="secret",
+        token="test_token",
+        show_allscores=True,
+        apply_migrations=True,
+        gitlab_course_group="test_course_group",
+        gitlab_course_public_repo="test_course_public_repo",
+        gitlab_course_students_group="test_course_students_group",
+        gitlab_default_branch="test_default_branch",
+    )
+
+
+def second_db_config(db_url):
+    return DatabaseConfig(
+        database_url=db_url,
+        course_name="Another Test Course",
+        gitlab_instance_host="gitlab.test.com",
+        token="another_test_token",
+        registration_secret="secret",
+        show_allscores=True,
+        apply_migrations=True,
+        gitlab_course_group="test_course_group",
+        gitlab_course_public_repo="test_course_public_repo",
+        gitlab_course_students_group="test_course_students_group",
+        gitlab_default_branch="test_default_branch",
+    )
+
+
 @pytest.fixture
 def first_course_db_api(tables, postgres_container):
-    return DataBaseApi(
-        DatabaseConfig(
-            database_url=postgres_container.get_connection_url(),
-            course_name="Test Course",
-            gitlab_instance_host="gitlab.test.com",
-            registration_secret="secret",
-            token="test_token",
-            show_allscores=True,
-            apply_migrations=True,
-        )
-    )
+    return DataBaseApi(first_db_config(postgres_container.get_connection_url()))
 
 
 @pytest.fixture
 def second_course_db_api(tables, postgres_container):
-    return DataBaseApi(
-        DatabaseConfig(
-            database_url=postgres_container.get_connection_url(),
-            course_name="Another Test Course",
-            gitlab_instance_host="gitlab.test.com",
-            token="another_test_token",
-            registration_secret="secret",
-            show_allscores=True,
-            apply_migrations=True,
-        )
-    )
+    return DataBaseApi(second_db_config(postgres_container.get_connection_url()))
 
 
 def load_deadlines_config_and_sync_columns(db_api: DataBaseApi, yaml_file_file_path: str):
@@ -122,14 +136,19 @@ def load_deadlines_config_and_sync_columns(db_api: DataBaseApi, yaml_file_file_p
         try:
             db_api._get(session, Course, name=db_api.course_name)
         except NoResultFound:
+            db_config = first_db_config(db_api.database_url)
             db_api._create(
                 session,
                 Course,
                 name=db_api.course_name,
-                gitlab_instance_host="gitlab.test.com",
-                registration_secret="secret",
-                token="token",
-                show_allscores=True,
+                gitlab_instance_host=db_config.gitlab_instance_host,
+                registration_secret=db_config.registration_secret,
+                token=db_config.token,
+                show_allscores=db_config.show_allscores,
+                gitlab_course_group=db_config.gitlab_course_group,
+                gitlab_course_public_repo=db_config.gitlab_course_public_repo,
+                gitlab_course_students_group=db_config.gitlab_course_students_group,
+                gitlab_default_branch=db_config.gitlab_default_branch,
             )
             session.commit()
 
@@ -670,10 +689,14 @@ def test_course_change_params(first_course_db_api, postgres_container):
             DatabaseConfig(
                 database_url=postgres_container.get_connection_url(),
                 course_name="Test Course",
-                gitlab_instance_host="gitlab.another_test.com",
-                registration_secret="secret",
-                token="test_token",
-                show_allscores=True,
+                gitlab_instance_host="another_gitlab.test.com",
+                registration_secret="another_secret",
+                token="another_token",
+                show_allscores=False,
+                gitlab_course_group="another_test_course_group",
+                gitlab_course_public_repo="another_test_course_public_repo",
+                gitlab_course_students_group="another_test_course_students_group",
+                gitlab_default_branch="another_test_default_branch",
             )
         )
 
@@ -683,8 +706,12 @@ def test_course_change_params(first_course_db_api, postgres_container):
             course_name="Test Course",
             gitlab_instance_host="gitlab.test.com",
             registration_secret="another_secret",
-            token="test_token",
+            token="another_token",
             show_allscores=False,
+            gitlab_course_group="another_test_course_group",
+            gitlab_course_public_repo="another_test_course_public_repo",
+            gitlab_course_students_group="another_test_course_students_group",
+            gitlab_default_branch="another_test_default_branch",
         )
     )
 
@@ -715,22 +742,16 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container):
                 registration_secret="secret",
                 token="test_token",
                 show_allscores=True,
+                gitlab_course_group="test_course_group",
+                gitlab_course_public_repo="test_course_public_repo",
+                gitlab_course_students_group="test_course_students_group",
+                gitlab_default_branch="test_default_branch",
             )
         )
 
     assert isinstance(exc_info.value.orig, UndefinedTable)
 
-    db_api = DataBaseApi(
-        DatabaseConfig(
-            database_url=postgres_container.get_connection_url(),
-            course_name="Test Course",
-            gitlab_instance_host="gitlab.test.com",
-            registration_secret="secret",
-            token="test_token",
-            show_allscores=True,
-            apply_migrations=True,
-        )
-    )
+    db_api = DataBaseApi(first_db_config(postgres_container.get_connection_url()))
 
     with Session(engine) as session:
         test_empty_course(db_api, session)
@@ -748,17 +769,7 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container):
             command.downgrade(alembic_cfg, "base")
             command.upgrade(alembic_cfg, revision.revision)
 
-            db_api = DataBaseApi(
-                DatabaseConfig(
-                    database_url=postgres_container.get_connection_url(),
-                    course_name="Test Course",
-                    gitlab_instance_host="gitlab.test.com",
-                    registration_secret="secret",
-                    show_allscores=True,
-                    apply_migrations=True,
-                    token="test_token",
-                )
-            )
+            db_api = DataBaseApi(first_db_config(postgres_container.get_connection_url()))
 
             with Session(engine) as session:
                 test_empty_course(db_api, session)
@@ -794,12 +805,28 @@ def test_store_score_update_error(first_course_with_deadlines, session):
 
 def test_get_course_success(first_course_db_api):
     course = first_course_db_api.get_course(first_course_db_api.course_name)
-    assert course.name == first_course_db_api.course_name
+    assert (
+        course.__dict__
+        == ManytaskCourse(
+            CourseConfig(
+                gitlab_course_group="test_course_group",
+                gitlab_course_public_repo="test_course_public_repo",
+                gitlab_course_students_group="test_course_students_group",
+                gitlab_default_branch="test_default_branch",
+                registration_secret="secret",
+                token="test_token",
+                show_allscores=True,
+                is_ready=False,
+                task_url_template="",
+                links={},
+            )
+        ).__dict__
+    )
 
 
 def test_get_course_unknown(first_course_db_api):
     course = first_course_db_api.get_course("Unknown course")
-    assert not course
+    assert course is None
 
 
 def test_apply_migrations_exceptions(first_course_db_api, postgres_container):

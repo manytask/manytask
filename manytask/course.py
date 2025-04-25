@@ -3,14 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 from zoneinfo import ZoneInfo
-
-from cachelib import BaseCache
-from pydantic import ValidationError
-
-from . import abstract, glab
-from .config import ManytaskConfig, ManytaskDeadlinesConfig
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEZONE = ZoneInfo("Europe/Moscow")
@@ -41,10 +34,7 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
 
 @dataclass
 class CourseConfig:
-    """Configuration for Course settings and APIs."""
-
-    storage_api: abstract.StorageApi
-    gitlab_api: glab.GitLabApi
+    """Configuration for Course settings."""
 
     gitlab_course_group: str
     gitlab_course_public_repo: str
@@ -54,9 +44,11 @@ class CourseConfig:
     registration_secret: str
     token: str
     show_allscores: bool
-    cache: BaseCache
-    manytask_version: str | None = None
-    debug: bool = False
+
+    is_ready: bool
+
+    task_url_template: str
+    links: dict[str, str]
 
 
 class Course:
@@ -68,9 +60,6 @@ class Course:
 
         :param config: CourseConfig instance containing all necessary settings
         """
-        self.storage_api = config.storage_api
-        self.gitlab_api = config.gitlab_api
-
         self.__gitlab_course_group = config.gitlab_course_group
         self.__gitlab_course_public_repo = config.gitlab_course_public_repo
         self.__gitlab_course_students_group = config.gitlab_course_students_group
@@ -79,9 +68,11 @@ class Course:
         self.registration_secret = config.registration_secret
         self.token = config.token
         self.show_allscores = config.show_allscores
-        self._cache = config.cache
-        self.manytask_version = config.manytask_version
-        self.debug = config.debug
+
+        self.is_ready = config.is_ready
+
+        self.task_url_template = config.task_url_template
+        self.links = config.links
 
     @property
     def gitlab_course_group(self) -> str:
@@ -98,47 +89,3 @@ class Course:
     @property
     def gitlab_default_branch(self) -> str:
         return self.__gitlab_default_branch
-
-    @property
-    def favicon(self) -> str:
-        return "favicon.ico"
-
-    @property
-    def name(self) -> str:
-        if self.config:
-            return self.config.settings.course_name
-        else:
-            return "not_ready"
-
-    @property
-    def deadlines_cache_time(self) -> datetime:
-        return self._cache.get("__deadlines_cache_time__")
-
-    @property
-    def config(self) -> ManytaskConfig | None:  # noqa: F811
-        logger.info("Fetching config...")
-        content = self._cache.get("__config__")
-
-        if content is None:
-            logger.info("Config not found in cache")
-            return None
-
-        return ManytaskConfig(**content)
-
-    def store_config(self, content: dict[str, Any]) -> None:
-        # For validation purposes
-        ManytaskConfig(**content)
-        if "deadlines" not in content:
-            raise ValidationError("Field required: deadlines")
-        deadlines_config = ManytaskDeadlinesConfig(**content["deadlines"])
-
-        # Update task groups (if necessary -- if there is an override) first
-        self.storage_api.update_task_groups_from_config(deadlines_config)
-
-        # Save deadlines to storage
-        self.storage_api.sync_columns(deadlines_config)
-
-        content_without_deadlines = {k: v for k, v in content.items() if k != "deadlines"}
-
-        # Save config to cache
-        self._cache.set("__config__", content_without_deadlines)

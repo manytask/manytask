@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
-from .config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskTaskConfig
+from .config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskTaskConfig, ManytaskUiConfig
+from .course import Course
 from .glab import Student
 
 
@@ -73,6 +74,18 @@ class StorageApi(ABC):
         self,
         deadlines_config: ManytaskDeadlinesConfig,
     ) -> None: ...
+
+    @abstractmethod
+    def update_course(
+        self,
+        ui_config: ManytaskUiConfig,
+    ) -> None: ...
+
+    @abstractmethod
+    def get_course(
+        self,
+        course_name: str,
+    ) -> Course | None: ...
 
     @abstractmethod
     def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]: ...

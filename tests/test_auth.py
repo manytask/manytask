@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
 from typing import Any
@@ -7,11 +8,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from flask import Flask, request, session, url_for
-from pydantic import AnyUrl
 
 from manytask.abstract import StoredUser
 from manytask.auth import requires_auth, requires_ready, set_oauth_session, valid_session
-from manytask.config import ManytaskConfig, ManytaskSettingsConfig, ManytaskUiConfig
 from manytask.glab import Student
 from manytask.web import bp as web_bp
 
@@ -27,13 +26,18 @@ TEST_REPO = "test_repo"
 
 
 @pytest.fixture
-def app():
+def app(mock_gitlab_api, mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
     app.config["DEBUG"] = False
+    app.course_name = TEST_COURSE_NAME
     app.secret_key = "test_key"
     app.register_blueprint(web_bp)
+    app.gitlab_api = mock_gitlab_api
+    app.storage_api = mock_storage_api
+    app.manytask_version = "1.0.0"
+    app.favicon = "test_favicon"
     return app
 
 
@@ -77,7 +81,7 @@ def mock_gitlab_api():
 
 
 @pytest.fixture
-def mock_storage_api():  # noqa: C901
+def mock_storage_api(mock_course):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
@@ -106,6 +110,10 @@ def mock_storage_api():  # noqa: C901
         def sync_stored_user(self, student):
             if student.course_admin:
                 self.stored_user.course_admin = True
+
+        @staticmethod
+        def get_course(_name):
+            return mock_course
 
         def get_stored_user(self, _student):
             return self.stored_user
@@ -141,27 +149,14 @@ def mock_storage_api():  # noqa: C901
 
 
 @pytest.fixture
-def mock_course(mock_gitlab_api, mock_storage_api):
+def mock_course():
     class MockCourse:
         def __init__(self):
             self.name = TEST_COURSE_NAME
-            self.config = ManytaskConfig(
-                version=1,
-                settings=ManytaskSettingsConfig(
-                    course_name=TEST_COURSE_NAME,
-                    gitlab_base_url=AnyUrl(GITLAB_BASE_URL),
-                    public_repo="test/repo",
-                    students_group="test/students",
-                ),
-                ui=ManytaskUiConfig(task_url_template=f"{GITLAB_BASE_URL}/test/$GROUP_NAME/$TASK_NAME", links={}),
-            )
+            self.is_ready = True
             self.show_allscores = True
-            self.manytask_version = "1.0.0"
-            self.favicon = "test_favicon"
             self.registration_secret = TEST_SECRET
             self.debug = False
-            self.storage_api = mock_storage_api
-            self.gitlab_api = mock_gitlab_api
             self.gitlab_course_group = "test_group"
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"
@@ -217,18 +212,17 @@ def test_requires_auth_in_debug_mode(app):
         assert response == "success"
 
 
-def test_requires_auth_with_valid_session_and_exist_on_course(app, mock_gitlab_oauth, mock_course):
+def test_requires_auth_with_valid_session_and_exist_on_course(app, mock_gitlab_oauth):
     @requires_auth
     def test_route():
         return "success"
 
     with (
         app.test_request_context(),
-        patch.object(mock_course.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(mock_course.storage_api, "check_user_on_course") as mock_check_user_on_course,
-        patch.object(mock_course.storage_api, "sync_and_get_admin_status") as mock_user_on_course,
+        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
+        patch.object(app.storage_api, "sync_and_get_admin_status") as mock_user_on_course,
     ):
-        app.course = mock_course
         app.oauth = mock_gitlab_oauth
         mock_check_user_on_course.return_value = True
         mock_get_authenticated_student.return_value = Student(
@@ -248,18 +242,17 @@ def test_requires_auth_with_valid_session_and_exist_on_course(app, mock_gitlab_o
         mock_user_on_course.assert_called_once()
 
 
-def test_requires_auth_with_valid_session_and_not_exist_on_course(app, mock_gitlab_oauth, mock_course):
+def test_requires_auth_with_valid_session_and_not_exist_on_course(app, mock_gitlab_oauth):
     @requires_auth
     def test_route():
         return "success"
 
     with (
         app.test_request_context(),
-        patch.object(mock_course.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(mock_course.storage_api, "check_user_on_course") as mock_check_user_on_course,
-        patch.object(mock_course.storage_api, "sync_and_get_admin_status") as mock_user_on_course,
+        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
+        patch.object(app.storage_api, "sync_and_get_admin_status") as mock_user_on_course,
     ):
-        app.course = mock_course
         app.oauth = mock_gitlab_oauth
         mock_check_user_on_course.return_value = True
         mock_get_authenticated_student.return_value = Student(
@@ -279,7 +272,7 @@ def test_requires_auth_with_valid_session_and_not_exist_on_course(app, mock_gitl
         mock_user_on_course.assert_called_once()
 
 
-def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth, mock_course):
+def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth):
     # Should redirect to signup
     @requires_auth
     def test_route():
@@ -287,10 +280,9 @@ def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth, mock_course)
 
     with (
         app.test_request_context(),
-        patch.object(mock_course.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(mock_course.storage_api, "check_user_on_course") as mock_check_user_on_course,
+        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
     ):
-        app.course = mock_course
         app.oauth = mock_gitlab_oauth
         mock_check_user_on_course.return_value = True
         mock_get_authenticated_student.return_value = Student(
@@ -301,19 +293,18 @@ def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth, mock_course)
         assert response.location == "/login"
 
 
-def test_requires_auth_callback_oauth(app, mock_gitlab_oauth, mock_course):
+def test_requires_auth_callback_oauth(app, mock_gitlab_oauth):
     # Should redirect to signup
     @requires_auth
     def test_route():
         return "success"
 
     with (
-        patch.object(mock_course.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(mock_course.gitlab_api, "check_project_exists") as mock_check_project_exists,
+        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):
-        app.course = mock_course
         app.oauth = mock_gitlab_oauth
 
         mock_get_authenticated_student.return_value = Student(
@@ -337,20 +328,19 @@ def test_requires_auth_callback_oauth(app, mock_gitlab_oauth, mock_course):
         assert args[0] == "test_token"
 
 
-def test_requires_auth_callback_secret(app, mock_gitlab_oauth, mock_course):
+def test_requires_auth_callback_secret(app, mock_gitlab_oauth):
     # Should redirect to signup
     @requires_auth
     def test_route():
         return "success"
 
     with (
-        patch.object(mock_course.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(mock_course.storage_api, "sync_stored_user") as mock_sync_stored_user,
-        patch.object(mock_course.gitlab_api, "check_project_exists") as mock_check_project_exists,
+        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.storage_api, "sync_stored_user") as mock_sync_stored_user,
+        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):
-        app.course = mock_course
         app.oauth = mock_gitlab_oauth
 
         mock_get_authenticated_student.return_value = Student(
@@ -376,33 +366,39 @@ def test_requires_auth_callback_secret(app, mock_gitlab_oauth, mock_course):
         mock_sync_stored_user.assert_called_once()
 
 
-def test_requires_ready_with_config(app):
+def test_requires_ready(app):
     @requires_ready
     def test_route():
         return "success"
 
-    class MockCourse:
-        def __init__(self):
-            self.config = {"test": "config"}
+    @dataclass
+    class Course:
+        is_ready = True
 
-    with app.test_request_context():
-        app.course = MockCourse()
+    with (
+        app.test_request_context(),
+        patch.object(app.storage_api, "get_course") as mock_get_course,
+    ):
+        mock_get_course.return_value = Course()
         response = test_route()
         assert response == "success"
 
 
-def test_requires_ready_without_config(app):
+def test_requires_ready_but_not_ready(app):
     # Should redirect to not_ready
     @requires_ready
     def test_route():
         return "success"
 
-    class MockCourse:
-        def __init__(self):
-            self.config = None
+    @dataclass
+    class Course:
+        is_ready = False
 
-    with app.test_request_context():
-        app.course = MockCourse()
+    with (
+        app.test_request_context(),
+        patch.object(app.storage_api, "get_course") as mock_get_course,
+    ):
+        mock_get_course.return_value = Course()
         response = test_route()
         assert response.status_code == HTTPStatus.FOUND
 

@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import pytest
 from flask import Flask
 
@@ -19,19 +21,7 @@ SCORES = {STUDENT_1: {TASK_1: 100, TASK_2: 90, "total": 190}, STUDENT_2: {TASK_1
 @pytest.fixture
 def app():
     app = Flask(__name__)
-    return app
-
-
-@pytest.fixture
-def mock_course():
-    class MockCourse:
-        def __init__(self):
-            self.storage_api = MockStorageApi()
-            self.gitlab_course_group = "test_group"
-            self.gitlab_course_public_repo = "public_2025_spring"
-            self.gitlab_course_students_group = "students_2025_spring"
-            self.gitlab_default_branch = "main"
-            self.gitlab_api = MockGitLabApi()
+    app.course_name = "test_course"
 
     class MockStorageApi:
         class MockGroup:
@@ -66,6 +56,15 @@ def mock_course():
                 STUDENT_2: {TASK_1: SCORES[STUDENT_2][TASK_1], TASK_2: SCORES[STUDENT_2][TASK_2]},
             }
 
+        @staticmethod
+        def get_course(_name):
+            @dataclass
+            class Course:
+                gitlab_course_group: str = "test_course_group"
+                gitlab_course_students_group: str = "test_course_students_group"
+
+            return Course()
+
     class MockGitLabApi:
         def __init__(self):
             pass
@@ -79,15 +78,17 @@ def mock_course():
                 repo="my repo",
             )
 
-    return MockCourse()
+    app.storage_api = MockStorageApi()
+    app.gitlab_api = MockGitLabApi()
+
+    return app
 
 
-def test_get_database_table_data(app, mock_course):
+def test_get_database_table_data(app):
     expected_tasks_count = 2
     expected_students_count = 2
 
     with app.test_request_context():
-        app.course = mock_course
         result = get_database_table_data()
 
         assert "tasks" in result
@@ -110,12 +111,11 @@ def test_get_database_table_data(app, mock_course):
             assert student["scores"] == {TASK_1: SCORES[student_id][TASK_1], TASK_2: SCORES[student_id][TASK_2]}
 
 
-def test_get_database_table_data_no_scores(app, mock_course):
+def test_get_database_table_data_no_scores(app):
     expected_tasks_count = 2
 
     with app.test_request_context():
-        mock_course.storage_api.get_all_scores = lambda: {}
-        app.course = mock_course
+        app.storage_api.get_all_scores = lambda: {}
         result = get_database_table_data()
 
         assert "tasks" in result

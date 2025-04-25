@@ -12,9 +12,15 @@ class ManytaskSettingsConfig(BaseModel):
     """Manytask settings."""
 
     course_name: str
-    gitlab_base_url: AnyUrl
-    public_repo: str
-    students_group: str
+
+    registration_secret: str
+    manytask_course_token: str
+    show_allscores: bool
+
+    gitlab_course_group: str
+    gitlab_course_public_repo: str
+    gitlab_course_students_group: str
+    gitlab_default_branch: str
 
 
 class ManytaskUiConfig(BaseModel):
@@ -201,8 +207,9 @@ class ManytaskConfig(BaseModel):
 
     version: int  # if config exists, version is always present
 
-    settings: ManytaskSettingsConfig
+    course_name: str  # will be removed in next PRs
     ui: ManytaskUiConfig
+    deadlines: ManytaskDeadlinesConfig
 
     @field_validator("version")
     @classmethod

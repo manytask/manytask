@@ -105,17 +105,15 @@ def test_create_app_production_with_db(mock_env, mock_gitlab, monkeypatch):
     assert app.testing == os.getenv("TESTING")
     assert app.secret_key == os.getenv("FLASK_SECRET_KEY")
 
-    assert hasattr(app.course, "storage_api")
-
     assert "web" in app.blueprints
     assert "api" in app.blueprints
 
     assert hasattr(app, "oauth")
     assert "gitlab" in app.oauth._clients
 
-    assert hasattr(app, "course")
-    assert hasattr(app.course, "storage_api")
-    assert hasattr(app.course, "gitlab_api")
+    assert hasattr(app, "course_name")
+    assert hasattr(app, "storage_api")
+    assert hasattr(app, "gitlab_api")
 
 
 def test_create_app_debug(mock_env, mock_gitlab):
@@ -126,7 +124,7 @@ def test_create_app_debug(mock_env, mock_gitlab):
     assert app.testing == os.getenv("TESTING")
 
 
-def test_create_app_missing_secret_key(mock_gitlab):
+def test_create_app_missing_secret_key(mock_env, mock_gitlab):
     os.environ.pop("FLASK_SECRET_KEY", None)
-    with pytest.raises(KeyError):
+    with pytest.raises(EnvironmentError):
         create_app()
