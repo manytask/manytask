@@ -13,10 +13,13 @@ def get_database_table_data() -> dict[str, Any]:
     all_scores = storage_api.get_all_scores()
 
     all_tasks = []
+    max_score: int = 0
     for group in course.storage_api.get_groups():
         for task in group.tasks:
             if task.enabled:
                 all_tasks.append({"name": task.name, "score": 0, "group": group.name})
+                if not task.is_bonus:
+                    max_score += task.score
 
     table_data = {"tasks": all_tasks, "students": []}
 
@@ -26,7 +29,13 @@ def get_database_table_data() -> dict[str, Any]:
             username, course.gitlab_course_group, course.gitlab_course_students_group
         ).name
         table_data["students"].append(
-            {"username": username, "student_name": student_name, "scores": student_scores, "total_score": total_score}
+            {
+                "username": username,
+                "student_name": student_name,
+                "scores": student_scores,
+                "total_score": total_score,
+                "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
+            }
         )
 
     return table_data
