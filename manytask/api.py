@@ -184,17 +184,6 @@ def _get_student(
     except Exception:
         abort(HTTPStatus.NOT_FOUND, f"There is no student with user_id {user_id} or username {username}")
 
-
-def _handle_files(files: dict[str, FileStorage], task_name: str, username: str) -> None:
-    """Handle file uploads for the task."""
-    with tempfile.TemporaryDirectory() as temp_folder_str:
-        temp_folder_path = Path(temp_folder_str)
-        for file in files.values():
-            assert file is not None and file.filename is not None
-            secured_filename = secure_filename(file.filename)
-            file.save(temp_folder_path / secured_filename)
-
-
 @bp.post("/report")
 @requires_token
 @requires_ready
@@ -235,10 +224,6 @@ def report_score() -> ResponseReturnValue:
         check_deadline=check_deadline,
     )
     final_score = course.storage_api.store_score(student, task.name, update_function)
-
-    files = request.files.to_dict()
-    if files:
-        _handle_files(files, task_name, student.username)
 
     return {
         "user_id": student.id,
