@@ -184,6 +184,7 @@ def _get_student(
     except Exception:
         abort(HTTPStatus.NOT_FOUND, f"There is no student with user_id {user_id} or username {username}")
 
+
 @bp.post("/report")
 @requires_token
 @requires_ready
