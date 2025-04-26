@@ -4,17 +4,13 @@ import functools
 import logging
 import os
 import secrets
-import tempfile
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any, Callable
 
 import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
-from werkzeug.datastructures import FileStorage
-from werkzeug.utils import secure_filename
 
 from manytask.database import DataBaseApi, TaskDisabledError
 
