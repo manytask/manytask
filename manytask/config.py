@@ -8,21 +8,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
 
-class ManytaskSettingsConfig(BaseModel):
-    """Manytask settings."""
-
-    course_name: str
-
-    registration_secret: str
-    manytask_course_token: str
-    show_allscores: bool
-
-    gitlab_course_group: str
-    gitlab_course_public_repo: str
-    gitlab_course_students_group: str
-    gitlab_default_branch: str
-
-
 class ManytaskUiConfig(BaseModel):
     task_url_template: str  # $GROUP_NAME $TASK_NAME vars are available
     links: dict[str, str] = Field(default_factory=dict)

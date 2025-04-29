@@ -49,20 +49,20 @@ def set_oauth_session(
     return result
 
 
-def handle_course_membership(app: CustomFlask, course: Course, student: Student) -> bool | str | Response:
+def handle_course_membership(app: CustomFlask, student: Student) -> bool | str | Response:
     """Checking user on course and sync admin role"""
 
     try:
-        if app.storage_api.check_user_on_course(app.storage_api.course_name, student):  # type: ignore
+        if app.storage_api.check_user_on_course(app.course_name, student):
             # sync admin flag with gitlab
-            app.storage_api.sync_and_get_admin_status(app.storage_api.course_name, student)  # type: ignore
+            app.storage_api.sync_and_get_admin_status(app.course_name, student)
             return True
         else:
-            logger.info(f"No user {student.username} on course {app.storage_api.course_name} asking secret")  # type: ignore
+            logger.info(f"No user {student.username} on course {app.course_name} asking secret")
             return False
     except NoResultFound:
         logger.info(f"Creating User: {student.username} that we already have in gitlab")
-        app.storage_api.get_or_create_user(student, app.storage_api.course_name)  # type: ignore
+        app.storage_api.create_user_if_not_exist(student, app.course_name)
         return redirect(url_for("web.login"))
 
     except Exception:
@@ -73,13 +73,13 @@ def handle_course_membership(app: CustomFlask, course: Course, student: Student)
 def check_secret(app: CustomFlask, student: Student) -> str | None:
     """Checking course secret for user if he is entering"""
 
-    course: Course = app.storage_api.get_course(app.storage_api.course_name)  # type: ignore
+    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
 
     if "secret" in request.form:
         if secrets.compare_digest(request.form["secret"], course.registration_secret):
             app.storage_api.sync_stored_user(student)
         else:
-            logger.error(f"Wrong secret user {student.username} on course {app.storage_api.course_name}")  # type: ignore
+            logger.error(f"Wrong secret user {student.username} on course {app.course_name}")
             return render_template(
                 "create_project.html",
                 error_message="Invalid registration secret",
@@ -132,7 +132,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        course: Course = app.storage_api.get_course(app.storage_api.course_name)  # type: ignore
+        course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
         oauth = app.oauth
 
         if "code" in request.args:
@@ -141,7 +141,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if valid_session(session):
             student = get_authenticate_student(oauth, app, course)
             check_secret(app, student)
-            if not handle_course_membership(app, course, student):
+            if not handle_course_membership(app, student):
                 return render_template(
                     "create_project.html",
                     course_name=app.course_name,
@@ -162,7 +162,7 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         app: CustomFlask = current_app  # type: ignore
-        course: Course = app.storage_api.get_course(app.storage_api.course_name)  # type: ignore
+        course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
         if not course.is_ready:
             return redirect(url_for("web.not_ready"))
         return f(*args, **kwargs)

@@ -113,3 +113,6 @@ class StorageApi(ABC):
 
     @abstractmethod
     def check_user_on_course(self, course_name: str, student: Student) -> bool: ...
+
+    @abstractmethod
+    def create_user_if_not_exist(self, student: Student, course_name: str) -> None: ...

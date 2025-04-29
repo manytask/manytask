@@ -27,7 +27,7 @@ def course_page() -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    course: Course = storage_api.get_course(storage_api.course_name)  # type: ignore
+    course: Course = storage_api.get_course(app.course_name)  # type: ignore
 
     if current_app.debug:
         student_username = "guest"
@@ -101,7 +101,7 @@ def course_page() -> ResponseReturnValue:
 def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    course: Course = app.storage_api.get_course(app.storage_api.course_name)  # type: ignore
+    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
 
     # ---- render page ---- #
     if request.method == "GET":
@@ -156,7 +156,7 @@ def signup() -> ResponseReturnValue:
 def login() -> ResponseReturnValue:
     """Callback for gitlab oauth"""
     app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(app.storage_api.course_name)  # type: ignore
+    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
     student = app.gitlab_api.get_authenticated_student(
         session["gitlab"]["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
     )
@@ -172,7 +172,7 @@ def login() -> ResponseReturnValue:
 @requires_auth
 def create_project() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(app.storage_api.course_name)  # type: ignore
+    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(
@@ -198,7 +198,7 @@ def logout() -> ResponseReturnValue:
 @bp.route("/not_ready")
 def not_ready() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(app.storage_api.course_name)  # type: ignore
+    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
 
     if course.is_ready and not app.debug:
         return redirect(url_for("web.course_page"))
@@ -215,7 +215,7 @@ def not_ready() -> ResponseReturnValue:
 def show_database() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    course: Course = app.storage_api.get_course(app.storage_api.course_name)  # type: ignore
+    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
 
     storage_api = app.storage_api
 
