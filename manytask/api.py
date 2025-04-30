@@ -4,17 +4,13 @@ import functools
 import logging
 import os
 import secrets
-import tempfile
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any, Callable
 
 import yaml
-from flask import Blueprint, Response, abort, current_app, jsonify, request, session
+from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
-from werkzeug.datastructures import FileStorage
-from werkzeug.utils import secure_filename
 
 from manytask.database import DataBaseApi, TaskDisabledError
 
@@ -185,17 +181,6 @@ def _get_student(
         abort(HTTPStatus.NOT_FOUND, f"There is no student with user_id {user_id} or username {username}")
 
 
-def _handle_files(files: dict[str, FileStorage], task_name: str, username: str, solutions_api: Any) -> None:
-    """Handle file uploads for the task."""
-    with tempfile.TemporaryDirectory() as temp_folder_str:
-        temp_folder_path = Path(temp_folder_str)
-        for file in files.values():
-            assert file is not None and file.filename is not None
-            secured_filename = secure_filename(file.filename)
-            file.save(temp_folder_path / secured_filename)
-        solutions_api.store_task_from_folder(task_name, username, temp_folder_path)
-
-
 @bp.post("/report")
 @requires_token
 @requires_ready
@@ -236,10 +221,6 @@ def report_score() -> ResponseReturnValue:
         check_deadline=check_deadline,
     )
     final_score = course.storage_api.store_score(student, task.name, update_function)
-
-    files = request.files.to_dict()
-    if files:
-        _handle_files(files, task_name, student.username, course.solutions_api)
 
     return {
         "user_id": student.id,
@@ -340,39 +321,6 @@ def update_cache() -> ResponseReturnValue:
     course.storage_api.update_cached_scores()
 
     return "", HTTPStatus.OK
-
-
-@bp.get("/solutions")
-@requires_token
-@requires_ready
-def get_solutions() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
-
-    # ----- get and validate request parameters ----- #
-    if "task" not in request.form:
-        return "You didn't provide required attribute `task`", HTTPStatus.BAD_REQUEST
-    task_name = request.form["task"]
-
-    # TODO: parameter to return not aggregated solutions
-
-    # ----- logic ----- #
-    try:
-        _, _ = course.storage_api.find_task(task_name)
-    except (KeyError, TaskDisabledError):
-        return f"There is no task with name `{task_name}` (or it is disabled)", HTTPStatus.NOT_FOUND
-
-    zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)
-    if not zip_bytes_io:
-        return f"Unable to get zip for {task_name}", 500
-
-    _now_str = datetime.now(UTC).strftime("%Y-%m-%d-%H-%M-%S")
-    filename = f"aggregated-solutions-{task_name}-{_now_str}.zip"
-
-    return Response(
-        zip_bytes_io.getvalue(),
-        mimetype="application/zip",
-        headers={"Content-Disposition": f"attachment;filename={filename}"},
-    )
 
 
 @bp.get("/database")

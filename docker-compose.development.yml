@@ -15,7 +15,6 @@ services:
         volumes:
             - ./manytask/:/app/manytask
             - .tmp/cache/:/cache
-            - .tmp/solutions/:/solutions
         dns:
             - 8.8.8.8
             - 8.8.4.4

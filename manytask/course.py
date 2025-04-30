@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from cachelib import BaseCache
 from pydantic import ValidationError
 
-from . import abstract, glab, solutions
+from . import abstract, glab
 from .config import ManytaskConfig, ManytaskDeadlinesConfig
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,6 @@ class CourseConfig:
     gitlab_course_students_group: str
     gitlab_default_branch: str
 
-    solutions_api: solutions.SolutionsApi
     registration_secret: str
     token: str
     show_allscores: bool
@@ -77,7 +76,6 @@ class Course:
         self.__gitlab_course_students_group = config.gitlab_course_students_group
         self.__gitlab_default_branch = config.gitlab_default_branch
 
-        self.solutions_api = config.solutions_api
         self.registration_secret = config.registration_secret
         self.token = config.token
         self.show_allscores = config.show_allscores

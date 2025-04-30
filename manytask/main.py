@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import abstract, course, database, glab, local_config, solutions
+from . import abstract, course, database, glab, local_config
 
 load_dotenv("../.env")  # take environment variables from .env.
 
@@ -49,10 +49,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     storage_api = _database_storage_setup(app)
 
-    solutions_api = solutions.SolutionsApi(
-        base_folder=(".tmp/solution" if app.debug else os.environ.get("SOLUTIONS_DIR", "/solutions")),
-    )
-
     # read VERSION file to get a version
     manytask_version = ""
     try:
@@ -70,7 +66,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             app.app_config.gitlab_course_public_repo,
             app.app_config.gitlab_course_students_group,
             app.app_config.gitlab_default_branch,
-            solutions_api,
             app.app_config.registration_secret,
             app.app_config.course_token,
             app.app_config.show_allscores,
