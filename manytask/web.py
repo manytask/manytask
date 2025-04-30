@@ -1,16 +1,14 @@
 import logging
 import secrets
 from datetime import datetime, timedelta
-from http import HTTPStatus
 
 import gitlab
-from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
 from . import glab
 from .auth import requires_auth, requires_ready
 from .course import Course, get_current_time
-from .database import TaskDisabledError
 from .database_utils import get_database_table_data
 
 SESSION_VERSION = 1.5
@@ -92,55 +90,6 @@ def course_page() -> ResponseReturnValue:
         course_favicon=course.favicon,
         is_course_admin=student_course_admin,
         cache_time=cache_delta,
-    )
-
-
-@bp.get("/solutions")
-@requires_auth
-@requires_ready
-def get_solutions() -> ResponseReturnValue:
-    course: Course = current_app.course  # type: ignore
-
-    if current_app.debug:
-        if request.args.get("admin", None) in ("true", "1", "yes", None):
-            student_course_admin = True
-        else:
-            student_course_admin = False
-    else:
-        student = course.gitlab_api.get_student(
-            session["gitlab"]["user_id"], course.gitlab_course_group, course.gitlab_course_students_group
-        )
-        stored_user = course.storage_api.get_stored_user(student)
-
-        student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
-
-    if not student_course_admin:
-        return "Possible only for admins", HTTPStatus.FORBIDDEN
-
-    # ----- get and validate request parameters ----- #
-    if "task" not in request.args:
-        return "You didn't provide required param `task`", HTTPStatus.BAD_REQUEST
-    task_name = request.args["task"]
-
-    # TODO: parameter to return not aggregated solutions
-
-    # ----- logic ----- #
-    try:
-        _, _ = course.storage_api.find_task(task_name)
-    except (KeyError, TaskDisabledError):
-        return f"There is no task with name `{task_name}` (or it is disabled)", HTTPStatus.NOT_FOUND
-
-    zip_bytes_io = course.solutions_api.get_task_aggregated_zip_io(task_name)
-    if not zip_bytes_io:
-        return f"Unable to get zip for {task_name}", 500
-
-    _now_str = datetime.utcnow().strftime("%Y-%m-%d-%H-%M-%S")
-    filename = f"aggregated-solutions-{task_name}-{_now_str}.zip"
-
-    return Response(
-        zip_bytes_io.getvalue(),
-        mimetype="application/zip",
-        headers={"Content-Disposition": f"attachment;filename={filename}"},
     )
 
 

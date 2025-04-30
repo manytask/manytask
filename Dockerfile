@@ -45,9 +45,9 @@ RUN poetry config virtualenvs.create false \
 COPY ./manytask/ /app/manytask
 COPY VERSION /app/VERSION
 
-ENV CACHE_DIR=/cache SOLUTIONS_DIR=/solutions
+ENV CACHE_DIR=/cache
 
-VOLUME ["/cache", "/solutions"]
+VOLUME ["/cache"]
 
 EXPOSE 5050
 HEALTHCHECK --interval=1m --timeout=15s --retries=3 --start-period=30s CMD curl -f http://localhost:5050/healthcheck

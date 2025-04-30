@@ -165,16 +165,7 @@ def mock_storage_api():  # noqa: C901
 
 
 @pytest.fixture
-def mock_solutions_api():
-    class MockSolutionsApi:
-        def store_task_from_folder(self, task_name, username, folder_path):
-            pass
-
-    return MockSolutionsApi()
-
-
-@pytest.fixture
-def mock_course(mock_gitlab_api, mock_storage_api, mock_solutions_api):
+def mock_course(mock_gitlab_api, mock_storage_api):
     class MockCourse:
         def __init__(self):
             self.name = TEST_COURSE_NAME
@@ -195,7 +186,6 @@ def mock_course(mock_gitlab_api, mock_storage_api, mock_solutions_api):
             self.debug = False
             self.storage_api = mock_storage_api
             self.gitlab_api = mock_gitlab_api
-            self.solutions_api = mock_solutions_api
             self.gitlab_course_group = "test_group"
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"
@@ -335,7 +325,7 @@ def check_admin_status_code(response, check_true):
 
 @pytest.mark.parametrize(
     "path_and_func",
-    [["/", check_admin_in_data], ["/solutions", check_admin_status_code], ["/database", check_admin_in_data]],
+    [["/", check_admin_in_data], ["/database", check_admin_in_data]],
 )
 @pytest.mark.parametrize("debug", [False, True])
 @pytest.mark.parametrize("get_param_admin", ["true", "1", "yes", None, "false", "0", "no", "random_value"])
@@ -605,17 +595,3 @@ def test_login_oauth_error(app, mock_gitlab_oauth, mock_course):
         response = app.test_client().get(url_for("web.login"), query_string={"code": "test_code"})
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("web.login")
-
-
-@pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
-def test_solutions_invalid_or_disabled_task(app, mock_gitlab_oauth, mock_course, task_name):
-    with app.test_request_context():
-        app.course = mock_course
-        app.oauth = mock_gitlab_oauth
-        app.debug = True  # course_admin = True
-
-        data = {"task": task_name}
-
-        response = app.test_client().get(url_for("web.get_solutions"), query_string=data)
-
-        assert response.status_code == HTTPStatus.NOT_FOUND

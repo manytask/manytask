@@ -86,20 +86,6 @@ def mock_student():
 
 
 @pytest.fixture
-def mock_solutions_api():
-    class MockSolutionsApi:
-        def store_task_from_folder(self, task_name, username, folder_path):
-            pass
-
-        def get_task_aggregated_zip_io(self, task_name):
-            from io import BytesIO
-
-            return BytesIO(b"test data")
-
-    return MockSolutionsApi()
-
-
-@pytest.fixture
 def mock_storage_api(mock_student, mock_task, mock_group):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
@@ -136,11 +122,6 @@ def mock_storage_api(mock_student, mock_task, mock_group):  # noqa: C901
 
         def update_cached_scores(self):
             pass
-
-        def get_solutions(self, student):
-            if student == TEST_USERNAME:
-                return {"solutions": []}
-            raise Exception("Student not found")
 
         def sync_columns(self, deadlines):
             pass
@@ -206,12 +187,11 @@ def mock_gitlab_api(mock_student):
 
 
 @pytest.fixture
-def mock_course(mock_storage_api, mock_solutions_api, mock_gitlab_api, mock_group):
+def mock_course(mock_storage_api, mock_gitlab_api, mock_group):
     class MockCourse:
         def __init__(self):
             self.config = {"test": "config"}
             self.storage_api = mock_storage_api
-            self.solutions_api = mock_solutions_api
             self.gitlab_api = mock_gitlab_api
             self.debug = False
             self.gitlab_course_group = "test_group"
@@ -467,24 +447,6 @@ def test_update_score_after_deadline(mock_course):
     # Test with check_deadline=True
     result = _update_score(group, task, score, flags, old_score, submit_time, check_deadline=True)
     assert result == score * group.get_current_percent_multiplier(submit_time)
-
-
-def test_get_solutions_success(app, mock_course):
-    app.course = mock_course
-    client = app.test_client()
-    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
-
-    response = client.get("/api/solutions", data={"task": TEST_TASK_NAME}, headers=headers)
-    assert response.status_code == HTTPStatus.OK
-
-
-def test_get_solutions_missing_student(app, mock_course):
-    app.course = mock_course
-    client = app.test_client()
-    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
-
-    response = client.get("/api/solutions", headers=headers)
-    assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_update_config_success(app, mock_course):
@@ -793,7 +755,7 @@ def test_post_requests_invalid_or_disabled_task(app, mock_course, task_name):
         assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-@pytest.mark.parametrize("path", ["/api/solutions", "/api/score"])
+@pytest.mark.parametrize("path", ["/api/score"])
 @pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
 def test_get_requests_invalid_or_disabled_task(app, mock_course, path, task_name):
     with app.test_request_context():

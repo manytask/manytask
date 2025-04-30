@@ -198,9 +198,6 @@
 {#                        {% endif %}#}
                         <div class="fs-6 stat">{% if task.is_special %}special&nbsp;{% endif %}{% if task.is_bonus %}bonus&nbsp;{% endif %}{{ task_stats.get(task.name, 0)|float|round(2) }}</div>
                     </a>
-                    {% if is_course_admin %}
-                        <button type="button" onclick="window.open('solutions?task={{ task.name }}')" class="solutions btn btn-outline-warning btn-sm"><i class="fa-solid fa-download"></i></button>
-                    {% endif %}
                 </div>
             {% endfor %}
         </div>
