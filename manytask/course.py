@@ -36,6 +36,8 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
 class CourseConfig:
     """Configuration for Course settings."""
 
+    course_name: str
+
     gitlab_course_group: str
     gitlab_course_public_repo: str
     gitlab_course_students_group: str
@@ -60,6 +62,9 @@ class Course:
 
         :param config: CourseConfig instance containing all necessary settings
         """
+
+        self.course_name = config.course_name
+
         self.__gitlab_course_group = config.gitlab_course_group
         self.__gitlab_course_public_repo = config.gitlab_course_public_repo
         self.__gitlab_course_students_group = config.gitlab_course_students_group
