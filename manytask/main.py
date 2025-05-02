@@ -7,20 +7,39 @@ from typing import Any
 
 import yaml
 from authlib.integrations.flask_client import OAuth
-from cachelib import FileSystemCache
 from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import abstract, course, database, glab, local_config
+from . import abstract, config, database, glab, local_config
 
 load_dotenv("../.env")  # take environment variables from .env.
 
 
 class CustomFlask(Flask):
-    course: course.Course
+    course_name: str  # will be removed in next PRs
     oauth: OAuth
     app_config: local_config.LocalConfig  # TODO: check if we need it
+    gitlab_api: glab.GitLabApi
+    storage_api: abstract.StorageApi
+
+    manytask_version: str | None = None
+
+    @property
+    def favicon(self) -> str:
+        return "favicon.ico"
+
+    def store_config(self, content: dict[str, Any]) -> None:
+        manytask_config = config.ManytaskConfig(**content)
+
+        # Update course settings
+        self.storage_api.update_course(manytask_config.ui)
+
+        # Update task groups (if necessary -- if there is an override) first
+        self.storage_api.update_task_groups_from_config(manytask_config.deadlines)
+
+        # Save deadlines to storage
+        self.storage_api.sync_columns(manytask_config.deadlines)
 
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
@@ -34,47 +53,29 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     # logging
     logging.config.dictConfig(_logging_config(app))
 
-    # cache
-    cache = FileSystemCache(app.app_config.cache_dir, threshold=0, default_timeout=0)
-
     # api objects
-    gitlab_api = glab.GitLabApi(
+    app.gitlab_api = glab.GitLabApi(
         glab.GitLabConfig(
             base_url=app.app_config.gitlab_url,
             admin_token=app.app_config.gitlab_admin_token,
         )
     )
 
-    storage_api: abstract.StorageApi
-
-    storage_api = _database_storage_setup(app)
-
     # read VERSION file to get a version
-    manytask_version = ""
+    app.manytask_version = ""
     try:
         with open("VERSION", "r") as f:
-            manytask_version = f.read().strip()
+            app.manytask_version = f.read().strip()
     except FileNotFoundError:
         pass
 
     # create course
-    _course = course.Course(
-        course.CourseConfig(
-            storage_api,
-            gitlab_api,
-            app.app_config.gitlab_course_group,
-            app.app_config.gitlab_course_public_repo,
-            app.app_config.gitlab_course_students_group,
-            app.app_config.gitlab_default_branch,
-            app.app_config.registration_secret,
-            app.app_config.course_token,
-            app.app_config.show_allscores,
-            cache,
-            manytask_version=manytask_version,
-            debug=app.debug,
-        )
-    )
-    app.course = _course
+    course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
+    if course_name is None:
+        raise EnvironmentError("Unable to find UNIQUE_COURSE_NAME env")
+    app.course_name = course_name
+
+    app.storage_api = _database_storage_setup(app)
 
     # for https support
     _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
@@ -89,10 +90,10 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     logger = logging.getLogger(__name__)
 
     # debug updates
-    if app.course.debug:
+    if app.debug:
         with open(".manytask.example.yml", "r") as f:
             debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-        app.course.store_config(debug_manytask_config_data)
+        app.store_config(debug_manytask_config_data)
 
     logger.info("Init success")
 
@@ -101,7 +102,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
 def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)
-    course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
     apply_migrations = os.environ.get("APPLY_MIGRATIONS", "false").lower() in (
         "true",
         "1",
@@ -109,17 +109,19 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     )
     if database_url is None:
         raise EnvironmentError("Unable to find DATABASE_URL env")
-    if course_name is None:
-        raise EnvironmentError("Unable to find UNIQUE_COURSE_NAME env")
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
-            course_name=course_name,
+            course_name=app.course_name,
             gitlab_instance_host=app.app_config.gitlab_url,
             registration_secret=app.app_config.registration_secret,
             token=app.app_config.course_token,
             show_allscores=app.app_config.show_allscores,
             apply_migrations=apply_migrations,
+            gitlab_course_group=app.app_config.gitlab_course_group,
+            gitlab_course_public_repo=app.app_config.gitlab_course_public_repo,
+            gitlab_course_students_group=app.app_config.gitlab_course_students_group,
+            gitlab_default_branch=app.app_config.gitlab_default_branch,
         )
     )
     return storage_api

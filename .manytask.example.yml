@@ -1,12 +1,7 @@
 version: 1
 
 
-settings:  # required
-  course_name: python
-
-  gitlab_base_url: https://gitlab.manytask.org
-  public_repo: python/public-2022-fall
-  students_group: python/students-fall-2022
+course_name: python  # will be removed in next PRs
 
 
 ui:
