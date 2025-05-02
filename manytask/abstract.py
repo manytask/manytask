@@ -41,6 +41,8 @@ class StorageApi(ABC):
     def sync_stored_user(
         self,
         student: Student,
+        repo_name: str,
+        course_admin: bool,
     ) -> StoredUser: ...
 
     @abstractmethod
@@ -59,6 +61,7 @@ class StorageApi(ABC):
     def store_score(
         self,
         student: Student,
+        repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
     ) -> int: ...
@@ -109,7 +112,7 @@ class StorageApi(ABC):
     def max_score_started(self) -> int: ...
 
     @abstractmethod
-    def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool: ...
+    def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool: ...
 
     @abstractmethod
     def check_user_on_course(self, course_name: str, student: Student) -> bool: ...

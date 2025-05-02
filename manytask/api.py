@@ -21,7 +21,7 @@ from .glab import Student
 from .main import CustomFlask
 
 logger = logging.getLogger(__name__)
-bp = Blueprint("api", __name__, url_prefix="/api")
+bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
 
 
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -29,10 +29,12 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     def decorated(*args: Any, **kwargs: Any) -> Any:
         app: CustomFlask = current_app  # type: ignore
 
-        db_course = app.storage_api.get_course(app.course_name)
-        if db_course is None:
-            abort(HTTPStatus.FORBIDDEN)
-        course_token = db_course.token
+        course_name = kwargs["course_name"]
+        course = app.storage_api.get_course(course_name)
+        if course is None:
+            abort(HTTPStatus.NOT_FOUND, "Course not found")
+
+        course_token = course.token
         token = request.form.get("token", request.headers.get("Authorization", ""))
         if not token or not course_token:
             abort(HTTPStatus.FORBIDDEN)
@@ -158,15 +160,13 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{score_str}> to a number")
 
 
-def _get_student(
-    gitlab_api: Any, user_id: int | None, username: str | None, course_group: str, course_students_group: str
-) -> Student:
+def _get_student(gitlab_api: Any, user_id: int | None, username: str | None) -> Student:
     """Get student by user_id or username."""
     try:
         if username:
-            return gitlab_api.get_student_by_username(username, course_group, course_students_group)
+            return gitlab_api.get_student_by_username(username)
         elif user_id:
-            return gitlab_api.get_student(user_id, course_group, course_students_group)
+            return gitlab_api.get_student(user_id)
         else:
             assert False, "unreachable"
     except Exception:
@@ -176,9 +176,9 @@ def _get_student(
 @bp.post("/report")
 @requires_token
 @requires_ready
-def report_score() -> ResponseReturnValue:
+def report_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     task_name, user_id, username, check_deadline, submit_time_str = _validate_and_extract_params(request.form)
 
@@ -195,9 +195,7 @@ def report_score() -> ResponseReturnValue:
         reported_score = task.score
         logger.info(f"Got score=None; set max score for {task.name} of {task.score}")
 
-    student = _get_student(
-        app.gitlab_api, user_id, username, course.gitlab_course_group, course.gitlab_course_students_group
-    )
+    student = _get_student(app.gitlab_api, user_id, username)
 
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone())
 
@@ -213,7 +211,12 @@ def report_score() -> ResponseReturnValue:
         submit_time=submit_time,
         check_deadline=check_deadline,
     )
-    final_score = app.storage_api.store_score(student, task.name, update_function)
+    final_score = app.storage_api.store_score(
+        student,
+        app.gitlab_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+        task.name,
+        update_function,
+    )
 
     return {
         "user_id": student.id,
@@ -228,9 +231,8 @@ def report_score() -> ResponseReturnValue:
 @bp.get("/score")
 @requires_token
 @requires_ready
-def get_score() -> ResponseReturnValue:
+def get_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
     # ----- get and validate request parameters ----- #
     if "task" not in request.form:
         return "You didn't provide required attribute `task`", HTTPStatus.BAD_REQUEST
@@ -256,13 +258,9 @@ def get_score() -> ResponseReturnValue:
 
     try:
         if username:
-            student = app.gitlab_api.get_student_by_username(
-                username, course.gitlab_course_group, course.gitlab_course_students_group
-            )
+            student = app.gitlab_api.get_student_by_username(username)
         elif user_id:
-            student = app.gitlab_api.get_student(
-                user_id, course.gitlab_course_group, course.gitlab_course_students_group
-            )
+            student = app.gitlab_api.get_student(user_id)
         else:
             assert False, "unreachable"
         student_scores = app.storage_api.get_scores(student.username)
@@ -284,7 +282,7 @@ def get_score() -> ResponseReturnValue:
 
 @bp.post("/update_config")
 @requires_token
-def update_config() -> ResponseReturnValue:
+def update_config(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     logger.info("Running update_config")
@@ -305,7 +303,7 @@ def update_config() -> ResponseReturnValue:
 
 @bp.post("/update_cache")
 @requires_token
-def update_cache() -> ResponseReturnValue:
+def update_cache(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     logger.info("Running update_cache")
@@ -319,15 +317,17 @@ def update_cache() -> ResponseReturnValue:
 @bp.get("/database")
 @requires_auth
 @requires_ready
-def get_database() -> ResponseReturnValue:
-    table_data = get_database_table_data()
+def get_database(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+
+    table_data = get_database_table_data(app)
     return jsonify(table_data)
 
 
 @bp.post("/database/update")
 @requires_auth
 @requires_ready
-def update_database() -> ResponseReturnValue:
+def update_database(course_name: str) -> ResponseReturnValue:
     """
     Update student scores in the database via API endpoint.
 
@@ -344,14 +344,13 @@ def update_database() -> ResponseReturnValue:
         ResponseReturnValue: JSON response with success status and optional error message
     """
     app: CustomFlask = current_app  # type: ignore
-    storage_api = app.storage_api
-    course: Course = storage_api.get_course(app.course_name)  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    student = app.gitlab_api.get_student(
-        session["gitlab"]["user_id"], course.gitlab_course_group, course.gitlab_course_students_group
-    )
+    storage_api = app.storage_api
+
+    student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
     stored_user = storage_api.get_stored_user(student)
-    student_course_admin = session["gitlab"]["course_admin"] or stored_user.course_admin
+    student_course_admin = stored_user.course_admin
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
@@ -371,14 +370,17 @@ def update_database() -> ResponseReturnValue:
             id=0,
             username=username,
             name=username,
-            repo=app.gitlab_api.get_url_for_repo(
-                username=username, course_students_group=course.gitlab_course_students_group
-            ),
+        )
+        repo_name = app.gitlab_api.get_url_for_repo(
+            username=username, course_students_group=course.gitlab_course_students_group
         )
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
                 storage_api.store_score(
-                    student=student, task_name=task_name, update_fn=lambda _flags, _old_score: int(new_score)
+                    student=student,
+                    repo_name=repo_name,
+                    task_name=task_name,
+                    update_fn=lambda _flags, _old_score: int(new_score),
                 )
         return jsonify({"success": True})
     except Exception as e:
