@@ -1,10 +1,9 @@
 import logging
-import secrets
 from functools import wraps
 from typing import Any, Callable
 
 from authlib.integrations.flask_client import OAuth
-from flask import current_app, redirect, render_template, request, session, url_for
+from flask import abort, current_app, redirect, request, session, url_for
 from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
@@ -24,8 +23,6 @@ def valid_session(user_session: SessionMixin) -> bool:
         and user_session["gitlab"]["version"] >= SESSION_VERSION
         and "username" in user_session["gitlab"]
         and "user_id" in user_session["gitlab"]
-        and "repo" in user_session["gitlab"]
-        and "course_admin" in user_session["gitlab"]
     )
 
 
@@ -37,8 +34,6 @@ def set_oauth_session(
     result: dict[str, Any] = {
         "username": student.username,
         "user_id": student.id,
-        "course_admin": student.course_admin,
-        "repo": student.repo,
         "version": version,
     }
     if oauth_tokens:
@@ -49,82 +44,59 @@ def set_oauth_session(
     return result
 
 
-def handle_course_membership(app: CustomFlask, student: Student) -> bool | str | Response:
-    """Checking user on course and sync admin role"""
+def handle_course_membership(app: CustomFlask, course: Course, student: Student) -> bool | str | Response:
+    """Checking user on course"""
 
     try:
-        if app.storage_api.check_user_on_course(app.course_name, student):
-            # sync admin flag with gitlab
-            app.storage_api.sync_and_get_admin_status(app.course_name, student)
+        if app.storage_api.check_user_on_course(course.course_name, student):
             return True
         else:
-            logger.info(f"No user {student.username} on course {app.course_name} asking secret")
+            logger.info(f"No user {student.username} on course {course.course_name} asking secret")
             return False
     except NoResultFound:
         logger.info(f"Creating User: {student.username} that we already have in gitlab")
-        app.storage_api.create_user_if_not_exist(student, app.course_name)
-        return redirect(url_for("web.login"))
+        app.storage_api.create_user_if_not_exist(student, course.course_name)
+        return redirect(url_for("root.login", course_name=course.course_name))
 
     except Exception:
         logger.error("Failed login while working with db", exc_info=True)
-        return redirect(url_for("web.signup"))
+        return redirect(url_for("root.login", course_name=course.course_name))
 
 
-def check_secret(app: CustomFlask, student: Student) -> str | None:
-    """Checking course secret for user if he is entering"""
-
-    course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
-
-    if "secret" in request.form:
-        if secrets.compare_digest(request.form["secret"], course.registration_secret):
-            app.storage_api.sync_stored_user(student)
-        else:
-            logger.error(f"Wrong secret user {student.username} on course {app.course_name}")
-            return render_template(
-                "create_project.html",
-                error_message="Invalid registration secret",
-                course_name=app.course_name,
-                course_favicon=app.favicon,
-                base_url=app.gitlab_api.base_url,
-            )
-    return None
-
-
-def handle_oauth_callback(oauth: OAuth, app: CustomFlask, course: Course) -> None | Response:
-    """Process oauth2 callback with code for auth, if success set auth session"""
+def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
+    """Process oauth2 callback with code for auth, if success set auth session and sync user's data to database"""
 
     try:
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        student = app.gitlab_api.get_authenticated_student(
-            gitlab_oauth_token["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
-        )
+        student = app.gitlab_api.get_authenticated_student(gitlab_oauth_token["access_token"])
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
-        return redirect(url_for("web.login"))
+        return redirect(url_for("root.login"))
 
     session.setdefault("gitlab", {}).update(set_oauth_session(student, gitlab_oauth_token))
     session.permanent = True
-    return redirect(url_for("web.login"))
+
+    return redirect(url_for("root.login"))
 
 
-def get_authenticate_student(oauth: OAuth, app: CustomFlask, course: Course) -> Student:
+def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student | Response:
     """Getting student and update session"""
 
     try:
-        student = app.gitlab_api.get_authenticated_student(
-            session["gitlab"]["access_token"], course.gitlab_course_group, course.gitlab_course_students_group
-        )
+        student = app.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
         session["gitlab"].update(set_oauth_session(student))
         return student
 
     except Exception:
         logger.error("Failed login in gitlab, redirect to login", exc_info=True)
         session.pop("gitlab", None)
-        redirect_uri = url_for("web.login", _external=True)
+        redirect_uri = url_for("root.login", _external=True)
         return oauth.gitlab.authorize_redirect(redirect_uri)
 
 
 def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Check authentication"""
+
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         app: CustomFlask = current_app  # type: ignore
@@ -132,25 +104,19 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
         oauth = app.oauth
 
         if "code" in request.args:
-            return handle_oauth_callback(oauth, app, course)
+            return handle_oauth_callback(oauth, app)
 
         if valid_session(session):
-            student = get_authenticate_student(oauth, app, course)
-            check_secret(app, student)
-            if not handle_course_membership(app, student):
-                return render_template(
-                    "create_project.html",
-                    course_name=app.course_name,
-                    course_favicon=app.favicon,
-                    base_url=app.gitlab_api.base_url,
-                )
+            student_or_resp = get_authenticate_student(oauth, app)
+
+            if not isinstance(student_or_resp, Student):
+                return student_or_resp
         else:
             logger.info("Redirect to login in Gitlab")
-            redirect_uri = url_for("web.login", _external=True)
+            redirect_uri = url_for("root.login", _external=True)
             return oauth.gitlab.authorize_redirect(redirect_uri)
 
         return f(*args, **kwargs)
@@ -159,12 +125,55 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Check course readiness"""
+
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         app: CustomFlask = current_app  # type: ignore
-        course: Course = app.storage_api.get_course(app.course_name)  # type: ignore
+
+        course_name = kwargs["course_name"]
+        course = app.storage_api.get_course(course_name)
+
+        if course is None:
+            abort(redirect(url_for("root.index")))
+
         if not course.is_ready:
-            return redirect(url_for("web.not_ready"))
+            abort(redirect(url_for("course.not_ready", course_name=course_name)))
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Check course readiness, user authentication and access"""
+
+    @requires_ready
+    @requires_auth
+    @wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        app: CustomFlask = current_app  # type: ignore
+
+        if app.debug:
+            return f(*args, **kwargs)
+
+        oauth = app.oauth
+
+        course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
+        student: Student = get_authenticate_student(oauth, app)  # type: ignore
+
+        if not handle_course_membership(app, course, student) or not app.gitlab_api.check_project_exists(
+            student=student, course_students_group=course.gitlab_course_students_group
+        ):
+            abort(redirect(url_for("course.create_project", course_name=course.course_name)))
+
+        # sync user's data from gitlab to database  TODO: optimize it
+        app.storage_api.sync_stored_user(
+            student,
+            app.gitlab_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+            app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
+        )
+
         return f(*args, **kwargs)
 
     return decorated

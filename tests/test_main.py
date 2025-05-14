@@ -105,7 +105,8 @@ def test_create_app_production_with_db(mock_env, mock_gitlab, monkeypatch):
     assert app.testing == os.getenv("TESTING")
     assert app.secret_key == os.getenv("FLASK_SECRET_KEY")
 
-    assert "web" in app.blueprints
+    assert "root" in app.blueprints
+    assert "course" in app.blueprints
     assert "api" in app.blueprints
 
     assert hasattr(app, "oauth")

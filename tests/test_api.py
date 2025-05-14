@@ -16,7 +16,7 @@ from manytask.api import _get_student, _parse_flags, _process_score, _update_sco
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.glab import Student
-from manytask.web import bp as web_bp
+from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
 TEST_USERNAME = "test_user"
@@ -44,7 +44,8 @@ def app(mock_storage_api, mock_gitlab_api):
     app.config["TESTING"] = True
     app.course_name = TEST_COURSE_NAME
     app.secret_key = TEST_SECRET_KEY
-    app.register_blueprint(web_bp)
+    app.register_blueprint(root_bp)
+    app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
     app.storage_api = mock_storage_api
     app.gitlab_api = mock_gitlab_api
@@ -103,7 +104,7 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
             self.course_name = TEST_COURSE_NAME
 
-        def store_score(self, student, task_name, update_fn):
+        def store_score(self, student, repo_name, task_name, update_fn):
             old_score = self.scores.get(f"{student.username}_{task_name}", 0)
             new_score = update_fn("", old_score)
             self.scores[f"{student.username}_{task_name}"] = new_score
@@ -135,12 +136,8 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
         def update_task_groups_from_config(self, config_data):
             pass
 
-        def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
-            self.stored_user.course_admin = (
-                student.course_admin
-                if self.stored_user.course_admin != student.course_admin and student.course_admin
-                else self.stored_user.course_admin
-            )
+        def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
+            self.stored_user.course_admin = course_admin
             return self.stored_user.course_admin
 
         def check_user_on_course(self, *a, **k):
@@ -171,18 +168,18 @@ def mock_gitlab_api(mock_student):
             self.course_admin = False
             self._student_class = mock_student
 
-        def get_student(self, user_id: int, course_group: str, course_students_group: str):
+        def get_student(self, user_id: int):
             if user_id == TEST_USER_ID:
                 return self._student_class(TEST_USER_ID, TEST_USERNAME)
             raise Exception("Student not found")
 
-        def get_student_by_username(self, username, course_group, course_students_group):
+        def get_student_by_username(self, username):
             if username == TEST_USERNAME:
                 return self._student_class(TEST_USER_ID, TEST_USERNAME)
             raise Exception("Student not found")
 
-        def get_authenticated_student(self, access_token, course_group, course_students_group):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=self.course_admin)
+        def get_authenticated_student(self, access_token):
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
         @staticmethod
         def get_url_for_repo(username, course_students_group):
@@ -226,9 +223,7 @@ def authenticated_client(app, mock_gitlab_oauth):
     ):
         app.oauth = mock_gitlab_oauth
 
-        mock_get_authenticated_student.return_value = Student(
-            id=TEST_USER_ID, username=TEST_USERNAME, name="", course_admin=False
-        )
+        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -239,8 +234,6 @@ def authenticated_client(app, mock_gitlab_oauth):
                 "version": 1.5,
                 "username": TEST_USERNAME,
                 "user_id": TEST_USER_ID,
-                "repo": "test_repo",
-                "course_admin": False,
                 "access_token": "",
                 "refresh_token": "",
             }
@@ -281,19 +274,12 @@ def test_update_score_with_old_score(app):
     assert score == old_score  # Should keep higher old score
 
 
-def test_healthcheck(app):
-    with app.test_request_context():
-        response = app.test_client().get("/api/healthcheck")
-        assert response.status_code == HTTPStatus.OK
-        assert response.data == b"OK"
-
-
 def test_report_score_missing_task(app):
     with app.test_request_context():
         data = {"user_id": str(TEST_USER_ID)}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
 
-        response = app.test_client().post("/api/report", data=data, headers=headers)
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
         assert response.status_code == HTTPStatus.BAD_REQUEST
         assert b"task" in response.data
 
@@ -303,7 +289,7 @@ def test_report_score_missing_user(app):
         data = {"task": TEST_TASK_NAME}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
 
-        response = app.test_client().post("/api/report", data=data, headers=headers)
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
         assert response.status_code == HTTPStatus.BAD_REQUEST
         assert b"user_id" in response.data
 
@@ -314,7 +300,7 @@ def test_report_score_success(app):
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
         expected_data = {"username": TEST_USERNAME, "score": 90}
 
-        response = app.test_client().post("/api/report", data=data, headers=headers)
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
         assert data["username"] == expected_data["username"]
@@ -327,7 +313,7 @@ def test_get_score_success(app):
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
         expected_data = {"score": 80, "task": TEST_TASK_NAME, "user_id": TEST_USER_ID, "username": TEST_USERNAME}
 
-        response = app.test_client().get("/api/score", data=data, headers=headers)
+        response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/score", data=data, headers=headers)
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
         assert data == expected_data
@@ -335,7 +321,9 @@ def test_get_score_success(app):
 
 def test_update_database_not_json(app, authenticated_client, mock_gitlab_oauth):
     app.oauth = mock_gitlab_oauth
-    response = authenticated_client.post("/api/database/update", data="not json", content_type="text/plain")
+    response = authenticated_client.post(
+        f"/api/{TEST_COURSE_NAME}/database/update", data="not json", content_type="text/plain"
+    )
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert data["success"] is False
@@ -344,14 +332,14 @@ def test_update_database_not_json(app, authenticated_client, mock_gitlab_oauth):
 
 def test_update_database_missing_fields(app, authenticated_client):
     # Empty data
-    response = authenticated_client.post("/api/database/update", json={})
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json={})
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert data["success"] is False
     assert "Missing required fields" in data["message"]
 
     # Partial data
-    response = authenticated_client.post("/api/database/update", json={"username": TEST_USERNAME})
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json={"username": TEST_USERNAME})
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert data["success"] is False
@@ -360,7 +348,7 @@ def test_update_database_missing_fields(app, authenticated_client):
 
 def test_update_database_success(app, authenticated_client):
     test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
-    response = authenticated_client.post("/api/database/update", json=test_data)
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
     assert response.status_code == HTTPStatus.OK
     data = json.loads(response.data)
     assert data["success"]
@@ -374,7 +362,7 @@ def test_update_database_invalid_score_type(app, authenticated_client):
             "task2": 85,
         },
     }
-    response = authenticated_client.post("/api/database/update", json=test_data)
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
     assert response.status_code == HTTPStatus.OK
     data = json.loads(response.data)
     assert data["success"]
@@ -383,7 +371,7 @@ def test_update_database_invalid_score_type(app, authenticated_client):
 def test_update_database_unauthorized(app, mock_gitlab_oauth):
     app.oauth = mock_gitlab_oauth
     test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
-    response = app.test_client().post("/api/database/update", json=test_data)
+    response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
     # Signup
     assert response.status_code == HTTPStatus.FOUND
     assert response.location == "/login"
@@ -399,7 +387,7 @@ def test_update_database_not_ready(app, authenticated_client):
         mock_get_course.return_value = Course()
 
         test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
-        response = authenticated_client.post("/api/database/update", json=test_data)
+        response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
         # Not ready
         assert response.status_code == HTTPStatus.FOUND
 
@@ -407,13 +395,13 @@ def test_update_database_not_ready(app, authenticated_client):
 def test_requires_token_invalid_token(app):
     client = app.test_client()
     headers = {"Authorization": "Bearer invalid_token"}
-    response = client.post("/api/report", headers=headers)
+    response = client.post("/api/{TEST_COURSE_NAME}/report", headers=headers)
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
 def test_requires_token_missing_token(app):
     client = app.test_client()
-    response = client.post("/api/report")
+    response = client.post(f"/api/{TEST_COURSE_NAME}/report")
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
@@ -440,7 +428,7 @@ def test_update_config_success(app):
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
 
     data = {"test": "config"}
-    response = client.post("/api/update_config", data=yaml.dump(data), headers=headers)
+    response = client.post(f"/api/{TEST_COURSE_NAME}/update_config", data=yaml.dump(data), headers=headers)
     assert response.status_code == HTTPStatus.OK
 
 
@@ -448,7 +436,7 @@ def test_update_cache_success(app):
     client = app.test_client()
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
 
-    response = client.post("/api/update_cache", headers=headers)
+    response = client.post(f"/api/{TEST_COURSE_NAME}/update_cache", headers=headers)
     assert response.status_code == HTTPStatus.OK
 
 
@@ -456,7 +444,7 @@ def test_get_database_unauthorized(app, mock_gitlab_oauth):
     app.debug = False  # Disable debug mode to test auth
     app.oauth = mock_gitlab_oauth
     client = app.test_client()
-    response = client.get("/api/database")
+    response = client.get(f"/api/{TEST_COURSE_NAME}/database")
     assert response.status_code == HTTPStatus.FOUND  # Redirects to login
 
 
@@ -476,10 +464,8 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
                 "version": 1.5,
                 "username": TEST_USERNAME,
                 "user_id": TEST_USER_ID,
-                "repo": "test-repo",
-                "course_admin": True,
             }
-        response = client.get("/api/database")
+        response = client.get(f"/api/{TEST_COURSE_NAME}/database")
         assert response.status_code == HTTPStatus.FOUND  # Redirects to not ready page
 
 
@@ -491,10 +477,10 @@ def test_update_database_invalid_json(app, authenticated_client, mock_gitlab_oau
             "version": 1.5,
             "username": TEST_USERNAME,
             "user_id": TEST_USER_ID,
-            "repo": "test-repo",
-            "course_admin": True,
         }
-    response = authenticated_client.post("/api/database/update", data="invalid json", content_type="application/json")
+    response = authenticated_client.post(
+        f"/api/{TEST_COURSE_NAME}/database/update", data="invalid json", content_type="application/json"
+    )
     assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
@@ -506,11 +492,9 @@ def test_update_database_missing_student(app, authenticated_client, mock_gitlab_
             "version": 1.5,
             "username": TEST_USERNAME,
             "user_id": TEST_USER_ID,
-            "repo": "test-repo",
-            "course_admin": True,
         }
     data = {"scores": {TEST_TASK_NAME: 100}}
-    response = authenticated_client.post("/api/database/update", json=data)
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert "Missing required fields" in json.loads(response.data)["message"]
 
@@ -527,7 +511,7 @@ def test_report_score_with_flags(app):
         "submit_time": "2024-03-20T15:30:00",
         "check_deadline": "True",
     }
-    response = client.post("/api/report", data=data, headers=headers)  # Use form data, not JSON
+    response = client.post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)  # Use form data, not JSON
     assert response.status_code == HTTPStatus.OK
 
 
@@ -543,7 +527,7 @@ def test_report_score_invalid_submit_time(app):
             "flags": "",
             "submit_time": "invalid_time",
         }
-        response = client.post("/api/report", json=data, headers=headers)
+        response = client.post(f"/api/{TEST_COURSE_NAME}/report", json=data, headers=headers)
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
@@ -551,7 +535,9 @@ def test_get_score_invalid_student(app):
     client = app.test_client()
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
 
-    response = client.get("/api/score", data={"username": "nonexistent_user", "task": TEST_TASK_NAME}, headers=headers)
+    response = client.get(
+        f"/api/{TEST_COURSE_NAME}/score", data={"username": "nonexistent_user", "task": TEST_TASK_NAME}, headers=headers
+    )
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
@@ -563,11 +549,9 @@ def test_update_database_invalid_task(app, authenticated_client, mock_gitlab_oau
             "version": 1.5,
             "username": TEST_USERNAME,
             "user_id": TEST_USER_ID,
-            "repo": "test-repo",
-            "course_admin": True,
         }
     data = {"username": TEST_USERNAME, "scores": {INVALID_TASK_NAME: 100}}
-    response = authenticated_client.post("/api/database/update", json=data)
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
     # API silently ignores invalid tasks
     assert response.status_code == HTTPStatus.OK
 
@@ -580,8 +564,6 @@ def test_update_database_invalid_score_value(app, authenticated_client, mock_git
             "version": 1.5,
             "username": TEST_USERNAME,
             "user_id": TEST_USER_ID,
-            "repo": "test-repo",
-            "course_admin": True,
         }
     data = {
         "username": TEST_USERNAME,
@@ -589,7 +571,7 @@ def test_update_database_invalid_score_value(app, authenticated_client, mock_git
             TEST_TASK_NAME: -1  # Invalid score value
         },
     }
-    response = authenticated_client.post("/api/database/update", json=data)
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
     # API silently ignores invalid scores
     assert response.status_code == HTTPStatus.OK
     data = json.loads(response.data)
@@ -604,8 +586,8 @@ def test_no_course_in_db(app):
     app.storage_api.get_course.return_value = None
     headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
     client = app.test_client()
-    response = client.post("/api/report", headers=headers)
-    assert response.status_code == HTTPStatus.FORBIDDEN
+    response = client.post(f"/api/{TEST_COURSE_NAME}/report", headers=headers)
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_process_score_no_score():
@@ -666,32 +648,30 @@ def test_process_score_invalid_format():
 def test_get_student_by_username():
     """Test getting student by username"""
     mock_gitlab = MagicMock()
-    test_student = Student(id=1, username="test_user", name="Test User", repo="")
+    test_student = Student(id=1, username="test_user", name="Test User")
     mock_gitlab.get_student_by_username.return_value = test_student
 
-    result = _get_student(mock_gitlab, None, "test_user", "test_course_group", "test_course_students_group")
+    result = _get_student(mock_gitlab, None, "test_user")
     assert result == test_student
-    mock_gitlab.get_student_by_username.assert_called_once_with(
-        "test_user", "test_course_group", "test_course_students_group"
-    )
+    mock_gitlab.get_student_by_username.assert_called_once_with("test_user")
 
 
 def test_get_student_by_id():
     """Test getting student by user_id"""
     mock_gitlab = MagicMock()
-    test_student = Student(id=1, username="test_user", name="Test User", repo="")
+    test_student = Student(id=1, username="test_user", name="Test User")
     mock_gitlab.get_student.return_value = test_student
 
-    result = _get_student(mock_gitlab, 1, None, "test_course_group", "test_course_students_group")
+    result = _get_student(mock_gitlab, 1, None)
     assert result == test_student
-    mock_gitlab.get_student.assert_called_once_with(1, "test_course_group", "test_course_students_group")
+    mock_gitlab.get_student.assert_called_once_with(1)
 
 
 def test_get_student_no_id_or_username():
     """Test when neither user_id nor username is provided"""
     mock_gitlab = MagicMock()
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, None, None, "test_course_group", "test_course_students_group")
+        _get_student(mock_gitlab, None, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
@@ -701,7 +681,7 @@ def test_get_student_username_not_found():
     mock_gitlab.get_student_by_username.side_effect = Exception("Student not found")
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, None, "nonexistent", "test_course_group", "test_course_students_group")
+        _get_student(mock_gitlab, None, "nonexistent")
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
@@ -711,7 +691,7 @@ def test_get_student_id_not_found():
     mock_gitlab.get_student.side_effect = Exception("Student not found")
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, 999, None, "test_course_group", "test_course_students_group")
+        _get_student(mock_gitlab, 999, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
@@ -721,11 +701,11 @@ def test_post_requests_invalid_or_disabled_task(app, task_name):
         data = {"task": task_name, "user_id": str(TEST_USER_ID)}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
 
-        response = app.test_client().post("/api/report", data=data, headers=headers)
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
         assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-@pytest.mark.parametrize("path", ["/api/score"])
+@pytest.mark.parametrize("path", [f"/api/{TEST_COURSE_NAME}/score"])
 @pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
 def test_get_requests_invalid_or_disabled_task(app, path, task_name):
     with app.test_request_context():
