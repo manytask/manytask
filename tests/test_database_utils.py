@@ -69,13 +69,11 @@ def app():
         def __init__(self):
             pass
 
-        def get_student_by_username(self, username: str, course_group: str, course_student_group: str) -> Student:
+        def get_student_by_username(self, username: str) -> Student:
             return Student(
                 id=1,
                 username=username,
                 name=STUDENT_NAMES[username],
-                course_admin=False,
-                repo="my repo",
             )
 
     app.storage_api = MockStorageApi()
@@ -89,7 +87,7 @@ def test_get_database_table_data(app):
     expected_students_count = 2
 
     with app.test_request_context():
-        result = get_database_table_data()
+        result = get_database_table_data(app)
 
         assert "tasks" in result
         assert "students" in result
@@ -116,7 +114,7 @@ def test_get_database_table_data_no_scores(app):
 
     with app.test_request_context():
         app.storage_api.get_all_scores = lambda: {}
-        result = get_database_table_data()
+        result = get_database_table_data(app)
 
         assert "tasks" in result
         assert "students" in result
