@@ -64,4 +64,3 @@ services:
             LETSENCRYPT_EMAIL: no-reply@manytask.org
         volumes:
             - cache:/cache
-            - solutions:/solutions

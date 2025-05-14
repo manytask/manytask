@@ -95,7 +95,7 @@ def mock_gitlab_oauth():
             @staticmethod
             def authorize_redirect(redirect_uri: str):
                 resp = Response(status=302)
-                resp.location = url_for("web.login")
+                resp.location = url_for("root.login")
                 return resp
 
     return MockGitlabOauth()

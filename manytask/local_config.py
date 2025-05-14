@@ -9,11 +9,6 @@ class LocalConfig:
     # tokens
     registration_secret: str
     course_token: str
-
-    # utils
-    cache_dir: str
-    solutions_dir: str
-
     # gitlab
     gitlab_url: str
     gitlab_admin_token: str
@@ -34,9 +29,6 @@ class LocalConfig:
             # tokens
             registration_secret=os.environ["REGISTRATION_SECRET"],
             course_token=os.environ["MANYTASK_COURSE_TOKEN"],
-            # utils
-            cache_dir=os.environ["CACHE_DIR"],
-            solutions_dir=os.environ["SOLUTIONS_DIR"],
             # gitlab
             gitlab_url=os.environ.get("GITLAB_URL", "https://gitlab.manytask.org"),
             gitlab_admin_token=os.environ["GITLAB_ADMIN_TOKEN"],
@@ -58,11 +50,6 @@ class DebugLocalConfig(LocalConfig):
     # tokens
     registration_secret: str = "registration_secret"
     course_token: str = "token"
-
-    # utils
-    cache_dir: str = ".tmp/cache"
-    solutions_dir: str = ".tmp/solutions"
-
     # gitlab
     gitlab_url: str = "https://gitlab.manytask.org"
     gitlab_admin_token: str = ""

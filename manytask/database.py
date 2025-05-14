@@ -18,7 +18,14 @@ from sqlalchemy.sql.functions import func
 
 from . import models
 from .abstract import StorageApi, StoredUser
-from .config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskTaskConfig
+from .config import (
+    ManytaskDeadlinesConfig,
+    ManytaskGroupConfig,
+    ManytaskTaskConfig,
+    ManytaskUiConfig,
+)
+from .course import Course as AppCourse
+from .course import CourseConfig as AppCourseConfig
 from .glab import Student
 
 ModelType = TypeVar("ModelType", bound=models.Base)
@@ -40,6 +47,10 @@ class DatabaseConfig:
     registration_secret: str
     token: str
     show_allscores: bool
+    gitlab_course_group: str
+    gitlab_course_public_repo: str
+    gitlab_course_students_group: str
+    gitlab_default_branch: str
     apply_migrations: bool = False
 
 
@@ -57,11 +68,8 @@ class DataBaseApi(StorageApi):
         :param config: DatabaseConfig instance containing all necessary settings
         """
         self.database_url = config.database_url
-        self.course_name = config.course_name
+        self._course_name = config.course_name
         self.gitlab_instance_host = config.gitlab_instance_host
-        self.registration_secret = config.registration_secret
-        self.token = config.token
-        self.show_allscores = config.show_allscores
         self.apply_migrations = config.apply_migrations
 
         self.engine = create_engine(self.database_url, echo=False)
@@ -74,34 +82,40 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             try:
-                course = self._get(session, models.Course, name=self.course_name)
+                course = self._get(session, models.Course, name=self._course_name)
                 if course.gitlab_instance_host != self.gitlab_instance_host:
                     raise AttributeError("Can't update gitlab_instance_host param on created course")
-                course.registration_secret = self.registration_secret
-                course.show_allscores = self.show_allscores
-                session.commit()
             except NoResultFound:
                 self._create(
                     session,
                     models.Course,
-                    name=self.course_name,
-                    gitlab_instance_host=self.gitlab_instance_host,
-                    registration_secret=self.registration_secret,
-                    token=self.token,
-                    show_allscores=self.show_allscores,
+                    registration_secret=config.registration_secret,
+                    token=config.token,
+                    show_allscores=config.show_allscores,
+                    is_ready=False,
+                    gitlab_course_group=config.gitlab_course_group,
+                    gitlab_course_public_repo=config.gitlab_course_public_repo,
+                    gitlab_course_students_group=config.gitlab_course_students_group,
+                    gitlab_default_branch=config.gitlab_default_branch,
+                    gitlab_instance_host=config.gitlab_instance_host,
+                    name=config.course_name,
+                    task_url_template="",
                 )
-                session.commit()
 
             self._update_or_create(
                 session,
                 models.Course,
                 defaults={
-                    "gitlab_instance_host": self.gitlab_instance_host,
-                    "registration_secret": self.registration_secret,
-                    "token": self.token,
-                    "show_allscores": self.show_allscores,
+                    "registration_secret": config.registration_secret,
+                    "token": config.token,
+                    "show_allscores": config.show_allscores,
+                    "gitlab_course_group": config.gitlab_course_group,
+                    "gitlab_course_public_repo": config.gitlab_course_public_repo,
+                    "gitlab_course_students_group": config.gitlab_course_students_group,
+                    "gitlab_default_branch": config.gitlab_default_branch,
+                    "task_url_template": "",
                 },
-                name=self.course_name,
+                name=config.course_name,
             )
 
     def get_scoreboard_url(self) -> str:
@@ -161,7 +175,7 @@ class DataBaseApi(StorageApi):
         """
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self.course_name)
+            course = self._get(session, models.Course, name=self._course_name)
             user_on_course = self._get_or_create_user_on_course(session, student, course)
             session.commit()
 
@@ -170,6 +184,8 @@ class DataBaseApi(StorageApi):
     def sync_stored_user(
         self,
         student: Student,
+        repo_name: str,
+        course_admin: bool,
     ) -> StoredUser:
         """Method for sync user's gitlab and stored data
 
@@ -179,10 +195,10 @@ class DataBaseApi(StorageApi):
         """
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self.course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course)
+            course = self._get(session, models.Course, name=self._course_name)
+            user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
 
-            user_on_course.is_course_admin = user_on_course.is_course_admin or student.course_admin
+            user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
 
@@ -195,7 +211,7 @@ class DataBaseApi(StorageApi):
         """
 
         with Session(self.engine) as session:
-            all_users = self._get_all_users(session, self.course_name)
+            all_users = self._get_all_users(session, self._course_name)
 
         all_scores: dict[str, dict[str, int]] = {}
         for username in all_users:
@@ -210,9 +226,9 @@ class DataBaseApi(StorageApi):
         """
 
         with Session(self.engine) as session:
-            tasks = self._get_all_tasks(session, self.course_name, enabled=True, started=True)
+            tasks = self._get_all_tasks(session, self._course_name, enabled=True, started=True)
 
-            users_on_courses_count = self._get_course_users_on_courses_count(session, self.course_name)
+            users_on_courses_count = self._get_course_users_on_courses_count(session, self._course_name)
             tasks_stats: dict[str, float] = {}
             for task in tasks:
                 if users_on_courses_count == 0:
@@ -238,12 +254,14 @@ class DataBaseApi(StorageApi):
     def store_score(
         self,
         student: Student,
+        repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
     ) -> int:
         """Method for storing user's task score
 
         :param student: Student object
+        :param repo_name: student's repo name
         :param task_name: task name
         :param update_fn: function for updating the score
 
@@ -255,8 +273,8 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             try:
-                course = self._get(session, models.Course, name=self.course_name)
-                user_on_course = self._get_or_create_user_on_course(session, student, course)
+                course = self._get(session, models.Course, name=self._course_name)
+                user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
                 session.commit()
 
                 try:
@@ -291,7 +309,7 @@ class DataBaseApi(StorageApi):
 
         logger.info("Syncing database tasks...")
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self.course_name)
+            course = self._get(session, models.Course, name=self._course_name)
 
             existing_course_tasks = (
                 session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
@@ -353,10 +371,30 @@ class DataBaseApi(StorageApi):
     def get_course(
         self,
         course_name: str,
-    ) -> models.Course | None:
+    ) -> AppCourse | None:
+        """Get course.Course by course_name
+
+        Get models.Course by course_name from database and convert it to course.Course
+        """
         try:
             with Session(self.engine) as session:
-                return self._get(session, models.Course, name=course_name)
+                course: models.Course = self._get(session, models.Course, name=course_name)
+
+            return AppCourse(
+                AppCourseConfig(
+                    course_name=course_name,
+                    gitlab_course_group=course.gitlab_course_group,
+                    gitlab_course_public_repo=course.gitlab_course_public_repo,
+                    gitlab_course_students_group=course.gitlab_course_students_group,
+                    gitlab_default_branch=course.gitlab_default_branch,
+                    registration_secret=course.registration_secret,
+                    token=course.token,
+                    show_allscores=course.show_allscores,
+                    is_ready=course.is_ready,
+                    task_url_template=course.task_url_template,
+                    links=course.links,
+                )
+            )
         except NoResultFound:
             return None
 
@@ -390,13 +428,13 @@ class DataBaseApi(StorageApi):
                     task_group = existing_task.group
                     task_course = task_group.course
 
-                    if task_course.name == self.course_name:
+                    if task_course.name == self._course_name:
                         new_group_name = new_task_to_group[existing_task.name]
                         if task_group.name != new_group_name:
                             tasks_to_update[existing_task.id] = new_group_name
 
             # Create any missing groups
-            course = self._get(session, models.Course, name=self.course_name)
+            course = self._get(session, models.Course, name=self._course_name)
             needed_group_names = set(tasks_to_update.values())
             existing_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
             existing_group_names = {g.name for g in existing_groups}
@@ -421,6 +459,26 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
+    def update_course(
+        self,
+        ui_config: ManytaskUiConfig,
+    ) -> None:
+        """Update course settings from config objects
+        :param ui_config: ManytaskUiConfig object
+        """
+
+        with Session(self.engine) as session:
+            self._update(
+                session,
+                models.Course,
+                defaults={
+                    "is_ready": True,
+                    "task_url_template": ui_config.task_url_template,
+                    "links": ui_config.links,
+                },
+                name=self._course_name,
+            )
+
     def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
 
@@ -432,7 +490,7 @@ class DataBaseApi(StorageApi):
         """
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self.course_name)
+            course = self._get(session, models.Course, name=self._course_name)
             try:
                 task = self._get_task_by_name_and_course_id(session, task_name, course.id)
             except NoResultFound:
@@ -495,7 +553,7 @@ class DataBaseApi(StorageApi):
             now = self.get_now_with_timezone()
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self.course_name)
+            course = self._get(session, models.Course, name=self._course_name)
 
             query = (
                 session.query(models.TaskGroup).join(models.Deadline).filter(models.TaskGroup.course_id == course.id)
@@ -548,12 +606,12 @@ class DataBaseApi(StorageApi):
         """Get current time with course timezone"""
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self.course_name)
+            course = self._get(session, models.Course, name=self._course_name)
         return datetime.now(tz=ZoneInfo(course.timezone))
 
     def max_score(self, started: bool | None = True) -> int:
         with Session(self.engine) as session:
-            tasks = self._get_all_tasks(session, self.course_name, enabled=True, started=started, is_bonus=False)
+            tasks = self._get_all_tasks(session, self._course_name, enabled=True, started=started, is_bonus=False)
 
         return sum(task.score for task in tasks)
 
@@ -561,7 +619,7 @@ class DataBaseApi(StorageApi):
     def max_score_started(self) -> int:
         return self.max_score(started=True)
 
-    def sync_and_get_admin_status(self, course_name: str, student: Student) -> bool:
+    def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
         """Sync admin flag in gitlab and db"""
 
         with Session(self.engine) as session:
@@ -570,11 +628,11 @@ class DataBaseApi(StorageApi):
                 session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
             )
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-            if student.course_admin != user_on_course.is_course_admin and student.course_admin:
+            if course_admin != user_on_course.is_course_admin and course_admin:
                 user_on_course = self._update(
                     session=session,
                     model=models.UserOnCourse,
-                    defaults={"is_course_admin": student.course_admin},
+                    defaults={"is_course_admin": course_admin},
                     user_id=user.id,
                     course_id=course.id,
                 )
@@ -595,8 +653,8 @@ class DataBaseApi(StorageApi):
             except Exception:
                 return False
 
-    def get_or_create_user(self, student: Student, course_name: str) -> models.User:
-        """Get user in DB or create if not"""
+    def create_user_if_not_exist(self, student: Student, course_name: str) -> None:
+        """Create user in DB if not exist"""
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
@@ -605,8 +663,6 @@ class DataBaseApi(StorageApi):
             )
             session.commit()
             session.refresh(user)
-
-        return user
 
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
@@ -642,14 +698,24 @@ class DataBaseApi(StorageApi):
             pass
 
     def _get_or_create_user_on_course(
-        self, session: Session, student: Student, course: models.Course
+        self,
+        session: Session,
+        student: Student,
+        course: models.Course,
+        repo_name: str | None = None,
     ) -> models.UserOnCourse:
         user = self._get_or_create(
             session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
         )
 
+        defaults = {}
+        if repo_name is not None:
+            defaults["repo_name"] = repo_name
+        else:
+            defaults["repo_name"] = ""
+
         user_on_course = self._get_or_create(
-            session, models.UserOnCourse, defaults={"repo_name": student.repo}, user_id=user.id, course_id=course.id
+            session, models.UserOnCourse, defaults=defaults, user_id=user.id, course_id=course.id
         )
 
         return user_on_course
@@ -663,7 +729,7 @@ class DataBaseApi(StorageApi):
         only_bonus: bool = False,
     ) -> Optional[Iterable["models.Grade"]]:
         try:
-            course = self._get(session, models.Course, name=self.course_name)
+            course = self._get(session, models.Course, name=self._course_name)
             user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
 
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
