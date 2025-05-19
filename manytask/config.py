@@ -192,7 +192,6 @@ class ManytaskConfig(BaseModel):
 
     version: int  # if config exists, version is always present
 
-    course_name: str  # will be removed in next PRs
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
 

@@ -6,7 +6,15 @@ from manytask.config import ManytaskDeadlinesConfig
 
 
 # ruff: noqa
-from tests.test_db_api import first_course_db_api, second_course_db_api
+from tests.test_db_api import (
+    db_api,
+    first_course_config,
+    first_course_deadlines_config,
+    second_course_config,
+    second_course_deadlines_config,
+    db_api_with_two_initialized_courses,
+    FIRST_COURSE_NAME,
+)
 
 
 def create_test_config(tasks_config):
@@ -72,7 +80,7 @@ def setup_course_with_tasks(
     return course, tasks
 
 
-def test_move_task_between_groups(first_course_db_api, session):
+def test_move_task_between_groups(db_api_with_two_initialized_courses, session):
     """Test moving a task from one group to another"""
 
     _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
@@ -80,15 +88,15 @@ def test_move_task_between_groups(first_course_db_api, session):
     tasks_config = create_base_task_config("group2")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    first_course_db_api.update_task_groups_from_config(
-        ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
+    db_api_with_two_initialized_courses.update_task_groups_from_config(
+        FIRST_COURSE_NAME, ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
     )
 
     task = session.query(Task).filter_by(name="task1").one()
     assert task.group.name == "group2"
 
 
-def test_create_missing_group(first_course_db_api, session):
+def test_create_missing_group(db_api_with_two_initialized_courses, session):
     """Test creating a new group when moving task to non-existent group"""
 
     _, tasks = setup_course_with_tasks(session, "Test Course", [("task1", "group1", "Test Course")])
@@ -96,8 +104,8 @@ def test_create_missing_group(first_course_db_api, session):
     tasks_config = create_base_task_config("new_group")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    first_course_db_api.update_task_groups_from_config(
-        ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
+    db_api_with_two_initialized_courses.update_task_groups_from_config(
+        FIRST_COURSE_NAME, ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
     )
 
     task = session.query(Task).filter_by(name="task1").one()
@@ -105,7 +113,7 @@ def test_create_missing_group(first_course_db_api, session):
     assert session.query(TaskGroup).filter_by(name="new_group").count() == 1
 
 
-def test_multiple_courses(first_course_db_api, second_course_db_api, session):
+def test_multiple_courses(db_api_with_two_initialized_courses, session):
     """Test that tasks are only moved in the correct course"""
 
     tasks_data = [("task1", "group1", "Test Course"), ("task1", "group1", "Another Test Course")]
@@ -122,8 +130,8 @@ def test_multiple_courses(first_course_db_api, second_course_db_api, session):
     tasks_config = create_base_task_config("group2")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    first_course_db_api.update_task_groups_from_config(
-        ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
+    db_api_with_two_initialized_courses.update_task_groups_from_config(
+        FIRST_COURSE_NAME, ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
     )
 
     task1_c1 = session.query(Task).join(TaskGroup).filter(Task.name == "task1", TaskGroup.course_id == course1.id).one()
@@ -133,7 +141,7 @@ def test_multiple_courses(first_course_db_api, second_course_db_api, session):
     assert task1_c2.group.name == "group1"
 
 
-def test_multiple_task_moves(first_course_db_api, session):
+def test_multiple_task_moves(db_api_with_two_initialized_courses, session):
     """Test moving multiple tasks between groups"""
 
     tasks_data = [
@@ -151,8 +159,8 @@ def test_multiple_task_moves(first_course_db_api, session):
     tasks_config = create_base_task_config("group3")
     tasks_config["tasks"] = [create_task_entry("task1"), create_task_entry("task2"), create_task_entry("task3")]
 
-    first_course_db_api.update_task_groups_from_config(
-        ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
+    db_api_with_two_initialized_courses.update_task_groups_from_config(
+        FIRST_COURSE_NAME, ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
     )
 
     tasks = session.query(Task).filter(Task.name.in_(["task1", "task2", "task3"])).all()

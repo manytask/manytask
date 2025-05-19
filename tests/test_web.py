@@ -11,6 +11,7 @@ from authlib.integrations.base_client import OAuthError
 from flask import Flask, url_for
 
 from manytask.abstract import StoredUser
+from manytask.api import bp as api_bp
 from manytask.database import TaskDisabledError
 from manytask.glab import Student, User
 from manytask.web import course_bp, root_bp
@@ -41,6 +42,7 @@ def app(mock_gitlab_api, mock_storage_api):
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
+    app.register_blueprint(api_bp)
     app.gitlab_api = mock_gitlab_api
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
@@ -105,26 +107,26 @@ def mock_storage_api(mock_course):  # noqa: C901
             self.course_name = TEST_COURSE_NAME
 
         @staticmethod
-        def get_scores_update_timestamp():
+        def get_scores_update_timestamp(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
         @staticmethod
-        def get_scores(_username):
+        def get_scores(_course_name, _username):
             return {"task1": 100, "task2": 90}
 
         @staticmethod
-        def get_all_scores():
+        def get_all_scores(_course_name):
             return {TEST_USERNAME: {"task1": 100, "task2": 90}}
 
         @staticmethod
-        def get_stats():
+        def get_stats(_course_name):
             return {"task1": {"mean": 95}, "task2": {"mean": 85}}
 
         @staticmethod
-        def get_bonus_score(_username):
+        def get_bonus_score(_course_name, _username):
             return 10
 
-        def sync_stored_user(self, student, repo_name, course_admin):
+        def sync_stored_user(self, _course_name, student, repo_name, course_admin):
             self.stored_user.course_admin = self.stored_user.course_admin or course_admin
 
         @staticmethod
@@ -136,7 +138,7 @@ def mock_storage_api(mock_course):  # noqa: C901
             return mock_course
 
         @staticmethod
-        def find_task(task_name):
+        def find_task(_course_name, task_name):
             if task_name == INVALID_TASK_NAME:
                 raise KeyError("Task not found")
             if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
@@ -144,14 +146,14 @@ def mock_storage_api(mock_course):  # noqa: C901
             return None, None
 
         @staticmethod
-        def get_now_with_timezone():
+        def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_stored_user(self, _student):
+        def get_stored_user(self, _course_name, _student):
             return self.stored_user
 
         @staticmethod
-        def update_cached_scores():
+        def update_cached_scores(_course_name):
             pass
 
         @staticmethod
@@ -162,8 +164,7 @@ def mock_storage_api(mock_course):  # noqa: C901
             self.stored_user.course_admin = self.stored_user.course_admin or course_admin
             return self.stored_user.course_admin
 
-        @property
-        def max_score_started(self):
+        def max_score_started(self, _course_name):
             return 100
 
     return MockStorageApi()
@@ -177,7 +178,6 @@ def mock_course():
             self.is_ready = True
             self.show_allscores = True
             self.registration_secret = TEST_SECRET
-            self.debug = False
             self.gitlab_course_group = "test_group"
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"

@@ -74,26 +74,26 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(student)
+        stored_user = storage_api.get_stored_user(course.course_name, student)
 
         student_course_admin = stored_user.course_admin
 
     # update cache if more than 1h passed or in debug mode
     try:
-        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp()))
+        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
     except ValueError:
         cache_delta = timedelta(days=365)
 
     hours_in_seconds = 3600
     if app.debug or cache_delta.total_seconds() > hours_in_seconds:
-        storage_api.update_cached_scores()
-        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp()))
+        storage_api.update_cached_scores(course.course_name)
+        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
 
     # get scores
-    tasks_scores = storage_api.get_scores(student_username)
-    tasks_stats = storage_api.get_stats()
+    tasks_scores = storage_api.get_scores(course.course_name, student_username)
+    tasks_stats = storage_api.get_stats(course.course_name)
 
     allscores_url = url_for("course.show_database", course_name=course_name)
 
@@ -111,9 +111,10 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=app.manytask_version,
+        task_url_template=course.task_url_template,
         links=course.links,
         scores=tasks_scores,
-        bonus_score=storage_api.get_bonus_score(student_username),
+        bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=app.favicon,
@@ -252,13 +253,13 @@ def show_database(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(student)
+        stored_user = storage_api.get_stored_user(course.course_name, student)
 
         student_course_admin = stored_user.course_admin
 
-    scores = storage_api.get_scores(student_username)
-    bonus_score = storage_api.get_bonus_score(student_username)
-    table_data = get_database_table_data(app)
+    scores = storage_api.get_scores(course.course_name, student_username)
+    bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
+    table_data = get_database_table_data(app, course.course_name)
 
     return render_template(
         "database.html",

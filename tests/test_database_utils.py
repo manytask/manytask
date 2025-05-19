@@ -46,11 +46,11 @@ def app():
                 )
             ]
 
-        def get_groups(self):
+        def get_groups(self, _course_name):
             return self.groups
 
         @staticmethod
-        def get_all_scores():
+        def get_all_scores(_course_name):
             return {
                 STUDENT_1: {TASK_1: SCORES[STUDENT_1][TASK_1], TASK_2: SCORES[STUDENT_1][TASK_2]},
                 STUDENT_2: {TASK_1: SCORES[STUDENT_2][TASK_1], TASK_2: SCORES[STUDENT_2][TASK_2]},
@@ -87,7 +87,7 @@ def test_get_database_table_data(app):
     expected_students_count = 2
 
     with app.test_request_context():
-        result = get_database_table_data(app)
+        result = get_database_table_data(app, app.course_name)
 
         assert "tasks" in result
         assert "students" in result
@@ -113,8 +113,8 @@ def test_get_database_table_data_no_scores(app):
     expected_tasks_count = 2
 
     with app.test_request_context():
-        app.storage_api.get_all_scores = lambda: {}
-        result = get_database_table_data(app)
+        app.storage_api.get_all_scores = lambda _course_name: {}
+        result = get_database_table_data(app, app.course_name)
 
         assert "tasks" in result
         assert "students" in result

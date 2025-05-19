@@ -42,15 +42,7 @@ class DatabaseConfig:
     """Configuration for Database connection and settings."""
 
     database_url: str
-    course_name: str
     gitlab_instance_host: str
-    registration_secret: str
-    token: str
-    show_allscores: bool
-    gitlab_course_group: str
-    gitlab_course_public_repo: str
-    gitlab_course_students_group: str
-    gitlab_default_branch: str
     apply_migrations: bool = False
 
 
@@ -68,7 +60,6 @@ class DataBaseApi(StorageApi):
         :param config: DatabaseConfig instance containing all necessary settings
         """
         self.database_url = config.database_url
-        self._course_name = config.course_name
         self.gitlab_instance_host = config.gitlab_instance_host
         self.apply_migrations = config.apply_migrations
 
@@ -80,60 +71,21 @@ class DataBaseApi(StorageApi):
             else:
                 logger.error("There are pending migrations that have not been applied")
 
-        with Session(self.engine) as session:
-            try:
-                course = self._get(session, models.Course, name=self._course_name)
-                if course.gitlab_instance_host != self.gitlab_instance_host:
-                    raise AttributeError("Can't update gitlab_instance_host param on created course")
-            except NoResultFound:
-                self._create(
-                    session,
-                    models.Course,
-                    registration_secret=config.registration_secret,
-                    token=config.token,
-                    show_allscores=config.show_allscores,
-                    is_ready=False,
-                    gitlab_course_group=config.gitlab_course_group,
-                    gitlab_course_public_repo=config.gitlab_course_public_repo,
-                    gitlab_course_students_group=config.gitlab_course_students_group,
-                    gitlab_default_branch=config.gitlab_default_branch,
-                    gitlab_instance_host=config.gitlab_instance_host,
-                    name=config.course_name,
-                    task_url_template="",
-                )
-
-            self._update_or_create(
-                session,
-                models.Course,
-                defaults={
-                    "registration_secret": config.registration_secret,
-                    "token": config.token,
-                    "show_allscores": config.show_allscores,
-                    "gitlab_course_group": config.gitlab_course_group,
-                    "gitlab_course_public_repo": config.gitlab_course_public_repo,
-                    "gitlab_course_students_group": config.gitlab_course_students_group,
-                    "gitlab_default_branch": config.gitlab_default_branch,
-                    "task_url_template": "",
-                },
-                name=config.course_name,
-            )
-
-    def get_scoreboard_url(self) -> str:
-        return ""
-
     def get_scores(
         self,
+        course_name: str,
         username: str,
     ) -> dict[str, int]:
         """Method for getting all user scores
 
+        :param course_name: course name
         :param username: student username
 
         :return: dict with the names of tasks and their scores
         """
 
         with Session(self.engine) as session:
-            grades = self._get_scores(session, username, enabled=True, started=True, only_bonus=False)
+            grades = self._get_scores(session, course_name, username, enabled=True, started=True, only_bonus=False)
 
             if grades is None:
                 return {}
@@ -146,17 +98,19 @@ class DataBaseApi(StorageApi):
 
     def get_bonus_score(
         self,
+        course_name: str,
         username: str,
     ) -> int:
         """Method for getting user's total bonus score
 
+        :param course_name: course name
         :param username: student username
 
         :return: user's total bonus score
         """
 
         with Session(self.engine) as session:
-            grades = self._get_scores(session, username, enabled=True, started=True, only_bonus=True)
+            grades = self._get_scores(session, course_name, username, enabled=True, started=True, only_bonus=True)
 
         if grades is None:
             return 0
@@ -165,17 +119,19 @@ class DataBaseApi(StorageApi):
 
     def get_stored_user(
         self,
+        course_name: str,
         student: Student,
     ) -> StoredUser:
         """Method for getting user's stored data
 
+        :param course_name: course name
         :param student: Student object
 
         :return: created or received StoredUser object
         """
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self._course_name)
+            course = self._get(session, models.Course, name=course_name)
             user_on_course = self._get_or_create_user_on_course(session, student, course)
             session.commit()
 
@@ -183,19 +139,21 @@ class DataBaseApi(StorageApi):
 
     def sync_stored_user(
         self,
+        course_name: str,
         student: Student,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser:
         """Method for sync user's gitlab and stored data
 
+        :param course_name: course name
         :param student: Student object
 
         :return: created or updated StoredUser object
         """
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self._course_name)
+            course = self._get(session, models.Course, name=course_name)
             user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
 
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
@@ -204,31 +162,35 @@ class DataBaseApi(StorageApi):
 
             return StoredUser(username=user_on_course.user.username, course_admin=user_on_course.is_course_admin)
 
-    def get_all_scores(self) -> dict[str, dict[str, int]]:
+    def get_all_scores(self, course_name: str) -> dict[str, dict[str, int]]:
         """Method for getting all scores for all users
+
+        :param course_name: course name
 
         :return: dict with usernames and all their scores
         """
 
         with Session(self.engine) as session:
-            all_users = self._get_all_users(session, self._course_name)
+            all_users = self._get_all_users(session, course_name)
 
         all_scores: dict[str, dict[str, int]] = {}
         for username in all_users:
-            all_scores[username] = self.get_scores(username)
+            all_scores[username] = self.get_scores(course_name, username)
 
         return all_scores
 
-    def get_stats(self) -> dict[str, float]:
+    def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks
+
+        :param course_name: course name
 
         :return: dict with the names of tasks and their stats
         """
 
         with Session(self.engine) as session:
-            tasks = self._get_all_tasks(session, self._course_name, enabled=True, started=True)
+            tasks = self._get_all_tasks(session, course_name, enabled=True, started=True)
 
-            users_on_courses_count = self._get_course_users_on_courses_count(session, self._course_name)
+            users_on_courses_count = self._get_course_users_on_courses_count(session, course_name)
             tasks_stats: dict[str, float] = {}
             for task in tasks:
                 if users_on_courses_count == 0:
@@ -238,21 +200,24 @@ class DataBaseApi(StorageApi):
 
         return tasks_stats
 
-    def get_scores_update_timestamp(self) -> str:
+    def get_scores_update_timestamp(self, course_name: str) -> str:
         """Method(deprecated) for getting last cached scores update timestamp
+
+        :param course_name: course name
 
         :return: last update timestamp
         """
 
         return datetime.now(timezone.utc).isoformat()
 
-    def update_cached_scores(self) -> None:
+    def update_cached_scores(self, course_name: str) -> None:
         """Method(deprecated) for updating cached scores"""
 
         return
 
     def store_score(
         self,
+        course_name: str,
         student: Student,
         repo_name: str,
         task_name: str,
@@ -260,6 +225,7 @@ class DataBaseApi(StorageApi):
     ) -> int:
         """Method for storing user's task score
 
+        :param course_name: course name
         :param student: Student object
         :param repo_name: student's repo name
         :param task_name: task name
@@ -273,7 +239,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             try:
-                course = self._get(session, models.Course, name=self._course_name)
+                course = self._get(session, models.Course, name=course_name)
                 user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
                 session.commit()
 
@@ -298,10 +264,12 @@ class DataBaseApi(StorageApi):
 
     def sync_columns(
         self,
+        course_name: str,
         deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
         """Method for updating deadlines config
 
+        :param course_name: course name
         :param deadlines_config: ManytaskDeadlinesConfig object
         """
 
@@ -309,7 +277,7 @@ class DataBaseApi(StorageApi):
 
         logger.info("Syncing database tasks...")
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self._course_name)
+            course = self._get(session, models.Course, name=course_name)
 
             existing_course_tasks = (
                 session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
@@ -400,6 +368,7 @@ class DataBaseApi(StorageApi):
 
     def update_task_groups_from_config(
         self,
+        course_name: str,
         deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
         """Update task groups based on new deadline config data.
@@ -428,13 +397,13 @@ class DataBaseApi(StorageApi):
                     task_group = existing_task.group
                     task_course = task_group.course
 
-                    if task_course.name == self._course_name:
+                    if task_course.name == course_name:
                         new_group_name = new_task_to_group[existing_task.name]
                         if task_group.name != new_group_name:
                             tasks_to_update[existing_task.id] = new_group_name
 
             # Create any missing groups
-            course = self._get(session, models.Course, name=self._course_name)
+            course = self._get(session, models.Course, name=course_name)
             needed_group_names = set(tasks_to_update.values())
             existing_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
             existing_group_names = {g.name for g in existing_groups}
@@ -459,11 +428,49 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
+    def create_course(
+        self,
+        settings_config: AppCourseConfig,
+    ) -> bool:
+        """Create from config object
+
+        :param settings_config: CourseConfig object
+
+        :return: is course created, false if course created before
+        """
+
+        with Session(self.engine) as session:
+            try:
+                self._get(session, models.Course, name=settings_config.course_name)
+            except NoResultFound:
+                self._create(
+                    session,
+                    models.Course,
+                    name=settings_config.course_name,
+                    gitlab_instance_host=self.gitlab_instance_host,
+                    registration_secret=settings_config.registration_secret,
+                    token=settings_config.token,
+                    show_allscores=settings_config.show_allscores,
+                    is_ready=settings_config.is_ready,
+                    gitlab_course_group=settings_config.gitlab_course_group,
+                    gitlab_course_public_repo=settings_config.gitlab_course_public_repo,
+                    gitlab_course_students_group=settings_config.gitlab_course_students_group,
+                    gitlab_default_branch=settings_config.gitlab_default_branch,
+                    task_url_template=settings_config.task_url_template,
+                    links=settings_config.links,
+                )
+                return True
+
+            return False
+
     def update_course(
         self,
+        course_name: str,
         ui_config: ManytaskUiConfig,
     ) -> None:
         """Update course settings from config objects
+
+        :param course_name: course name
         :param ui_config: ManytaskUiConfig object
         """
 
@@ -476,21 +483,22 @@ class DataBaseApi(StorageApi):
                     "task_url_template": ui_config.task_url_template,
                     "links": ui_config.links,
                 },
-                name=self._course_name,
+                name=course_name,
             )
 
-    def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
+    def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
 
         Raise TaskDisabledError if task or its group is disabled
 
+        :param course_name: course name
         :param task_name: task name
 
         :return: pair of ManytaskGroupConfig and ManytaskTaskConfig objects
         """
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self._course_name)
+            course = self._get(session, models.Course, name=course_name)
             try:
                 task = self._get_task_by_name_and_course_id(session, task_name, course.id)
             except NoResultFound:
@@ -536,12 +544,14 @@ class DataBaseApi(StorageApi):
 
     def get_groups(
         self,
+        course_name: str,
         enabled: bool | None = None,
         started: bool | None = None,
         now: datetime | None = None,
     ) -> list[ManytaskGroupConfig]:
         """Get tasks groups. Serialize result to Config object.
 
+        :param course_name: course name
         :param enabled: flag to check for group is enabled
         :param started: flag to check for group is started
         :param now: optional param for setting current time
@@ -550,10 +560,10 @@ class DataBaseApi(StorageApi):
         """
 
         if now is None:
-            now = self.get_now_with_timezone()
+            now = self.get_now_with_timezone(course_name)
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self._course_name)
+            course = self._get(session, models.Course, name=course_name)
 
             query = (
                 session.query(models.TaskGroup).join(models.Deadline).filter(models.TaskGroup.course_id == course.id)
@@ -602,22 +612,21 @@ class DataBaseApi(StorageApi):
 
         return result_groups
 
-    def get_now_with_timezone(self) -> datetime:
+    def get_now_with_timezone(self, course_name: str) -> datetime:
         """Get current time with course timezone"""
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=self._course_name)
+            course = self._get(session, models.Course, name=course_name)
         return datetime.now(tz=ZoneInfo(course.timezone))
 
-    def max_score(self, started: bool | None = True) -> int:
+    def max_score(self, course_name: str, started: bool | None = True) -> int:
         with Session(self.engine) as session:
-            tasks = self._get_all_tasks(session, self._course_name, enabled=True, started=started, is_bonus=False)
+            tasks = self._get_all_tasks(session, course_name, enabled=True, started=started, is_bonus=False)
 
         return sum(task.score for task in tasks)
 
-    @property
-    def max_score_started(self) -> int:
-        return self.max_score(started=True)
+    def max_score_started(self, course_name: str) -> int:
+        return self.max_score(course_name, started=True)
 
     def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
         """Sync admin flag in gitlab and db"""
@@ -723,13 +732,14 @@ class DataBaseApi(StorageApi):
     def _get_scores(
         self,
         session: Session,
+        course_name: str,
         username: str,
         enabled: bool | None = None,
         started: bool | None = None,
         only_bonus: bool = False,
     ) -> Optional[Iterable["models.Grade"]]:
         try:
-            course = self._get(session, models.Course, name=self._course_name)
+            course = self._get(session, models.Course, name=course_name)
             user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
 
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
@@ -948,9 +958,9 @@ class DataBaseApi(StorageApi):
 
         if started is not None:
             if started:
-                query = query.filter(self.get_now_with_timezone() >= models.Deadline.start)
+                query = query.filter(self.get_now_with_timezone(user_on_course.course.name) >= models.Deadline.start)
             else:
-                query = query.filter(self.get_now_with_timezone() < models.Deadline.start)
+                query = query.filter(self.get_now_with_timezone(user_on_course.course.name) < models.Deadline.start)
 
         if only_bonus:
             query = query.filter(models.Task.is_bonus)
@@ -991,9 +1001,9 @@ class DataBaseApi(StorageApi):
 
         if started is not None:
             if started:
-                query = query.filter(self.get_now_with_timezone() >= models.Deadline.start)
+                query = query.filter(self.get_now_with_timezone(course_name) >= models.Deadline.start)
             else:
-                query = query.filter(self.get_now_with_timezone() < models.Deadline.start)
+                query = query.filter(self.get_now_with_timezone(course_name) < models.Deadline.start)
 
         return query.all()
 
