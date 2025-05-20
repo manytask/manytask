@@ -11,7 +11,7 @@ from flask import Flask, Response, request, session, url_for
 from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import StoredUser
-from manytask.auth import requires_auth, requires_ready, set_oauth_session, valid_session
+from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
 from manytask.glab import Student
 from manytask.web import course_bp, root_bp
 
@@ -32,7 +32,6 @@ def app(mock_gitlab_api, mock_storage_api):
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
     app.config["DEBUG"] = False
-    app.course_name = TEST_COURSE_NAME
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
@@ -70,6 +69,10 @@ def mock_gitlab_api():
 
         def get_authenticated_student(self, gitlab_access_token: str):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+
+        @staticmethod
+        def check_is_gitlab_admin(user_id: int):
+            return False
 
         @staticmethod
         def check_project_exists(student: Student, course_students_group: str):
@@ -243,7 +246,7 @@ def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth):
         mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
         response = test_route(course_name=TEST_COURSE_NAME)
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == "/login"
+        assert response.location == "http://localhost/"
 
 
 def test_requires_auth_callback_oauth(app, mock_gitlab_oauth):
@@ -270,7 +273,7 @@ def test_requires_auth_callback_oauth(app, mock_gitlab_oauth):
         request.args = {"code": "test_code"}
         response = test_route(course_name=TEST_COURSE_NAME)
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("root.login")
+        assert response.location == url_for("root.index")
 
         mock_authorize_access_token.assert_called_once()
 
@@ -369,3 +372,62 @@ def test_set_oauth_session_only_student():
     assert "refresh_token" not in result
     assert result["username"] == student.username
     assert result["user_id"] == student.id
+
+
+def test_requires_admin_in_debug_mode(app):
+    @requires_admin
+    def test_route(course_name: str):
+        return "success"
+
+    with app.test_request_context():
+        app.config["DEBUG"] = True
+        response = test_route(course_name=TEST_COURSE_NAME)
+        assert response == "success"
+
+
+def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
+    @requires_admin
+    def test_route(course_name: str):
+        return "success"
+
+    with (
+        app.test_request_context(),
+        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.gitlab_api, "check_is_gitlab_admin") as mock_check_is_gitlab_admin,
+    ):
+        app.oauth = mock_gitlab_oauth
+        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_check_is_gitlab_admin.return_value = True
+        session["gitlab"] = {
+            "version": 1.5,
+            "username": "test_user",
+            "user_id": 123,
+            "access_token": TEST_TOKEN,
+        }
+
+        response = test_route(course_name=TEST_COURSE_NAME)
+        assert response == "success"
+
+
+def test_requires_admin_with_no_admin_rules(app, mock_gitlab_oauth):
+    @requires_admin
+    def test_route(course_name: str):
+        return "success"
+
+    with (
+        app.test_request_context(),
+        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
+    ):
+        app.oauth = mock_gitlab_oauth
+        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        session["gitlab"] = {
+            "version": 1.5,
+            "username": "test_user",
+            "user_id": 123,
+            "access_token": TEST_TOKEN,
+        }
+
+        with pytest.raises(HTTPException) as e:
+            test_route(course_name=TEST_COURSE_NAME)
+
+        assert e.value.code == HTTPStatus.FORBIDDEN

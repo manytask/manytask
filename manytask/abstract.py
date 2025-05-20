@@ -133,3 +133,9 @@ class StorageApi(ABC):
 
     @abstractmethod
     def create_user_if_not_exist(self, student: Student, course_name: str) -> None: ...
+
+    @abstractmethod
+    def get_user_courses_names(self, student: Student) -> list[str]: ...
+
+    @abstractmethod
+    def get_all_courses_names(self) -> list[str]: ...

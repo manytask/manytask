@@ -24,7 +24,7 @@ INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
 TEST_SECRET_KEY = "test_key"
-TEST_COURSE_NAME = "Test Course"
+TEST_COURSE_NAME = "Test_Course"
 
 
 @pytest.fixture(autouse=True)
@@ -42,7 +42,6 @@ def app(mock_storage_api, mock_gitlab_api):
     app = Flask(__name__)
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
-    app.course_name = TEST_COURSE_NAME
     app.secret_key = TEST_SECRET_KEY
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
@@ -373,7 +372,7 @@ def test_update_database_unauthorized(app, mock_gitlab_oauth):
     response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
     # Signup
     assert response.status_code == HTTPStatus.FOUND
-    assert response.location == "/login"
+    assert response.location == f"http://localhost/api/{TEST_COURSE_NAME}/database/update"
 
 
 def test_update_database_not_ready(app, authenticated_client):
@@ -581,7 +580,6 @@ def test_no_course_in_db(app):
     """Test the decorator when no course information is present in the database, leading to an abort."""
 
     app.storage_api = MagicMock(DataBaseApi)
-    app.course_name = "NoSuchCourse"
     app.storage_api.get_course.return_value = None
     headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
     client = app.test_client()

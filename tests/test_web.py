@@ -38,7 +38,6 @@ def app(mock_gitlab_api, mock_storage_api):
     )
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
-    app.course_name = TEST_COURSE_NAME
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
@@ -226,7 +225,7 @@ def test_course_page_invalid_session(app, mock_gitlab_oauth):
         app.oauth = mock_gitlab_oauth
         response = app.test_client().get(f"/{TEST_COURSE_NAME}/")
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == "/login"
+        assert response.location == f"http://localhost/{TEST_COURSE_NAME}/"
 
 
 def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
@@ -298,7 +297,7 @@ def test_logout(app):
                 sess["gitlab"] = {"version": TEST_VERSION, "username": TEST_USERNAME}
             response = client.get("/logout")
             assert response.status_code == HTTPStatus.FOUND
-            assert response.headers["Location"] == f"/{TEST_COURSE_NAME}/signup"
+            assert response.headers["Location"] == "/"
             with client.session_transaction() as sess:
                 assert "gitlab" not in sess
 
@@ -441,7 +440,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
 
         response = app.test_client().post(url_for("course.signup", course_name=TEST_COURSE_NAME), data=data)
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("root.login")
+        assert response.location == url_for("course.create_project", course_name=TEST_COURSE_NAME)
 
         mock_register_new_user.assert_called_once()
         args, _ = mock_register_new_user.call_args
@@ -485,7 +484,7 @@ def test_login_get_with_code(app, mock_gitlab_oauth):
         response = app.test_client().get(url_for("root.login"), query_string={"code": "test_code"})
 
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("root.login")
+        assert response.location == url_for("root.index")
 
         mock_authorize_access_token.assert_called_once()
 
@@ -502,4 +501,4 @@ def test_login_oauth_error(app, mock_gitlab_oauth):
         app.oauth = mock_gitlab_oauth
         response = app.test_client().get(url_for("root.login"), query_string={"code": "test_code"})
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("root.login")
+        assert response.location == url_for("root.index")

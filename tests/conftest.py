@@ -93,9 +93,9 @@ def mock_gitlab_oauth():
                 return {"access_token": "", "refresh_token": ""}
 
             @staticmethod
-            def authorize_redirect(redirect_uri: str):
+            def authorize_redirect(redirect_uri: str, state: str | None = None):
                 resp = Response(status=302)
-                resp.location = url_for("root.login")
+                resp.location = state or url_for("root.index")
                 return resp
 
     return MockGitlabOauth()

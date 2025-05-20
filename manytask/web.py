@@ -8,10 +8,11 @@ from flask import Blueprint, current_app, redirect, render_template, request, se
 from flask.typing import ResponseReturnValue
 
 from . import glab
-from .auth import requires_auth, requires_course_access, requires_ready
-from .course import Course, get_current_time
+from .auth import requires_admin, requires_auth, requires_course_access, requires_ready
+from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
+from .utils import generate_token_hex
 
 SESSION_VERSION = 1.5
 
@@ -19,6 +20,7 @@ SESSION_VERSION = 1.5
 logger = logging.getLogger(__name__)
 root_bp = Blueprint("root", __name__)
 course_bp = Blueprint("course", __name__, url_prefix="/<course_name>")
+admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 
 @root_bp.get("/healthcheck")
@@ -27,10 +29,33 @@ def healthcheck() -> ResponseReturnValue:
 
 
 @root_bp.route("/", methods=["GET"])
+@requires_auth
 def index() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    return redirect(url_for("course.course_page", course_name=app.course_name))
+    if app.debug:
+        courses_names = app.storage_api.get_all_courses_names()
+
+    else:
+        student_id = session["gitlab"]["user_id"]
+        student = app.gitlab_api.get_student(student_id)
+
+        courses_names = app.storage_api.get_user_courses_names(student)
+
+    courses = [
+        {
+            "name": course_name,
+            "url": url_for("course.course_page", course_name=course_name),
+        }
+        for course_name in courses_names
+    ]
+
+    return render_template(
+        "courses.html",
+        course_favicon=app.favicon,
+        manytask_version=app.manytask_version,
+        courses=courses,
+    )
 
 
 @root_bp.route("/login", methods=["GET", "POST"])
@@ -41,10 +66,8 @@ def login() -> ResponseReturnValue:
 
 @root_bp.route("/logout")
 def logout() -> ResponseReturnValue:
-    app: CustomFlask = current_app  # type: ignore
-
     session.pop("gitlab", None)
-    return redirect(url_for("course.signup", course_name=app.course_name))
+    return redirect(url_for("root.index"))
 
 
 @course_bp.route("/", methods=["GET", "POST"])
@@ -168,7 +191,7 @@ def signup(course_name: str) -> ResponseReturnValue:
             base_url=app.gitlab_api.base_url,
         )
 
-    return redirect(url_for("root.login"))
+    return redirect(url_for("course.create_project", course_name=course.course_name))
 
 
 @course_bp.route("/create_project", methods=["GET", "POST"])
@@ -197,6 +220,14 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
+    app.storage_api.create_user_if_not_exist(student, course.course_name)
+
+    app.storage_api.sync_stored_user(
+        course.course_name,
+        student,
+        app.gitlab_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+        app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
+    )
 
     # Create use if needed
     try:
@@ -222,6 +253,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
 
     return render_template(
         "not_ready.html",
+        course_name=course.course_name,
         manytask_version=app.manytask_version,
     )
 
@@ -277,4 +309,39 @@ def show_database(course_name: str) -> ResponseReturnValue:
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
+    )
+
+
+@admin_bp.route("/courses/new", methods=["GET", "POST"])
+@requires_admin
+def create_course() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+
+    if request.method == "POST":
+        settings = CourseConfig(
+            course_name=request.form["unique_course_name"],
+            gitlab_course_group=request.form["gitlab_course_group"],
+            gitlab_course_public_repo=request.form["gitlab_course_public_repo"],
+            gitlab_course_students_group=request.form["gitlab_course_students_group"],
+            gitlab_default_branch=request.form["gitlab_default_branch"],
+            registration_secret=request.form["registration_secret"],
+            token=request.form["token"],
+            show_allscores=request.form.get("show_allscores", "off") == "on",
+            is_ready=False,
+            task_url_template="",
+            links={},
+        )
+
+        if app.storage_api.create_course(settings):
+            return redirect(url_for("course.course_page", course_name=settings.course_name))
+
+        return render_template(
+            "create_course.html",
+            generated_token=generate_token_hex(24),
+            error_message=f"Курс с названием {settings.course_name} уже существует",
+        )
+
+    return render_template(
+        "create_course.html",
+        generated_token=generate_token_hex(24),
     )

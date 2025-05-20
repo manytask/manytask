@@ -265,6 +265,10 @@ class GitLabApi:
 
         return True
 
+    def check_is_gitlab_admin(self, user_id: int) -> bool:
+        user = self._gitlab.users.get(user_id)
+        return user.is_admin
+
     def _parse_user_to_student(
         self,
         user: dict[str, Any],

@@ -21,7 +21,6 @@ SCORES = {STUDENT_1: {TASK_1: 100, TASK_2: 90, "total": 190}, STUDENT_2: {TASK_1
 @pytest.fixture
 def app():
     app = Flask(__name__)
-    app.course_name = "test_course"
 
     class MockStorageApi:
         class MockGroup:
@@ -87,7 +86,7 @@ def test_get_database_table_data(app):
     expected_students_count = 2
 
     with app.test_request_context():
-        result = get_database_table_data(app, app.course_name)
+        result = get_database_table_data(app, "test_course")
 
         assert "tasks" in result
         assert "students" in result
@@ -114,7 +113,7 @@ def test_get_database_table_data_no_scores(app):
 
     with app.test_request_context():
         app.storage_api.get_all_scores = lambda _course_name: {}
-        result = get_database_table_data(app, app.course_name)
+        result = get_database_table_data(app, "test_course")
 
         assert "tasks" in result
         assert "students" in result
