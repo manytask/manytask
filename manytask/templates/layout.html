@@ -6,7 +6,7 @@
 {% set solved_score = scores.values() | sum() %}
 {% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
 {% set solved_score_string = solved_score ~ bonus_score_string %}
-{% set solved_percent = "0.0" if app.storage_api.max_score_started  == 0 else (solved_score / app.storage_api.max_score_started * 100) | round(1, 'common') %}
+{% set solved_percent = "0.0" if app.storage_api.max_score_started(course_name)  == 0 else (solved_score / app.storage_api.max_score_started(course_name) * 100) | round(1, 'common') %}
 
 
     <style>
@@ -67,7 +67,7 @@
                     <li class="nav-item">
                         <a class="nav-link px-3 {% if active_page == 'database' %}active{% endif %}" 
                            aria-current="{% if active_page == 'database' %}page{% endif %}"
-                           href="/database">
+                           href="{{ url_for('course.show_database', course_name=course_name) }}">
                             All&nbsp;Scores
                         </a>
                     </li>
@@ -88,7 +88,7 @@
 
             <div class="dropdown text-end d-flex align-items-center justify-content-center">
                 <div class="total_score round d-flex flex-column align-items-center justify-content-center ms-2 me-2">
-                    <span class="fs-7">{{ solved_score_string }}/{{ app.storage_api.max_score_started }}</span>
+                    <span class="fs-7">{{ solved_score_string }}/{{ app.storage_api.max_score_started(course_name) }}</span>
                     <span class="fs-7">{{ solved_percent }}%</span>
                 </div>
 
@@ -103,7 +103,7 @@
                     <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i class="fa-fw fa-solid fa-moon"></i>&nbsp;Dark Theme</a></li>
                     <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i class="fa-fw fa-solid fa-wand-magic-sparkles"></i>&nbsp;Auto Theme</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="/logout">Sign out</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('root.logout') }}">Sign out</a></li>
                 </ul>
             </div>
 

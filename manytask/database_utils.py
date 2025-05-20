@@ -3,14 +3,14 @@ from typing import Any
 from .main import CustomFlask
 
 
-def get_database_table_data(app: CustomFlask) -> dict[str, Any]:
+def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints."""
 
     storage_api = app.storage_api
-    all_scores = storage_api.get_all_scores()
+    all_scores = storage_api.get_all_scores(course_name)
 
     all_tasks = []
-    for group in storage_api.get_groups():
+    for group in storage_api.get_groups(course_name):
         for task in group.tasks:
             if task.enabled:
                 all_tasks.append({"name": task.name, "score": 0, "group": group.name})

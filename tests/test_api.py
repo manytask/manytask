@@ -52,7 +52,7 @@ def app(mock_storage_api, mock_gitlab_api):
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
 
-    def store_config(content):
+    def store_config(course_name, content):
         pass
 
     app.store_config = store_config
@@ -104,36 +104,36 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
             self.course_name = TEST_COURSE_NAME
 
-        def store_score(self, student, repo_name, task_name, update_fn):
+        def store_score(self, _course_name, student, repo_name, task_name, update_fn):
             old_score = self.scores.get(f"{student.username}_{task_name}", 0)
             new_score = update_fn("", old_score)
             self.scores[f"{student.username}_{task_name}"] = new_score
             return new_score
 
         @staticmethod
-        def get_scores(_username):
+        def get_scores(_course_name, _username):
             return {"task1": 100, "task2": 90, "test_task": 80}
 
         @staticmethod
         def get_course(_name):
             return mock_course
 
-        def get_all_scores(self):
-            return {"test_user": self.get_scores("test_user")}
+        def get_all_scores(course_name, self):
+            return {"test_user": self.get_scores(course_name, "test_user")}
 
         @staticmethod
-        def get_stored_user(student):
+        def get_stored_user(_course_name, student):
             from manytask.abstract import StoredUser
 
             return StoredUser(username=student.username, course_admin=True)
 
-        def update_cached_scores(self):
+        def update_cached_scores(self, _course_name):
             pass
 
-        def sync_columns(self, deadlines):
+        def sync_columns(self, _course_name, _deadlines):
             pass
 
-        def update_task_groups_from_config(self, config_data):
+        def update_task_groups_from_config(self, _course_name, _config_data):
             pass
 
         def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
@@ -144,7 +144,7 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             return True
 
         @staticmethod
-        def find_task(task_name):
+        def find_task(_course_name, task_name):
             if task_name == INVALID_TASK_NAME:
                 raise KeyError("Task not found")
             if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
@@ -152,10 +152,10 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             return mock_group, mock_task
 
         @staticmethod
-        def get_now_with_timezone():
+        def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_groups(self):
+        def get_groups(self, _course_name):
             return [mock_group]
 
     return MockStorageApi()
@@ -196,11 +196,10 @@ def mock_gitlab_api(mock_student):
 def mock_course():
     class MockCourse:
         def __init__(self):
-            self.name = TEST_COURSE_NAME
+            self.course_name = TEST_COURSE_NAME
             self.is_ready = True
             self.show_allscores = True
             self.registration_secret = "test_secret"
-            self.debug = False
             self.token = os.environ["MANYTASK_COURSE_TOKEN"]
             self.gitlab_course_group = "test_group"
             self.gitlab_course_public_repo = "public_2025_spring"
@@ -258,16 +257,16 @@ def test_parse_flags_past_date():
 
 
 def test_update_score_basic(app):
-    group = app.storage_api.find_task("test_task")[0]
-    task = app.storage_api.find_task("test_task")[1]
+    group = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[0]
+    task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[1]
     updated_score = 80
     score = _update_score(group, task, updated_score, "", 0, datetime.now(tz=ZoneInfo("UTC")))
     assert score == updated_score
 
 
 def test_update_score_with_old_score(app):
-    group = app.storage_api.find_task("test_task")[0]
-    task = app.storage_api.find_task("test_task")[1]
+    group = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[0]
+    task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[1]
     updated_score = 70
     old_score = 80
     score = _update_score(group, task, updated_score, "", old_score, datetime.now(tz=ZoneInfo("UTC")))
@@ -411,8 +410,8 @@ def test_parse_flags_invalid_date(app):
 
 
 def test_update_score_after_deadline(app):
-    group = app.storage_api.find_task(TEST_TASK_NAME)[0]
-    task = app.storage_api.find_task(TEST_TASK_NAME)[1]
+    group = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)[0]
+    task = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)[1]
     score = 100
     flags = ""
     old_score = 0
