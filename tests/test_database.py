@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 
 from manytask.models import Course, Task, TaskGroup
 from manytask.config import ManytaskDeadlinesConfig
+from manytask.glab import Student
 
 
 # ruff: noqa
@@ -14,6 +15,7 @@ from tests.test_db_api import (
     second_course_deadlines_config,
     db_api_with_two_initialized_courses,
     FIRST_COURSE_NAME,
+    SECOND_COURSE_NAME,
 )
 
 
@@ -166,3 +168,34 @@ def test_multiple_task_moves(db_api_with_two_initialized_courses, session):
     tasks = session.query(Task).filter(Task.name.in_(["task1", "task2", "task3"])).all()
     for task in tasks:
         assert task.group.name == "group3"
+
+
+def test_get_courses_names_with_no_courses(db_api):
+    student = Student(id=0, username="some_user", name="some_name")
+
+    assert db_api.get_user_courses_names(student) == []
+    assert db_api.get_all_courses_names() == []
+
+
+def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
+    student1 = Student(id=0, username="username1", name="user1")
+    student2 = Student(id=1, username="username2", name="user2")
+    student3 = Student(id=2, username="username3", name="user3")
+
+    assert db_api_with_two_initialized_courses.get_user_courses_names(student1) == []
+    assert db_api_with_two_initialized_courses.get_user_courses_names(student2) == []
+    assert db_api_with_two_initialized_courses.get_user_courses_names(student3) == []
+    assert sorted(db_api_with_two_initialized_courses.get_all_courses_names()) == sorted(
+        [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
+    )
+
+    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, student1, "repo1", True)
+    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, student2, "repo2", False)
+    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, student3, "repo3", False)
+    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, student3, "repo3", True)
+
+    assert db_api_with_two_initialized_courses.get_user_courses_names(student1) == [FIRST_COURSE_NAME]
+    assert db_api_with_two_initialized_courses.get_user_courses_names(student2) == [SECOND_COURSE_NAME]
+    assert sorted(db_api_with_two_initialized_courses.get_user_courses_names(student3)) == sorted(
+        [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
+    )

@@ -112,7 +112,6 @@ def test_create_app_production_with_db(mock_env, mock_gitlab, monkeypatch):
     assert hasattr(app, "oauth")
     assert "gitlab" in app.oauth._clients
 
-    assert hasattr(app, "course_name")
     assert hasattr(app, "storage_api")
     assert hasattr(app, "gitlab_api")
 

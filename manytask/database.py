@@ -673,6 +673,29 @@ class DataBaseApi(StorageApi):
             session.commit()
             session.refresh(user)
 
+    def get_user_courses_names(self, student: Student) -> list[str]:
+        """Get a list of courses names that the user participates in"""
+
+        with Session(self.engine) as session:
+            try:
+                user = self._get(session, models.User, username=student.username)
+            except NoResultFound:
+                return []
+
+            user_on_courses = user.users_on_courses.all()
+
+            result = [user_on_course.course.name for user_on_course in user_on_courses]
+            return result
+
+    def get_all_courses_names(self) -> list[str]:
+        """Get a list of all courses names"""
+
+        with Session(self.engine) as session:
+            courses = session.query(models.Course).all()
+
+            result = [course.name for course in courses]
+            return result
+
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
