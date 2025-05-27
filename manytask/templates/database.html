@@ -147,7 +147,7 @@
             // Update database
             const scores = {};
             scores[taskName] = newScore;
-            fetch('/api/database/update', {
+            fetch('{{ url_for("api.update_database", course_name=course_name) }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -224,7 +224,7 @@
                 attributeFilter: ['data-bs-theme']
             });
 
-            fetch('/api/database')
+            fetch('{{ url_for("api.get_database", course_name=course_name) }}')
                 .then(response => response.json())
                 .then(data => {
                     let columns = [

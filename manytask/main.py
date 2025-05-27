@@ -11,13 +11,12 @@ from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import abstract, config, database, glab, local_config
+from . import abstract, config, course, database, glab, local_config
 
 load_dotenv("../.env")  # take environment variables from .env.
 
 
 class CustomFlask(Flask):
-    course_name: str  # will be removed in next PRs
     oauth: OAuth
     app_config: local_config.LocalConfig  # TODO: check if we need it
     gitlab_api: glab.GitLabApi
@@ -29,17 +28,17 @@ class CustomFlask(Flask):
     def favicon(self) -> str:
         return "favicon.ico"
 
-    def store_config(self, content: dict[str, Any]) -> None:
+    def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
 
         # Update course settings
-        self.storage_api.update_course(manytask_config.ui)
+        self.storage_api.update_course(course_name, manytask_config.ui)
 
         # Update task groups (if necessary -- if there is an override) first
-        self.storage_api.update_task_groups_from_config(manytask_config.deadlines)
+        self.storage_api.update_task_groups_from_config(course_name, manytask_config.deadlines)
 
         # Save deadlines to storage
-        self.storage_api.sync_columns(manytask_config.deadlines)
+        self.storage_api.sync_columns(course_name, manytask_config.deadlines)
 
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
@@ -69,12 +68,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     except FileNotFoundError:
         pass
 
-    # create course
-    course_name = os.environ.get("UNIQUE_COURSE_NAME", None)
-    if course_name is None:
-        raise EnvironmentError("Unable to find UNIQUE_COURSE_NAME env")
-    app.course_name = course_name
-
     app.storage_api = _database_storage_setup(app)
 
     # for https support
@@ -87,18 +80,38 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app.register_blueprint(api.bp)
     app.register_blueprint(web.root_bp)
     app.register_blueprint(web.course_bp)
+    app.register_blueprint(web.admin_bp)
 
     logger = logging.getLogger(__name__)
 
     # debug updates
     if app.debug:
+        _create_debug_course(app)
+
         with open(".manytask.example.yml", "r") as f:
             debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-        app.store_config(debug_manytask_config_data)
+        app.store_config("python2025", debug_manytask_config_data)
 
     logger.info("Init success")
 
     return app
+
+
+def _create_debug_course(app: CustomFlask) -> None:
+    course_config = course.CourseConfig(
+        course_name="python2025",
+        gitlab_course_group="",
+        gitlab_course_public_repo="",
+        gitlab_course_students_group="",
+        gitlab_default_branch="main",
+        registration_secret="registration_secret",
+        token="token",
+        show_allscores=True,
+        is_ready=False,
+        task_url_template="",
+        links={},
+    )
+    app.storage_api.create_course(course_config)
 
 
 def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
@@ -113,16 +126,8 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
-            course_name=app.course_name,
             gitlab_instance_host=app.app_config.gitlab_url,
-            registration_secret=app.app_config.registration_secret,
-            token=app.app_config.course_token,
-            show_allscores=app.app_config.show_allscores,
             apply_migrations=apply_migrations,
-            gitlab_course_group=app.app_config.gitlab_course_group,
-            gitlab_course_public_repo=app.app_config.gitlab_course_public_repo,
-            gitlab_course_students_group=app.app_config.gitlab_course_students_group,
-            gitlab_default_branch=app.app_config.gitlab_default_branch,
         )
     )
     return storage_api
