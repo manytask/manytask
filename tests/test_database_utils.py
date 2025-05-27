@@ -29,18 +29,20 @@ def app():
                 self.name = "test_group"
 
         class MockTask:
-            def __init__(self, name, enabled):
+            def __init__(self, name, score, enabled, is_bonus=False):
                 self.name = name
+                self.score = score
                 self.enabled = enabled
+                self.is_bonus = is_bonus
 
         def __init__(self):
             self.groups = [
                 self.MockGroup(
                     [
                         # name, enabled
-                        self.MockTask(TASK_1, True),
-                        self.MockTask(TASK_2, True),
-                        self.MockTask(TASK_3, False),
+                        self.MockTask(TASK_1, 10, True, False),
+                        self.MockTask(TASK_2, 20, True, True),
+                        self.MockTask(TASK_3, 30, False, False),
                     ]
                 )
             ]
