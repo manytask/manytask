@@ -58,12 +58,6 @@ def mock_gitlab_api():
             return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
 
         @staticmethod
-        def register_new_user(user):
-            if user.username == TEST_USERNAME:
-                return True
-            raise Exception("Registration failed")
-
-        @staticmethod
         def get_student(user_id: int):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 

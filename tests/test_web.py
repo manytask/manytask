@@ -13,7 +13,7 @@ from flask import Flask, url_for
 from manytask.abstract import StoredUser
 from manytask.api import bp as api_bp
 from manytask.database import TaskDisabledError
-from manytask.glab import Student, User
+from manytask.glab import Student
 from manytask.web import course_bp, root_bp
 
 TEST_USERNAME = "test_user"
@@ -66,8 +66,14 @@ def mock_gitlab_api():
             return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
 
         @staticmethod
-        def register_new_user(user: User):
-            if user.username == TEST_USERNAME:
+        def register_new_user(
+            username: str,
+            firstname: str,
+            lastname: str,
+            email: str,
+            password: str,
+        ):
+            if username == TEST_USERNAME:
                 return True
             raise Exception("Registration failed")
 
@@ -425,7 +431,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
         "secret": mock_course.registration_secret,
     }
     with (
-        patch.object(app.gitlab_api, "register_new_user") as mock_register_new_user,
+        patch.object(app.rms_api, "register_new_user") as mock_register_new_user,
         patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
         patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
@@ -445,11 +451,11 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
 
         mock_register_new_user.assert_called_once()
         args, _ = mock_register_new_user.call_args
-        assert args[0].username == TEST_USERNAME
-        assert args[0].firstname == "Test"
-        assert args[0].lastname == "User"
-        assert args[0].email == "test@example.com"
-        assert args[0].password == "password"
+        assert args[0] == TEST_USERNAME
+        assert args[1] == "Test"
+        assert args[2] == "User"
+        assert args[3] == "test@example.com"
+        assert args[4] == "password"
 
 
 def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
