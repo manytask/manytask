@@ -318,13 +318,3 @@ class GitLabApi(RmsApi):
         course_students_group: str,
     ) -> str:
         return f"{self.base_url}/{course_students_group}/{username}"
-
-
-def map_gitlab_user_to_student(
-    gitlab_response: gitlab.v4.objects.User,
-) -> Student:
-    return Student(
-        id=gitlab_response.id,
-        username=gitlab_response.username,
-        name=gitlab_response.name,
-    )
