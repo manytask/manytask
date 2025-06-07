@@ -5,7 +5,6 @@ from typing import Any, Callable
 
 from .config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskTaskConfig, ManytaskUiConfig
 from .course import Course, CourseConfig
-from .glab import Student
 
 
 @dataclass
@@ -16,6 +15,16 @@ class StoredUser:
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
+
+
+@dataclass
+class Student:
+    id: int
+    username: str
+    name: str
+
+    def __repr__(self) -> str:
+        return f"Student(username={self.username})"
 
 
 class StorageApi(ABC):
@@ -139,3 +148,49 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_all_courses_names(self) -> list[str]: ...
+
+
+class RmsApi(ABC):
+    _base_url: str
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    @abstractmethod
+    def create_public_repo(
+        self,
+        course_group: str,
+        course_public_repo: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def create_students_group(
+        self,
+        course_students_group: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def check_project_exists(
+        self,
+        student: Student,
+        course_students_group: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def create_project(
+        self,
+        student: Student,
+        course_students_group: str,
+        course_public_repo: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str: ...
+
+    @abstractmethod
+    def get_url_for_repo(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str: ...

@@ -80,7 +80,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
     if app.debug:
         student_username = "guest"
-        student_repo = app.gitlab_api.get_url_for_repo(
+        student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
@@ -92,7 +92,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_username = session["gitlab"]["username"]
         student_id = session["gitlab"]["user_id"]
 
-        student_repo = app.gitlab_api.get_url_for_repo(
+        student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
@@ -122,13 +122,11 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
     return render_template(
         "tasks.html",
-        task_base_url=app.gitlab_api.get_url_for_task_base(
-            course.gitlab_course_public_repo, course.gitlab_default_branch
-        ),
+        task_base_url=app.rms_api.get_url_for_task_base(course.gitlab_course_public_repo, course.gitlab_default_branch),
         username=student_username,
         course_name=course.course_name,
         app=app,
-        gitlab_url=app.gitlab_api.base_url,
+        gitlab_url=app.rms_api.base_url,
         allscores_url=allscores_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
@@ -188,7 +186,7 @@ def signup(course_name: str) -> ResponseReturnValue:
             error_message=str(e),
             course_name=course.course_name,
             course_favicon=app.favicon,
-            base_url=app.gitlab_api.base_url,
+            base_url=app.rms_api.base_url,
         )
 
     return redirect(url_for("course.create_project", course_name=course.course_name))
@@ -206,7 +204,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             "create_project.html",
             course_name=course.course_name,
             course_favicon=app.favicon,
-            base_url=app.gitlab_api.base_url,
+            base_url=app.rms_api.base_url,
         )
 
     if not secrets.compare_digest(request.form["secret"], course.registration_secret):
@@ -215,7 +213,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             error_message="Invalid secret",
             course_name=course.course_name,
             course_favicon=app.favicon,
-            base_url=app.gitlab_api.base_url,
+            base_url=app.rms_api.base_url,
         )
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
@@ -225,13 +223,13 @@ def create_project(course_name: str) -> ResponseReturnValue:
     app.storage_api.sync_stored_user(
         course.course_name,
         student,
-        app.gitlab_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
         app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
     )
 
     # Create use if needed
     try:
-        app.gitlab_api.create_project(student, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        app.rms_api.create_project(student, course.gitlab_course_students_group, course.gitlab_course_public_repo)
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
         return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
@@ -268,7 +266,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
     if app.debug:
         student_username = "guest"
-        student_repo = app.gitlab_api.get_url_for_repo(
+        student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
@@ -280,7 +278,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         student_username = session["gitlab"]["username"]
         student_id = session["gitlab"]["user_id"]
 
-        student_repo = app.gitlab_api.get_url_for_repo(
+        student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
@@ -305,7 +303,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         course_favicon=app.favicon,
         readonly_fields=["username", "total_score"],  # Cannot be edited in database web viewer
         links=course.links,
-        gitlab_url=app.gitlab_api.base_url,
+        gitlab_url=app.rms_api.base_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",

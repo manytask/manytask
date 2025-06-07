@@ -9,6 +9,8 @@ import gitlab.const
 import gitlab.v4.objects
 import requests
 
+from .abstract import RmsApi, Student
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,16 +26,6 @@ class User:
         return f"User(username={self.username})"
 
 
-@dataclass
-class Student:
-    id: int
-    username: str
-    name: str
-
-    def __repr__(self) -> str:
-        return f"Student(username={self.username})"
-
-
 class GitLabApiException(Exception):
     pass
 
@@ -47,7 +39,7 @@ class GitLabConfig:
     dry_run: bool = False
 
 
-class GitLabApi:
+class GitLabApi(RmsApi):
     def __init__(
         self,
         config: GitLabConfig,
@@ -58,7 +50,7 @@ class GitLabApi:
         """
         self.dry_run = config.dry_run
 
-        self.base_url = config.base_url
+        self._base_url = config.base_url
         self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token)
 
     def register_new_user(
