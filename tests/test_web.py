@@ -66,13 +66,7 @@ def mock_gitlab_api():
             return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
 
         @staticmethod
-        def register_new_user(
-            username: str,
-            firstname: str,
-            lastname: str,
-            email: str,
-            password: str,
-        ):
+        def register_new_user(username: str, firstname: str, lastname: str, email: str, password: str):
             if username == TEST_USERNAME:
                 return True
             raise Exception("Registration failed")
@@ -431,7 +425,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
         "secret": mock_course.registration_secret,
     }
     with (
-        patch.object(app.gitlab_api, "register_new_user") as mock_register_new_user,
+        patch.object(app.rms_api, "register_new_user") as mock_register_new_user,
         patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
         patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,

@@ -168,11 +168,11 @@ def signup(course_name: str) -> ResponseReturnValue:
 
         # register user in gitlab
         app.rms_api.register_new_user(
-            username=request.form["username"].strip(),
-            firstname=request.form["firstname"].strip(),
-            lastname=request.form["lastname"].strip(),
-            email=request.form["email"].strip(),
-            password=request.form["password"],
+            request.form["username"].strip(),
+            request.form["firstname"].strip(),
+            request.form["lastname"].strip(),
+            request.form["email"].strip(),
+            request.form["password"],
         )
 
     # render template with error... if error
