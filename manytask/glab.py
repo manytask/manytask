@@ -49,20 +49,13 @@ class GitLabApi(RmsApi):
         email: str,
         password: str,
     ) -> None:
-        """
-        :param user:
-        :return: returns this thing
-        https://python-gitlab.readthedocs.io/en/stable/api/gitlab.v4.html#gitlab.v4.objects.User
-        but the docs do not really help much. Grep the logs
-        """
-
         logger.info(f"Creating user (username={username})")
         # was invented to distinguish between different groups of users automatically by secret
         new_user = self._gitlab.users.create(
             {
                 "email": email,
                 "username": username,
-                "name": firstname + " " + lastname,
+                "name": f"{firstname} {lastname}",
                 "external": False,
                 "password": password,
                 "skip_confirmation": True,

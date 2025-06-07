@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from gitlab import GitlabGetError, const
-from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork
+from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 from requests import HTTPError
 
 from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, Student
@@ -145,6 +145,18 @@ def mock_gitlab_public_project() -> Project:
 
 
 @pytest.fixture
+def mock_gitlab_user() -> User:
+    """Fixture to create a mock GitLab user."""
+    user = mock.create_autospec(User, instance=True)
+    user.id = TEST_USER_ID
+    user.name = TEST_USERNAME
+    user.username = TEST_USERNAME
+    user.email = TEST_USER_EMAIL
+    user.web_url = TEST_USER_URL
+    return user
+
+
+@pytest.fixture
 def mock_gitlab():
     """Fixture to setup the patched GitLab instance."""
     with patch("gitlab.Gitlab") as MockGitlab:
@@ -173,15 +185,14 @@ def gitlab(
     return api, mock_gitlab_instance
 
 
-def test_register_new_user(gitlab, mock_gitlab_user, mock_user):
+def test_register_new_user(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.users.create.return_value = mock_gitlab_user
 
-    username = (TEST_USERNAME,)
-    firstname = (TEST_USER_FIRSTNAME,)
-    lastname = (TEST_USER_LASTNAME,)
-    email = (TEST_USER_EMAIL,)
-    password = (TEST_USER_PASSWORD,)
+    username = TEST_USERNAME
+    firstname = TEST_USER_FIRSTNAME
+    lastname = TEST_USER_LASTNAME
+    email = TEST_USER_EMAIL
+    password = TEST_USER_PASSWORD
 
     gitlab_api.register_new_user(username, firstname, lastname, email, password)
 
@@ -386,7 +397,7 @@ def test_get_student_by_username_not_found(gitlab):
         gitlab_api.get_student_by_username(TEST_USERNAME)
 
 
-def test_get_student_found(gitlab, mock_user, mock_student):
+def test_get_student_found(gitlab, mock_gitlab_user, mock_student):
     gitlab_api, mock_gitlab_instance = gitlab
     user_attrs = {
         "id": TEST_USER_ID,
@@ -395,8 +406,8 @@ def test_get_student_found(gitlab, mock_user, mock_student):
         "course_group": TEST_GROUP_NAME,
         "course_students_group": TEST_GROUP_STUDENT_NAME,
     }
-    mock_user = MagicMock(_attrs=user_attrs)
-    mock_gitlab_instance.users.get = MagicMock(return_value=mock_user)
+    mock_gitlab_user = MagicMock(_attrs=user_attrs)
+    mock_gitlab_instance.users.get = MagicMock(return_value=mock_gitlab_user)
     gitlab_api._parse_user_to_student = MagicMock(return_value=mock_student)
 
     student = gitlab_api.get_student(TEST_USER_ID)
