@@ -6,7 +6,7 @@ from gitlab import GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork
 from requests import HTTPError
 
-from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, Student, User, map_gitlab_user_to_student
+from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, Student, User
 
 # Constants for test data
 EXAMPLE_REPO_OWNER = "example_owner"
@@ -491,10 +491,3 @@ def test_get_url_for_repo(gitlab):
     url = gitlab_api.get_url_for_repo(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert url == f"{gitlab_api.base_url}/{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}"
-
-
-def test_map_gitlab_user_to_student(gitlab, mock_gitlab_user):
-    student = map_gitlab_user_to_student(mock_gitlab_user)
-
-    assert student.username == TEST_USERNAME
-    assert student.name == TEST_USERNAME
