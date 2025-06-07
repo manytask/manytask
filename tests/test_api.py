@@ -48,6 +48,7 @@ def app(mock_storage_api, mock_gitlab_api):
     app.register_blueprint(api_bp)
     app.storage_api = mock_storage_api
     app.gitlab_api = mock_gitlab_api
+    app.rms_api = mock_gitlab_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
 

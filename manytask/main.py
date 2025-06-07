@@ -20,6 +20,7 @@ class CustomFlask(Flask):
     oauth: OAuth
     app_config: local_config.LocalConfig  # TODO: check if we need it
     gitlab_api: glab.GitLabApi
+    rms_api: abstract.RmsApi
     storage_api: abstract.StorageApi
 
     manytask_version: str | None = None
@@ -53,12 +54,15 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     logging.config.dictConfig(_logging_config(app))
 
     # api objects
-    app.gitlab_api = glab.GitLabApi(
+    gitlab_api: glab.GitLabApi = glab.GitLabApi(
         glab.GitLabConfig(
             base_url=app.app_config.gitlab_url,
             admin_token=app.app_config.gitlab_admin_token,
         )
     )
+
+    app.gitlab_api = gitlab_api
+    app.rms_api = gitlab_api
 
     # read VERSION file to get a version
     app.manytask_version = ""
