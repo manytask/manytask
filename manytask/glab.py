@@ -85,7 +85,7 @@ class GitLabApi(RmsApi):
         group_name_with_spaces = " / ".join(group_name.split("/"))
 
         try:
-            return next( 
+            return next(
                 group
                 for group in self._gitlab.groups.list(get_all=True, search=group_name)
                 if group.name == short_group_name and group.full_name == group_name_with_spaces
