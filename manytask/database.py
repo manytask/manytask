@@ -19,10 +19,10 @@ from sqlalchemy.sql.functions import func
 from . import models
 from .abstract import StorageApi, StoredUser
 from .config import (
+    ManytaskConfig,
     ManytaskDeadlinesConfig,
     ManytaskGroupConfig,
     ManytaskTaskConfig,
-    ManytaskConfig,
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig

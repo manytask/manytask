@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
-from .config import ManytaskGroupConfig, ManytaskTaskConfig, ManytaskConfig
+from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig
 
 
