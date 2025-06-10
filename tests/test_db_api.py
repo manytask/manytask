@@ -12,7 +12,7 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, Uni
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
-from manytask.config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskUiConfig
+from manytask.config import ManytaskConfig, ManytaskGroupConfig, ManytaskDeadlinesConfig, ManytaskUiConfig
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig
 from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
@@ -194,11 +194,12 @@ def update_course(
     db_api: DataBaseApi, course_name: str, ui_config: ManytaskUiConfig, deadlines_config: ManytaskDeadlinesConfig
 ) -> None:
     """Update created course"""
+    config = ManytaskConfig()
+    config.version = 1
+    config.ui = ui_config
+    config.deadlines = deadlines_config
 
-    db_api.update_course(course_name=course_name, ui_config=ui_config)
-
-    db_api.update_task_groups_from_config(course_name=course_name, deadlines_config=deadlines_config)
-    db_api.sync_columns(course_name=course_name, deadlines_config=deadlines_config)
+    db_api.update_course(course_name=course_name, config=config)
 
 
 def create_course(db_api: DataBaseApi, course_config: CourseConfig, deadlines_config: ManytaskDeadlinesConfig) -> None:

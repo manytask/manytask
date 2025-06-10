@@ -33,13 +33,7 @@ class CustomFlask(Flask):
         manytask_config = config.ManytaskConfig(**content)
 
         # Update course settings
-        self.storage_api.update_course(course_name, manytask_config.ui)
-
-        # Update task groups (if necessary -- if there is an override) first
-        self.storage_api.update_task_groups_from_config(course_name, manytask_config.deadlines)
-
-        # Save deadlines to storage
-        self.storage_api.sync_columns(course_name, manytask_config.deadlines)
+        self.storage_api.update_course(course_name, manytask_config)
 
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
