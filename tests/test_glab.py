@@ -3,10 +3,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from gitlab import GitlabGetError, const
-from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork
+from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 from requests import HTTPError
 
-from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, Student, User
+from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, Student
 
 # Constants for test data
 EXAMPLE_REPO_OWNER = "example_owner"
@@ -84,18 +84,6 @@ def mock_student() -> Student:
         id=TEST_USER_ID,
         username=TEST_USERNAME,
         name=TEST_USERNAME,
-    )
-
-
-@pytest.fixture
-def mock_user() -> User:
-    """Fixture to create a mock User object."""
-    return User(
-        username=TEST_USERNAME,
-        firstname=TEST_USER_FIRSTNAME,
-        lastname=TEST_USER_LASTNAME,
-        email=TEST_USER_EMAIL,
-        password=TEST_USER_PASSWORD,
     )
 
 
@@ -197,25 +185,27 @@ def gitlab(
     return api, mock_gitlab_instance
 
 
-def test_register_new_user(gitlab, mock_gitlab_user, mock_user):
+def test_register_new_user(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.users.create.return_value = mock_gitlab_user
 
-    new_user = gitlab_api.register_new_user(mock_user)
+    username = TEST_USERNAME
+    firstname = TEST_USER_FIRSTNAME
+    lastname = TEST_USER_LASTNAME
+    email = TEST_USER_EMAIL
+    password = TEST_USER_PASSWORD
+
+    gitlab_api.register_new_user(username, firstname, lastname, email, password)
 
     mock_gitlab_instance.users.create.assert_called_once_with(
         {
-            "email": mock_user.email,
-            "username": mock_user.username,
-            "name": f"{mock_user.firstname} {mock_user.lastname}",
+            "email": email,
+            "username": username,
+            "name": f"{firstname} {lastname}",
             "external": False,
-            "password": mock_user.password,
+            "password": password,
             "skip_confirmation": True,
         }
     )
-
-    assert new_user.username == mock_gitlab_user.username
-    assert new_user.email == mock_gitlab_user.email
 
 
 def test_get_project_by_name_success(gitlab, mock_gitlab_project):
@@ -407,7 +397,7 @@ def test_get_student_by_username_not_found(gitlab):
         gitlab_api.get_student_by_username(TEST_USERNAME)
 
 
-def test_get_student_found(gitlab, mock_user, mock_student):
+def test_get_student_found(gitlab, mock_gitlab_user, mock_student):
     gitlab_api, mock_gitlab_instance = gitlab
     user_attrs = {
         "id": TEST_USER_ID,
@@ -416,8 +406,8 @@ def test_get_student_found(gitlab, mock_user, mock_student):
         "course_group": TEST_GROUP_NAME,
         "course_students_group": TEST_GROUP_STUDENT_NAME,
     }
-    mock_user = MagicMock(_attrs=user_attrs)
-    mock_gitlab_instance.users.get = MagicMock(return_value=mock_user)
+    mock_gitlab_user = MagicMock(_attrs=user_attrs)
+    mock_gitlab_instance.users.get = MagicMock(return_value=mock_gitlab_user)
     gitlab_api._parse_user_to_student = MagicMock(return_value=mock_student)
 
     student = gitlab_api.get_student(TEST_USER_ID)
