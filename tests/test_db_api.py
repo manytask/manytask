@@ -194,10 +194,7 @@ def update_course(
     db_api: DataBaseApi, course_name: str, ui_config: ManytaskUiConfig, deadlines_config: ManytaskDeadlinesConfig
 ) -> None:
     """Update created course"""
-    config = ManytaskConfig()
-    config.version = 1
-    config.ui = ui_config
-    config.deadlines = deadlines_config
+    config = ManytaskConfig(version=1, ui=ui_config, deadlines=deadlines_config)
 
     db_api.update_course(course_name=course_name, config=config)
 
