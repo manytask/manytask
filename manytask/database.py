@@ -353,7 +353,6 @@ class DataBaseApi(StorageApi):
         self._update_task_groups_from_config(course_name, config.deadlines)
         self._sync_columns(course_name, config.deadlines)
 
-
     def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
 
@@ -586,8 +585,7 @@ class DataBaseApi(StorageApi):
                     new_task_names.add(task_config.name)
                     new_task_to_group[task_config.name] = group.name
 
-            existing_tasks = session.query(
-                models.Task).join(models.TaskGroup).all()
+            existing_tasks = session.query(models.Task).join(models.TaskGroup).all()
 
             # Check for duplicates (name + course)
             tasks_to_update = {}
