@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
-from .config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskTaskConfig, ManytaskUiConfig
+from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig
 
 
@@ -81,20 +81,6 @@ class StorageApi(ABC):
     ) -> int: ...
 
     @abstractmethod
-    def sync_columns(
-        self,
-        course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
-    ) -> None: ...
-
-    @abstractmethod
-    def update_task_groups_from_config(
-        self,
-        course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
-    ) -> None: ...
-
-    @abstractmethod
     def create_course(
         self,
         settings_config: CourseConfig,
@@ -104,7 +90,7 @@ class StorageApi(ABC):
     def update_course(
         self,
         course_name: str,
-        ui_config: ManytaskUiConfig,
+        config: ManytaskConfig,
     ) -> None: ...
 
     @abstractmethod
