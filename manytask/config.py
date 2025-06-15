@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional, Union, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from pathlib import Path
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
@@ -188,6 +189,89 @@ class ManytaskDeadlinesConfig(BaseModel):
         return self.schedule
 
 
+class LogicalConnectiveType(Enum):
+    AND = "and"
+    OR = "or"
+
+
+class PrimaryLogicalFormula(BaseModel):
+    path: Path
+    attribute_min: Union[int, float]
+    attribute_max: Optional[Union[int, float]] = None
+
+    @model_validator(mode="after")
+    def check_attribute_bounds(self) -> PrimaryLogicalFormula:
+        if self.attribute_max is not None and type(self.attribute_max) != type(self.attribute_min):
+            raise ValueError(
+                "attribute_max and attribute_min must be of the same type")
+        if self.attribute_max is not None and self.attribute_max <= self.attribute_min:
+            raise ValueError(
+                "attribute_max must be greater than attribute_min")
+
+        return self
+
+    def evaluate(self, scores: dict[str, Any]) -> bool:
+        # empty path means always true: dummy case for lowest mark
+        if len(self.path.parts) == 0:
+            return True
+
+        attribute = scores
+        for dir in self.path.parts:
+            if not isinstance(attribute, dict):
+                raise ValueError(
+                    f"Path <{self.path}> not found in scores data <{scores}>")
+            try:
+                attribute = attribute[dir]
+            except KeyError:
+                raise ValueError(
+                    f"Path <{self.path}> not found in scores data <{scores}>")
+
+        if not isinstance(attribute, (int, float)):
+            raise ValueError(
+                f"Path <{self.path}> does not point to a number in scores data <{scores}>")
+
+        return self.attribute_min <= attribute and (self.attribute_max is None or attribute < self.attribute_max)
+
+
+class ComplexLogicalFormula(BaseModel):
+    connective: LogicalConnectiveType = LogicalConnectiveType.AND
+    subformulas: list[Union[ComplexLogicalFormula, PrimaryLogicalFormula]] = Field(default_factory=list)
+
+    def evaluate(self, scores: dict[str, Any]) -> bool:
+        if self.connective == LogicalConnectiveType.AND:
+            return all(subformula.evaluate(scores) for subformula in self.subformulas)
+        elif self.subformulas == LogicalConnectiveType.OR:
+            return any(subformula.evaluate(scores) for subformula in self.subformulas)
+        return True
+
+
+class ManytaskFinalGradeConfig(BaseModel):
+    grades: dict[str, Union[ComplexLogicalFormula, PrimaryLogicalFormula]] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def check_unique_grade_names(self) -> ManytaskFinalGradeConfig:
+        grade_names = list(self.grades.keys())
+        grade_names_duplicates = [
+            name for name in grade_names if grade_names.count(name) > 1]
+
+        # grades defined
+        if len(grade_names) == 0:
+            raise ValueError("No grades defined")
+
+        # grade names unique
+        if len(grade_names_duplicates) > 0:
+            raise ValueError(
+                f"Grade names must be unique, duplicates: {grade_names_duplicates}")
+
+        return self
+
+    def evaluate(self, scores: dict[str, Any]) -> Optional[str]:
+        for grade_name, grade_formula in self.grades.items():
+            if grade_formula.evaluate(scores):
+                return grade_name
+        raise ValueError("No grade matched")
+
+
 class ManytaskConfig(BaseModel):
     """Manytask configuration."""
 
@@ -195,6 +279,7 @@ class ManytaskConfig(BaseModel):
 
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
+    grades: Optional[ManytaskFinalGradeConfig] = None
 
     @field_validator("version")
     @classmethod

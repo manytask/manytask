@@ -22,6 +22,7 @@ from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
     ManytaskGroupConfig,
+    ManytaskFinalGradeConfig,
     ManytaskTaskConfig,
 )
 from .course import Course as AppCourse
@@ -352,6 +353,7 @@ class DataBaseApi(StorageApi):
 
         self._update_task_groups_from_config(course_name, config.deadlines)
         self._sync_columns(course_name, config.deadlines)
+        self._sync_grades(course_name, config.grades)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
