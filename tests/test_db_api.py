@@ -288,7 +288,7 @@ def test_not_initialized_course(session, db_api, first_course_config):
 
 def test_initialized_course(db_api_with_initialized_first_course, session):
     expected_task_groups = 6
-    expected_tasks = 18
+    expected_tasks = 19
     bonus_tasks = ("task_0_2", "task_1_3")
     large_tasks = "task_5_0"
     special_tasks = ("task_1_1",)
@@ -424,7 +424,7 @@ def test_resync_with_changed_task_name(
     session,
 ):
     expected_task_groups = 6
-    expected_tasks = 19
+    expected_tasks = 20
     disabled_tasks = ("task_0_0", "task_2_1")
 
     create_course(db_api, first_course_config, first_course_deadlines_config)
