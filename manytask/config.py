@@ -41,6 +41,7 @@ class ManytaskTaskConfig(BaseModel):
     special: int = 0
 
     is_bonus: bool = False
+    is_large: bool = False
     is_special: bool = False
 
     # Note: use Optional/Union[...] instead of ... | None as pydantic does not support | in older python versions

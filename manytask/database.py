@@ -392,6 +392,7 @@ class DataBaseApi(StorageApi):
                     enabled=group_task.enabled,
                     score=group_task.score,
                     is_bonus=group_task.is_bonus,
+                    is_large=group_task.is_large,
                     is_special=group_task.is_special,
                     url=AnyUrl(group_task.url) if group_task.url is not None else None,
                 )
@@ -404,6 +405,7 @@ class DataBaseApi(StorageApi):
             enabled=task.enabled,
             score=task.score,
             is_bonus=task.is_bonus,
+            is_large=task.is_large,
             is_special=task.is_special,
         )
 
@@ -461,6 +463,7 @@ class DataBaseApi(StorageApi):
                             enabled=task.enabled,
                             score=task.score,
                             is_bonus=task.is_bonus,
+                            is_large=task.is_large,
                             is_special=task.is_special,
                             url=AnyUrl(task.url) if task.url is not None else None,
                         )
@@ -689,6 +692,7 @@ class DataBaseApi(StorageApi):
                         defaults={
                             "score": task.score,
                             "is_bonus": task.is_bonus,
+                            "is_large": task.is_large,
                             "is_special": task.is_special,
                             "enabled": task.enabled,
                             "url": str(task.url) if task.url is not None else None,

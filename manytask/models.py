@@ -217,6 +217,7 @@ class Task(Base):
     group_id: Mapped[int] = mapped_column(ForeignKey(TaskGroup.id))
     score: Mapped[int] = mapped_column(server_default="0", default=0)
     is_bonus: Mapped[bool] = mapped_column(default=False)
+    is_large: Mapped[bool] = mapped_column(default=False)
     is_special: Mapped[bool] = mapped_column(server_default="false", default=False)
     enabled: Mapped[bool] = mapped_column(server_default="true", default=True)
     url: Mapped[Optional[str]]
