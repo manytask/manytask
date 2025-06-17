@@ -1,0 +1,33 @@
+title: Manytask
+href: index.yaml
+navigation:
+  logo:
+    url: ./index.html
+    dark:
+      icon: ./img/ManytaskTextFullDark.png
+    light:
+      icon: ./img/ManytaskTextFull.png
+  header:
+    leftItems:
+      - type: link
+        text: Documentation
+        url: ./production.html
+      - type: link
+        text: GitHub
+        url: https://github.com/manytask
+      - type: link
+        text: Telegram
+        url: https://t.me/+ZL73so2oW-k1YTYy
+    rightItems:
+      - type: controls
+items:
+  - name: Production setup
+    href: system_setup.md
+  - name: Production
+    href: production.md
+  - name: Development setup
+    href: dev.md
+  - name: Development strategy
+    href: strategy.md
+  - name: Deadline schedule
+    href: deadline_schedule.md
