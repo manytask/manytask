@@ -1,8 +1,8 @@
-"""add_task_type
+"""Add is_large flag to Task
 
-Revision ID: 147e84c81078
+Revision ID: e64fbb93da7d
 Revises: b608e9f744f4
-Create Date: 2025-06-17 14:15:28.040680
+Create Date: 2025-06-17 14:40:41.170829
 
 """
 from typing import Sequence, Union
@@ -10,9 +10,11 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
+import manytask
+
 
 # revision identifiers, used by Alembic.
-revision: str = '147e84c81078'
+revision: str = 'e64fbb93da7d'
 down_revision: Union[str, None] = 'b608e9f744f4'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
