@@ -10,6 +10,9 @@ navigation:
   header:
     leftItems:
       - type: link
+        text: App
+        url: https://app.manytask2.org/
+      - type: link
         text: Documentation
         url: ./production.html
       - type: link

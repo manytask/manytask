@@ -10,6 +10,10 @@ blocks:
       color: '#ffe2b3'
       fullWidth: false
     buttons:
+      - text: 'App'
+        theme: 'action'
+        size: 'promo'
+        url: 'https://app.manytask2.org/'
       - text: 'GitHub'
         theme: 'outlined'
         size: 'promo'
