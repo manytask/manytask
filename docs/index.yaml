@@ -12,7 +12,7 @@ blocks:
     buttons:
       - text: 'App'
         theme: 'action'
-        size: 'promo'
+        size: 'outlined'
         url: 'https://app.manytask2.org/'
       - text: 'GitHub'
         theme: 'outlined'
