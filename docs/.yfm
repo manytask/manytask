@@ -4,3 +4,7 @@ outputFormat: html
 resources:
   style:
     - _assets/style/custom.css
+
+docs-viewer:
+  project-name: manytask
+  favicon-src: https://github.com/manytask/identity/blob/main/favicons/favicon.ico
