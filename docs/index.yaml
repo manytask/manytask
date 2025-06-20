@@ -24,7 +24,7 @@ blocks:
     items:
       - title: 'Universal Compatibility'
         icon: 'img/gravity-ui/shapes-3.svg'
-        text: 'Supports courses in any programming language, easy customisable'
+        text: 'Supports courses in any programming language, easy customizable'
       - title: 'Automated Testing'
         icon: 'img/gravity-ui/play.svg'
         text: 'Run objective tests on student solutions for consistent evaluations - support public and private tests'
