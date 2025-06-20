@@ -32,7 +32,7 @@ Here is the way you can go if you have 1 server with 1 manytask instance (1 cour
 1. Create docker/docker-compose script with latest manytask version  
    Note: Best practice is to use version tag (e.g. `manytask/manytask:9.9.9`) **not** `latest` tag
 
-   See [docker-compose.production.yml](../docker-compose.production.yml) file as an example  
+   See [docker-compose.production.yml](/docker-compose.production.yml) file as an example  
    ```shell
    curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/docker-compose.development.yml -o docker-compose.yml 
    ```
@@ -46,7 +46,7 @@ Here is the way you can go if you have 1 server with 1 manytask instance (1 cour
 
 3. Setup `nginx-proxy`/`letencrypt`/`certbot` to update https certificates automatically  
    
-   If you are using [docker-compose.production.yml](../docker-compose.production.yml) example, it's already set up.
+   If you are using [docker-compose.production.yml](/docker-compose.production.yml) example, it's already set up.
 
 
 ### From repo (not recommended)
@@ -109,3 +109,24 @@ curl --fail --silent -X POST -H "Authorization: Bearer $MANYTASK_COURSE_TOKEN" -
      "Content-type: application/x-yaml" --data-binary "@tests/.manytask.test.yml" "https://py.manytask.org/api/update_config"
 ```
 Please, refer to the example files and api docs. 
+
+
+## How to build documentation
+
+### Install NPM:
+
+```bash
+sudo apt intall npm
+```
+
+### Install YFM and build:
+
+```bash
+sudo npm i @diplodoc/cli -g
+```
+
+### Buld html from yml/md files:
+
+```bash
+yfm -i ./docs -o ./html --allow-custom-resources
+```
