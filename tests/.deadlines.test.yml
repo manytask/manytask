@@ -84,3 +84,12 @@ deadlines:
           score: 40
         - task: task_4_2
           score: 40
+
+    - group: group_5
+      start: 2020-04-01 18:00
+      end: 2020-05-01 23:59
+      enabled: true
+      tasks:
+        - task: task_5_0
+          score: 50
+          is_large: true

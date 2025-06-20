@@ -101,7 +101,9 @@ deadlines:
       tasks:
         - task: task_5_0
           score: 50
+          is_large: true
         - task: task_5_1
+          is_large: true
           score: 50
         - task: task_5_2
           score: 50
