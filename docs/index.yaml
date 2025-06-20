@@ -11,8 +11,8 @@ blocks:
       fullWidth: false
     buttons:
       - text: 'App'
-        theme: 'action'
-        size: 'outlined'
+        theme: 'outlined'
+        size: 'promo'
         url: 'https://app.manytask2.org/'
       - text: 'GitHub'
         theme: 'outlined'
