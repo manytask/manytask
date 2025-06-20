@@ -128,5 +128,5 @@ sudo npm i @diplodoc/cli -g
 ### Buld html from yml/md files:
 
 ```bash
-yfm -i ./docs -o ./html
+yfm -i ./docs -o ./html --allow-custom-resources
 ```

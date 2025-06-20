@@ -1,0 +1,6 @@
+allowHTML: true
+outputFormat: html
+
+resources:
+  style:
+    - _assets/style/custom.css
