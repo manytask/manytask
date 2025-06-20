@@ -14,18 +14,6 @@ from .abstract import RmsApi, Student
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class User:
-    username: str
-    firstname: str
-    lastname: str
-    email: str
-    password: str
-
-    def __repr__(self) -> str:
-        return f"User(username={self.username})"
-
-
 class GitLabApiException(Exception):
     pass
 
@@ -55,30 +43,25 @@ class GitLabApi(RmsApi):
 
     def register_new_user(
         self,
-        user: User,
-    ) -> gitlab.v4.objects.User:
-        """
-        :param user:
-        :return: returns this thing
-        https://python-gitlab.readthedocs.io/en/stable/api/gitlab.v4.html#gitlab.v4.objects.User
-        but the docs do not really help much. Grep the logs
-        """
-
-        logger.info(f"Creating user: {user}")
+        username: str,
+        firstname: str,
+        lastname: str,
+        email: str,
+        password: str,
+    ) -> None:
+        logger.info(f"Creating user (username={username})")
         # was invented to distinguish between different groups of users automatically by secret
         new_user = self._gitlab.users.create(
             {
-                "email": user.email,
-                "username": user.username,
-                "name": user.firstname + " " + user.lastname,
+                "email": email,
+                "username": username,
+                "name": f"{firstname} {lastname}",
                 "external": False,
-                "password": user.password,
+                "password": password,
                 "skip_confirmation": True,
             }
         )
         logger.info(f"Gitlab user created {new_user}")
-
-        return new_user
 
     def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
         short_group_name = group_name.split("/")[-1]

@@ -7,7 +7,6 @@ import gitlab
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
-from . import glab
 from .auth import requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
@@ -161,14 +160,6 @@ def signup(course_name: str) -> ResponseReturnValue:
 
     # ----  register a new user ---- #
 
-    user = glab.User(
-        username=request.form["username"].strip(),
-        firstname=request.form["firstname"].strip(),
-        lastname=request.form["lastname"].strip(),
-        email=request.form["email"].strip(),
-        password=request.form["password"],
-    )
-
     try:
         if not secrets.compare_digest(request.form["secret"], course.registration_secret):
             raise Exception("Invalid registration secret")
@@ -176,7 +167,13 @@ def signup(course_name: str) -> ResponseReturnValue:
             raise Exception("Passwords don't match")
 
         # register user in gitlab
-        app.gitlab_api.register_new_user(user)
+        app.rms_api.register_new_user(
+            request.form["username"].strip(),
+            request.form["firstname"].strip(),
+            request.form["lastname"].strip(),
+            request.form["email"].strip(),
+            request.form["password"],
+        )
 
     # render template with error... if error
     except Exception as e:
