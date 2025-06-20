@@ -49,3 +49,30 @@ deadlines:
           score: 10
         - task: task_0_5
           score: 10
+
+grades:
+  "A":
+    connective: or
+    subformulas:
+      - connective: and
+        subformulas:
+          - path: percent
+            attribute_min: 90
+          - path: large_count
+            attribute_min: 1
+      - connective: and
+        subformulas:
+          - path: percent
+            attribute_min: 80
+          - path: large_count
+            attribute_min: 2
+  "B":
+    connective: and
+    subformulas:
+      - path: percent
+        attribute_min: 80
+      - path: large_count
+        attribute_min: 1
+  "C":
+    path: percent
+    attribute_min: 70

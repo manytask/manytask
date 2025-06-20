@@ -5,7 +5,8 @@ from typing import Optional
 from sqlalchemy import JSON, DateTime, ForeignKey, MetaData, UniqueConstraint, event, func
 from sqlalchemy.engine import Connection, Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, Mapper, Session, mapped_column, relationship
-from sqlalchemy.types import TypeDecorator
+from sqlalchemy.types import TypeDecorator, Numeric
+from manytask.config import LogicalConnectiveType
 
 logger = logging.getLogger(__name__)
 
@@ -242,3 +243,30 @@ class Grade(Base):
     # relationships
     user_on_course: Mapped["UserOnCourse"] = relationship(back_populates="grades")
     task: Mapped["Task"] = relationship(back_populates="grades")
+
+
+class PrimaryFormula(Base):
+    __tablename__ = "primary_formulas"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    path: Mapped[str]
+    attribute_min: Mapped[Numeric]
+    attribute_max: Mapped[Optional[Numeric]]
+
+
+class ComplexFormula(Base):
+    __tablename__ = "complex_formulas"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    connective: Mapped[LogicalConnectiveType]
+    subformulas: DynamicMapped[Union["PrimaryFormula", "ComplexFormula"]]
+
+
+class FinalGrade(Base):
+    __tablename__ = "final_grades"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    subformulas: DynamicMapped[Union[]]
