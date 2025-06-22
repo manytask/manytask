@@ -12,7 +12,7 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, Uni
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
-from manytask.config import ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskUiConfig
+from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskUiConfig
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig
 from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
@@ -43,6 +43,7 @@ FIRST_COURSE_EXPECTED_STATS_KEYS = {
     "task_3_0",
     "task_3_1",
     "task_3_2",
+    "task_5_0",
 }
 SECOND_COURSE_EXPECTED_STATS_KEYS = {
     "task_0_0",
@@ -71,7 +72,7 @@ SECOND_COURSE_EXPECTED_STATS_KEYS = {
     "task_5_2",
 }
 
-FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED = 200
+FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED = 250
 SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED = 540
 
 
@@ -194,11 +195,9 @@ def update_course(
     db_api: DataBaseApi, course_name: str, ui_config: ManytaskUiConfig, deadlines_config: ManytaskDeadlinesConfig
 ) -> None:
     """Update created course"""
+    config = ManytaskConfig(version=1, ui=ui_config, deadlines=deadlines_config)
 
-    db_api.update_course(course_name=course_name, ui_config=ui_config)
-
-    db_api.update_task_groups_from_config(course_name=course_name, deadlines_config=deadlines_config)
-    db_api.sync_columns(course_name=course_name, deadlines_config=deadlines_config)
+    db_api.update_course(course_name=course_name, config=config)
 
 
 def create_course(db_api: DataBaseApi, course_config: CourseConfig, deadlines_config: ManytaskDeadlinesConfig) -> None:
@@ -288,9 +287,10 @@ def test_not_initialized_course(session, db_api, first_course_config):
 
 
 def test_initialized_course(db_api_with_initialized_first_course, session):
-    expected_task_groups = 5
-    expected_tasks = 18
+    expected_task_groups = 6
+    expected_tasks = 19
     bonus_tasks = ("task_0_2", "task_1_3")
+    large_tasks = "task_5_0"
     special_tasks = ("task_1_1",)
     disabled_groups = ("group_4",)
     disabled_tasks = ("task_2_1",)
@@ -333,6 +333,7 @@ def test_initialized_course(db_api_with_initialized_first_course, session):
         assert task.group.name == "group_" + task.name[len("task_")]
 
         assert task.is_bonus == (task.name in bonus_tasks)
+        assert task.is_large == (task.name in large_tasks)
         assert task.is_special == (task.name in special_tasks)
         assert task.group.enabled != (task.group.name in disabled_groups)
         assert task.enabled != (task.name in disabled_tasks)
@@ -357,6 +358,7 @@ def test_updating_course(
     expected_task_groups = 8
     expected_tasks = 28
     bonus_tasks = ("task_0_2", "task_1_3", "task_6_0")
+    large_tasks = ("task_5_0", "task_5_1")
     special_tasks = ("task_1_1", "task_6_0")
     disabled_groups = ("group_6",)
     disabled_tasks = ("task_2_2",)
@@ -399,6 +401,7 @@ def test_updating_course(
         assert task.group.name == "group_" + task.name[len("task_")]
 
         assert task.is_bonus == (task.name in bonus_tasks)
+        assert task.is_large == (task.name in large_tasks)
         assert task.is_special == (task.name in special_tasks)
         assert task.group.enabled != (task.group.name in disabled_groups)
         assert task.enabled != (task.name in disabled_tasks)
@@ -420,8 +423,8 @@ def test_resync_with_changed_task_name(
     first_course_updated_ui_config,
     session,
 ):
-    expected_task_groups = 5
-    expected_tasks = 19
+    expected_task_groups = 6
+    expected_tasks = 20
     disabled_tasks = ("task_0_0", "task_2_1")
 
     create_course(db_api, first_course_config, first_course_deadlines_config)

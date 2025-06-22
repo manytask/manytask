@@ -327,6 +327,7 @@ def test_task(session):
     assert retrieved_task.group.name == "group3"
     assert retrieved_task.score == 0
     assert not retrieved_task.is_bonus
+    assert not retrieved_task.is_large
     assert not retrieved_task.is_special
     assert retrieved_task.enabled
     assert not retrieved_task.url
@@ -336,6 +337,7 @@ def test_task(session):
         name="task_with_all_params",
         score=TEST_TASK_SCORE,
         is_bonus=True,
+        is_large=True,
         is_special=True,
         enabled=False,
         url="https://www.python.org/about/gettingstarted/",
@@ -350,6 +352,7 @@ def test_task(session):
     assert retrieved_task.group.name == "group3"
     assert retrieved_task.score == TEST_TASK_SCORE
     assert retrieved_task.is_bonus
+    assert retrieved_task.is_large
     assert retrieved_task.is_special
     assert not retrieved_task.enabled
     assert retrieved_task.url == "https://www.python.org/about/gettingstarted/"

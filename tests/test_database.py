@@ -90,7 +90,7 @@ def test_move_task_between_groups(db_api_with_two_initialized_courses, session):
     tasks_config = create_base_task_config("group2")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    db_api_with_two_initialized_courses.update_task_groups_from_config(
+    db_api_with_two_initialized_courses._update_task_groups_from_config(
         FIRST_COURSE_NAME, ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
     )
 
@@ -106,7 +106,7 @@ def test_create_missing_group(db_api_with_two_initialized_courses, session):
     tasks_config = create_base_task_config("new_group")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    db_api_with_two_initialized_courses.update_task_groups_from_config(
+    db_api_with_two_initialized_courses._update_task_groups_from_config(
         FIRST_COURSE_NAME, ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
     )
 
@@ -132,7 +132,7 @@ def test_multiple_courses(db_api_with_two_initialized_courses, session):
     tasks_config = create_base_task_config("group2")
     tasks_config["tasks"] = [create_task_entry("task1")]
 
-    db_api_with_two_initialized_courses.update_task_groups_from_config(
+    db_api_with_two_initialized_courses._update_task_groups_from_config(
         FIRST_COURSE_NAME, ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
     )
 
@@ -161,7 +161,7 @@ def test_multiple_task_moves(db_api_with_two_initialized_courses, session):
     tasks_config = create_base_task_config("group3")
     tasks_config["tasks"] = [create_task_entry("task1"), create_task_entry("task2"), create_task_entry("task3")]
 
-    db_api_with_two_initialized_courses.update_task_groups_from_config(
+    db_api_with_two_initialized_courses._update_task_groups_from_config(
         FIRST_COURSE_NAME, ManytaskDeadlinesConfig(**create_test_config(tasks_config)["deadlines"])
     )
 

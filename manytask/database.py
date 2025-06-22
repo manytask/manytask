@@ -19,10 +19,10 @@ from sqlalchemy.sql.functions import func
 from . import models
 from .abstract import StorageApi, StoredUser
 from .config import (
+    ManytaskConfig,
     ManytaskDeadlinesConfig,
     ManytaskGroupConfig,
     ManytaskTaskConfig,
-    ManytaskUiConfig,
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
@@ -262,80 +262,6 @@ class DataBaseApi(StorageApi):
                 logger.error(f"Failed to update score for {student.username} on {task_name}: {str(e)}")
                 raise
 
-    def sync_columns(
-        self,
-        course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
-    ) -> None:
-        """Method for updating deadlines config
-
-        :param course_name: course name
-        :param deadlines_config: ManytaskDeadlinesConfig object
-        """
-
-        groups = deadlines_config.groups
-
-        logger.info("Syncing database tasks...")
-        with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-
-            existing_course_tasks = (
-                session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
-            )
-            existing_course_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
-
-            # Disabling tasks and groups removed from the config
-            for existing_task in existing_course_tasks:
-                existing_task.enabled = False
-                existing_task.position = 0
-            for existing_group in existing_course_groups:
-                existing_group.enabled = False
-                existing_group.position = 0
-
-            # update deadlines parameters
-            course.timezone = deadlines_config.timezone
-            course.max_submissions = deadlines_config.max_submissions
-            course.submission_penalty = deadlines_config.submission_penalty
-
-            # update deadlines for each group
-            for group_pos, group in enumerate(groups, start=1):
-                tasks = group.tasks
-
-                deadline_start = group.start
-                deadline_steps = {
-                    k: self._convert_timedelta_to_datetime(group.start, v) for k, v in group.steps.items()
-                }
-                deadline_end = self._convert_timedelta_to_datetime(group.start, group.end)
-
-                task_group = DataBaseApi._update_or_create(
-                    session,
-                    models.TaskGroup,
-                    defaults={"enabled": group.enabled, "position": group_pos},
-                    name=group.name,
-                    course_id=course.id,
-                )
-
-                DataBaseApi._update_deadline_for_task_group(
-                    session, task_group, deadline_start, deadline_steps, deadline_end
-                )
-
-                for task_pos, task in enumerate(tasks, start=1):
-                    self._update_or_create(
-                        session,
-                        models.Task,
-                        defaults={
-                            "score": task.score,
-                            "is_bonus": task.is_bonus,
-                            "is_special": task.is_special,
-                            "enabled": task.enabled,
-                            "url": str(task.url) if task.url is not None else None,
-                            "position": task_pos,
-                        },
-                        name=task.name,
-                        group_id=task_group.id,
-                    )
-            session.commit()
-
     def get_course(
         self,
         course_name: str,
@@ -365,68 +291,6 @@ class DataBaseApi(StorageApi):
             )
         except NoResultFound:
             return None
-
-    def update_task_groups_from_config(
-        self,
-        course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
-    ) -> None:
-        """Update task groups based on new deadline config data.
-
-        This method:
-        1. Finds tasks that need to be moved to different groups
-        2. Creates any missing groups
-        3. Updates task group assignments
-
-        :param deadlines_config: ManytaskDeadlinesConfig object
-        """
-        with Session(self.engine) as session:
-            new_task_names = set()
-            new_task_to_group = {}
-            for group in deadlines_config.groups:
-                for task_config in group.tasks:
-                    new_task_names.add(task_config.name)
-                    new_task_to_group[task_config.name] = group.name
-
-            existing_tasks = session.query(models.Task).join(models.TaskGroup).all()
-
-            # Check for duplicates (name + course)
-            tasks_to_update = {}
-            for existing_task in existing_tasks:
-                if existing_task.name in new_task_names:
-                    task_group = existing_task.group
-                    task_course = task_group.course
-
-                    if task_course.name == course_name:
-                        new_group_name = new_task_to_group[existing_task.name]
-                        if task_group.name != new_group_name:
-                            tasks_to_update[existing_task.id] = new_group_name
-
-            # Create any missing groups
-            course = self._get(session, models.Course, name=course_name)
-            needed_group_names = set(tasks_to_update.values())
-            existing_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
-            existing_group_names = {g.name for g in existing_groups}
-
-            for group_name in needed_group_names:
-                if group_name not in existing_group_names:
-                    new_group = models.TaskGroup(name=group_name, course_id=course.id)
-                    session.add(new_group)
-
-            session.commit()
-
-            # Update groups for existing tasks
-            for task_id, new_group_name in tasks_to_update.items():
-                existing_task = session.query(models.Task).filter_by(id=task_id).one()
-
-                new_group = (
-                    session.query(models.TaskGroup)
-                    .filter_by(name=new_group_name, course_id=existing_task.group.course_id)
-                    .one()
-                )
-                existing_task.group = new_group
-
-            session.commit()
 
     def create_course(
         self,
@@ -466,12 +330,12 @@ class DataBaseApi(StorageApi):
     def update_course(
         self,
         course_name: str,
-        ui_config: ManytaskUiConfig,
+        config: ManytaskConfig,
     ) -> None:
         """Update course settings from config objects
 
         :param course_name: course name
-        :param ui_config: ManytaskUiConfig object
+        :param config: ManytaskConfig object
         """
 
         with Session(self.engine) as session:
@@ -480,11 +344,14 @@ class DataBaseApi(StorageApi):
                 models.Course,
                 defaults={
                     "is_ready": True,
-                    "task_url_template": ui_config.task_url_template,
-                    "links": ui_config.links,
+                    "task_url_template": config.ui.task_url_template,
+                    "links": config.ui.links,
                 },
                 name=course_name,
             )
+
+        self._update_task_groups_from_config(course_name, config.deadlines)
+        self._sync_columns(course_name, config.deadlines)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
@@ -525,6 +392,7 @@ class DataBaseApi(StorageApi):
                     enabled=group_task.enabled,
                     score=group_task.score,
                     is_bonus=group_task.is_bonus,
+                    is_large=group_task.is_large,
                     is_special=group_task.is_special,
                     url=AnyUrl(group_task.url) if group_task.url is not None else None,
                 )
@@ -537,6 +405,7 @@ class DataBaseApi(StorageApi):
             enabled=task.enabled,
             score=task.score,
             is_bonus=task.is_bonus,
+            is_large=task.is_large,
             is_special=task.is_special,
         )
 
@@ -594,6 +463,7 @@ class DataBaseApi(StorageApi):
                             enabled=task.enabled,
                             score=task.score,
                             is_bonus=task.is_bonus,
+                            is_large=task.is_large,
                             is_special=task.is_special,
                             url=AnyUrl(task.url) if task.url is not None else None,
                         )
@@ -695,6 +565,143 @@ class DataBaseApi(StorageApi):
 
             result = [course.name for course in courses]
             return result
+
+    def _update_task_groups_from_config(
+        self,
+        course_name: str,
+        deadlines_config: ManytaskDeadlinesConfig,
+    ) -> None:
+        """Update task groups based on new deadline config data.
+
+        This method:
+        1. Finds tasks that need to be moved to different groups
+        2. Creates any missing groups
+        3. Updates task group assignments
+
+        :param deadlines_config: ManytaskDeadlinesConfig object
+        """
+        with Session(self.engine) as session:
+            new_task_names = set()
+            new_task_to_group = {}
+            for group in deadlines_config.groups:
+                for task_config in group.tasks:
+                    new_task_names.add(task_config.name)
+                    new_task_to_group[task_config.name] = group.name
+
+            existing_tasks = session.query(models.Task).join(models.TaskGroup).all()
+
+            # Check for duplicates (name + course)
+            tasks_to_update = {}
+            for existing_task in existing_tasks:
+                if existing_task.name in new_task_names:
+                    task_group = existing_task.group
+                    task_course = task_group.course
+
+                    if task_course.name == course_name:
+                        new_group_name = new_task_to_group[existing_task.name]
+                        if task_group.name != new_group_name:
+                            tasks_to_update[existing_task.id] = new_group_name
+
+            # Create any missing groups
+            course = self._get(session, models.Course, name=course_name)
+            needed_group_names = set(tasks_to_update.values())
+            existing_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
+            existing_group_names = {g.name for g in existing_groups}
+
+            for group_name in needed_group_names:
+                if group_name not in existing_group_names:
+                    new_group = models.TaskGroup(name=group_name, course_id=course.id)
+                    session.add(new_group)
+
+            session.commit()
+
+            # Update groups for existing tasks
+            for task_id, new_group_name in tasks_to_update.items():
+                existing_task = session.query(models.Task).filter_by(id=task_id).one()
+
+                new_group = (
+                    session.query(models.TaskGroup)
+                    .filter_by(name=new_group_name, course_id=existing_task.group.course_id)
+                    .one()
+                )
+                existing_task.group = new_group
+
+            session.commit()
+
+    def _sync_columns(
+        self,
+        course_name: str,
+        deadlines_config: ManytaskDeadlinesConfig,
+    ) -> None:
+        """Method for updating deadlines config
+
+        :param course_name: course name
+        :param deadlines_config: ManytaskDeadlinesConfig object
+        """
+
+        groups = deadlines_config.groups
+
+        logger.info("Syncing database tasks...")
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+
+            existing_course_tasks = (
+                session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
+            )
+            existing_course_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
+
+            # Disabling tasks and groups removed from the config
+            for existing_task in existing_course_tasks:
+                existing_task.enabled = False
+                existing_task.position = 0
+            for existing_group in existing_course_groups:
+                existing_group.enabled = False
+                existing_group.position = 0
+
+            # update deadlines parameters
+            course.timezone = deadlines_config.timezone
+            course.max_submissions = deadlines_config.max_submissions
+            course.submission_penalty = deadlines_config.submission_penalty
+
+            # update deadlines for each group
+            for group_pos, group in enumerate(groups, start=1):
+                tasks = group.tasks
+
+                deadline_start = group.start
+                deadline_steps = {
+                    k: self._convert_timedelta_to_datetime(group.start, v) for k, v in group.steps.items()
+                }
+                deadline_end = self._convert_timedelta_to_datetime(group.start, group.end)
+
+                task_group = DataBaseApi._update_or_create(
+                    session,
+                    models.TaskGroup,
+                    defaults={"enabled": group.enabled, "position": group_pos},
+                    name=group.name,
+                    course_id=course.id,
+                )
+
+                DataBaseApi._update_deadline_for_task_group(
+                    session, task_group, deadline_start, deadline_steps, deadline_end
+                )
+
+                for task_pos, task in enumerate(tasks, start=1):
+                    self._update_or_create(
+                        session,
+                        models.Task,
+                        defaults={
+                            "score": task.score,
+                            "is_bonus": task.is_bonus,
+                            "is_large": task.is_large,
+                            "is_special": task.is_special,
+                            "enabled": task.enabled,
+                            "url": str(task.url) if task.url is not None else None,
+                            "position": task_pos,
+                        },
+                        name=task.name,
+                        group_id=task_group.id,
+                    )
+            session.commit()
 
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
