@@ -176,9 +176,9 @@ def test_get_courses_names_with_no_courses(db_api):
 
 
 def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
-    username1="username1"
-    username2="username2"
-    username3="username3"
+    username1 = "username1"
+    username2 = "username2"
+    username3 = "username3"
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(username1) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(username2) == []
