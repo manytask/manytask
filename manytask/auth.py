@@ -49,7 +49,7 @@ def handle_course_membership(app: CustomFlask, course: Course, student: Student)
     """Checking user on course"""
 
     try:
-        if app.storage_api.check_user_on_course(course.course_name, student):
+        if app.storage_api.check_user_on_course(course.course_name, student.username):
             return True
         else:
             logger.info(f"No user {student.username} on course {course.course_name} asking secret")
@@ -171,7 +171,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_stored_user(
             course.course_name,
-            student,
+            student.username,
             app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
             app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
         )
