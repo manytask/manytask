@@ -46,14 +46,14 @@ class StorageApi(ABC):
     def get_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
     ) -> StoredUser: ...
 
     @abstractmethod
     def sync_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser: ...
@@ -74,7 +74,7 @@ class StorageApi(ABC):
     def store_score(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
@@ -127,13 +127,23 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, student: Student) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, student: Student, course_name: str) -> None: ...
+    def create_user_if_not_exist(self, username: str, course_name: str) -> None: ...
 
     @abstractmethod
-    def get_user_courses_names(self, student: Student) -> list[str]: ...
+    def get_user_courses_names(self, username: str) -> list[str]: ...
 
     @abstractmethod
     def get_all_courses_names(self) -> list[str]: ...
+
+
+@dataclass
+class RmsUser:
+    id: int
+    username: str
+    name: str
+
+    def __repr__(self) -> str:
+        return f"Student(username={self.username})"
 
 
 class RmsApi(ABC):
@@ -169,14 +179,14 @@ class RmsApi(ABC):
     @abstractmethod
     def check_project_exists(
         self,
-        student: Student,
-        course_students_group: str,
+        project_name: str,
+        project_group: str,
     ) -> bool: ...
 
     @abstractmethod
     def create_project(
         self,
-        student: Student,
+        rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
     ) -> None: ...
@@ -190,3 +200,21 @@ class RmsApi(ABC):
         username: str,
         course_students_group: str,
     ) -> str: ...
+
+    @abstractmethod
+    def get_rms_user_by_id(
+        self,
+        user_id: int,
+    ) -> RmsUser: ...
+
+    @abstractmethod
+    def get_rms_user_by_username(
+        self,
+        username: str,
+    ) -> RmsUser: ...
+
+    @abstractmethod
+    def get_authenticated_rms_user(
+        self,
+        oauth_token: str,
+    ) -> RmsUser: ...

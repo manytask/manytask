@@ -4,7 +4,7 @@ import pytest
 from flask import Flask
 
 from manytask.database_utils import get_database_table_data
-from manytask.glab import Student
+from manytask.abstract import Student
 
 TASK_1 = "task1"
 TASK_2 = "task2"

@@ -12,7 +12,7 @@ from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import StoredUser
 from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
-from manytask.glab import Student
+from manytask.abstract import Student
 from manytask.web import course_bp, root_bp
 
 TEST_USERNAME = "test_user"
@@ -69,7 +69,7 @@ def mock_gitlab_api():
             return False
 
         @staticmethod
-        def check_project_exists(student: Student, course_students_group: str):
+        def check_project_exists(_project_name: str, _project_group: str):
             return True
 
         @staticmethod
@@ -106,15 +106,11 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_bonus_score(_username):
             return 10
 
-        def sync_stored_user(self, student):
-            if student.course_admin:
-                self.stored_user.course_admin = True
-
         @staticmethod
         def get_course(_name):
             return mock_course
 
-        def get_stored_user(self, _student):
+        def get_stored_user(self, _username):
             return self.stored_user
 
         def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
@@ -250,8 +246,8 @@ def test_requires_auth_callback_oauth(app, mock_gitlab_oauth):
         return "success"
 
     with (
-        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
+        patch.object(app.rms_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):
@@ -283,8 +279,8 @@ def test_requires_auth_callback_secret(app, mock_gitlab_oauth):
         return "success"
 
     with (
-        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
+        patch.object(app.rms_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):

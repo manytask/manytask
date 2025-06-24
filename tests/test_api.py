@@ -11,11 +11,10 @@ from dotenv import load_dotenv
 from flask import Flask, json
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import StoredUser
-from manytask.api import _get_student, _parse_flags, _process_score, _update_score
+from manytask.abstract import StoredUser, Student
+from manytask.api import _get_rms_user, _parse_flags, _process_score, _update_score
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
-from manytask.glab import Student
 from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
@@ -104,10 +103,10 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
             self.course_name = TEST_COURSE_NAME
 
-        def store_score(self, _course_name, student, repo_name, task_name, update_fn):
-            old_score = self.scores.get(f"{student.username}_{task_name}", 0)
+        def store_score(self, _course_name, username, repo_name, task_name, update_fn):
+            old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
-            self.scores[f"{student.username}_{task_name}"] = new_score
+            self.scores[f"{username}_{task_name}"] = new_score
             return new_score
 
         @staticmethod
@@ -122,10 +121,10 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             return {"test_user": self.get_scores(course_name, "test_user")}
 
         @staticmethod
-        def get_stored_user(_course_name, student):
+        def get_stored_user(_course_name, username):
             from manytask.abstract import StoredUser
 
-            return StoredUser(username=student.username, course_admin=True)
+            return StoredUser(username=username, course_admin=True)
 
         def update_cached_scores(self, _course_name):
             pass
@@ -186,7 +185,7 @@ def mock_gitlab_api(mock_student):
             return f"https://gitlab.com/{username}/test-repo"
 
         @staticmethod
-        def check_project_exists(_student, course_students_group):
+        def check_project_exists(_project_name, _project_group):
             return True
 
     return MockGitlabApi()
@@ -216,8 +215,8 @@ def authenticated_client(app, mock_gitlab_oauth):
     """
     with (
         app.test_client() as client,
-        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
+        patch.object(app.rms_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
     ):
         app.oauth = mock_gitlab_oauth

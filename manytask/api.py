@@ -13,11 +13,11 @@ from flask.typing import ResponseReturnValue
 
 from manytask.database import TaskDisabledError
 
+from .abstract import RmsUser
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .database_utils import get_database_table_data
-from .glab import Student
 from .main import CustomFlask
 
 logger = logging.getLogger(__name__)
@@ -160,13 +160,13 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{score_str}> to a number")
 
 
-def _get_student(gitlab_api: Any, user_id: int | None, username: str | None) -> Student:
+def _get_rms_user(rms_api: Any, user_id: int | None, username: str | None) -> RmsUser:
     """Get student by user_id or username."""
     try:
         if username:
-            return gitlab_api.get_student_by_username(username)
+            return rms_api.get_rms_user_by_username(username)
         elif user_id:
-            return gitlab_api.get_student(user_id)
+            return rms_api.get_rms_uset_by_id(user_id)
         else:
             assert False, "unreachable"
     except Exception:
@@ -195,12 +195,12 @@ def report_score(course_name: str) -> ResponseReturnValue:
         reported_score = task.score
         logger.info(f"Got score=None; set max score for {task.name} of {task.score}")
 
-    student = _get_student(app.gitlab_api, user_id, username)
+    rms_user = _get_rms_user(app.rms_api, user_id, username)
 
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone(course.course_name))
 
     # Log with sanitized values
-    logger.info(f"Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}")
+    logger.info(f"Save score {reported_score} for @{rms_user} on task {task.name} check_deadline {check_deadline}")
     logger.info(f"verify deadline: Use submit_time={submit_time}")
 
     update_function = functools.partial(
@@ -213,15 +213,15 @@ def report_score(course_name: str) -> ResponseReturnValue:
     )
     final_score = app.storage_api.store_score(
         course.course_name,
-        student,
-        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+        rms_user.username,
+        app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
         task.name,
         update_function,
     )
 
     return {
-        "user_id": student.id,
-        "username": student.username,
+        "user_id": rms_user.id,
+        "username": rms_user.username,
         "task": task.name,
         "score": final_score,
         "commit_time": submit_time.isoformat(sep=" ") if submit_time else "None",
@@ -259,23 +259,23 @@ def get_score(course_name: str) -> ResponseReturnValue:
 
     try:
         if username:
-            student = app.gitlab_api.get_student_by_username(username)
+            rms_user = app.rms_api.get_rms_user_by_username(username)
         elif user_id:
-            student = app.gitlab_api.get_student(user_id)
+            rms_user = app.rms_api.get_rms_user_by_id(user_id)
         else:
             assert False, "unreachable"
-        student_scores = app.storage_api.get_scores(course_name, student.username)
+        student_scores = app.storage_api.get_scores(course_name, rms_user.username)
     except Exception:
         return f"There is no student with user_id {user_id} or username {username}", HTTPStatus.NOT_FOUND
 
     try:
         student_task_score = student_scores[task.name]
     except Exception:
-        return f"Cannot get score for task {task.name} for {student.username}", HTTPStatus.NOT_FOUND
+        return f"Cannot get score for task {task.name} for {rms_user.username}", HTTPStatus.NOT_FOUND
 
     return {
-        "user_id": student.id,
-        "username": student.username,
+        "user_id": rms_user.id,
+        "username": rms_user.username,
         "task": task.name,
         "score": student_task_score,
     }, HTTPStatus.OK
@@ -349,8 +349,8 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
-    stored_user = storage_api.get_stored_user(course.course_name, student)
+    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+    stored_user = storage_api.get_stored_user(course.course_name, rms_user.username)
     student_course_admin = stored_user.course_admin
 
     if not student_course_admin:
@@ -367,11 +367,6 @@ def update_database(course_name: str) -> ResponseReturnValue:
     new_scores = data["scores"]
 
     try:
-        student = Student(
-            id=0,
-            username=username,
-            name=username,
-        )
         repo_name = app.rms_api.get_url_for_repo(
             username=username, course_students_group=course.gitlab_course_students_group
         )
@@ -379,7 +374,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
             if isinstance(new_score, (int, float)):
                 storage_api.store_score(
                     course.course_name,
-                    student=student,
+                    username=username,
                     repo_name=repo_name,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),

@@ -9,8 +9,8 @@ from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
+from manytask.abstract import Student
 from manytask.course import Course
-from manytask.glab import Student
 from manytask.main import CustomFlask
 
 logger = logging.getLogger(__name__)
@@ -68,8 +68,10 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     redirect_url = request.args.get("state") or url_for("root.index")
 
     try:
+        # This is where the oath_api should be used
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        student = app.gitlab_api.get_authenticated_student(gitlab_oauth_token["access_token"])
+        rms_user = app.rms_api.get_authenticated_rms_user(gitlab_oauth_token["access_token"])
+        student = Student(rms_user.id, rms_user.username, rms_user.name)
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
         return redirect(redirect_url)
@@ -84,7 +86,9 @@ def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student | Respon
     """Getting student and update session"""
 
     try:
-        student = app.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
+        # This is where the auth_api should be user instead of gitlab/rms
+        rms_user = app.gitlab_api.get_authenticated_rms_user(session["gitlab"]["access_token"])
+        student = Student(rms_user.id, rms_user.username, rms_user.name)
         session["gitlab"].update(set_oauth_session(student))
         return student
 
@@ -164,14 +168,14 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         student: Student = get_authenticate_student(oauth, app)  # type: ignore
 
         if not handle_course_membership(app, course, student) or not app.rms_api.check_project_exists(
-            student=student, course_students_group=course.gitlab_course_students_group
+            project_name=student.username, project_group=course.gitlab_course_students_group
         ):
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_stored_user(
             course.course_name,
-            student,
+            student.username,
             app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
             app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
         )

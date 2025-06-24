@@ -36,10 +36,11 @@ def index() -> ResponseReturnValue:
         courses_names = app.storage_api.get_all_courses_names()
 
     else:
-        student_id = session["gitlab"]["user_id"]
-        student = app.gitlab_api.get_student(student_id)
+        # Here is where the auth_api should be used
+        user_id = session["gitlab"]["user_id"]
+        rms_user = app.rms_api.get_rms_user_by_id(user_id)
 
-        courses_names = app.storage_api.get_user_courses_names(student)
+        courses_names = app.storage_api.get_user_courses_names(rms_user.username)
 
     courses = [
         {
@@ -95,8 +96,8 @@ def course_page(course_name: str) -> ResponseReturnValue:
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
+        rms_user = app.gitlab_api.get_rms_user_by_id(user_id=student_id)
+        stored_user = storage_api.get_stored_user(course.course_name, rms_user.username)
 
         student_course_admin = stored_user.course_admin
 
@@ -214,19 +215,20 @@ def create_project(course_name: str) -> ResponseReturnValue:
         )
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
-    student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    app.storage_api.create_user_if_not_exist(student, course.course_name)
+    # This is where the auth_api should be used when it will be ready
+    rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
+    app.storage_api.create_user_if_not_exist(rms_user.username, course.course_name)
 
     app.storage_api.sync_stored_user(
         course.course_name,
-        student,
-        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-        app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
+        rms_user.username,
+        app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
+        app.gitlab_api.check_is_course_admin(rms_user.id, course.gitlab_course_group),
     )
 
     # Create use if needed
     try:
-        app.rms_api.create_project(student, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
         return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
@@ -279,8 +281,8 @@ def show_database(course_name: str) -> ResponseReturnValue:
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
+        rms_user = app.gitlab_api.get_rms_user_by_id(user_id=student_id)
+        stored_user = storage_api.get_stored_user(course.course_name, rms_user.username)
 
         student_course_admin = stored_user.course_admin
 
