@@ -135,7 +135,7 @@
     }
 </style>
 
-{% for group in current_course.storage_api.get_groups(enabled=True, started=True)[::-1] %}
+{% for group in app.storage_api.get_groups(course_name, enabled=True, started=True)[::-1] %}
     {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
     {% set solved_group_scores = [] %}
     {% for task in group.tasks %}
@@ -163,7 +163,7 @@
                 {% if task.url %}
                   {% set task_link = task.url %}
                 {% else %}
-                  {% set task_link = current_course.config.ui.task_url_template | replace('$GROUP_NAME', group.name) | replace('$TASK_NAME', task.name) %}
+                  {% set task_link = task_url_template | replace('$GROUP_NAME', group.name) | replace('$TASK_NAME', task.name) %}
                 {% endif %}
 
                 {% if scores.get(task.name, 0) == task.score %}
@@ -198,9 +198,6 @@
 {#                        {% endif %}#}
                         <div class="fs-6 stat">{% if task.is_special %}special&nbsp;{% endif %}{% if task.is_bonus %}bonus&nbsp;{% endif %}{{ task_stats.get(task.name, 0)|float|round(2) }}</div>
                     </a>
-                    {% if is_course_admin %}
-                        <button type="button" onclick="window.open('solutions?task={{ task.name }}')" class="solutions btn btn-outline-warning btn-sm"><i class="fa-solid fa-download"></i></button>
-                    {% endif %}
                 </div>
             {% endfor %}
         </div>

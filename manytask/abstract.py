@@ -3,15 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
-from .config import (
-    ManytaskDeadlinesConfig,
-    ManytaskGroupConfig,
-    ManytaskSettingsConfig,
-    ManytaskTaskConfig,
-    ManytaskUiConfig,
-)
-from .course import Course
-from .glab import Student
+from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
+from .course import Course, CourseConfig
 
 
 @dataclass
@@ -22,6 +15,16 @@ class StoredUser:
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
+
+
+@dataclass
+class Student:
+    id: int
+    username: str
+    name: str
+
+    def __repr__(self) -> str:
+        return f"Student(username={self.username})"
 
 
 class StorageApi(ABC):
@@ -43,14 +46,14 @@ class StorageApi(ABC):
     def get_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
     ) -> StoredUser: ...
 
     @abstractmethod
     def sync_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser: ...
@@ -62,26 +65,32 @@ class StorageApi(ABC):
     def get_stats(self, course_name: str) -> dict[str, float]: ...
 
     @abstractmethod
-    def get_scores_update_timestamp(self) -> str: ...
+    def get_scores_update_timestamp(self, course_name: str) -> str: ...
 
     @abstractmethod
-    def update_cached_scores(self) -> None: ...
+    def update_cached_scores(self, course_name: str) -> None: ...
 
     @abstractmethod
     def store_score(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
     ) -> int: ...
 
     @abstractmethod
-    def sync_columns(
+    def create_course(
+        self,
+        settings_config: CourseConfig,
+    ) -> bool: ...
+
+    @abstractmethod
+    def update_course(
         self,
         course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
+        config: ManytaskConfig,
     ) -> None: ...
 
     @abstractmethod
@@ -89,26 +98,6 @@ class StorageApi(ABC):
         self,
         course_name: str,
     ) -> Course | None: ...
-
-    @abstractmethod
-    def update_task_groups_from_config(
-        self,
-        course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
-    ) -> None: ...
-
-    @abstractmethod
-    def create_course(
-        self,
-        settings_config: ManytaskSettingsConfig,
-    ) -> bool: ...
-
-    @abstractmethod
-    def update_course(
-        self,
-        course_name: str,
-        ui_config: ManytaskUiConfig,
-    ) -> None: ...
 
     @abstractmethod
     def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]: ...
@@ -123,10 +112,7 @@ class StorageApi(ABC):
     ) -> list[ManytaskGroupConfig]: ...
 
     @abstractmethod
-    def get_now_with_timezone(
-        self,
-        course_name: str,
-    ) -> datetime: ...
+    def get_now_with_timezone(self, course_name: str) -> datetime: ...
 
     @abstractmethod
     def max_score(self, course_name: str, started: bool | None = True) -> int: ...
@@ -135,7 +121,62 @@ class StorageApi(ABC):
     def max_score_started(self, course_name: str) -> int: ...
 
     @abstractmethod
-    def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool: ...
+    def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool: ...
 
     @abstractmethod
-    def check_user_on_course(self, course_name: str, student: Student) -> bool: ...
+    def check_user_on_course(self, course_name: str, username: str) -> bool: ...
+
+    @abstractmethod
+    def create_user_if_not_exist(self, username: str, course_name: str) -> None: ...
+
+    @abstractmethod
+    def get_user_courses_names(self, username: str) -> list[str]: ...
+
+    @abstractmethod
+    def get_all_courses_names(self) -> list[str]: ...
+
+
+class RmsApi(ABC):
+    _base_url: str
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    @abstractmethod
+    def create_public_repo(
+        self,
+        course_group: str,
+        course_public_repo: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def create_students_group(
+        self,
+        course_students_group: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def check_project_exists(
+        self,
+        student: Student,
+        course_students_group: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def create_project(
+        self,
+        student: Student,
+        course_students_group: str,
+        course_public_repo: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str: ...
+
+    @abstractmethod
+    def get_url_for_repo(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str: ...

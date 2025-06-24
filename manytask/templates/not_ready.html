@@ -6,7 +6,7 @@
     <h3>You need configure it first with api request</h3>
     <hr>
     <p>You can update the page once it ready</p>
-    <button onClick="window.location.reload()" class="btn btn-warning">Refresh</button>
+    <a href="{{ url_for('course.course_page', course_name=course_name) }}" class="btn btn-warning">Refresh</a>
 </div>
 {% endblock %}
 

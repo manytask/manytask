@@ -11,7 +11,6 @@ TEST_STUDENTS_GROUP = "test_students"
 TEST_PUBLIC_REPO = "test_public_repo"
 
 TEST_CACHE_DIR = "/tmp/manytask_test_cache"
-TEST_SOLUTIONS_DIR = "/tmp/manytask_test_solutions"
 
 
 @pytest.fixture
@@ -46,13 +45,11 @@ def mock_env(monkeypatch, postgres_container):
     set_if_missing("SHOW_ALLSCORES", "true")
 
     monkeypatch.setenv("CACHE_DIR", TEST_CACHE_DIR)
-    monkeypatch.setenv("SOLUTIONS_DIR", TEST_SOLUTIONS_DIR)
     monkeypatch.setenv("DATABASE_URL", postgres_container.get_connection_url())
     monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course")
     monkeypatch.setenv("APPLY_MIGRATIONS", "true")
 
     os.makedirs(TEST_CACHE_DIR, exist_ok=True)
-    os.makedirs(TEST_SOLUTIONS_DIR, exist_ok=True)
 
     return mock_env
 
@@ -108,18 +105,15 @@ def test_create_app_production_with_db(mock_env, mock_gitlab, monkeypatch):
     assert app.testing == os.getenv("TESTING")
     assert app.secret_key == os.getenv("FLASK_SECRET_KEY")
 
-    assert hasattr(app.course, "storage_api")
-
-    assert "web" in app.blueprints
+    assert "root" in app.blueprints
+    assert "course" in app.blueprints
     assert "api" in app.blueprints
 
     assert hasattr(app, "oauth")
     assert "gitlab" in app.oauth._clients
 
-    assert hasattr(app, "course")
-    assert hasattr(app.course, "storage_api")
-    assert hasattr(app.course, "gitlab_api")
-    assert hasattr(app.course, "solutions_api")
+    assert hasattr(app, "storage_api")
+    assert hasattr(app, "gitlab_api")
 
 
 def test_create_app_debug(mock_env, mock_gitlab):
@@ -130,7 +124,7 @@ def test_create_app_debug(mock_env, mock_gitlab):
     assert app.testing == os.getenv("TESTING")
 
 
-def test_create_app_missing_secret_key(mock_gitlab):
+def test_create_app_missing_secret_key(mock_env, mock_gitlab):
     os.environ.pop("FLASK_SECRET_KEY", None)
-    with pytest.raises(KeyError):
+    with pytest.raises(EnvironmentError):
         create_app()

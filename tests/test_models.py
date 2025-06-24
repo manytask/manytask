@@ -39,6 +39,23 @@ TEST_SUBMISSION_PENALTY = 0.1
 TEST_DEADLINE_STEPS = {0.4: datetime(2000, 1, 2, 3, 4, 5, 6, tzinfo=ZoneInfo("Europe/Berlin"))}
 
 
+def make_course(course_id, **kwargs):
+    params = {
+        "name": f"test_course_{course_id}",
+        "registration_secret": f"secret_{course_id}",
+        "token": f"token_{course_id}",
+        "gitlab_instance_host": "gitlab.inst.org",
+        "gitlab_course_group": f"test_course_group_{course_id}",
+        "gitlab_course_public_repo": f"test_course_public_repo_{course_id}",
+        "gitlab_course_students_group": f"test_course_students_group_{course_id}",
+        "gitlab_default_branch": f"test_default_branch_{course_id}",
+        "task_url_template": f"test_task_url_template_{course_id}",
+    }
+    params.update(kwargs)
+
+    return Course(**params)
+
+
 @pytest.fixture(scope="module")
 def engine():
     return create_engine(SQLALCHEMY_DATABASE_URL, echo=False)
@@ -86,12 +103,7 @@ def test_user_unique_username_and_gitlab_instance(session):
 
 
 def test_course(session):
-    course = Course(
-        name="test_course",
-        registration_secret="test_secret",
-        token="test_token",
-        gitlab_instance_host="gitlab.inst.org",
-    )
+    course = make_course("test", name="test_course", registration_secret="test_secret", token="test_token")
     session.add(course)
     session.commit()
 
@@ -107,11 +119,11 @@ def test_course(session):
 
 
 def test_course_deadlines_parameters(session):
-    course = Course(
+    course = make_course(
+        "deadlines_params",
         name="test_course_deadlines_parameters",
         registration_secret="test_secret_deadlines_parameters",
         token="test_token_deadlines_parameters",
-        gitlab_instance_host="gitlab.inst.org",
         show_allscores=True,
         timezone="Europe/Berlin",
         max_submissions=TEST_MAX_SUBMISSIONS,
@@ -132,12 +144,8 @@ def test_course_deadlines_parameters(session):
 
 
 def test_course_unique_name(session):
-    course1 = Course(
-        name="unique_course", registration_secret="secret1", token="test_token1", gitlab_instance_host="gitlab.inst.org"
-    )
-    course2 = Course(
-        name="unique_course", registration_secret="secret2", token="test_token2", gitlab_instance_host="gitlab.inst.org"
-    )
+    course1 = make_course("unique1", name="unique_course")
+    course2 = make_course("unique2", name="unique_course")
     session.add(course1)
     session.commit()
     session.add(course2)
@@ -147,9 +155,7 @@ def test_course_unique_name(session):
 
 def test_user_on_course(session):
     user = User(username="user1", gitlab_instance_host="gitlab.inst.org")
-    course = Course(
-        name="course1", registration_secret="secret1", token="test_token1_", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("1")
     session.add_all([user, course])
     session.commit()
 
@@ -159,9 +165,9 @@ def test_user_on_course(session):
 
     retrieved_user = session.query(User).filter_by(username="user1").first()
     assert len(retrieved_user.users_on_courses.all()) == 1
-    assert retrieved_user.users_on_courses[0].course.name == "course1"
+    assert retrieved_user.users_on_courses[0].course.name == "test_course_1"
 
-    retrieved_course = session.query(Course).filter_by(name="course1").first()
+    retrieved_course = session.query(Course).filter_by(name="test_course_1").first()
     assert len(retrieved_course.users_on_courses.all()) == 1
     assert retrieved_course.users_on_courses[0].user.username == "user1"
 
@@ -177,13 +183,9 @@ def test_user_on_course(session):
 
 def test_user_on_course_unique_ids(session):
     user1 = User(username="user001", gitlab_instance_host="gitlab.inst.org")
-    course1 = Course(
-        name="course001", registration_secret="secret001", token="test_token001", gitlab_instance_host="gitlab.inst.org"
-    )
+    course1 = make_course("001")
     user2 = User(username="user002", gitlab_instance_host="gitlab.inst.org")
-    course2 = Course(
-        name="course002", registration_secret="secret002", token="test_token002", gitlab_instance_host="gitlab.inst.org"
-    )
+    course2 = make_course("002")
 
     user_on_course1 = UserOnCourse(user=user1, course=course1, repo_name="user_repo01")
     user_on_course2 = UserOnCourse(user=user1, course=course2, repo_name="user_repo02")
@@ -200,9 +202,7 @@ def test_user_on_course_unique_ids(session):
 
 
 def test_deadline(session):
-    course = Course(
-        name="course0001", registration_secret="secret", token="test_token0001", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("0001")
     session.add(course)
     session.commit()
 
@@ -219,9 +219,7 @@ def test_deadline(session):
 
 
 def test_task_group(session):
-    course = Course(
-        name="course0002", registration_secret="secret", token="test_token2", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("0002")
     session.add(course)
     task_group = TaskGroup(name="group2", course=course, position=TEST_TASK_GROUP_POSITION)
     session.add(task_group)
@@ -234,9 +232,7 @@ def test_task_group(session):
 
 
 def test_deadline_steps(session, fixed_current_time):
-    course = Course(
-        name="course0003", registration_secret="secret", token="test_token3", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("0003")
     session.add(course)
     session.commit()
 
@@ -317,9 +313,7 @@ def test_deadline_steps(session, fixed_current_time):
 
 
 def test_task(session):
-    course = Course(
-        name="course3", registration_secret="secret3", token="test_token3_", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("3")
     task_group = TaskGroup(name="group3", course=course)
     session.add_all([course, task_group])
     session.commit()
@@ -329,10 +323,11 @@ def test_task(session):
     session.commit()
 
     retrieved_task = session.query(Task).filter_by(name="task1").first()
-    assert retrieved_task.group.course.name == "course3"
+    assert retrieved_task.group.course.name == "test_course_3"
     assert retrieved_task.group.name == "group3"
     assert retrieved_task.score == 0
     assert not retrieved_task.is_bonus
+    assert not retrieved_task.is_large
     assert not retrieved_task.is_special
     assert retrieved_task.enabled
     assert not retrieved_task.url
@@ -342,6 +337,7 @@ def test_task(session):
         name="task_with_all_params",
         score=TEST_TASK_SCORE,
         is_bonus=True,
+        is_large=True,
         is_special=True,
         enabled=False,
         url="https://www.python.org/about/gettingstarted/",
@@ -352,10 +348,11 @@ def test_task(session):
     session.commit()
 
     retrieved_task = session.query(Task).filter_by(name="task_with_all_params").first()
-    assert retrieved_task.group.course.name == "course3"
+    assert retrieved_task.group.course.name == "test_course_3"
     assert retrieved_task.group.name == "group3"
     assert retrieved_task.score == TEST_TASK_SCORE
     assert retrieved_task.is_bonus
+    assert retrieved_task.is_large
     assert retrieved_task.is_special
     assert not retrieved_task.enabled
     assert retrieved_task.url == "https://www.python.org/about/gettingstarted/"
@@ -364,9 +361,7 @@ def test_task(session):
 
 def test_grade(session, fixed_current_time):
     user = User(username="user2", gitlab_instance_host="gitlab.inst.org")
-    course = Course(
-        name="course4", registration_secret="secret4", token="test_token4", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("4")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="repo_name1")
     task_group = TaskGroup(name="group4", course=course)
     task = Task(name="task2", group=task_group)
@@ -384,9 +379,7 @@ def test_grade(session, fixed_current_time):
 
 
 def test_grade_unique_ids(session, fixed_current_time):
-    course = Course(
-        name="course101", registration_secret="secret101", token="test_token101", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("101")
     task_group = TaskGroup(name="group101", course=course)
     user1 = User(username="user101", gitlab_instance_host="gitlab.inst.org")
     user2 = User(username="user102", gitlab_instance_host="gitlab.inst.org")
@@ -412,16 +405,14 @@ def test_grade_unique_ids(session, fixed_current_time):
 
 
 def test_course_tasks(session):
-    course = Course(
-        name="course11", registration_secret="secret11", token="test_token11", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("11")
     task_group = TaskGroup(name="group11", course=course)
     task1 = Task(name="task11_1", group=task_group)
     task2 = Task(name="task11_2", group=task_group)
     session.add_all([course, task_group, task1, task2])
     session.commit()
 
-    retrieved_course = session.query(Course).filter_by(name="course11").first()
+    retrieved_course = session.query(Course).filter_by(name="test_course_11").first()
     retrieved_task_group = retrieved_course.task_groups.one()
 
     assert len(retrieved_task_group.tasks.all()) == TEST_TASK_COUNT
@@ -431,9 +422,7 @@ def test_course_tasks(session):
 
 
 def test_task_group_tasks(session):
-    course = Course(
-        name="course12", registration_secret="secret12", token="test_token12", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("12")
     task_group = TaskGroup(name="group12", course=course)
     task1 = Task(name="task12_1", group=task_group)
     task2 = Task(name="task12_2", group=task_group)
@@ -448,9 +437,7 @@ def test_task_group_tasks(session):
 
 
 def test_users_on_course_validate_gitlab_instance(session):
-    course = Course(
-        name="course21", registration_secret="secret", token="test_token21", gitlab_instance_host="gitlab.inst.org"
-    )
+    course = make_course("21")
     user = User(username="user21", gitlab_instance_host="another.gitlab.inst.org")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="user21_repo")
 
@@ -460,12 +447,7 @@ def test_users_on_course_validate_gitlab_instance(session):
 
 
 def test_cascade_delete_course(session):
-    course = Course(
-        name="cascade_course",
-        registration_secret="secret",
-        token="test_token__",
-        gitlab_instance_host="gitlab.inst.org",
-    )
+    course = make_course("cascade")
     task_group1 = TaskGroup(name="cascade_group1", course=course)
     task_group2 = TaskGroup(name="cascade_group2", course=course)
     user1 = User(username="cascade_user1", gitlab_instance_host="gitlab.inst.org")
@@ -488,7 +470,7 @@ def test_cascade_delete_course(session):
     session.add_all([grade1, grade2, grade3, grade4])
     session.commit()
 
-    assert session.query(Course).filter_by(name="cascade_course").first() is not None
+    assert session.query(Course).filter_by(name="test_course_cascade").first() is not None
     assert (
         session.query(TaskGroup).filter(TaskGroup.name.in_(["cascade_group1", "cascade_group2"])).count()
         == TEST_TASK_COUNT
@@ -506,7 +488,7 @@ def test_cascade_delete_course(session):
     session.delete(course)
     session.commit()
 
-    assert session.query(Course).filter_by(name="cascade_course").first() is None
+    assert session.query(Course).filter_by(name="test_course_cascade").first() is None
     assert session.query(TaskGroup).filter(TaskGroup.name.in_(["cascade_group1", "cascade_group2"])).count() == 0
     assert session.query(Task).filter(Task.name.in_(["cascade_task1", "cascade_task2", "cascade_task3"])).count() == 0
     assert (
@@ -518,12 +500,7 @@ def test_cascade_delete_course(session):
 
 
 def test_cascade_delete_task_group(session):
-    course = Course(
-        name="cascade_course2",
-        registration_secret="secret",
-        token="test_token2__",
-        gitlab_instance_host="gitlab.inst.org",
-    )
+    course = make_course("cascade2")
     deadline = Deadline(id=TEST_DEADLINE_ID, steps=TEST_DEADLINE_STEPS)
     task_group = TaskGroup(name="cascade_group3", course=course, deadline=deadline)
     task1 = Task(name="cascade_task4", group=task_group)
@@ -555,19 +532,14 @@ def test_cascade_delete_task_group(session):
     assert retrieved_user is not None
     assert len(retrieved_user.users_on_courses.all()) == 1
 
-    retrieved_course = session.query(Course).filter_by(name="cascade_course2").first()
+    retrieved_course = session.query(Course).filter_by(name="test_course_cascade2").first()
     assert retrieved_course is not None
     assert len(retrieved_course.users_on_courses.all()) == 1
 
 
 def test_cascade_delete_user(session):
     user = User(username="cascade_user4", gitlab_instance_host="gitlab.inst.org")
-    course = Course(
-        name="cascade_course3",
-        registration_secret="secret",
-        token="test_token3__",
-        gitlab_instance_host="gitlab.inst.org",
-    )
+    course = make_course("cascade3")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo4")
     task_group = TaskGroup(name="cascade_group4", course=course)
     task = Task(name="cascade_task6", group=task_group)
@@ -586,18 +558,13 @@ def test_cascade_delete_user(session):
     assert session.query(UserOnCourse).filter_by(repo_name="cascade_repo4").first() is None
     assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_3).count() == 0
 
-    assert session.query(Course).filter_by(name="cascade_course3").first() is not None
+    assert session.query(Course).filter_by(name="test_course_cascade3").first() is not None
     assert session.query(TaskGroup).filter_by(name="cascade_group4").first() is not None
 
 
 def test_cascade_delete_user_on_course(session):
     user = User(username="cascade_user5", gitlab_instance_host="gitlab.inst.org")
-    course = Course(
-        name="cascade_course4",
-        registration_secret="secret",
-        token="test_token5",
-        gitlab_instance_host="gitlab.inst.org",
-    )
+    course = make_course("cascade4")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo5")
     task_group = TaskGroup(name="cascade_group5", course=course)
     task = Task(name="cascade_task7", group=task_group)
@@ -615,7 +582,7 @@ def test_cascade_delete_user_on_course(session):
     assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_4).count() == 0
 
     assert session.query(User).filter_by(username="cascade_user5").first() is not None
-    assert session.query(Course).filter_by(name="cascade_course4").first() is not None
+    assert session.query(Course).filter_by(name="test_course_cascade4").first() is not None
 
     assert session.query(TaskGroup).filter_by(name="cascade_group5").first() is not None
     assert session.query(Task).filter_by(name="cascade_task7").first() is not None

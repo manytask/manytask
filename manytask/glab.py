@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
+
+from .abstract import RmsApi, Student
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +26,6 @@ class User:
         return f"User(username={self.username})"
 
 
-@dataclass
-class Student:
-    id: int
-    username: str
-    name: str
-    course_admin: bool = False
-    repo: str | None = field(default=None)
-
-    def __repr__(self) -> str:
-        return f"Student(username={self.username})"
-
-
 class GitLabApiException(Exception):
     pass
 
@@ -49,7 +39,7 @@ class GitLabConfig:
     dry_run: bool = False
 
 
-class GitLabApi:
+class GitLabApi(RmsApi):
     def __init__(
         self,
         config: GitLabConfig,
@@ -60,7 +50,7 @@ class GitLabApi:
         """
         self.dry_run = config.dry_run
 
-        self.base_url = config.base_url
+        self._base_url = config.base_url
         self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token)
 
     def register_new_user(
@@ -88,14 +78,14 @@ class GitLabApi:
         )
         logger.info(f"Gitlab user created {new_user}")
 
-        return new_user  # type: ignore
+        return new_user
 
     def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
         short_group_name = group_name.split("/")[-1]
         group_name_with_spaces = " / ".join(group_name.split("/"))
 
         try:
-            return next(  # type: ignore
+            return next(
                 group
                 for group in self._gitlab.groups.list(get_all=True, search=group_name)
                 if group.name == short_group_name and group.full_name == group_name_with_spaces
@@ -107,7 +97,7 @@ class GitLabApi:
         short_project_name = project_name.split("/")[-1]
 
         try:
-            return next(  # type: ignore
+            return next(
                 project
                 for project in self._gitlab.projects.list(get_all=True, search=short_project_name)
                 if project.path_with_namespace == project_name
@@ -255,7 +245,7 @@ class GitLabApi:
         except gitlab.GitlabCreateError:
             logger.info(f"Access already granted for {student.username} or smth happened")
 
-    def _check_is_course_admin(self, user_id: int, course_group: str) -> bool:
+    def check_is_course_admin(self, user_id: int, course_group: str) -> bool:
         try:
             admin_group = self._get_group_by_name(course_group)
             admin_group_member = admin_group.members_all.get(user_id)
@@ -267,47 +257,41 @@ class GitLabApi:
 
         return True
 
+    def check_is_gitlab_admin(self, user_id: int) -> bool:
+        user = self._gitlab.users.get(user_id)
+        return user.is_admin
+
     def _parse_user_to_student(
         self,
         user: dict[str, Any],
-        course_group: str,
-        course_students_group: str,
     ) -> Student:
         return Student(
             id=user["id"],
             username=user["username"],
             name=user["name"],
-            repo=self.get_url_for_repo(user["username"], course_students_group),
-            course_admin=self._check_is_course_admin(user["id"], course_group),
         )
 
     def get_students_by_username(
         self,
         username: str,
-        course_group: str,
-        course_students_group: str,
     ) -> list[Student]:
         users = self._gitlab.users.list(get_all=True, username=username)
-        return [self._parse_user_to_student(user._attrs, course_group, course_students_group) for user in users]
+        return [self._parse_user_to_student(user._attrs) for user in users]
 
     def get_student(
         self,
         user_id: int,
-        course_group: str,
-        course_students_group: str,
     ) -> Student:
         logger.info(f"Searching user {user_id}...")
         user = self._gitlab.users.get(user_id)
         logger.info(f'User found: "{user.username}"')
-        return self._parse_user_to_student(user._attrs, course_group, course_students_group)
+        return self._parse_user_to_student(user._attrs)
 
     def get_student_by_username(
         self,
         username: str,
-        course_group: str,
-        course_students_group: str,
     ) -> Student:
-        potential_students = self.get_students_by_username(username, course_group, course_students_group)
+        potential_students = self.get_students_by_username(username)
         potential_students = [student for student in potential_students if student.username == username]
         if len(potential_students) == 0:
             raise GitLabApiException(f"No students found for username {username}")
@@ -319,13 +303,11 @@ class GitLabApi:
     def get_authenticated_student(
         self,
         oauth_token: str,
-        course_group: str,
-        course_students_group: str,
     ) -> Student:
         headers = {"Authorization": "Bearer " + oauth_token}
         response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
         response.raise_for_status()
-        return self._parse_user_to_student(response.json(), course_group, course_students_group)
+        return self._parse_user_to_student(response.json())
 
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"
@@ -336,14 +318,3 @@ class GitLabApi:
         course_students_group: str,
     ) -> str:
         return f"{self.base_url}/{course_students_group}/{username}"
-
-
-def map_gitlab_user_to_student(
-    gitlab_response: gitlab.v4.objects.User,
-) -> Student:
-    return Student(
-        id=gitlab_response.id,
-        username=gitlab_response.username,
-        name=gitlab_response.name,
-        repo=gitlab_response.web_url,
-    )

@@ -19,14 +19,13 @@ from sqlalchemy.sql.functions import func
 from . import models
 from .abstract import StorageApi, StoredUser
 from .config import (
+    ManytaskConfig,
     ManytaskDeadlinesConfig,
     ManytaskGroupConfig,
-    ManytaskSettingsConfig,
     ManytaskTaskConfig,
-    ManytaskUiConfig,
 )
-from .course import Course, CourseConfig
-from .glab import Student
+from .course import Course as AppCourse
+from .course import CourseConfig as AppCourseConfig
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -36,6 +35,16 @@ logger = logging.getLogger(__name__)
 class TaskDisabledError(Exception):
     pass
 
+
+@dataclass
+class DatabaseConfig:
+    """Configuration for Database connection and settings."""
+
+    database_url: str
+    gitlab_instance_host: str
+    apply_migrations: bool = False
+
+
 class DataBaseApi(StorageApi):
     """Class for interacting with a database with the StorageApi functionality"""
 
@@ -43,17 +52,15 @@ class DataBaseApi(StorageApi):
 
     def __init__(
         self,
-        database_url: str,
-        gitlab_instance_host: str,
-        apply_migrations: bool = False,
+        config: DatabaseConfig,
     ):
         """Initialize Database connection with configuration.
 
         :param config: DatabaseConfig instance containing all necessary settings
         """
-        self.database_url = database_url
-        self.gitlab_instance_host = gitlab_instance_host
-        self.apply_migrations = apply_migrations
+        self.database_url = config.database_url
+        self.gitlab_instance_host = config.gitlab_instance_host
+        self.apply_migrations = config.apply_migrations
 
         self.engine = create_engine(self.database_url, echo=False)
 
@@ -63,9 +70,6 @@ class DataBaseApi(StorageApi):
             else:
                 logger.error("There are pending migrations that have not been applied")
 
-    def get_scoreboard_url(self) -> str:
-        return ""
-
     def get_scores(
         self,
         course_name: str,
@@ -73,13 +77,14 @@ class DataBaseApi(StorageApi):
     ) -> dict[str, int]:
         """Method for getting all user scores
 
+        :param course_name: course name
         :param username: student username
 
         :return: dict with the names of tasks and their scores
         """
 
         with Session(self.engine) as session:
-            grades = self._get_scores(course_name, session, username, enabled=True, started=True, only_bonus=False)
+            grades = self._get_scores(session, course_name, username, enabled=True, started=True, only_bonus=False)
 
             if grades is None:
                 return {}
@@ -97,13 +102,14 @@ class DataBaseApi(StorageApi):
     ) -> int:
         """Method for getting user's total bonus score
 
+        :param course_name: course name
         :param username: student username
 
         :return: user's total bonus score
         """
 
         with Session(self.engine) as session:
-            grades = self._get_scores(course_name, session, username, enabled=True, started=True, only_bonus=True)
+            grades = self._get_scores(session, course_name, username, enabled=True, started=True, only_bonus=True)
 
         if grades is None:
             return 0
@@ -113,18 +119,19 @@ class DataBaseApi(StorageApi):
     def get_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
     ) -> StoredUser:
         """Method for getting user's stored data
 
-        :param student: Student object
+        :param course_name: course name
+        :param username: user name
 
         :return: created or received StoredUser object
         """
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course)
+            user_on_course = self._get_or_create_user_on_course(session, username, course)
             session.commit()
 
             return StoredUser(username=user_on_course.user.username, course_admin=user_on_course.is_course_admin)
@@ -132,20 +139,21 @@ class DataBaseApi(StorageApi):
     def sync_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser:
         """Method for sync user's gitlab and stored data
 
-        :param student: Student object
+        :param course_name: course name
+        :param username: user name
 
         :return: created or updated StoredUser object
         """
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
+            user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
 
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
@@ -155,6 +163,8 @@ class DataBaseApi(StorageApi):
 
     def get_all_scores(self, course_name: str) -> dict[str, dict[str, int]]:
         """Method for getting all scores for all users
+
+        :param course_name: course name
 
         :return: dict with usernames and all their scores
         """
@@ -170,6 +180,8 @@ class DataBaseApi(StorageApi):
 
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks
+
+        :param course_name: course name
 
         :return: dict with the names of tasks and their stats
         """
@@ -187,15 +199,17 @@ class DataBaseApi(StorageApi):
 
         return tasks_stats
 
-    def get_scores_update_timestamp(self) -> str:
+    def get_scores_update_timestamp(self, course_name: str) -> str:
         """Method(deprecated) for getting last cached scores update timestamp
+
+        :param course_name: course name
 
         :return: last update timestamp
         """
 
         return datetime.now(timezone.utc).isoformat()
 
-    def update_cached_scores(self) -> None:
+    def update_cached_scores(self, course_name: str) -> None:
         """Method(deprecated) for updating cached scores"""
 
         return
@@ -203,14 +217,16 @@ class DataBaseApi(StorageApi):
     def store_score(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
     ) -> int:
         """Method for storing user's task score
 
-        :param student: Student object
+        :param course_name: course name
+        :param username: user name
+        :param repo_name: student's repo name
         :param task_name: task name
         :param update_fn: function for updating the score
 
@@ -223,7 +239,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
                 session.commit()
 
                 try:
@@ -242,94 +258,24 @@ class DataBaseApi(StorageApi):
 
             except Exception as e:
                 session.rollback()
-                logger.error(f"Failed to update score for {student.username} on {task_name}: {str(e)}")
+                logger.error(f"Failed to update score for {username} on {task_name}: {str(e)}")
                 raise
-
-    def sync_columns(
-        self,
-        course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
-    ) -> None:
-        """Method for updating deadlines config
-
-        :param deadlines_config: ManytaskDeadlinesConfig object
-        """
-
-        groups = deadlines_config.groups
-
-        logger.info("Syncing database tasks...")
-        with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-
-            existing_course_tasks = (
-                session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
-            )
-            existing_course_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
-
-            # Disabling tasks and groups removed from the config
-            for existing_task in existing_course_tasks:
-                existing_task.enabled = False
-                existing_task.position = 0
-            for existing_group in existing_course_groups:
-                existing_group.enabled = False
-                existing_group.position = 0
-
-            # update deadlines parameters
-            course.timezone = deadlines_config.timezone
-            course.max_submissions = deadlines_config.max_submissions
-            course.submission_penalty = deadlines_config.submission_penalty
-
-            # update deadlines for each group
-            for group_pos, group in enumerate(groups, start=1):
-                tasks = group.tasks
-
-                deadline_start = group.start
-                deadline_steps = {
-                    k: self._convert_timedelta_to_datetime(group.start, v) for k, v in group.steps.items()
-                }
-                deadline_end = self._convert_timedelta_to_datetime(group.start, group.end)
-
-                task_group = DataBaseApi._update_or_create(
-                    session,
-                    models.TaskGroup,
-                    defaults={"enabled": group.enabled, "position": group_pos},
-                    name=group.name,
-                    course_id=course.id,
-                )
-
-                DataBaseApi._update_deadline_for_task_group(
-                    session, task_group, deadline_start, deadline_steps, deadline_end
-                )
-
-                for task_pos, task in enumerate(tasks, start=1):
-                    self._update_or_create(
-                        session,
-                        models.Task,
-                        defaults={
-                            "score": task.score,
-                            "is_bonus": task.is_bonus,
-                            "is_special": task.is_special,
-                            "enabled": task.enabled,
-                            "url": str(task.url) if task.url is not None else None,
-                            "position": task_pos,
-                        },
-                        name=task.name,
-                        group_id=task_group.id,
-                    )
-            session.commit()
 
     def get_course(
         self,
         course_name: str,
-    ) -> Course | None:
+    ) -> AppCourse | None:
+        """Get course.Course by course_name
+
+        Get models.Course by course_name from database and convert it to course.Course
+        """
         try:
             with Session(self.engine) as session:
-                course = self._get(session, models.Course, name=course_name)
+                course: models.Course = self._get(session, models.Course, name=course_name)
 
-            return Course(
-                CourseConfig(
-                    course_name=course.name,
-                    is_ready=course.is_ready,
+            return AppCourse(
+                AppCourseConfig(
+                    course_name=course_name,
                     gitlab_course_group=course.gitlab_course_group,
                     gitlab_course_public_repo=course.gitlab_course_public_repo,
                     gitlab_course_students_group=course.gitlab_course_students_group,
@@ -337,6 +283,7 @@ class DataBaseApi(StorageApi):
                     registration_secret=course.registration_secret,
                     token=course.token,
                     show_allscores=course.show_allscores,
+                    is_ready=course.is_ready,
                     task_url_template=course.task_url_template,
                     links=course.links,
                 )
@@ -344,7 +291,277 @@ class DataBaseApi(StorageApi):
         except NoResultFound:
             return None
 
-    def update_task_groups_from_config(
+    def create_course(
+        self,
+        settings_config: AppCourseConfig,
+    ) -> bool:
+        """Create from config object
+
+        :param settings_config: CourseConfig object
+
+        :return: is course created, false if course created before
+        """
+
+        with Session(self.engine) as session:
+            try:
+                self._get(session, models.Course, name=settings_config.course_name)
+            except NoResultFound:
+                self._create(
+                    session,
+                    models.Course,
+                    name=settings_config.course_name,
+                    gitlab_instance_host=self.gitlab_instance_host,
+                    registration_secret=settings_config.registration_secret,
+                    token=settings_config.token,
+                    show_allscores=settings_config.show_allscores,
+                    is_ready=settings_config.is_ready,
+                    gitlab_course_group=settings_config.gitlab_course_group,
+                    gitlab_course_public_repo=settings_config.gitlab_course_public_repo,
+                    gitlab_course_students_group=settings_config.gitlab_course_students_group,
+                    gitlab_default_branch=settings_config.gitlab_default_branch,
+                    task_url_template=settings_config.task_url_template,
+                    links=settings_config.links,
+                )
+                return True
+
+            return False
+
+    def update_course(
+        self,
+        course_name: str,
+        config: ManytaskConfig,
+    ) -> None:
+        """Update course settings from config objects
+
+        :param course_name: course name
+        :param config: ManytaskConfig object
+        """
+
+        with Session(self.engine) as session:
+            self._update(
+                session,
+                models.Course,
+                defaults={
+                    "is_ready": True,
+                    "task_url_template": config.ui.task_url_template,
+                    "links": config.ui.links,
+                },
+                name=course_name,
+            )
+
+        self._update_task_groups_from_config(course_name, config.deadlines)
+        self._sync_columns(course_name, config.deadlines)
+
+    def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
+        """Find task and its group by task name. Serialize result to Config objects.
+
+        Raise TaskDisabledError if task or its group is disabled
+
+        :param course_name: course name
+        :param task_name: task name
+
+        :return: pair of ManytaskGroupConfig and ManytaskTaskConfig objects
+        """
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            try:
+                task = self._get_task_by_name_and_course_id(session, task_name, course.id)
+            except NoResultFound:
+                raise KeyError(f"Task {task_name} not found")
+
+            if not task.enabled:
+                raise TaskDisabledError(f"Task {task_name} is disabled")
+            if not task.group.enabled:
+                raise TaskDisabledError(f"Task {task_name} group {task.group.name} is disabled")
+
+            group = task.group
+            group_tasks = group.tasks.all()
+            group_deadlines = group.deadline
+
+        group_config = ManytaskGroupConfig(
+            group=group.name,
+            enabled=group.enabled,
+            start=group_deadlines.start,
+            steps=cast(dict[float, datetime | timedelta], group_deadlines.steps),
+            end=group_deadlines.end,
+            tasks=[
+                ManytaskTaskConfig(
+                    task=group_task.name,
+                    enabled=group_task.enabled,
+                    score=group_task.score,
+                    is_bonus=group_task.is_bonus,
+                    is_large=group_task.is_large,
+                    is_special=group_task.is_special,
+                    url=AnyUrl(group_task.url) if group_task.url is not None else None,
+                )
+                for group_task in group_tasks
+            ],
+        )
+
+        task_config = ManytaskTaskConfig(
+            task=task.name,
+            enabled=task.enabled,
+            score=task.score,
+            is_bonus=task.is_bonus,
+            is_large=task.is_large,
+            is_special=task.is_special,
+        )
+
+        return group_config, task_config
+
+    def get_groups(
+        self,
+        course_name: str,
+        enabled: bool | None = None,
+        started: bool | None = None,
+        now: datetime | None = None,
+    ) -> list[ManytaskGroupConfig]:
+        """Get tasks groups. Serialize result to Config object.
+
+        :param course_name: course name
+        :param enabled: flag to check for group is enabled
+        :param started: flag to check for group is started
+        :param now: optional param for setting current time
+
+        :return: list of ManytaskGroupConfig objects
+        """
+
+        if now is None:
+            now = self.get_now_with_timezone(course_name)
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+
+            query = (
+                session.query(models.TaskGroup).join(models.Deadline).filter(models.TaskGroup.course_id == course.id)
+            )
+
+            if enabled is not None:
+                query = query.filter(models.TaskGroup.enabled == enabled)
+
+            if started is not None:
+                if started:
+                    query = query.filter(now >= models.Deadline.start)
+                else:
+                    query = query.filter(now < models.Deadline.start)
+
+            groups = query.order_by(models.TaskGroup.position).all()
+
+            result_groups = []
+            for group in groups:
+                tasks = []
+
+                for task in group.tasks:
+                    if enabled is not None and enabled != task.enabled:
+                        continue
+
+                    tasks.append(
+                        ManytaskTaskConfig(
+                            task=task.name,
+                            enabled=task.enabled,
+                            score=task.score,
+                            is_bonus=task.is_bonus,
+                            is_large=task.is_large,
+                            is_special=task.is_special,
+                            url=AnyUrl(task.url) if task.url is not None else None,
+                        )
+                    )
+
+                result_groups.append(
+                    ManytaskGroupConfig(
+                        group=group.name,
+                        enabled=group.enabled,
+                        start=group.deadline.start,
+                        steps=cast(dict[float, datetime | timedelta], group.deadline.steps),
+                        end=group.deadline.end,
+                        tasks=tasks,
+                    )
+                )
+
+        return result_groups
+
+    def get_now_with_timezone(self, course_name: str) -> datetime:
+        """Get current time with course timezone"""
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+        return datetime.now(tz=ZoneInfo(course.timezone))
+
+    def max_score(self, course_name: str, started: bool | None = True) -> int:
+        with Session(self.engine) as session:
+            tasks = self._get_all_tasks(session, course_name, enabled=True, started=started, is_bonus=False)
+
+        return sum(task.score for task in tasks)
+
+    def max_score_started(self, course_name: str) -> int:
+        return self.max_score(course_name, started=True)
+
+    def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
+        """Sync admin flag in gitlab and db"""
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
+            user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+            if course_admin != user_on_course.is_course_admin and course_admin:
+                user_on_course = self._update(
+                    session=session,
+                    model=models.UserOnCourse,
+                    defaults={"is_course_admin": course_admin},
+                    user_id=user.id,
+                    course_id=course.id,
+                )
+                session.refresh(user_on_course)
+            return user_on_course.is_course_admin
+
+    def check_user_on_course(self, course_name: str, username: str) -> bool:
+        """Checking that user has been enrolled on course"""
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
+            try:
+                self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+                return True
+            except Exception:
+                return False
+
+    def create_user_if_not_exist(self, username: str, course_name: str) -> None:
+        """Create user in DB if not exist"""
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            user = self._get_or_create(
+                session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host
+            )
+            session.commit()
+            session.refresh(user)
+
+    def get_user_courses_names(self, username: str) -> list[str]:
+        """Get a list of courses names that the user participates in"""
+
+        with Session(self.engine) as session:
+            try:
+                user = self._get(session, models.User, username=username)
+            except NoResultFound:
+                return []
+
+            user_on_courses = user.users_on_courses.all()
+
+            result = [user_on_course.course.name for user_on_course in user_on_courses]
+            return result
+
+    def get_all_courses_names(self) -> list[str]:
+        """Get a list of all courses names"""
+
+        with Session(self.engine) as session:
+            courses = session.query(models.Course).all()
+
+            result = [course.name for course in courses]
+            return result
+
+    def _update_task_groups_from_config(
         self,
         course_name: str,
         deadlines_config: ManytaskDeadlinesConfig,
@@ -406,264 +623,80 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def create_course(
-        self,
-        settings_config: ManytaskSettingsConfig,
-    ) -> bool:
-        """Create from config object
-
-        :param settings_config: ManytaskSettingsConfig object
-
-        :return: is course created, false if course created before
-        """
-
-        with Session(self.engine) as session:
-            try:
-                self._get(session, models.Course, name=settings_config.course_name)
-            except NoResultFound:
-                self._create(
-                    session,
-                    models.Course,
-                    registration_secret=settings_config.registration_secret,
-                    token=settings_config.manytask_course_token,
-                    show_allscores=settings_config.show_allscores,
-                    is_ready=False,
-                    gitlab_course_group=settings_config.gitlab_course_group,
-                    gitlab_course_public_repo=settings_config.gitlab_course_public_repo,
-                    gitlab_course_students_group=settings_config.gitlab_course_students_group,
-                    gitlab_default_branch=settings_config.gitlab_default_branch,
-                    gitlab_instance_host=self.gitlab_instance_host,
-                    name=settings_config.course_name,
-                    task_url_template="",
-                )
-                return True
-
-            return False
-
-    def update_course(
+    def _sync_columns(
         self,
         course_name: str,
-        ui_config: ManytaskUiConfig,
+        deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
-        """Update course settings from config objects
+        """Method for updating deadlines config
 
-        :param settings_config: ManytaskSettingsConfig object
-        :param ui_config: ManytaskUiConfig object
+        :param course_name: course name
+        :param deadlines_config: ManytaskDeadlinesConfig object
         """
 
+        groups = deadlines_config.groups
+
+        logger.info("Syncing database tasks...")
         with Session(self.engine) as session:
-            self._update(
-                session,
-                models.Course,
-                defaults={
-                    "is_ready": True,
-                    "task_url_template": ui_config.task_url_template,
-                    "links": ui_config.links,
-                },
-                name=course_name,
+            course = self._get(session, models.Course, name=course_name)
+
+            existing_course_tasks = (
+                session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
             )
+            existing_course_groups = session.query(models.TaskGroup).filter_by(course_id=course.id).all()
 
-    def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
-        """Find task and its group by task name. Serialize result to Config objects.
+            # Disabling tasks and groups removed from the config
+            for existing_task in existing_course_tasks:
+                existing_task.enabled = False
+                existing_task.position = 0
+            for existing_group in existing_course_groups:
+                existing_group.enabled = False
+                existing_group.position = 0
 
-        Raise TaskDisabledError if task or its group is disabled
+            # update deadlines parameters
+            course.timezone = deadlines_config.timezone
+            course.max_submissions = deadlines_config.max_submissions
+            course.submission_penalty = deadlines_config.submission_penalty
 
-        :param task_name: task name
+            # update deadlines for each group
+            for group_pos, group in enumerate(groups, start=1):
+                tasks = group.tasks
 
-        :return: pair of ManytaskGroupConfig and ManytaskTaskConfig objects
-        """
+                deadline_start = group.start
+                deadline_steps = {
+                    k: self._convert_timedelta_to_datetime(group.start, v) for k, v in group.steps.items()
+                }
+                deadline_end = self._convert_timedelta_to_datetime(group.start, group.end)
 
-        with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-            try:
-                task = self._get_task_by_name_and_course_id(session, task_name, course.id)
-            except NoResultFound:
-                raise KeyError(f"Task {task_name} not found")
-
-            if not task.enabled:
-                raise TaskDisabledError(f"Task {task_name} is disabled")
-            if not task.group.enabled:
-                raise TaskDisabledError(f"Task {task_name} group {task.group.name} is disabled")
-
-            group = task.group
-            group_tasks = group.tasks.all()
-            group_deadlines = group.deadline
-
-        group_config = ManytaskGroupConfig(
-            group=group.name,
-            enabled=group.enabled,
-            start=group_deadlines.start,
-            steps=cast(dict[float, datetime | timedelta], group_deadlines.steps),
-            end=group_deadlines.end,
-            tasks=[
-                ManytaskTaskConfig(
-                    task=group_task.name,
-                    enabled=group_task.enabled,
-                    score=group_task.score,
-                    is_bonus=group_task.is_bonus,
-                    is_special=group_task.is_special,
-                    url=AnyUrl(group_task.url) if group_task.url is not None else None,
-                )
-                for group_task in group_tasks
-            ],
-        )
-
-        task_config = ManytaskTaskConfig(
-            task=task.name,
-            enabled=task.enabled,
-            score=task.score,
-            is_bonus=task.is_bonus,
-            is_special=task.is_special,
-        )
-
-        return group_config, task_config
-
-    def get_groups(
-        self,
-        course_name: str,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        now: datetime | None = None,
-    ) -> list[ManytaskGroupConfig]:
-        """Get tasks groups. Serialize result to Config object.
-
-        :param enabled: flag to check for group is enabled
-        :param started: flag to check for group is started
-        :param now: optional param for setting current time
-
-        :return: list of ManytaskGroupConfig objects
-        """
-
-        if now is None:
-            now = self.get_now_with_timezone(course_name)
-
-        with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-
-            query = (
-                session.query(models.TaskGroup).join(models.Deadline).filter(models.TaskGroup.course_id == course.id)
-            )
-
-            if enabled is not None:
-                query = query.filter(models.TaskGroup.enabled == enabled)
-
-            if started is not None:
-                if started:
-                    query = query.filter(now >= models.Deadline.start)
-                else:
-                    query = query.filter(now < models.Deadline.start)
-
-            groups = query.order_by(models.TaskGroup.position).all()
-
-            result_groups = []
-            for group in groups:
-                tasks = []
-
-                for task in group.tasks:
-                    if enabled is not None and enabled != task.enabled:
-                        continue
-
-                    tasks.append(
-                        ManytaskTaskConfig(
-                            task=task.name,
-                            enabled=task.enabled,
-                            score=task.score,
-                            is_bonus=task.is_bonus,
-                            is_special=task.is_special,
-                            url=AnyUrl(task.url) if task.url is not None else None,
-                        )
-                    )
-
-                result_groups.append(
-                    ManytaskGroupConfig(
-                        group=group.name,
-                        enabled=group.enabled,
-                        start=group.deadline.start,
-                        steps=cast(dict[float, datetime | timedelta], group.deadline.steps),
-                        end=group.deadline.end,
-                        tasks=tasks,
-                    )
-                )
-
-        return result_groups
-
-    def get_now_with_timezone(
-        self,
-        course_name: str,
-    ) -> datetime:
-        """Get current time with course timezone"""
-
-        with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-        return datetime.now(tz=ZoneInfo(course.timezone))
-
-    def max_score(self, course_name: str, started: bool | None = True) -> int:
-        with Session(self.engine) as session:
-            tasks = self._get_all_tasks(session, course_name, enabled=True, started=started, is_bonus=False)
-
-        return sum(task.score for task in tasks)
-
-    def max_score_started(self, course_name: str) -> int:
-        return self.max_score(started=True, course_name=course_name)
-
-    def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
-        """Sync admin flag in gitlab and db"""
-
-        with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-            user = self._get(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
-            user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-            if course_admin != user_on_course.is_course_admin and course_admin:
-                user_on_course = self._update(
-                    session=session,
-                    model=models.UserOnCourse,
-                    defaults={"is_course_admin": course_admin},
-                    user_id=user.id,
+                task_group = DataBaseApi._update_or_create(
+                    session,
+                    models.TaskGroup,
+                    defaults={"enabled": group.enabled, "position": group_pos},
+                    name=group.name,
                     course_id=course.id,
                 )
-                session.refresh(user_on_course)
-            return user_on_course.is_course_admin
 
-    def check_user_on_course(self, course_name: str, student: Student) -> bool:
-        """Checking that user has been enrolled on course"""
+                DataBaseApi._update_deadline_for_task_group(
+                    session, task_group, deadline_start, deadline_steps, deadline_end
+                )
 
-        with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-            user = self._get(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
-            try:
-                self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-                return True
-            except Exception:
-                return False
-
-    def create_user_if_not_exist(self, student: Student, course_name: str) -> None:
-        """Get user in DB or create if not"""
-
-        with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-            user = self._get_or_create(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
+                for task_pos, task in enumerate(tasks, start=1):
+                    self._update_or_create(
+                        session,
+                        models.Task,
+                        defaults={
+                            "score": task.score,
+                            "is_bonus": task.is_bonus,
+                            "is_large": task.is_large,
+                            "is_special": task.is_special,
+                            "enabled": task.enabled,
+                            "url": str(task.url) if task.url is not None else None,
+                            "position": task_pos,
+                        },
+                        name=task.name,
+                        group_id=task_group.id,
+                    )
             session.commit()
-            session.refresh(user)
-
-    def get_user_courses_names(self, student: Student) -> list[str]:
-        """Get a list of courses names that the user participates in"""
-
-        with Session(self.engine) as session:
-            try:
-                user = self._get(session, models.User, username=student.username)
-            except NoResultFound:
-                return []
-
-            user_on_courses = user.users_on_courses.all()
-
-            result = [user_on_course.course.name for user_on_course in user_on_courses]
-            return result
 
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
@@ -701,17 +734,19 @@ class DataBaseApi(StorageApi):
     def _get_or_create_user_on_course(
         self,
         session: Session,
-        student: Student,
+        username: str,
         course: models.Course,
         repo_name: str | None = None,
     ) -> models.UserOnCourse:
         user = self._get_or_create(
-            session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+            session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host
         )
 
         defaults = {}
-        if repo_name:
+        if repo_name is not None:
             defaults["repo_name"] = repo_name
+        else:
+            defaults["repo_name"] = ""
 
         user_on_course = self._get_or_create(
             session, models.UserOnCourse, defaults=defaults, user_id=user.id, course_id=course.id
@@ -721,8 +756,8 @@ class DataBaseApi(StorageApi):
 
     def _get_scores(
         self,
-        course_name: str,
         session: Session,
+        course_name: str,
         username: str,
         enabled: bool | None = None,
         started: bool | None = None,
