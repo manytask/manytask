@@ -95,7 +95,7 @@ def mock_student():
         def __init__(self, student_id, username, name):
             self.id = student_id
             self.username = username
-            self.name=name
+            self.name = name
 
     return MockStudent
 
@@ -105,7 +105,9 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
     class MockStorageApi:
         def __init__(self):
             self.scores = {}
-            self.stored_user = StoredUser(username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False)
+            self.stored_user = StoredUser(
+                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
+            )
             self.course_name = TEST_COURSE_NAME
 
         def store_score(self, _course_name, student, repo_name, task_name, update_fn):
@@ -128,6 +130,7 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
         @staticmethod
         def get_stored_user(_course_name, student):
             from manytask.abstract import StoredUser
+
             first_name, last_name = student.name.split()
             return StoredUser(username=student.username, first_name=first_name, last_name=last_name, course_admin=True)
 
