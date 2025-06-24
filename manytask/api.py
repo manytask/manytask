@@ -264,7 +264,7 @@ def get_score(course_name: str) -> ResponseReturnValue:
             student = app.gitlab_api.get_student(user_id)
         else:
             assert False, "unreachable"
-        student_scores = course.storage_api.get_scores(course.course_name, student.username)
+        student_scores = app.storage_api.get_scores(course.course_name, student.username)
     except Exception:
         return f"There is no student with user_id {user_id} or username {username}", HTTPStatus.NOT_FOUND
 
