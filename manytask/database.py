@@ -52,8 +52,8 @@ class DataBaseApi(StorageApi):
     DEFAULT_ALEMBIC_PATH = Path(__file__).parent / "alembic.ini"
 
     def __init__(
-        self,
-        config: DatabaseConfig,
+            self,
+            config: DatabaseConfig,
     ):
         """Initialize Database connection with configuration.
 
@@ -72,9 +72,9 @@ class DataBaseApi(StorageApi):
                 logger.error("There are pending migrations that have not been applied")
 
     def get_scores(
-        self,
-        course_name: str,
-        username: str,
+            self,
+            course_name: str,
+            username: str,
     ) -> dict[str, int]:
         """Method for getting all user scores
 
@@ -97,9 +97,9 @@ class DataBaseApi(StorageApi):
         return scores
 
     def get_bonus_score(
-        self,
-        course_name: str,
-        username: str,
+            self,
+            course_name: str,
+            username: str,
     ) -> int:
         """Method for getting user's total bonus score
 
@@ -118,9 +118,9 @@ class DataBaseApi(StorageApi):
         return sum([grade.score for grade in grades])
 
     def get_stored_user(
-        self,
-        course_name: str,
-        student: Student,
+            self,
+            course_name: str,
+            student: Student,
     ) -> StoredUser:
         """Method for getting user's stored data
 
@@ -135,14 +135,16 @@ class DataBaseApi(StorageApi):
             user_on_course = self._get_or_create_user_on_course(session, student, course)
             session.commit()
 
-            return StoredUser(username=user_on_course.user.username, course_admin=user_on_course.is_course_admin)
+            return StoredUser(username=user_on_course.user.username, first_name=user_on_course.user.first_name,
+                              last_name=user_on_course.user.last_name,
+                              course_admin=user_on_course.is_course_admin)
 
     def sync_stored_user(
-        self,
-        course_name: str,
-        student: Student,
-        repo_name: str,
-        course_admin: bool,
+            self,
+            course_name: str,
+            student: Student,
+            repo_name: str,
+            course_admin: bool,
     ) -> StoredUser:
         """Method for sync user's gitlab and stored data
 
@@ -160,7 +162,9 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-            return StoredUser(username=user_on_course.user.username, course_admin=user_on_course.is_course_admin)
+            return StoredUser(username=user_on_course.user.username, first_name=user_on_course.user.first_name,
+                              course_admin=user_on_course.is_course_admin,
+                              last_name=user_on_course.user.last_name)
 
     def get_all_scores(self, course_name: str) -> dict[str, dict[str, int]]:
         """Method for getting all scores for all users
@@ -216,12 +220,12 @@ class DataBaseApi(StorageApi):
         return
 
     def store_score(
-        self,
-        course_name: str,
-        student: Student,
-        repo_name: str,
-        task_name: str,
-        update_fn: Callable[..., Any],
+            self,
+            course_name: str,
+            student: Student,
+            repo_name: str,
+            task_name: str,
+            update_fn: Callable[..., Any],
     ) -> int:
         """Method for storing user's task score
 
@@ -263,8 +267,8 @@ class DataBaseApi(StorageApi):
                 raise
 
     def get_course(
-        self,
-        course_name: str,
+            self,
+            course_name: str,
     ) -> AppCourse | None:
         """Get course.Course by course_name
 
@@ -293,8 +297,8 @@ class DataBaseApi(StorageApi):
             return None
 
     def create_course(
-        self,
-        settings_config: AppCourseConfig,
+            self,
+            settings_config: AppCourseConfig,
     ) -> bool:
         """Create from config object
 
@@ -328,9 +332,9 @@ class DataBaseApi(StorageApi):
             return False
 
     def update_course(
-        self,
-        course_name: str,
-        config: ManytaskConfig,
+            self,
+            course_name: str,
+            config: ManytaskConfig,
     ) -> None:
         """Update course settings from config objects
 
@@ -412,11 +416,11 @@ class DataBaseApi(StorageApi):
         return group_config, task_config
 
     def get_groups(
-        self,
-        course_name: str,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        now: datetime | None = None,
+            self,
+            course_name: str,
+            enabled: bool | None = None,
+            started: bool | None = None,
+            now: datetime | None = None,
     ) -> list[ManytaskGroupConfig]:
         """Get tasks groups. Serialize result to Config object.
 
@@ -567,9 +571,9 @@ class DataBaseApi(StorageApi):
             return result
 
     def _update_task_groups_from_config(
-        self,
-        course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
+            self,
+            course_name: str,
+            deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
         """Update task groups based on new deadline config data.
 
@@ -629,9 +633,9 @@ class DataBaseApi(StorageApi):
             session.commit()
 
     def _sync_columns(
-        self,
-        course_name: str,
-        deadlines_config: ManytaskDeadlinesConfig,
+            self,
+            course_name: str,
+            deadlines_config: ManytaskDeadlinesConfig,
     ) -> None:
         """Method for updating deadlines config
 
@@ -737,14 +741,16 @@ class DataBaseApi(StorageApi):
             pass
 
     def _get_or_create_user_on_course(
-        self,
-        session: Session,
-        student: Student,
-        course: models.Course,
-        repo_name: str | None = None,
+            self,
+            session: Session,
+            student: Student,
+            course: models.Course,
+            repo_name: str | None = None,
     ) -> models.UserOnCourse:
+        first_name, last_name = student.name.split()
         user = self._get_or_create(
-            session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+            session, models.User, username=student.username, first_name=first_name, last_name=last_name,
+            gitlab_instance_host=course.gitlab_instance_host
         )
 
         defaults = {}
@@ -760,13 +766,13 @@ class DataBaseApi(StorageApi):
         return user_on_course
 
     def _get_scores(
-        self,
-        session: Session,
-        course_name: str,
-        username: str,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        only_bonus: bool = False,
+            self,
+            session: Session,
+            course_name: str,
+            username: str,
+            enabled: bool | None = None,
+            started: bool | None = None,
+            only_bonus: bool = False,
     ) -> Optional[Iterable["models.Grade"]]:
         try:
             course = self._get(session, models.Course, name=course_name)
@@ -787,9 +793,9 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _get(
-        session: Session,
-        model: Type[ModelType],
-        **kwargs: Any,  # params for get
+            session: Session,
+            model: Type[ModelType],
+            **kwargs: Any,  # params for get
     ) -> ModelType:
         try:
             return session.query(model).filter_by(**kwargs).one()
@@ -798,10 +804,10 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _update(
-        session: Session,
-        model: Type[ModelType],
-        defaults: Optional[dict[str, Any]] = None,  # params for update
-        **kwargs: Any,  # params for get
+            session: Session,
+            model: Type[ModelType],
+            defaults: Optional[dict[str, Any]] = None,  # params for update
+            **kwargs: Any,  # params for get
     ) -> ModelType:
         instance = DataBaseApi._get(session, model, **kwargs)
 
@@ -813,9 +819,9 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _create(
-        session: Session,
-        model: Type[ModelType],
-        **kwargs: Any,  # params for create
+            session: Session,
+            model: Type[ModelType],
+            **kwargs: Any,  # params for create
     ) -> ModelType:
         try:
             instance = model(**kwargs)
@@ -828,7 +834,7 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _query_with_for_update(
-        session: Session, model: Type[ModelType], allow_none: bool = True, **kwargs: Any
+            session: Session, model: Type[ModelType], allow_none: bool = True, **kwargs: Any
     ) -> Optional[ModelType]:
         """Query a model with SELECT FOR UPDATE to prevent concurrent modifications.
 
@@ -844,12 +850,12 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _create_or_update_instance(
-        session: Session,
-        model: Type[ModelType],
-        instance: Optional[ModelType],
-        defaults: Optional[dict[str, Any]] = None,
-        create_defaults: Optional[dict[str, Any]] = None,
-        **kwargs: Any,
+            session: Session,
+            model: Type[ModelType],
+            instance: Optional[ModelType],
+            defaults: Optional[dict[str, Any]] = None,
+            create_defaults: Optional[dict[str, Any]] = None,
+            **kwargs: Any,
     ) -> ModelType:
         """Create a new instance or update existing one with defaults.
 
@@ -891,10 +897,10 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _get_or_create(
-        session: Session,
-        model: Type[ModelType],
-        defaults: Optional[dict[str, Any]] = None,  # params for create
-        **kwargs: Any,  # params for get
+            session: Session,
+            model: Type[ModelType],
+            defaults: Optional[dict[str, Any]] = None,  # params for create
+            **kwargs: Any,  # params for get
     ) -> ModelType:
         try:
             instance = DataBaseApi._query_with_for_update(session, model, **kwargs)
@@ -905,11 +911,11 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _update_or_create(
-        session: Session,
-        model: Type[ModelType],
-        defaults: Optional[dict[str, Any]] = None,  # params for update
-        create_defaults: Optional[dict[str, Any]] = None,  # params for create
-        **kwargs: Any,  # params for get
+            session: Session,
+            model: Type[ModelType],
+            defaults: Optional[dict[str, Any]] = None,  # params for update
+            create_defaults: Optional[dict[str, Any]] = None,  # params for create
+            **kwargs: Any,  # params for get
     ) -> ModelType:
         try:
             instance = DataBaseApi._query_with_for_update(session, model, **kwargs)
@@ -920,9 +926,9 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _get_or_create_sfu_grade(
-        session: Session,
-        user_on_course_id: int,
-        task_id: int,
+            session: Session,
+            user_on_course_id: int,
+            task_id: int,
     ) -> models.Grade:
         """Get or create a Grade with SELECT FOR UPDATE to prevent concurrent modifications.
 
@@ -955,11 +961,11 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _update_deadline_for_task_group(
-        session: Session,
-        task_group: models.TaskGroup,
-        deadline_start: datetime,
-        deadline_steps: dict[Any, Any],  # json steps
-        deadline_end: datetime,
+            session: Session,
+            task_group: models.TaskGroup,
+            deadline_start: datetime,
+            deadline_steps: dict[Any, Any],  # json steps
+            deadline_end: datetime,
     ) -> None:
         if task_group.deadline_id is None:
             deadline = DataBaseApi._create(
@@ -975,11 +981,11 @@ class DataBaseApi(StorageApi):
             )
 
     def _get_all_grades(
-        self,
-        user_on_course: models.UserOnCourse,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        only_bonus: bool = False,
+            self,
+            user_on_course: models.UserOnCourse,
+            enabled: bool | None = None,
+            started: bool | None = None,
+            only_bonus: bool = False,
     ) -> Iterable["models.Grade"]:
         query = user_on_course.grades.join(models.Task).join(models.TaskGroup).join(models.Deadline)
 
@@ -999,20 +1005,20 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _get_all_users(
-        session: Session,
-        course_name: str,
+            session: Session,
+            course_name: str,
     ) -> Iterable[str]:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
         return [user_on_course.user.username for user_on_course in course.users_on_courses.all()]
 
     def _get_all_tasks(
-        self,
-        session: Session,
-        course_name: str,
-        enabled: bool | None = None,
-        started: bool | None = None,
-        is_bonus: bool | None = None,
+            self,
+            session: Session,
+            course_name: str,
+            enabled: bool | None = None,
+            started: bool | None = None,
+            is_bonus: bool | None = None,
     ) -> Iterable["models.Task"]:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
@@ -1039,8 +1045,8 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _get_course_users_on_courses_count(
-        session: Session,
-        course_name: str,
+            session: Session,
+            course_name: str,
     ) -> int:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
@@ -1048,8 +1054,8 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _get_task_submits_count(
-        session: Session,
-        task_id: int,
+            session: Session,
+            task_id: int,
     ) -> int:
         return (
             session.query(func.count(models.Grade.id))
