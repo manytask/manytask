@@ -10,9 +10,8 @@ import pytest
 from flask import Flask, Response, request, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import StoredUser
+from manytask.abstract import StoredUser, Student
 from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
-from manytask.abstract import Student
 from manytask.web import course_bp, root_bp
 
 TEST_USERNAME = "test_user"

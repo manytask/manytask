@@ -12,11 +12,11 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, Uni
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
+from manytask.abstract import Student
 from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskUiConfig
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig
 from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
-from manytask.abstract import Student
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 
 DEADLINES_CONFIG_FILES = [  # part of manytask config file

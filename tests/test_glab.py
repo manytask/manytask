@@ -300,7 +300,7 @@ def test_check_project_exists(gitlab, mock_gitlab_student_project):
     exists = gitlab_api.check_project_exists(TEST_GROUP_STUDENT_NAME, TEST_GROUP_STUDENT_NAME)
 
     assert exists is True
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_student.username)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
 
 
 def test_check_project_not_exists(gitlab):
@@ -310,7 +310,7 @@ def test_check_project_not_exists(gitlab):
     exists = gitlab_api.check_project_exists(TEST_GROUP_STUDENT_NAME, TEST_GROUP_NAME)
 
     assert exists is False
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_student.username)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
 
 
 def test_create_project_existing_project(gitlab, mock_rms_user, mock_gitlab_student_project, mock_gitlab_group_member):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 import gitlab
 import gitlab.const
@@ -68,13 +68,10 @@ class GitLabApi(RmsApi):
         group_name_with_spaces = " / ".join(group_name.split("/"))
 
         try:
-            return cast(
-                gitlab.v4.objects.Group,
-                next(
-                    group
-                    for group in self._gitlab.groups.list(get_all=True, search=group_name)
-                    if group.name == short_group_name and group.full_name == group_name_with_spaces
-                ),
+            return next(
+                group
+                for group in self._gitlab.groups.list(get_all=True, search=group_name)
+                if group.name == short_group_name and group.full_name == group_name_with_spaces
             )
         except StopIteration:
             raise RuntimeError(f"Unable to find group {group_name}")
@@ -83,13 +80,10 @@ class GitLabApi(RmsApi):
         short_project_name = project_name.split("/")[-1]
 
         try:
-            return cast(
-                gitlab.v4.objects.Project,
-                next(
-                    project
-                    for project in self._gitlab.projects.list(get_all=True, search=short_project_name)
-                    if project.path_with_namespace == project_name
-                ),
+            return next(
+                project
+                for project in self._gitlab.projects.list(get_all=True, search=short_project_name)
+                if project.path_with_namespace == project_name
             )
         except StopIteration:
             raise RuntimeError(f"Unable to find project {project_name}")

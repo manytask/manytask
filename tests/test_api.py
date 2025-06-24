@@ -644,51 +644,51 @@ def test_process_score_invalid_format():
 
 def test_get_student_by_username():
     """Test getting student by username"""
-    mock_gitlab = MagicMock()
+    mock_rms_api = MagicMock()
     test_student = Student(id=1, username="test_user", name="Test User")
-    mock_gitlab.get_student_by_username.return_value = test_student
+    mock_rms_api.get_rms_user_by_username.return_value = test_student
 
-    result = _get_student(mock_gitlab, None, "test_user")
+    result = _get_rms_user(mock_rms_api, None, "test_user")
     assert result == test_student
-    mock_gitlab.get_student_by_username.assert_called_once_with("test_user")
+    mock_rms_api.get_rms_user_by_username.assert_called_once_with("test_user")
 
 
 def test_get_student_by_id():
     """Test getting student by user_id"""
-    mock_gitlab = MagicMock()
+    mock_rms_api = MagicMock()
     test_student = Student(id=1, username="test_user", name="Test User")
-    mock_gitlab.get_student.return_value = test_student
+    mock_rms_api.get_rms_user_by_id.return_value = test_student
 
-    result = _get_student(mock_gitlab, 1, None)
+    result = _get_rms_user(mock_rms_api, 1, None)
     assert result == test_student
-    mock_gitlab.get_student.assert_called_once_with(1)
+    mock_rms_api.get_rms_user_by_id.assert_called_once_with(1)
 
 
 def test_get_student_no_id_or_username():
     """Test when neither user_id nor username is provided"""
-    mock_gitlab = MagicMock()
+    mock_rms_api = MagicMock()
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, None, None)
+        _get_rms_user(mock_rms_api, None, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
 def test_get_student_username_not_found():
     """Test when username is not found"""
-    mock_gitlab = MagicMock()
-    mock_gitlab.get_student_by_username.side_effect = Exception("Student not found")
+    mock_rms_api = MagicMock()
+    mock_rms_api.get_student_by_username.side_effect = Exception("Student not found")
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, None, "nonexistent")
+        _get_rms_user(mock_rms_api, None, "nonexistent")
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
 def test_get_student_id_not_found():
     """Test when user_id is not found"""
-    mock_gitlab = MagicMock()
-    mock_gitlab.get_student.side_effect = Exception("Student not found")
+    mock_rms_api = MagicMock()
+    mock_rms_api.get_student.side_effect = Exception("Student not found")
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, 999, None)
+        _get_rms_user(mock_rms_api, 999, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 

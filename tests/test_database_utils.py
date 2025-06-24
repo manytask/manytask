@@ -3,8 +3,8 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
-from manytask.database_utils import get_database_table_data
 from manytask.abstract import Student
+from manytask.database_utils import get_database_table_data
 
 TASK_1 = "task1"
 TASK_2 = "task2"

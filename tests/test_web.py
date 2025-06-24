@@ -10,10 +10,9 @@ import pytest
 from authlib.integrations.base_client import OAuthError
 from flask import Flask, url_for
 
-from manytask.abstract import StoredUser
+from manytask.abstract import StoredUser, Student
 from manytask.api import bp as api_bp
 from manytask.database import TaskDisabledError
-from manytask.abstract import Student
 from manytask.web import course_bp, root_bp
 
 TEST_USERNAME = "test_user"
