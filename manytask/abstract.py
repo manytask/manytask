@@ -11,6 +11,7 @@ from .course import Course, CourseConfig
 class StoredUser:
     username: str
     course_admin: bool = False
+
     # we can add more fields that we store
 
     def __repr__(self) -> str:
@@ -83,6 +84,13 @@ class StorageApi(ABC):
     @abstractmethod
     def create_course(
         self,
+        settings_config: CourseConfig,
+    ) -> bool: ...
+
+    @abstractmethod
+    def edit_course(
+        self,
+        course_name: str,
         settings_config: CourseConfig,
     ) -> bool: ...
 

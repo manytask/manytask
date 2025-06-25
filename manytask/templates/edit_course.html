@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Course: {{ course.course_name }}{% endblock %}
+
+{% block body %}
+<div class="container mt-4">
+    <h2>Edit Course: {{ course.course_name }}</h2>
+    {% if error_message %}
+    <div class="alert alert-danger" role="alert">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('admin.edit_course', course_name=course.course_name) }}" class="needs-validation" novalidate>
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <h4>Basic Course Information</h4>
+                <div class="mb-3">
+                    <label class="form-label">Unique Course Name</label>
+                    <input type="text" class="form-control" value="{{ course.course_name }}" readonly disabled>
+                    <div class="form-text">Course name cannot be changed</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Registration Secret</label>
+                    <input type="text" class="form-control" id="registration_secret" name="registration_secret" value="{{ course.registration_secret }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="token" class="form-label">Course Token</label>
+                    <input type="text" class="form-control" id="token" name="token" value="{{ course.token }}" readonly disabled>
+                    <div class="form-text">Token cannot be changed</div>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="show_allscores" name="show_allscores" {% if course.show_allscores %}checked{% endif %}>
+                    <label class="form-check-label" for="show_allscores">Show All Scores</label>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-4">
+                <h4>GitLab Configuration</h4>
+                <div class="mb-3">
+                    <label for="gitlab_course_group" class="form-label">GitLab Course Group</label>
+                    <input type="text" class="form-control" id="gitlab_course_group" name="gitlab_course_group" value="{{ course.gitlab_course_group }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="gitlab_course_public_repo" class="form-label">GitLab Public Repo</label>
+                    <input type="text" class="form-control" id="gitlab_course_public_repo" name="gitlab_course_public_repo" value="{{ course.gitlab_course_public_repo }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="gitlab_course_students_group" class="form-label">GitLab Students Group</label>
+                    <input type="text" class="form-control" id="gitlab_course_students_group" name="gitlab_course_students_group" value="{{ course.gitlab_course_students_group }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="gitlab_default_branch" class="form-label">GitLab Default Branch</label>
+                    <input type="text" class="form-control" id="gitlab_default_branch" name="gitlab_default_branch" value="{{ course.gitlab_default_branch }}" required>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <button type="submit" class="btn btn-primary">Update Course</button>
+            <a href="{{ url_for('course.course_page', course_name=course.course_name) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+(function () {
+    'use strict'
+    var forms = document.querySelectorAll('.needs-validation')
+    Array.prototype.slice.call(forms)
+        .forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                if (!form.checkValidity()) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                }
+                form.classList.add('was-validated')
+            }, false)
+        })
+})()
+</script>
+{% endblock %}
