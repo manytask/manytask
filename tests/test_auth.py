@@ -16,9 +16,9 @@ from manytask.glab import Student
 from manytask.web import course_bp, root_bp
 
 TEST_USERNAME = "test_user"
-TEST_FIRST_NAME = "Test"
-TEST_LAST_NAME = "User"
-TEST_NAME = "Test User"
+TEST_FIRST_NAME = "Ivan"
+TEST_LAST_NAME = "Ivanov"
+TEST_NAME = "Ivan Ivanov"
 TEST_SECRET = "test_secret"
 TEST_KEY = "test_key"
 TEST_TOKEN = "test_token"

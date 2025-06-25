@@ -20,9 +20,9 @@ from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
 TEST_USERNAME = "test_user"
-TEST_FIRST_NAME = "Test"
-TEST_LAST_NAME = "User"
-TEST_NAME = "Test User"
+TEST_FIRST_NAME = "Ivan"
+TEST_LAST_NAME = "Ivanov"
+TEST_NAME = "Ivan Ivanov"
 INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
