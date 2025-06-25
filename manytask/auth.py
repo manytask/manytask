@@ -49,7 +49,7 @@ def handle_course_membership(app: CustomFlask, course: Course, student: Student)
     """Checking user on course"""
 
     try:
-        if app.storage_api.check_user_on_course(course.course_name, student):
+        if app.storage_api.check_user_on_course(course.course_name, student.username):
             return True
         else:
             logger.info(f"No user {student.username} on course {course.course_name} asking secret")

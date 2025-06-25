@@ -96,7 +96,7 @@ def mock_student():
 
 
 @pytest.fixture
-def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa: C901
+def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.scores = {}
@@ -135,7 +135,7 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
         def update_task_groups_from_config(self, _course_name, _config_data):
             pass
 
-        def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
+        def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.stored_user.course_admin = course_admin
             return self.stored_user.course_admin
 

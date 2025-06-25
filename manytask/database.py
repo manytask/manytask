@@ -124,7 +124,7 @@ class DataBaseApi(StorageApi):
         """Method for getting user's stored data
 
         :param course_name: course name
-        :param student: Student object
+        :param username: user name
 
         :return: created or received StoredUser object
         """
@@ -146,7 +146,7 @@ class DataBaseApi(StorageApi):
         """Method for sync user's gitlab and stored data
 
         :param course_name: course name
-        :param student: Student object
+        :param username: user name
 
         :return: created or updated StoredUser object
         """
@@ -225,7 +225,7 @@ class DataBaseApi(StorageApi):
         """Method for storing user's task score
 
         :param course_name: course name
-        :param student: Student object
+        :param username: user name
         :param repo_name: student's repo name
         :param task_name: task name
         :param update_fn: function for updating the score
@@ -497,14 +497,12 @@ class DataBaseApi(StorageApi):
     def max_score_started(self, course_name: str) -> int:
         return self.max_score(course_name, started=True)
 
-    def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
+    def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
         """Sync admin flag in gitlab and db"""
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
+            user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
             if course_admin != user_on_course.is_course_admin and course_admin:
                 user_on_course = self._update(
@@ -517,14 +515,12 @@ class DataBaseApi(StorageApi):
                 session.refresh(user_on_course)
             return user_on_course.is_course_admin
 
-    def check_user_on_course(self, course_name: str, student: Student) -> bool:
+    def check_user_on_course(self, course_name: str, username: str) -> bool:
         """Checking that user has been enrolled on course"""
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
+            user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
             try:
                 self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
                 return True
