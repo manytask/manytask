@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 
 import gitlab
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for, flash
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 
 from . import glab
