@@ -166,7 +166,7 @@ def _get_rms_user(rms_api: Any, user_id: int | None, username: str | None) -> Rm
         if username:
             return rms_api.get_rms_user_by_username(username)
         elif user_id:
-            return rms_api.get_rms_uset_by_id(user_id)
+            return rms_api.get_rms_user_by_id(user_id)
         else:
             assert False, "unreachable"
     except Exception:

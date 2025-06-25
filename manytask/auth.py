@@ -71,7 +71,7 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
         # This is where the oath_api should be used
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
         rms_user = app.rms_api.get_authenticated_rms_user(gitlab_oauth_token["access_token"])
-        student = Student(rms_user.id, rms_user.username, rms_user.name)
+        student = Student(id=rms_user.id, username=rms_user.username, name=rms_user.name)
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
         return redirect(redirect_url)
@@ -87,8 +87,8 @@ def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student | Respon
 
     try:
         # This is where the auth_api should be user instead of gitlab/rms
-        rms_user = app.gitlab_api.get_authenticated_rms_user(session["gitlab"]["access_token"])
-        student = Student(rms_user.id, rms_user.username, rms_user.name)
+        rms_user = app.rms_api.get_authenticated_rms_user(session["gitlab"]["access_token"])
+        student = Student(id=rms_user.id, username=rms_user.username, name=rms_user.name)
         session["gitlab"].update(set_oauth_session(student))
         return student
 

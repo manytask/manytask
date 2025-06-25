@@ -143,7 +143,7 @@ class RmsUser:
     name: str
 
     def __repr__(self) -> str:
-        return f"Student(username={self.username})"
+        return f"RmsUser(username={self.username})"
 
 
 class RmsApi(ABC):
