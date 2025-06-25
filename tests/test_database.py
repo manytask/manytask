@@ -196,6 +196,5 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     assert db_api_with_two_initialized_courses.get_user_courses_names(username1) == [FIRST_COURSE_NAME]
     assert db_api_with_two_initialized_courses.get_user_courses_names(username2) == [SECOND_COURSE_NAME]
     assert sorted(db_api_with_two_initialized_courses.get_user_courses_names(username3)) == sorted(
-
         [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
     )

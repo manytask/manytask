@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
 from . import models
-from .abstract import StorageApi, StoredUser, Student
+from .abstract import StorageApi, StoredUser
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
