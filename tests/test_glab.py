@@ -294,23 +294,25 @@ def test_get_group_by_name_not_found(gitlab):
 
 
 def test_check_project_exists(gitlab, mock_gitlab_student_project):
+    username = TEST_USERNAME
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_student_project]
 
-    exists = gitlab_api.check_project_exists(TEST_GROUP_STUDENT_NAME, TEST_GROUP_STUDENT_NAME)
+    exists = gitlab_api.check_project_exists(username, TEST_GROUP_STUDENT_NAME)
 
     assert exists is True
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=username)
 
 
 def test_check_project_not_exists(gitlab):
+    username = TEST_USERNAME
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = []
 
-    exists = gitlab_api.check_project_exists(TEST_GROUP_STUDENT_NAME, TEST_GROUP_NAME)
+    exists = gitlab_api.check_project_exists(username, TEST_GROUP_STUDENT_NAME)
 
     assert exists is False
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=username)
 
 
 def test_create_project_existing_project(gitlab, mock_rms_user, mock_gitlab_student_project, mock_gitlab_group_member):
@@ -374,27 +376,27 @@ def test_parse_user_to_student(gitlab, mock_rms_user):
         "username": TEST_USERNAME,
         "name": TEST_USERNAME,
     }
-    rms_user = gitlab_api.__construct_rms_user(user_dict)
+    rms_user = gitlab_api._construct_rms_user(user_dict)
 
     assert rms_user == mock_rms_user
 
 
 def test_get_student_by_username_found(gitlab, mock_rms_user):
     gitlab_api, _ = gitlab
-    gitlab_api.__get_rms_users_by_username = MagicMock(return_value=[mock_rms_user])
+    gitlab_api._get_rms_users_by_username = MagicMock(return_value=[mock_rms_user])
 
-    result_rms_user = gitlab_api.get_student_by_username(TEST_USERNAME)
+    result_rms_user = gitlab_api.get_rms_user_by_username(TEST_USERNAME)
 
     assert result_rms_user == mock_rms_user
-    gitlab_api.__get_rms_users_by_username.assert_called_once_with(TEST_USERNAME)
+    gitlab_api._get_rms_users_by_username.assert_called_once_with(TEST_USERNAME)
 
 
 def test_get_student_by_username_not_found(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.users.list.return_value = []
 
-    with pytest.raises(GitLabApiException, match=f"No students found for username {TEST_USERNAME}"):
-        gitlab_api.get_student_by_username(TEST_USERNAME)
+    with pytest.raises(GitLabApiException, match=f"No users found for username {TEST_USERNAME}"):
+        gitlab_api.get_rms_user_by_username(TEST_USERNAME)
 
 
 def test_get_student_found(gitlab, mock_gitlab_user, mock_rms_user):
@@ -408,13 +410,13 @@ def test_get_student_found(gitlab, mock_gitlab_user, mock_rms_user):
     }
     mock_gitlab_user = MagicMock(_attrs=user_attrs)
     mock_gitlab_instance.users.get = MagicMock(return_value=mock_gitlab_user)
-    rms_api.__construct_rms_user = MagicMock(return_value=mock_rms_user)
+    rms_api._construct_rms_user = MagicMock(return_value=mock_rms_user)
 
     rms_user = rms_api.get_rms_user_by_id(TEST_USER_ID)
 
     assert rms_user == mock_rms_user
     mock_gitlab_instance.users.get.assert_called_once_with(TEST_USER_ID)
-    rms_api.__construct_rms_user.assert_called_once_with(user_attrs)
+    rms_api._construct_rms_user.assert_called_once_with(user_attrs)
 
 
 def test_get_student_not_found(gitlab):
@@ -422,7 +424,7 @@ def test_get_student_not_found(gitlab):
     mock_gitlab_instance.users.get = MagicMock(side_effect=GitlabGetError("User not found"))
 
     with pytest.raises(GitlabGetError, match="User not found"):
-        gitlab_api.get_student(TEST_USER_ID)
+        gitlab_api.get_rms_user_by_id(TEST_USER_ID)
 
     mock_gitlab_instance.users.get.assert_called_once_with(TEST_USER_ID)
 
@@ -443,13 +445,13 @@ def test_get_authenticated_student_success(mock_get, gitlab, mock_rms_user):
     mock_response.raise_for_status = MagicMock()
 
     mock_get.return_value = mock_response
-    rms_api.__construct_rms_user = MagicMock(return_value=mock_rms_user)
+    rms_api._construct_rms_user = MagicMock(return_value=mock_rms_user)
 
     rms_user = rms_api.get_authenticated_rms_user(oauth_token)
 
     assert rms_user == mock_rms_user
     mock_get.assert_called_once_with(f"{rms_api.base_url}/api/v4/user", headers=headers)
-    rms_api.__construct_rms_user.assert_called_once_with(user_data)
+    rms_api._construct_rms_user.assert_called_once_with(user_data)
 
 
 @patch("requests.get")
@@ -464,7 +466,7 @@ def test_get_authenticated_student_failure(mock_get, gitlab):
     mock_get.return_value = mock_response
 
     with pytest.raises(HTTPError, match="401 Unauthorized"):
-        gitlab_api.get_authenticated_student(oauth_token)
+        gitlab_api.get_authenticated_rms_user(oauth_token)
 
     mock_get.assert_called_once_with(f"{gitlab_api.base_url}/api/v4/user", headers=headers)
 

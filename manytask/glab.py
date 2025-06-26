@@ -244,7 +244,7 @@ class GitLabApi(RmsApi):
         user = self._gitlab.users.get(user_id)
         return user.is_admin
 
-    def __construct_rms_user(
+    def _construct_rms_user(
         self,
         user: dict[str, Any],
     ) -> RmsUser:
@@ -254,12 +254,12 @@ class GitLabApi(RmsApi):
             name=user["name"],
         )
 
-    def __get_rms_users_by_username(
+    def _get_rms_users_by_username(
         self,
         username: str,
     ) -> list[RmsUser]:
         users = self._gitlab.users.list(get_all=True, username=username)
-        return [self.__construct_rms_user(user._attrs) for user in users]
+        return [self._construct_rms_user(user._attrs) for user in users]
 
     def get_rms_user_by_id(
         self,
@@ -268,13 +268,13 @@ class GitLabApi(RmsApi):
         logger.info(f"Searching user {user_id}...")
         user = self._gitlab.users.get(user_id)
         logger.info(f'User found: "{user.username}"')
-        return self.__construct_rms_user(user._attrs)
+        return self._construct_rms_user(user._attrs)
 
     def get_rms_user_by_username(
         self,
         username: str,
     ) -> RmsUser:
-        potential_rms_users = self.__get_rms_users_by_username(username)
+        potential_rms_users = self._get_rms_users_by_username(username)
         potential_rms_users = [rms_user for rms_user in potential_rms_users if rms_user.username == username]
         if len(potential_rms_users) == 0:
             raise GitLabApiException(f"No users found for username {username}")
@@ -290,7 +290,7 @@ class GitLabApi(RmsApi):
         headers = {"Authorization": "Bearer " + oauth_token}
         response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
         response.raise_for_status()
-        return self.__construct_rms_user(response.json())
+        return self._construct_rms_user(response.json())
 
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"

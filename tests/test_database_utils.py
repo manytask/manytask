@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
-from manytask.abstract import Student
+from manytask.abstract import RmsUser
 from manytask.database_utils import get_database_table_data
 
 TASK_1 = "task1"
@@ -84,15 +84,15 @@ def app():
         def __init__(self):
             pass
 
-        def get_student_by_username(self, username: str) -> Student:
-            return Student(
+        def get_rms_user_by_username(self, username: str) -> RmsUser:
+            return RmsUser(
                 id=1,
                 username=username,
                 name=STUDENT_NAMES[username],
             )
 
     app.storage_api = MockStorageApi()
-    app.gitlab_api = MockGitLabApi()
+    app.rms_api = MockGitLabApi()
 
     return app
 

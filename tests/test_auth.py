@@ -73,7 +73,7 @@ def mock_gitlab_api():
             return True
 
         @staticmethod
-        def __construct_rms_user(user: dict[str, Any]):
+        def _construct_rms_user(user: dict[str, Any]):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
     return MockGitlabApi()

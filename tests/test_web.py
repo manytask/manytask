@@ -10,7 +10,7 @@ import pytest
 from authlib.integrations.base_client import OAuthError
 from flask import Flask, url_for
 
-from manytask.abstract import StoredUser, Student
+from manytask.abstract import RmsUser, StoredUser
 from manytask.api import bp as api_bp
 from manytask.database import TaskDisabledError
 from manytask.web import course_bp, root_bp
@@ -71,26 +71,26 @@ def mock_gitlab_api():
             raise Exception("Registration failed")
 
         @staticmethod
-        def get_student(user_id: int):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        def get_rms_user_by_id(user_id: int):
+            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
-        def get_student_by_username(self, username: str) -> Student:
-            return Student(
+        def get_rms_user_by_username(self, username: str) -> RmsUser:
+            return RmsUser(
                 id=1,
                 username=username,
                 name=TEST_STUDENT_NAME,
             )
 
-        def get_authenticated_student(self, gitlab_access_token: str):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        def get_authenticated_rms_user(self, gitlab_access_token: str):
+            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
         @staticmethod
-        def check_project_exists(_project_name: str, _project_group: str):
+        def check_project_exists(project_name: str, project_group: str):
             return True
 
         @staticmethod
-        def _parse_user_to_student(user: dict[str, Any]):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        def _construct_rms_user(user: dict[str, Any]):
+            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
         def check_is_course_admin(self, _user_id, _course_group):
             return self.course_admin
@@ -125,7 +125,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_bonus_score(_course_name, _username):
             return 10
 
-        def sync_stored_user(self, _course_name, student, repo_name, course_admin):
+        def sync_stored_user(self, _course_name, username, repo_name, course_admin):
             self.stored_user.course_admin = self.stored_user.course_admin or course_admin
 
         @staticmethod
@@ -159,7 +159,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def check_user_on_course(*a, **k):
             return True
 
-        def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
+        def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.stored_user.course_admin = self.stored_user.course_admin or course_admin
             return self.stored_user.course_admin
 
@@ -425,13 +425,13 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
     }
     with (
         patch.object(app.rms_api, "register_new_user") as mock_register_new_user,
-        patch.object(app.rms_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -467,14 +467,14 @@ def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
 
 def test_login_get_with_code(app, mock_gitlab_oauth):
     with (
-        patch.object(app.rms_api, "get_authenticated_student") as mock_get_authenticated_student,
+        patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
 
-        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -488,8 +488,8 @@ def test_login_get_with_code(app, mock_gitlab_oauth):
 
         mock_authorize_access_token.assert_called_once()
 
-        mock_get_authenticated_student.assert_called_once()
-        args, _ = mock_get_authenticated_student.call_args
+        mock_get_authenticated_rms_user.assert_called_once()
+        args, _ = mock_get_authenticated_rms_user.call_args
         assert args[0] == "test_token"
 
 
