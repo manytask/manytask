@@ -466,7 +466,7 @@ def test_resync_with_changed_task_name(
 
 
 def test_store_score(db_api_with_initialized_first_course, session):
-    student = Student(0, "user1", "username1")
+    student = Student(0, "user1", "Ivan Ivanov")
 
     assert session.query(User).count() == 0
     assert session.query(UserOnCourse).count() == 0
@@ -523,7 +523,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
 def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
-    student = Student(0, "user1", "username1")
+    student = Student(0, "user1", "Ivan Ivanov")
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -563,7 +563,7 @@ def test_store_score_with_changed_task_name(
 ):
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
-    student = Student(0, "user1", "username1")
+    student = Student(0, "user1", "Ivan Ivanov")
     db_api.store_score(FIRST_COURSE_NAME, student, "repo1", "task_0_0", update_func(10))
 
     update_course(
@@ -584,14 +584,14 @@ def test_store_score_with_changed_task_name(
 
 
 def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session):
-    student = Student(0, "user1", "username1")  # default student(not admin in gitlab)
+    student = Student(0, "user1", "Ivan Ivanov")  # default student(not admin in gitlab)
 
     assert session.query(User).count() == 0
     assert session.query(UserOnCourse).count() == 0
 
     stored_user = db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, student)
 
-    assert stored_user == StoredUser(username="user1", course_admin=False)
+    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=False)
 
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1
@@ -599,12 +599,12 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     # admin in gitlab
     stored_user = db_api_with_initialized_first_course.sync_stored_user(FIRST_COURSE_NAME, student, "repo1", True)
 
-    assert stored_user == StoredUser(username="user1", course_admin=True)
+    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=True)
 
     # lost admin rules in gitlab, but in database stored that user is admin
     stored_user = db_api_with_initialized_first_course.sync_stored_user(FIRST_COURSE_NAME, student, "repo1", False)
 
-    assert stored_user == StoredUser(username="user1", course_admin=True)
+    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=True)
 
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1
@@ -618,13 +618,13 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_grades = 3
     expected_stats_ratio = 0.5
 
-    student1 = Student(0, "user1", "username1")
+    student1 = Student(0, "user1", "Ivan Ivanov")
     db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, student1, "repo1", "task_0_0", update_func(1))
     db_api_with_initialized_first_course.store_score(
         FIRST_COURSE_NAME, student1, "repo1", "task_1_3", update_func(expected_score_1)
     )
 
-    student2 = Student(1, "user2", "username2")
+    student2 = Student(1, "user2", "Ivan Ivanov")
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -660,7 +660,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
-    student = Student(0, "user1", "username1")
+    student = Student(0, "user1", "Ivan Ivanov")
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, student, "repo1", "task_0_0", update_func(30))
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, student, "repo1", "task_1_3", update_func(40))
     expected_users = 1
@@ -707,8 +707,8 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_grades = 5
     expected_stats_ratio = 0.5
 
-    student1 = Student(0, "user1", "username1")
-    student2 = Student(1, "user2", "username2")
+    student1 = Student(0, "user1", "Ivan Ivanov")
+    student2 = Student(1, "user2", "Ivan Olegov")
 
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, student1, "repo1", "task_0_0", update_func(1))
     db_api_with_two_initialized_courses.store_score(
@@ -849,9 +849,11 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container, first_
 
 
 def test_store_score_integrity_error(db_api_with_two_initialized_courses, session):
-    student = Student(0, "user1", "username1")
+    student = Student(0, "user1", "Ivan Ivanov")
 
-    user = User(username=student.username, gitlab_instance_host="gitlab.test.com")
+    user = User(
+        username=student.username, first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.test.com"
+    )
     session.add(user)
     session.commit()
 
@@ -866,7 +868,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
 
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
-    student = Student(0, "user1", "username1")
+    student = Student(0, "user1", "Ivan Ivanov")
 
     def failing_update(_, score):
         raise ValueError("Update failed")
@@ -921,8 +923,8 @@ def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgr
 
 
 def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_courses, session):
-    student = Student(id=1, username="user1", name="username1")
-    user = User(id=1, username="user1", gitlab_instance_host="gitlab.test.com")
+    student = Student(id=1, username="user1", name="Ivan Ivanov")
+    user = User(id=1, username="user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.test.com")
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, repo_name="repo1", is_course_admin=False)
 
     session.add(user)
@@ -936,9 +938,9 @@ def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_cour
 
 
 def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_courses, session):
-    student = Student(id=1, username="user1", name="username1")
+    student = Student(id=1, username="user1", name="Ivan Ivanov")
 
-    user = User(id=1, username="user1", gitlab_instance_host="gitlab.test.com")
+    user = User(id=1, username="user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.test.com")
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, repo_name="repo1", is_course_admin=True)
 
     session.add(user)
@@ -952,9 +954,9 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
 
 
 def test_check_user_on_course(db_api_with_two_initialized_courses, session):
-    student = Student(id=1, username="user1", name="username1")
+    student = Student(id=1, username="user1", name="Ivan Ivanov")
 
-    user = User(id=1, username="user1", gitlab_instance_host="gitlab.test.com")
+    user = User(id=1, username="user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.test.com")
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, repo_name="repo1", is_course_admin=True)
 
     session.add(user)
@@ -965,8 +967,8 @@ def test_check_user_on_course(db_api_with_two_initialized_courses, session):
 
 
 def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, session):
-    student = Student(id=2, username="user1", name="username1")
-    user = User(id=1, username="user1", gitlab_instance_host="gitlab.test.com")
+    student = Student(id=2, username="user1", name="Ivan Ivanov")
+    user = User(id=1, username="user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.test.com")
     session.add(user)
     session.commit()
 
@@ -976,7 +978,7 @@ def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, 
 
 
 def test_create_user_if_not_exist_nonexisting(db_api_with_two_initialized_courses, session):
-    student = Student(id=1, username="user1", name="username1")
+    student = Student(id=1, username="user1", name="Ivan Ivanov")
 
     assert session.query(User).filter_by(username="user1").one_or_none() is None
     db_api_with_two_initialized_courses.create_user_if_not_exist(student, FIRST_COURSE_NAME)

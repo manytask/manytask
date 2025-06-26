@@ -171,16 +171,16 @@ def test_multiple_task_moves(db_api_with_two_initialized_courses, session):
 
 
 def test_get_courses_names_with_no_courses(db_api):
-    student = Student(id=0, username="some_user", name="some_name")
+    student = Student(id=0, username="some_user", name="Ivan Ivanov")
 
     assert db_api.get_user_courses_names(student) == []
     assert db_api.get_all_courses_names() == []
 
 
 def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
-    student1 = Student(id=0, username="username1", name="user1")
-    student2 = Student(id=1, username="username2", name="user2")
-    student3 = Student(id=2, username="username3", name="user3")
+    student1 = Student(id=0, username="username1", name="Ivan Ivanov")
+    student2 = Student(id=1, username="username2", name="Ivan Orlov")
+    student3 = Student(id=2, username="username3", name="Ivan Olegov")
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(student1) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(student2) == []

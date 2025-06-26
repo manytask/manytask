@@ -89,6 +89,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str]
+    first_name: Mapped[str]
+    last_name: Mapped[str]
     gitlab_instance_host: Mapped[str]
 
     __table_args__ = (UniqueConstraint("username", "gitlab_instance_host", name="_username_gitlab_instance_uc"),)
