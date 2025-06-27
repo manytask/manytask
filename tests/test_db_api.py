@@ -572,7 +572,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
 
     stored_user = db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, username)
 
-    assert stored_user == StoredUser(username="user1", course_admin=False)
+    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=False)
 
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1
@@ -580,12 +580,12 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     # admin in gitlab
     stored_user = db_api_with_initialized_first_course.sync_stored_user(FIRST_COURSE_NAME, username, "repo1", True)
 
-    assert stored_user == StoredUser(username="user1", course_admin=True)
+    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=True)
 
     # lost admin rules in gitlab, but in database stored that user is admin
     stored_user = db_api_with_initialized_first_course.sync_stored_user(FIRST_COURSE_NAME, username, "repo1", False)
 
-    assert stored_user == StoredUser(username="user1", course_admin=True)
+    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=True)
 
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1

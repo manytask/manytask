@@ -20,6 +20,9 @@ from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
 TEST_USERNAME = "test_user"
+TEST_FIRST_NAME = "Ivan"
+TEST_LAST_NAME = "Ivanov"
+TEST_NAME = "Ivan Ivanov"
 INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
@@ -89,9 +92,10 @@ def mock_group(mock_task):
 @pytest.fixture
 def mock_student():
     class MockStudent:
-        def __init__(self, student_id, username):
+        def __init__(self, student_id, username, name):
             self.id = student_id
             self.username = username
+            self.name = name
 
     return MockStudent
 
@@ -101,7 +105,9 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.scores = {}
-            self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
+            self.stored_user = StoredUser(
+                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
+            )
             self.course_name = TEST_COURSE_NAME
 
         def store_score(self, _course_name, username, repo_name, task_name, update_fn):
@@ -125,7 +131,8 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_stored_user(_course_name, username):
             from manytask.abstract import StoredUser
 
-            return StoredUser(username=username, course_admin=True)
+            first_name, last_name = student.name.split()
+            return StoredUser(username=username, first_name=first_name, last_name=last_name, course_admin=True)
 
         def update_cached_scores(self, _course_name):
             pass
@@ -170,12 +177,12 @@ def mock_gitlab_api(mock_student):
 
         def get_student(self, user_id: int):
             if user_id == TEST_USER_ID:
-                return self._student_class(TEST_USER_ID, TEST_USERNAME)
+                return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
             raise Exception("Student not found")
 
         def get_student_by_username(self, username):
             if username == TEST_USERNAME:
-                return self._student_class(TEST_USER_ID, TEST_USERNAME)
+                return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
             raise Exception("Student not found")
 
         def get_authenticated_student(self, access_token):
