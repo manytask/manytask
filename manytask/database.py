@@ -135,7 +135,12 @@ class DataBaseApi(StorageApi):
             user_on_course = self._get_or_create_user_on_course(session, student, course)
             session.commit()
 
-            return StoredUser(username=user_on_course.user.username, course_admin=user_on_course.is_course_admin)
+            return StoredUser(
+                username=user_on_course.user.username,
+                first_name=user_on_course.user.first_name,
+                last_name=user_on_course.user.last_name,
+                course_admin=user_on_course.is_course_admin,
+            )
 
     def sync_stored_user(
         self,
@@ -160,7 +165,12 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-            return StoredUser(username=user_on_course.user.username, course_admin=user_on_course.is_course_admin)
+            return StoredUser(
+                username=user_on_course.user.username,
+                first_name=user_on_course.user.first_name,
+                last_name=user_on_course.user.last_name,
+                course_admin=user_on_course.is_course_admin,
+            )
 
     def get_all_scores(self, course_name: str) -> dict[str, dict[str, int]]:
         """Method for getting all scores for all users
@@ -537,8 +547,14 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
+            first_name, last_name = student.name.split()  # TODO: come up with how to separate names
             user = self._get_or_create(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+                session,
+                models.User,
+                username=student.username,
+                first_name=first_name,
+                last_name=last_name,
+                gitlab_instance_host=course.gitlab_instance_host,
             )
             session.commit()
             session.refresh(user)
@@ -743,8 +759,14 @@ class DataBaseApi(StorageApi):
         course: models.Course,
         repo_name: str | None = None,
     ) -> models.UserOnCourse:
+        first_name, last_name = student.name.split()  # TODO: come up with how to separate names
         user = self._get_or_create(
-            session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+            session,
+            models.User,
+            username=student.username,
+            first_name=first_name,
+            last_name=last_name,
+            gitlab_instance_host=course.gitlab_instance_host,
         )
 
         defaults = {}
