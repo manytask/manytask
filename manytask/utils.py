@@ -1,7 +1,8 @@
 import secrets
 
-from manytask.main import CustomFlask
 from flask import session, url_for
+
+from manytask.main import CustomFlask
 
 
 def generate_token_hex(bytes_count: int = 24) -> str:
