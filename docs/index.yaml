@@ -1,0 +1,87 @@
+fullScreen: true
+blocks:
+  - type: 'header-block'
+    title: 'Manytask'
+    description: 'Robust platform for managing and organizing programming language courses: test, score and store.'
+    background:
+      image:
+        desktop: './img/bg.png'
+        disableCompress: true
+      color: '#ffe2b3'
+      fullWidth: false
+    buttons:
+      - text: 'App'
+        theme: 'outlined'
+        size: 'promo'
+        url: 'https://app.manytask2.org/'
+      - text: 'GitHub'
+        theme: 'outlined'
+        size: 'promo'
+        url: 'https://github.com/manytask'
+  - type: 'extended-features-block'
+    title:
+      text: 'Key features'
+    items:
+      - title: 'Universal Compatibility'
+        icon: 'img/gravity-ui/shapes-3.svg'
+        text: 'Supports courses in any programming language, easy customizable'
+      - title: 'Automated Testing'
+        icon: 'img/gravity-ui/play.svg'
+        text: 'Run objective tests on student solutions for consistent evaluations - support public and private tests'
+      - title: 'Score Management'
+        icon: 'img/gravity-ui/display-pulse.svg'
+        text: 'A centralized system for storing and presenting student scores. Edit scores and display them in a student-friendly manner'
+      - title: 'GitLab Integration'
+        icon: 'img/gravity-ui/logo-gitlab.svg'
+        text: 'Manage code, submissions, code reviews, and track progress efficiently with GitLab integration'
+      - title: 'Real-World Learning'
+        icon: 'img/gravity-ui/code-pull-request.svg'
+        text: 'Manytask simulate real-world scenarios in the learning process, it uses pytest, garber etc'
+      - title: 'Isolated Test Environments'
+        icon: 'img/gravity-ui/circles-5-random.svg'
+        text: 'Ensure fair, secure, and consistent evaluations with our isolated testing environments'
+  - type: extended-features-block
+    title:
+      text: Ecosystem
+      textSize: m
+    items:
+      - title: Manytask Web App
+        text: Web service to store students scores, maintain deadlines, and show it to the student.
+        links:
+          - text: GitHub
+            url: 'https://github.com/manytask/manytask'
+            arrow: true
+            theme: normal
+      - title: Manytask Checker
+        text: Python CLI script to run build and run tests against students' solutions, then push scores to Manytask Web App.
+        links:
+          - text: GitHub
+            url: 'https://github.com/manytask/checker'
+            arrow: true
+            theme: normal
+      - title: Courses Templates
+        text: Templates of the simple course to base yours on.
+        links:
+          - text: GitLab
+            url: 'https://gitlab.com/manytask/examples'
+            arrow: true
+            theme: normal
+  - type: content-layout-block
+    textContent:
+      title: How to contribute
+      text: "Manytask is an open-source project and we are thrilled that you're considering contributing! Please see the list of opened issues below. File a PR or open a new issue."
+      links:
+        - url: https://github.com/orgs/manytask/projects/3
+          text: Opened issues
+          theme: normal
+          arrow: true
+  - type: 'icons-block'
+    title: 'Join us'
+    items:
+      - src: 'img/github-mark.png'
+        text: 'GitHub'
+        url: 'https://github.com/manytask'
+      - src: 'img/telegram.png'
+        text: 'Telegram'
+        url: 'https://t.me/manytask_chat'
+animated: true
