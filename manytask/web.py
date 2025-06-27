@@ -12,7 +12,7 @@ from .auth import requires_admin, requires_auth, requires_course_access, require
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
-from .utils import generate_token_hex
+from .utils import generate_token_hex, get_courses
 
 SESSION_VERSION = 1.5
 
@@ -33,22 +33,7 @@ def healthcheck() -> ResponseReturnValue:
 def index() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    if app.debug:
-        courses_names = app.storage_api.get_all_courses_names()
-
-    else:
-        student_id = session["gitlab"]["user_id"]
-        student = app.gitlab_api.get_student(student_id)
-
-        courses_names = app.storage_api.get_user_courses_names(student)
-
-    courses = [
-        {
-            "name": course_name,
-            "url": url_for("course.course_page", course_name=course_name),
-        }
-        for course_name in courses_names
-    ]
+    courses = get_courses(app)
 
     return render_template(
         "courses.html",
@@ -75,6 +60,8 @@ def logout() -> ResponseReturnValue:
 def course_page(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
+
+    courses = get_courses(app)
 
     storage_api = app.storage_api
 
@@ -141,6 +128,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         course_favicon=app.favicon,
         is_course_admin=student_course_admin,
         cache_time=cache_delta,
+        courses=courses,
     )
 
 
@@ -262,6 +250,8 @@ def show_database(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
+    courses = get_courses(app)
+
     storage_api = app.storage_api
 
     if app.debug:
@@ -307,6 +297,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
+        courses=courses,
     )
 
 
