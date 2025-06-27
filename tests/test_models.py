@@ -80,7 +80,7 @@ def fixed_current_time():
 
 
 def test_user_simple(session):
-    user = User(username="test_user", gitlab_instance_host="gitlab.inst.org")
+    user = User(username="test_user", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org")
     session.add(user)
     session.commit()
 
@@ -90,11 +90,21 @@ def test_user_simple(session):
 
 
 def test_user_unique_username_and_gitlab_instance(session):
-    user1 = User(username="unique_user1", gitlab_instance_host="gitlab.inst1.org")
-    user2 = User(username="unique_user1", gitlab_instance_host="gitlab.inst2.org")
-    user3 = User(username="unique_user2", gitlab_instance_host="gitlab.inst1.org")
-    user4 = User(username="unique_user2", gitlab_instance_host="gitlab.inst2.org")
-    user5 = User(username="unique_user1", gitlab_instance_host="gitlab.inst1.org")
+    user1 = User(
+        username="unique_user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst1.org"
+    )
+    user2 = User(
+        username="unique_user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst2.org"
+    )
+    user3 = User(
+        username="unique_user2", first_name="Ivan", last_name="Olegov", gitlab_instance_host="gitlab.inst1.org"
+    )
+    user4 = User(
+        username="unique_user2", first_name="Ivan", last_name="Olegov", gitlab_instance_host="gitlab.inst2.org"
+    )
+    user5 = User(
+        username="unique_user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst1.org"
+    )
     session.add_all([user1, user2, user3, user4])
     session.commit()
     session.add(user5)
@@ -154,7 +164,7 @@ def test_course_unique_name(session):
 
 
 def test_user_on_course(session):
-    user = User(username="user1", gitlab_instance_host="gitlab.inst.org")
+    user = User(username="user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org")
     course = make_course("1")
     session.add_all([user, course])
     session.commit()
@@ -182,9 +192,9 @@ def test_user_on_course(session):
 
 
 def test_user_on_course_unique_ids(session):
-    user1 = User(username="user001", gitlab_instance_host="gitlab.inst.org")
+    user1 = User(username="user001", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org")
     course1 = make_course("001")
-    user2 = User(username="user002", gitlab_instance_host="gitlab.inst.org")
+    user2 = User(username="user002", first_name="Ivan", last_name="Olegov", gitlab_instance_host="gitlab.inst.org")
     course2 = make_course("002")
 
     user_on_course1 = UserOnCourse(user=user1, course=course1, repo_name="user_repo01")
@@ -360,7 +370,7 @@ def test_task(session):
 
 
 def test_grade(session, fixed_current_time):
-    user = User(username="user2", gitlab_instance_host="gitlab.inst.org")
+    user = User(username="user2", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org")
     course = make_course("4")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="repo_name1")
     task_group = TaskGroup(name="group4", course=course)
@@ -381,8 +391,8 @@ def test_grade(session, fixed_current_time):
 def test_grade_unique_ids(session, fixed_current_time):
     course = make_course("101")
     task_group = TaskGroup(name="group101", course=course)
-    user1 = User(username="user101", gitlab_instance_host="gitlab.inst.org")
-    user2 = User(username="user102", gitlab_instance_host="gitlab.inst.org")
+    user1 = User(username="user101", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org")
+    user2 = User(username="user102", first_name="Ivan", last_name="Olegov", gitlab_instance_host="gitlab.inst.org")
     user_on_course1 = UserOnCourse(user=user1, course=course, repo_name="repo_name1")
     user_on_course2 = UserOnCourse(user=user2, course=course, repo_name="repo_name1")
     task1 = Task(name="task101", group=task_group)
@@ -438,7 +448,9 @@ def test_task_group_tasks(session):
 
 def test_users_on_course_validate_gitlab_instance(session):
     course = make_course("21")
-    user = User(username="user21", gitlab_instance_host="another.gitlab.inst.org")
+    user = User(
+        username="user21", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="another.gitlab.inst.org"
+    )
     user_on_course = UserOnCourse(user=user, course=course, repo_name="user21_repo")
 
     session.add_all([user, course, user_on_course])
@@ -450,8 +462,12 @@ def test_cascade_delete_course(session):
     course = make_course("cascade")
     task_group1 = TaskGroup(name="cascade_group1", course=course)
     task_group2 = TaskGroup(name="cascade_group2", course=course)
-    user1 = User(username="cascade_user1", gitlab_instance_host="gitlab.inst.org")
-    user2 = User(username="cascade_user2", gitlab_instance_host="gitlab.inst.org")
+    user1 = User(
+        username="cascade_user1", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org"
+    )
+    user2 = User(
+        username="cascade_user2", first_name="Ivan", last_name="Olegov", gitlab_instance_host="gitlab.inst.org"
+    )
     user_on_course1 = UserOnCourse(user=user1, course=course, repo_name="cascade_repo1")
     user_on_course2 = UserOnCourse(user=user2, course=course, repo_name="cascade_repo2")
     session.add_all([course, task_group1, task_group2, user1, user2, user_on_course1, user_on_course2])
@@ -508,7 +524,7 @@ def test_cascade_delete_task_group(session):
     session.add_all([course, deadline, task_group, task1, task2])
     session.commit()
 
-    user = User(username="cascade_user3", gitlab_instance_host="gitlab.inst.org")
+    user = User(username="cascade_user3", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo3")
     grade1 = Grade(user_on_course=user_on_course, task=task1, score=TEST_GRADE_SCORE_2)
     grade2 = Grade(user_on_course=user_on_course, task=task2, score=TEST_GRADE_SCORE_2)
@@ -538,7 +554,7 @@ def test_cascade_delete_task_group(session):
 
 
 def test_cascade_delete_user(session):
-    user = User(username="cascade_user4", gitlab_instance_host="gitlab.inst.org")
+    user = User(username="cascade_user4", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org")
     course = make_course("cascade3")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo4")
     task_group = TaskGroup(name="cascade_group4", course=course)
@@ -563,7 +579,7 @@ def test_cascade_delete_user(session):
 
 
 def test_cascade_delete_user_on_course(session):
-    user = User(username="cascade_user5", gitlab_instance_host="gitlab.inst.org")
+    user = User(username="cascade_user5", first_name="Ivan", last_name="Ivanov", gitlab_instance_host="gitlab.inst.org")
     course = make_course("cascade4")
     user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo5")
     task_group = TaskGroup(name="cascade_group5", course=course)
