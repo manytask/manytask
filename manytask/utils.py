@@ -9,7 +9,7 @@ def generate_token_hex(bytes_count: int = 24) -> str:
     return secrets.token_hex(nbytes=bytes_count)
 
 
-def get_courses(app: CustomFlask):
+def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     if app.debug:
         courses_names = app.storage_api.get_all_courses_names()
 
