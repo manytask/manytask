@@ -152,6 +152,16 @@ class RmsApi(ABC):
         return self._base_url
 
     @abstractmethod
+    def register_new_user(
+        self,
+        username: str,
+        firstname: str,
+        lastname: str,
+        email: str,
+        password: str,
+    ) -> None: ...
+
+    @abstractmethod
     def create_public_repo(
         self,
         course_group: str,
