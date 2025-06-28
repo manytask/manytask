@@ -870,7 +870,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     first_name = "First"
     last_name = "Last"
 
-    user = User(username=username, gitlab_instance_host="gitlab.test.com")
+    user = User(username=username, first_name=first_name, last_name=last_name, gitlab_instance_host="gitlab.test.com")
     session.add(user)
     session.commit()
 
@@ -943,7 +943,11 @@ def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgr
 
 def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_courses, session):
     username = "user1"
-    user = User(id=1, username=username, gitlab_instance_host="gitlab.test.com")
+    first_name = "First"
+    last_name = "Last"
+    user = User(
+        id=1, username=username, first_name=first_name, last_name=last_name, gitlab_instance_host="gitlab.test.com"
+    )
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, repo_name="repo1", is_course_admin=False)
 
     session.add(user)
@@ -958,8 +962,12 @@ def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_cour
 
 def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_courses, session):
     username = "user1"
+    first_name = "First"
+    last_name = "Last"
 
-    user = User(id=1, username=username, gitlab_instance_host="gitlab.test.com")
+    user = User(
+        id=1, username=username, first_name=first_name, last_name=last_name, gitlab_instance_host="gitlab.test.com"
+    )
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, repo_name="repo1", is_course_admin=True)
 
     session.add(user)
@@ -974,8 +982,12 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
 
 def test_check_user_on_course(db_api_with_two_initialized_courses, session):
     username = "user1"
+    first_name = "First"
+    last_name = "Last"
 
-    user = User(id=1, username=username, gitlab_instance_host="gitlab.test.com")
+    user = User(
+        id=1, username=username, first_name=first_name, last_name=last_name, gitlab_instance_host="gitlab.test.com"
+    )
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, repo_name="repo1", is_course_admin=True)
 
     session.add(user)
@@ -989,7 +1001,9 @@ def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, 
     username = "user1"
     first_name = "Ivan"
     last_name = "Ivanov"
-    user = User(id=1, username=username, gitlab_instance_host="gitlab.test.com")
+    user = User(
+        id=1, username=username, first_name=first_name, last_name=last_name, gitlab_instance_host="gitlab.test.com"
+    )
     session.add(user)
     session.commit()
 
