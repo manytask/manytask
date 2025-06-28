@@ -582,7 +582,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
         FIRST_COURSE_NAME, username, first_name, last_name
     )
 
-    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=False)
+    assert stored_user == StoredUser(username=username, first_name=first_name, last_name=last_name, course_admin=False)
 
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1
@@ -592,14 +592,14 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
         FIRST_COURSE_NAME, username, first_name, last_name, "repo1", True
     )
 
-    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=True)
+    assert stored_user == StoredUser(username=username, first_name=first_name, last_name=last_name, course_admin=True)
 
     # lost admin rules in gitlab, but in database stored that user is admin
     stored_user = db_api_with_initialized_first_course.sync_stored_user(
         FIRST_COURSE_NAME, username, first_name, last_name, "repo1", False
     )
 
-    assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=True)
+    assert stored_user == StoredUser(username=username, first_name=first_name, last_name=last_name, course_admin=True)
 
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1
@@ -886,13 +886,15 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
     username = "user1"
+    first_name = "First"
+    last_name = "Last"
 
     def failing_update(_, score):
         raise ValueError("Update failed")
 
     with pytest.raises(ValueError) as exc_info:
         db_api_with_two_initialized_courses.store_score(
-            FIRST_COURSE_NAME, username, "repo1", "task_0_0", failing_update
+            FIRST_COURSE_NAME, username, first_name, last_name, "repo1", "task_0_0", failing_update
         )
     assert "Update failed" in str(exc_info.value)
 
