@@ -448,13 +448,15 @@ def test_resync_with_changed_task_name(
 
 def test_store_score(db_api_with_initialized_first_course, session):
     username = "user1"
+    first_name = "First"
+    last_name = "Last"
 
     assert session.query(User).count() == 0
     assert session.query(UserOnCourse).count() == 0
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME, username, "repo1", "not_exist_task", update_func(1)
+            FIRST_COURSE_NAME, username, first_name, last_name, "repo1", "not_exist_task", update_func(1)
         )
         == 0
     )
@@ -474,7 +476,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME, username, "repo1", "task_0_0", update_func(1)
+            FIRST_COURSE_NAME, username, first_name, last_name, "repo1", "task_0_0", update_func(1)
         )
         == 1
     )
@@ -505,10 +507,12 @@ def test_store_score(db_api_with_initialized_first_course, session):
 def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
     username = "user1"
+    first_name = "First"
+    last_name = "Last"
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME, username, "repo1", "task_1_3", update_func(expected_score)
+            FIRST_COURSE_NAME, username, first_name, last_name, "repo1", "task_1_3", update_func(expected_score)
         )
         == expected_score
     )
@@ -545,7 +549,9 @@ def test_store_score_with_changed_task_name(
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
     username = "user1"
-    db_api.store_score(FIRST_COURSE_NAME, username, "repo1", "task_0_0", update_func(10))
+    first_name = "First"
+    last_name = "Last"
+    db_api.store_score(FIRST_COURSE_NAME, username, first_name, last_name, "repo1", "task_0_0", update_func(10))
 
     update_course(
         db_api, FIRST_COURSE_NAME, first_course_updated_ui_config, first_course_deadlines_config_with_changed_task_name
@@ -566,11 +572,15 @@ def test_store_score_with_changed_task_name(
 
 def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session):
     username = "user1"  # default student(not admin in gitlab)
+    first_name = "Ivan"
+    last_name = "Ivanov"
 
     assert session.query(User).count() == 0
     assert session.query(UserOnCourse).count() == 0
 
-    stored_user = db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, username)
+    stored_user = db_api_with_initialized_first_course.get_stored_user(
+        FIRST_COURSE_NAME, username, first_name, last_name
+    )
 
     assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=False)
 
@@ -578,12 +588,16 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     assert session.query(UserOnCourse).count() == 1
 
     # admin in gitlab
-    stored_user = db_api_with_initialized_first_course.sync_stored_user(FIRST_COURSE_NAME, username, "repo1", True)
+    stored_user = db_api_with_initialized_first_course.sync_stored_user(
+        FIRST_COURSE_NAME, username, first_name, last_name, "repo1", True
+    )
 
     assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=True)
 
     # lost admin rules in gitlab, but in database stored that user is admin
-    stored_user = db_api_with_initialized_first_course.sync_stored_user(FIRST_COURSE_NAME, username, "repo1", False)
+    stored_user = db_api_with_initialized_first_course.sync_stored_user(
+        FIRST_COURSE_NAME, username, first_name, last_name, "repo1", False
+    )
 
     assert stored_user == StoredUser(username="user1", first_name="Ivan", last_name="Ivanov", course_admin=True)
 
@@ -600,16 +614,22 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_stats_ratio = 0.5
 
     username1 = "user1"
-    db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, username1, "repo1", "task_0_0", update_func(1))
+    first_name1 = "First"
+    last_name1 = "Last"
     db_api_with_initialized_first_course.store_score(
-        FIRST_COURSE_NAME, username1, "repo1", "task_1_3", update_func(expected_score_1)
+        FIRST_COURSE_NAME, username1, first_name1, last_name1, "repo1", "task_0_0", update_func(1)
+    )
+    db_api_with_initialized_first_course.store_score(
+        FIRST_COURSE_NAME, username1, first_name1, last_name1, "repo1", "task_1_3", update_func(expected_score_1)
     )
 
     username2 = "user2"
+    first_name2 = "Second"
+    last_name2 = "Verylast"
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME, username2, "repo2", "task_0_0", update_func(expected_score_2)
+            FIRST_COURSE_NAME, username2, first_name2, last_name2, "repo2", "task_0_0", update_func(expected_score_2)
         )
         == expected_score_2
     )
@@ -642,8 +662,14 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
     username = "user1"
-    db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, username, "repo1", "task_0_0", update_func(30))
-    db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, username, "repo1", "task_1_3", update_func(40))
+    first_name = "First"
+    last_name = "Last"
+    db_api_with_two_initialized_courses.store_score(
+        FIRST_COURSE_NAME, username, first_name, last_name, "repo1", "task_0_0", update_func(30)
+    )
+    db_api_with_two_initialized_courses.store_score(
+        SECOND_COURSE_NAME, username, first_name, last_name, "repo1", "task_1_3", update_func(40)
+    )
     expected_users = 1
     expected_user_on_course = 2
     expected_grades = 2
@@ -689,18 +715,28 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_stats_ratio = 0.5
 
     username1 = "user1"
+    first_name1 = "First"
+    last_name1 = "Last"
     username2 = "user2"
+    first_name2 = "Second"
+    last_name2 = "Verylast"
 
-    db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, username1, "repo1", "task_0_0", update_func(1))
     db_api_with_two_initialized_courses.store_score(
-        FIRST_COURSE_NAME, username1, "repo1", "task_1_3", update_func(expected_score_1)
+        FIRST_COURSE_NAME, username1, first_name1, last_name1, "repo1", "task_0_0", update_func(1)
     )
     db_api_with_two_initialized_courses.store_score(
-        FIRST_COURSE_NAME, username2, "repo2", "task_0_0", update_func(expected_score_2)
+        FIRST_COURSE_NAME, username1, first_name1, last_name1, "repo1", "task_1_3", update_func(expected_score_1)
+    )
+    db_api_with_two_initialized_courses.store_score(
+        FIRST_COURSE_NAME, username2, first_name2, last_name2, "repo2", "task_0_0", update_func(expected_score_2)
     )
 
-    db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, username1, "repo1", "task_1_0", update_func(99))
-    db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, username2, "repo2", "task_1_1", update_func(7))
+    db_api_with_two_initialized_courses.store_score(
+        SECOND_COURSE_NAME, username1, first_name1, last_name1, "repo1", "task_1_0", update_func(99)
+    )
+    db_api_with_two_initialized_courses.store_score(
+        SECOND_COURSE_NAME, username2, first_name2, last_name2, "repo2", "task_1_1", update_func(7)
+    )
 
     assert session.query(User).count() == expected_users
     assert session.query(UserOnCourse).count() == expected_user_on_course
@@ -831,13 +867,15 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container, first_
 
 def test_store_score_integrity_error(db_api_with_two_initialized_courses, session):
     username = "user1"
+    first_name = "First"
+    last_name = "Last"
 
     user = User(username=username, gitlab_instance_host="gitlab.test.com")
     session.add(user)
     session.commit()
 
     score = db_api_with_two_initialized_courses.store_score(
-        FIRST_COURSE_NAME, username, "repo1", "task_0_0", update_func(1)
+        FIRST_COURSE_NAME, username, first_name, last_name, "repo1", "task_0_0", update_func(1)
     )
     assert score == 1
 
@@ -949,20 +987,24 @@ def test_check_user_on_course(db_api_with_two_initialized_courses, session):
 
 def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, session):
     username = "user1"
+    first_name = "Ivan"
+    last_name = "Ivanov"
     user = User(id=1, username=username, gitlab_instance_host="gitlab.test.com")
     session.add(user)
     session.commit()
 
     assert session.query(User).filter_by(username="user1").one().id == user.id
-    db_api_with_two_initialized_courses.create_user_if_not_exist(username, FIRST_COURSE_NAME)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username, first_name, last_name, FIRST_COURSE_NAME)
     assert session.query(User).filter_by(username="user1").one().id == user.id
 
 
 def test_create_user_if_not_exist_nonexisting(db_api_with_two_initialized_courses, session):
     username = "user1"
+    first_name = "Ivan"
+    last_name = "Ivanov"
 
     assert session.query(User).filter_by(username=username).one_or_none() is None
-    db_api_with_two_initialized_courses.create_user_if_not_exist(username, FIRST_COURSE_NAME)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username, first_name, last_name, FIRST_COURSE_NAME)
     assert session.query(User).filter_by(username=username).one().id == 1
 
 

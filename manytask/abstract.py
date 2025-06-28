@@ -49,6 +49,8 @@ class StorageApi(ABC):
         self,
         course_name: str,
         username: str,
+        first_name: str,
+        last_name: str,
     ) -> StoredUser: ...
 
     @abstractmethod
@@ -56,6 +58,8 @@ class StorageApi(ABC):
         self,
         course_name: str,
         username: str,
+        first_name: str,
+        last_name: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser: ...
@@ -77,6 +81,8 @@ class StorageApi(ABC):
         self,
         course_name: str,
         username: str,
+        first_name: str,
+        last_name: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
@@ -129,7 +135,7 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, username: str, course_name: str) -> None: ...
+    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, course_name: str) -> None: ...
 
     @abstractmethod
     def get_user_courses_names(self, username: str) -> list[str]: ...

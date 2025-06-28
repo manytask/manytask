@@ -120,6 +120,8 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         username: str,
+        first_name: str,
+        last_name: str,
     ) -> StoredUser:
         """Method for getting user's stored data
 
@@ -131,7 +133,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, username, course)
+            user_on_course = self._get_or_create_user_on_course(session, username, first_name, last_name, course)
             session.commit()
 
             return StoredUser(
@@ -145,6 +147,8 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         username: str,
+        first_name: str,
+        last_name: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser:
@@ -158,7 +162,9 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
+            user_on_course = self._get_or_create_user_on_course(
+                session, username, first_name, last_name, course, repo_name
+            )
 
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
@@ -228,6 +234,8 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         username: str,
+        first_name: str,
+        last_name: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
@@ -249,7 +257,9 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
+                user_on_course = self._get_or_create_user_on_course(
+                    session, username, first_name, last_name, course, repo_name
+                )
                 session.commit()
 
                 try:
@@ -537,12 +547,11 @@ class DataBaseApi(StorageApi):
             except Exception:
                 return False
 
-    def create_user_if_not_exist(self, username: str, course_name: str) -> None:
+    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, course_name: str) -> None:
         """Create user in DB if not exist"""
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            first_name, last_name = student.name.split()  # TODO: come up with how to separate names
             user = self._get_or_create(
                 session,
                 models.User,
@@ -751,10 +760,11 @@ class DataBaseApi(StorageApi):
         self,
         session: Session,
         username: str,
+        first_name: str,
+        last_name: str,
         course: models.Course,
         repo_name: str | None = None,
     ) -> models.UserOnCourse:
-        first_name, last_name = student.name.split()  # TODO: come up with how to separate names
         user = self._get_or_create(
             session,
             models.User,

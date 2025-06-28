@@ -97,7 +97,8 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student.username)
+        first_name, last_name = student.name.split()
+        stored_user = storage_api.get_stored_user(course.course_name, student.username, first_name, last_name)
 
         student_course_admin = stored_user.course_admin
 
@@ -218,11 +219,14 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    app.storage_api.create_user_if_not_exist(student.username, course.course_name)
+    first_name, last_name = student.name.split()  # TODO: come up with how to separate names
+    app.storage_api.create_user_if_not_exist(student.username, first_name, last_name, course.course_name)
 
     app.storage_api.sync_stored_user(
         course.course_name,
         student.username,
+        first_name,
+        last_name,
         app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
         app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
     )
@@ -283,7 +287,8 @@ def show_database(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student.username)
+        first_name, last_name = student.name.split()
+        stored_user = storage_api.get_stored_user(course.course_name, student.username, first_name, last_name)
 
         student_course_admin = stored_user.course_admin
 

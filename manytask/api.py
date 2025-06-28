@@ -196,6 +196,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
         logger.info(f"Got score=None; set max score for {task.name} of {task.score}")
 
     student = _get_student(app.gitlab_api, user_id, username)
+    first_name, last_name = student.name.split()  # TODO: come up with how to separate names
 
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone(course.course_name))
 
@@ -214,6 +215,8 @@ def report_score(course_name: str) -> ResponseReturnValue:
     final_score = app.storage_api.store_score(
         course.course_name,
         student.username,
+        first_name,
+        last_name,
         app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
         task.name,
         update_function,
@@ -350,7 +353,8 @@ def update_database(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
-    stored_user = storage_api.get_stored_user(course.course_name, student.username)
+    first_name, last_name = student.name.split()
+    stored_user = storage_api.get_stored_user(course.course_name, student.username, first_name, last_name)
     student_course_admin = stored_user.course_admin
 
     if not student_course_admin:
@@ -375,6 +379,8 @@ def update_database(course_name: str) -> ResponseReturnValue:
                 storage_api.store_score(
                     course.course_name,
                     username=username,
+                    first_name=first_name,
+                    last_name=last_name,
                     repo_name=repo_name,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
