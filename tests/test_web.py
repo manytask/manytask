@@ -73,7 +73,7 @@ def mock_gitlab_api():
 
         @staticmethod
         def get_student(user_id: int):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
         def get_student_by_username(self, username: str) -> Student:
             return Student(
@@ -91,7 +91,7 @@ def mock_gitlab_api():
 
         @staticmethod
         def _parse_user_to_student(user: dict[str, Any]):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
         def check_is_course_admin(self, _user_id, _course_group):
             return self.course_admin
