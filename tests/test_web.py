@@ -165,7 +165,7 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def max_score_started(self, _course_name):
             return 100
-    
+
         def sync_stored_user(
             self,
             course_name: str,
