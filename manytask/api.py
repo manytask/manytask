@@ -217,7 +217,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
         rms_user.username,
         first_name,
         last_name,
-        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+        app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
         task.name,
         update_function,
     )
@@ -354,7 +354,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
     first_name, last_name = rms_user.name.split()
-    stored_user = storage_api.get_stored_user(course.course_name, rms_user.username)
+    stored_user = storage_api.get_stored_user(course.course_name, rms_user.username, first_name, last_name)
     student_course_admin = stored_user.course_admin
 
     if not student_course_admin:

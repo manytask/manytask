@@ -399,7 +399,6 @@ def test_get_student_by_username_not_found(gitlab):
         gitlab_api.get_rms_user_by_username(TEST_USERNAME)
 
 
-
 def test_get_student_found(gitlab, mock_gitlab_user, mock_rms_user):
     rms_api, mock_gitlab_instance = gitlab
     user_attrs = {

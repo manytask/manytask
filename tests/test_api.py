@@ -91,7 +91,7 @@ def mock_group(mock_task):
 @pytest.fixture
 def mock_rms_user():
     class MockRmsUser:
-        def __init__(self, user_id, username):
+        def __init__(self, user_id, username, name):
             self.id = user_id
             self.username = username
             self.name = name

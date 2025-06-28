@@ -97,8 +97,8 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         rms_user = app.gitlab_api.get_rms_user_by_id(user_id=student_id)
-        first_name, last_name = student.name.split()
-        stored_user = storage_api.get_stored_user(course.course_name, rms_user.username)
+        first_name, last_name = rms_user.name.split()
+        stored_user = storage_api.get_stored_user(course.course_name, rms_user.username, first_name, last_name)
         student_course_admin = stored_user.course_admin
 
     # update cache if more than 1h passed or in debug mode
