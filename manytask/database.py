@@ -159,6 +159,14 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
+
+            self._get_or_create(
+                session,
+                models.User,
+                username=student.username,
+                gitlab_instance_host=course.gitlab_instance_host,
+            )
+
             user_on_course = self._get_or_create_user_on_course(session, student.username, course, repo_name)
 
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
