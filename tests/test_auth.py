@@ -15,6 +15,9 @@ from manytask.auth import requires_admin, requires_auth, requires_ready, set_oau
 from manytask.web import course_bp, root_bp
 
 TEST_USERNAME = "test_user"
+TEST_FIRST_NAME = "Ivan"
+TEST_LAST_NAME = "Ivanov"
+TEST_NAME = "Ivan Ivanov"
 TEST_SECRET = "test_secret"
 TEST_KEY = "test_key"
 TEST_TOKEN = "test_token"
@@ -59,10 +62,10 @@ def mock_gitlab_api():
 
         @staticmethod
         def get_rms_user_by_id(user_id: int):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
 
         def get_authenticated_rms_user(self, gitlab_access_token: str):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
 
         @staticmethod
         def check_is_gitlab_admin(user_id: int):
@@ -83,7 +86,9 @@ def mock_gitlab_api():
 def mock_storage_api(mock_course):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
-            self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
+            self.stored_user = StoredUser(
+                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
+            )
             self.course_name = TEST_COURSE_NAME
 
         @staticmethod
@@ -110,7 +115,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_course(_name):
             return mock_course
 
-        def get_stored_user(self, _username):
+        def get_stored_user(self, _username, _first_name, _last_name):
             return self.stored_user
 
         def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:

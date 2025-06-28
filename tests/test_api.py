@@ -19,6 +19,9 @@ from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
 TEST_USERNAME = "test_user"
+TEST_FIRST_NAME = "Ivan"
+TEST_LAST_NAME = "Ivanov"
+TEST_NAME = "Ivan Ivanov"
 INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
@@ -91,6 +94,7 @@ def mock_rms_user():
         def __init__(self, user_id, username):
             self.id = user_id
             self.username = username
+            self.name = name
 
     return MockRmsUser
 
@@ -100,10 +104,12 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.scores = {}
-            self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
+            self.stored_user = StoredUser(
+                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
+            )
             self.course_name = TEST_COURSE_NAME
 
-        def store_score(self, _course_name, username, repo_name, task_name, update_fn):
+        def store_score(self, _course_name, username, first_name, last_name, repo_name, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
             self.scores[f"{username}_{task_name}"] = new_score
@@ -121,10 +127,10 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             return {"test_user": self.get_scores(course_name, "test_user")}
 
         @staticmethod
-        def get_stored_user(_course_name, username):
+        def get_stored_user(_course_name, username, first_name, last_name):
             from manytask.abstract import StoredUser
 
-            return StoredUser(username=username, course_admin=True)
+            return StoredUser(username=username, first_name=first_name, last_name=last_name, course_admin=True)
 
         def update_cached_scores(self, _course_name):
             pass
@@ -169,12 +175,12 @@ def mock_gitlab_api(mock_rms_user):
 
         def get_rms_user_by_id(self, user_id: int):
             if user_id == TEST_USER_ID:
-                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME)
+                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
             raise Exception("User not found")
 
         def get_rms_user_by_username(self, username):
             if username == TEST_USERNAME:
-                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME)
+                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
             raise Exception("User not found")
 
         def get_authenticated_rms_user(self, access_token):

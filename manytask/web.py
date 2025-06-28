@@ -97,8 +97,8 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         rms_user = app.gitlab_api.get_rms_user_by_id(user_id=student_id)
+        first_name, last_name = student.name.split()
         stored_user = storage_api.get_stored_user(course.course_name, rms_user.username)
-
         student_course_admin = stored_user.course_admin
 
     # update cache if more than 1h passed or in debug mode
@@ -217,11 +217,14 @@ def create_project(course_name: str) -> ResponseReturnValue:
     gitlab_access_token: str = session["gitlab"]["access_token"]
     # This is where the auth_api should be used when it will be ready
     rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
-    app.storage_api.create_user_if_not_exist(rms_user.username, course.course_name)
+    first_name, last_name = rms_user.name.split()  # TODO: come up with how to separate names
+    app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, course.course_name)
 
     app.storage_api.sync_stored_user(
         course.course_name,
         rms_user.username,
+        first_name,
+        last_name,
         app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
         app.gitlab_api.check_is_course_admin(rms_user.id, course.gitlab_course_group),
     )
@@ -282,8 +285,8 @@ def show_database(course_name: str) -> ResponseReturnValue:
         )
 
         rms_user = app.gitlab_api.get_rms_user_by_id(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, rms_user.username)
-
+        first_name, last_name = rms_user.name.split()
+        stored_user = storage_api.get_stored_user(course.course_name, rms_user.username, first_name, last_name)
         student_course_admin = stored_user.course_admin
 
     scores = storage_api.get_scores(course.course_name, student_username)
