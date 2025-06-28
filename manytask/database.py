@@ -132,7 +132,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course)
+            user_on_course = self._get_or_create_user_on_course(session, student.username, course)
             session.commit()
 
             return StoredUser(
@@ -159,7 +159,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
+            user_on_course = self._get_or_create_user_on_course(session, student.username, course, repo_name)
 
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
@@ -250,7 +250,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
+                user_on_course = self._get_or_create_user_on_course(session, student.username, course, repo_name)
                 session.commit()
 
                 try:
@@ -755,17 +755,14 @@ class DataBaseApi(StorageApi):
     def _get_or_create_user_on_course(
         self,
         session: Session,
-        student: Student,
+        username: str,
         course: models.Course,
         repo_name: str | None = None,
     ) -> models.UserOnCourse:
-        first_name, last_name = student.name.split()  # TODO: come up with how to separate names
-        user = self._get_or_create(
+        user = self._get(
             session,
             models.User,
-            username=student.username,
-            first_name=first_name,
-            last_name=last_name,
+            username=username,
             gitlab_instance_host=course.gitlab_instance_host,
         )
 
