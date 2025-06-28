@@ -128,6 +128,21 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_bonus_score(_course_name, _username):
             return 10
 
+        def sync_stored_user(
+            self,
+            course_name: str,
+            username: str,
+            first_name: str,
+            last_name: str,
+            repo_name: str,
+            course_admin: bool,
+        ) -> StoredUser:
+            self.stored_user.username = username
+            self.stored_user.first_name = first_name
+            self.stored_user.last_name = last_name
+            self.stored_user.course_admin = self.stored_user.course_admin or course_admin
+            return self.stored_user
+
         @staticmethod
         def get_groups(*_args, **_kwargs):
             return []
@@ -165,21 +180,6 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def max_score_started(self, _course_name):
             return 100
-
-        def sync_stored_user(
-            self,
-            course_name: str,
-            username: str,
-            first_name: str,
-            last_name: str,
-            repo_name: str,
-            course_admin: bool,
-        ) -> StoredUser:
-            self.stored_user.username = username
-            self.stored_user.first_name = first_name
-            self.stored_user.last_name = last_name
-            self.stored_user.course_admin = course_admin
-            return self.stored_user
 
     return MockStorageApi()
 
