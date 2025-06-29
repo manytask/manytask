@@ -469,7 +469,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME, student, "repo1", "not_exist_task", update_func(1)
+            FIRST_COURSE_NAME, student, TEST_REPO_NAME, "not_exist_task", update_func(1)
         )
         == 0
     )
@@ -489,7 +489,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME, student, "repo1", "task_0_0", update_func(1)
+            FIRST_COURSE_NAME, student, TEST_REPO_NAME, "task_0_0", update_func(1)
         )
         == 1
     )
@@ -505,8 +505,8 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
     all_scores = db_api_with_initialized_first_course.get_all_scores(FIRST_COURSE_NAME)
-    bonus_score = db_api_with_initialized_first_course.get_bonus_score(FIRST_COURSE_NAME, TEST_FIRST_NAME)
-    scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_FIRST_NAME)
+    bonus_score = db_api_with_initialized_first_course.get_bonus_score(FIRST_COURSE_NAME, TEST_USERNAME)
+    scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
 
     assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
     assert stats["task_0_0"] == 1.0
