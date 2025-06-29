@@ -25,7 +25,11 @@ TEST_LAST_NAME = "Last"
 TEST_REPO_NAME = "repo1"
 
 TEST_USERNAME_1 = "user1"
+TEST_FIRST_NAME_1 = "First"
+TEST_LAST_NAME_1 = "Last"
 TEST_USERNAME_2 = "user2"
+TEST_FIRST_NAME_2 = "Second"
+TEST_LAST_NAME_2 = "SecondToLast"
 
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",
@@ -459,6 +463,9 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert session.query(User).count() == 0
     assert session.query(UserOnCourse).count() == 0
 
+    student = Student(id=2, username=TEST_USERNAME, name=f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student, FIRST_COURSE_NAME)
+
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME, TEST_USERNAME, TEST_REPO_NAME, "not_exist_task", update_func(1)
@@ -512,6 +519,9 @@ def test_store_score(db_api_with_initialized_first_course, session):
 def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
 
+    student = Student(id=2, username=TEST_USERNAME, name=f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student, FIRST_COURSE_NAME)
+
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME, TEST_USERNAME, "repo1", "task_1_3", update_func(expected_score)
@@ -549,6 +559,9 @@ def test_store_score_with_changed_task_name(
     first_course_updated_ui_config,
 ):
     create_course(db_api, first_course_config, first_course_deadlines_config)
+
+    student = Student(id=2, username=TEST_USERNAME, name=f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student, FIRST_COURSE_NAME)
 
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "repo1", "task_0_0", update_func(10))
 
@@ -614,9 +627,15 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_grades = 3
     expected_stats_ratio = 0.5
 
+    student1 = Student(id=2, username=TEST_USERNAME_1, name=f"{TEST_FIRST_NAME_1} {TEST_LAST_NAME_1}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student1, FIRST_COURSE_NAME)
+
     db_api_with_initialized_first_course.store_score(
         FIRST_COURSE_NAME, TEST_USERNAME_1, "repo1", "task_0_0", update_func(1)
     )
+
+    student2 = Student(id=3, username=TEST_USERNAME_2, name=f"{TEST_FIRST_NAME_2} {TEST_LAST_NAME_2}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student2, FIRST_COURSE_NAME)
     db_api_with_initialized_first_course.store_score(
         FIRST_COURSE_NAME, TEST_USERNAME_1, "repo1", "task_1_3", update_func(expected_score_1)
     )
@@ -655,6 +674,10 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
+    student = Student(id=2, username=TEST_USERNAME, name=f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student, FIRST_COURSE_NAME)
+    db_api_with_initialized_first_course.create_user_if_not_exist(student, SECOND_COURSE_NAME)
+
     db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, TEST_USERNAME, "repo1", "task_0_0", update_func(30)
     )
@@ -704,6 +727,14 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_user_on_course = 4
     expected_grades = 5
     expected_stats_ratio = 0.5
+
+    student1 = Student(id=1, username=TEST_USERNAME_1, name=f"{TEST_FIRST_NAME_1} {TEST_LAST_NAME_1}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student1, FIRST_COURSE_NAME)
+    db_api_with_initialized_first_course.create_user_if_not_exist(student1, SECOND_COURSE_NAME)
+
+    student2 = Student(id=2, username=TEST_USERNAME_2, name=f"{TEST_FIRST_NAME_2} {TEST_LAST_NAME_2}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student2, FIRST_COURSE_NAME)
+    db_api_with_initialized_first_course.create_user_if_not_exist(student2, SECOND_COURSE_NAME)
 
     db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, TEST_USERNAME_1, "repo1", "task_0_0", update_func(1)
