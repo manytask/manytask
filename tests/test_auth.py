@@ -119,7 +119,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_course(_name):
             return mock_course
 
-        def get_stored_user(self, _student):
+        def get_stored_user(self, _username):
             return self.stored_user
 
         def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:

@@ -110,10 +110,10 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             )
             self.course_name = TEST_COURSE_NAME
 
-        def store_score(self, _course_name, student, repo_name, task_name, update_fn):
-            old_score = self.scores.get(f"{student.username}_{task_name}", 0)
+        def store_score(self, _course_name, username, repo_name, task_name, update_fn):
+            old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
-            self.scores[f"{student.username}_{task_name}"] = new_score
+            self.scores[f"{username}_{task_name}"] = new_score
             return new_score
 
         @staticmethod
@@ -128,11 +128,12 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             return {"test_user": self.get_scores(course_name, "test_user")}
 
         @staticmethod
-        def get_stored_user(_course_name, student):
+        def get_stored_user(_course_name, username):
             from manytask.abstract import StoredUser
 
-            first_name, last_name = student.name.split()
-            return StoredUser(username=student.username, first_name=first_name, last_name=last_name, course_admin=True)
+            return StoredUser(
+                username=username, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=True
+            )
 
         def update_cached_scores(self, _course_name):
             pass

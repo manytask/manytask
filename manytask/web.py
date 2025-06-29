@@ -78,9 +78,9 @@ def course_page(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     if app.debug:
-        student_username = "guest"
+        username = "guest"
         student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
+            username=username, course_students_group=course.gitlab_course_students_group
         )
 
         if request.args.get("admin", None) in ("true", "1", "yes", None):
@@ -88,15 +88,13 @@ def course_page(course_name: str) -> ResponseReturnValue:
         else:
             student_course_admin = False
     else:
-        student_username = session["gitlab"]["username"]
-        student_id = session["gitlab"]["user_id"]
+        username = session["gitlab"]["username"]
 
         student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
+            username=username, course_students_group=course.gitlab_course_students_group
         )
 
-        student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
+        stored_user = storage_api.get_stored_user(course.course_name, username)
 
         student_course_admin = stored_user.course_admin
 
@@ -114,7 +112,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
 
     # get scores
-    tasks_scores = storage_api.get_scores(course.course_name, student_username)
+    tasks_scores = storage_api.get_scores(course.course_name, username)
     tasks_stats = storage_api.get_stats(course.course_name)
 
     allscores_url = url_for("course.show_database", course_name=course_name)
@@ -122,7 +120,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
     return render_template(
         "tasks.html",
         task_base_url=app.rms_api.get_url_for_task_base(course.gitlab_course_public_repo, course.gitlab_default_branch),
-        username=student_username,
+        username=username,
         course_name=course.course_name,
         app=app,
         gitlab_url=app.rms_api.base_url,
@@ -134,7 +132,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         task_url_template=course.task_url_template,
         links=course.links,
         scores=tasks_scores,
-        bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
+        bonus_score=storage_api.get_bonus_score(course.course_name, username),
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=app.favicon,
@@ -262,9 +260,9 @@ def show_database(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     if app.debug:
-        student_username = "guest"
+        username = "guest"
         student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
+            username=username, course_students_group=course.gitlab_course_students_group
         )
 
         if request.args.get("admin", None) in ("true", "1", "yes", None):
@@ -272,20 +270,18 @@ def show_database(course_name: str) -> ResponseReturnValue:
         else:
             student_course_admin = False
     else:
-        student_username = session["gitlab"]["username"]
-        student_id = session["gitlab"]["user_id"]
+        username = session["gitlab"]["username"]
 
         student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
+            username=username, course_students_group=course.gitlab_course_students_group
         )
 
-        student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
+        stored_user = storage_api.get_stored_user(course.course_name, username)
 
         student_course_admin = stored_user.course_admin
 
-    scores = storage_api.get_scores(course.course_name, student_username)
-    bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
+    scores = storage_api.get_scores(course.course_name, username)
+    bonus_score = storage_api.get_bonus_score(course.course_name, username)
     table_data = get_database_table_data(app, course.course_name)
 
     return render_template(
@@ -294,7 +290,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         course_name=course.course_name,
         scores=scores,
         bonus_score=bonus_score,
-        username=student_username,
+        username=username,
         is_course_admin=student_course_admin,
         app=app,
         course_favicon=app.favicon,

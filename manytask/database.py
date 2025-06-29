@@ -120,19 +120,19 @@ class DataBaseApi(StorageApi):
     def get_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
     ) -> StoredUser:
         """Method for getting user's stored data
 
         :param course_name: course name
-        :param student: Student object
+        :param username: User name
 
         :return: created or received StoredUser object
         """
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course)
+            user_on_course = self._get_user_on_course(session, username, course)
             session.commit()
 
             return StoredUser(
@@ -228,7 +228,7 @@ class DataBaseApi(StorageApi):
     def store_score(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
@@ -236,7 +236,7 @@ class DataBaseApi(StorageApi):
         """Method for storing user's task score
 
         :param course_name: course name
-        :param student: Student object
+        :param username: Username
         :param repo_name: student's repo name
         :param task_name: task name
         :param update_fn: function for updating the score
@@ -250,7 +250,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
+                user_on_course = self._get_user_on_course(session, username, course, repo_name)
                 session.commit()
 
                 try:
@@ -269,7 +269,7 @@ class DataBaseApi(StorageApi):
 
             except Exception as e:
                 session.rollback()
-                logger.error(f"Failed to update score for {student.username} on {task_name}: {str(e)}")
+                logger.error(f"Failed to update score for {username} on {task_name}: {str(e)}")
                 raise
 
     def get_course(
@@ -751,6 +751,23 @@ class DataBaseApi(StorageApi):
                 raise
         except DuplicateTable:  # if tables are created concurrently
             pass
+
+    def _get_user_on_course(
+        self,
+        session: Session,
+        username: str,
+        course: models.Course,
+        repo_name: str | None = None,
+    ) -> models.UserOnCourse:
+        user = self._get(
+            session,
+            models.User,
+            username=username,
+        )
+
+        user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+
+        return user_on_course
 
     def _get_or_create_user_on_course(
         self,

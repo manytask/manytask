@@ -48,7 +48,7 @@ class StorageApi(ABC):
     def get_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
     ) -> StoredUser: ...
 
     @abstractmethod
@@ -76,7 +76,7 @@ class StorageApi(ABC):
     def store_score(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],

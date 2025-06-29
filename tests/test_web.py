@@ -149,7 +149,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_stored_user(self, _course_name, _student):
+        def get_stored_user(self, _course_name, _username):
             return self.stored_user
 
         @staticmethod
