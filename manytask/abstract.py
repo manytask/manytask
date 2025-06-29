@@ -89,6 +89,13 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
+    def edit_course(
+        self,
+        course_name: str,
+        settings_config: CourseConfig,
+    ) -> bool: ...
+
+    @abstractmethod
     def update_course(
         self,
         course_name: str,
