@@ -82,7 +82,7 @@ def mock_gitlab_api():
             )
 
         def get_authenticated_rms_user(self, gitlab_access_token: str, name=TEST_STUDENT_NAME):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
         @staticmethod
         def check_project_exists(project_name: str, project_group: str):
