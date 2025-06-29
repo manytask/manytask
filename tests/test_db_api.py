@@ -512,7 +512,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert stats["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_0_0")
 
-    assert all_scores == {TEST_FIRST_NAME: {"task_0_0": 1}}
+    assert all_scores == {TEST_USERNAME: {"task_0_0": 1}}
     assert bonus_score == 0
     assert scores == {"task_0_0": 1}
 
