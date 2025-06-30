@@ -530,13 +530,12 @@ def test_store_score(db_api_with_initialized_first_course, session):
 def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
     student = Student(0, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
-          
+
     db_api_with_initialized_first_course.create_user_if_not_exist(student, FIRST_COURSE_NAME)
 
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME, student, constants.TEST_REPO_NAME, "task_1_3", update_func(expected_score)
-
         )
         == expected_score
     )
@@ -574,9 +573,9 @@ def test_store_score_with_changed_task_name(
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
     student = Student(0, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
-  
+
     db_api.create_user_if_not_exist(student, FIRST_COURSE_NAME)
-  
+
     db_api.store_score(FIRST_COURSE_NAME, student, constants.TEST_REPO_NAME, "task_0_0", update_func(10))
 
     update_course(
@@ -760,7 +759,7 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
 
     student1 = Student(0, constants.TEST_USERNAME_1, f"{constants.TEST_FIRST_NAME_1} {constants.TEST_LAST_NAME_1}")
     student2 = Student(0, constants.TEST_USERNAME_2, f"{constants.TEST_FIRST_NAME_2} {constants.TEST_LAST_NAME_2}")
-      
+
     db_api_with_two_initialized_courses.create_user_if_not_exist(student1, FIRST_COURSE_NAME)
     db_api_with_two_initialized_courses.create_user_if_not_exist(student2, FIRST_COURSE_NAME)
 
