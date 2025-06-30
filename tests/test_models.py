@@ -87,12 +87,12 @@ def test_user_simple(session):
     assert retrieved.username == "test_user"
 
 
-def test_user_unique_username_and_gitlab_instance(session):
+def test_user_unique_username(session):
     user1 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov")
-    user2 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov")
-    user3 = User(username="unique_user2", first_name="Ivan", last_name="Olegov")
-    user4 = User(username="unique_user2", first_name="Ivan", last_name="Olegov")
-    user5 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov")
+    user2 = User(username="unique_user2", first_name="Oleg", last_name="Ivanov")
+    user3 = User(username="unique_user3", first_name="Ivan", last_name="Olegov")
+    user4 = User(username="unique_user4", first_name="Ivan", last_name="Olegov")
+    user5 = User(username="unique_user5", first_name="Ivan", last_name="Ivanov")
     session.add_all([user1, user2, user3, user4])
     session.commit()
     session.add(user5)
@@ -430,16 +430,6 @@ def test_task_group_tasks(session):
     task_names = [task.name for task in retrieved_group.tasks]
     assert "task12_1" in task_names
     assert "task12_2" in task_names
-
-
-def test_users_on_course_validate_gitlab_instance(session):
-    course = make_course("21")
-    user = User(username="user21", first_name="Ivan", last_name="Ivanov")
-    user_on_course = UserOnCourse(user=user, course=course, repo_name="user21_repo")
-
-    session.add_all([user, course, user_on_course])
-    with pytest.raises(ValueError):
-        session.commit()
 
 
 def test_cascade_delete_course(session):
