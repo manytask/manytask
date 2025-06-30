@@ -11,11 +11,10 @@ from dotenv import load_dotenv
 from flask import Flask, json
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import StoredUser
-from manytask.api import _get_student, _parse_flags, _process_score, _update_score
+from manytask.abstract import RmsUser, StoredUser
+from manytask.api import _get_rms_user, _parse_flags, _process_score, _update_score
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
-from manytask.glab import Student
 from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
@@ -90,14 +89,14 @@ def mock_group(mock_task):
 
 
 @pytest.fixture
-def mock_student():
-    class MockStudent:
-        def __init__(self, student_id, username, name):
-            self.id = student_id
+def mock_rms_user():
+    class MockRmsUser:
+        def __init__(self, user_id, username, name):
+            self.id = user_id
             self.username = username
             self.name = name
 
-    return MockStudent
+    return MockRmsUser
 
 
 @pytest.fixture
@@ -168,31 +167,31 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
 
 @pytest.fixture
-def mock_gitlab_api(mock_student):
+def mock_gitlab_api(mock_rms_user):
     class MockGitlabApi:
         def __init__(self):
             self.course_admin = False
-            self._student_class = mock_student
+            self._rms_user_class = mock_rms_user
 
-        def get_student(self, user_id: int):
+        def get_rms_user_by_id(self, user_id: int):
             if user_id == TEST_USER_ID:
-                return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise Exception("Student not found")
+                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
+            raise Exception("User not found")
 
-        def get_student_by_username(self, username):
+        def get_rms_user_by_username(self, username):
             if username == TEST_USERNAME:
-                return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise Exception("Student not found")
+                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
+            raise Exception("User not found")
 
-        def get_authenticated_student(self, access_token):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        def get_authenticated_rms_user(self, access_token):
+            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
         @staticmethod
         def get_url_for_repo(username, course_students_group):
             return f"https://gitlab.com/{username}/test-repo"
 
         @staticmethod
-        def check_project_exists(_student, course_students_group):
+        def check_project_exists(_project_name, _project_group):
             return True
 
     return MockGitlabApi()
@@ -222,13 +221,13 @@ def authenticated_client(app, mock_gitlab_oauth):
     """
     with (
         app.test_client() as client,
-        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
+        patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
     ):
         app.oauth = mock_gitlab_oauth
 
-        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -651,51 +650,51 @@ def test_process_score_invalid_format():
 
 def test_get_student_by_username():
     """Test getting student by username"""
-    mock_gitlab = MagicMock()
-    test_student = Student(id=1, username="test_user", name="Test User")
-    mock_gitlab.get_student_by_username.return_value = test_student
+    mock_rms_api = MagicMock()
+    test_rms_user = RmsUser(id=1, username="test_user", name="Test User")
+    mock_rms_api.get_rms_user_by_username.return_value = test_rms_user
 
-    result = _get_student(mock_gitlab, None, "test_user")
-    assert result == test_student
-    mock_gitlab.get_student_by_username.assert_called_once_with("test_user")
+    result = _get_rms_user(mock_rms_api, None, "test_user")
+    assert result == test_rms_user
+    mock_rms_api.get_rms_user_by_username.assert_called_once_with("test_user")
 
 
 def test_get_student_by_id():
     """Test getting student by user_id"""
-    mock_gitlab = MagicMock()
-    test_student = Student(id=1, username="test_user", name="Test User")
-    mock_gitlab.get_student.return_value = test_student
+    mock_rms_api = MagicMock()
+    test_rms_user = RmsUser(id=1, username="test_user", name="Test User")
+    mock_rms_api.get_rms_user_by_id.return_value = test_rms_user
 
-    result = _get_student(mock_gitlab, 1, None)
-    assert result == test_student
-    mock_gitlab.get_student.assert_called_once_with(1)
+    result = _get_rms_user(mock_rms_api, 1, None)
+    assert result == test_rms_user
+    mock_rms_api.get_rms_user_by_id.assert_called_once_with(1)
 
 
 def test_get_student_no_id_or_username():
     """Test when neither user_id nor username is provided"""
-    mock_gitlab = MagicMock()
+    mock_rms_api = MagicMock()
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, None, None)
+        _get_rms_user(mock_rms_api, None, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
 def test_get_student_username_not_found():
     """Test when username is not found"""
-    mock_gitlab = MagicMock()
-    mock_gitlab.get_student_by_username.side_effect = Exception("Student not found")
+    mock_rms_api = MagicMock()
+    mock_rms_api.get_rms_user_by_username.side_effect = Exception("User not found")
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, None, "nonexistent")
+        _get_rms_user(mock_rms_api, None, "nonexistent")
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
 def test_get_student_id_not_found():
     """Test when user_id is not found"""
-    mock_gitlab = MagicMock()
-    mock_gitlab.get_student.side_effect = Exception("Student not found")
+    mock_rms_api = MagicMock()
+    mock_rms_api.get_rms_user_by_id.side_effect = Exception("User not found")
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_student(mock_gitlab, 999, None)
+        _get_rms_user(mock_rms_api, 999, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 

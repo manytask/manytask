@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from manytask.models import Course, Task, TaskGroup
 from manytask.config import ManytaskDeadlinesConfig
-from manytask.glab import Student
+from manytask.abstract import Student
 
 
 # ruff: noqa
@@ -189,6 +189,7 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     assert db_api_with_two_initialized_courses.get_user_courses_names(username1) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(username2) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(username3) == []
+
     assert sorted(db_api_with_two_initialized_courses.get_all_courses_names()) == sorted(
         [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
     )
