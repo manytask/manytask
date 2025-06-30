@@ -91,7 +91,7 @@ def test_user_unique_username(session):
     user1 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov")
     user2 = User(username="unique_user2", first_name="Oleg", last_name="Ivanov")
     user3 = User(username="unique_user3", first_name="Ivan", last_name="Olegov")
-    user4 = User(username="unique_user1", first_name="Ivan", last_name="Olegov")
+    user4 = User(username="unique_user4", first_name="Ivan", last_name="Olegov")
     user5 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov")
     session.add_all([user1, user2, user3, user4])
     session.commit()
