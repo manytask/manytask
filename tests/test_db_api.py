@@ -20,20 +20,6 @@ from manytask.glab import Student
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests import constants
 
-TEST_USERNAME = "username"
-TEST_FIRST_NAME = "First"
-TEST_LAST_NAME = "Last"
-TEST_REPO_NAME = "repo1"
-
-TEST_USERNAME_1 = "user1"
-TEST_FIRST_NAME_1 = "First"
-TEST_LAST_NAME_1 = "Last1"
-TEST_REPO_NAME_1 = "repo1"
-TEST_USERNAME_2 = "user2"
-TEST_FIRST_NAME_2 = "First2"
-TEST_LAST_NAME_2 = "Last2"
-TEST_REPO_NAME_2 = "repo2"
-
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",
     "tests/.deadlines.test2.yml",
