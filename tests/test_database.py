@@ -182,6 +182,10 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     student2 = Student(id=1, username="username2", name="Ivan Orlov")
     student3 = Student(id=2, username="username3", name="Ivan Olegov")
 
+    db_api_with_two_initialized_courses.create_user_if_not_exist(student1, FIRST_COURSE_NAME)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(student2, SECOND_COURSE_NAME)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(student3, FIRST_COURSE_NAME)
+
     assert db_api_with_two_initialized_courses.get_user_courses_names(student1) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(student2) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(student3) == []

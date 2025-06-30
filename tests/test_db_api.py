@@ -536,7 +536,6 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
 
     stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
     all_scores = db_api_with_initialized_first_course.get_all_scores(FIRST_COURSE_NAME)
-
     bonus_score = db_api_with_initialized_first_course.get_bonus_score(FIRST_COURSE_NAME, constants.TEST_USERNAME)
     scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, constants.TEST_USERNAME)
 
