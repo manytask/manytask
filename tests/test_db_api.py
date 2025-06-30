@@ -526,6 +526,8 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
     student = Student(0, TEST_USERNAME, f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
 
+    db_api_with_initialized_first_course.create_user_if_not_exist(student, FIRST_COURSE_NAME)
+
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME, student, TEST_REPO_NAME, "task_1_3", update_func(expected_score)
@@ -565,6 +567,9 @@ def test_store_score_with_changed_task_name(
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
     student = Student(0, TEST_USERNAME, f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
+
+    db_api.create_user_if_not_exist(student, FIRST_COURSE_NAME)
+
     db_api.store_score(FIRST_COURSE_NAME, student, TEST_REPO_NAME, "task_0_0", update_func(10))
 
     update_course(
@@ -588,6 +593,11 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     student = Student(0, TEST_USERNAME, f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")  # default student(not admin in gitlab)
 
     assert session.query(User).count() == 0
+    assert session.query(UserOnCourse).count() == 0
+
+    db_api_with_initialized_first_course.create_user_if_not_exist(student, FIRST_COURSE_NAME)
+
+    assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
 
     stored_user = db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, student)
@@ -630,12 +640,14 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_stats_ratio = 0.5
 
     student1 = Student(0, TEST_USERNAME_1, f"{TEST_FIRST_NAME_1} {TEST_LAST_NAME_1}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student1, FIRST_COURSE_NAME)
     db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, student1, "repo1", "task_0_0", update_func(1))
     db_api_with_initialized_first_course.store_score(
         FIRST_COURSE_NAME, student1, "repo1", "task_1_3", update_func(expected_score_1)
     )
 
     student2 = Student(0, TEST_USERNAME_2, f"{TEST_FIRST_NAME_2} {TEST_LAST_NAME_2}")
+    db_api_with_initialized_first_course.create_user_if_not_exist(student2, FIRST_COURSE_NAME)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -672,6 +684,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
     student = Student(0, TEST_USERNAME, f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
+    db_api_with_two_initialized_courses.create_user_if_not_exist(student, FIRST_COURSE_NAME)
     db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, student, TEST_REPO_NAME, "task_0_0", update_func(30)
     )
@@ -724,6 +737,8 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
 
     student1 = Student(0, TEST_USERNAME_1, f"{TEST_FIRST_NAME_1} {TEST_LAST_NAME_1}")
     student2 = Student(0, TEST_USERNAME_2, f"{TEST_FIRST_NAME_2} {TEST_LAST_NAME_2}")
+    db_api_with_two_initialized_courses.create_user_if_not_exist(student1, FIRST_COURSE_NAME)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(student2, FIRST_COURSE_NAME)
 
     db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, student1, TEST_REPO_NAME_1, "task_0_0", update_func(1)
@@ -893,6 +908,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
     student = Student(0, TEST_USERNAME, f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
+    db_api_with_two_initialized_courses.create_user_if_not_exist(student, FIRST_COURSE_NAME)
 
     def failing_update(_, score):
         raise ValueError("Update failed")
