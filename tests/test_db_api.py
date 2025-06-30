@@ -464,8 +464,6 @@ def test_resync_with_changed_task_name(
 def test_store_score(db_api_with_initialized_first_course, session):
     student = Student(0, TEST_USERNAME, f"{TEST_FIRST_NAME} {TEST_LAST_NAME}")
 
-    db_api_with_initialized_first_course.create_user_if_not_exist(student, FIRST_COURSE_NAME)
-
     assert session.query(User).count() == 0
     assert session.query(UserOnCourse).count() == 0
 
