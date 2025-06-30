@@ -510,7 +510,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
 def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
-    student = Student(0, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(0, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -550,7 +550,7 @@ def test_store_score_with_changed_task_name(
 ):
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
-    student = Student(0, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(0, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
     db_api.store_score(FIRST_COURSE_NAME, student, constants.TEST_REPO_NAME, "task_0_0", update_func(10))
 
     update_course(
@@ -572,7 +572,7 @@ def test_store_score_with_changed_task_name(
 
 def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session):
     student = Student(
-        0, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}"
+        0, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME)
     )  # default student(not admin in gitlab)
 
     assert session.query(User).count() == 0
@@ -626,13 +626,13 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_grades = 3
     expected_stats_ratio = 0.5
 
-    student1 = Student(0, constants.TEST_USERNAME_1, f"{constants.TEST_FIRST_NAME_1} {constants.TEST_LAST_NAME_1}")
+    student1 = Student(0, constants.TEST_USERNAME_1, _make_full_name(constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1))
     db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, student1, "repo1", "task_0_0", update_func(1))
     db_api_with_initialized_first_course.store_score(
         FIRST_COURSE_NAME, student1, "repo1", "task_1_3", update_func(expected_score_1)
     )
 
-    student2 = Student(0, constants.TEST_USERNAME_2, f"{constants.TEST_FIRST_NAME_2} {constants.TEST_LAST_NAME_2}")
+    student2 = Student(0, constants.TEST_USERNAME_2, _make_full_name(constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2))
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -672,7 +672,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
-    student = Student(0, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(0, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
     db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, student, constants.TEST_REPO_NAME, "task_0_0", update_func(30)
     )
@@ -723,8 +723,8 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_grades = 5
     expected_stats_ratio = 0.5
 
-    student1 = Student(0, constants.TEST_USERNAME_1, f"{constants.TEST_FIRST_NAME_1} {constants.TEST_LAST_NAME_1}")
-    student2 = Student(0, constants.TEST_USERNAME_2, f"{constants.TEST_FIRST_NAME_2} {constants.TEST_LAST_NAME_2}")
+    student1 = Student(0, constants.TEST_USERNAME_1, _make_full_name(constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1))
+    student2 = Student(0, constants.TEST_USERNAME_2, _make_full_name(constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2))
 
     db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, student1, constants.TEST_REPO_NAME_1, "task_0_0", update_func(1)
@@ -879,7 +879,7 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container, first_
 
 
 def test_store_score_integrity_error(db_api_with_two_initialized_courses, session):
-    student = Student(0, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(0, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
 
     user = User(
         username=student.username,
@@ -901,7 +901,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
 
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
-    student = Student(0, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(0, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
 
     def failing_update(_, score):
         raise ValueError("Update failed")
@@ -958,7 +958,7 @@ def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgr
 
 
 def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_courses, session):
-    student = Student(1, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(1, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
     user = User(
         id=1,
         username=constants.TEST_USERNAME,
@@ -981,7 +981,7 @@ def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_cour
 
 
 def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_courses, session):
-    student = Student(1, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(1, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
 
     user = User(
         id=1,
@@ -1005,7 +1005,7 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
 
 
 def test_check_user_on_course(db_api_with_two_initialized_courses, session):
-    student = Student(1, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(1, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
 
     user = User(
         id=1,
@@ -1026,7 +1026,7 @@ def test_check_user_on_course(db_api_with_two_initialized_courses, session):
 
 
 def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, session):
-    student = Student(2, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(2, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
     user = User(
         id=1,
         username=constants.TEST_USERNAME,
@@ -1043,7 +1043,7 @@ def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, 
 
 
 def test_create_user_if_not_exist_nonexisting(db_api_with_two_initialized_courses, session):
-    student = Student(1, constants.TEST_USERNAME, f"{constants.TEST_FIRST_NAME} {constants.TEST_LAST_NAME}")
+    student = Student(1, constants.TEST_USERNAME, _make_full_name(constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME))
 
     assert session.query(User).filter_by(username=constants.TEST_USERNAME).one_or_none() is None
     db_api_with_two_initialized_courses.create_user_if_not_exist(student, FIRST_COURSE_NAME)
