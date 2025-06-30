@@ -42,7 +42,6 @@ class DatabaseConfig:
     """Configuration for Database connection and settings."""
 
     database_url: str
-    gitlab_instance_host: str
     apply_migrations: bool = False
 
 
@@ -60,7 +59,6 @@ class DataBaseApi(StorageApi):
         :param config: DatabaseConfig instance containing all necessary settings
         """
         self.database_url = config.database_url
-        self.gitlab_instance_host = config.gitlab_instance_host
         self.apply_migrations = config.apply_migrations
 
         self.engine = create_engine(self.database_url, echo=False)
@@ -321,7 +319,6 @@ class DataBaseApi(StorageApi):
                     session,
                     models.Course,
                     name=settings_config.course_name,
-                    gitlab_instance_host=self.gitlab_instance_host,
                     registration_secret=settings_config.registration_secret,
                     token=settings_config.token,
                     show_allscores=settings_config.show_allscores,
@@ -513,9 +510,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
+            user = self._get(session, models.User, username=student.username)
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
             if course_admin != user_on_course.is_course_admin and course_admin:
                 user_on_course = self._update(
@@ -533,20 +528,17 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
+            user = self._get(session, models.User, username=student.username)
             try:
                 self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
                 return True
             except Exception:
                 return False
 
-    def create_user_if_not_exist(self, student: Student, course_name: str) -> None:
+    def create_user_if_not_exist(self, student: Student) -> None:
         """Create user in DB if not exist"""
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
             first_name, last_name = student.name.split()  # TODO: come up with how to separate names
             user = self._get_or_create(
                 session,
@@ -554,7 +546,6 @@ class DataBaseApi(StorageApi):
                 username=student.username,
                 first_name=first_name,
                 last_name=last_name,
-                gitlab_instance_host=course.gitlab_instance_host,
             )
             session.commit()
             session.refresh(user)
@@ -766,7 +757,6 @@ class DataBaseApi(StorageApi):
             username=student.username,
             first_name=first_name,
             last_name=last_name,
-            gitlab_instance_host=course.gitlab_instance_host,
         )
 
         defaults = {}
@@ -792,7 +782,7 @@ class DataBaseApi(StorageApi):
     ) -> Optional[Iterable["models.Grade"]]:
         try:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
+            user = self._get(session, models.User, username=username)
 
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
         except NoResultFound:

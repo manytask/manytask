@@ -215,7 +215,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    app.storage_api.create_user_if_not_exist(student, course.course_name)
+    app.storage_api.create_user_if_not_exist(student)
 
     app.storage_api.sync_stored_user(
         course.course_name,

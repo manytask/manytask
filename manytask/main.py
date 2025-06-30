@@ -124,7 +124,6 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
-            gitlab_instance_host=app.app_config.gitlab_url,
             apply_migrations=apply_migrations,
         )
     )
