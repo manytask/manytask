@@ -80,6 +80,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     from . import api, web
 
     app.register_blueprint(api.bp)
+    csrf.exempt(api.bp)
     app.register_blueprint(web.root_bp)
     app.register_blueprint(web.course_bp)
     app.register_blueprint(web.admin_bp)
