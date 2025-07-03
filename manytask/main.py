@@ -9,11 +9,14 @@ import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from flask import Flask
+from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import abstract, config, course, database, glab, local_config
 
 load_dotenv("../.env")  # take environment variables from .env.
+
+csrf = CSRFProtect()
 
 
 class CustomFlask(Flask):
@@ -38,6 +41,7 @@ class CustomFlask(Flask):
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app = CustomFlask(__name__)
+    csrf.init_app(app)
 
     if debug:
         app.debug = debug
