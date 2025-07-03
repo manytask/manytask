@@ -47,7 +47,7 @@
             <a href="/" class="d-flex align-items-center text-decoration-none navbar-brand me-0">
                 <img class="d-none d-sm-block" src="{{ url_for('static', filename=course_favicon) }}" alt="favicon" width="32" height="32">
                 &nbsp;
-                <span class="fs-4 mb-0 ms-1 h1">Manytask</span>
+                <span class="fs-4 mb-0 ms-1 h1">Manytask | {{ course_name }}</span>
 {#                <span class="fs-4 mb-0 ms-1 h1">Manytask: {{ course_name }}</span>#}
                 {#                <button class="fs-4 mb-0 ms-1">python</button>#}
             </a>
@@ -65,7 +65,7 @@
                     </li>
                     {% if show_allscores %}
                     <li class="nav-item">
-                        <a class="nav-link px-3 {% if active_page == 'database' %}active{% endif %}" 
+                        <a class="nav-link px-3 {% if active_page == 'database' %}active{% endif %}"
                            aria-current="{% if active_page == 'database' %}page{% endif %}"
                            href="{{ url_for('course.show_database', course_name=course_name) }}">
                             All&nbsp;Scores
@@ -79,6 +79,17 @@
                             {% for link_name, link_url in links.items() %}
                                 <li>
                                     <a class="dropdown-item" target="_blank" href="{{ link_url }}">{{ link_name }}</a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_courses" data-bs-toggle="dropdown" aria-expanded="false">Select course</a>
+                        <ul class="dropdown-menu" aria-labelledby="navbar_courses">
+                            {% set courses = courses | default([]) %}
+                            {% for course in courses %}
+                                <li>
+                                    <a class="dropdown-item" href="{{ course.url }}">{{ course.name }}</a>
                                 </li>
                             {% endfor %}
                         </ul>
