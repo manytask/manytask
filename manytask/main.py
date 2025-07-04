@@ -16,10 +16,8 @@ from . import abstract, config, course, database, glab, local_config
 
 load_dotenv("../.env")  # take environment variables from .env.
 
-csrf = CSRFProtect()
-
-
 class CustomFlask(Flask):
+    csrf: CSRFProtect
     oauth: OAuth
     app_config: local_config.LocalConfig  # TODO: check if we need it
     gitlab_api: glab.GitLabApi
@@ -41,7 +39,6 @@ class CustomFlask(Flask):
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app = CustomFlask(__name__)
-    csrf.init_app(app)
 
     if debug:
         app.debug = debug
@@ -61,6 +58,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     app.gitlab_api = gitlab_api
     app.rms_api = gitlab_api
+    app.csrf = CSRFProtect(app)
 
     # read VERSION file to get a version
     app.manytask_version = ""
@@ -80,7 +78,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     from . import api, web
 
     app.register_blueprint(api.bp)
-    csrf.exempt(api.bp)
+    app.csrf.exempt(api.bp)
     app.register_blueprint(web.root_bp)
     app.register_blueprint(web.course_bp)
     app.register_blueprint(web.admin_bp)
