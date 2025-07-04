@@ -16,6 +16,7 @@ from . import abstract, config, course, database, glab, local_config
 
 load_dotenv("../.env")  # take environment variables from .env.
 
+
 class CustomFlask(Flask):
     csrf: CSRFProtect
     oauth: OAuth
