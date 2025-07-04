@@ -46,6 +46,9 @@
             К сожалению, курсов пока нет.
         {% endfor %}
     </ul>
+    <a href="{{ url_for('root.enroll') }}" class="btn btn-success p-3 mt-3">
+        <span class="fs-4">Добавить курс</span>
+    </a>
 </div>
 
 {% endblock %}

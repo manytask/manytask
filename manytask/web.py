@@ -8,7 +8,7 @@ from flask import Blueprint, current_app, redirect, render_template, request, se
 from flask.typing import ResponseReturnValue
 
 from . import glab
-from .auth import requires_admin, requires_auth, requires_course_access, requires_ready
+from .auth import requires_admin, requires_auth, requires_course_access, requires_ready, handle_oauth_callback, get_authenticate_student
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
@@ -58,16 +58,108 @@ def index() -> ResponseReturnValue:
     )
 
 
-@root_bp.route("/login", methods=["GET", "POST"])
-@requires_auth
-def login() -> ResponseReturnValue:
-    return redirect(url_for("root.index"))
-
-
 @root_bp.route("/logout")
 def logout() -> ResponseReturnValue:
     session.pop("gitlab", None)
     return redirect(url_for("root.index"))
+
+
+@root_bp.route("/login", methods=["GET", "POST"])
+def login() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    oauth: OAuth = current_app.oauth
+    
+    redirect_uri = url_for("root.login_finish", _external=True)
+    return oauth.gitlab.authorize_redirect(redirect_uri, state=url_for("root.index"))
+
+
+@root_bp.route("/signup", methods=["GET", "POST"])
+def signup() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+
+    if request.method == "GET":
+        return render_template(
+            "signup.html",
+            manytask_version=app.manytask_version,
+        )
+
+    user = glab.User(
+        username=request.form["username"].strip(),
+        firstname=request.form["firstname"].strip(),
+        lastname=request.form["lastname"].strip(),
+        email=request.form["email"].strip(),
+        password=request.form["password"],
+    )
+
+    try:
+        if not secrets.compare_digest(request.form["password"], request.form["password2"]):
+            raise Exception("Passwords don't match")
+
+        app.gitlab_api.register_new_user(user)
+
+    except Exception as e:
+        logger.warning(f"User registration failed: {e}")
+        return render_template(
+            "signup.html",
+            error_message=str(e),
+            base_url=app.rms_api.base_url,
+        )
+
+    return redirect(url_for("root.login"))
+
+
+@root_bp.route("/login_finish")
+def login_finish() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    oauth: OAuth = current_app.oauth
+    
+    return handle_oauth_callback(oauth, app)
+
+
+@root_bp.route("/enroll", methods=["GET", "POST"])
+@requires_auth
+def enroll() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+
+    if request.method == "GET":
+        return render_template("enroll.html", course_name=request.args.get("course_name", None))
+    
+    course = app.storage_api.get_course(request.form["course_handle"])
+    error = None
+    
+    if course is None:
+        error = "Course not found"
+    elif not course.is_ready:
+        error = "Course not ready"
+    elif not secrets.compare_digest(request.form["secret"], course.registration_secret):
+        error = "Invalid secret"
+
+    if error is not None:
+        return render_template(
+            "enroll.html",
+            course_name=course.course_name if course is not None else None,
+            error_message=error,
+        )
+
+    gitlab_access_token: str = session["gitlab"]["access_token"]
+    student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
+    app.storage_api.create_user_if_not_exist(student, course.course_name)
+
+    app.storage_api.sync_stored_user(
+        course.course_name,
+        student,
+        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+        app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
+    )
+
+    # Create use if needed
+    try:
+        app.rms_api.create_project(student, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+    except gitlab.GitlabError as ex:
+        logger.error(f"Project creation failed: {ex.error_message}")
+        return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
+
+    return redirect(url_for("course.course_page", course_name=course.course_name))
 
 
 @course_bp.route("/", methods=["GET", "POST"])
@@ -142,99 +234,6 @@ def course_page(course_name: str) -> ResponseReturnValue:
         is_course_admin=student_course_admin,
         cache_time=cache_delta,
     )
-
-
-@course_bp.route("/signup", methods=["GET", "POST"])
-@requires_ready
-def signup(course_name: str) -> ResponseReturnValue:
-    app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(course_name)  # type: ignore
-
-    # ---- render page ---- #
-    if request.method == "GET":
-        return render_template(
-            "signup.html",
-            course_name=course.course_name,
-            course_favicon=app.favicon,
-            manytask_version=app.manytask_version,
-        )
-
-    # ----  register a new user ---- #
-
-    user = glab.User(
-        username=request.form["username"].strip(),
-        firstname=request.form["firstname"].strip(),
-        lastname=request.form["lastname"].strip(),
-        email=request.form["email"].strip(),
-        password=request.form["password"],
-    )
-
-    try:
-        if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-            raise Exception("Invalid registration secret")
-        if not secrets.compare_digest(request.form["password"], request.form["password2"]):
-            raise Exception("Passwords don't match")
-
-        # register user in gitlab
-        app.gitlab_api.register_new_user(user)
-
-    # render template with error... if error
-    except Exception as e:
-        logger.warning(f"User registration failed: {e}")
-        return render_template(
-            "signup.html",
-            error_message=str(e),
-            course_name=course.course_name,
-            course_favicon=app.favicon,
-            base_url=app.rms_api.base_url,
-        )
-
-    return redirect(url_for("course.create_project", course_name=course.course_name))
-
-
-@course_bp.route("/create_project", methods=["GET", "POST"])
-@requires_ready
-@requires_auth
-def create_project(course_name: str) -> ResponseReturnValue:
-    app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(course_name)  # type: ignore
-
-    if request.method == "GET":
-        return render_template(
-            "create_project.html",
-            course_name=course.course_name,
-            course_favicon=app.favicon,
-            base_url=app.rms_api.base_url,
-        )
-
-    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        return render_template(
-            "create_project.html",
-            error_message="Invalid secret",
-            course_name=course.course_name,
-            course_favicon=app.favicon,
-            base_url=app.rms_api.base_url,
-        )
-
-    gitlab_access_token: str = session["gitlab"]["access_token"]
-    student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    app.storage_api.create_user_if_not_exist(student, course.course_name)
-
-    app.storage_api.sync_stored_user(
-        course.course_name,
-        student,
-        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-        app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
-    )
-
-    # Create use if needed
-    try:
-        app.rms_api.create_project(student, course.gitlab_course_students_group, course.gitlab_course_public_repo)
-    except gitlab.GitlabError as ex:
-        logger.error(f"Project creation failed: {ex.error_message}")
-        return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
-
-    return redirect(url_for("course.course_page", course_name=course_name))
 
 
 @course_bp.route("/not_ready")

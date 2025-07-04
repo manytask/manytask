@@ -5,18 +5,24 @@
 
 
     <div class="d-flex align-items-center justify-content-center bg-body-tertiary container-fluid p-3">
-        <div class="d-flex flex-column align-items-center justify-content-center form-signin px-4 py-4 rounded m-auto container-sm" style="background-color: var(--bs-body-bg); max-width: 400px;">
+        <div class="d-flex flex-column align-items-center justify-content-center form-signin px-4 py-4 rounded m-auto container-sm" style="background-color: var(--bs-body-bg); max-width: 500px;">
             <form method="post">
+                <h2>Enroll for a course</h2>
                 {% if error_message %}
                     <div class="alert alert-danger" role="alert">
                         {{ error_message }}
                     </div>
-                {% endif %}
+                {% endif %} 
+                <div class="form-floating mt-3 mb-2">
+                    <input type="text" name="course_handle" class="form-control" id="floatingCode" placeholder="Code" value="{% if course_name %}{{ course_name }}{% endif %}" required>
+                    <label for="floatingCode">Course Handle</label>
+                </div>
                 <div class="form-floating my-2">
                     <input type="text" name="secret" class="form-control" id="floatingCode" placeholder="Code" required>
                     <label for="floatingCode">Secret Code</label>
                 </div>
                 <button class="btn btn-primary w-100 py-2 mt-2" type="submit" value="CreateRepo">Join course</button>
+                <a href="{{ url_for('root.index') }}" class="btn btn-danger w-100 py-2 mt-2">Back to main page</a>
             </form>
         </div>
     </div>
