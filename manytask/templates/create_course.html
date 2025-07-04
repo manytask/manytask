@@ -18,7 +18,8 @@
                 <h4>Basic Course Information</h4>
                 <div class="mb-3">
                     <label for="unique_course_name" class="form-label">Unique Course Name</label>
-                    <input type="text" class="form-control" id="unique_course_name" name="unique_course_name" required>
+                    <input type="text" class="form-control" id="unique_course_name" name="unique_course_name"
+                           pattern="[a-zA-Z0-9\-]+" required>
                     <div class="form-text">Used to separate data when multiple courses share a database</div>
                 </div>
                 <div class="mb-3">
