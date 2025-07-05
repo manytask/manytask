@@ -52,6 +52,13 @@ class StorageApi(ABC):
     ) -> StoredUser: ...
 
     @abstractmethod
+    def check_if_course_admin(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool: ...
+
+    @abstractmethod
     def sync_stored_user(
         self,
         course_name: str,

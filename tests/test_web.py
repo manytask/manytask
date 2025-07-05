@@ -164,6 +164,9 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_stored_user(self, _course_name, _username):
             return self.stored_user
 
+        def check_if_course_admin(self, _course_name, _username):
+            return self.stored_user.course_admin
+
         @staticmethod
         def update_cached_scores(_course_name):
             pass

@@ -141,6 +141,26 @@ class DataBaseApi(StorageApi):
                 course_admin=user_on_course.is_course_admin,
             )
 
+    def check_if_course_admin(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool:
+        """Method for getting user's stored data
+
+        :param course_name: course name
+        :param username: user name
+
+        :return: created or received StoredUser object
+        """
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            user_on_course = self._get_or_create_user_on_course(session, username, course)
+            session.commit()
+
+            return user_on_course.is_course_admin
+
     def sync_stored_user(
         self,
         course_name: str,

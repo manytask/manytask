@@ -98,9 +98,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student.username)
-
-        student_course_admin = stored_user.course_admin
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
 
     # update cache if more than 1h passed or in debug mode
     try:
@@ -289,9 +287,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student.username)
-
-        student_course_admin = stored_user.course_admin
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
