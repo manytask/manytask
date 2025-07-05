@@ -966,6 +966,8 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container, first_
 def test_store_score_integrity_error(db_api_with_two_initialized_courses, session):
     user = User(
         username=constants.TEST_USERNAME,
+        first_name=constants.TEST_FIRST_NAME,
+        last_name=constants.TEST_LAST_NAME,
         gitlab_instance_host="gitlab.test.com",
     )
     session.add(user)
