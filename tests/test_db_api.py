@@ -629,6 +629,8 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
 
     assert stored_user == StoredUser(
         username=constants.TEST_USERNAME,
+        first_name=constants.TEST_FIRST_NAME,
+        last_name=constants.TEST_LAST_NAME,
         course_admin=True,
     )
 
@@ -642,6 +644,8 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
 
     assert stored_user == StoredUser(
         username=constants.TEST_USERNAME,
+        first_name=constants.TEST_FIRST_NAME,
+        last_name=constants.TEST_LAST_NAME,
         course_admin=True,
     )
 

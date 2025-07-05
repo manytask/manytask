@@ -10,6 +10,8 @@ from .course import Course, CourseConfig
 @dataclass
 class StoredUser:
     username: str
+    first_name: str
+    last_name: str
     course_admin: bool = False
     # we can add more fields that we store
 
