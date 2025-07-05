@@ -136,6 +136,8 @@ class DataBaseApi(StorageApi):
 
             return StoredUser(
                 username=user_on_course.user.username,
+                first_name=user_on_course.user.first_name,
+                last_name=user_on_course.user.last_name,
                 course_admin=user_on_course.is_course_admin,
             )
 
@@ -163,6 +165,8 @@ class DataBaseApi(StorageApi):
 
             return StoredUser(
                 username=user_on_course.user.username,
+                first_name=user_on_course.user.first_name,
+                last_name=user_on_course.user.last_name,
                 course_admin=user_on_course.is_course_admin,
             )
 
