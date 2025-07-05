@@ -17,6 +17,8 @@ from manytask.glab import Student
 from manytask.web import course_bp, root_bp
 
 TEST_USERNAME = "test_user"
+TEST_FIRST_NAME = "First"
+TEST_LAST_NAME = "Last"
 TEST_STUDENT_NAME = "First Last"
 TEST_STUDENT_REPO = "students/test_user"
 TEST_SECRET = "test_secret"
@@ -103,7 +105,9 @@ def mock_gitlab_api():
 def mock_storage_api(mock_course):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
-            self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
+            self.stored_user = StoredUser(
+                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
+            )
             self.course_name = TEST_COURSE_NAME
 
         @staticmethod
