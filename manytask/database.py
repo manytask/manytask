@@ -120,8 +120,6 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         username: str,
-        first_name: str,
-        last_name: str,
     ) -> StoredUser:
         """Method for getting user's stored data
 
@@ -133,7 +131,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, username, first_name, last_name, course)
+            user_on_course = self._get_or_create_user_on_course(session, username, course)
             session.commit()
 
             return StoredUser(
@@ -147,8 +145,6 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         username: str,
-        first_name: str,
-        last_name: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser:
@@ -162,10 +158,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(
-                session, username, first_name, last_name, course, repo_name
-            )
-
+            user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
@@ -234,8 +227,6 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         username: str,
-        first_name: str,
-        last_name: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
@@ -257,9 +248,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(
-                    session, username, first_name, last_name, course, repo_name
-                )
+                user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
                 session.commit()
 
                 try:
@@ -760,17 +749,13 @@ class DataBaseApi(StorageApi):
         self,
         session: Session,
         username: str,
-        first_name: str,
-        last_name: str,
         course: models.Course,
         repo_name: str | None = None,
     ) -> models.UserOnCourse:
-        user = self._get_or_create(
+        user = self._get(
             session,
             models.User,
             username=username,
-            first_name=first_name,
-            last_name=last_name,
             gitlab_instance_host=course.gitlab_instance_host,
         )
 

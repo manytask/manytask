@@ -110,7 +110,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             )
             self.course_name = TEST_COURSE_NAME
 
-        def store_score(self, _course_name, username, first_name, last_name, repo_name, task_name, update_fn):
+        def store_score(self, _course_name, username, repo_name, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
             self.scores[f"{username}_{task_name}"] = new_score
@@ -127,11 +127,15 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_all_scores(course_name, self):
             return {"test_user": self.get_scores(course_name, "test_user")}
 
-        @staticmethod
-        def get_stored_user(_course_name, username, first_name, last_name):
+        def get_stored_user(self, _course_name, username):
             from manytask.abstract import StoredUser
 
-            return StoredUser(username=username, first_name=first_name, last_name=last_name, course_admin=True)
+            return StoredUser(
+                username=username,
+                first_name=self.stored_user.first_name,
+                last_name=self.stored_user.last_name,
+                course_admin=True,
+            )
 
         def update_cached_scores(self, _course_name):
             pass
