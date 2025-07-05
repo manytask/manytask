@@ -1027,6 +1027,17 @@ def test_get_course_unknown(db_api_with_two_initialized_courses):
     assert course is None
 
 
+def test_store_score_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
+    with pytest.raises(NoResultFound):
+        db_api_with_initialized_first_course.store_score(
+            FIRST_COURSE_NAME,
+            constants.TEST_USERNAME_2,
+            constants.TEST_REPO_NAME_2,
+            "task_0_0",
+            update_func(1),
+        )
+
+
 def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgres_container):
     with patch.object(command, "upgrade", side_effect=TestException()):
         with pytest.raises(TestException):
