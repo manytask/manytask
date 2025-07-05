@@ -105,9 +105,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.scores = {}
-            self.stored_user = StoredUser(
-                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
-            )
+            self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
             self.course_name = TEST_COURSE_NAME
 
         def store_score(self, _course_name, username, repo_name, task_name, update_fn):
@@ -131,7 +129,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_stored_user(_course_name, username):
             from manytask.abstract import StoredUser
 
-            return StoredUser(username=username, first_name=first_name, last_name=last_name, course_admin=True)
+            return StoredUser(username=username, course_admin=True)
 
         def update_cached_scores(self, _course_name):
             pass

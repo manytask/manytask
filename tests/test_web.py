@@ -103,9 +103,7 @@ def mock_gitlab_api():
 def mock_storage_api(mock_course):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
-            self.stored_user = StoredUser(
-                username=TEST_USERNAME, course_admin=False, first_name="First", last_name="Last"
-            )
+            self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False)
             self.course_name = TEST_COURSE_NAME
 
         @staticmethod
