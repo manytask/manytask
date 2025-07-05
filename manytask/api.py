@@ -211,13 +211,19 @@ def report_score(course_name: str) -> ResponseReturnValue:
         submit_time=submit_time,
         check_deadline=check_deadline,
     )
-    final_score = app.storage_api.store_score(
-        course.course_name,
-        student.username,
-        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-        task.name,
-        update_function,
-    )
+    try:
+        final_score = app.storage_api.store_score(
+            course.course_name,
+            student.username,
+            app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
+            task.name,
+            update_function,
+        )
+    except Exception as e:
+        return (
+            f"There was an exception on updating score for user {student.username}: {str(e)}",
+            HTTPStatus.NOT_FOUND,
+        )
 
     return {
         "user_id": student.id,
@@ -350,7 +356,12 @@ def update_database(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
-    stored_user = storage_api.get_stored_user(course.course_name, student.username)
+    try:
+        stored_user = storage_api.get_stored_user(course.course_name, student.username)
+    except Exception as e:
+        logger.error(f"Error finding the user {student.username}: {str(e)}")
+        return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
+
     student_course_admin = stored_user.course_admin
 
     if not student_course_admin:

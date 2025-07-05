@@ -162,7 +162,6 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         student: Student = get_authenticate_student(oauth, app)  # type: ignore
-        first_name, last_name = student.name.split()
 
         if not handle_course_membership(app, course, student) or not app.rms_api.check_project_exists(
             student=student, course_students_group=course.gitlab_course_students_group

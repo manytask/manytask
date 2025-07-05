@@ -98,7 +98,17 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student.username)
+        try:
+            stored_user = storage_api.get_stored_user(course.course_name, student.username)
+        except Exception as e:
+            logger.warning(f"Can not find user {student.username}: {e}")
+            return render_template(
+                "signup.html",
+                error_message=str(e),
+                course_name=course.course_name,
+                course_favicon=app.favicon,
+                base_url=app.rms_api.base_url,
+            )
 
         student_course_admin = stored_user.course_admin
 
@@ -289,7 +299,17 @@ def show_database(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student.username)
+        try:
+            stored_user = storage_api.get_stored_user(course.course_name, student.username)
+        except Exception as e:
+            logger.warning(f"Can not find user {student.username}: {e}")
+            return render_template(
+                "signup.html",
+                error_message=str(e),
+                course_name=course.course_name,
+                course_favicon=app.favicon,
+                base_url=app.rms_api.base_url,
+            )
 
         student_course_admin = stored_user.course_admin
 
