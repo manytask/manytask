@@ -137,6 +137,9 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 course_admin=True,
             )
 
+        def check_if_course_admin(self, _course_name, _username):
+            return True
+
         def update_cached_scores(self, _course_name):
             pass
 
