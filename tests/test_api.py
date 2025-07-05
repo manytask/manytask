@@ -128,7 +128,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             return {"test_user": self.get_scores(course_name, "test_user")}
 
         @staticmethod
-        def get_stored_user(_course_name, username, first_name, last_name):
+        def get_stored_user(_course_name, username):
             from manytask.abstract import StoredUser
 
             return StoredUser(username=username, first_name=first_name, last_name=last_name, course_admin=True)
