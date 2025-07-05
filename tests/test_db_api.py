@@ -676,6 +676,10 @@ def test_many_users(db_api_with_initialized_first_course, session):
         update_func(expected_score_1),
     )
 
+    db_api_with_initialized_first_course.create_user_if_not_exist(
+        constants.TEST_USERNAME_2, constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2, FIRST_COURSE_NAME
+    )
+
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME,
@@ -718,6 +722,10 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
+    db_api_with_two_initialized_courses.create_user_if_not_exist(
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, FIRST_COURSE_NAME
+    )
+
     db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME,
         constants.TEST_USERNAME,
@@ -962,6 +970,10 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     )
     session.add(user)
     session.commit()
+
+    db_api_with_two_initialized_courses.create_user_if_not_exist(
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, FIRST_COURSE_NAME
+    )
 
     score = db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME,
