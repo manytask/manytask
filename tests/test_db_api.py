@@ -602,6 +602,13 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     assert session.query(User).count() == 0
     assert session.query(UserOnCourse).count() == 0
 
+    db_api_with_initialized_first_course.create_user_if_not_exist(
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, FIRST_COURSE_NAME
+    )
+
+    assert session.query(User).count() == 1
+    assert session.query(UserOnCourse).count() == 0
+
     stored_user = db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, constants.TEST_USERNAME)
 
     assert stored_user == StoredUser(
