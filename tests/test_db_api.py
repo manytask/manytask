@@ -1038,6 +1038,21 @@ def test_store_score_raises_exception_if_user_does_not_exist(db_api_with_initial
         )
 
 
+def test_store_get_stored_user_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
+    with pytest.raises(NoResultFound):
+        db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, constants.TEST_USERNAME)
+
+
+def test_store_sync_stored_user_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
+    with pytest.raises(NoResultFound):
+        db_api_with_initialized_first_course.sync_stored_user(
+            FIRST_COURSE_NAME,
+            constants.TEST_USERNAME,
+            constants.TEST_REPO_NAME,
+            False,
+        )
+
+
 def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgres_container):
     with patch.object(command, "upgrade", side_effect=TestException()):
         with pytest.raises(TestException):
