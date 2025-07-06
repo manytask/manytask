@@ -292,6 +292,11 @@
                 }
             });
 
+            document.getElementById("filter-clear").addEventListener('click', function (event) {
+                valueEl.value = "";
+                window.tabulatorTable.clearFilter();
+            })
+
             fetch('{{ url_for("api.get_database", course_name=course_name) }}')
                 .then(response => response.json())
                 .then(data => {
