@@ -146,20 +146,30 @@ class DataBaseApi(StorageApi):
         course_name: str,
         username: str,
     ) -> bool:
-        """Method for getting user's stored data
+        """Method for checking user's admin status
 
         :param course_name: course name
         :param username: user name
 
-        :return: created or received StoredUser object
+        :return: cif the user is an admin on the course
         """
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, username, course)
-            session.commit()
-
-            return user_on_course.is_course_admin
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user = self._get(
+                    session,
+                    models.User,
+                    username=username,
+                    gitlab_instance_host=course.gitlab_instance_host,
+                )
+                user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+                session.commit()
+                return user_on_course.is_course_admin
+            except NoResultFound as e:
+                session.rollback()
+                logger.info(f"There was an exception when checking user admin status: {e}")
+                return False
 
     def sync_stored_user(
         self,
