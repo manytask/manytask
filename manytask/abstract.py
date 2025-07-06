@@ -49,8 +49,6 @@ class StorageApi(ABC):
         self,
         course_name: str,
         username: str,
-        first_name: str,
-        last_name: str,
     ) -> StoredUser: ...
 
     @abstractmethod
@@ -58,8 +56,6 @@ class StorageApi(ABC):
         self,
         course_name: str,
         username: str,
-        first_name: str,
-        last_name: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser: ...
@@ -81,8 +77,6 @@ class StorageApi(ABC):
         self,
         course_name: str,
         username: str,
-        first_name: str,
-        last_name: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
