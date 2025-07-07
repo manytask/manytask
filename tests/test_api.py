@@ -12,7 +12,7 @@ from flask import Flask, json
 from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import StoredUser
-from manytask.api import _get_student, _parse_flags, _process_score, _update_score
+from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.glab import Student
@@ -26,8 +26,12 @@ TEST_NAME = "Ivan Ivanov"
 INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
+TEST_TASK_GROUP_NAME = "test_task_group"
 TEST_SECRET_KEY = "test_key"
 TEST_COURSE_NAME = "Test_Course"
+
+TEST_INVALID_USER_ID = 321
+TEST_INVALID_USERNAME = "invalid_user"
 
 
 @pytest.fixture(autouse=True)
@@ -77,6 +81,7 @@ def mock_task():
 def mock_group(mock_task):
     class MockGroup:
         def __init__(self):
+            self.name = TEST_TASK_GROUP_NAME
             self.tasks = [mock_task]
 
         @staticmethod
@@ -653,17 +658,90 @@ def test_process_score_invalid_format():
     assert exc_info.value.code == HTTPStatus.BAD_REQUEST
 
 
-def test_get_student_by_username():
-    """Test getting student by username"""
-    mock_gitlab = MagicMock()
-    test_student = Student(id=1, username="test_user", name="Test User")
-    mock_gitlab.get_student_by_username.return_value = test_student
+def test_validate_and_extract_params_get_student_by_id(app):
+    """Test parsing form data getting student by username"""
+    form_data = {"user_id": TEST_USER_ID, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
 
-    result = _get_student(mock_gitlab, None, "test_user")
-    assert result == test_student
-    mock_gitlab.get_student_by_username.assert_called_once_with("test_user")
+    student, task, group = _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert student.id == TEST_USER_ID
+    assert student.username == TEST_USERNAME
+    assert student.name == TEST_NAME
+    assert task.name == TEST_TASK_NAME
+    assert group.name == TEST_TASK_GROUP_NAME
 
 
+def test_validate_and_extract_params_get_student_by_username(app):
+    """Test parsing form data getting student by id"""
+    form_data = {"username": TEST_USERNAME, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    student, task, group = _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert student.id == TEST_USER_ID
+    assert student.username == TEST_USERNAME
+    assert student.name == TEST_NAME
+    assert task.name == TEST_TASK_NAME
+    assert group.name == TEST_TASK_GROUP_NAME
+
+
+def test_validate_and_extract_params_no_task_name(app):
+    """Test parsing form data when task is not defined"""
+    form_data = {"username": TEST_USERNAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_validate_and_extract_params_no_student_name_or_id(app):
+    """Test parsing form data user is not defined"""
+    form_data = {"task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_validate_and_extract_params_student_id_not_found(app):
+    """Test parsing form data wrong id"""
+    form_data = {"user_id": TEST_INVALID_USER_ID, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.NOT_FOUND
+
+
+def test_validate_and_extract_params_student_username_not_found(app):
+    """Test parsing form data wrong username"""
+    form_data = {"username": TEST_INVALID_USERNAME, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.NOT_FOUND
+
+
+def test_validate_and_extract_params_task_not_found(app):
+    """Test parsing form data wrong task name"""
+    form_data = {"user_id": TEST_USER_ID, "task": INVALID_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.NOT_FOUND
+
+
+'''
 def test_get_student_by_id():
     """Test getting student by user_id"""
     mock_gitlab = MagicMock()
@@ -701,6 +779,7 @@ def test_get_student_id_not_found():
     with pytest.raises(HTTPException) as exc_info:
         _get_student(mock_gitlab, 999, None)
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
+'''
 
 
 @pytest.mark.parametrize("task_name", [INVALID_TASK_NAME, TASK_NAME_WITH_DISABLED_TASK_OR_GROUP])
