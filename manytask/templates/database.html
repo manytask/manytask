@@ -275,12 +275,12 @@
             const valueEl = document.getElementById("filter-value");
 
             function customFilter(data) {
-                if (data.username.toLowerCase().includes(valueEl.value.toLowerCase())) {
+                const searchTerm = valueEl.value.toLowerCase();
+                if (data.username.toLowerCase().includes(searchTerm)) {
                     return true;
                 }
                 const full_name = `${data.first_name} ${data.last_name}`.toLowerCase();
-                return full_name.includes(valueEl.value.toLowerCase());
-
+                return full_name.includes(searchTerm);
             }
 
             document.getElementById("filter-value")
