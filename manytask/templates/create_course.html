@@ -12,12 +12,14 @@
     {% endif %}
 
     <form method="POST" action="{{ url_for('admin.create_course') }}" class="needs-validation" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row">
             <div class="col-md-6 mb-4">
                 <h4>Basic Course Information</h4>
                 <div class="mb-3">
                     <label for="unique_course_name" class="form-label">Unique Course Name</label>
-                    <input type="text" class="form-control" id="unique_course_name" name="unique_course_name" required>
+                    <input type="text" class="form-control" id="unique_course_name" name="unique_course_name"
+                           pattern="[a-zA-Z0-9\-]+" required>
                     <div class="form-text">Used to separate data when multiple courses share a database</div>
                 </div>
                 <div class="mb-3">
@@ -29,7 +31,7 @@
                     <input type="text" class="form-control" id="token" name="token" value="{% if generated_token %}{{ generated_token }}{% endif %}" required>
                 </div>
                 <div class="mb-3 form-check">
-                    <input type="checkbox" class="form-check-input" id="show_allscores" name="show_allscores">
+                    <input type="checkbox" class="form-check-input" id="show_allscores" name="show_allscores" checked>
                     <label class="form-check-label" for="show_allscores">Show All Scores</label>
                 </div>
             </div>
@@ -38,15 +40,35 @@
                 <h4>GitLab Configuration</h4>
                 <div class="mb-3">
                     <label for="gitlab_course_group" class="form-label">GitLab Course Group</label>
-                    <input type="text" class="form-control" id="gitlab_course_group" name="gitlab_course_group" required>
+                    <input type="text" class="form-control" id="gitlab_course_group" name="gitlab_course_group"
+                           placeholder="test-course" required>
+                    <div class="form-text">The general name of the GitLab group where all course materials will be
+                        stored
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="gitlab_course_public_repo" class="form-label">GitLab Public Repo</label>
-                    <input type="text" class="form-control" id="gitlab_course_public_repo" name="gitlab_course_public_repo" required>
+                    <input type="text" class="form-control" id="gitlab_course_public_repo"
+                           name="gitlab_course_public_repo"
+                           placeholder="test-course/public-repo" formnovalidate>
+                    <div class="invalid-feedback" id="public-repo-feedback">Public Repo should begin with the name
+                        of the course group
+                    </div>
+                    <div class="form-text">The name of the repository shared by students, where the assignment
+                        conditions are laid out
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="gitlab_course_students_group" class="form-label">GitLab Students Group</label>
-                    <input type="text" class="form-control" id="gitlab_course_students_group" name="gitlab_course_students_group" required>
+                    <input type="text" class="form-control" id="gitlab_course_students_group"
+                           name="gitlab_course_students_group"
+                           placeholder="test-course/private-repo" formnovalidate>
+                    <div class="invalid-feedback" id="students-group-feedback">Students Group should begin with the
+                        name of the course group
+                    </div>
+                    <div class="form-text">The name of the repository shared by students where assignment conditions
+                        are written out
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="gitlab_default_branch" class="form-label">GitLab Default Branch</label>
@@ -55,7 +77,7 @@
             </div>
         </div>
 
-        <div class="mb-4">
+        <div class="mb-4 text-center">
             <button type="submit" class="btn btn-primary">Create Course</button>
         </div>
     </form>
@@ -68,13 +90,59 @@
     Array.prototype.slice.call(forms)
         .forEach(function (form) {
             form.addEventListener('submit', function (event) {
-                if (!form.checkValidity()) {
+                if (form.querySelectorAll(".is-invalid").length > 0 || !form.checkValidity()) {
                     event.preventDefault()
                     event.stopPropagation()
                 }
-                form.classList.add('was-validated')
+                if (form.querySelectorAll(".is-invalid").length === 0) {
+                    form.classList.add('was-validated')
+                }
             }, false)
         })
-})()
+})();
+
+document.addEventListener('DOMContentLoaded', function () {
+    const gitlabGroupField = document.getElementById('gitlab_course_group');
+    const publicRepoField = document.getElementById('gitlab_course_public_repo');
+    const studentsGroupField = document.getElementById('gitlab_course_students_group');
+
+    let publicRepoChanged = false;
+    let studentsGroupChanged = false;
+
+    function validatePrefix(field, prefix, feedbackId) {
+        if (field.value.startsWith(prefix.value + '/')) {
+            field.classList.remove('is-invalid');
+            field.classList.add('is-valid');
+            document.getElementById(feedbackId).style.display = 'none';
+        } else {
+            field.classList.remove('is-valid');
+            field.classList.add('is-invalid');
+            document.getElementById(feedbackId).style.display = 'block';
+        }
+    }
+
+    publicRepoField.addEventListener('input', function () {
+        publicRepoChanged = true;
+        validatePrefix(publicRepoField, gitlabGroupField, "public-repo-feedback")
+    });
+
+    studentsGroupField.addEventListener('input', function () {
+        studentsGroupChanged = true;
+        validatePrefix(studentsGroupField, gitlabGroupField, "students-group-feedback")
+    });
+
+    gitlabGroupField.addEventListener('input', function () {
+        const groupName = gitlabGroupField.value;
+
+        if (!publicRepoChanged) {
+            publicRepoField.value = groupName + '/public-repo';
+        }
+
+        if (!studentsGroupChanged) {
+            studentsGroupField.value = groupName + '/private-repo';
+        }
+
+    });
+});
 </script>
-{% endblock %} 
+{% endblock %}

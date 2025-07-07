@@ -186,26 +186,21 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     first_name3 = "Peter"
     last_name3 = "Nordstrom"
 
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username1, first_name1, last_name1, FIRST_COURSE_NAME)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username2, first_name2, last_name2, SECOND_COURSE_NAME)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username3, first_name3, last_name3, FIRST_COURSE_NAME)
+
     assert db_api_with_two_initialized_courses.get_user_courses_names(username1) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(username2) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(username3) == []
-
     assert sorted(db_api_with_two_initialized_courses.get_all_courses_names()) == sorted(
         [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
     )
 
-    db_api_with_two_initialized_courses.sync_stored_user(
-        FIRST_COURSE_NAME, username1, first_name1, last_name1, "repo1", True
-    )
-    db_api_with_two_initialized_courses.sync_stored_user(
-        SECOND_COURSE_NAME, username2, first_name2, last_name2, "repo2", False
-    )
-    db_api_with_two_initialized_courses.sync_stored_user(
-        FIRST_COURSE_NAME, username3, first_name3, last_name3, "repo3", False
-    )
-    db_api_with_two_initialized_courses.sync_stored_user(
-        SECOND_COURSE_NAME, username3, first_name3, last_name3, "repo3", True
-    )
+    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, username1, "repo1", True)
+    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, username2, "repo2", False)
+    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, username3, "repo3", False)
+    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, username3, "repo3", True)
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(username1) == [FIRST_COURSE_NAME]
     assert db_api_with_two_initialized_courses.get_user_courses_names(username2) == [SECOND_COURSE_NAME]

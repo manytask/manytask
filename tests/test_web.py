@@ -16,6 +16,8 @@ from manytask.database import TaskDisabledError
 from manytask.web import course_bp, root_bp
 
 TEST_USERNAME = "test_user"
+TEST_FIRST_NAME = "First"
+TEST_LAST_NAME = "Last"
 TEST_STUDENT_NAME = "First Last"
 TEST_STUDENT_REPO = "students/test_user"
 TEST_SECRET = "test_secret"
@@ -103,7 +105,7 @@ def mock_storage_api(mock_course):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.stored_user = StoredUser(
-                username=TEST_USERNAME, course_admin=False, first_name="First", last_name="Last"
+                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
             )
             self.course_name = TEST_COURSE_NAME
 
@@ -131,14 +133,10 @@ def mock_storage_api(mock_course):  # noqa: C901
             self,
             course_name: str,
             username: str,
-            first_name: str,
-            last_name: str,
             repo_name: str,
             course_admin: bool,
         ) -> StoredUser:
             self.stored_user.username = username
-            self.stored_user.first_name = first_name
-            self.stored_user.last_name = last_name
             self.stored_user.course_admin = self.stored_user.course_admin or course_admin
             return self.stored_user
 
@@ -162,7 +160,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_stored_user(self, _course_name, _username, _first_name, _last_name):
+        def get_stored_user(self, _course_name, _username):
             return self.stored_user
 
         @staticmethod
