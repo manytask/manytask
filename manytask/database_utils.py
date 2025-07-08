@@ -26,11 +26,13 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
     for username, student_scores in all_scores.items():
         total_score = sum(student_scores.values())
         large_count = sum(1 for task in large_tasks if student_scores.get(task, 0) > 0)
-        student_name = app.gitlab_api.get_student_by_username(username).name
+        stored_user = storage_api.get_stored_user(course_name, username)
+        first_name, last_name = stored_user.first_name, stored_user.last_name
         table_data["students"].append(
             {
                 "username": username,
-                "student_name": student_name,
+                "first_name": first_name,
+                "last_name": last_name,
                 "scores": student_scores,
                 "total_score": total_score,
                 "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
