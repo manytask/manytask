@@ -2,7 +2,10 @@
 {% set active_page = "database" -%}
 
 {% block content %}
-    <div class="container-fluid">
+    <div id="loader" class="position-absolute top-50 start-50" >
+        <div class="spinner-border text-secondary" style="width: 3rem; height: 3rem;"></div>
+    </div>
+    <div class="container-fluid  position-relative">
         <h2>Course Database</h2>
 
             <div class="search-controls mb-3 mt-4">
@@ -550,6 +553,10 @@
                         },
                         persistenceMode: "local",
                         persistentLayout: true
+                    });
+
+                    window.tabulatorTable.on("tableBuilt", function () {
+                        document.getElementById("loader").style.display = "none"
                     });
 
                     // Wait for a short delay to ensure table is rendered

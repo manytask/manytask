@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Tuple, Type, TypeVar, cast
+from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 from zoneinfo import ZoneInfo
 
 from alembic import command
@@ -170,26 +170,23 @@ class DataBaseApi(StorageApi):
                 course_admin=user_on_course.is_course_admin,
             )
 
-    def get_all_scores_with_names(
-        self, course_name: str
-    ) -> Tuple[dict[str, dict[str, int]], dict[str, tuple[str, str]]]:
-        """Method for getting all scores for all users
-
+    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
+        """Method for getting all users scores with names
         :param course_name: course name
-
-        :return: dict with usernames and all their scores
+        :return: dict with the usernames as keys and a tuple of (first_name, last_name) and scores dict as values
         """
 
         with Session(self.engine) as session:
             all_users = self._get_all_users(session, course_name)
 
-        all_scores: dict[str, dict[str, int]] = {}
-        names: dict[str, tuple[str, str]] = {}
+        scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
         for user in all_users:
-            all_scores[user.username] = self.get_scores(course_name, user.username)
-            names[user.username] = (user.first_name, user.last_name)
+            scores_and_names[user.username] = (
+                self.get_scores(course_name, user.username),
+                (user.first_name, user.last_name),
+            )
 
-        return all_scores, names
+        return scores_and_names
 
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks

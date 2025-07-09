@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Tuple
+from typing import Any, Callable
 
 from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig
@@ -61,9 +61,7 @@ class StorageApi(ABC):
     ) -> StoredUser: ...
 
     @abstractmethod
-    def get_all_scores_with_names(
-        self, course_name: str
-    ) -> Tuple[dict[str, dict[str, int]], dict[str, tuple[str, str]]]: ...
+    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
 
     @abstractmethod
     def get_stats(self, course_name: str) -> dict[str, float]: ...
