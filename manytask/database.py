@@ -339,7 +339,6 @@ class DataBaseApi(StorageApi):
 
     def edit_course(
         self,
-        course_name: str,
         settings_config: AppCourseConfig,
     ) -> bool:
         """Edit Course by course_name from config object
@@ -352,21 +351,25 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             try:
-                course = self._get(session, models.Course, name=course_name)
+                self._update(
+                    session,
+                    models.Course,
+                    defaults={
+                        "gitlab_course_group": settings_config.gitlab_course_group,
+                        "gitlab_course_public_repo": settings_config.gitlab_course_public_repo,
+                        "gitlab_course_students_group": settings_config.gitlab_course_students_group,
+                        "gitlab_default_branch": settings_config.gitlab_default_branch,
+                        "registration_secret": settings_config.registration_secret,
+                        "show_allscores": settings_config.show_allscores,
+                        "is_ready": settings_config.is_ready,
+                        "task_url_template": settings_config.task_url_template,
+                        "links": settings_config.links,
+                    },
+                    name=settings_config.course_name,
+                )
+                return True
             except NoResultFound:
                 return False
-            course.gitlab_course_group = settings_config.gitlab_course_group
-            course.gitlab_course_public_repo = settings_config.gitlab_course_public_repo
-            course.gitlab_course_students_group = settings_config.gitlab_course_students_group
-            course.gitlab_default_branch = settings_config.gitlab_default_branch
-            course.registration_secret = settings_config.registration_secret
-            course.show_allscores = settings_config.show_allscores
-            course.is_ready = settings_config.is_ready
-            course.task_url_template = settings_config.task_url_template
-            course.links = settings_config.links
-
-            session.commit()
-            return True
 
     def update_course(
         self,

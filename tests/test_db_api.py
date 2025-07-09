@@ -229,8 +229,8 @@ def create_course(db_api: DataBaseApi, course_config: CourseConfig, deadlines_co
     )
 
 
-def edit_course(db_api: DataBaseApi, course_name: str, course_config: CourseConfig) -> None:
-    db_api.edit_course(course_name=course_name, settings_config=course_config)
+def edit_course(db_api: DataBaseApi, course_config: CourseConfig) -> None:
+    db_api.edit_course(settings_config=course_config)
 
 
 @pytest.fixture
@@ -1152,7 +1152,7 @@ def test_get_groups_with_resync(  # noqa: PLR0913
 
 
 def test_edit_course(db_api_with_initialized_first_course, edited_first_course_config, session):
-    db_api_with_initialized_first_course.edit_course(FIRST_COURSE_NAME, edited_first_course_config)
+    db_api_with_initialized_first_course.edit_course(edited_first_course_config)
 
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
