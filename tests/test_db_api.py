@@ -278,7 +278,7 @@ def test_not_initialized_course(session, db_api, first_course_config):
     assert course.submission_penalty == 0
 
     stats = db_api.get_stats(course_name)
-    all_scores = db_api.get_all_scores(course_name)
+    all_scores, _ = db_api.get_all_scores_with_names(course_name)
     bonus_score = db_api.get_bonus_score(course_name, "some_user")
     scores = db_api.get_scores(course_name, "some_user")
     max_score_started = db_api.max_score_started(course_name)
@@ -507,7 +507,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert grade.score == 1
 
     stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
-    all_scores = db_api_with_initialized_first_course.get_all_scores(FIRST_COURSE_NAME)
+    all_scores, _ = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
     bonus_score = db_api_with_initialized_first_course.get_bonus_score(FIRST_COURSE_NAME, constants.TEST_USERNAME)
     scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, constants.TEST_USERNAME)
 
@@ -547,7 +547,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     assert grade.score == expected_score
 
     stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
-    all_scores = db_api_with_initialized_first_course.get_all_scores(FIRST_COURSE_NAME)
+    all_scores, _ = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
     bonus_score = db_api_with_initialized_first_course.get_bonus_score(FIRST_COURSE_NAME, constants.TEST_USERNAME)
     scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, constants.TEST_USERNAME)
 
@@ -586,7 +586,7 @@ def test_store_score_with_changed_task_name(
     )
 
     stats = db_api.get_stats(FIRST_COURSE_NAME)
-    all_scores = db_api.get_all_scores(FIRST_COURSE_NAME)
+    all_scores, _ = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)
     bonus_score = db_api.get_bonus_score(FIRST_COURSE_NAME, constants.TEST_USERNAME)
     scores = db_api.get_scores(FIRST_COURSE_NAME, constants.TEST_USERNAME)
 
@@ -702,7 +702,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
     assert session.query(Grade).count() == expected_grades
 
     stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
-    all_scores = db_api_with_initialized_first_course.get_all_scores(FIRST_COURSE_NAME)
+    all_scores, _ = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
     bonus_score_user1 = db_api_with_initialized_first_course.get_bonus_score(
         FIRST_COURSE_NAME, constants.TEST_USERNAME_1
     )
@@ -755,7 +755,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     assert session.query(Grade).count() == expected_grades
 
     stats1 = db_api_with_two_initialized_courses.get_stats(FIRST_COURSE_NAME)
-    all_scores1 = db_api_with_two_initialized_courses.get_all_scores(FIRST_COURSE_NAME)
+    all_scores1, _ = db_api_with_two_initialized_courses.get_all_scores_with_names(FIRST_COURSE_NAME)
     bonus_score_user1 = db_api_with_two_initialized_courses.get_bonus_score(FIRST_COURSE_NAME, constants.TEST_USERNAME)
     scores_user1 = db_api_with_two_initialized_courses.get_scores(FIRST_COURSE_NAME, constants.TEST_USERNAME)
 
@@ -768,7 +768,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     assert scores_user1 == {"task_0_0": 30}
 
     stats2 = db_api_with_two_initialized_courses.get_stats(SECOND_COURSE_NAME)
-    all_scores2 = db_api_with_two_initialized_courses.get_all_scores(SECOND_COURSE_NAME)
+    all_scores2, _ = db_api_with_two_initialized_courses.get_all_scores_with_names(SECOND_COURSE_NAME)
     bonus_score_user2 = db_api_with_two_initialized_courses.get_bonus_score(SECOND_COURSE_NAME, constants.TEST_USERNAME)
     scores_user2 = db_api_with_two_initialized_courses.get_scores(SECOND_COURSE_NAME, constants.TEST_USERNAME)
 
@@ -839,7 +839,7 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     assert session.query(Grade).count() == expected_grades
 
     stats1 = db_api_with_two_initialized_courses.get_stats(FIRST_COURSE_NAME)
-    all_scores1 = db_api_with_two_initialized_courses.get_all_scores(FIRST_COURSE_NAME)
+    all_scores1, _ = db_api_with_two_initialized_courses.get_all_scores_with_names(FIRST_COURSE_NAME)
     bonus_score1_user1 = db_api_with_two_initialized_courses.get_bonus_score(
         FIRST_COURSE_NAME, constants.TEST_USERNAME_1
     )
@@ -864,7 +864,7 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     assert scores1_user2 == {"task_0_0": expected_score_2}
 
     stats2 = db_api_with_two_initialized_courses.get_stats(SECOND_COURSE_NAME)
-    all_scores2 = db_api_with_two_initialized_courses.get_all_scores(SECOND_COURSE_NAME)
+    all_scores2, _ = db_api_with_two_initialized_courses.get_all_scores_with_names(SECOND_COURSE_NAME)
     bonus_score2_user1 = db_api_with_two_initialized_courses.get_bonus_score(
         SECOND_COURSE_NAME, constants.TEST_USERNAME_1
     )
