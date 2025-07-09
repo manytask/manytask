@@ -101,7 +101,7 @@ def mock_student():
 
 
 @pytest.fixture
-def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa: C901
+def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
             self.scores = {}
@@ -110,10 +110,10 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             )
             self.course_name = TEST_COURSE_NAME
 
-        def store_score(self, _course_name, student, repo_name, task_name, update_fn):
-            old_score = self.scores.get(f"{student.username}_{task_name}", 0)
+        def store_score(self, _course_name, username, repo_name, task_name, update_fn):
+            old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
-            self.scores[f"{student.username}_{task_name}"] = new_score
+            self.scores[f"{username}_{task_name}"] = new_score
             return new_score
 
         @staticmethod
@@ -127,12 +127,15 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
         def get_all_scores(course_name, self):
             return {"test_user": self.get_scores(course_name, "test_user")}
 
-        @staticmethod
-        def get_stored_user(_course_name, student):
+        def get_stored_user(self, _course_name, username):
             from manytask.abstract import StoredUser
 
-            first_name, last_name = student.name.split()
-            return StoredUser(username=student.username, first_name=first_name, last_name=last_name, course_admin=True)
+            return StoredUser(
+                username=username,
+                first_name=self.stored_user.first_name,
+                last_name=self.stored_user.last_name,
+                course_admin=True,
+            )
 
         def update_cached_scores(self, _course_name):
             pass
@@ -143,7 +146,7 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
         def update_task_groups_from_config(self, _course_name, _config_data):
             pass
 
-        def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
+        def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.stored_user.course_admin = course_admin
             return self.stored_user.course_admin
 

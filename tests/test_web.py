@@ -17,7 +17,9 @@ from manytask.glab import Student
 from manytask.web import admin_bp, course_bp, root_bp
 
 TEST_USERNAME = "test_user"
-TEST_STUDENT_NAME = "User Name"
+TEST_FIRST_NAME = "First"
+TEST_LAST_NAME = "Last"
+TEST_STUDENT_NAME = "First Last"
 TEST_STUDENT_REPO = "students/test_user"
 TEST_SECRET = "test_secret"
 TEST_KEY = "test_key"
@@ -74,7 +76,7 @@ def mock_gitlab_api():
 
         @staticmethod
         def get_student(user_id: int):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
         def get_student_by_username(self, username: str) -> Student:
             return Student(
@@ -84,7 +86,7 @@ def mock_gitlab_api():
             )
 
         def get_authenticated_student(self, gitlab_access_token: str):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
         @staticmethod
         def check_project_exists(student: Student, course_students_group: str):
@@ -92,7 +94,7 @@ def mock_gitlab_api():
 
         @staticmethod
         def _parse_user_to_student(user: dict[str, Any]):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
         def check_is_course_admin(self, _user_id, _course_group):
             return self.course_admin
@@ -104,7 +106,9 @@ def mock_gitlab_api():
 def mock_storage_api(mock_course):  # noqa: C901
     class MockStorageApi:
         def __init__(self):
-            self.stored_user = StoredUser(username=TEST_USERNAME, course_admin=False, first_name="", last_name="")
+            self.stored_user = StoredUser(
+                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
+            )
             self.course_name = TEST_COURSE_NAME
 
         @staticmethod
@@ -127,8 +131,16 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_bonus_score(_course_name, _username):
             return 10
 
-        def sync_stored_user(self, _course_name, student, repo_name, course_admin):
+        def sync_stored_user(
+            self,
+            course_name: str,
+            username: str,
+            repo_name: str,
+            course_admin: bool,
+        ) -> StoredUser:
+            self.stored_user.username = username
             self.stored_user.course_admin = self.stored_user.course_admin or course_admin
+            return self.stored_user
 
         @staticmethod
         def get_groups(*_args, **_kwargs):
@@ -150,7 +162,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_stored_user(self, _course_name, _student):
+        def get_stored_user(self, _course_name, _username):
             return self.stored_user
 
         @staticmethod
@@ -433,7 +445,9 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
         app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_student.return_value = Student(
+            id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME
+        )
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -476,7 +490,9 @@ def test_login_get_with_code(app, mock_gitlab_oauth):
     ):
         app.oauth = mock_gitlab_oauth
 
-        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_student.return_value = Student(
+            id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME
+        )
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",

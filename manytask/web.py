@@ -6,6 +6,8 @@ from http import HTTPStatus
 import gitlab
 from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
+from flask_wtf.csrf import validate_csrf
+from wtforms import ValidationError
 
 from .auth import requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, get_current_time
@@ -39,7 +41,7 @@ def index() -> ResponseReturnValue:
         student_id = session["gitlab"]["user_id"]
         student = app.gitlab_api.get_student(student_id)
 
-        courses_names = app.storage_api.get_user_courses_names(student)
+        courses_names = app.storage_api.get_user_courses_names(student.username)
 
     courses = [
         {
@@ -96,7 +98,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
+        stored_user = storage_api.get_stored_user(course.course_name, student.username)
 
         student_course_admin = stored_user.course_admin
 
@@ -204,6 +206,12 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError as e:
+        app.logger.error(f"CSRF validation failed: {e}")
+        return render_template("create_project.html", error_message="CSRF Error")
+
     if not secrets.compare_digest(request.form["secret"], course.registration_secret):
         return render_template(
             "create_project.html",
@@ -215,11 +223,12 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    app.storage_api.create_user_if_not_exist(student, course.course_name)
+    first_name, last_name = student.name.split()  # TODO: come up with how to separate names
+    app.storage_api.create_user_if_not_exist(student.username, first_name, last_name, course.course_name)
 
     app.storage_api.sync_stored_user(
         course.course_name,
-        student,
+        student.username,
         app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
         app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
     )
@@ -280,7 +289,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
+        stored_user = storage_api.get_stored_user(course.course_name, student.username)
 
         student_course_admin = stored_user.course_admin
 
@@ -313,6 +322,14 @@ def create_course() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     if request.method == "POST":
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError as e:
+            app.logger.error(f"CSRF validation failed: {e}")
+            return render_template(
+                "create_course.html", generated_token=generate_token_hex(24), error_message="CSRF Error"
+            )
+
         settings = CourseConfig(
             course_name=request.form["unique_course_name"],
             gitlab_course_group=request.form["gitlab_course_group"],
@@ -333,7 +350,7 @@ def create_course() -> ResponseReturnValue:
         return render_template(
             "create_course.html",
             generated_token=generate_token_hex(24),
-            error_message=f"Курс с названием {settings.course_name} уже существует",
+            error_message=f"Курс с названием '{settings.course_name}' уже существует",
         )
 
     return render_template(

@@ -213,7 +213,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
     )
     final_score = app.storage_api.store_score(
         course.course_name,
-        student,
+        student.username,
         app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
         task.name,
         update_function,
@@ -350,7 +350,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
-    stored_user = storage_api.get_stored_user(course.course_name, student)
+    stored_user = storage_api.get_stored_user(course.course_name, student.username)
     student_course_admin = stored_user.course_admin
 
     if not student_course_admin:
@@ -367,11 +367,6 @@ def update_database(course_name: str) -> ResponseReturnValue:
     new_scores = data["scores"]
 
     try:
-        student = Student(
-            id=0,
-            username=username,
-            name=username,
-        )
         repo_name = app.rms_api.get_url_for_repo(
             username=username, course_students_group=course.gitlab_course_students_group
         )
@@ -379,7 +374,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
             if isinstance(new_score, (int, float)):
                 storage_api.store_score(
                     course.course_name,
-                    student=student,
+                    username=username,
                     repo_name=repo_name,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
