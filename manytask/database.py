@@ -164,7 +164,6 @@ class DataBaseApi(StorageApi):
                     gitlab_instance_host=course.gitlab_instance_host,
                 )
                 user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-                session.commit()
                 return user_on_course.is_course_admin
             except NoResultFound as e:
                 session.rollback()
