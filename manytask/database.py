@@ -170,22 +170,23 @@ class DataBaseApi(StorageApi):
                 course_admin=user_on_course.is_course_admin,
             )
 
-    def get_all_scores(self, course_name: str) -> dict[str, dict[str, int]]:
-        """Method for getting all scores for all users
-
+    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
+        """Method for getting all users scores with names
         :param course_name: course name
-
-        :return: dict with usernames and all their scores
+        :return: dict with the usernames as keys and a tuple of (first_name, last_name) and scores dict as values
         """
 
         with Session(self.engine) as session:
-            all_users = self._get_all_users(session, course_name)
+            all_users = self._get_all_users_on_course(session, course_name)
 
-        all_scores: dict[str, dict[str, int]] = {}
-        for username in all_users:
-            all_scores[username] = self.get_scores(course_name, username)
+        scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
+        for user in all_users:
+            scores_and_names[user.username] = (
+                self.get_scores(course_name, user.username),
+                (user.first_name, user.last_name),
+            )
 
-        return all_scores
+        return scores_and_names
 
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks
@@ -1010,13 +1011,13 @@ class DataBaseApi(StorageApi):
         return query.all()
 
     @staticmethod
-    def _get_all_users(
+    def _get_all_users_on_course(
         session: Session,
         course_name: str,
-    ) -> Iterable[str]:
+    ) -> Iterable["models.User"]:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
-        return [user_on_course.user.username for user_on_course in course.users_on_courses.all()]
+        return [user_on_course.user for user_on_course in course.users_on_courses.all()]
 
     def _get_all_tasks(
         self,

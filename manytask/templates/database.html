@@ -2,7 +2,10 @@
 {% set active_page = "database" -%}
 
 {% block content %}
-    <div class="container-fluid">
+    <div id="loader" class="position-absolute top-50 start-50" >
+        <div class="spinner-border text-secondary" style="width: 3rem; height: 3rem;"></div>
+    </div>
+    <div class="container-fluid  position-relative">
         <h2>Course Database</h2>
 
             <div class="search-controls mb-3 mt-4">
@@ -275,8 +278,12 @@
             const valueEl = document.getElementById("filter-value");
 
             function customFilter(data) {
-                return data.username.toLowerCase().includes(valueEl.value.toLowerCase()) ||
-                    data.student_name.toLowerCase().includes(valueEl.value.toLowerCase());
+                const searchTerm = valueEl.value.toLowerCase();
+                if (data.username.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                const full_name = `${data.first_name} ${data.last_name}`.toLowerCase();
+                return full_name.includes(searchTerm);
             }
 
             document.getElementById("filter-value")
@@ -310,26 +317,34 @@
                             headerTooltip: "Username"
                         },
                         {
-                            title: "Name",
-                            field: "student_name",
+                            title: "First<br>Name",
+                            field: "first_name",
                             frozen: true,
                             minWidth: 1,
-                            width: 200,
-                            headerTooltip: "Full name"
+                            headerTooltip: "First Name"
                         },
                         {
-                            title: "Total Score",
+                            title: "Last<br>Name",
+                            field: "last_name",
+                            frozen: true,
+                            minWidth: 1,
+                            headerTooltip: "Last Name"
+                        },
+                        {
+                            title: "Total<br>Score",
                             field: "total_score",
                             frozen: true,
                             sorter: "number",
+                            hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Total Score"
                         },
                         {
-                            title: "Percent",
+                            title: "Per<br>cent",
                             field: "percent",
                             frozen: true,
                             sorter: "number",
+                            hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "% completed"
                         },
@@ -338,6 +353,7 @@
                             field: "large_count",
                             frozen: true,
                             sorter: "number",
+                            hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Number of Large Homeworks"
                         }
@@ -363,6 +379,7 @@
                             title: task.name,
                             field: `scores.${task.name}`,
                             sorter: "number",
+                            hozAlign: "center",
                             headerTooltip: task.name,
                             {% if is_course_admin %}
                             cellClick: function(e, cell) {
@@ -536,6 +553,10 @@
                         },
                         persistenceMode: "local",
                         persistentLayout: true
+                    });
+
+                    window.tabulatorTable.on("tableBuilt", function () {
+                        document.getElementById("loader").style.display = "none"
                     });
 
                     // Wait for a short delay to ensure table is rendered
