@@ -13,7 +13,7 @@ from flask.typing import ResponseReturnValue
 
 from manytask.abstract import StorageApi
 from manytask.database import TaskDisabledError
-from manytask.glab import GitLabApi
+from manytask.glab import GitLabApi, GitLabApiException
 
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
@@ -106,26 +106,29 @@ def _validate_and_extract_params(
     form_data: dict[str, Any], gitlab_api: GitLabApi, storage_api: StorageApi, course_name: str
 ) -> tuple[Student, ManytaskTaskConfig, ManytaskGroupConfig]:
     """Validate and extract parameters from form data."""
+
+    if "user_id" in form_data and "username" in form_data:
+        abort(HTTPStatus.BAD_REQUEST, "Both `user_id` or `username` were provided, use only one")
+    elif "user_id" in form_data:
+        try:
+            user_id = int(form_data["user_id"])
+            student = gitlab_api.get_student(user_id)
+        except ValueError:
+            abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
+        except GitLabApiException:
+            abort(HTTPStatus.NOT_FOUND, f"There is no student with user ID {user_id}")
+    elif "username" in form_data:
+        try:
+            username = form_data["username"]
+            student = gitlab_api.get_student_by_username(username)
+        except GitLabApiException:
+            abort(HTTPStatus.NOT_FOUND, f"There is no student with username {username}")
+    else:
+        abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
+
     if "task" not in form_data:
         abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `task`")
     task_name = form_data["task"]
-
-    if "user_id" not in form_data and "username" not in form_data:
-        abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
-
-    user_id = int(form_data["user_id"]) if "user_id" in form_data else None
-    username = form_data["username"] if "username" in form_data else None
-
-    """Get student by user_id or username."""
-    try:
-        if username:
-            student = gitlab_api.get_student_by_username(username)
-        elif user_id:
-            student = gitlab_api.get_student(user_id)
-        else:
-            assert False, "unreachable"
-    except Exception:
-        abort(HTTPStatus.NOT_FOUND, f"There is no student with user_id {user_id} or username {username}")
 
     try:
         group, task = storage_api.find_task(course_name, task_name)

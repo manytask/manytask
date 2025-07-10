@@ -15,7 +15,7 @@ from manytask.abstract import StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
-from manytask.glab import Student
+from manytask.glab import GitLabApiException, Student
 from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
@@ -186,12 +186,12 @@ def mock_gitlab_api(mock_student):
         def get_student(self, user_id: int):
             if user_id == TEST_USER_ID:
                 return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise Exception("Student not found")
+            raise GitLabApiException("Student not found")
 
         def get_student_by_username(self, username):
             if username == TEST_USERNAME:
                 return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise Exception("Student not found")
+            raise GitLabApiException("Student not found")
 
         def get_authenticated_student(self, access_token):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
@@ -686,9 +686,9 @@ def test_validate_and_extract_params_get_student_by_username(app):
     assert group.name == TEST_TASK_GROUP_NAME
 
 
-def test_validate_and_extract_params_no_task_name(app):
-    """Test parsing form data when task is not defined"""
-    form_data = {"username": TEST_USERNAME}
+def test_validate_and_extract_params_no_student_name_or_id(app):
+    """Test parsing form data user is not defined"""
+    form_data = {"task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
@@ -697,9 +697,31 @@ def test_validate_and_extract_params_no_task_name(app):
     assert exc_info.value.code == HTTPStatus.BAD_REQUEST
 
 
-def test_validate_and_extract_params_no_student_name_or_id(app):
+def test_validate_and_extract_params_both_student_name_and_id(app):
     """Test parsing form data user is not defined"""
-    form_data = {"task": TEST_TASK_NAME}
+    form_data = {"user_id": TEST_USER_ID, "username": TEST_USERNAME, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_validate_and_extract_params_user_id_not_an_int(app):
+    """Test parsing form data user is not defined"""
+    form_data = {"user_id": TEST_USERNAME, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_validate_and_extract_params_no_task_name(app):
+    """Test parsing form data when task is not defined"""
+    form_data = {"username": TEST_USERNAME}
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
