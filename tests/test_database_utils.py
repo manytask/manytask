@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
-from manytask.abstract import StoredUser, RmsUser
+from manytask.abstract import StoredUser
 from manytask.database_utils import get_database_table_data
 from tests import constants
 
