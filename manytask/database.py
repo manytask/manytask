@@ -177,7 +177,7 @@ class DataBaseApi(StorageApi):
         """
 
         with Session(self.engine) as session:
-            all_users = self._get_all_users(session, course_name)
+            all_users = self._get_all_users_on_course(session, course_name)
 
         scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
         for user in all_users:
@@ -1011,7 +1011,7 @@ class DataBaseApi(StorageApi):
         return query.all()
 
     @staticmethod
-    def _get_all_users(
+    def _get_all_users_on_course(
         session: Session,
         course_name: str,
     ) -> Iterable["models.User"]:
