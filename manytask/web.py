@@ -109,20 +109,15 @@ def course_page(course_name: str) -> ResponseReturnValue:
     except ValueError:
         cache_delta = timedelta(days=365)
 
-    hours_in_seconds = 3600
-    if app.debug or cache_delta.total_seconds() > hours_in_seconds:
+    CACHE_TIMEOUT_SECONDS = 3600
+    if app.debug or cache_delta.total_seconds() > CACHE_TIMEOUT_SECONDS:
         storage_api.update_cached_scores(course.course_name)
         cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
 
     # get scores
-    print(student_username)
     tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
-    tasks_stats['task_0_2'] = 10
-    tasks_scores['task_0_2'] = 10
-    print(tasks_scores)
-    print(tasks_stats)
     allscores_url = url_for("course.show_database", course_name=course_name)
 
     return render_template(
@@ -227,7 +222,18 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    first_name, last_name = student.name.split()  # TODO: come up with how to separate names
+    # Split name into first and last name, handling cases with multiple names
+    if not student.name or not student.name.strip():
+        first_name = ""
+        last_name = ""
+    else:
+        name_parts = student.name.strip().split()
+        if len(name_parts) >= 2:
+            first_name = name_parts[0]
+            last_name = " ".join(name_parts[1:])  # Join remaining parts as last name
+        else:
+            first_name = student.name.strip()
+            last_name = ""
     app.storage_api.create_user_if_not_exist(student.username, first_name, last_name, course.course_name)
 
     app.storage_api.sync_stored_user(
