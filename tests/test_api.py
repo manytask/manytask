@@ -12,9 +12,10 @@ from flask import Flask, json
 from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import RmsUser, StoredUser
-from manytask.api import _get_rms_user, _parse_flags, _process_score, _update_score
+from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
+from manytask.glab import GitLabApiException
 from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
@@ -25,8 +26,12 @@ TEST_NAME = "Ivan Ivanov"
 INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
+TEST_TASK_GROUP_NAME = "test_task_group"
 TEST_SECRET_KEY = "test_key"
 TEST_COURSE_NAME = "Test_Course"
+
+TEST_INVALID_USER_ID = 321
+TEST_INVALID_USERNAME = "invalid_user"
 
 
 @pytest.fixture(autouse=True)
@@ -76,6 +81,7 @@ def mock_task():
 def mock_group(mock_task):
     class MockGroup:
         def __init__(self):
+            self.name = TEST_TASK_GROUP_NAME
             self.tasks = [mock_task]
 
         @staticmethod
@@ -180,12 +186,12 @@ def mock_gitlab_api(mock_rms_user):
         def get_rms_user_by_id(self, user_id: int):
             if user_id == TEST_USER_ID:
                 return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise Exception("User not found")
+            raise GitLabApiException("User not found")
 
         def get_rms_user_by_username(self, username):
             if username == TEST_USERNAME:
                 return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise Exception("User not found")
+            raise GitLabApiException("User not found")
 
         def get_authenticated_rms_user(self, access_token):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
@@ -652,53 +658,108 @@ def test_process_score_invalid_format():
     assert exc_info.value.code == HTTPStatus.BAD_REQUEST
 
 
-def test_get_student_by_username():
-    """Test getting student by username"""
-    mock_rms_api = MagicMock()
-    test_rms_user = RmsUser(id=1, username="test_user", name="Test User")
-    mock_rms_api.get_rms_user_by_username.return_value = test_rms_user
+def test_validate_and_extract_params_get_student_by_id(app):
+    """Test parsing form data getting student by username"""
+    form_data = {"user_id": TEST_USER_ID, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
 
-    result = _get_rms_user(mock_rms_api, None, "test_user")
-    assert result == test_rms_user
-    mock_rms_api.get_rms_user_by_username.assert_called_once_with("test_user")
+    rms_user, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
-
-def test_get_student_by_id():
-    """Test getting student by user_id"""
-    mock_rms_api = MagicMock()
-    test_rms_user = RmsUser(id=1, username="test_user", name="Test User")
-    mock_rms_api.get_rms_user_by_id.return_value = test_rms_user
-
-    result = _get_rms_user(mock_rms_api, 1, None)
-    assert result == test_rms_user
-    mock_rms_api.get_rms_user_by_id.assert_called_once_with(1)
+    assert rms_user.id == TEST_USER_ID
+    assert rms_user.username == TEST_USERNAME
+    assert rms_user.name == TEST_NAME
+    assert task.name == TEST_TASK_NAME
+    assert group.name == TEST_TASK_GROUP_NAME
 
 
-def test_get_student_no_id_or_username():
-    """Test when neither user_id nor username is provided"""
-    mock_rms_api = MagicMock()
+def test_validate_and_extract_params_get_student_by_username(app):
+    """Test parsing form data getting student by id"""
+    form_data = {"username": TEST_USERNAME, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    rms_user, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+
+    assert rms_user.id == TEST_USER_ID
+    assert rms_user.username == TEST_USERNAME
+    assert rms_user.name == TEST_NAME
+    assert task.name == TEST_TASK_NAME
+    assert group.name == TEST_TASK_GROUP_NAME
+
+
+def test_validate_and_extract_params_no_student_name_or_id(app):
+    """Test parsing form data user is not defined"""
+    form_data = {"task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
     with pytest.raises(HTTPException) as exc_info:
-        _get_rms_user(mock_rms_api, None, None)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_validate_and_extract_params_both_student_name_and_id(app):
+    """Test parsing form data user is not defined"""
+    form_data = {"user_id": TEST_USER_ID, "username": TEST_USERNAME, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_validate_and_extract_params_user_id_not_an_int(app):
+    """Test parsing form data user is not defined"""
+    form_data = {"user_id": TEST_USERNAME, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_validate_and_extract_params_no_task_name(app):
+    """Test parsing form data when task is not defined"""
+    form_data = {"username": TEST_USERNAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+
+    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+
+
+def test_validate_and_extract_params_student_id_not_found(app):
+    """Test parsing form data wrong id"""
+    form_data = {"user_id": TEST_INVALID_USER_ID, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
-def test_get_student_username_not_found():
-    """Test when username is not found"""
-    mock_rms_api = MagicMock()
-    mock_rms_api.get_rms_user_by_username.side_effect = Exception("User not found")
+def test_validate_and_extract_params_student_username_not_found(app):
+    """Test parsing form data wrong username"""
+    form_data = {"username": TEST_INVALID_USERNAME, "task": TEST_TASK_NAME}
+    course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_rms_user(mock_rms_api, None, "nonexistent")
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
-def test_get_student_id_not_found():
-    """Test when user_id is not found"""
-    mock_rms_api = MagicMock()
-    mock_rms_api.get_rms_user_by_id.side_effect = Exception("User not found")
+def test_validate_and_extract_params_task_not_found(app):
+    """Test parsing form data wrong task name"""
+    form_data = {"user_id": TEST_USER_ID, "task": INVALID_TASK_NAME}
+    course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _get_rms_user(mock_rms_api, 999, None)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 

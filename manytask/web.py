@@ -225,7 +225,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
     # This is where the auth_api should be used when it will be ready
     rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
     first_name, last_name = rms_user.name.split()  # TODO: come up with how to separate names
-    app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, course.course_name)
+    app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name)
 
     app.storage_api.sync_stored_user(
         course.course_name,
