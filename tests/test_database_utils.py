@@ -70,18 +70,24 @@ def app():
             )
 
         @staticmethod
-        def get_all_scores(_course_name):
+        def get_all_scores_with_names(_course_name):
             return {
-                STUDENT_1: {
-                    TASK_1: SCORES[STUDENT_1][TASK_1],
-                    TASK_2: SCORES[STUDENT_1][TASK_2],
-                    TASK_LARGE: SCORES[STUDENT_1][TASK_LARGE],
-                },
-                STUDENT_2: {
-                    TASK_1: SCORES[STUDENT_2][TASK_1],
-                    TASK_2: SCORES[STUDENT_2][TASK_2],
-                    TASK_LARGE: SCORES[STUDENT_2][TASK_LARGE],
-                },
+                STUDENT_1: (
+                    {
+                        TASK_1: SCORES[STUDENT_1][TASK_1],
+                        TASK_2: SCORES[STUDENT_1][TASK_2],
+                        TASK_LARGE: SCORES[STUDENT_1][TASK_LARGE],
+                    },
+                    STUDENT_NAMES[STUDENT_1],
+                ),
+                STUDENT_2: (
+                    {
+                        TASK_1: SCORES[STUDENT_2][TASK_1],
+                        TASK_2: SCORES[STUDENT_2][TASK_2],
+                        TASK_LARGE: SCORES[STUDENT_2][TASK_LARGE],
+                    },
+                    STUDENT_NAMES[STUDENT_2],
+                ),
             }
 
         @staticmethod
@@ -141,7 +147,7 @@ def test_get_database_table_data_no_scores(app):
     expected_tasks_count = 3
 
     with app.test_request_context():
-        app.storage_api.get_all_scores = lambda _course_name: {}
+        app.storage_api.get_all_scores_with_names = lambda _course_name: {}
         result = get_database_table_data(app, "test_course")
 
         assert "tasks" in result
