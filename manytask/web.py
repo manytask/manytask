@@ -222,18 +222,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    # Split name into first and last name, handling cases with multiple names
-    if not student.name or not student.name.strip():
-        first_name = ""
-        last_name = ""
-    else:
-        name_parts = student.name.strip().split()
-        if len(name_parts) >= 2:
-            first_name = name_parts[0]
-            last_name = " ".join(name_parts[1:])  # Join remaining parts as last name
-        else:
-            first_name = student.name.strip()
-            last_name = ""
+    first_name, last_name = student.name.split()  # TODO: come up with how to separate names
     app.storage_api.create_user_if_not_exist(student.username, first_name, last_name, course.course_name)
 
     app.storage_api.sync_stored_user(
@@ -323,7 +312,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
-        manytask_version=app.manytask_version
+        manytask_version=app.manytask_version,
     )
 
 
