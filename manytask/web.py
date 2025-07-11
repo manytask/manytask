@@ -16,6 +16,7 @@ from .main import CustomFlask
 from .utils import generate_token_hex
 
 SESSION_VERSION = 1.5
+CACHE_TIMEOUT_SECONDS = 3600
 
 
 logger = logging.getLogger(__name__)
@@ -109,7 +110,6 @@ def course_page(course_name: str) -> ResponseReturnValue:
     except ValueError:
         cache_delta = timedelta(days=365)
 
-    CACHE_TIMEOUT_SECONDS = 3600
     if app.debug or cache_delta.total_seconds() > CACHE_TIMEOUT_SECONDS:
         storage_api.update_cached_scores(course.course_name)
         cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))

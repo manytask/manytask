@@ -1,15 +1,13 @@
 {% extends "base.html" %}
 
 {% block body %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
     {% set solved_score = scores.values() | sum() %}
     {% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
     {% set solved_score_string = solved_score ~ bonus_score_string %}
     {% set solved_percent = "0.0" if app.storage_api.max_score_started(course_name) == 0 else (solved_score / app.storage_api.max_score_started(course_name) * 100) | round(1, 'common') %}
 
-
-
-    <nav class="border-bottom navbar navbar-expand-lg bg-body fixed-top">
+    <nav class="navbar navbar-expand-lg bg-body fixed-top shadow-sm">
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar"
                     aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
@@ -20,41 +18,50 @@
                 <img class="d-none d-sm-block" src="{{ url_for('static', filename=course_favicon) }}" alt="favicon"
                      width="32" height="32">
                 &nbsp;
-                <span class="fs-4 mb-0 ms-1 h1">Manytask</span>
-                {#                <span class="fs-4 mb-0 ms-1 h1">Manytask: {{ course_name }}</span>#}
-                {#                <button class="fs-4 mb-0 ms-1">python</button>#}
+                <span class="fs-4 mb-0 ms-1 fw-bold text-gradient">Manytask</span>
             </a>
 
             <div class="collapse navbar-collapse ms-2" id="navbar">
-                <ul class="navbar-nav">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link px-3 {% if active_page == 'tasks' %}active{% endif %}"
+                        <a class="hover-underline nav-link px-3 position-relative {% if active_page == 'tasks' %}active fw-semibold{% endif %}"
                            aria-current="{% if active_page == 'tasks' %}page{% endif %}"
-                           href="{{ url_for('course.course_page', course_name=course_name) }}">Assignments</a>
+                           href="{{ url_for('course.course_page', course_name=course_name) }}">
+                           Assignments
+                           {% if active_page == 'tasks' %}<span class="active-indicator"></span>{% endif %}
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link px-3" target="_blank" href="{{ student_repo_url }}">My&nbsp;Repo</a>
+                        <a class="nav-link px-3 position-relative hover-underline" target="_blank" href="{{ student_repo_url }}">
+                            My Repo
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link px-3" target="_blank" href="{{ student_ci_url }}">My&nbsp;Submits</a>
+                        <a class="nav-link px-3 position-relative hover-underline" target="_blank" href="{{ student_ci_url }}">
+                            My Submits
+                        </a>
                     </li>
                     {% if show_allscores %}
                         <li class="nav-item">
-                            <a class="nav-link px-3 {% if active_page == 'database' %}active{% endif %}"
+                            <a class="hover-underline nav-link px-3 position-relative {% if active_page == 'database' %}active fw-semibold{% endif %}"
                                aria-current="{% if active_page == 'database' %}page{% endif %}"
                                href="{{ url_for('course.show_database', course_name=course_name) }}">
-                                All&nbsp;Scores
+                               All Scores
+                               {% if active_page == 'database' %}<span class="active-indicator"></span>{% endif %}
                             </a>
                         </li>
                     {% endif %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_links" data-bs-toggle="dropdown"
+                        <a class="nav-link px-3 dropdown-toggle position-relative hover-underline" href="#" id="navbar_links" data-bs-toggle="dropdown"
                            aria-expanded="false">Links</a>
-                        <ul class="dropdown-menu" aria-labelledby="navbar_links">
+                        <ul class="dropdown-menu shadow-sm" aria-labelledby="navbar_links">
                             {% set links = links | default({}) %}
                             {% for link_name, link_url in links.items() %}
                                 <li>
-                                    <a class="dropdown-item" target="_blank" href="{{ link_url }}">{{ link_name }}</a>
+                                    <a class="dropdown-item d-flex align-items-center py-2" target="_blank" href="{{ link_url }}">
+                                        <i class="fas fa-external-link-alt me-2 opacity-75"></i>
+                                        {{ link_name }}
+                                    </a>
                                 </li>
                             {% endfor %}
                         </ul>
@@ -62,53 +69,72 @@
                 </ul>
             </div>
 
-            <div class="dropdown text-end d-flex align-items-center justify-content-center">
-                <div class="adm-score-display round d-flex flex-column align-items-center justify-content-center ms-2 me-2">
-                    <span class="fs-7">{{ solved_score_string }}/{{ app.storage_api.max_score_started(course_name) }}</span>
-                    <span class="fs-7">{{ solved_percent }}%</span>
+            <div class="d-flex align-items-center">
+                <div class="score-display rounded-pill d-flex flex-column align-items-center justify-content-center ms-2 me-3 px-3 py-1 shadow-sm">
+                    <span class="fw-bold">{{ solved_percent }}%</span>
+                    <small class="text-muted">{{ solved_score_string }}/{{ app.storage_api.max_score_started(course_name) }}</small>
                 </div>
 
-                <a href="#" class="d-block link-body-emphasis text-decoration-none dropdown-toggle"
-                   data-bs-toggle="dropdown" aria-expanded="false">
-                    {#                        <img src="https://github.com/mdo.png" alt="mdo" width="32" height="32" class="rounded-circle">#}
-                    <span class="d-inline-block fw-bold">[{{ username }}]</span>
-                </a>
-                <ul class="dropdown-menu text-small dropdown-menu-end">
-                    <li><a class="dropdown-item" target="_blank" href="{{ gitlab_url }}/-/profile">Account Settings</a>
-                    </li>
-                    <li>
-                        <hr class="dropdown-divider">
-                    </li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="light"><i
-                            class="fa-fw fa-solid fa-sun "></i>&nbsp;Light Theme</a></li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i
-                            class="fa-fw fa-solid fa-moon"></i>&nbsp;Dark Theme</a></li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i
-                            class="fa-fw fa-solid fa-wand-magic-sparkles"></i>&nbsp;Auto Theme</a></li>
-                    <li>
-                        <hr class="dropdown-divider">
-                    </li>
-                    <li><a class="dropdown-item" href="{{ url_for('root.logout') }}">Sign out</a></li>
-                </ul>
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle user-menu"
+                       data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="avatar-circle me-2">
+                            {{ username[0] | upper }}
+                        </div>
+                        <span class="fw-semibold">{{ username }}</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2">
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center py-2" target="_blank" href="{{ gitlab_url }}/-/profile">
+                                <i class="fas fa-user-cog me-2 opacity-75"></i>
+                                Account Settings
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center py-2" href="#" data-bs-theme-value="light">
+                                <i class="fas fa-sun me-2 opacity-75"></i>
+                                Light Theme
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center py-2" href="#" data-bs-theme-value="dark">
+                                <i class="fas fa-moon me-2 opacity-75"></i>
+                                Dark Theme
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center py-2" href="#" data-bs-theme-value="auto">
+                                <i class="fas fa-magic me-2 opacity-75"></i>
+                                Auto Theme
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center py-2 text-danger" href="{{ url_for('root.logout') }}">
+                                <i class="fas fa-sign-out-alt me-2"></i>
+                                Sign out
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </div>
-
         </div>
     </nav>
 
-    {#  Floating form with ADMIN label if so  #}
+    {# Floating form with ADMIN label if so #}
     {% if is_course_admin %}
-        <div class="adm-badge fs-7">ADMIN</div>
+        <div class="adm-badge">ADMIN</div>
     {% endif %}
 
     <div class="px-3 container-lg">
-        {# Add bootstrap empty space for header  #}
+        {# Add bootstrap empty space for header #}
         <div class="container-fluid" style="height: 80px;"></div>
 
-        {#        <main class="main">#}
         {% block content %}
         {% endblock %}
-        {#        </main>#}
 
         <div class="container-fluid" style="height: 10px;"></div>
     </div>
+
 {% endblock %}
