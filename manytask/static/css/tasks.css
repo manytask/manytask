@@ -1,0 +1,166 @@
+.mt-lecture {
+    padding: 10px 20px 20px 20px;
+    border: 1px solid var(--bs-body-color);
+    margin-bottom: 30px;
+    box-sizing: border-box;
+}
+
+.mt-lecture.special {
+    background-color: var(--bs-tertiary-bg);
+}
+
+.mt-task-card {
+    width: 180px;
+    height: 120px;
+    padding: 8px;
+    margin: 10px;
+    position: relative;
+    box-sizing: border-box;
+    border: 2px solid #00000000;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.mt-task-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 10px 20px rgba(77, 75, 75, 0.17);
+}
+
+
+@media (max-width: 667px) {
+    .mt-task-card {
+        width: 150px;
+    }
+}
+
+@media (max-width: 479px) {
+    .mt-task-card {
+        width: 135px;
+    }
+}
+
+.mt-task-card * {
+    text-decoration: none;
+    color: black;
+}
+
+.mt-task-card.unsolved {
+    background-color: #a8a8a8;
+}
+
+.mt-task-card.unsolved:hover {
+    background-color: #b8b8b8;
+}
+
+
+.mt-task-card.solved {
+    background-color: #66cda3;
+}
+
+.mt-task-card.solved:hover {
+    background-color: #76ddb3;
+}
+
+
+.mt-task-card.over_solved {
+    background-color: #66cd83;
+}
+
+.mt-task-card.over_solved:hover {
+    background-color: #76dd93;
+}
+
+
+.mt-task-card.solved_partially {
+    background-color: #a27fdc;
+}
+
+.mt-task-card.solved_partially:hover {
+    background-color: #b28fec;
+}
+
+.mt-task-card.special {
+    border: 2px solid #f0ad4e !important;
+}
+
+.mt-task-card.special:hover {
+    border-color: #ffbd4e !important;
+    box-shadow: 0 10px 20px rgba(240, 173, 78, 0.2);
+}
+
+.mt-task-card.bonus {
+    border: 2px solid #5bc0de;
+}
+
+.mt-task-card.bonus:hover {
+    border-color: #6bd0ee;
+    box-shadow: 0 10px 20px rgba(91, 192, 222, 0.2);
+}
+
+.mt-task-card:hover .mt-task-stats {
+    opacity: 0.8;
+}
+
+.mt-task-card * {
+    transition: all 0.3s ease;
+}
+
+.mt-task-card .mt-task-name {
+    text-align: center;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: -6px;
+}
+
+.mt-task-card .mt-task-stats {
+    opacity: 0.25;
+    bottom: 0.15em;
+    font-size: 1em;
+    margin-top: -5px;
+    text-align: center;
+    overflow: hidden;
+    max-width: 85%;
+}
+
+.mt-task-card .solutions {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    text-align: center;
+    overflow: hidden;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.deadline.passed {
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+    opacity: 0.5;
+}
+
+/* Tooltip text */
+.mt-task-card .demand .mt-task-stats {
+    border-bottom: 1px dotted;
+}
+
+.mt-task-card .demand .demand-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: var(--bs-secondary-bg-subtle);
+    text-align: center;
+    padding: 10px;
+    border-radius: 20px;
+
+    /* Position the tooltip text - see examples below! */
+    position: absolute;
+    z-index: 1000;
+    left: 60%;
+    top: 120%;
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.mt-task-card .demand:hover .demand-text {
+    visibility: visible;
+}

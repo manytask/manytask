@@ -1,0 +1,27 @@
+body {
+    margin: 0;
+    font-family: 'Source Code Pro', monospace;
+    display: flex;
+    text-decoration: none;
+}
+
+:root body * {
+    --bs-border-radius: 20px;
+    --bs-border-radius-sm: 10px;
+}
+
+.mt-version-badge {
+    position: fixed;
+    bottom: 3px;
+    right: 7px;
+    text-align: right;
+    opacity: 0.4;
+}
+
+.mt-cache-time {
+    position: fixed;
+    bottom: 3px;
+    left: 7px;
+    text-align: left;
+    opacity: 0.2;
+}

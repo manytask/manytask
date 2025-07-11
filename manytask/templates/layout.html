@@ -1,61 +1,36 @@
 {% extends "base.html" %}
 
 {% block body %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    {% set solved_score = scores.values() | sum() %}
+    {% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
+    {% set solved_score_string = solved_score ~ bonus_score_string %}
+    {% set solved_percent = "0.0" if app.storage_api.max_score_started(course_name) == 0 else (solved_score / app.storage_api.max_score_started(course_name) * 100) | round(1, 'common') %}
 
-
-{% set solved_score = scores.values() | sum() %}
-{% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
-{% set solved_score_string = solved_score ~ bonus_score_string %}
-{% set solved_percent = "0.0" if app.storage_api.max_score_started(course_name)  == 0 else (solved_score / app.storage_api.max_score_started(course_name) * 100) | round(1, 'common') %}
-
-
-    <style>
-        .admin-label {
-            position: fixed;
-            bottom: 23px;
-            right: 7px;
-            background: orange;
-            padding: 0 4px;
-            border-radius: 5px;
-            opacity: 0.4;
-        }
-
-
-
-     {#Floating div with total score #}
-    .total_score {
-{#        position: fixed;#}
-{#        top: 70px;#}
-{#        right: 10px;#}
-{#        padding: 10px;#}
-        background-color: var(--bs-tertiary-bg);
-        border-radius: 10px;
-        padding: 0 5px;
-        font-size: 0.8rem;
-        {#box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);#}
-{#        z-index: 1000;#}
-    }
-    </style>
 
 
     <nav class="border-bottom navbar navbar-expand-lg bg-body fixed-top">
         <div class="container-fluid d-flex justify-content-between align-items-center">
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar"
+                    aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
             <a href="/" class="d-flex align-items-center text-decoration-none navbar-brand me-0">
-                <img class="d-none d-sm-block" src="{{ url_for('static', filename=course_favicon) }}" alt="favicon" width="32" height="32">
+                <img class="d-none d-sm-block" src="{{ url_for('static', filename=course_favicon) }}" alt="favicon"
+                     width="32" height="32">
                 &nbsp;
                 <span class="fs-4 mb-0 ms-1 h1">Manytask</span>
-{#                <span class="fs-4 mb-0 ms-1 h1">Manytask: {{ course_name }}</span>#}
+                {#                <span class="fs-4 mb-0 ms-1 h1">Manytask: {{ course_name }}</span>#}
                 {#                <button class="fs-4 mb-0 ms-1">python</button>#}
             </a>
 
             <div class="collapse navbar-collapse ms-2" id="navbar">
                 <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link px-3 {% if active_page == 'tasks' %}active{% endif %}" aria-current="{% if active_page == 'tasks' %}page{% endif %}" href="{{ url_for('course.course_page', course_name=course_name) }}">Assignments</a>
+                        <a class="nav-link px-3 {% if active_page == 'tasks' %}active{% endif %}"
+                           aria-current="{% if active_page == 'tasks' %}page{% endif %}"
+                           href="{{ url_for('course.course_page', course_name=course_name) }}">Assignments</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link px-3" target="_blank" href="{{ student_repo_url }}">My&nbsp;Repo</a>
@@ -64,16 +39,17 @@
                         <a class="nav-link px-3" target="_blank" href="{{ student_ci_url }}">My&nbsp;Submits</a>
                     </li>
                     {% if show_allscores %}
-                    <li class="nav-item">
-                        <a class="nav-link px-3 {% if active_page == 'database' %}active{% endif %}" 
-                           aria-current="{% if active_page == 'database' %}page{% endif %}"
-                           href="{{ url_for('course.show_database', course_name=course_name) }}">
-                            All&nbsp;Scores
-                        </a>
-                    </li>
+                        <li class="nav-item">
+                            <a class="nav-link px-3 {% if active_page == 'database' %}active{% endif %}"
+                               aria-current="{% if active_page == 'database' %}page{% endif %}"
+                               href="{{ url_for('course.show_database', course_name=course_name) }}">
+                                All&nbsp;Scores
+                            </a>
+                        </li>
                     {% endif %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_links" data-bs-toggle="dropdown" aria-expanded="false">Links</a>
+                        <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_links" data-bs-toggle="dropdown"
+                           aria-expanded="false">Links</a>
                         <ul class="dropdown-menu" aria-labelledby="navbar_links">
                             {% set links = links | default({}) %}
                             {% for link_name, link_url in links.items() %}
@@ -87,22 +63,31 @@
             </div>
 
             <div class="dropdown text-end d-flex align-items-center justify-content-center">
-                <div class="total_score round d-flex flex-column align-items-center justify-content-center ms-2 me-2">
+                <div class="adm-score-display round d-flex flex-column align-items-center justify-content-center ms-2 me-2">
                     <span class="fs-7">{{ solved_score_string }}/{{ app.storage_api.max_score_started(course_name) }}</span>
                     <span class="fs-7">{{ solved_percent }}%</span>
                 </div>
 
-                <a href="#" class="d-block link-body-emphasis text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <a href="#" class="d-block link-body-emphasis text-decoration-none dropdown-toggle"
+                   data-bs-toggle="dropdown" aria-expanded="false">
                     {#                        <img src="https://github.com/mdo.png" alt="mdo" width="32" height="32" class="rounded-circle">#}
                     <span class="d-inline-block fw-bold">[{{ username }}]</span>
                 </a>
                 <ul class="dropdown-menu text-small dropdown-menu-end">
-                    <li><a class="dropdown-item" target="_blank" href="{{ gitlab_url }}/-/profile">Account Settings</a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="light"><i class="fa-fw fa-solid fa-sun "></i>&nbsp;Light Theme</a></li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i class="fa-fw fa-solid fa-moon"></i>&nbsp;Dark Theme</a></li>
-                    <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i class="fa-fw fa-solid fa-wand-magic-sparkles"></i>&nbsp;Auto Theme</a></li>
-                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" target="_blank" href="{{ gitlab_url }}/-/profile">Account Settings</a>
+                    </li>
+                    <li>
+                        <hr class="dropdown-divider">
+                    </li>
+                    <li><a class="dropdown-item" href="#" data-bs-theme-value="light"><i
+                            class="fa-fw fa-solid fa-sun "></i>&nbsp;Light Theme</a></li>
+                    <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i
+                            class="fa-fw fa-solid fa-moon"></i>&nbsp;Dark Theme</a></li>
+                    <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i
+                            class="fa-fw fa-solid fa-wand-magic-sparkles"></i>&nbsp;Auto Theme</a></li>
+                    <li>
+                        <hr class="dropdown-divider">
+                    </li>
                     <li><a class="dropdown-item" href="{{ url_for('root.logout') }}">Sign out</a></li>
                 </ul>
             </div>
@@ -112,7 +97,7 @@
 
     {#  Floating form with ADMIN label if so  #}
     {% if is_course_admin %}
-        <div class="admin-label fs-7">ADMIN</div>
+        <div class="adm-badge fs-7">ADMIN</div>
     {% endif %}
 
     <div class="px-3 container-lg">
@@ -126,5 +111,4 @@
 
         <div class="container-fluid" style="height: 10px;"></div>
     </div>
-
 {% endblock %}

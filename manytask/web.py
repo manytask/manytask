@@ -116,9 +116,13 @@ def course_page(course_name: str) -> ResponseReturnValue:
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
 
     # get scores
+    print(student_username)
     tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
-
+    tasks_stats['task_0_2'] = 10
+    tasks_scores['task_0_2'] = 10
+    print(tasks_scores)
+    print(tasks_stats)
     allscores_url = url_for("course.show_database", course_name=course_name)
 
     return render_template(
@@ -313,6 +317,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
+        manytask_version=app.manytask_version
     )
 
 
