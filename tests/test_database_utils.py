@@ -3,8 +3,9 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
+from manytask.abstract import StoredUser
 from manytask.database_utils import get_database_table_data
-from manytask.glab import Student
+from tests import constants
 
 TASK_1 = "task1"
 TASK_2 = "task2"
@@ -14,7 +15,10 @@ TASK_LARGE = "task_large"
 STUDENT_1 = "student1"
 STUDENT_2 = "student2"
 
-STUDENT_NAMES = {STUDENT_1: "Student Oneich", STUDENT_2: "Student Twoich"}
+STUDENT_NAMES = {
+    STUDENT_1: [constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1],
+    STUDENT_2: [constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2],
+}
 
 SCORES = {
     STUDENT_1: {TASK_1: 100, TASK_2: 90, TASK_LARGE: 200, "total": 390, "large_count": 1},
@@ -57,18 +61,33 @@ def app():
             return self.groups
 
         @staticmethod
-        def get_all_scores(_course_name):
+        def get_stored_user(_course_name, username):
+            return StoredUser(
+                username=username,
+                first_name=STUDENT_NAMES[username][0],
+                last_name=STUDENT_NAMES[username][1],
+                course_admin=False,
+            )
+
+        @staticmethod
+        def get_all_scores_with_names(_course_name):
             return {
-                STUDENT_1: {
-                    TASK_1: SCORES[STUDENT_1][TASK_1],
-                    TASK_2: SCORES[STUDENT_1][TASK_2],
-                    TASK_LARGE: SCORES[STUDENT_1][TASK_LARGE],
-                },
-                STUDENT_2: {
-                    TASK_1: SCORES[STUDENT_2][TASK_1],
-                    TASK_2: SCORES[STUDENT_2][TASK_2],
-                    TASK_LARGE: SCORES[STUDENT_2][TASK_LARGE],
-                },
+                STUDENT_1: (
+                    {
+                        TASK_1: SCORES[STUDENT_1][TASK_1],
+                        TASK_2: SCORES[STUDENT_1][TASK_2],
+                        TASK_LARGE: SCORES[STUDENT_1][TASK_LARGE],
+                    },
+                    STUDENT_NAMES[STUDENT_1],
+                ),
+                STUDENT_2: (
+                    {
+                        TASK_1: SCORES[STUDENT_2][TASK_1],
+                        TASK_2: SCORES[STUDENT_2][TASK_2],
+                        TASK_LARGE: SCORES[STUDENT_2][TASK_LARGE],
+                    },
+                    STUDENT_NAMES[STUDENT_2],
+                ),
             }
 
         @staticmethod
@@ -83,13 +102,6 @@ def app():
     class MockGitLabApi:
         def __init__(self):
             pass
-
-        def get_student_by_username(self, username: str) -> Student:
-            return Student(
-                id=1,
-                username=username,
-                name=STUDENT_NAMES[username],
-            )
 
     app.storage_api = MockStorageApi()
     app.gitlab_api = MockGitLabApi()
@@ -120,7 +132,8 @@ def test_get_database_table_data(app):
 
         for student_id in [STUDENT_1, STUDENT_2]:
             student = next(s for s in students if s["username"] == student_id)
-            assert student["student_name"] == STUDENT_NAMES[student_id]
+            assert student["first_name"] == STUDENT_NAMES[student_id][0]
+            assert student["last_name"] == STUDENT_NAMES[student_id][1]
             assert student["total_score"] == SCORES[student_id]["total"]
             assert student["large_count"] == SCORES[student_id]["large_count"]
             assert student["scores"] == {
@@ -134,7 +147,7 @@ def test_get_database_table_data_no_scores(app):
     expected_tasks_count = 3
 
     with app.test_request_context():
-        app.storage_api.get_all_scores = lambda _course_name: {}
+        app.storage_api.get_all_scores_with_names = lambda _course_name: {}
         result = get_database_table_data(app, "test_course")
 
         assert "tasks" in result

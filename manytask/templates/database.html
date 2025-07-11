@@ -2,8 +2,25 @@
 {% set active_page = "database" -%}
 
 {% block content %}
-    <div class="container-fluid">
+    <div id="loader" class="position-absolute top-50 start-50" >
+        <div class="spinner-border text-secondary" style="width: 3rem; height: 3rem;"></div>
+    </div>
+    <div class="container-fluid  position-relative">
         <h2>Course Database</h2>
+
+            <div class="search-controls mb-3 mt-4">
+                <div class="search-group">
+                    <div class="search-input-wrapper">
+                        <input id="filter-value" type="text" class="form-control pr-1" placeholder="Search...">
+                        <i class="fas fa-search search-icon"></i>
+                    </div>
+
+                    <button id="filter-clear" class="btn btn-outline-secondary">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
+            </div>
+        </div>
+
         <div id="database-table" style="max-width: 800px; width: 100%; overflow-x: auto;"></div>
 
         {% if is_course_admin %}
@@ -39,6 +56,39 @@
           id="dark-theme" disabled>
 
     <style>
+
+        .search-controls {
+            display: flex;
+        }
+
+        .search-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+            pointer-events: none;
+        }
+
+        #filter-clear:hover {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: white;
+        }
+
         [data-bs-theme="dark"] .tabulator-footer .tabulator-paginator .tabulator-page:not(.active) {
             color: #666666 !important;
             background-color: #333333 !important;
@@ -224,6 +274,36 @@
                 attributeFilter: ['data-bs-theme']
             });
 
+
+            const valueEl = document.getElementById("filter-value");
+
+            function customFilter(data) {
+                const searchTerm = valueEl.value.toLowerCase();
+                if (data.username.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                const full_name = `${data.first_name} ${data.last_name}`.toLowerCase();
+                return full_name.includes(searchTerm);
+            }
+
+            document.getElementById("filter-value")
+                .addEventListener("keyup", function ()
+                {
+                    window.tabulatorTable.setFilter(customFilter);
+                });
+
+            document.addEventListener('keydown', function (event) {
+                if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+                    event.preventDefault();
+                    document.getElementById('filter-value').focus();
+                }
+            });
+
+            document.getElementById("filter-clear").addEventListener('click', function (event) {
+                valueEl.value = "";
+                window.tabulatorTable.clearFilter();
+            })
+
             fetch('{{ url_for("api.get_database", course_name=course_name) }}')
                 .then(response => response.json())
                 .then(data => {
@@ -237,26 +317,34 @@
                             headerTooltip: "Username"
                         },
                         {
-                            title: "Name",
-                            field: "student_name",
+                            title: "First<br>Name",
+                            field: "first_name",
                             frozen: true,
                             minWidth: 1,
-                            width: 200,
-                            headerTooltip: "Full name"
+                            headerTooltip: "First Name"
                         },
                         {
-                            title: "Total Score",
+                            title: "Last<br>Name",
+                            field: "last_name",
+                            frozen: true,
+                            minWidth: 1,
+                            headerTooltip: "Last Name"
+                        },
+                        {
+                            title: "Total<br>Score",
                             field: "total_score",
                             frozen: true,
                             sorter: "number",
+                            hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Total Score"
                         },
                         {
-                            title: "Percent",
+                            title: "Per<br>cent",
                             field: "percent",
                             frozen: true,
                             sorter: "number",
+                            hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "% completed"
                         },
@@ -265,6 +353,7 @@
                             field: "large_count",
                             frozen: true,
                             sorter: "number",
+                            hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Number of Large Homeworks"
                         }
@@ -290,6 +379,7 @@
                             title: task.name,
                             field: `scores.${task.name}`,
                             sorter: "number",
+                            hozAlign: "center",
                             headerTooltip: task.name,
                             {% if is_course_admin %}
                             cellClick: function(e, cell) {
@@ -463,6 +553,10 @@
                         },
                         persistenceMode: "local",
                         persistentLayout: true
+                    });
+
+                    window.tabulatorTable.on("tableBuilt", function () {
+                        document.getElementById("loader").style.display = "none"
                     });
 
                     // Wait for a short delay to ensure table is rendered

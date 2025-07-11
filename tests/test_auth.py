@@ -61,12 +61,6 @@ def mock_gitlab_api():
             return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
 
         @staticmethod
-        def register_new_user(user):
-            if user.username == TEST_USERNAME:
-                return True
-            raise Exception("Registration failed")
-
-        @staticmethod
         def get_student(user_id: int):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
@@ -117,15 +111,11 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_bonus_score(_username):
             return 10
 
-        def sync_stored_user(self, student):
-            if student.course_admin:
-                self.stored_user.course_admin = True
-
         @staticmethod
         def get_course(_name):
             return mock_course
 
-        def get_stored_user(self, _student):
+        def get_stored_user(self, _username):
             return self.stored_user
 
         def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
