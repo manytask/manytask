@@ -166,7 +166,6 @@ class DataBaseApi(StorageApi):
                 user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
                 return user_on_course.is_course_admin
             except NoResultFound as e:
-                session.rollback()
                 logger.info(f"There was an exception when checking user admin status: {e}")
                 return False
 
