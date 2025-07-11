@@ -9,7 +9,6 @@ from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
-from . import glab
 from .auth import requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
