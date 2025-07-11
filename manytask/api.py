@@ -11,7 +11,9 @@ import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
 
+from manytask.abstract import StorageApi
 from manytask.database import TaskDisabledError
+from manytask.glab import GitLabApi, GitLabApiException
 
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
@@ -100,25 +102,40 @@ def healthcheck() -> ResponseReturnValue:
     return "OK", HTTPStatus.OK
 
 
-def _validate_and_extract_params(form_data: dict[str, Any]) -> tuple[str, int | None, str | None, bool, str | None]:
+def _validate_and_extract_params(
+    form_data: dict[str, Any], gitlab_api: GitLabApi, storage_api: StorageApi, course_name: str
+) -> tuple[Student, ManytaskTaskConfig, ManytaskGroupConfig]:
     """Validate and extract parameters from form data."""
+
+    if "user_id" in form_data and "username" in form_data:
+        abort(HTTPStatus.BAD_REQUEST, "Both `user_id` or `username` were provided, use only one")
+    elif "user_id" in form_data:
+        try:
+            user_id = int(form_data["user_id"])
+            student = gitlab_api.get_student(user_id)
+        except ValueError:
+            abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
+        except GitLabApiException:
+            abort(HTTPStatus.NOT_FOUND, f"There is no student with user ID {user_id}")
+    elif "username" in form_data:
+        try:
+            username = form_data["username"]
+            student = gitlab_api.get_student_by_username(username)
+        except GitLabApiException:
+            abort(HTTPStatus.NOT_FOUND, f"There is no student with username {username}")
+    else:
+        abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
+
     if "task" not in form_data:
         abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `task`")
     task_name = form_data["task"]
 
-    if "user_id" not in form_data and "username" not in form_data:
-        abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
+    try:
+        group, task = storage_api.find_task(course_name, task_name)
+    except (KeyError, TaskDisabledError):
+        abort(HTTPStatus.NOT_FOUND, f"There is no task with name `{task_name}` (or it is closed for submission)")
 
-    user_id = int(form_data["user_id"]) if "user_id" in form_data else None
-    username = form_data["username"] if "username" in form_data else None
-
-    check_deadline = True
-    if "check_deadline" in form_data:
-        check_deadline = form_data["check_deadline"] is True or form_data["check_deadline"] == "True"
-
-    submit_time_str = form_data.get("submit_time")
-
-    return task_name, user_id, username, check_deadline, submit_time_str
+    return student, task, group
 
 
 def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetime) -> datetime:
@@ -160,19 +177,6 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{score_str}> to a number")
 
 
-def _get_student(gitlab_api: Any, user_id: int | None, username: str | None) -> Student:
-    """Get student by user_id or username."""
-    try:
-        if username:
-            return gitlab_api.get_student_by_username(username)
-        elif user_id:
-            return gitlab_api.get_student(user_id)
-        else:
-            assert False, "unreachable"
-    except Exception:
-        abort(HTTPStatus.NOT_FOUND, f"There is no student with user_id {user_id} or username {username}")
-
-
 @bp.post("/report")
 @requires_token
 @requires_ready
@@ -180,23 +184,20 @@ def report_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    task_name, user_id, username, check_deadline, submit_time_str = _validate_and_extract_params(request.form)
-
-    try:
-        group, task = app.storage_api.find_task(course.course_name, task_name)
-    except (KeyError, TaskDisabledError):
-        return (
-            f"There is no task with name `{task_name}` (or it is closed for submission)",
-            HTTPStatus.NOT_FOUND,
-        )
+    student, task, group = _validate_and_extract_params(
+        request.form, app.gitlab_api, app.storage_api, course.course_name
+    )
 
     reported_score = _process_score(request.form, task.score)
     if reported_score is None:
         reported_score = task.score
         logger.info(f"Got score=None; set max score for {task.name} of {task.score}")
 
-    student = _get_student(app.gitlab_api, user_id, username)
+    check_deadline = True
+    if "check_deadline" in request.form:
+        check_deadline = request.form["check_deadline"] is True or request.form["check_deadline"] == "True"
 
+    submit_time_str = request.form.get("submit_time")
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone(course.course_name))
 
     # Log with sanitized values
@@ -234,39 +235,13 @@ def report_score(course_name: str) -> ResponseReturnValue:
 @requires_ready
 def get_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    # ----- get and validate request parameters ----- #
-    if "task" not in request.form:
-        return "You didn't provide required attribute `task`", HTTPStatus.BAD_REQUEST
-    task_name = request.form["task"]
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    if "user_id" not in request.form and "username" not in request.form:
-        return "You didn't provide required attribute `user_id` or `username`", HTTPStatus.BAD_REQUEST
-    user_id = None
-    username = None
-    if "user_id" in request.form:
-        user_id = int(request.form["user_id"])
-    if "username" in request.form:
-        username = request.form["username"]
+    student, task, group = _validate_and_extract_params(
+        request.form, app.gitlab_api, app.storage_api, course.course_name
+    )
 
-    # ----- logic ----- #
-    try:
-        group, task = app.storage_api.find_task(course_name, task_name)
-    except (KeyError, TaskDisabledError):
-        return (
-            f"There is no task with name `{task_name}` (or it is closed for submission)",
-            HTTPStatus.NOT_FOUND,
-        )
-
-    try:
-        if username:
-            student = app.gitlab_api.get_student_by_username(username)
-        elif user_id:
-            student = app.gitlab_api.get_student(user_id)
-        else:
-            assert False, "unreachable"
-        student_scores = app.storage_api.get_scores(course_name, student.username)
-    except Exception:
-        return f"There is no student with user_id {user_id} or username {username}", HTTPStatus.NOT_FOUND
+    student_scores = app.storage_api.get_scores(course.course_name, student.username)
 
     try:
         student_task_score = student_scores[task.name]
