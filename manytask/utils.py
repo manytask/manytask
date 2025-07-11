@@ -17,7 +17,7 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
         student_id = session["gitlab"]["user_id"]
         student = app.gitlab_api.get_student(student_id)
 
-        courses_names = app.storage_api.get_user_courses_names(student)
+        courses_names = app.storage_api.get_user_courses_names(student.username)
 
     return [
         {

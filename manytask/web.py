@@ -85,7 +85,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
+        stored_user = storage_api.get_stored_user(course.course_name, student.username)
 
         student_course_admin = stored_user.course_admin
 
