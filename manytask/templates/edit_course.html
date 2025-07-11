@@ -12,6 +12,7 @@
     {% endif %}
 
     <form method="POST" action="{{ url_for('admin.edit_course', course_name=course.course_name) }}" class="needs-validation" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row">
             <div class="col-md-6 mb-4">
                 <h4>Basic Course Information</h4>
@@ -39,19 +40,35 @@
                 <h4>GitLab Configuration</h4>
                 <div class="mb-3">
                     <label for="gitlab_course_group" class="form-label">GitLab Course Group</label>
-                    <input type="text" class="form-control" id="gitlab_course_group" name="gitlab_course_group" value="{{ course.gitlab_course_group }}" required>
+                    <input type="text" class="form-control" id="gitlab_course_group" name="gitlab_course_group" value="{{ course.gitlab_course_group }}" placeholder="test-course" required>
+                    <div class="form-text">The general name of the GitLab group where all course materials will be
+                        stored
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="gitlab_course_public_repo" class="form-label">GitLab Public Repo</label>
-                    <input type="text" class="form-control" id="gitlab_course_public_repo" name="gitlab_course_public_repo" value="{{ course.gitlab_course_public_repo }}" required>
+                    <input type="text" class="form-control" id="gitlab_course_public_repo" name="gitlab_course_public_repo" value="{{ course.gitlab_course_public_repo }}" placeholder="test-course/public-repo" required>
+                    <div class="invalid-feedback" id="public-repo-feedback">Public Repo should begin with the name
+                        of the course group
+                    </div>
+                    <div class="form-text">The name of the repository shared by students, where the assignment
+                        conditions are laid out
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="gitlab_course_students_group" class="form-label">GitLab Students Group</label>
-                    <input type="text" class="form-control" id="gitlab_course_students_group" name="gitlab_course_students_group" value="{{ course.gitlab_course_students_group }}" required>
+                    <input type="text" class="form-control" id="gitlab_course_students_group" name="gitlab_course_students_group" value="{{ course.gitlab_course_students_group }}" placeholder="test-course/private-repo" formnovalidate>
+                    <div class="invalid-feedback" id="students-group-feedback">Students Group should begin with the
+                        name of the course group
+                    </div>
+                    <div class="form-text">The name of the repository shared by students where assignment conditions
+                        are written out
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="gitlab_default_branch" class="form-label">GitLab Default Branch</label>
                     <input type="text" class="form-control" id="gitlab_default_branch" name="gitlab_default_branch" value="{{ course.gitlab_default_branch }}" required>
+
                 </div>
             </div>
         </div>

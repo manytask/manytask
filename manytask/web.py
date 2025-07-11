@@ -370,6 +370,11 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         return redirect(url_for("root.index"))
 
     if request.method == "POST":
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError as e:
+            app.logger.error(f"CSRF validation failed: {e}")
+            return render_template("create_project.html", error_message="CSRF Error")
         updated_settings = CourseConfig(
             course_name=course_name,
             gitlab_course_group=request.form["gitlab_course_group"],
@@ -384,7 +389,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             links=course.links,
         )
 
-        if app.storage_api.edit_course(course_name, updated_settings):
+        if app.storage_api.edit_course(updated_settings):
             return redirect(url_for("course.course_page", course_name=course_name))
 
         return render_template("edit_course.html", course=updated_settings, error_message="Ошибка при обновлении курса")
