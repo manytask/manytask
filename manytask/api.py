@@ -325,8 +325,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
-    stored_user = storage_api.get_stored_user(course.course_name, student.username)
-    student_course_admin = stored_user.course_admin
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
