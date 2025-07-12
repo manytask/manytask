@@ -52,6 +52,13 @@ class StorageApi(ABC):
     ) -> StoredUser: ...
 
     @abstractmethod
+    def check_if_course_admin(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool: ...
+
+    @abstractmethod
     def sync_stored_user(
         self,
         course_name: str,
@@ -129,7 +136,7 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, course_name: str) -> None: ...
+    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str) -> None: ...
 
     @abstractmethod
     def get_user_courses_names(self, username: str) -> list[str]: ...
