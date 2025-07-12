@@ -115,6 +115,14 @@ def mock_storage_api(mock_course):  # noqa: C901
             return datetime.now(tz=ZoneInfo("UTC"))
 
         @staticmethod
+        def get_all_courses_names():
+            return "test_course_names"
+
+        @staticmethod
+        def get_user_courses_names(_username):
+            return "test_course_names"
+
+        @staticmethod
         def get_scores(_course_name, _username):
             return {"task1": 100, "task2": 90}
 
