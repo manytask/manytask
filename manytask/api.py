@@ -195,7 +195,8 @@ def report_score(course_name: str) -> ResponseReturnValue:
     # Log with sanitized values
     logger.info(f"Use submit_time: {submit_time}")
     logger.info(
-        f"Will process score {reported_score} for @{student} on task {task.name} {'with' if check_deadline else 'without'} deadline check"
+        f"Will process score {reported_score} for @{student} on task {task.name} \
+            {'with' if check_deadline else 'without'} deadline check"
     )
 
     update_function = functools.partial(
