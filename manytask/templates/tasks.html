@@ -1,208 +1,80 @@
 {% extends "layout.html" %}
 {% set active_page = "tasks" -%}
 
+{% block additional_styles %}
+{#    {{ super() }}#}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}">
+{% endblock %}
+
 {% block content %}
+    {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True)[::-1] %}
+        {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
+        {% set solved_group_scores = [] %}
+        {% for task in group.tasks %}
+            {% set _ = solved_group_scores.append(scores.get(task.name, 0)) %}
+        {% endfor %}
+        {% set solved_group_score = solved_group_scores|sum %}
 
-<style>
-    .lecture {
-        padding: 10px 20px 20px 20px;
-        {#background-color: var(--bs-light-bg-subtle);#}
-        border: 1px solid var(--bs-body-color);
-        margin-bottom: 30px;
-        box-sizing: border-box;
-    }
-
-    .lecture.special {
-        background-color: var(--bs-tertiary-bg);
-        {#background-color: var(--bs-secondary-bg);#}
-        {#border: 1px solid var(--bs-info-border-subtle);#}
-    }
-
-    .assignment {
-        width: 180px;
-        height: 120px;
-        padding: 8px;
-        margin: 10px;
-        position: relative;
-        box-sizing: border-box;
-        border: 2px solid #00000000;
-    }
-    @media (max-width: 667px) {
-        .assignment {
-            width: 150px;
-        }
-    }
-    @media (max-width: 479px) {
-        .assignment {
-            width: 135px;
-        }
-    }
-
-    .assignment * {
-        text-decoration: none;
-        color: black;
-    }
-
-    .assignment.unsolved {
-        background-color: #a8a8a8;
-    }
-
-    .assignment.solved {
-        background-color: #66cda3;
-    }
-
-    .assignment.over_solved {
-        background-color: #66cd83;
-    }
-
-    .assignment.solved_partially {
-        background-color: #a27fdc;
-    }
-    .assignment.special {
-        border: 2px solid #f0ad4e!important;
-    }
-    .assignment.bonus {
-        border: 2px solid #5bc0de;
-        {#background-color: #66cda3;#}
-        {#background-color: #a8a8a8;#}
-    }
-
-
-    .assignment .name {
-        text-align: center;
-        width: 100%;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin-bottom: -6px;
-    }
-
-    .assignment .stat {
-        opacity: 0.25;
-        {#position: absolute;#}
-        {#top: 0.15em;#}
-        {#left: 0.5em;#}
-        bottom: 0.15em;
-        font-size: 1em;
-        margin-top: -5px;
-        text-align: center;
-        overflow: hidden;
-        max-width: 85%;
-    }
-
-    .assignment .solutions {
-        position: absolute;
-        right: 10px;
-        bottom: 10px;
-        text-align: center;
-        overflow: hidden;
-        margin-left: auto;
-        margin-right: auto;
-        {#max-width: 4ch;#}
-    }
-
-    .deadline.passed {
-        text-decoration: line-through;
-        text-decoration-thickness: 2px;
-        {#text-decoration-color: rgba(40, 40, 40, 0.5);#}
-        opacity: 0.5;
-    }
-
-    /* Tooltip text */
-    .assignment .demand .stat {
-        border-bottom: 1px dotted;
-    }
-
-    .assignment .demand .demand-text {
-        visibility: hidden;
-        width: 200px;
-        background-color: var(--bs-secondary-bg-subtle);
-        text-align: center;
-        padding: 10px;
-        border-radius: 20px;
-
-        /* Position the tooltip text - see examples below! */
-        position: absolute;
-        z-index: 1000;
-        left: 60%;
-        top: 120%;
-        {#bottom: 110%;#}
-    }
-
-    /* Show the tooltip text when you mouse over the tooltip container */
-    .assignment .demand:hover .demand-text {
-        visibility: visible;
-    }
-</style>
-
-{% for group in app.storage_api.get_groups(course_name, enabled=True, started=True)[::-1] %}
-    {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
-    {% set solved_group_scores = [] %}
-    {% for task in group.tasks %}
-        {% set _ = solved_group_scores.append(scores.get(task.name, 0)) %}
-    {% endfor %}
-    {% set solved_group_score = solved_group_scores|sum %}
-
-    <div class="container-fluid rounded lecture {{ 'special' if group.special else '' }}">
-        <div class="d-block d-sm-flex justify-content-between align-items-start">
-            <div class="d-block flex-column align-items-start">
-                <span class="fs-2 mb-0">{{ group.name }}</span>
-                <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
+        <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}">
+            <div class="d-block d-sm-flex justify-content-between align-items-start">
+                <div class="d-block flex-column align-items-start">
+                    <span class="fs-2 mb-0">{{ group.name }}</span>
+                    <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
+                </div>
+                <div class="d-flex flex-column align-items-end mt-2">
+                    {% for percent, deadline in group.get_percents_before_deadline().items() %}
+                        <span class="fs-5 deadline {{ 'passed' if deadline < now else '' }}">{{ (percent*100)|round|int }}%: {{ deadline.strftime('%Y-%m-%d %H:%M %Z') }}</span>
+                    {% endfor %}
+                </div>
             </div>
-            <div class="d-flex flex-column align-items-end mt-2">
-                {% for percent, deadline in group.get_percents_before_deadline().items() %}
-                    <span class="fs-5 deadline {{ 'passed' if deadline < now else '' }}">{{ (percent*100)|round|int }}%: {{ deadline.strftime('%Y-%m-%d %H:%M %Z') }}</span>
+            <hr class="dashed mt-1">
+
+            <div class="container-fluid d-flex flex-wrap px-0" style="margin: -10px!important;">
+                {#        <div class="container-fluid row px-0" style="margin: -10px!important;">#}
+                {% for task in group.tasks %}
+                    {% if task.url %}
+                        {% set task_link = task.url %}
+                    {% else %}
+                        {% set task_link = task_url_template | replace('$GROUP_NAME', group.name) | replace('$TASK_NAME', task.name) %}
+                    {% endif %}
+
+                    {% if scores.get(task.name, 0) == task.score %}
+                        {% set task_tag = 'solved' %}
+                    {% elif scores.get(task.name, 0) > task.score %}
+                        {% set task_tag = 'over_solved' %}
+                    {% elif scores.get(task.name, 0) > 0 %}
+                        {% set task_tag = 'solved_partially' %}
+                    {% else %}
+                        {% set task_tag = 'unsolved' %}
+                    {% endif %}
+
+                    {% if task.is_special %}
+                        {% set task_tag = task_tag ~ ' special' %}
+                    {% endif %}
+
+                    {% if task.is_bonus %}
+                        {% set task_tag = task_tag ~ ' bonus' %}
+                    {% endif %}
+
+                    <div class="mt-task-card rounded {{ task_tag }}" style="position: relative">
+                        <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
+                            <span class="fs-5 mt-task-name">{{ task.name }}</span>
+                            <span class="fs-1 fw-bold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
+                            {#                        {% if not group.hw and demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}#}
+                            {#                            <div class="demand">#}
+                            {#                                <div class="fs-6 stat"><i class="fa-solid fa-bolt"></i>{{ task_stats.get(task.name, '0') }}</div>#}
+                            {#                                <div class="demand-text">Low demand!<br>Only {{ task_stats.get(task.name, '0') }} of students solved this assignment.<br>Your score will be multiplied by {{ demand_multipliers.get(task.name, '1') | round(3, 'common') }}</div>#}
+                            {#                            </div>#}
+                            {#                        {% else %}#}
+                            {#                            <div class="fs-6 stat">{{ task_stats.get(task.name, '0') }}</div>#}
+                            {#                        {% endif %}#}
+                            <div class="fs-6 mt-task-stats">{% if task.is_special %}special&nbsp;{% endif %}
+                                {% if task.is_bonus %}bonus
+                                    &nbsp;{% endif %}{{ task_stats.get(task.name, 0)|float|round(2) }}</div>
+                        </a>
+                    </div>
                 {% endfor %}
             </div>
         </div>
-        <hr class="dashed mt-1">
-
-        <div class="container-fluid d-flex flex-wrap px-0" style="margin: -10px!important;">
-{#        <div class="container-fluid row px-0" style="margin: -10px!important;">#}
-            {% for task in group.tasks %}
-                {% if task.url %}
-                  {% set task_link = task.url %}
-                {% else %}
-                  {% set task_link = task_url_template | replace('$GROUP_NAME', group.name) | replace('$TASK_NAME', task.name) %}
-                {% endif %}
-
-                {% if scores.get(task.name, 0) == task.score %}
-                    {% set task_tag = 'solved' %}
-                {% elif scores.get(task.name, 0) > task.score %}
-                    {% set task_tag = 'over_solved' %}
-                {% elif scores.get(task.name, 0) > 0 %}
-                    {% set task_tag = 'solved_partially' %}
-                {% else %}
-                    {% set task_tag = 'unsolved' %}
-                {% endif %}
-
-                {% if task.is_special %}
-                    {% set task_tag = task_tag ~ ' special' %}
-                {% endif %}
-
-                {% if task.is_bonus %}
-                    {% set task_tag = task_tag ~ ' bonus' %}
-                {% endif %}
-
-                <div class="assignment rounded {{ task_tag }}" style="position: relative">
-                    <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
-                        <span class="fs-5 name">{{ task.name }}</span>
-                        <span class="fs-1 fw-bold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
-{#                        {% if not group.hw and demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}#}
-{#                            <div class="demand">#}
-{#                                <div class="fs-6 stat"><i class="fa-solid fa-bolt"></i>{{ task_stats.get(task.name, '0') }}</div>#}
-{#                                <div class="demand-text">Low demand!<br>Only {{ task_stats.get(task.name, '0') }} of students solved this assignment.<br>Your score will be multiplied by {{ demand_multipliers.get(task.name, '1') | round(3, 'common') }}</div>#}
-{#                            </div>#}
-{#                        {% else %}#}
-{#                            <div class="fs-6 stat">{{ task_stats.get(task.name, '0') }}</div>#}
-{#                        {% endif %}#}
-                        <div class="fs-6 stat">{% if task.is_special %}special&nbsp;{% endif %}{% if task.is_bonus %}bonus&nbsp;{% endif %}{{ task_stats.get(task.name, 0)|float|round(2) }}</div>
-                    </a>
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-{% endfor %}
-
-
+    {% endfor %}
 {% endblock %}
