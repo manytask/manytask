@@ -139,6 +139,33 @@ class DataBaseApi(StorageApi):
                 course_admin=user_on_course.is_course_admin,
             )
 
+    def check_if_course_admin(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool:
+        """Method for checking user's admin status
+
+        :param course_name: course name
+        :param username: user name
+
+        :return: cif the user is an admin on the course
+        """
+
+        with Session(self.engine) as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user = self._get(
+                    session,
+                    models.User,
+                    username=username,
+                )
+                user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+                return user_on_course.is_course_admin
+            except NoResultFound as e:
+                logger.info(f"There was an exception when checking user admin status: {e}")
+                return False
+
     def sync_stored_user(
         self,
         course_name: str,
