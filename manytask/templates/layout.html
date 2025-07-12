@@ -27,18 +27,20 @@
                         <a class="hover-underline nav-link px-3 position-relative {% if active_page == 'tasks' %}active fw-semibold{% endif %}"
                            aria-current="{% if active_page == 'tasks' %}page{% endif %}"
                            href="{{ url_for('course.course_page', course_name=course_name) }}">
-                           Assignments
+                           <i class="fas fa-tasks me-1"></i>Assignments
                            {% if active_page == 'tasks' %}<span class="active-indicator"></span>{% endif %}
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link px-3 position-relative hover-underline" target="_blank" href="{{ student_repo_url }}">
-                            My Repo
+                            <i class="fas fa-code-branch me-1"></i>My&nbsp;Repo
+
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link px-3 position-relative hover-underline" target="_blank" href="{{ student_ci_url }}">
-                            My Submits
+                            <i class="fas fa-rocket me-1"></i>My&nbsp;Submits
+
                         </a>
                     </li>
                     {% if show_allscores %}
@@ -46,15 +48,19 @@
                             <a class="hover-underline nav-link px-3 position-relative {% if active_page == 'database' %}active fw-semibold{% endif %}"
                                aria-current="{% if active_page == 'database' %}page{% endif %}"
                                href="{{ url_for('course.show_database', course_name=course_name) }}">
-                               All Scores
+                               <i class="fas fa-table me-1"></i>All&nbsp;Scores
                                {% if active_page == 'database' %}<span class="active-indicator"></span>{% endif %}
                             </a>
                         </li>
                     {% endif %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link px-3 dropdown-toggle position-relative hover-underline" href="#" id="navbar_links" data-bs-toggle="dropdown"
-                           aria-expanded="false">Links</a>
+                        <a class="nav-link px-3 position-relative hover-underline" href="#" id="navbar_links" data-bs-toggle="dropdown"
+                           aria-expanded="false">
+                            <i class="fas fa-link me-1"></i>Links
+                                <i class="dropdown-chevron fas fa-chevron-down ms-1 fs-8 transition-transform"></i>
+                        </a>
                         <ul class="dropdown-menu shadow-sm" aria-labelledby="navbar_links">
+
                             {% set links = links | default({}) %}
                             {% for link_name, link_url in links.items() %}
                                 <li>

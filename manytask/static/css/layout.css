@@ -137,65 +137,14 @@
     }
 }
 
-/*.navbar {*/
-/*        !*background: linear-gradient(90deg, #004085, #0062cc);*!*/
-/*        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);*/
-/*    }*/
+.dropdown-chevron {
+    opacity: 0;
+    transform: translateY(2px);
+    transition: all 0.2s ease;
+}
 
-/*    .navbar-brand, .navbar-nav .nav-link {*/
-/*        color: white !important;*/
-/*        transition: color 0.3s ease;*/
-/*    }*/
-
-/*    .navbar-nav .nav-link:hover {*/
-/*        color: #ffc107 !important;*/
-/*        background-color: rgba(255, 255, 255, 0.1);*/
-/*        border-radius: 0.5rem;*/
-/*    }*/
-
-/*    .nav-item .active {*/
-/*        font-weight: bold;*/
-/*        color: #ffd966 !important;*/
-/*    }*/
-
-/*    .dropdown-menu {*/
-/*        border-radius: 0.5rem;*/
-/*        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);*/
-/*    }*/
-
-/*    .dropdown-item:hover {*/
-/*        background-color: #f8f9fa;*/
-/*        color: #0d6efd;*/
-/*    }*/
-
-/*    !*.adm-score-display {*!*/
-/*    !*    background: #ffffff;*!*/
-/*    !*    padding: 0.4rem 0.8rem;*!*/
-/*    !*    border-radius: 0.5rem;*!*/
-/*    !*    box-shadow: 0 2px 5px rgba(0,0,0,0.1);*!*/
-/*    !*    font-weight: bold;*!*/
-/*    !*    font-size: 0.85rem;*!*/
-/*    !*    min-width: 70px;*!*/
-/*    !*    text-align: center;*!*/
-/*    !*}*!*/
-
-/*    !*.adm-badge {*!*/
-/*    !*    position: fixed;*!*/
-/*    !*    top: 90px;*!*/
-/*    !*    right: 20px;*!*/
-/*    !*    background: #dc3545;*!*/
-/*    !*    color: white;*!*/
-/*    !*    padding: 4px 8px;*!*/
-/*    !*    border-radius: 4px;*!*/
-/*    !*    font-weight: bold;*!*/
-/*    !*    z-index: 1050;*!*/
-/*    !*    box-shadow: 0 2px 4px rgba(0,0,0,0.2);*!*/
-/*    !*}*!*/
-
-/*    .navbar-toggler {*/
-/*        border-color: rgba(255, 255, 255, 0.5);*/
-/*    }*/
-
-/*    .navbar-toggler-icon {*/
-/*        background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3e%3cpath stroke='rgba%28255, 255, 255, 0.8%29' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");*/
-/*    }*/
+.nav-item.dropdown:hover .dropdown-chevron,
+.nav-item.dropdown.show .dropdown-chevron {
+    opacity: 1;
+    transform: translateY(0);
+}

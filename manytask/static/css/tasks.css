@@ -54,51 +54,55 @@
 
 
 .mt-task-card.solved {
-    background-color: #66cda3;
+    background-color: #66cda3!important;
 }
 
 .mt-task-card.solved:hover {
-    background-color: #76ddb3;
+    background-color: #76ddb3 !important;
 }
 
 
 .mt-task-card.over_solved {
-    background-color: #66cd83;
+    background-color: #66cd83 !important;
 }
 
 .mt-task-card.over_solved:hover {
-    background-color: #76dd93;
+    background-color: #76dd93 !important;
 }
 
 
 .mt-task-card.solved_partially {
-    background-color: #a27fdc;
+    background-color: #a27fdc !important;
 }
 
 .mt-task-card.solved_partially:hover {
-    background-color: #b28fec;
+    background-color: #b28fec !important;
 }
-
-.mt-task-card.special {
-    border: 2px solid #f0ad4e !important;
-}
-
-.mt-task-card.special:hover {
-    border-color: #ffbd4e !important;
-    box-shadow: 0 10px 20px rgba(240, 173, 78, 0.2);
-}
-
 .mt-task-card.bonus {
     border: 2px solid #5bc0de;
+     background-color: rgba(227, 242, 253, 0.7);
 }
 
 .mt-task-card.bonus:hover {
     border-color: #6bd0ee;
     box-shadow: 0 10px 20px rgba(91, 192, 222, 0.2);
+    background-color: rgba(227, 242, 253, 0.7);
 }
 
+.mt-task-card.special {
+    border: 2px solid #f0ad4e !important;
+    background-color: rgba(255, 243, 224, 0.7) ;
+}
+
+.mt-task-card.special:hover {
+    border-color: #ffbd4e !important;
+    box-shadow: 0 10px 20px rgba(240, 173, 78, 0.2) ;
+    background-color: rgba(255, 243, 224, 0.7) ;
+}
+
+
 .mt-task-card:hover .mt-task-stats {
-    opacity: 0.8;
+    opacity: 0.9;
 }
 
 .mt-task-card * {
@@ -115,7 +119,7 @@
 }
 
 .mt-task-card .mt-task-stats {
-    opacity: 0.25;
+    opacity: 0.35;
     bottom: 0.15em;
     font-size: 1em;
     margin-top: -5px;
