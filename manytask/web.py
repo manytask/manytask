@@ -97,8 +97,6 @@ def course_page(course_name: str) -> ResponseReturnValue:
                 base_url=app.rms_api.base_url,
             )
 
-        student_course_admin = stored_user.course_admin
-
     # update cache if more than 1h passed or in debug mode
     try:
         cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
