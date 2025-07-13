@@ -99,7 +99,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
         student = app.gitlab_api.get_student(user_id=student_id)
         try:
-            stored_user = storage_api.get_stored_user(course.course_name, student.username)
+            student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
         except Exception as e:
             logger.warning(f"Can not find user {student.username}: {e}")
             return render_template(
@@ -300,7 +300,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
         student = app.gitlab_api.get_student(user_id=student_id)
         try:
-            stored_user = storage_api.get_stored_user(course.course_name, student.username)
+            student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
         except Exception as e:
             logger.warning(f"Can not find user {student.username}: {e}")
             return render_template(
@@ -310,8 +310,6 @@ def show_database(course_name: str) -> ResponseReturnValue:
                 course_favicon=app.favicon,
                 base_url=app.rms_api.base_url,
             )
-
-        student_course_admin = stored_user.course_admin
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)

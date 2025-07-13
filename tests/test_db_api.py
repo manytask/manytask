@@ -615,6 +615,11 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
         course_admin=False,
     )
 
+    is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
+        FIRST_COURSE_NAME, constants.TEST_USERNAME
+    )
+    assert not is_course_admin
+
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1
 
@@ -633,6 +638,11 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
         course_admin=True,
     )
 
+    is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
+        FIRST_COURSE_NAME, constants.TEST_USERNAME
+    )
+    assert is_course_admin
+
     # lost admin rules in gitlab, but in database stored that user is admin
     stored_user = db_api_with_initialized_first_course.sync_stored_user(
         FIRST_COURSE_NAME,
@@ -647,6 +657,11 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
         last_name=constants.TEST_LAST_NAME,
         course_admin=True,
     )
+
+    is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
+        FIRST_COURSE_NAME, constants.TEST_USERNAME
+    )
+    assert is_course_admin
 
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 1

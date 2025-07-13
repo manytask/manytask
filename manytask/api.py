@@ -79,21 +79,13 @@ def _update_score(
     if old_score < 0:
         return old_score
 
-    if not check_deadline:
-        return int(score)
+    if check_deadline:
+        extra_time = _parse_flags(flags)
 
-    extra_time = _parse_flags(flags)
+        multiplier = group.get_current_percent_multiplier(now=submit_time - extra_time)
+        score = int(score * multiplier)
 
-    multiplier = group.get_current_percent_multiplier(now=submit_time - extra_time)
-    new_score = int(score * multiplier)
-
-    return max(old_score, new_score)
-
-    # if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
-    #     return old_score
-    # if check_deadline and task.is_overdue(extra_time, submit_time=submit_time):
-    #     return int(second_deadline_max * score)
-    # return int(score)
+    return max(old_score, score)
 
 
 @bp.get("/healthcheck")
@@ -201,8 +193,11 @@ def report_score(course_name: str) -> ResponseReturnValue:
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone(course.course_name))
 
     # Log with sanitized values
-    logger.info(f"Save score {reported_score} for @{student} on task {task.name} check_deadline {check_deadline}")
-    logger.info(f"verify deadline: Use submit_time={submit_time}")
+    logger.info(f"Use submit_time: {submit_time}")
+    logger.info(
+        f"Will process score {reported_score} for @{student} on task {task.name} \
+            {'with' if check_deadline else 'without'} deadline check"
+    )
 
     update_function = functools.partial(
         _update_score,
@@ -332,12 +327,10 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
     try:
-        stored_user = storage_api.get_stored_user(course.course_name, student.username)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
     except Exception as e:
         logger.error(f"Error finding the user {student.username}: {str(e)}")
         return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
-
-    student_course_admin = stored_user.course_admin
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
