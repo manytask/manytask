@@ -204,7 +204,7 @@ def mock_gitlab_api(mock_student):
             return f"https://gitlab.com/{username}/test-repo"
 
         @staticmethod
-        def check_project_exists(_student, course_students_group):
+        def check_project_exists(_username, course_students_group):
             return True
 
     return MockGitlabApi()
