@@ -6,7 +6,7 @@
     color: white;
     padding: 0.25rem 0.75rem;
     border-radius: 1rem;
-    font-size: 0.70rem;
+    font-size: 0.7rem;
     font-weight: bold;
     z-index: 1035;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -20,7 +20,7 @@
 }
 
 .text-gradient {
-    background: linear-gradient(90deg, #FFCB77, #17C3B2);
+    background: #17C3B2;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -37,7 +37,8 @@
     transition: all 0.2s ease;
     color: var(--bs-body-color);
     position: relative;
-    padding: 0.5rem 1rem !important;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem !important;
 }
 
 .nav-link:hover {
@@ -57,12 +58,12 @@
 }
 
 .hover-underline:hover::after {
-    width: 75%;
+    width: 80%;
 }
 
 .active-indicator {
     position: absolute;
-    width: 75%;
+    width: 80%;
     height: 2px;
     bottom: 0;
     left: 50%;
@@ -73,11 +74,13 @@
 .score-display {
     background-color: var(--bs-primary-bg-subtle);
     border: 1px solid var(--bs-primary-border-subtle);
+    border-radius: 1.35rem;
     transition: background-color 0.3s ease;
 }
 
 .score-display:hover {
     background-color: var(--bs-primary);
+    border-radius: 1rem;
     color: white;
 }
 
@@ -123,6 +126,41 @@
     background-color: var(--bs-tertiary-bg);
 }
 
+.current-course {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.5rem;
+    background-color: var(--bs-tertiary-bg);
+    margin-right: 1rem;
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.current-course:hover {
+    background-color: var(--bs-secondary-bg);
+}
+
+.current-course i {
+    margin-right: 0.5rem;
+    color: var(--bs-primary);
+    font-size: 0.9rem;
+}
+
+.course-selector {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.course-selector:hover {
+    background-color: var(--bs-tertiary-bg);
+}
+
 @media (max-width: 991.98px) {
     .navbar-collapse {
         padding: 1rem 0;
@@ -134,6 +172,10 @@
 
     .score-display {
         margin: 1rem 0;
+    }
+
+    .current-course {
+        margin: 1rem 0.2rem;
     }
 }
 

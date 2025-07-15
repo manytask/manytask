@@ -3,6 +3,7 @@
     border: 1px solid var(--bs-body-color);
     margin-bottom: 30px;
     box-sizing: border-box;
+    position: relative;
 }
 
 .mt-lecture.special {
@@ -54,7 +55,7 @@
 
 
 .mt-task-card.solved {
-    background-color: #66cda3!important;
+    background-color: #66cda3 !important;
 }
 
 .mt-task-card.solved:hover {
@@ -78,9 +79,10 @@
 .mt-task-card.solved_partially:hover {
     background-color: #b28fec !important;
 }
+
 .mt-task-card.bonus {
     border: 2px solid #5bc0de;
-     background-color: rgba(227, 242, 253, 0.7);
+    background-color: rgba(227, 242, 253, 0.7);
 }
 
 .mt-task-card.bonus:hover {
@@ -91,13 +93,13 @@
 
 .mt-task-card.special {
     border: 2px solid #f0ad4e !important;
-    background-color: rgba(255, 243, 224, 0.7) ;
+    background-color: rgba(255, 243, 224, 0.7);
 }
 
 .mt-task-card.special:hover {
     border-color: #ffbd4e !important;
-    box-shadow: 0 10px 20px rgba(240, 173, 78, 0.2) ;
-    background-color: rgba(255, 243, 224, 0.7) ;
+    box-shadow: 0 10px 20px rgba(240, 173, 78, 0.2);
+    background-color: rgba(255, 243, 224, 0.7);
 }
 
 
@@ -167,4 +169,177 @@
 /* Show the tooltip text when you mouse over the tooltip container */
 .mt-task-card .demand:hover .demand-text {
     visibility: visible;
+}
+
+.deadline-container {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.deadline-container.passed-deadline {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+}
+
+.deadline-item {
+    background: var(--bs-body-color-rgb);
+    border-radius: 12px;
+    padding: 10px;
+    border-left: 3px solid var(--bs-primary);
+    min-width: 12rem;
+    font-size: 0.9rem;
+}
+
+.deadline-item .passed {
+    border-left-color: var(--bs-secondary);
+}
+
+.deadline-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.deadline-percent {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--bs-body);
+}
+
+.deadline-status {
+    border-radius: 12px;
+    font-size: 0.8rem;
+    padding: 2px 6px;
+}
+
+.deadline-progress {
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 5px 0;
+}
+
+.progress-bar {
+    height: 100%;
+    transition: width 0.5s ease;
+}
+
+.deadline-time {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 5px;
+}
+
+.deadline-hint {
+    font-size: 0.75rem;
+    text-align: right;
+    color: var(--bs-secondary-color);
+    font-style: italic;
+}
+
+
+@media (max-width: 767px) {
+    .deadline-container {
+        width: 100%;
+        margin-top: 15px;
+    }
+
+    .d-block.d-sm-flex {
+        flex-direction: column;
+    }
+}
+
+.deadline-time i.fa-calendar,
+.deadline-time i.fa-clock {
+    margin-right: -0.2rem;
+}
+
+.deadline-status.active {
+    background: #e1fae4;
+    color: #4caf50;
+}
+
+.deadline-status.urgent {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.deadline-status.expired {
+    background: #f5f5f5;
+    color: #616161;
+}
+
+.progress-bar {
+    background: #4caf50;
+}
+
+.progress-bar.urgent {
+    background: linear-gradient(90deg, #ff8f00, #fd3e04);
+}
+
+.progress-bar.expired {
+    background: #9e9e9e;
+}
+
+.passed-deadline {
+    opacity: 0.9;
+    border-left: 4px solid #9e9e9e;
+}
+
+.passed-deadline .deadline-percent {
+    text-decoration: line-through;
+    text-decoration-thickness: 0.11rem;
+}
+
+.deadline-status::before {
+    margin-right: 4px;
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+}
+
+.deadline-status.active::before {
+    content: "\f017";
+}
+
+.deadline-status.urgent::before {
+    content: "\f071";
+}
+
+.deadline-status.expired::before {
+    content: "\f1da";
+}
+
+.group-expired-notice {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.2);
+    border-radius: 8px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    backdrop-filter: blur(2px);
+    z-index: 1;
+    transition: all 0.3s ease;
+}
+
+.group-expired-notice i {
+    color: #dc3545;
+    font-size: 0.9rem;
+}
+
+.group-expired-notice span {
+    color: #dc3545;
+    font-size: 0.85rem;
+    font-weight: 500;
 }

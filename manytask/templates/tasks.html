@@ -2,11 +2,15 @@
 {% set active_page = "tasks" -%}
 
 {% block additional_styles %}
-{#    {{ super() }}#}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}">
 {% endblock %}
 
 {% block content %}
+    <div class="mb-3 mt-2 d-flex justify-content-end">
+        <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
+            Show past deadlines
+        </button>
+    </div>
     {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True)[::-1] %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
         {% set solved_group_scores = [] %}
@@ -16,14 +20,51 @@
         {% set solved_group_score = solved_group_scores|sum %}
 
         <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}">
+            {% if group.end < now %}
+                <div class="group-expired-notice" id="expiredNotice-{{ loop.index }}">
+                    <i class="fas fa-clock"></i>
+                    <span>All deadlines expired</span>
+                </div>
+            {% endif %}
             <div class="d-block d-sm-flex justify-content-between align-items-start">
                 <div class="d-block flex-column align-items-start">
                     <span class="fs-2 mb-0">{{ group.name }}</span>
                     <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
                 </div>
-                <div class="d-flex flex-column align-items-end mt-2">
+                <div class="deadline-container">
+                    {% set last = namespace(start=group.start) %}
                     {% for percent, deadline in group.get_percents_before_deadline().items() %}
-                        <span class="fs-5 deadline {{ 'passed' if deadline < now else '' }}">{{ (percent*100)|round|int }}%: {{ deadline.strftime('%Y-%m-%d %H:%M %Z') }}</span>
+                        {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
+                        {% set is_expired = deadline < now %}
+                        <div class="deadline-item {% if deadline < now %}passed-deadline{% endif %}"
+                             {% if deadline < now %}style="display: none;"{% endif %}>
+                            <div class="deadline-header">
+                                <span class="deadline-percent">{{ (percent*100)|round|int }}%</span>
+                                <span class="deadline-status {{ 'expired' if is_expired else ('urgent' if is_less_than_day else 'active') }}">
+                                    {{ 'Expired' if is_expired else ('Urgent' if is_less_than_day else 'Active') }}
+                                </span>
+                            </div>
+                            <div class="deadline-progress">
+                                <div class="progress-bar {{ 'expired' if is_expired else ('urgent' if is_less_than_day else '') }}"
+                                     style="width: {{ 100 if deadline < now else (0 if last.start > now else ((now.timestamp() - last.start.timestamp()) / (deadline.timestamp() - last.start.timestamp()) * 100) | abs | int) }}%">
+                                </div>
+                            </div>
+
+                            <div class="deadline-time">
+                                <span><i class="far fa-calendar"></i>
+                                <span>{{ deadline.strftime('%d.%m.%Y') }}</span></span>
+                                <span class="tippy-tooltip" data-tippy-content="{{ deadline.strftime('%Z') }}">
+                                <i class="far fa-clock"></i>
+                                <span>{{ deadline.strftime('%H:%M') }}</span>
+                                </span>
+                            </div>
+
+                            <div class="deadline-hint">
+                                {% set remained = (((deadline - now).seconds / 3600)|int|string + ' h.') if is_less_than_day else ((deadline - now).days|string + ' d.') %}
+                                {{ '' if deadline < now else 'Before the deadline: ' + remained }}
+                            </div>
+                        </div>
+                        {% set last.start = deadline %}
                     {% endfor %}
                 </div>
             </div>
@@ -77,4 +118,38 @@
             </div>
         </div>
     {% endfor %}
+
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+    <script>
+        tippy('.tippy-tooltip', {
+            arrow: true,
+            placement: 'top'
+        });
+        document.getElementById('toggleDeadlinesBtn').addEventListener('click', function () {
+            const passedDeadlines = document.querySelectorAll('.passed-deadline');
+            const expiredNotices = document.querySelectorAll('.group-expired-notice');
+
+            const button = this;
+
+            passedDeadlines.forEach(deadline => {
+                if (deadline.style.display === 'none') {
+                    deadline.style.display = 'block';
+                    button.textContent = 'Hide past deadlines';
+                } else {
+                    deadline.style.display = 'none';
+                    button.textContent = 'Show past deadlines';
+                }
+            });
+            expiredNotices.forEach(notice => {
+                if (notice.style.display === 'none') {
+                    notice.style.display = 'flex';
+                } else {
+                    notice.style.display = 'none';
+                }
+            });
+        });
+    </script>
+
 {% endblock %}
+

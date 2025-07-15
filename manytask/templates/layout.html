@@ -18,7 +18,7 @@
                 <img class="d-none d-sm-block" src="{{ url_for('static', filename=course_favicon) }}" alt="favicon"
                      width="32" height="32">
                 &nbsp;
-                <span class="fs-4 mb-0 ms-1 fw-bold text-gradient">Manytask | {{ course_name }}</span>
+                <span class="fs-4 mb-0 ms-1 fw-bold text-gradient">Manytask</span>
             </a>
 
             <div class="collapse navbar-collapse ms-2" id="navbar">
@@ -27,18 +27,19 @@
                         <a class="hover-underline nav-link px-3 position-relative {% if active_page == 'tasks' %}active fw-semibold{% endif %}"
                            aria-current="{% if active_page == 'tasks' %}page{% endif %}"
                            href="{{ url_for('course.course_page', course_name=course_name) }}">
-                           <i class="fas fa-tasks me-1"></i>Assignments
-                           {% if active_page == 'tasks' %}<span class="active-indicator"></span>{% endif %}
+                            <i class="fas fa-tasks me-1"></i>Assignments
+                            {% if active_page == 'tasks' %}<span class="active-indicator"></span>{% endif %}
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link px-3 position-relative hover-underline" target="_blank" href="{{ student_repo_url }}">
+                        <a class="nav-link px-3 position-relative hover-underline" target="_blank"
+                           href="{{ student_repo_url }}">
                             <i class="fas fa-code-branch me-1"></i>My&nbsp;Repo
-
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link px-3 position-relative hover-underline" target="_blank" href="{{ student_ci_url }}">
+                        <a class="nav-link px-3 position-relative hover-underline" target="_blank"
+                           href="{{ student_ci_url }}">
                             <i class="fas fa-rocket me-1"></i>My&nbsp;Submits
                         </a>
                     </li>
@@ -47,37 +48,27 @@
                             <a class="hover-underline nav-link px-3 position-relative {% if active_page == 'database' %}active fw-semibold{% endif %}"
                                aria-current="{% if active_page == 'database' %}page{% endif %}"
                                href="{{ url_for('course.show_database', course_name=course_name) }}">
-                               <i class="fas fa-table me-1"></i>All&nbsp;Scores
-                               {% if active_page == 'database' %}<span class="active-indicator"></span>{% endif %}
+                                <i class="fas fa-table me-1"></i>All&nbsp;Scores
+                                {% if active_page == 'database' %}<span class="active-indicator"></span>{% endif %}
                             </a>
                         </li>
                     {% endif %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link px-3 position-relative hover-underline" href="#" id="navbar_links" data-bs-toggle="dropdown"
+                        <a class="nav-link px-3 position-relative hover-underline" href="#" id="navbar_links"
+                           data-bs-toggle="dropdown"
                            aria-expanded="false">
                             <i class="fas fa-link me-1"></i>Links
-                                <i class="dropdown-chevron fas fa-chevron-down ms-1 fs-8 transition-transform"></i>
+                            <i class="dropdown-chevron fas fa-chevron-down ms-1 fs-8 transition-transform"></i>
                         </a>
                         <ul class="dropdown-menu shadow-sm" aria-labelledby="navbar_links">
-
                             {% set links = links | default({}) %}
                             {% for link_name, link_url in links.items() %}
                                 <li>
-                                    <a class="dropdown-item d-flex align-items-center py-2" target="_blank" href="{{ link_url }}">
+                                    <a class="dropdown-item d-flex align-items-center py-2" target="_blank"
+                                       href="{{ link_url }}">
                                         <i class="fas fa-external-link-alt me-2 opacity-75"></i>
                                         {{ link_name }}
                                     </a>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link px-3 dropdown-toggle" href="#" id="navbar_courses" data-bs-toggle="dropdown" aria-expanded="false">Select course</a>
-                        <ul class="dropdown-menu" aria-labelledby="navbar_courses">
-                            {% set courses = courses | default([]) %}
-                            {% for course in courses %}
-                                <li>
-                                    <a class="dropdown-item" href="{{ course.url }}">{{ course.name }}</a>
                                 </li>
                             {% endfor %}
                         </ul>
@@ -86,7 +77,30 @@
             </div>
 
             <div class="d-flex align-items-center">
-                <div class="score-display rounded-pill d-flex flex-column align-items-center justify-content-center ms-2 me-3 px-3 py-1 shadow-sm">
+                <div class="dropdown">
+                    <a href="#" class="current-course text-decoration-none" data-bs-toggle="dropdown"
+                       aria-expanded="false">
+                        <i class="fas fa-book"></i>
+                        <span>{{ course_name }}</span>
+                    </a>
+                    <ul class="dropdown-menu shadow-sm" aria-labelledby="navbar_courses">
+                        {% set courses = courses | default([]) %}
+                        {% for course in courses %}
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center {% if course.name == course_name %}active{% endif %}"
+                                   href="{{ course.url }}">
+                                    <i class="fas fa-book me-2 opacity-75"></i>
+                                    {{ course.name }}
+                                    {% if course.name == course_name %}
+                                        <i class="fas fa-check ms-2 opacity-75"></i>
+                                    {% endif %}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <div class="score-display d-flex flex-column align-items-center justify-content-center me-2 px-3 py-1 shadow-sm">
                     <span class="fw-bold">{{ solved_percent }}%</span>
                     <small class="text-muted">{{ solved_score_string }}/{{ app.storage_api.max_score_started(course_name) }}</small>
                 </div>
@@ -101,14 +115,18 @@
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2">
                         <li>
-                            <a class="dropdown-item d-flex align-items-center py-2" target="_blank" href="{{ gitlab_url }}/-/profile">
+                            <a class="dropdown-item d-flex align-items-center py-2" target="_blank"
+                               href="{{ gitlab_url }}/-/profile">
                                 <i class="fas fa-user-cog me-2 opacity-75"></i>
                                 Account Settings
                             </a>
                         </li>
-                        <li><hr class="dropdown-divider my-1"></li>
                         <li>
-                            <a class="dropdown-item d-flex align-items-center py-2" href="#" data-bs-theme-value="light">
+                            <hr class="dropdown-divider my-1">
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center py-2" href="#"
+                               data-bs-theme-value="light">
                                 <i class="fas fa-sun me-2 opacity-75"></i>
                                 Light Theme
                             </a>
@@ -125,9 +143,12 @@
                                 Auto Theme
                             </a>
                         </li>
-                        <li><hr class="dropdown-divider my-1"></li>
                         <li>
-                            <a class="dropdown-item d-flex align-items-center py-2 text-danger" href="{{ url_for('root.logout') }}">
+                            <hr class="dropdown-divider my-1">
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center py-2 text-danger"
+                               href="{{ url_for('root.logout') }}">
                                 <i class="fas fa-sign-out-alt me-2"></i>
                                 Sign out
                             </a>
