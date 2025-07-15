@@ -188,7 +188,8 @@
     background: var(--bs-body-color-rgb);
     border-radius: 12px;
     padding: 10px;
-    border-left: 3px solid var(--bs-primary);
+    margin-bottom: 5px;
+    border: 2px solid var(--bs-border-color-translucent);
     min-width: 12rem;
     font-size: 0.9rem;
 }
@@ -318,14 +319,10 @@
 }
 
 .group-expired-notice {
-    position: absolute;
-    top: 10px;
-    right: 10px;
     background-color: rgba(220, 53, 69, 0.1);
-    border: 1px solid rgba(220, 53, 69, 0.2);
+    border: 1px solid var(--bs-danger-border-subtle);
     border-radius: 8px;
     padding: 6px 10px;
-    display: flex;
     align-items: center;
     gap: 6px;
     backdrop-filter: blur(2px);
@@ -343,3 +340,5 @@
     font-size: 0.85rem;
     font-weight: 500;
 }
+
+

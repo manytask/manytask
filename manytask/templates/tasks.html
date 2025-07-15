@@ -20,18 +20,21 @@
         {% set solved_group_score = solved_group_scores|sum %}
 
         <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}">
-            {% if group.end < now %}
-                <div class="group-expired-notice" id="expiredNotice-{{ loop.index }}">
-                    <i class="fas fa-clock"></i>
-                    <span>All deadlines expired</span>
-                </div>
-            {% endif %}
+
             <div class="d-block d-sm-flex justify-content-between align-items-start">
                 <div class="d-block flex-column align-items-start">
                     <span class="fs-2 mb-0">{{ group.name }}</span>
                     <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
                 </div>
+
                 <div class="deadline-container">
+                {% if group.end < now %}
+                <div class="deadline-item group-expired-notice expired-tooltip" data-tippy-content="{{ group.end.strftime('%Z') }}" id="expiredNotice-{{ loop.index }}">
+                    <i class="fas fa-clock"></i>
+                    <span>Expired:
+                    <span>{{ group.end.strftime('%d.%m.%Y %H:%M') }}</span></span>
+                </div>
+            {% endif %}
                     {% set last = namespace(start=group.start) %}
                     {% for percent, deadline in group.get_percents_before_deadline().items() %}
                         {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
@@ -53,7 +56,7 @@
                             <div class="deadline-time">
                                 <span><i class="far fa-calendar"></i>
                                 <span>{{ deadline.strftime('%d.%m.%Y') }}</span></span>
-                                <span class="tippy-tooltip" data-tippy-content="{{ deadline.strftime('%Z') }}">
+                                <span class="card-tooltip" data-tippy-content="{{ deadline.strftime('%Z') }}">
                                 <i class="far fa-clock"></i>
                                 <span>{{ deadline.strftime('%H:%M') }}</span>
                                 </span>
@@ -61,7 +64,7 @@
 
                             <div class="deadline-hint">
                                 {% set remained = (((deadline - now).seconds / 3600)|int|string + ' h.') if is_less_than_day else ((deadline - now).days|string + ' d.') %}
-                                {{ '' if deadline < now else 'Before the deadline: ' + remained }}
+                                {{ '' if deadline < now else 'Deadline expires in: ' + remained }}
                             </div>
                         </div>
                         {% set last.start = deadline %}
@@ -122,7 +125,11 @@
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
     <script>
-        tippy('.tippy-tooltip', {
+        tippy('.card-tooltip', {
+            arrow: true,
+            placement: 'top'
+        });
+        tippy('.expired-tooltip', {
             arrow: true,
             placement: 'top'
         });
