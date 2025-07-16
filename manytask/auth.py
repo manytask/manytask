@@ -45,17 +45,17 @@ def set_oauth_session(
     return result
 
 
-def handle_course_membership(app: CustomFlask, course: Course, student: Student) -> bool | str | Response:
+def handle_course_membership(app: CustomFlask, course: Course, username: str) -> bool | str | Response:
     """Checking user on course"""
 
     try:
-        if app.storage_api.check_user_on_course(course.course_name, student.username):
+        if app.storage_api.check_user_on_course(course.course_name, username):
             return True
         else:
-            logger.info(f"No user {student.username} on course {course.course_name} asking secret")
+            logger.info(f"No user {username} on course {course.course_name} asking secret")
             return False
     except NoResultFound:
-        logger.info(f"User: {student.username} not in the database")
+        logger.info(f"User: {username} not in the database")
         return False
     except Exception:
         logger.error("Failed login while working with db", exc_info=True)
@@ -162,10 +162,9 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         student: Student = get_authenticate_student(oauth, app)  # type: ignore
-        first_name, last_name = student.name.split()
 
-        if not handle_course_membership(app, course, student) or not app.rms_api.check_project_exists(
-            student=student, course_students_group=course.gitlab_course_students_group
+        if not handle_course_membership(app, course, student.username) or not app.rms_api.check_project_exists(
+            username=student.username, course_students_group=course.gitlab_course_students_group
         ):
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
