@@ -32,8 +32,7 @@
                         <div class="task-deadline task-group__expired-notice expired-tooltip"
                              data-tippy-content="{{ group.end.strftime('%Z') }}" id="expiredNotice-{{ loop.index }}">
                             <i class="fas fa-solid fa-clock-rotate-left"></i>
-                            <span>Expired:
-                    <span>{{ group.end.strftime('%d.%m.%Y %H:%M') }}</span></span>
+                            <span>Expired: {{ group.end.strftime('%d.%m.%Y %H:%M') }}</span>
                         </div>
                     {% endif %}
                     {% set last = namespace(start=group.start) %}
@@ -161,4 +160,3 @@
     </script>
 
 {% endblock %}
-
