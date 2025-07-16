@@ -27,42 +27,44 @@
                     <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
                 </div>
 
-                <div class="deadline-container">
-                {% if group.end < now %}
-                <div class="deadline-item group-expired-notice expired-tooltip" data-tippy-content="{{ group.end.strftime('%Z') }}" id="expiredNotice-{{ loop.index }}">
-                    <i class="fas fa-clock"></i>
-                    <span>Expired:
+                <div class="task-deadlines">
+                    {% if group.end < now %}
+                        <div class="task-deadline task-group__expired-notice expired-tooltip"
+                             data-tippy-content="{{ group.end.strftime('%Z') }}" id="expiredNotice-{{ loop.index }}">
+                            <i class="fas fa-solid fa-clock-rotate-left"></i>
+                            <span>Expired:
                     <span>{{ group.end.strftime('%d.%m.%Y %H:%M') }}</span></span>
-                </div>
-            {% endif %}
+                        </div>
+                    {% endif %}
                     {% set last = namespace(start=group.start) %}
                     {% for percent, deadline in group.get_percents_before_deadline().items() %}
                         {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
                         {% set is_expired = deadline < now %}
-                        <div class="deadline-item {% if deadline < now %}passed-deadline{% endif %}"
+                        <div class="task-deadline {% if deadline < now %}passed-deadline{% endif %}"
                              {% if deadline < now %}style="display: none;"{% endif %}>
                             <div class="deadline-header">
                                 <span class="deadline-percent">{{ (percent*100)|round|int }}%</span>
-                                <span class="deadline-status {{ 'expired' if is_expired else ('urgent' if is_less_than_day else 'active') }}">
+                                <span class="task-deadline__status {{ 'expired' if is_expired else ('urgent' if is_less_than_day else 'active') }}">
                                     {{ 'Expired' if is_expired else ('Urgent' if is_less_than_day else 'Active') }}
                                 </span>
                             </div>
-                            <div class="deadline-progress">
-                                <div class="progress-bar {{ 'expired' if is_expired else ('urgent' if is_less_than_day else '') }}"
+                            <div class="task-deadline__progress">
+                                <div class="task-deadline__progress-bar {{ 'expired' if is_expired else ('urgent' if is_less_than_day else '') }}"
                                      style="width: {{ 100 if deadline < now else (0 if last.start > now else ((now.timestamp() - last.start.timestamp()) / (deadline.timestamp() - last.start.timestamp()) * 100) | abs | int) }}%">
                                 </div>
                             </div>
 
-                            <div class="deadline-time">
+                            <div class="task-deadline__deadline-time card-tooltip"
+                                 data-tippy-content="{{ deadline.strftime('%Z') }}">
                                 <span><i class="far fa-calendar"></i>
                                 <span>{{ deadline.strftime('%d.%m.%Y') }}</span></span>
-                                <span class="card-tooltip" data-tippy-content="{{ deadline.strftime('%Z') }}">
+                                <span>
                                 <i class="far fa-clock"></i>
                                 <span>{{ deadline.strftime('%H:%M') }}</span>
                                 </span>
                             </div>
 
-                            <div class="deadline-hint">
+                            <div class="task-deadline__deadline-hint">
                                 {% set remained = (((deadline - now).seconds / 3600)|int|string + ' h.') if is_less_than_day else ((deadline - now).days|string + ' d.') %}
                                 {{ '' if deadline < now else 'Deadline expires in: ' + remained }}
                             </div>
@@ -102,7 +104,7 @@
 
                     <div class="mt-task-card rounded {{ task_tag }}" style="position: relative">
                         <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
-                            <span class="fs-5 mt-task-name">{{ task.name }}</span>
+                            <span class="fs-5 mt-card__name">{{ task.name }}</span>
                             <span class="fs-1 fw-bold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
                             {#                        {% if not group.hw and demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}#}
                             {#                            <div class="demand">#}
@@ -112,7 +114,7 @@
                             {#                        {% else %}#}
                             {#                            <div class="fs-6 stat">{{ task_stats.get(task.name, '0') }}</div>#}
                             {#                        {% endif %}#}
-                            <div class="fs-6 mt-task-stats">{% if task.is_special %}special&nbsp;{% endif %}
+                            <div class="fs-6 mt-card__stats">{% if task.is_special %}special&nbsp;{% endif %}
                                 {% if task.is_bonus %}bonus
                                     &nbsp;{% endif %}{{ task_stats.get(task.name, 0)|float|round(2) }}</div>
                         </a>
@@ -126,16 +128,16 @@
     <script src="https://unpkg.com/tippy.js@6"></script>
     <script>
         tippy('.card-tooltip', {
-            arrow: true,
-            placement: 'top'
+            arrow: false,
+            placement: 'top-end'
         });
         tippy('.expired-tooltip', {
-            arrow: true,
-            placement: 'top'
+            arrow: false,
+            placement: 'top-end'
         });
         document.getElementById('toggleDeadlinesBtn').addEventListener('click', function () {
             const passedDeadlines = document.querySelectorAll('.passed-deadline');
-            const expiredNotices = document.querySelectorAll('.group-expired-notice');
+            const expiredNotices = document.querySelectorAll('.task-group__expired-notice');
 
             const button = this;
 
