@@ -45,7 +45,7 @@
     color: var(--bs-primary);
 }
 
-.hover-underline::after {
+.nav-hover-underline::after {
     content: '';
     position: absolute;
     width: 0;
@@ -57,11 +57,11 @@
     transform: translateX(-50%);
 }
 
-.hover-underline:hover::after {
+.nav-hover-underline:hover::after {
     width: 80%;
 }
 
-.active-indicator {
+.nav-active-indicator {
     position: absolute;
     width: 80%;
     height: 2px;
@@ -71,24 +71,24 @@
     transform: translateX(-50%);
 }
 
-.score-display {
+.nav-score-display {
     background-color: var(--bs-primary-bg-subtle);
     border: 1px solid var(--bs-primary-border-subtle);
     border-radius: 1.35rem;
     transition: background-color 0.3s ease;
 }
 
-.score-display:hover {
+.nav-score-display:hover {
     background-color: var(--bs-primary);
     border-radius: 1rem;
     color: white;
 }
 
-.score-display:hover small {
+.nav-score-display:hover small {
     color: rgba(255, 255, 255, 0.8) !important;
 }
 
-.avatar-circle {
+.nav-avatar-circle {
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -116,17 +116,17 @@
     background-color: var(--bs-primary-bg-subtle);
 }
 
-.user-menu {
+.nav-user-menu {
     transition: all 0.2s ease;
     padding: 0.25rem 0.5rem;
     border-radius: 0.5rem;
 }
 
-.user-menu:hover {
+.nav-user-menu:hover {
     background-color: var(--bs-tertiary-bg);
 }
 
-.current-course {
+.nav-current-course {
     display: flex;
     align-items: center;
     padding: 0.5rem 0.7rem;
@@ -139,17 +139,17 @@
     transition: all 0.2s ease;
 }
 
-.current-course:hover {
+.nav-current-course:hover {
     background-color: var(--bs-secondary-bg);
 }
 
-.current-course i {
+.nav-current-course i {
     margin-right: 0.5rem;
     color: var(--bs-primary);
     font-size: 0.9rem;
 }
 
-.course-selector {
+.nav-course-selector {
     display: flex;
     align-items: center;
     padding: 0.5rem;
@@ -157,7 +157,7 @@
     transition: all 0.2s ease;
 }
 
-.course-selector:hover {
+.nav-course-selector:hover {
     background-color: var(--bs-tertiary-bg);
 }
 
@@ -170,11 +170,11 @@
         margin: 0.25rem 0;
     }
 
-    .score-display {
+    .nav-score-display {
         margin: 1rem 0;
     }
 
-    .current-course {
+    .nav-current-course {
         margin: 1rem 0.2rem;
     }
 }

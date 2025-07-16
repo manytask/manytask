@@ -24,37 +24,37 @@
             <div class="collapse navbar-collapse ms-2" id="navbar">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="hover-underline nav-link px-3 position-relative {% if active_page == 'tasks' %}active fw-semibold{% endif %}"
+                        <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'tasks' %}active fw-semibold{% endif %}"
                            aria-current="{% if active_page == 'tasks' %}page{% endif %}"
                            href="{{ url_for('course.course_page', course_name=course_name) }}">
                             <i class="fas fa-tasks me-1"></i>Assignments
-                            {% if active_page == 'tasks' %}<span class="active-indicator"></span>{% endif %}
+                            {% if active_page == 'tasks' %}<span class="nav-active-indicator"></span>{% endif %}
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link px-3 position-relative hover-underline" target="_blank"
+                        <a class="nav-link px-3 position-relative nav-hover-underline" target="_blank"
                            href="{{ student_repo_url }}">
                             <i class="fas fa-code-branch me-1"></i>My&nbsp;Repo
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link px-3 position-relative hover-underline" target="_blank"
+                        <a class="nav-link px-3 position-relative nav-hover-underline" target="_blank"
                            href="{{ student_ci_url }}">
                             <i class="fas fa-rocket me-1"></i>My&nbsp;Submits
                         </a>
                     </li>
                     {% if show_allscores %}
                         <li class="nav-item">
-                            <a class="hover-underline nav-link px-3 position-relative {% if active_page == 'database' %}active fw-semibold{% endif %}"
+                            <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'database' %}active fw-semibold{% endif %}"
                                aria-current="{% if active_page == 'database' %}page{% endif %}"
                                href="{{ url_for('course.show_database', course_name=course_name) }}">
                                 <i class="fas fa-table me-1"></i>All&nbsp;Scores
-                                {% if active_page == 'database' %}<span class="active-indicator"></span>{% endif %}
+                                {% if active_page == 'database' %}<span class="nav-active-indicator"></span>{% endif %}
                             </a>
                         </li>
                     {% endif %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link px-3 position-relative hover-underline" href="#" id="navbar_links"
+                        <a class="nav-link px-3 position-relative nav-hover-underline" href="#" id="navbar_links"
                            data-bs-toggle="dropdown"
                            aria-expanded="false">
                             <i class="fas fa-link me-1"></i>Links
@@ -78,7 +78,7 @@
 
             <div class="d-flex align-items-center">
                 <div class="dropdown">
-                    <a href="#" class="current-course text-decoration-none" data-bs-toggle="dropdown"
+                    <a href="#" class="nav-current-course text-decoration-none" data-bs-toggle="dropdown"
                        aria-expanded="false">
                         <i class="fas fa-book"></i>
                         <span>{{ course_name }}</span>
@@ -100,15 +100,15 @@
                     </ul>
                 </div>
 
-                <div class="score-display d-flex flex-column align-items-center justify-content-center me-2 px-3 py-1 shadow-sm">
+                <div class="nav-score-display d-flex flex-column align-items-center justify-content-center me-2 px-3 py-1 shadow-sm">
                     <span class="fw-bold">{{ solved_percent }}%</span>
                     <small class="text-muted">{{ solved_score_string }}/{{ app.storage_api.max_score_started(course_name) }}</small>
                 </div>
 
                 <div class="dropdown">
-                    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle user-menu"
+                    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle nav-user-menu"
                        data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="avatar-circle me-2">
+                        <div class="nav-avatar-circle me-2">
                             {{ username[0] | upper }}
                         </div>
                         <span class="fw-semibold">{{ username }}</span>
