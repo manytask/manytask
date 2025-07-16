@@ -84,7 +84,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        rms_user = app.gitlab_api.get_rms_user_by_id(user_id=student_id)
+        rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
         student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     # update cache if more than 1h passed or in debug mode
@@ -277,7 +277,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        rms_user = app.gitlab_api.get_rms_user_by_id(user_id=student_id)
+        rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
         student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     scores = storage_api.get_scores(course.course_name, student_username)

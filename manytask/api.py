@@ -13,9 +13,9 @@ from flask.typing import ResponseReturnValue
 
 from manytask.abstract import StorageApi
 from manytask.database import TaskDisabledError
-from manytask.glab import GitLabApiException, RmsApi
+from manytask.glab import GitLabApiException
 
-from .abstract import RmsUser
+from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
@@ -315,7 +315,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    rms_user = app.gitlab_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
     student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     if not student_course_admin:
