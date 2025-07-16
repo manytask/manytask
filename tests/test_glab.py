@@ -294,25 +294,23 @@ def test_get_group_by_name_not_found(gitlab):
 
 
 def test_check_project_exists(gitlab, mock_gitlab_student_project):
-    username = TEST_USERNAME
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_student_project]
 
-    exists = gitlab_api.check_project_exists(username, TEST_GROUP_STUDENT_NAME)
+    exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert exists is True
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=username)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=TEST_USERNAME)
 
 
 def test_check_project_not_exists(gitlab):
-    username = TEST_USERNAME
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = []
 
-    exists = gitlab_api.check_project_exists(username, TEST_GROUP_STUDENT_NAME)
+    exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_NAME)
 
     assert exists is False
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=username)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=TEST_USERNAME)
 
 
 def test_create_project_existing_project(gitlab, mock_rms_user, mock_gitlab_student_project, mock_gitlab_group_member):
