@@ -144,7 +144,7 @@ def _logging_config(app: CustomFlask) -> dict[str, Any]:
                 "[process-%(process)d:%(thread)d] app in [%(module)s:%(lineno)s] : %(message)s",
             },
             "access": {
-                "format": "%(message)s",
+                "format": "[%(asctime)s] - %(message)s",
             },
         },
         "handlers": {
