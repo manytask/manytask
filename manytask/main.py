@@ -137,11 +137,11 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
 def _logging_config(app: CustomFlask) -> dict[str, Any]:
     return {
         "version": 1,
-        "disable_existing_loggers": True,
+        "disable_existing_loggers": False,
         "formatters": {
             "default": {
-                "format": "%(asctime)s %(levelname)s - "
-                "process-%(process)d:%(thread)d app in %(filename)s : %(message)s",
+                "format": "[%(asctime)s] [%(levelname)s] - "
+                "[process-%(process)d:%(thread)d] app in [%(module)s:%(lineno)s] : %(message)s",
             },
             "access": {
                 "format": "%(message)s",
