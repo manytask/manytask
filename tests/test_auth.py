@@ -72,7 +72,7 @@ def mock_gitlab_api():
             return False
 
         @staticmethod
-        def check_project_exists(student: Student, course_students_group: str):
+        def check_project_exists(username: str, course_students_group: str):
             return True
 
         @staticmethod
