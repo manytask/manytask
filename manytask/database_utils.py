@@ -19,13 +19,13 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
                 if not task.is_bonus:
                     max_score += task.score
                 if task.is_large:
-                    large_tasks.append(task.name)
+                    large_tasks.append((task.name, task.min_score))
 
     table_data = {"tasks": all_tasks, "students": []}
 
     for username, student_scores in all_scores.items():
         total_score = sum(student_scores.values())
-        large_count = sum(1 for task in large_tasks if student_scores.get(task, 0) > 0)
+        large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
         student_name = app.gitlab_api.get_student_by_username(username).name
         table_data["students"].append(
             {
