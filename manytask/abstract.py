@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
+from pathlib import Path
 
-from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
+from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig, ManytaskFinalGradeConfig
 from .course import Course, CourseConfig
 
 
@@ -60,6 +61,9 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_all_scores(self, course_name: str) -> dict[str, dict[str, int]]: ...
+
+    @abstractmethod
+    def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig: ...
 
     @abstractmethod
     def get_stats(self, course_name: str) -> dict[str, float]: ...

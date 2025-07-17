@@ -258,6 +258,7 @@ class ManytaskFinalGradeConfig(BaseModel):
         for grade in self.grades_order:
             if self.grades[grade].evaluate(scores):
                 return grade
+
         raise ValueError("No grade matched")
 
 

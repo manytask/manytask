@@ -23,6 +23,8 @@ from .config import (
     ManytaskDeadlinesConfig,
     ManytaskGroupConfig,
     ManytaskFinalGradeConfig,
+    ManytaskGradeConfig,
+    PrimaryGradeFormula,
     ManytaskTaskConfig,
 )
 from .course import Course as AppCourse
@@ -179,6 +181,31 @@ class DataBaseApi(StorageApi):
             all_scores[username] = self.get_scores(course_name, username)
 
         return all_scores
+
+    def get_grades(self, course_name) -> ManytaskFinalGradeConfig:
+        """Method for getting config with grades for the course
+
+        :param course_name: course name
+
+        :return: dict with list of possible criterions for each grade
+        """
+
+        with Session(self.engine) as session:
+            course = DataBaseApi._get(session, models.Course, name=course_name)
+
+            grades: dict[int, ManytaskGradeConfig] = {}
+            for grade in course.course_grades:
+                formulas = []
+                for f in grade.primary_formulas.all():
+                    f.primary_formula
+                    formulas.append(PrimaryGradeFormula(
+                        formulas={Path(k) : v for k, v in f.primary_formula.items()}
+                    ))
+
+                grades[grade.grade] = ManytaskGradeConfig(formulas=formulas)
+
+            grades_order = sorted(list(grades.keys()), reverse=True)
+            return ManytaskFinalGradeConfig(grades=grades, grades_order=grades_order)
 
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks

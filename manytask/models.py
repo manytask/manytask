@@ -6,7 +6,6 @@ from sqlalchemy import JSON, DateTime, ForeignKey, MetaData, UniqueConstraint, e
 from sqlalchemy.engine import Connection, Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, Mapper, Session, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator, Numeric
-from manytask.config import LogicalConnectiveType
 
 logger = logging.getLogger(__name__)
 
