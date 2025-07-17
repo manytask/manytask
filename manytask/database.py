@@ -198,9 +198,7 @@ class DataBaseApi(StorageApi):
                 formulas = []
                 for f in grade.primary_formulas.all():
                     f.primary_formula
-                    formulas.append(PrimaryGradeFormula(
-                        formulas={Path(k) : v for k, v in f.primary_formula.items()}
-                    ))
+                    formulas.append(PrimaryGradeFormula(formulas={Path(k): v for k, v in f.primary_formula.items()}))
 
                 grades[grade.grade] = ManytaskGradeConfig(formulas=formulas)
 

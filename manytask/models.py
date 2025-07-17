@@ -84,13 +84,13 @@ class StrStrDict(TypeDecorator[Optional[dict[str, str]]]):
         return value
 
 
-class StrIntFloatDict(TypeDecorator[Optional[dict[str, int|float]]]):
+class StrIntFloatDict(TypeDecorator[Optional[dict[str, int | float]]]):
     impl = JSON
     cache_ok = True
 
     def process_bind_param(
-        self, value: Optional[dict[str, int|float]], dialect: Dialect
-    ) -> Optional[dict[str, int|float]]:
+        self, value: Optional[dict[str, int | float]], dialect: Dialect
+    ) -> Optional[dict[str, int | float]]:
         if value is None:
             return None
 
@@ -106,8 +106,8 @@ class StrIntFloatDict(TypeDecorator[Optional[dict[str, int|float]]]):
         return value
 
     def process_result_value(
-        self, value: Optional[dict[str, int|float]], dialect: Dialect
-    ) -> Optional[dict[str, int|float]]:
+        self, value: Optional[dict[str, int | float]], dialect: Dialect
+    ) -> Optional[dict[str, int | float]]:
         return value
 
 

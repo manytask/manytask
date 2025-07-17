@@ -213,17 +213,14 @@ class PrimaryGradeFormula(BaseModel):
         attribute = scores
         for dir in path.parts:
             if not isinstance(attribute, dict):
-                raise ValueError(
-                    f"Path <{path}> not found in scores data <{scores}>")
+                raise ValueError(f"Path <{path}> not found in scores data <{scores}>")
             try:
                 attribute = attribute[dir]
             except KeyError:
-                raise ValueError(
-                    f"Path <{path}> not found in scores data <{scores}>")
+                raise ValueError(f"Path <{path}> not found in scores data <{scores}>")
 
         if not isinstance(attribute, (int, float)):
-            raise ValueError(
-                f"Path <{path}> does not point to a number in scores data <{scores}>")
+            raise ValueError(f"Path <{path}> does not point to a number in scores data <{scores}>")
 
         return attribute
 
