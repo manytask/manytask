@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
-from pathlib import Path
 
-from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig, ManytaskFinalGradeConfig
+from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig
 
 

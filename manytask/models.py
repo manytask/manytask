@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import JSON, DateTime, ForeignKey, MetaData, UniqueConstraint, event, func
 from sqlalchemy.engine import Connection, Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, Mapper, Session, mapped_column, relationship
-from sqlalchemy.types import TypeDecorator, Numeric
+from sqlalchemy.types import TypeDecorator
 
 logger = logging.getLogger(__name__)
 

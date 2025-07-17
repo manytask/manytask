@@ -21,11 +21,11 @@ from .abstract import StorageApi, StoredUser
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
-    ManytaskGroupConfig,
     ManytaskFinalGradeConfig,
     ManytaskGradeConfig,
-    PrimaryGradeFormula,
+    ManytaskGroupConfig,
     ManytaskTaskConfig,
+    PrimaryGradeFormula,
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig

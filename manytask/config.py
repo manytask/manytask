@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Optional, Union, Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
+from typing import Any, Optional, Union
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
@@ -198,7 +198,7 @@ class PrimaryGradeFormula(BaseModel):
         for path, limit in self.formulas.items():
             try:
                 attribute = PrimaryGradeFormula.get_attribute(path, scores)
-            except ValueError as error:
+            except ValueError:
                 return False
             if attribute < limit:
                 return False
