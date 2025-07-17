@@ -178,7 +178,7 @@ class RmsApi(ABC):
     @abstractmethod
     def check_project_exists(
         self,
-        student: Student,
+        username: str,
         course_students_group: str,
     ) -> bool: ...
 

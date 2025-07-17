@@ -133,22 +133,22 @@ class GitLabApi(RmsApi):
 
     def check_project_exists(
         self,
-        student: Student,
+        username: str,
         course_students_group: str,
     ) -> bool:
-        gitlab_project_path = f"{course_students_group}/{student.username}"
+        gitlab_project_path = f"{course_students_group}/{username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
-        for project in self._gitlab.projects.list(get_all=True, search=student.username):
+        for project in self._gitlab.projects.list(get_all=True, search=username):
             logger.info(f"Check project path: {project.path_with_namespace}")
 
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project {student.username} for group {course_students_group} exists")
+                logger.info(f"Project {username} for group {course_students_group} exists")
                 return True
 
-        logger.info(f"Project {student.username} for group {course_students_group} does not exist")
+        logger.info(f"Project {username} for group {course_students_group} does not exist")
         return False
 
     def create_project(
