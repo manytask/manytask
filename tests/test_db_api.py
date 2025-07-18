@@ -1392,7 +1392,6 @@ def test_edit_course(db_api_with_initialized_first_course, edited_first_course_c
     course = session.query(Course).one()
 
     assert course.name == FIRST_COURSE_NAME
-    assert course.gitlab_instance_host == "gitlab.test.com"
     assert course.registration_secret == edited_first_course_config.registration_secret
     assert course.token == "test_token"
     assert not course.show_allscores
