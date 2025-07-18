@@ -331,6 +331,13 @@ def create_course() -> ResponseReturnValue:
             links={},
         )
 
+        app.gitlab_api.create_course_infrastructure(
+            settings.gitlab_course_group,
+            settings.gitlab_course_public_repo,
+            settings.gitlab_course_students_group,
+            settings.gitlab_default_branch,
+        )
+
         if app.storage_api.create_course(settings):
             return redirect(url_for("course.course_page", course_name=settings.course_name))
 
