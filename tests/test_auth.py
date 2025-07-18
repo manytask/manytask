@@ -72,7 +72,7 @@ def mock_gitlab_api():
             return False
 
         @staticmethod
-        def check_project_exists(student: Student, course_students_group: str):
+        def check_project_exists(username: str, course_students_group: str):
             return True
 
         @staticmethod
@@ -117,6 +117,9 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def get_stored_user(self, _username):
             return self.stored_user
+
+        def check_if_course_admin(self, _course_name, _username):
+            return self.stored_user.course_admin
 
         def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
             self.stored_user.course_admin = course_admin

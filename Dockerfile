@@ -51,7 +51,7 @@ VOLUME ["/cache"]
 
 EXPOSE 5050
 HEALTHCHECK --interval=1m --timeout=15s --retries=3 --start-period=30s CMD curl -f http://localhost:5050/healthcheck
-CMD ["gunicorn", "--bind", "0.0.0.0:5050", "--workers", "2", "--threads", "4", "manytask:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5050", "--access-logfile", "-", "--log-file", "-", "--capture-output", "--workers", "2", "--threads", "4", "manytask:create_app()"]
 
 # Set up Yandex.Cloud certificate
 RUN mkdir -p /root/.postgresql && \

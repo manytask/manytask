@@ -89,7 +89,7 @@ def mock_gitlab_api():
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
         @staticmethod
-        def check_project_exists(student: Student, course_students_group: str):
+        def check_project_exists(username: str, course_students_group: str):
             return True
 
         @staticmethod
@@ -114,6 +114,14 @@ def mock_storage_api(mock_course):  # noqa: C901
         @staticmethod
         def get_scores_update_timestamp(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
+
+        @staticmethod
+        def get_all_courses_names():
+            return "test_course_names"
+
+        @staticmethod
+        def get_user_courses_names(_username):
+            return "test_course_names"
 
         @staticmethod
         def get_scores(_course_name, _username):
@@ -164,6 +172,9 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def get_stored_user(self, _course_name, _username):
             return self.stored_user
+
+        def check_if_course_admin(self, _course_name, _username):
+            return self.stored_user.course_admin
 
         @staticmethod
         def update_cached_scores(_course_name):
