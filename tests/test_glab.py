@@ -31,15 +31,15 @@ TEST_GROUP_NAME_SHORT = "TestGroup"
 TEST_GROUP_NAME_FULL = "some / TestGroup"
 
 TEST_GROUP_ID_PUBLIC = 2
-TEST_GROUP_PUBLIC_NAME = "some/TestGroup/TestProject/Public"
+TEST_GROUP_PUBLIC_NAME = "some/TestGroup/Public"
 TEST_GROUP_PUBLIC_NAME_SHORT = "Public"
-TEST_GROUP_PUBLIC_NAME_FULL = "some / TestGroup / TestProject / Public"
+TEST_GROUP_PUBLIC_NAME_FULL = "some / TestGroup / Public"
 TEST_GROUP_PUBLIC_DEFAULT_BRANCH = "main"
 
 TEST_GROUP_ID_STUDENT = 3
 TEST_GROUP_STUDENT_NAME = "some/TestGroup/Students"
 TEST_GROUP_STUDENT_NAME_SHORT = "Students"
-TEST_GROUP_STUDENT_NAME_FULL = "some / TestGroup / TestProject / Students"
+TEST_GROUP_STUDENT_NAME_FULL = "some / TestGroup / Students"
 
 TEST_FORK_ID = 1
 
@@ -228,8 +228,8 @@ def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
 
     mock_gitlab_instance.projects.create.assert_called_once_with(
         {
-            "name": TEST_GROUP_PUBLIC_NAME.split('/')[-1],
-            "path": TEST_GROUP_PUBLIC_NAME.split('/')[-1],
+            "name": TEST_GROUP_PUBLIC_NAME.split("/")[-1],
+            "path": TEST_GROUP_PUBLIC_NAME.split("/")[-1],
             "namespace_id": mock_gitlab_group.id,
             "visibility": "public",
             "shared_runners_enabled": True,
@@ -249,20 +249,37 @@ def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab
 
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
-    mock_gitlab_instance.projects.get.assert_called_once_with(TEST_GROUP_PUBLIC_NAME)
-
 
 def test_create_students_group(gitlab, mock_gitlab_group):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.groups.list.return_value = []
+    mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group]
     mock_gitlab_instance.groups.create.return_value = mock_gitlab_group
 
     gitlab_api.create_students_group(TEST_GROUP_NAME, TEST_GROUP_STUDENT_NAME)
 
     mock_gitlab_instance.groups.create.assert_called_once_with(
         {
-            "name": TEST_GROUP_NAME.split('/')[-1],
-            "path": TEST_GROUP_NAME.split('/')[-1],
+            "name": TEST_GROUP_STUDENT_NAME.split("/")[-1],
+            "path": TEST_GROUP_STUDENT_NAME.split("/")[-1],
+            "parent_id": mock_gitlab_group.id,
+            "visibility": "private",
+            "lfs_enabled": True,
+            "shared_runners_enabled": True,
+        }
+    )
+
+
+def test_create_course_group(gitlab, mock_gitlab_group):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.list.return_value = []
+    mock_gitlab_instance.groups.create.return_value = mock_gitlab_group
+
+    gitlab_api.create_course_group(TEST_GROUP_NAME)
+
+    mock_gitlab_instance.groups.create.assert_called_once_with(
+        {
+            "name": TEST_GROUP_NAME,
+            "path": TEST_GROUP_NAME,
             "visibility": "private",
             "lfs_enabled": True,
             "shared_runners_enabled": True,
