@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 
 import gitlab
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
@@ -344,3 +344,41 @@ def create_course() -> ResponseReturnValue:
         "create_course.html",
         generated_token=generate_token_hex(24),
     )
+
+
+@admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
+@requires_admin
+def edit_course(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    course = app.storage_api.get_course(course_name)
+
+    if not course:
+        flash("Курс не найден", category="course_not_found")
+        return redirect(url_for("root.index"))
+
+    if request.method == "POST":
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError as e:
+            app.logger.error(f"CSRF validation failed: {e}")
+            return render_template("create_project.html", error_message="CSRF Error")
+        updated_settings = CourseConfig(
+            course_name=course_name,
+            gitlab_course_group=request.form["gitlab_course_group"],
+            gitlab_course_public_repo=request.form["gitlab_course_public_repo"],
+            gitlab_course_students_group=request.form["gitlab_course_students_group"],
+            gitlab_default_branch=request.form["gitlab_default_branch"],
+            registration_secret=request.form["registration_secret"],
+            token=course.token,
+            show_allscores=request.form.get("show_allscores", "off") == "on",
+            is_ready=course.is_ready,
+            task_url_template=course.task_url_template,
+            links=course.links,
+        )
+
+        if app.storage_api.edit_course(updated_settings):
+            return redirect(url_for("course.course_page", course_name=course_name))
+
+        return render_template("edit_course.html", course=updated_settings, error_message="Ошибка при обновлении курса")
+
+    return render_template("edit_course.html", course=course)
