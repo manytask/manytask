@@ -161,6 +161,11 @@
 
     {# Floating form with ADMIN label if so #}
     {% if is_course_admin %}
+         <a href="{{ url_for('admin.edit_course', course_name=course_name) }}"
+           class="btn btn-warning btn-lg position-fixed"
+            style="--bs-btn-padding-y: 0.55rem; --bs-btn-padding-x: 0.5rem; --bs-btn-font-size: 1rem; bottom: 55px; right: 7px; z-index: 1001 ;">
+             <strong>EDIT</strong>
+        </a>
         <div class="adm-badge">ADMIN</div>
     {% endif %}
 

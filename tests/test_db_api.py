@@ -121,6 +121,20 @@ def first_course_config():
 
 
 @pytest.fixture
+def edited_first_course_config(first_course_config):
+    edited_config = first_course_config
+    edited_config.gitlab_course_group = "test_course_group2"
+    edited_config.gitlab_course_public_repo = "test_course_public_repo2"
+    edited_config.gitlab_course_students_group = "test_course_students_group2"
+    edited_config.gitlab_default_branch = "test_default_branch2"
+    edited_config.registration_secret = "secret2"
+    edited_config.token = "test_token"
+    edited_config.show_allscores = False
+
+    return edited_config
+
+
+@pytest.fixture
 def first_course_updated_ui_config():
     return ManytaskUiConfig(
         task_url_template="https://gitlab.test.com/test_updated/$GROUP_NAME/$TASK_NAME",
@@ -216,6 +230,10 @@ def create_course(db_api: DataBaseApi, course_config: CourseConfig, deadlines_co
         ),
         deadlines_config,
     )
+
+
+def edit_course(db_api: DataBaseApi, course_config: CourseConfig) -> None:
+    db_api.edit_course(settings_config=course_config)
 
 
 @pytest.fixture
@@ -1364,4 +1382,37 @@ def test_get_groups_with_resync(  # noqa: PLR0913
 
     check_get_groups(
         db_api_with_two_initialized_courses, FIRST_COURSE_NAME, course_deadlines_config, enabled, started, now
+    )
+
+
+def test_edit_course(db_api_with_initialized_first_course, edited_first_course_config, session):
+    db_api_with_initialized_first_course.edit_course(edited_first_course_config)
+
+    assert session.query(Course).count() == 1
+    course = session.query(Course).one()
+
+    assert course.name == FIRST_COURSE_NAME
+    assert course.registration_secret == edited_first_course_config.registration_secret
+    assert course.token == "test_token"
+    assert not course.show_allscores
+    assert not course.is_ready
+
+    assert course.gitlab_course_group == edited_first_course_config.gitlab_course_group
+    assert course.gitlab_course_public_repo == edited_first_course_config.gitlab_course_public_repo
+    assert course.gitlab_course_students_group == edited_first_course_config.gitlab_course_students_group
+    assert course.gitlab_default_branch == edited_first_course_config.gitlab_default_branch
+
+    assert course.task_url_template == "https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME"
+    assert course.links == {"TG Channel": "https://t.me/joinchat/", "TG Chat": "https://t.me/joinchat/"}
+
+    assert course.timezone == "Europe/Berlin"
+    assert course.max_submissions == 10  # noqa: PLR2004
+    assert course.submission_penalty == 0.1  # noqa: PLR2004
+
+    stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
+    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
+    assert all(v == 0 for v in stats.values())
+    assert (
+        db_api_with_initialized_first_course.max_score_started(FIRST_COURSE_NAME)
+        == FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED
     )

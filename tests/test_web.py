@@ -14,7 +14,7 @@ from manytask.abstract import StoredUser
 from manytask.api import bp as api_bp
 from manytask.database import TaskDisabledError
 from manytask.glab import Student
-from manytask.web import course_bp, root_bp
+from manytask.web import admin_bp, course_bp, root_bp
 
 TEST_USERNAME = "test_user"
 TEST_FIRST_NAME = "First"
@@ -44,6 +44,7 @@ def app(mock_gitlab_api, mock_storage_api):
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(admin_bp)
     app.gitlab_api = mock_gitlab_api
     app.rms_api = mock_gitlab_api
     app.storage_api = mock_storage_api

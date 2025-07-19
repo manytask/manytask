@@ -24,6 +24,19 @@
     {% if manytask_version %}
         <div class="mt-version-badge fs-7">{{ manytask_version }}</div>
     {% endif %}
+
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 11">
+    {% with messages = get_flashed_messages(category_filter=["course_not_found"]) %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                  <strong>Ошибка:</strong> курс не найден!
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    </div>
 </body>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script>
