@@ -13,7 +13,7 @@ from flask import Flask, url_for
 from manytask.abstract import RmsUser, StoredUser
 from manytask.api import bp as api_bp
 from manytask.database import TaskDisabledError
-from manytask.web import course_bp, root_bp
+from manytask.web import admin_bp, course_bp, root_bp
 
 TEST_USERNAME = "test_user"
 TEST_FIRST_NAME = "First"
@@ -43,6 +43,7 @@ def app(mock_gitlab_api, mock_storage_api):
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(admin_bp)
     app.gitlab_api = mock_gitlab_api
     app.rms_api = mock_gitlab_api
     app.storage_api = mock_storage_api
@@ -334,9 +335,9 @@ def test_not_ready(app):
 def check_admin_in_data(response, check_true):
     assert response.status_code == HTTPStatus.OK
     if check_true:
-        assert b'class="admin-label' in response.data
+        assert b'class="adm-badge' in response.data
     else:
-        assert b'class="admin-label' not in response.data
+        assert b'class="adm-badge' not in response.data
 
 
 def check_admin_status_code(response, check_true):

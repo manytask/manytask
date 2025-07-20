@@ -360,6 +360,40 @@ class DataBaseApi(StorageApi):
 
             return False
 
+    def edit_course(
+        self,
+        settings_config: AppCourseConfig,
+    ) -> bool:
+        """Edit Course by course_name from config object
+
+        :param course_name: course name
+        :param settings_config: CourseConfig object
+
+        :return: True if course was updated, False if course not found
+        """
+
+        with Session(self.engine) as session:
+            try:
+                self._update(
+                    session,
+                    models.Course,
+                    defaults={
+                        "gitlab_course_group": settings_config.gitlab_course_group,
+                        "gitlab_course_public_repo": settings_config.gitlab_course_public_repo,
+                        "gitlab_course_students_group": settings_config.gitlab_course_students_group,
+                        "gitlab_default_branch": settings_config.gitlab_default_branch,
+                        "registration_secret": settings_config.registration_secret,
+                        "show_allscores": settings_config.show_allscores,
+                        "is_ready": settings_config.is_ready,
+                        "task_url_template": settings_config.task_url_template,
+                        "links": settings_config.links,
+                    },
+                    name=settings_config.course_name,
+                )
+                return True
+            except NoResultFound:
+                return False
+
     def update_course(
         self,
         course_name: str,
