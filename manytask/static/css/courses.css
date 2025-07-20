@@ -1,0 +1,49 @@
+.course-list {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    min-width: 10vw;
+}
+
+.course-item {
+    border: 1px solid var(--bs-body-color);
+    border-radius: 15px;
+    padding: 10px 20px;
+    background-color: transparent;
+    display: inline-block;
+    width: 100%;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.course-link {
+    text-decoration: none;
+    color: inherit;
+    font-size: 1.2rem;
+    display: block;
+    position: relative;
+    transition: color 0.3s ease;
+    text-align: center;
+}
+
+.course-link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background-color: currentColor;
+    transition: width 0.2s ease;
+}
+
+.course-link:hover {
+    color: #64aeff;
+}
+
+.course-link:hover::after {
+    width: 100%;
+}
