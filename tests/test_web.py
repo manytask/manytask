@@ -336,9 +336,9 @@ def test_not_ready(app):
 def check_admin_in_data(response, check_true):
     assert response.status_code == HTTPStatus.OK
     if check_true:
-        assert b'class="admin-label' in response.data
+        assert b'class="adm-badge' in response.data
     else:
-        assert b'class="admin-label' not in response.data
+        assert b'class="adm-badge' not in response.data
 
 
 def check_admin_status_code(response, check_true):
