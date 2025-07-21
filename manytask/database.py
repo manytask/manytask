@@ -694,13 +694,12 @@ class DataBaseApi(StorageApi):
                         logger.error("Cannot remove the last admin")
                         return
 
-                user = self._get(session, models.User, username=username)
-                user.is_instance_admin = is_admin
-                session.commit()
+                self._update(session, models.User, defaults={"is_instance_admin": is_admin}, username=username)
+
             except NoResultFound:
                 logger.error(f"User {username} not found in the database")
 
-    def update_user_profile(self, username: str, new_first_name: str, new_last_name: str) -> None:
+    def update_user_profile(self, username: str | None, new_first_name: str | None, new_last_name: str | None) -> None:
         """Update user profile information
         :param username: user name
         :param new_first_name: new first name
@@ -708,10 +707,14 @@ class DataBaseApi(StorageApi):
         """
         with Session(self.engine) as session:
             try:
-                user = self._get(session, models.User, username=username)
-                user.first_name = new_first_name
-                user.last_name = new_last_name
-                session.commit()
+                defaults = {}
+                if new_first_name:
+                    defaults["first_name"] = new_first_name
+                if new_last_name:
+                    defaults["last_name"] = new_last_name
+
+                self._update(session, models.User, defaults=defaults, username=username)
+                logger.info(f"Updated user {username} profile: {new_first_name} {new_last_name}")
             except NoResultFound:
                 logger.error(f"User {username} not found in the database")
 

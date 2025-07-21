@@ -1,7 +1,9 @@
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from urllib.parse import urlparse
 
 import gitlab
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
@@ -407,8 +409,8 @@ def admin_panel() -> ResponseReturnValue:
             app.logger.error(f"CSRF validation failed: {e}")
             return render_template("admin_panel.html", error_message="CSRF Error")
 
-        action = request.form.get("action")
-        username = request.form.get("username")
+        action = request.form.get("action", "")
+        username = request.form.get("username", "")
         current_admin = session["gitlab"]["username"]
 
         if action == "grant":
@@ -428,12 +430,18 @@ def admin_panel() -> ResponseReturnValue:
 
 @root_bp.route("/update_profile", methods=["POST"])
 @requires_auth
-def update_profile():
+def update_profile() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    request_username = request.form.get("username")
-    new_first_name = request.form.get("first_name")
-    new_last_name = request.form.get("last_name")
+    def _validate_params(param: str) -> str | None:
+        return param if (re.match(r"^[a-zA-Zа-яА-Я_-]+$", param) is not None) else None
+
+    request_username = _validate_params(request.form.get("username", ""))
+    new_first_name = _validate_params(request.form.get("first_name", ""))
+    new_last_name = _validate_params(request.form.get("last_name", ""))
+
+    if request_username is None:
+        abort(HTTPStatus.BAD_REQUEST)
 
     if app.debug:
         current_username = request_username
@@ -450,6 +458,13 @@ def update_profile():
         abort(HTTPStatus.FORBIDDEN)
 
     app.storage_api.update_user_profile(request_username, new_first_name, new_last_name)
-    logger.info(f"Updated user {request_username} profile: {new_first_name} {new_last_name}")
 
-    return redirect(request.referrer or url_for("root.index"))
+    referrer = request.referrer
+    if referrer:
+        referrer_netloc = urlparse(referrer).netloc
+        current_netloc = urlparse(request.host_url).netloc
+
+        if referrer_netloc == current_netloc:
+            return redirect(referrer)
+
+    return redirect(url_for("root.index"))

@@ -12,6 +12,7 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, Uni
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
+from manytask.abstract import Student
 from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskUiConfig
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig
@@ -74,6 +75,7 @@ SECOND_COURSE_EXPECTED_STATS_KEYS = {
 
 FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED = 250
 SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED = 540
+USER_EXPECTED = 2
 
 
 class TestException(Exception):
@@ -94,6 +96,7 @@ def mock_current_time():
 def db_config(db_url):
     return DatabaseConfig(
         database_url=db_url,
+        admin=Student(0, "zero_admin", "zero admin"),
         apply_migrations=True,
     )
 
@@ -466,14 +469,14 @@ def test_resync_with_changed_task_name(
 
 
 def test_store_score(db_api_with_initialized_first_course, session):
-    assert session.query(User).count() == 0
+    assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
         constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
     )
 
-    assert session.query(User).count() == 1
+    assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 0
 
     assert (
@@ -487,10 +490,10 @@ def test_store_score(db_api_with_initialized_first_course, session):
         == 0
     )
 
-    assert session.query(User).count() == 1
+    assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
 
-    user = session.query(User).one()
+    user = session.query(User).all()[-1]
     assert user.username == constants.TEST_USERNAME
 
     user_on_course = session.query(UserOnCourse).one()
@@ -510,7 +513,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
         == 1
     )
 
-    assert session.query(User).count() == 1
+    assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
     assert session.query(Grade).count() == 1
 
@@ -553,7 +556,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
         == expected_score
     )
 
-    assert session.query(User).count() == 1
+    assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
     assert session.query(Grade).count() == 1
 
@@ -614,14 +617,14 @@ def test_store_score_with_changed_task_name(
 
 
 def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session):
-    assert session.query(User).count() == 0
+    assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
         constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
     )
 
-    assert session.query(User).count() == 1
+    assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 0
 
     stored_user = db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, constants.TEST_USERNAME)
@@ -638,7 +641,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     )
     assert not is_course_admin
 
-    assert session.query(User).count() == 1
+    assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
 
     # admin in gitlab
@@ -681,14 +684,14 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     )
     assert is_course_admin
 
-    assert session.query(User).count() == 1
+    assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
 
 
 def test_many_users(db_api_with_initialized_first_course, session):
     expected_score_1 = 22
     expected_score_2 = 15
-    expected_users = 2
+    expected_users = 3
     expected_user_on_course = 2
     expected_grades = 3
     expected_stats_ratio = 0.5
@@ -782,7 +785,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
         "task_1_3",
         update_func(40),
     )
-    expected_users = 1
+    expected_users = 2
     expected_user_on_course = 2
     expected_grades = 2
 
@@ -825,7 +828,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
 def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_score_1 = 22
     expected_score_2 = 15
-    expected_users = 2
+    expected_users = 3
     expected_user_on_course = 4
     expected_grades = 5
     expected_stats_ratio = 0.5
@@ -970,7 +973,7 @@ def test_bad_requests(db_api_with_two_initialized_courses, session):
     assert bonus_score == 0
     assert scores == {}
 
-    assert session.query(User).count() == 0
+    assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
     assert session.query(Grade).count() == 0
 
@@ -984,6 +987,7 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container, first_cou
         db_api = DataBaseApi(
             DatabaseConfig(
                 database_url=postgres_container.get_connection_url(),
+                admin=Student(0, "admin", "Ivan Ivanov"),
                 apply_migrations=False,
             )
         )
@@ -1040,7 +1044,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     )
     assert score == 1
 
-    assert session.query(User).count() == 1
+    assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
     assert session.query(Grade).count() == 1
 
@@ -1136,7 +1140,7 @@ def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgr
 
 def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_courses, session):
     user = User(
-        id=1,
+        id=2,
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
@@ -1157,7 +1161,7 @@ def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_cour
 
 def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_courses, session):
     user = User(
-        id=1,
+        id=2,
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
@@ -1178,7 +1182,7 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
 
 def test_check_user_on_course(db_api_with_two_initialized_courses, session):
     user = User(
-        id=1,
+        id=2,
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
@@ -1196,7 +1200,7 @@ def test_check_user_on_course(db_api_with_two_initialized_courses, session):
 
 def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, session):
     user = User(
-        id=1,
+        id=2,
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
@@ -1416,3 +1420,61 @@ def test_edit_course(db_api_with_initialized_first_course, edited_first_course_c
         db_api_with_initialized_first_course.max_score_started(FIRST_COURSE_NAME)
         == FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED
     )
+
+
+def test_zero_admin_is_in_db_and_set_admin_status(db_api, session):
+    assert session.query(User).count() == 1
+    assert session.query(User).one().is_instance_admin
+
+    db_api.set_instance_admin_status(session.query(User).one().username, False)
+    session.commit()
+    assert session.query(User).one().is_instance_admin  # should not be possible to remove last admin
+
+    user = User(
+        id=2,
+        username=constants.TEST_USERNAME,
+        first_name=constants.TEST_FIRST_NAME,
+        last_name=constants.TEST_LAST_NAME,
+    )
+    session.add(user)
+    session.commit()
+
+    assert not session.query(User).filter_by(username=constants.TEST_USERNAME).one().is_instance_admin
+    db_api.set_instance_admin_status(constants.TEST_USERNAME, True)
+    session.commit()
+    assert session.query(User).filter_by(username=constants.TEST_USERNAME).one().is_instance_admin
+    db_api.set_instance_admin_status(session.query(User).filter_by(id=1).one().username, False)
+    session.commit()
+    assert not session.query(User).filter_by(id=1).one().is_instance_admin
+
+
+def test_update_user_profile(db_api, session):
+    user = User(
+        id=2,
+        username=constants.TEST_USERNAME,
+        first_name=constants.TEST_FIRST_NAME,
+        last_name=constants.TEST_LAST_NAME,
+    )
+    session.add(user)
+    session.commit()
+
+    db_api.update_user_profile(constants.TEST_USERNAME, "NewFirstName", "NewLastName")
+    session.commit()
+    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).one()
+
+    assert updated_user.first_name == "NewFirstName"
+    assert updated_user.last_name == "NewLastName"
+
+    db_api.update_user_profile(constants.TEST_USERNAME, None, "LastName")
+    session.commit()
+    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).one()
+
+    assert updated_user.first_name == "NewFirstName"
+    assert updated_user.last_name == "LastName"
+
+    db_api.update_user_profile(constants.TEST_USERNAME, "FirstName", None)
+    session.commit()
+    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).one()
+
+    assert updated_user.first_name == "FirstName"
+    assert updated_user.last_name == "LastName"

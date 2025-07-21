@@ -95,6 +95,16 @@ def mock_gitlab():
 
         gitlab_instance.projects.list.side_effect = mock_project_list_search
 
+        mock_student = MagicMock()
+        mock_student._attrs = {"id": 0, "username": "", "name": "Test User"}
+
+        def mock_get_student(**kwargs):
+            username = kwargs.get("username", "")
+            mock_student._attrs["username"] = username
+            return [mock_student]
+
+        gitlab_instance.users.list.side_effect = mock_get_student
+
         yield mock
 
 

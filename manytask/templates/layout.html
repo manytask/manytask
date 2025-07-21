@@ -194,7 +194,7 @@
                     <form id="changeUserInfoForm" action="{{ url_for('root.update_profile') }}" method="POST">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="change">
-                        <input type="hidden" name="username" value={{ username }}>
+                        <input type="hidden" name="username" value="{{ username }}">
                         <div class="mb-3">
 
                             <div class="row g-2">
