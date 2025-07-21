@@ -122,6 +122,13 @@
                             </a>
                         </li>
                         <li>
+                            <button type="button" class="btn dropdown-item d-flex align-items-center py-2" data-bs-toggle="modal"
+                                    data-bs-target="#changeUserInfoModal">
+                                <i class="fas fa-user-edit me-2 opacity-75"></i>
+                                Change user info
+                            </button>
+                        </li>
+                        <li>
                             <hr class="dropdown-divider my-1">
                         </li>
                         <li>
@@ -172,6 +179,43 @@
         {% endblock %}
 
         <div class="container-fluid" style="height: 10px;"></div>
+    </div>
+
+    {#  modal for changing user info   #}
+    <div class="modal fade" id="changeUserInfoModal" tabindex="-1" aria-labelledby="changeUserInfoModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="changeUserInfoModalLabel">Change user info</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="changeUserInfoForm" action="{{ url_for('root.update_profile') }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="change">
+                        <input type="hidden" name="username" value={{ username }}>
+                        <div class="mb-3">
+
+                            <div class="row g-2">
+                                <div class="col-md">
+                                    <input type="text" class="form-control" id="firstNameInput" name="first_name"
+                                           placeholder="New first name" autocomplete="off">
+                                </div>
+                                <div class="col-md">
+                                    <input type="text" class="form-control" id="lastNameInput" name="last_name"
+                                           placeholder="New last name" autocomplete="off">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="changeUserInfoForm" class="btn btn-info">Change info</button>
+                </div>
+            </div>
+        </div>
     </div>
 
 {% endblock %}
