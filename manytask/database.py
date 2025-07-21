@@ -26,7 +26,6 @@ from .config import (
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
-from .models import User
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -701,11 +700,7 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 logger.error(f"User {username} not found in the database")
 
-    def update_user_profile(
-            self,
-            username: str,
-            new_first_name: str,
-            new_last_name: str) -> None:
+    def update_user_profile(self, username: str, new_first_name: str, new_last_name: str) -> None:
         """Update user profile information
         :param username: user name
         :param new_first_name: new first name

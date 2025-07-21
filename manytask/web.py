@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 
 import gitlab
-from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for, abort
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
@@ -410,7 +410,6 @@ def admin_panel() -> ResponseReturnValue:
         action = request.form.get("action")
         username = request.form.get("username")
         current_admin = session["gitlab"]["username"]
-
 
         if action == "grant":
             app.storage_api.set_instance_admin_status(username, True)

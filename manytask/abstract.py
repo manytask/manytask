@@ -167,11 +167,7 @@ class StorageApi(ABC):
     ) -> None: ...
 
     @abstractmethod
-    def update_user_profile(
-            self,
-            username: str,
-            new_first_name: str,
-            new_last_name: str) -> None: ...
+    def update_user_profile(self, username: str, new_first_name: str, new_last_name: str) -> None: ...
 
 
 class RmsApi(ABC):
