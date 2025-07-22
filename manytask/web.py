@@ -461,10 +461,10 @@ def update_profile() -> ResponseReturnValue:
 
     referrer = request.referrer
     if referrer:
-        referrer_netloc = urlparse(referrer).netloc
-        current_netloc = urlparse(request.host_url).netloc
+        referrer_url = urlparse(referrer)
+        current_url = urlparse(request.host_url)
 
-        if referrer_netloc == current_netloc:
+        if referrer_url.netloc == current_url.netloc and referrer_url.scheme in ("http", "https"):
             return redirect(referrer)
 
     return redirect(url_for("root.index"))
