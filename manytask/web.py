@@ -434,11 +434,11 @@ def update_profile() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     def _validate_params(param: str) -> str | None:
-        return param if (re.match(r"^[a-zA-Zа-яА-Я_-]+$", param) is not None) else None
+        return param if (re.match(r"^[a-zA-Zа-яА-Я_-]{1,50}$", param) is not None) else None
 
-    request_username = _validate_params(request.form.get("username", ""))
-    new_first_name = _validate_params(request.form.get("first_name", ""))
-    new_last_name = _validate_params(request.form.get("last_name", ""))
+    request_username = request.form.get("username", None)
+    new_first_name = _validate_params(request.form.get("first_name", "").strip())
+    new_last_name = _validate_params(request.form.get("last_name", "").strip())
 
     if request_username is None:
         abort(HTTPStatus.BAD_REQUEST)

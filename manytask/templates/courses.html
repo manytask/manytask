@@ -1,25 +1,25 @@
 {% extends "base.html" %}
 
 {% block additional_styles %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/courses.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/courses.css') }}">
 {% endblock %}
 
 {% block body %}
-<div class="container-fluid d-flex flex-column justify-content-center align-items-center">
-    <h1 class="mt-4 mb-3">Список курсов</h1>
-    <ul class="course-list">
-        {% for course in courses %}
-            <li class="course-item">
-                <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
-            </li>
-        {% else %}
-            К сожалению, курсов пока нет.
-        {% endfor %}
-    </ul>
+    <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
+        <h1 class="mt-4 mb-3">Список курсов</h1>
+        <ul class="course-list">
+            {% for course in courses %}
+                <li class="course-item">
+                    <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
+                </li>
+            {% else %}
+                К сожалению, курсов пока нет.
+            {% endfor %}
+        </ul>
 
-     {% if is_admin %}
-        <a class="btn btn-primary mt-3" href="{{ url_for('admin.admin_panel') }}">Admin panel</a>
-    {% endif %}
+        {% if is_admin %}
+            <a class="btn btn-primary mt-3" href="{{ url_for('admin.admin_panel') }}">Admin panel</a>
+        {% endif %}
 
-</div>
+    </div>
 {% endblock %}

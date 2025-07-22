@@ -699,7 +699,7 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 logger.error(f"User {username} not found in the database")
 
-    def update_user_profile(self, username: str | None, new_first_name: str | None, new_last_name: str | None) -> None:
+    def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
         """Update user profile information
         :param username: user name
         :param new_first_name: new first name
@@ -707,14 +707,24 @@ class DataBaseApi(StorageApi):
         """
         with Session(self.engine) as session:
             try:
-                defaults = {}
-                if new_first_name:
-                    defaults["first_name"] = new_first_name
-                if new_last_name:
-                    defaults["last_name"] = new_last_name
+                user = self._get(session, models.User, username=username)
+                old_first_name, old_last_name = user.first_name, user.last_name
 
-                self._update(session, models.User, defaults=defaults, username=username)
-                logger.info(f"Updated user {username} profile: {new_first_name} {new_last_name}")
+                if new_first_name:
+                    user.first_name = new_first_name
+                if new_last_name:
+                    user.last_name = new_last_name
+
+                session.commit()
+
+                changes = []
+                if new_first_name:
+                    changes.append(f"first_name: {old_first_name} -> {new_first_name}")
+                if new_last_name:
+                    changes.append(f"last_name: {old_last_name} -> {new_last_name}")
+
+                if changes:
+                    logger.info(f"Updated user {username} profile: {', '.join(changes)}")
             except NoResultFound:
                 logger.error(f"User {username} not found in the database")
 
