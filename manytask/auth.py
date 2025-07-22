@@ -4,7 +4,7 @@ from http import HTTPStatus
 from typing import Any, Callable
 
 from authlib.integrations.flask_client import OAuth
-from flask import abort, current_app, redirect, request, session, url_for, flash
+from flask import abort, current_app, flash, redirect, request, session, url_for
 from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response

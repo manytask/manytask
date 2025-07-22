@@ -17,7 +17,7 @@
             {% endfor %}
         </ul>
 
-        <form class="course-search-form" style="padding-top: 6rem" onsubmit="redirectToCourse(event)">
+        <form class="course-search-form" id="registerCourseForm" style="padding-top: 6rem">
             <div class="d-flex flex-column align-items-center" style="gap: 0.8rem;">
                 <label for="courseInput" class="course-search-label">Register on new course</label>
                 <input type="text" class="form-control" id="courseInput" placeholder="Course title..." required>
@@ -29,11 +29,10 @@
     </div>
 
     <script>
-        function redirectToCourse(e) {
+        document.getElementById('registerCourseForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            const course = document.getElementById('courseInput').value
-                .trim()
+            const course = document.getElementById('courseInput').value.trim()
             window.location.href = `/${course}`;
-        }
+        });
     </script>
 {% endblock %}
