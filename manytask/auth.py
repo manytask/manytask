@@ -173,7 +173,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             course.course_name,
             student.username,
             app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-            app.storage_api.check_if_course_admin(course.course_name, student.username),
+            app.storage_api.check_if_instance_admin(student.username),
         )
 
         return f(*args, **kwargs)
