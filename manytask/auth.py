@@ -4,7 +4,7 @@ from http import HTTPStatus
 from typing import Any, Callable
 
 from authlib.integrations.flask_client import OAuth
-from flask import abort, current_app, redirect, request, session, url_for
+from flask import abort, current_app, redirect, request, session, url_for, flash
 from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
@@ -136,6 +136,7 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
         course = app.storage_api.get_course(course_name)
 
         if course is None:
+            flash("Course not found", "course_not_found")
             abort(redirect(url_for("root.index")))
 
         if not course.is_ready:
