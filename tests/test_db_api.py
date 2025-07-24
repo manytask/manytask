@@ -96,7 +96,7 @@ def mock_current_time():
 def db_config(db_url):
     return DatabaseConfig(
         database_url=db_url,
-        admin=Student(0, "zero_admin", "zero admin"),
+        zero_admin_username="zero_admin",
         apply_migrations=True,
     )
 
@@ -987,7 +987,7 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container, first_cou
         db_api = DataBaseApi(
             DatabaseConfig(
                 database_url=postgres_container.get_connection_url(),
-                admin=Student(0, "admin", "Ivan Ivanov"),
+                zero_admin_username="admin",
                 apply_migrations=False,
             )
         )

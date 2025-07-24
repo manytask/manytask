@@ -126,18 +126,16 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     )
     if database_url is None:
         raise EnvironmentError("Unable to find DATABASE_URL env")
+
     zero_admin_username = os.environ.get("ZERO_ADMIN", "")
-    if app.debug:
-        zero_admin = Student(0, "guest", "guest guest")
-    else:
-        zero_admin = app.gitlab_api.get_student_by_username(zero_admin_username)
-    if zero_admin is None:
-        raise EnvironmentError(f"Unable to find admin user {zero_admin_username} in GitLab")
+
+    if zero_admin_username is None:
+        raise EnvironmentError("Unable to find ZERO_ADMIN env")
 
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
-            admin=zero_admin,
+            zero_admin_username=zero_admin_username,
             apply_migrations=apply_migrations,
         )
     )
