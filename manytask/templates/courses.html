@@ -6,20 +6,37 @@
 
 {% block body %}
     <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
-        <h1 class="mt-4 mb-3">Список курсов</h1>
+        <h1 class="mt-4 mb-3">List of courses</h1>
         <ul class="course-list">
             {% for course in courses %}
                 <li class="course-item">
                     <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
                 </li>
             {% else %}
-                К сожалению, курсов пока нет.
+                Unfortunately, there are no courses yet.
             {% endfor %}
         </ul>
+
+        <form class="course-search-form" id="registerCourseForm" style="padding-top: 6rem">
+            <div class="d-flex flex-column align-items-center" style="gap: 0.8rem;">
+                <label for="courseInput" class="course-search-label">Register on new course</label>
+                <input type="text" class="form-control" id="courseInput" placeholder="Course title..." required>
+                <button type="submit" class="btn btn-outline-primary px-4 py-2">
+                    Go
+                </button>
+            </div>
+        </form>
 
         {% if is_admin %}
             <a class="btn btn-primary mt-3" href="{{ url_for('admin.admin_panel') }}">Admin panel</a>
         {% endif %}
-
     </div>
+
+    <script>
+        document.getElementById('registerCourseForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const course = document.getElementById('courseInput').value.trim()
+            window.location.href = `/${course}`;
+        });
+    </script>
 {% endblock %}
