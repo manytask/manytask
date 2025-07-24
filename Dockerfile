@@ -24,7 +24,6 @@ COPY --from=builder /app/.venv /app/.venv
 
 COPY ./manytask/ /app/manytask
 COPY VERSION /app/VERSION
-COPY .manytask.example.yml /app/.manytask.example.yml
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
@@ -46,4 +45,4 @@ CMD ["gunicorn", "--bind", "0.0.0.0:5050", \
 RUN mkdir -p /root/.postgresql && \
 wget "https://storage.yandexcloud.net/cloud-certs/CA.pem" \
     --output-document /root/.postgresql/root.crt && \
-chmod 0600 /root/.postgresql/root.crt
+chmod 0600 /root/.postgresql/root.crt \
