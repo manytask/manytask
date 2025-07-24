@@ -91,8 +91,7 @@ def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student | Respon
     except Exception:
         logger.error("Failed login in gitlab, redirect to login", exc_info=True)
         session.pop("gitlab", None)
-        redirect_uri = url_for("root.login", _external=True)
-        return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
+        return redirect(url_for("root.signup"))
 
 
 def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -107,9 +106,6 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 
         oauth = app.oauth
 
-        if "code" in request.args:
-            return handle_oauth_callback(oauth, app)
-
         if valid_session(session):
             student_or_resp = get_authenticate_student(oauth, app)
 
@@ -117,8 +113,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
                 return student_or_resp
         else:
             logger.info("Redirect to login in Gitlab")
-            redirect_uri = url_for("root.login", _external=True)
-            return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
+            return redirect(url_for("root.signup"))
 
         return f(*args, **kwargs)
 
