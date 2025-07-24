@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from manytask.models import Course, Task, TaskGroup
 from manytask.config import ManytaskDeadlinesConfig
-from manytask.glab import Student
+from manytask.abstract import Student
 
 
 # ruff: noqa
