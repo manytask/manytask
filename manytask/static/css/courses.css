@@ -47,19 +47,3 @@
 .course-link:hover::after {
     width: 100%;
 }
-
-    /*.course-search-form {*/
-    /*    text-align: center;*/
-    /*    width: 100%;*/
-    /*    max-width: 500px;*/
-    /*    margin: 0 auto;*/
-    /*}*/
-    /*.course-search-label {*/
-    /*    font-weight: 500;*/
-    /*    color: #333;*/
-    /*    margin-bottom: 8px;*/
-    /*}*/
-    /*.btn-primary:hover {*/
-    /*    transform: translateY(-2px);*/
-    /*    box-shadow: 0 4px 8px rgba(0,0,0,0.1);*/
-    /*}*/
