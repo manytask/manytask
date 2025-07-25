@@ -2,6 +2,7 @@ import logging
 from functools import wraps
 from http import HTTPStatus
 from typing import Any, Callable
+from urllib.error import HTTPError
 
 from authlib.integrations.flask_client import OAuth
 from flask import abort, current_app, flash, redirect, request, session, url_for
@@ -80,49 +81,12 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     return redirect(redirect_url)
 
 
-def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student | Response:
+def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student:
     """Getting student and update session"""
 
-    try:
-        student = app.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
-        session["gitlab"].update(set_oauth_session(student))
-        return student
-
-    except Exception:
-        logger.error("Failed login in gitlab, redirect to login", exc_info=True)
-        session.pop("gitlab", None)
-        redirect_uri = url_for("root.login", _external=True)
-        return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
-
-
-def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
-    """Check authentication"""
-
-    @wraps(f)
-    def decorated(*args: Any, **kwargs: Any) -> Any:
-        app: CustomFlask = current_app  # type: ignore
-
-        if app.debug:
-            return f(*args, **kwargs)
-
-        oauth = app.oauth
-
-        if "code" in request.args:
-            return handle_oauth_callback(oauth, app)
-
-        if valid_session(session):
-            student_or_resp = get_authenticate_student(oauth, app)
-
-            if not isinstance(student_or_resp, Student):
-                return student_or_resp
-        else:
-            logger.info("Redirect to login in Gitlab")
-            redirect_uri = url_for("root.login", _external=True)
-            return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
-
-        return f(*args, **kwargs)
-
-    return decorated
+    student = app.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
+    session["gitlab"].update(set_oauth_session(student))
+    return student
 
 
 def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -147,6 +111,44 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
     return decorated
 
 
+def __redirect_to_login() -> Callable[..., Any]:
+    app: CustomFlask = current_app  # type: ignore
+    oauth = app.oauth
+    session.pop("gitlab", None)
+    redirect_uri = url_for("root.login", _external=True)
+    return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
+
+
+def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Check authentication"""
+
+    @wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        app: CustomFlask = current_app  # type: ignore
+
+        if app.debug:
+            return f(*args, **kwargs)
+
+        oauth = app.oauth
+
+        if "code" in request.args:
+            return handle_oauth_callback(oauth, app)
+
+        if valid_session(session):
+            try:
+                app.gitlab_api.check_authenticated_student(session["gitlab"]["access_token"])
+            except (HTTPError, KeyError) as e:
+                logger.error(f"Failed login in gitlab, redirect to login: {e}", exc_info=True)
+                return __redirect_to_login()
+        else:
+            logger.error("Failed to verify session.", exc_info=True)
+            return __redirect_to_login()
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
 def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
     """Check course readiness, user authentication and access"""
 
@@ -162,7 +164,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         oauth = app.oauth
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
-        student: Student = get_authenticate_student(oauth, app)  # type: ignore
+        student: Student = get_authenticate_student(oauth, app)
 
         if not handle_course_membership(app, course, student.username) or not app.rms_api.check_project_exists(
             username=student.username, course_students_group=course.gitlab_course_students_group

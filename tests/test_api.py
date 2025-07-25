@@ -196,6 +196,9 @@ def mock_gitlab_api(mock_student):
                 return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
             raise GitLabApiException("Student not found")
 
+        def check_authenticated_student(self, access_token):
+            pass
+
         def get_authenticated_student(self, access_token):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
