@@ -182,7 +182,7 @@ class DataBaseApi(StorageApi):
 
         return all_scores
 
-    def get_grades(self, course_name) -> ManytaskFinalGradeConfig:
+    def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig:
         """Method for getting config with grades for the course
 
         :param course_name: course name
@@ -729,6 +729,15 @@ class DataBaseApi(StorageApi):
                         group_id=task_group.id,
                     )
             session.commit()
+
+    def _sync_grades(
+        self,
+        course_name: str,
+        grades: ManytaskFinalGradeConfig | None
+    ) -> None:
+        if grades is None:
+            return
+        # TODO
 
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})

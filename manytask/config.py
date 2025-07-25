@@ -219,7 +219,7 @@ class PrimaryGradeFormula(BaseModel):
             except KeyError:
                 raise ValueError(f"Path <{path}> not found in scores data <{scores}>")
 
-        if not isinstance(attribute, (int, float)):
+        if not isinstance(attribute, int) and not isinstance(attribute, float):
             raise ValueError(f"Path <{path}> does not point to a number in scores data <{scores}>")
 
         return attribute
