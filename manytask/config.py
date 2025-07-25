@@ -205,7 +205,7 @@ class PrimaryGradeFormula(BaseModel):
         return True
 
     @staticmethod
-    def get_attribute(path: Path, scores: dict[str, Any]) -> Union[int, float]:
+    def get_attribute(path: Path, scores: dict[str, Any]) -> Any:
         # empty path means always true: dummy case for lowest mark
         if len(path.parts) == 0:
             return True
@@ -218,9 +218,6 @@ class PrimaryGradeFormula(BaseModel):
                 attribute = attribute[dir]
             except KeyError:
                 raise ValueError(f"Path <{path}> not found in scores data <{scores}>")
-
-        if not isinstance(attribute, int) and not isinstance(attribute, float):
-            raise ValueError(f"Path <{path}> does not point to a number in scores data <{scores}>")
 
         return attribute
 

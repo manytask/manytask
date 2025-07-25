@@ -445,7 +445,7 @@ class DataBaseApi(StorageApi):
 
         self._update_task_groups_from_config(course_name, config.deadlines)
         self._sync_columns(course_name, config.deadlines)
-        self._sync_grades(course_name, config.grades)
+        self._sync_grades_config(course_name, config.grades)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
@@ -485,6 +485,7 @@ class DataBaseApi(StorageApi):
                     task=group_task.name,
                     enabled=group_task.enabled,
                     score=group_task.score,
+                    min_score=group_task.min_score,
                     is_bonus=group_task.is_bonus,
                     is_large=group_task.is_large,
                     is_special=group_task.is_special,
@@ -498,6 +499,7 @@ class DataBaseApi(StorageApi):
             task=task.name,
             enabled=task.enabled,
             score=task.score,
+            min_score=task.min_score,
             is_bonus=task.is_bonus,
             is_large=task.is_large,
             is_special=task.is_special,
@@ -556,6 +558,7 @@ class DataBaseApi(StorageApi):
                             task=task.name,
                             enabled=task.enabled,
                             score=task.score,
+                            min_score=task.min_score,
                             is_bonus=task.is_bonus,
                             is_large=task.is_large,
                             is_special=task.is_special,
@@ -784,6 +787,7 @@ class DataBaseApi(StorageApi):
                         models.Task,
                         defaults={
                             "score": task.score,
+                            "min_score": task.min_score,
                             "is_bonus": task.is_bonus,
                             "is_large": task.is_large,
                             "is_special": task.is_special,
@@ -796,10 +800,81 @@ class DataBaseApi(StorageApi):
                     )
             session.commit()
 
-    def _sync_grades(self, course_name: str, grades: ManytaskFinalGradeConfig | None) -> None:
-        if grades is None:
+    def _sync_grades_config(self, course_name: str, grades_config: ManytaskFinalGradeConfig | None) -> None:
+        if grades_config is None:
             return
-        # TODO
+
+        with Session(self.engine) as session:
+            course = self._get(session, models.Course, name=course_name)
+            existing_complex_formulas = session.query(models.ComplexFormula).filter_by(course_id=course.id).all()
+
+            existing_complex_formulas_grades = set(
+                complex_formula.grade for complex_formula in existing_complex_formulas
+            )
+            config_complex_formulas_grades = set(grades_config.grades.keys())
+
+            # add new grades
+            for grade in config_complex_formulas_grades - existing_complex_formulas_grades:
+                complex_formula = DataBaseApi._update_or_create(
+                    session, models.ComplexFormula, grade=grade, course_id=course.id
+                )
+
+                for primary_formula in grades_config.grades[grade].formulas:
+                    primary_formula_dict = {str(k): v for k, v in primary_formula.formulas.items()}
+                    primary_formula_instance = DataBaseApi._update_or_create(
+                        session,
+                        models.PrimaryFormula,
+                        create_defaults={"primary_formula": primary_formula_dict},
+                        complex_id=complex_formula.id,
+                    )
+
+            # remove deleted grafes
+            for grade in existing_complex_formulas_grades - config_complex_formulas_grades:
+                session.query(models.ComplexFormula).filter_by(
+                    course_id=course.id,
+                    grade=grade,
+                ).delete()
+
+            # update existing grades
+            for grade in existing_complex_formulas_grades & config_complex_formulas_grades:
+                complex_formula = (
+                    session.query(models.ComplexFormula)
+                    .filter_by(
+                        course_id=course.id,
+                        grade=grade,
+                    )
+                    .one()
+                )
+
+                existing_primary_formulas = (
+                    session.query(models.PrimaryFormula).filter_by(complex_id=complex_formula.id).all()
+                )
+                existing_primary_formulas_set = set(
+                    primary_formula.primary_formula for primary_formula in existing_primary_formulas
+                )
+
+                new_primary_formulas_set = set(
+                    {str(k): v for k, v in primary_formula.formulas.items()}
+                    for primary_formula in grades_config.grades[grade].formulas
+                )
+
+                # remove deleted primary formulas
+                for formula in existing_primary_formulas_set - new_primary_formulas_set:
+                    session.query(models.PrimaryFormula).filter_by(
+                        complex_id=complex_formula.id,
+                        primary_formula=formula,
+                    ).delete()
+
+                # add new primary formulas
+                for formula in new_primary_formulas_set - existing_primary_formulas_set:
+                    DataBaseApi._update_or_create(
+                        session,
+                        models.PrimaryFormula,
+                        create_defaults={"primary_formula": formula},
+                        complex_id=complex_formula.id,
+                    )
+
+            session.commit()
 
     def _check_pending_migrations(self, database_url: str) -> bool:
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})

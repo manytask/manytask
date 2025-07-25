@@ -256,6 +256,7 @@ class ComplexFormula(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     grade: Mapped[int] = mapped_column(default=0, server_default="0")
+    course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
 
     # relationships
     primary_formulas: DynamicMapped["PrimaryFormula"] = relationship(
