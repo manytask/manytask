@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Optional, Union
+from pathlib import Path
+from typing import Any, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
@@ -38,6 +39,8 @@ class ManytaskTaskConfig(BaseModel):
     enabled: bool = True
 
     score: int
+    # Minimum score to count the task, only significant for large tasks
+    min_score: int = 0
     special: int = 0
 
     is_bonus: bool = False
@@ -188,6 +191,71 @@ class ManytaskDeadlinesConfig(BaseModel):
         return self.schedule
 
 
+class PrimaryGradeFormula(BaseModel):
+    formulas: dict[Path, Union[int, float]] = Field(default_factory=dict)
+
+    def evaluate(self, scores: dict[str, Any]) -> bool:
+        for path, limit in self.formulas.items():
+            try:
+                attribute = PrimaryGradeFormula.get_attribute(path, scores)
+            except ValueError:
+                return False
+            if attribute < limit:
+                return False
+        return True
+
+    @staticmethod
+    def get_attribute(path: Path, scores: dict[str, Any]) -> Any:
+        # empty path means always true: dummy case for lowest mark
+        if len(path.parts) == 0:
+            return True
+
+        attribute = scores
+        for dir in path.parts:
+            if not isinstance(attribute, dict):
+                raise ValueError(f"Path <{path}> not found in scores data <{scores}>")
+            try:
+                attribute = attribute[dir]
+            except KeyError:
+                raise ValueError(f"Path <{path}> not found in scores data <{scores}>")
+
+        return attribute
+
+
+class ManytaskGradeConfig(BaseModel):
+    formulas: list[PrimaryGradeFormula] = Field(default_factory=list)
+
+    def evaluate(self, scores: dict[str, Any]) -> bool:
+        for formula in self.formulas:
+            if formula.evaluate(scores):
+                return True
+        return False
+
+
+class ManytaskFinalGradeConfig(BaseModel):
+    grades: dict[int, ManytaskGradeConfig] = Field(default_factory=dict)
+    grades_order: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_grade_names_initialization(self) -> ManytaskFinalGradeConfig:
+        if len(self.grades.keys()) == 0:
+            raise ValueError("No grades defined")
+
+        return self
+
+    @model_validator(mode="after")
+    def populate_grades_order(self) -> ManytaskFinalGradeConfig:
+        self.grades_order = sorted(list(self.grades.keys()), reverse=True)
+        return self
+
+    def evaluate(self, scores: dict[str, Any]) -> Optional[int]:
+        for grade in self.grades_order:
+            if self.grades[grade].evaluate(scores):
+                return grade
+
+        raise ValueError("No grade matched")
+
+
 class ManytaskConfig(BaseModel):
     """Manytask configuration."""
 
@@ -195,6 +263,7 @@ class ManytaskConfig(BaseModel):
 
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
+    grades: Optional[ManytaskFinalGradeConfig] = None
 
     @field_validator("version")
     @classmethod

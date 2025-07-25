@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
-from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
+from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig
 
 
@@ -69,6 +69,9 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
+
+    @abstractmethod
+    def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig: ...
 
     @abstractmethod
     def get_stats(self, course_name: str) -> dict[str, float]: ...
