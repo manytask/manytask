@@ -815,13 +815,13 @@ class DataBaseApi(StorageApi):
 
             # add new grades
             for grade in config_complex_formulas_grades - existing_complex_formulas_grades:
-                complex_formula = DataBaseApi._update_or_create(
+                complex_formula = self._update_or_create(
                     session, models.ComplexFormula, grade=grade, course_id=course.id
                 )
 
                 for primary_formula in grades_config.grades[grade].formulas:
                     primary_formula_dict = {str(k): v for k, v in primary_formula.formulas.items()}
-                    primary_formula_instance = DataBaseApi._update_or_create(
+                    self._update_or_create(
                         session,
                         models.PrimaryFormula,
                         create_defaults={"primary_formula": primary_formula_dict},
@@ -867,7 +867,7 @@ class DataBaseApi(StorageApi):
 
                 # add new primary formulas
                 for formula in new_primary_formulas_set - existing_primary_formulas_set:
-                    DataBaseApi._update_or_create(
+                    self._update_or_create(
                         session,
                         models.PrimaryFormula,
                         create_defaults={"primary_formula": formula},
