@@ -1426,54 +1426,42 @@ def test_zero_admin_is_in_db_and_set_admin_status(db_api, session):
     assert session.query(User).one().is_instance_admin
 
     db_api.set_instance_admin_status(session.query(User).one().username, False)
-    session.commit()
     assert session.query(User).one().is_instance_admin  # should not be possible to remove last admin
 
-    user = User(
-        id=2,
+    db_api.create_user_if_not_exist(
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
     )
-    session.add(user)
-    session.commit()
 
     assert not session.query(User).filter_by(username=constants.TEST_USERNAME).one().is_instance_admin
     db_api.set_instance_admin_status(constants.TEST_USERNAME, True)
-    session.commit()
     assert session.query(User).filter_by(username=constants.TEST_USERNAME).one().is_instance_admin
     db_api.set_instance_admin_status(session.query(User).filter_by(id=1).one().username, False)
-    session.commit()
     assert not session.query(User).filter_by(id=1).one().is_instance_admin
 
 
 def test_update_user_profile(db_api, session):
-    user = User(
-        id=2,
+    db_api.create_user_if_not_exist(
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
     )
-    session.add(user)
-    session.commit()
 
     db_api.update_user_profile(constants.TEST_USERNAME, "NewFirstName", "NewLastName")
-    session.commit()
-    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).one()
+    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).populate_existing().one()
 
     assert updated_user.first_name == "NewFirstName"
     assert updated_user.last_name == "NewLastName"
 
     db_api.update_user_profile(constants.TEST_USERNAME, None, "LastName")
-    session.commit()
-    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).one()
+    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).populate_existing().one()
 
     assert updated_user.first_name == "NewFirstName"
     assert updated_user.last_name == "LastName"
 
     db_api.update_user_profile(constants.TEST_USERNAME, "FirstName", None)
-    session.commit()
-    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).one()
+    updated_user = session.query(User).filter_by(username=constants.TEST_USERNAME).populate_existing().one()
 
     assert updated_user.first_name == "FirstName"
     assert updated_user.last_name == "LastName"
