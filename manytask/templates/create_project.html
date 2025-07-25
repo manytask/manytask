@@ -7,6 +7,7 @@
     <div class="d-flex align-items-center justify-content-center bg-body-tertiary container-fluid p-3">
         <div class="d-flex flex-column align-items-center justify-content-center form-signin px-4 py-4 rounded m-auto container-sm" style="background-color: var(--bs-body-bg); max-width: 400px;">
             <form method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 {% if error_message %}
                     <div class="alert alert-danger" role="alert">
                         {{ error_message }}

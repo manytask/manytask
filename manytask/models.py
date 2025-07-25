@@ -2,9 +2,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, MetaData, UniqueConstraint, event, func
-from sqlalchemy.engine import Connection, Dialect
-from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, Mapper, Session, mapped_column, relationship
+from sqlalchemy import JSON, DateTime, ForeignKey, MetaData, UniqueConstraint, func
+from sqlalchemy.engine import Dialect
+from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
 logger = logging.getLogger(__name__)
@@ -115,10 +115,9 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str]
-    gitlab_instance_host: Mapped[str]
-
-    __table_args__ = (UniqueConstraint("username", "gitlab_instance_host", name="_username_gitlab_instance_uc"),)
+    username: Mapped[str] = mapped_column(unique=True)
+    first_name: Mapped[str]
+    last_name: Mapped[str]
 
     # relationships
     users_on_courses: DynamicMapped["UserOnCourse"] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -129,7 +128,6 @@ class Course(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(unique=True)
-    gitlab_instance_host: Mapped[str]
     registration_secret: Mapped[str]
     token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
@@ -183,28 +181,6 @@ class UserOnCourse(Base):
     user: Mapped["User"] = relationship(back_populates="users_on_courses")
     course: Mapped["Course"] = relationship(back_populates="users_on_courses")
     grades: DynamicMapped["Grade"] = relationship(back_populates="user_on_course", cascade="all, delete-orphan")
-
-
-@event.listens_for(UserOnCourse, "before_insert")
-def validate_gitlab_instance_host(mapper: Mapper[UserOnCourse], connection: Connection, target: UserOnCourse) -> None:
-    session = Session(bind=connection)
-
-    try:
-        if target.user:
-            user = target.user
-        else:  # target missing user if we gave user_id or nothing
-            user = session.query(User).filter_by(id=target.user_id).one()
-
-        if target.course:
-            course = target.course
-        else:  # target missing course if we gave course_id or nothing
-            course = session.query(Course).filter_by(id=target.course_id).one()
-    except Exception as e:  # TODO: fix swallowing exception
-        logger.warning(f"Swallowing exception in 'before_insert' event in UserOnCourse model: {repr(e)}")
-        return
-
-    if user.gitlab_instance_host != course.gitlab_instance_host:
-        raise ValueError("Gitlab instances not equal")
 
 
 class Deadline(Base):

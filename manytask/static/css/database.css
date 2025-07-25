@@ -1,0 +1,90 @@
+.db-search-controls {
+    display: flex;
+}
+
+.db-search-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.db-search-input {
+    position: relative;
+    flex: 1;
+    min-width: 300px;
+}
+
+.db-search-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    pointer-events: none;
+}
+
+.db-filter-clear {
+  transition: all 0.3s ease;
+}
+
+.db-filter-clear:hover {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+[data-bs-theme="dark"] .tabulator-footer .tabulator-paginator .tabulator-page:not(.active) {
+    color: #666666 !important;
+    background-color: #333333 !important;
+    opacity: 1 !important;
+}
+
+/* Export button styles */
+#export-csv {
+    border: 1px solid #aaaaaa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #ffffff33;
+    color: #212529;
+}
+
+[data-bs-theme="dark"] #export-csv {
+    background-color: #5c5c5c;
+    color: #ffffff;
+    border-color: #6c757d;
+}
+
+[data-bs-theme="dark"] #export-csv:hover {
+    background-color: #202020;
+    border-color: #adb5bd;
+}
+
+#export-csv:hover {
+    background-color: #9e9e9e;
+    border-color: #ced4da;
+}
+
+.tabulator {
+    width: 100% !important;
+    max-width: 100% !important;
+    --min-col-width: 30px;
+}
+
+.tabulator .tabulator-header .tabulator-col {
+    min-width: var(--min-col-width) !important;
+}
+
+.tabulator .tabulator-cell {
+    min-width: var(--min-col-width) !important;
+}
+
+.tabulator-cell,
+.tabulator .tabulator-header .tabulator-col-content {
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}

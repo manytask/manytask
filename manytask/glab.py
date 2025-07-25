@@ -14,18 +14,6 @@ from .abstract import RmsApi, Student
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class User:
-    username: str
-    firstname: str
-    lastname: str
-    email: str
-    password: str
-
-    def __repr__(self) -> str:
-        return f"User(username={self.username})"
-
-
 class GitLabApiException(Exception):
     pass
 
@@ -55,30 +43,25 @@ class GitLabApi(RmsApi):
 
     def register_new_user(
         self,
-        user: User,
-    ) -> gitlab.v4.objects.User:
-        """
-        :param user:
-        :return: returns this thing
-        https://python-gitlab.readthedocs.io/en/stable/api/gitlab.v4.html#gitlab.v4.objects.User
-        but the docs do not really help much. Grep the logs
-        """
-
-        logger.info(f"Creating user: {user}")
+        username: str,
+        firstname: str,
+        lastname: str,
+        email: str,
+        password: str,
+    ) -> None:
+        logger.info(f"Creating user (username={username})")
         # was invented to distinguish between different groups of users automatically by secret
         new_user = self._gitlab.users.create(
             {
-                "email": user.email,
-                "username": user.username,
-                "name": user.firstname + " " + user.lastname,
+                "email": email,
+                "username": username,
+                "name": f"{firstname} {lastname}",
                 "external": False,
-                "password": user.password,
+                "password": password,
                 "skip_confirmation": True,
             }
         )
         logger.info(f"Gitlab user created {new_user}")
-
-        return new_user
 
     def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
         short_group_name = group_name.split("/")[-1]
@@ -150,22 +133,22 @@ class GitLabApi(RmsApi):
 
     def check_project_exists(
         self,
-        student: Student,
+        username: str,
         course_students_group: str,
     ) -> bool:
-        gitlab_project_path = f"{course_students_group}/{student.username}"
+        gitlab_project_path = f"{course_students_group}/{username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
-        for project in self._gitlab.projects.list(get_all=True, search=student.username):
+        for project in self._gitlab.projects.list(get_all=True, search=username):
             logger.info(f"Check project path: {project.path_with_namespace}")
 
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project {student.username} for group {course_students_group} exists")
+                logger.info(f"Project {username} for group {course_students_group} exists")
                 return True
 
-        logger.info(f"Project {student.username} for group {course_students_group} does not exist")
+        logger.info(f"Project {username} for group {course_students_group} does not exist")
         return False
 
     def create_project(

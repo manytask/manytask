@@ -10,6 +10,8 @@ from .course import Course, CourseConfig
 @dataclass
 class StoredUser:
     username: str
+    first_name: str
+    last_name: str
     course_admin: bool = False
     # we can add more fields that we store
 
@@ -46,20 +48,27 @@ class StorageApi(ABC):
     def get_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
     ) -> StoredUser: ...
+
+    @abstractmethod
+    def check_if_course_admin(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool: ...
 
     @abstractmethod
     def sync_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser: ...
 
     @abstractmethod
-    def get_all_scores(self, course_name: str) -> dict[str, dict[str, int]]: ...
+    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
 
     @abstractmethod
     def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig: ...
@@ -77,7 +86,7 @@ class StorageApi(ABC):
     def store_score(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
@@ -85,6 +94,12 @@ class StorageApi(ABC):
 
     @abstractmethod
     def create_course(
+        self,
+        settings_config: CourseConfig,
+    ) -> bool: ...
+
+    @abstractmethod
+    def edit_course(
         self,
         settings_config: CourseConfig,
     ) -> bool: ...
@@ -124,16 +139,16 @@ class StorageApi(ABC):
     def max_score_started(self, course_name: str) -> int: ...
 
     @abstractmethod
-    def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool: ...
+    def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool: ...
 
     @abstractmethod
-    def check_user_on_course(self, course_name: str, student: Student) -> bool: ...
+    def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, student: Student, course_name: str) -> None: ...
+    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str) -> None: ...
 
     @abstractmethod
-    def get_user_courses_names(self, student: Student) -> list[str]: ...
+    def get_user_courses_names(self, username: str) -> list[str]: ...
 
     @abstractmethod
     def get_all_courses_names(self) -> list[str]: ...
@@ -145,6 +160,16 @@ class RmsApi(ABC):
     @property
     def base_url(self) -> str:
         return self._base_url
+
+    @abstractmethod
+    def register_new_user(
+        self,
+        username: str,
+        firstname: str,
+        lastname: str,
+        email: str,
+        password: str,
+    ) -> None: ...
 
     @abstractmethod
     def create_public_repo(
@@ -162,7 +187,7 @@ class RmsApi(ABC):
     @abstractmethod
     def check_project_exists(
         self,
-        student: Student,
+        username: str,
         course_students_group: str,
     ) -> bool: ...
 

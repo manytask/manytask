@@ -1,61 +1,42 @@
 <!DOCTYPE html>
 <html lang="" data-bs-theme="white">
 <head>
-    <title>{% block title %}{{course_name}}{% endblock %}</title>
+    <title>{% block title %}{{ course_name }}{% endblock %}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
     <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/7.0.0/normalize.min.css"
-          integrity="sha256-HxaKz5E/eBbvhGMNwhWRPrAR9i/lG1JeT4mD6hCQ7s4=" crossorigin="anonymous" />
+          integrity="sha256-HxaKz5E/eBbvhGMNwhWRPrAR9i/lG1JeT4mD6hCQ7s4=" crossorigin="anonymous"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename="favicon.ico") }}">
-
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    {% block additional_styles %}{% endblock %}
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <style>
-        body {
-            margin: 0;
-            font-family: 'Source Code Pro', monospace;
-            display: flex;
-            text-decoration: none;
-        }
-
-        :root body * {
-            --bs-border-radius: 20px;
-            --bs-border-radius-sm: 10px;
-        }
-
-        .version-label {
-            position: fixed;
-            bottom: 3px;
-            right: 7px;
-            text-align: right;
-            opacity: 0.4;
-        }
-        .cache-time {
-            position: fixed;
-            bottom: 3px;
-            left: 7px;
-            text-align: left;
-            opacity: 0.2;
-        }
-    </style>
-
     <meta name="robots" content="noindex">
-
-    {% block style %}
-    {% endblock %}
 </head>
-
 <body>
     {% block body %}
     {% endblock %}
     {% if cache_time %}
-        <div class="cache-time fs-7">Cache time: {{ cache_time }}</div>
+        <div class="mt-cache-time fs-7">Cache time: {{ cache_time }}</div>
     {% endif %}
     {% if manytask_version %}
-        <div class="version-label fs-7">{{ manytask_version }}</div>
+        <div class="mt-version-badge fs-7">{{ manytask_version }}</div>
     {% endif %}
+
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 11">
+    {% with messages = get_flashed_messages(category_filter=["course_not_found"]) %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                  <strong>Error:</strong> course not found!
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    </div>
 </body>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script>

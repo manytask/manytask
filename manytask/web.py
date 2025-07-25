@@ -4,17 +4,19 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 
 import gitlab
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
+from flask_wtf.csrf import validate_csrf
+from wtforms import ValidationError
 
-from . import glab
 from .auth import requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
-from .utils import generate_token_hex
+from .utils import generate_token_hex, get_courses
 
 SESSION_VERSION = 1.5
+CACHE_TIMEOUT_SECONDS = 3600
 
 
 logger = logging.getLogger(__name__)
@@ -33,22 +35,7 @@ def healthcheck() -> ResponseReturnValue:
 def index() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    if app.debug:
-        courses_names = app.storage_api.get_all_courses_names()
-
-    else:
-        student_id = session["gitlab"]["user_id"]
-        student = app.gitlab_api.get_student(student_id)
-
-        courses_names = app.storage_api.get_user_courses_names(student)
-
-    courses = [
-        {
-            "name": course_name,
-            "url": url_for("course.course_page", course_name=course_name),
-        }
-        for course_name in courses_names
-    ]
+    courses = get_courses(app)
 
     return render_template(
         "courses.html",
@@ -76,6 +63,8 @@ def course_page(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
+    courses = get_courses(app)
+
     storage_api = app.storage_api
 
     if app.debug:
@@ -97,9 +86,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
-
-        student_course_admin = stored_user.course_admin
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
 
     # update cache if more than 1h passed or in debug mode
     try:
@@ -108,8 +95,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
     except ValueError:
         cache_delta = timedelta(days=365)
 
-    hours_in_seconds = 3600
-    if app.debug or cache_delta.total_seconds() > hours_in_seconds:
+    if app.debug or cache_delta.total_seconds() > CACHE_TIMEOUT_SECONDS:
         storage_api.update_cached_scores(course.course_name)
         cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
@@ -117,7 +103,6 @@ def course_page(course_name: str) -> ResponseReturnValue:
     # get scores
     tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
-
     allscores_url = url_for("course.show_database", course_name=course_name)
 
     return render_template(
@@ -141,6 +126,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         course_favicon=app.favicon,
         is_course_admin=student_course_admin,
         cache_time=cache_delta,
+        courses=courses,
     )
 
 
@@ -161,14 +147,6 @@ def signup(course_name: str) -> ResponseReturnValue:
 
     # ----  register a new user ---- #
 
-    user = glab.User(
-        username=request.form["username"].strip(),
-        firstname=request.form["firstname"].strip(),
-        lastname=request.form["lastname"].strip(),
-        email=request.form["email"].strip(),
-        password=request.form["password"],
-    )
-
     try:
         if not secrets.compare_digest(request.form["secret"], course.registration_secret):
             raise Exception("Invalid registration secret")
@@ -176,7 +154,13 @@ def signup(course_name: str) -> ResponseReturnValue:
             raise Exception("Passwords don't match")
 
         # register user in gitlab
-        app.gitlab_api.register_new_user(user)
+        app.rms_api.register_new_user(
+            request.form["username"].strip(),
+            request.form["firstname"].strip(),
+            request.form["lastname"].strip(),
+            request.form["email"].strip(),
+            request.form["password"],
+        )
 
     # render template with error... if error
     except Exception as e:
@@ -207,6 +191,12 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError as e:
+        app.logger.error(f"CSRF validation failed: {e}")
+        return render_template("create_project.html", error_message="CSRF Error")
+
     if not secrets.compare_digest(request.form["secret"], course.registration_secret):
         return render_template(
             "create_project.html",
@@ -218,11 +208,12 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    app.storage_api.create_user_if_not_exist(student, course.course_name)
+    first_name, last_name = student.name.split()  # TODO: come up with how to separate names
+    app.storage_api.create_user_if_not_exist(student.username, first_name, last_name)
 
     app.storage_api.sync_stored_user(
         course.course_name,
-        student,
+        student.username,
         app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
         app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
     )
@@ -262,6 +253,8 @@ def show_database(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
+    courses = get_courses(app)
+
     storage_api = app.storage_api
 
     if app.debug:
@@ -283,9 +276,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        stored_user = storage_api.get_stored_user(course.course_name, student)
-
-        student_course_admin = stored_user.course_admin
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
@@ -307,6 +298,8 @@ def show_database(course_name: str) -> ResponseReturnValue:
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=f"{student_repo}/pipelines",
+        manytask_version=app.manytask_version,
+        courses=courses,
     )
 
 
@@ -316,6 +309,14 @@ def create_course() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     if request.method == "POST":
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError as e:
+            app.logger.error(f"CSRF validation failed: {e}")
+            return render_template(
+                "create_course.html", generated_token=generate_token_hex(24), error_message="CSRF Error"
+            )
+
         settings = CourseConfig(
             course_name=request.form["unique_course_name"],
             gitlab_course_group=request.form["gitlab_course_group"],
@@ -336,10 +337,48 @@ def create_course() -> ResponseReturnValue:
         return render_template(
             "create_course.html",
             generated_token=generate_token_hex(24),
-            error_message=f"Курс с названием {settings.course_name} уже существует",
+            error_message=f"Курс с названием '{settings.course_name}' уже существует",
         )
 
     return render_template(
         "create_course.html",
         generated_token=generate_token_hex(24),
     )
+
+
+@admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
+@requires_admin
+def edit_course(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    course = app.storage_api.get_course(course_name)
+
+    if not course:
+        flash("Курс не найден", category="course_not_found")
+        return redirect(url_for("root.index"))
+
+    if request.method == "POST":
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError as e:
+            app.logger.error(f"CSRF validation failed: {e}")
+            return render_template("create_project.html", error_message="CSRF Error")
+        updated_settings = CourseConfig(
+            course_name=course_name,
+            gitlab_course_group=request.form["gitlab_course_group"],
+            gitlab_course_public_repo=request.form["gitlab_course_public_repo"],
+            gitlab_course_students_group=request.form["gitlab_course_students_group"],
+            gitlab_default_branch=request.form["gitlab_default_branch"],
+            registration_secret=request.form["registration_secret"],
+            token=course.token,
+            show_allscores=request.form.get("show_allscores", "off") == "on",
+            is_ready=course.is_ready,
+            task_url_template=course.task_url_template,
+            links=course.links,
+        )
+
+        if app.storage_api.edit_course(updated_settings):
+            return redirect(url_for("course.course_page", course_name=course_name))
+
+        return render_template("edit_course.html", course=updated_settings, error_message="Ошибка при обновлении курса")
+
+    return render_template("edit_course.html", course=course)

@@ -29,7 +29,6 @@ from .config import (
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
-from .glab import Student
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -45,7 +44,6 @@ class DatabaseConfig:
     """Configuration for Database connection and settings."""
 
     database_url: str
-    gitlab_instance_host: str
     apply_migrations: bool = False
 
 
@@ -63,7 +61,6 @@ class DataBaseApi(StorageApi):
         :param config: DatabaseConfig instance containing all necessary settings
         """
         self.database_url = config.database_url
-        self.gitlab_instance_host = config.gitlab_instance_host
         self.apply_migrations = config.apply_migrations
 
         self.engine = create_engine(self.database_url, echo=False)
@@ -123,64 +120,101 @@ class DataBaseApi(StorageApi):
     def get_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
     ) -> StoredUser:
         """Method for getting user's stored data
 
         :param course_name: course name
-        :param student: Student object
+        :param username: user name
 
         :return: created or received StoredUser object
         """
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course)
+            user_on_course = self._get_or_create_user_on_course(session, username, course)
             session.commit()
 
-            return StoredUser(username=user_on_course.user.username, course_admin=user_on_course.is_course_admin)
+            return StoredUser(
+                username=user_on_course.user.username,
+                first_name=user_on_course.user.first_name,
+                last_name=user_on_course.user.last_name,
+                course_admin=user_on_course.is_course_admin,
+            )
+
+    def check_if_course_admin(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool:
+        """Method for checking user's admin status
+
+        :param course_name: course name
+        :param username: user name
+
+        :return: cif the user is an admin on the course
+        """
+
+        with Session(self.engine) as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user = self._get(
+                    session,
+                    models.User,
+                    username=username,
+                )
+                user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+                return user_on_course.is_course_admin
+            except NoResultFound as e:
+                logger.info(f"There was an exception when checking user admin status: {e}")
+                return False
 
     def sync_stored_user(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         course_admin: bool,
     ) -> StoredUser:
         """Method for sync user's gitlab and stored data
 
         :param course_name: course name
-        :param student: Student object
+        :param username: user name
 
         :return: created or updated StoredUser object
         """
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
-
+            user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
 
-            return StoredUser(username=user_on_course.user.username, course_admin=user_on_course.is_course_admin)
+            return StoredUser(
+                username=user_on_course.user.username,
+                first_name=user_on_course.user.first_name,
+                last_name=user_on_course.user.last_name,
+                course_admin=user_on_course.is_course_admin,
+            )
 
-    def get_all_scores(self, course_name: str) -> dict[str, dict[str, int]]:
-        """Method for getting all scores for all users
-
+    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
+        """Method for getting all users scores with names
         :param course_name: course name
-
-        :return: dict with usernames and all their scores
+        :return: dict with the usernames as keys and a tuple of (first_name, last_name) and scores dict as values
         """
 
         with Session(self.engine) as session:
-            all_users = self._get_all_users(session, course_name)
+            all_users = self._get_all_users_on_course(session, course_name)
 
-        all_scores: dict[str, dict[str, int]] = {}
-        for username in all_users:
-            all_scores[username] = self.get_scores(course_name, username)
+        scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
+        for user in all_users:
+            scores_and_names[user.username] = (
+                self.get_scores(course_name, user.username),
+                (user.first_name, user.last_name),
+            )
 
-        return all_scores
+        return scores_and_names
 
     def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig:
         """Method for getting config with grades for the course
@@ -244,7 +278,7 @@ class DataBaseApi(StorageApi):
     def store_score(
         self,
         course_name: str,
-        student: Student,
+        username: str,
         repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
@@ -252,7 +286,7 @@ class DataBaseApi(StorageApi):
         """Method for storing user's task score
 
         :param course_name: course name
-        :param student: Student object
+        :param username: user name
         :param repo_name: student's repo name
         :param task_name: task name
         :param update_fn: function for updating the score
@@ -266,7 +300,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
                 session.commit()
 
                 try:
@@ -285,7 +319,7 @@ class DataBaseApi(StorageApi):
 
             except Exception as e:
                 session.rollback()
-                logger.error(f"Failed to update score for {student.username} on {task_name}: {str(e)}")
+                logger.error(f"Failed to update score for {username} on {task_name}: {str(e)}")
                 raise
 
     def get_course(
@@ -337,7 +371,6 @@ class DataBaseApi(StorageApi):
                     session,
                     models.Course,
                     name=settings_config.course_name,
-                    gitlab_instance_host=self.gitlab_instance_host,
                     registration_secret=settings_config.registration_secret,
                     token=settings_config.token,
                     show_allscores=settings_config.show_allscores,
@@ -352,6 +385,40 @@ class DataBaseApi(StorageApi):
                 return True
 
             return False
+
+    def edit_course(
+        self,
+        settings_config: AppCourseConfig,
+    ) -> bool:
+        """Edit Course by course_name from config object
+
+        :param course_name: course name
+        :param settings_config: CourseConfig object
+
+        :return: True if course was updated, False if course not found
+        """
+
+        with Session(self.engine) as session:
+            try:
+                self._update(
+                    session,
+                    models.Course,
+                    defaults={
+                        "gitlab_course_group": settings_config.gitlab_course_group,
+                        "gitlab_course_public_repo": settings_config.gitlab_course_public_repo,
+                        "gitlab_course_students_group": settings_config.gitlab_course_students_group,
+                        "gitlab_default_branch": settings_config.gitlab_default_branch,
+                        "registration_secret": settings_config.registration_secret,
+                        "show_allscores": settings_config.show_allscores,
+                        "is_ready": settings_config.is_ready,
+                        "task_url_template": settings_config.task_url_template,
+                        "links": settings_config.links,
+                    },
+                    name=settings_config.course_name,
+                )
+                return True
+            except NoResultFound:
+                return False
 
     def update_course(
         self,
@@ -525,14 +592,12 @@ class DataBaseApi(StorageApi):
     def max_score_started(self, course_name: str) -> int:
         return self.max_score(course_name, started=True)
 
-    def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
+    def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
         """Sync admin flag in gitlab and db"""
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
+            user = self._get(session, models.User, username=username)
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
             if course_admin != user_on_course.is_course_admin and course_admin:
                 user_on_course = self._update(
@@ -545,37 +610,38 @@ class DataBaseApi(StorageApi):
                 session.refresh(user_on_course)
             return user_on_course.is_course_admin
 
-    def check_user_on_course(self, course_name: str, student: Student) -> bool:
+    def check_user_on_course(self, course_name: str, username: str) -> bool:
         """Checking that user has been enrolled on course"""
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
-            )
+            user = self._get(session, models.User, username=username)
             try:
                 self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
                 return True
             except Exception:
                 return False
 
-    def create_user_if_not_exist(self, student: Student, course_name: str) -> None:
+    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str) -> None:
         """Create user in DB if not exist"""
 
         with Session(self.engine) as session:
-            course = self._get(session, models.Course, name=course_name)
             user = self._get_or_create(
-                session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+                session,
+                models.User,
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
             )
             session.commit()
             session.refresh(user)
 
-    def get_user_courses_names(self, student: Student) -> list[str]:
+    def get_user_courses_names(self, username: str) -> list[str]:
         """Get a list of courses names that the user participates in"""
 
         with Session(self.engine) as session:
             try:
-                user = self._get(session, models.User, username=student.username)
+                user = self._get(session, models.User, username=username)
             except NoResultFound:
                 return []
 
@@ -771,12 +837,14 @@ class DataBaseApi(StorageApi):
     def _get_or_create_user_on_course(
         self,
         session: Session,
-        student: Student,
+        username: str,
         course: models.Course,
         repo_name: str | None = None,
     ) -> models.UserOnCourse:
-        user = self._get_or_create(
-            session, models.User, username=student.username, gitlab_instance_host=course.gitlab_instance_host
+        user = self._get(
+            session,
+            models.User,
+            username=username,
         )
 
         defaults = {}
@@ -802,7 +870,7 @@ class DataBaseApi(StorageApi):
     ) -> Optional[Iterable["models.Grade"]]:
         try:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(session, models.User, username=username, gitlab_instance_host=course.gitlab_instance_host)
+            user = self._get(session, models.User, username=username)
 
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
         except NoResultFound:
@@ -1030,13 +1098,13 @@ class DataBaseApi(StorageApi):
         return query.all()
 
     @staticmethod
-    def _get_all_users(
+    def _get_all_users_on_course(
         session: Session,
         course_name: str,
-    ) -> Iterable[str]:
+    ) -> Iterable["models.User"]:
         course = DataBaseApi._get(session, models.Course, name=course_name)
 
-        return [user_on_course.user.username for user_on_course in course.users_on_courses.all()]
+        return [user_on_course.user for user_on_course in course.users_on_courses.all()]
 
     def _get_all_tasks(
         self,

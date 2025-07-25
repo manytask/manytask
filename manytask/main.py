@@ -9,6 +9,7 @@ import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from flask import Flask
+from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import abstract, config, course, database, glab, local_config
@@ -17,6 +18,7 @@ load_dotenv("../.env")  # take environment variables from .env.
 
 
 class CustomFlask(Flask):
+    csrf: CSRFProtect
     oauth: OAuth
     app_config: local_config.LocalConfig  # TODO: check if we need it
     gitlab_api: glab.GitLabApi
@@ -57,6 +59,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     app.gitlab_api = gitlab_api
     app.rms_api = gitlab_api
+    app.csrf = CSRFProtect(app)
 
     # read VERSION file to get a version
     app.manytask_version = ""
@@ -76,6 +79,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     from . import api, web
 
     app.register_blueprint(api.bp)
+    app.csrf.exempt(api.bp)
     app.register_blueprint(web.root_bp)
     app.register_blueprint(web.course_bp)
     app.register_blueprint(web.admin_bp)
@@ -124,7 +128,6 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
-            gitlab_instance_host=app.app_config.gitlab_url,
             apply_migrations=apply_migrations,
         )
     )
@@ -134,14 +137,14 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
 def _logging_config(app: CustomFlask) -> dict[str, Any]:
     return {
         "version": 1,
-        "disable_existing_loggers": True,
+        "disable_existing_loggers": False,
         "formatters": {
             "default": {
-                "format": "%(asctime)s %(levelname)s - "
-                "process-%(process)d:%(thread)d app in %(filename)s : %(message)s",
+                "format": "[%(asctime)s] [%(levelname)s] - "
+                "[process-%(process)d:%(thread)d] app in [%(module)s:%(lineno)s] : %(message)s",
             },
             "access": {
-                "format": "%(message)s",
+                "format": "[%(asctime)s] - %(message)s",
             },
         },
         "handlers": {
