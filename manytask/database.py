@@ -730,11 +730,7 @@ class DataBaseApi(StorageApi):
                     )
             session.commit()
 
-    def _sync_grades(
-        self,
-        course_name: str,
-        grades: ManytaskFinalGradeConfig | None
-    ) -> None:
+    def _sync_grades(self, course_name: str, grades: ManytaskFinalGradeConfig | None) -> None:
         if grades is None:
             return
         # TODO
