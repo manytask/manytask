@@ -375,7 +375,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
             app.oauth = mock_gitlab_oauth
             app.debug = debug
 
-            # not admin in gitlab, not admin in manytask
+            # not instance admin, not course admin
             response = client.get(path)
 
             if app.debug:
@@ -391,10 +391,10 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
                 }
-            app.storage_api.instance_admin = False
+
             app.storage_api.stored_user.course_admin = True
 
-            # not admin in gitlab, admin in manytask
+            # not instance admin, but course admin
             response = client.get(path)
 
             if app.debug:
@@ -410,8 +410,10 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
                 }
+            app.storage_api.stored_user.course_admin = False
             app.storage_api.instance_admin = True
-            # admin in gitlab, admin in manytask
+
+            # instance admin => course admin
             response = client.get(path)
 
             if app.debug:

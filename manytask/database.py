@@ -61,7 +61,7 @@ class DataBaseApi(StorageApi):
         self.database_url = config.database_url
         self.apply_migrations = config.apply_migrations
 
-        self.engine = create_engine(self.database_url, echo=False)
+        self.engine = create_engine(self.database_url, echo=True)
 
         if self._check_pending_migrations(self.database_url):
             if self.apply_migrations:
@@ -688,7 +688,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 if not is_admin:
-                    admin_count = session.query(models.User).filter(models.User.is_instance_admin.is_(True)).count()
+                    admin_count = session.query(func.count()).filter(models.User.is_instance_admin.is_(True)).scalar()
                     if admin_count <= 1:
                         logger.error("Cannot remove the last admin")
                         return
