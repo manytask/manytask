@@ -61,7 +61,7 @@ class DataBaseApi(StorageApi):
         self.database_url = config.database_url
         self.apply_migrations = config.apply_migrations
 
-        self.engine = create_engine(self.database_url, echo=True)
+        self.engine = create_engine(self.database_url, echo=False)
 
         if self._check_pending_migrations(self.database_url):
             if self.apply_migrations:
