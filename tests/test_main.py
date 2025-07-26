@@ -46,6 +46,7 @@ def mock_env(monkeypatch, postgres_container):
 
     monkeypatch.setenv("CACHE_DIR", TEST_CACHE_DIR)
     monkeypatch.setenv("DATABASE_URL", postgres_container.get_connection_url())
+    monkeypatch.setenv("ZERO_ADMIN", "zero_admin")
     monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course")
     monkeypatch.setenv("APPLY_MIGRATIONS", "true")
 
