@@ -91,6 +91,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(unique=True)
     first_name: Mapped[str]
     last_name: Mapped[str]
+    is_instance_admin: Mapped[bool] = mapped_column(default=False, server_default="false")
 
     # relationships
     users_on_courses: DynamicMapped["UserOnCourse"] = relationship(back_populates="user", cascade="all, delete-orphan")

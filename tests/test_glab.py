@@ -344,29 +344,6 @@ def test_create_project_no_existing_project_creates_fork(
     gitlab_api._get_group_by_name.assert_called_with(TEST_GROUP_STUDENT_NAME)
 
 
-def test_check_is_course_admin(gitlab):
-    gitlab_api, _ = gitlab
-    mock_group = MagicMock()
-    gitlab_api._get_group_by_name = MagicMock(return_value=mock_group)
-    mock_member = MagicMock()
-    mock_group.members_all.get.return_value = mock_member
-
-    is_admin = gitlab_api.check_is_course_admin(TEST_USER_ID, TEST_GROUP_NAME)
-
-    assert is_admin is True
-
-
-def test_check_is_course_admin_not_found(gitlab):
-    gitlab_api, _ = gitlab
-    mock_group = MagicMock()
-    gitlab_api._get_group_by_name = MagicMock(return_value=mock_group)
-    mock_group.members_all.get.return_value = None
-
-    is_admin = gitlab_api.check_is_course_admin(TEST_USER_ID, TEST_GROUP_NAME)
-
-    assert is_admin is False
-
-
 def test_parse_user_to_student(gitlab, mock_student):
     gitlab_api, _ = gitlab
     user_dict = {
