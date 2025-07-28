@@ -6,7 +6,6 @@ from http import HTTPStatus
 from urllib.parse import urlparse
 
 import gitlab
-
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
