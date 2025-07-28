@@ -6,12 +6,13 @@ from http import HTTPStatus
 from urllib.parse import urlparse
 
 import gitlab
+from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
-from .auth import requires_admin, requires_auth, requires_course_access, requires_ready
+from .auth import handle_oauth_callback, requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
@@ -54,9 +55,20 @@ def index() -> ResponseReturnValue:
 
 
 @root_bp.route("/login", methods=["GET", "POST"])
-@requires_auth
 def login() -> ResponseReturnValue:
-    return redirect(url_for("root.index"))
+    app: CustomFlask = current_app  # type: ignore
+    oauth: OAuth = app.oauth
+
+    redirect_uri = url_for("root.login_finish", _external=True)
+    return oauth.gitlab.authorize_redirect(redirect_uri, state=url_for("root.index"))
+
+
+@root_bp.route("/login_finish")
+def login_finish() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    oauth: OAuth = app.oauth
+
+    return handle_oauth_callback(oauth, app)
 
 
 @root_bp.route("/logout")
@@ -138,17 +150,14 @@ def course_page(course_name: str) -> ResponseReturnValue:
     )
 
 
-@course_bp.route("/signup", methods=["GET", "POST"])
-@requires_ready
-def signup(course_name: str) -> ResponseReturnValue:
+@root_bp.route("/signup", methods=["GET", "POST"])
+def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
             "signup.html",
-            course_name=course.course_name,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -156,8 +165,6 @@ def signup(course_name: str) -> ResponseReturnValue:
     # ----  register a new user ---- #
 
     try:
-        if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-            raise Exception("Invalid registration secret")
         if not secrets.compare_digest(request.form["password"], request.form["password2"]):
             raise Exception("Passwords don't match")
 
@@ -176,12 +183,11 @@ def signup(course_name: str) -> ResponseReturnValue:
         return render_template(
             "signup.html",
             error_message=str(e),
-            course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
         )
 
-    return redirect(url_for("course.create_project", course_name=course.course_name))
+    return redirect(url_for("root.login"))
 
 
 @course_bp.route("/create_project", methods=["GET", "POST"])

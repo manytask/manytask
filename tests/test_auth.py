@@ -7,7 +7,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import pytest
-from flask import Flask, Response, request, session, url_for
+from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import StoredUser
@@ -243,72 +243,7 @@ def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth):
         mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
         response = test_route(course_name=TEST_COURSE_NAME)
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == "http://localhost/"
-
-
-def test_requires_auth_callback_oauth(app, mock_gitlab_oauth):
-    # Should redirect to signup
-    @requires_auth
-    def test_route(course_name: str):
-        return "success"
-
-    with (
-        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
-        app.test_request_context(),
-    ):
-        app.oauth = mock_gitlab_oauth
-
-        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-        mock_check_project_exists.return_value = True
-        mock_authorize_access_token.return_value = {
-            "access_token": "test_token",
-            "refresh_token": "test_token",
-        }
-
-        request.args = {"code": "test_code"}
-        response = test_route(course_name=TEST_COURSE_NAME)
-        assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("root.index")
-
-        mock_authorize_access_token.assert_called_once()
-
-        mock_get_authenticated_student.assert_called_once()
-        args, _ = mock_get_authenticated_student.call_args
-        assert args[0] == "test_token"
-
-
-def test_requires_auth_callback_secret(app, mock_gitlab_oauth):
-    # Should redirect to signup
-    @requires_auth
-    def test_route(course_name: str):
-        return "success"
-
-    with (
-        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
-        app.test_request_context(),
-    ):
-        app.oauth = mock_gitlab_oauth
-
-        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-        mock_check_project_exists.return_value = True
-        mock_authorize_access_token.return_value = {
-            "access_token": "test_token",
-            "refresh_token": "test_token",
-        }
-        session["gitlab"] = {
-            "version": 1.5,
-            "username": "test_user",
-            "user_id": 123,
-            "access_token": TEST_TOKEN,
-        }
-
-        request.form = {"secret": TEST_SECRET}
-        response = test_route(course_name=TEST_COURSE_NAME)
-        assert response == "success"
+        assert response.location == url_for("root.signup")
 
 
 def test_requires_ready(app):

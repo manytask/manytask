@@ -251,7 +251,7 @@ def test_course_page_invalid_session(app, mock_gitlab_oauth):
         app.oauth = mock_gitlab_oauth
         response = app.test_client().get(f"/{TEST_COURSE_NAME}/")
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == f"http://localhost/{TEST_COURSE_NAME}/"
+        assert response.location == url_for("root.signup")
 
 
 def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
@@ -276,32 +276,14 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
 
 def test_signup_get(app):
     with app.test_request_context():
-        response = app.test_client().get(f"/{TEST_COURSE_NAME}/signup")
+        response = app.test_client().get("/signup")
         assert response.status_code == HTTPStatus.OK
-
-
-def test_signup_post_invalid_secret(app):
-    with app.test_request_context():
-        response = app.test_client().post(
-            f"/{TEST_COURSE_NAME}/signup",
-            data={
-                "username": TEST_USERNAME,
-                "firstname": "Test",
-                "lastname": "User",
-                "email": "test@example.com",
-                "password": "password123",
-                "password2": "password123",
-                "secret": "wrong_secret",
-            },
-        )
-        assert response.status_code == HTTPStatus.OK
-        assert b"Invalid registration secret" in response.data
 
 
 def test_signup_post_password_mismatch(app, mock_course):
     with app.test_request_context():
         response = app.test_client().post(
-            f"/{TEST_COURSE_NAME}/signup",
+            "/signup",
             data={
                 "username": TEST_USERNAME,
                 "firstname": "Test",
@@ -450,9 +432,9 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
             "refresh_token": "test_token",
         }
 
-        response = app.test_client().post(url_for("course.signup", course_name=TEST_COURSE_NAME), data=data)
+        response = app.test_client().post(url_for("root.signup", course_name=TEST_COURSE_NAME), data=data)
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("course.create_project", course_name=TEST_COURSE_NAME)
+        assert response.location == url_for("root.login")
 
         mock_register_new_user.assert_called_once()
         args, _ = mock_register_new_user.call_args
@@ -474,10 +456,10 @@ def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
             app.test_client().get(url_for("root.login"))
             mock_authorize_redirect.assert_called_once()
             args, _ = mock_authorize_redirect.call_args
-            assert args[0] == url_for("root.login", _external=True)
+            assert args[0] == url_for("root.login_finish", _external=True)
 
 
-def test_login_get_with_code(app, mock_gitlab_oauth):
+def test_login_finish_get_with_code(app, mock_gitlab_oauth):
     with (
         patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
         patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
@@ -495,7 +477,7 @@ def test_login_get_with_code(app, mock_gitlab_oauth):
             "refresh_token": "test_token",
         }
 
-        response = app.test_client().get(url_for("root.login"), query_string={"code": "test_code"})
+        response = app.test_client().get(url_for("root.login_finish"), query_string={"code": "test_code"})
 
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("root.index")

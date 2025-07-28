@@ -4,7 +4,7 @@
 
     <div class="d-flex align-items-center justify-content-center bg-body-tertiary container-fluid p-3">
         <div class="d-flex flex-column align-items-center justify-content-center form-signin px-4 py-4 rounded m-auto container-sm" style="background-color: var(--bs-body-bg); max-width: 400px;">
-            <a href="{{ url_for('course.create_project', course_name=course_name) }}" class="btn btn-primary p-3">
+            <a href="{{ url_for('root.login') }}" class="btn btn-primary p-3">
                 <span class="fs-2">Login</span>
                 <br>
                 with {{ base_url }}
@@ -47,10 +47,6 @@
                 <div class="form-floating my-2">
                     <input type="password" name="password2" class="form-control" id="floatingPassword" placeholder="Re-type password" pattern="\S*" minlength="6" required>
                     <label for="floatingPassword">Re-type password</label>
-                </div>
-                <div class="form-floating my-2">
-                    <input type="text" name="secret" class="form-control" id="floatingCode" placeholder="Code" required>
-                    <label for="floatingCode">Secret Code</label>
                 </div>
 
 {#                <div class="form-check text-start my-2">#}
