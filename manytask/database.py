@@ -610,7 +610,6 @@ class DataBaseApi(StorageApi):
                     user_id=user.id,
                     course_id=course.id,
                 )
-                session.refresh(user_on_course)
             return user_on_course.is_course_admin
 
     def check_user_on_course(self, course_name: str, username: str) -> bool:
@@ -629,7 +628,7 @@ class DataBaseApi(StorageApi):
         """Create user in DB if not exist"""
 
         with Session(self.engine) as session:
-            user = self._get_or_create(
+            self._get_or_create(
                 session,
                 models.User,
                 username=username,
@@ -637,7 +636,6 @@ class DataBaseApi(StorageApi):
                 last_name=last_name,
             )
             session.commit()
-            session.refresh(user)
 
     def get_user_courses_names(self, username: str) -> list[str]:
         """Get a list of courses names that the user participates in"""
