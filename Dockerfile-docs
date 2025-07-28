@@ -1,0 +1,10 @@
+FROM node:24 AS builder
+
+RUN npm i @diplodoc/cli -g
+COPY ./docs ./docs
+RUN rm -rf html
+RUN yfm -i ./docs -o ./html --allow-custom-resources
+
+FROM nginx
+COPY --from=builder ./html /usr/share/nginx/html
+
