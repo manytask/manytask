@@ -104,11 +104,6 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        oauth = app.oauth
-
-        if "code" in request.args:
-            return handle_oauth_callback(oauth, app)
-
         if valid_session(session):
             try:
                 app.gitlab_api.check_authenticated_student(session["gitlab"]["access_token"])
