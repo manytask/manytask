@@ -68,10 +68,6 @@ def mock_gitlab_api():
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
         @staticmethod
-        def check_is_gitlab_admin(user_id: int):
-            return False
-
-        @staticmethod
         def check_project_exists(username: str, course_students_group: str):
             return True
 
@@ -117,6 +113,9 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def get_stored_user(self, _username):
             return self.stored_user
+
+        def check_if_instance_admin(self, _username):
+            return False
 
         def check_if_course_admin(self, _course_name, _username):
             return self.stored_user.course_admin
@@ -391,11 +390,11 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
     with (
         app.test_request_context(),
         patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(app.gitlab_api, "check_is_gitlab_admin") as mock_check_is_gitlab_admin,
+        patch.object(app.storage_api, "check_if_instance_admin") as mock_check_if_instance_admin,
     ):
         app.oauth = mock_gitlab_oauth
         mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-        mock_check_is_gitlab_admin.return_value = True
+        mock_check_if_instance_admin.return_value = True
         session["gitlab"] = {
             "version": 1.5,
             "username": "test_user",
