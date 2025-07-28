@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from authlib.integrations.base_client import OAuthError
 from flask import Flask, url_for
+from flask_wtf import CSRFProtect
 
 from manytask.abstract import StoredUser
 from manytask.api import bp as api_bp
@@ -57,7 +58,6 @@ def app(mock_gitlab_api, mock_storage_api):
 def mock_gitlab_api():
     class MockGitlabApi:
         def __init__(self):
-            self.course_admin = False
             self.base_url = GITLAB_BASE_URL
 
         @staticmethod
@@ -99,9 +99,6 @@ def mock_gitlab_api():
         def _parse_user_to_student(user: dict[str, Any]):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
-        def check_is_course_admin(self, _user_id, _course_group):
-            return self.course_admin
-
     return MockGitlabApi()
 
 
@@ -113,6 +110,7 @@ def mock_storage_api(mock_course):  # noqa: C901
                 username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
             )
             self.course_name = TEST_COURSE_NAME
+            self.instance_admin = False
 
         @staticmethod
         def get_scores_update_timestamp(_course_name):
@@ -150,7 +148,7 @@ def mock_storage_api(mock_course):  # noqa: C901
             course_admin: bool,
         ) -> StoredUser:
             self.stored_user.username = username
-            self.stored_user.course_admin = self.stored_user.course_admin or course_admin
+            self.stored_user.course_admin = self.stored_user.course_admin or self.instance_admin
             return self.stored_user
 
         @staticmethod
@@ -175,6 +173,9 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def get_stored_user(self, _course_name, _username):
             return self.stored_user
+
+        def check_if_instance_admin(self, _username):
+            return self.instance_admin
 
         def check_if_course_admin(self, _course_name, _username):
             return self.stored_user.course_admin
@@ -253,7 +254,7 @@ def test_course_page_invalid_session(app, mock_gitlab_oauth):
         app.oauth = mock_gitlab_oauth
         response = app.test_client().get(f"/{TEST_COURSE_NAME}/")
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == f"http://localhost/{TEST_COURSE_NAME}/"
+        assert response.location == url_for("root.signup")
 
 
 def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
@@ -278,32 +279,14 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
 
 def test_signup_get(app):
     with app.test_request_context():
-        response = app.test_client().get(f"/{TEST_COURSE_NAME}/signup")
+        response = app.test_client().get("/signup")
         assert response.status_code == HTTPStatus.OK
-
-
-def test_signup_post_invalid_secret(app):
-    with app.test_request_context():
-        response = app.test_client().post(
-            f"/{TEST_COURSE_NAME}/signup",
-            data={
-                "username": TEST_USERNAME,
-                "firstname": "Test",
-                "lastname": "User",
-                "email": "test@example.com",
-                "password": "password123",
-                "password2": "password123",
-                "secret": "wrong_secret",
-            },
-        )
-        assert response.status_code == HTTPStatus.OK
-        assert b"Invalid registration secret" in response.data
 
 
 def test_signup_post_password_mismatch(app, mock_course):
     with app.test_request_context():
         response = app.test_client().post(
-            f"/{TEST_COURSE_NAME}/signup",
+            "/signup",
             data={
                 "username": TEST_USERNAME,
                 "firstname": "Test",
@@ -359,6 +342,7 @@ def check_admin_status_code(response, check_true):
 @pytest.mark.parametrize("get_param_admin", ["true", "1", "yes", None, "false", "0", "no", "random_value"])
 def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_func, debug, get_param_admin):
     path, check_func = path_and_func
+    CSRFProtect(app)
 
     if get_param_admin is not None:
         path += f"?admin={get_param_admin}"
@@ -376,7 +360,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
             app.oauth = mock_gitlab_oauth
             app.debug = debug
 
-            # not admin in gitlab, not admin in manytask
+            # not instance admin, not course admin
             response = client.get(path)
 
             if app.debug:
@@ -392,29 +376,10 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
                 }
-            app.gitlab_api.course_admin = True
-
-            # admin in gitlab, not admin in manytask
-            response = client.get(path)
-
-            if app.debug:
-                # in debug admin flag is the same as get param
-                check_func(response, get_param_admin in ("true", "1", "yes", None))
-            else:
-                check_func(response, True)
-
-            with client.session_transaction() as sess:
-                sess["gitlab"] = {
-                    "version": TEST_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                }
-            app.gitlab_api.course_admin = False
 
             app.storage_api.stored_user.course_admin = True
 
-            # not admin in gitlab, admin in manytask
+            # not instance admin, but course admin
             response = client.get(path)
 
             if app.debug:
@@ -430,8 +395,10 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
                 }
+            app.storage_api.stored_user.course_admin = False
+            app.storage_api.instance_admin = True
 
-            # admin in gitlab, admin in manytask
+            # instance admin => course admin
             response = client.get(path)
 
             if app.debug:
@@ -468,9 +435,9 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
             "refresh_token": "test_token",
         }
 
-        response = app.test_client().post(url_for("course.signup", course_name=TEST_COURSE_NAME), data=data)
+        response = app.test_client().post(url_for("root.signup", course_name=TEST_COURSE_NAME), data=data)
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("course.create_project", course_name=TEST_COURSE_NAME)
+        assert response.location == url_for("root.login")
 
         mock_register_new_user.assert_called_once()
         args, _ = mock_register_new_user.call_args
@@ -492,10 +459,10 @@ def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
             app.test_client().get(url_for("root.login"))
             mock_authorize_redirect.assert_called_once()
             args, _ = mock_authorize_redirect.call_args
-            assert args[0] == url_for("root.login", _external=True)
+            assert args[0] == url_for("root.login_finish", _external=True)
 
 
-def test_login_get_with_code(app, mock_gitlab_oauth):
+def test_login_finish_get_with_code(app, mock_gitlab_oauth):
     with (
         patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
         patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
@@ -513,7 +480,7 @@ def test_login_get_with_code(app, mock_gitlab_oauth):
             "refresh_token": "test_token",
         }
 
-        response = app.test_client().get(url_for("root.login"), query_string={"code": "test_code"})
+        response = app.test_client().get(url_for("root.login_finish"), query_string={"code": "test_code"})
 
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("root.index")
