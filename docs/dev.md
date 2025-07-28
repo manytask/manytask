@@ -1,22 +1,52 @@
-# Development Guide
+# Development
 
-## Setup
+## How to deploy manytask locally
+Use `WSL 2`, if you are using Windows
+1. Install `postgresql`: 
+    ```bash
+     sudo apt install postgresql postgresql-contrib
+     sudo systemctl start postgresql
+     sudo systemctl enable postgresql
+    ```
+   
+2. Now it is necessary to create `postgres` user and database:
+   ```bash
+   sudo -u postgres psql
+   CREATE USER <username> WITH PASSWORD '<password>' CREATEDB;
+   CREATE DATABASE <database name> WITH OWNER <username>;
+   \q
+    ```
+   
+3. Now you can connect to this database using `psql`:
+   ```bash
+   psql postgresql://<username>:<password>@localhost:5432/<database name>
+   ```
+   
+4. After this, copy `.env.example` to `.env` and in `FLASK_SECRET_KEY` write random string, in `DATABASE_URL` write the URL from
+previous point, in `ZERO_ADMIN` write yours username.
 
-1. Install Poetry (if not already installed):
-```shell
-curl -sSL https://install.python-poetry.org | python3 -
-```
+5. Try to start `Manytask`:
+   ```bash
+   poetry run flask --app "manytask:create_app()" run --host=0.0.0.0 --port=5050 --reload --debug
+   ```
+   
+6. Manytask will be available on [http://127.0.0.1:5050/](http://127.0.0.1:5050/)
 
-2. Install dependencies and setup pre-commit hooks:
-```shell
-poetry install --with dev
-poetry run pre-commit install --hook-type commit-msg
-```
+## How to run tests
+### On Windows:
 
-## Git hooks
+1. Use `WSL 2` with your favourite distro
+2. Download [Docker Desktop](https://www.docker.com/products/docker-desktop/) 
+3. On `WSL integration` in settings: Settings -> Resources -> Enable Integration
+4. Now, you can run tests from the project root:
+   ```bash
+   pytest . -vvv
+   ```
+   
+### On Linux:
 
-This project uses [pre-commit](https://pre-commit.com/) hooks to check:
-
-* `commit-msg` - check commit message format to follow [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/)
-
-The hooks are automatically installed when running `poetry install`.
+1. Download docker
+2. Now, you can run tests from the project root:
+   ```bash
+   pytest . -vvv
+   ```

@@ -29,6 +29,8 @@ items:
   - name: Production
     href: production.md
   - name: Development setup
+    href: dev_setup.md
+  - name: Development
     href: dev.md
   - name: Development strategy
     href: strategy.md
