@@ -153,10 +153,12 @@ class GitLabApi(RmsApi):
 
     def create_project(
         self,
-        student: Student,
+        username: str,
         course_students_group: str,
         course_public_repo: str,
     ) -> None:
+        student = self.get_student_by_username(username)
+
         course_group = self._get_group_by_name(course_students_group)
 
         gitlab_project_path = f"{course_students_group}/{student.username}"

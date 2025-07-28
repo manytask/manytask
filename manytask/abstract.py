@@ -210,7 +210,7 @@ class RmsApi(ABC):
     @abstractmethod
     def create_project(
         self,
-        student: Student,
+        username: str,
         course_students_group: str,
         course_public_repo: str,
     ) -> None: ...

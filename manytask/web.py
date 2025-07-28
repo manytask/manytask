@@ -168,11 +168,18 @@ def signup() -> ResponseReturnValue:
         if not secrets.compare_digest(request.form["password"], request.form["password2"]):
             raise Exception("Passwords don't match")
 
+        username = request.form["username"].strip()
+        firstname = request.form["firstname"].strip()
+        lastname = request.form["lastname"].strip()
+
+        # create user in database if not yet there
+        app.storage_api.create_user_if_not_exist(username, firstname, lastname)
+
         # register user in gitlab
         app.rms_api.register_new_user(
-            request.form["username"].strip(),
-            request.form["firstname"].strip(),
-            request.form["lastname"].strip(),
+            username,
+            firstname,
+            lastname,
             request.form["email"].strip(),
             request.form["password"],
         )
@@ -211,9 +218,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error(f"CSRF validation failed: {e}")
         return render_template("create_project.html", error_message="CSRF Error")
 
-    gitlab_access_token: str = session["gitlab"]["access_token"]
-    student = app.gitlab_api.get_authenticated_student(gitlab_access_token)
-    is_course_admin = app.storage_api.check_if_instance_admin(student.username)
+    username: str = session["gitlab"]["username"]
+    is_course_admin = app.storage_api.check_if_instance_admin(username)
 
     if not secrets.compare_digest(request.form["secret"], course.registration_secret):
         if secrets.compare_digest(request.form["secret"], course.token):
@@ -226,20 +232,25 @@ def create_project(course_name: str) -> ResponseReturnValue:
                 course_favicon=app.favicon,
                 base_url=app.rms_api.base_url,
             )
-
-    first_name, last_name = student.name.split()  # TODO: come up with how to separate names
-    app.storage_api.create_user_if_not_exist(student.username, first_name, last_name)
-
-    app.storage_api.sync_stored_user(
-        course.course_name,
-        student.username,
-        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-        is_course_admin,
-    )
+    try:
+        app.storage_api.sync_stored_user(
+            course.course_name,
+            username,
+            app.rms_api.get_url_for_repo(username, course.gitlab_course_students_group),
+            is_course_admin,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to sync user to the database: {e}")
+        return render_template(
+            "signup.html",
+            error_message=str(e),
+            course_favicon=app.favicon,
+            base_url=app.rms_api.base_url,
+        )
 
     # Create use if needed
     try:
-        app.rms_api.create_project(student, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        app.rms_api.create_project(username, course.gitlab_course_students_group, course.gitlab_course_public_repo)
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
         return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)

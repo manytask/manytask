@@ -318,8 +318,9 @@ def test_create_project_existing_project(gitlab, mock_student, mock_gitlab_stude
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_student_project]
     mock_gitlab_instance.projects.get.return_value = mock_gitlab_student_project
     mock_gitlab_student_project.members.create.return_value = mock_gitlab_group_member
+    gitlab_api.get_student_by_username = MagicMock(return_value=mock_student)
 
-    gitlab_api.create_project(mock_student, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
+    gitlab_api.create_project(mock_student.username, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
 
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_student.username)
     mock_gitlab_instance.projects.get.assert_called_with(mock_gitlab_student_project.id)
@@ -335,11 +336,12 @@ def test_create_project_no_existing_project_creates_fork(
     mock_gitlab_instance.projects.list.return_value = []
     gitlab_api._get_group_by_name = MagicMock(return_value=mock_gitlab_group)
     gitlab_api._get_project_by_name = MagicMock(return_value=mock_gitlab_student_project)
+    gitlab_api.get_student_by_username = MagicMock(return_value=mock_student)
     mock_gitlab_student_project.forks.create.return_value = mock_gitlab_fork
 
-    gitlab_api.create_project(mock_student, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
+    gitlab_api.create_project(TEST_USERNAME, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
 
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_student.username)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=TEST_USERNAME)
     gitlab_api._get_project_by_name.assert_called_with(TEST_GROUP_PUBLIC_NAME)
     gitlab_api._get_group_by_name.assert_called_with(TEST_GROUP_STUDENT_NAME)
 
