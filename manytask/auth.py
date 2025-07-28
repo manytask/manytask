@@ -169,7 +169,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             course.course_name,
             student.username,
             app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-            app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
+            app.storage_api.check_if_instance_admin(student.username),
         )
 
         return f(*args, **kwargs)
@@ -188,8 +188,8 @@ def requires_admin(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        user_id = session["gitlab"]["user_id"]
-        if not app.gitlab_api.check_is_gitlab_admin(user_id):
+        username = session["gitlab"]["username"]
+        if not app.storage_api.check_if_instance_admin(username):
             abort(HTTPStatus.FORBIDDEN)
 
         return f(*args, **kwargs)

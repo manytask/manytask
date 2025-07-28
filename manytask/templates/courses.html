@@ -26,6 +26,10 @@
                 </button>
             </div>
         </form>
+
+        {% if is_admin %}
+            <a class="btn btn-primary mt-3" href="{{ url_for('admin.admin_panel') }}">Admin panel</a>
+        {% endif %}
     </div>
 
     <script>
