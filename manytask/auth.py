@@ -89,28 +89,6 @@ def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student:
     return student
 
 
-def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
-    """Check course readiness"""
-
-    @wraps(f)
-    def decorated(*args: Any, **kwargs: Any) -> Any:
-        app: CustomFlask = current_app  # type: ignore
-
-        course_name = kwargs["course_name"]
-        course = app.storage_api.get_course(course_name)
-
-        if course is None:
-            flash("Course not found", "course_not_found")
-            abort(redirect(url_for("root.index")))
-
-        if not course.is_ready:
-            abort(redirect(url_for("course.not_ready", course_name=course_name)))
-
-        return f(*args, **kwargs)
-
-    return decorated
-
-
 def __redirect_to_login() -> Callable[..., Any]:
     session.pop("gitlab", None)
     return redirect(url_for("root.signup"))
@@ -140,6 +118,28 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         else:
             logger.error("Failed to verify session.", exc_info=True)
             return __redirect_to_login()
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Check course readiness"""
+
+    @wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        app: CustomFlask = current_app  # type: ignore
+
+        course_name = kwargs["course_name"]
+        course = app.storage_api.get_course(course_name)
+
+        if course is None:
+            flash("Course not found", "course_not_found")
+            abort(redirect(url_for("root.index")))
+
+        if not course.is_ready:
+            abort(redirect(url_for("course.not_ready", course_name=course_name)))
 
         return f(*args, **kwargs)
 
