@@ -1,15 +1,18 @@
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from urllib.parse import urlparse
 
 import gitlab
-from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
+from authlib.integrations.flask_client import OAuth
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
-from .auth import requires_admin, requires_auth, requires_course_access, requires_ready
+from .auth import handle_oauth_callback, requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
@@ -17,7 +20,6 @@ from .utils import generate_token_hex, get_courses
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
-
 
 logger = logging.getLogger(__name__)
 root_bp = Blueprint("root", __name__)
@@ -37,18 +39,36 @@ def index() -> ResponseReturnValue:
 
     courses = get_courses(app)
 
+    if app.debug:
+        is_admin = True
+    else:
+        student_username = session["gitlab"]["username"]
+        is_admin = app.storage_api.check_if_instance_admin(student_username)
+
     return render_template(
         "courses.html",
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
         courses=courses,
+        is_admin=is_admin,
     )
 
 
 @root_bp.route("/login", methods=["GET", "POST"])
-@requires_auth
 def login() -> ResponseReturnValue:
-    return redirect(url_for("root.index"))
+    app: CustomFlask = current_app  # type: ignore
+    oauth: OAuth = app.oauth
+
+    redirect_uri = url_for("root.login_finish", _external=True)
+    return oauth.gitlab.authorize_redirect(redirect_uri, state=url_for("root.index"))
+
+
+@root_bp.route("/login_finish")
+def login_finish() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    oauth: OAuth = app.oauth
+
+    return handle_oauth_callback(oauth, app)
 
 
 @root_bp.route("/logout")
@@ -130,17 +150,14 @@ def course_page(course_name: str) -> ResponseReturnValue:
     )
 
 
-@course_bp.route("/signup", methods=["GET", "POST"])
-@requires_ready
-def signup(course_name: str) -> ResponseReturnValue:
+@root_bp.route("/signup", methods=["GET", "POST"])
+def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
             "signup.html",
-            course_name=course.course_name,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -148,8 +165,6 @@ def signup(course_name: str) -> ResponseReturnValue:
     # ----  register a new user ---- #
 
     try:
-        if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-            raise Exception("Invalid registration secret")
         if not secrets.compare_digest(request.form["password"], request.form["password2"]):
             raise Exception("Passwords don't match")
 
@@ -168,12 +183,11 @@ def signup(course_name: str) -> ResponseReturnValue:
         return render_template(
             "signup.html",
             error_message=str(e),
-            course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
         )
 
-    return redirect(url_for("course.create_project", course_name=course.course_name))
+    return redirect(url_for("root.login"))
 
 
 @course_bp.route("/create_project", methods=["GET", "POST"])
@@ -197,18 +211,22 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error(f"CSRF validation failed: {e}")
         return render_template("create_project.html", error_message="CSRF Error")
 
-    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        return render_template(
-            "create_project.html",
-            error_message="Invalid secret",
-            course_name=course.course_name,
-            course_favicon=app.favicon,
-            base_url=app.rms_api.base_url,
-        )
-
     gitlab_access_token: str = session["gitlab"]["access_token"]
-    # This is where the auth_api should be used when it will be ready
     rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
+    is_course_admin = app.storage_api.check_if_instance_admin(rms_user.username)
+
+    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
+        if secrets.compare_digest(request.form["secret"], course.token):
+            is_course_admin = True
+        else:
+            return render_template(
+                "create_project.html",
+                error_message="Invalid secret",
+                course_name=course.course_name,
+                course_favicon=app.favicon,
+                base_url=app.rms_api.base_url,
+            )
+
     first_name, last_name = rms_user.name.split()  # TODO: come up with how to separate names
     app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name)
 
@@ -216,7 +234,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
         course.course_name,
         rms_user.username,
         app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
-        app.gitlab_api.check_is_course_admin(rms_user.id, course.gitlab_course_group),
+        is_course_admin,
     )
 
     # Create use if needed
@@ -383,3 +401,76 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         return render_template("edit_course.html", course=updated_settings, error_message="Ошибка при обновлении курса")
 
     return render_template("edit_course.html", course=course)
+
+
+@admin_bp.route("/panel", methods=["GET", "POST"])
+@requires_admin
+def admin_panel() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+
+    if request.method == "POST":
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError as e:
+            app.logger.error(f"CSRF validation failed: {e}")
+            return render_template("admin_panel.html", error_message="CSRF Error")
+
+        action = request.form.get("action", "")
+        username = request.form.get("username", "")
+        current_admin = session["gitlab"]["username"]
+
+        if action == "grant":
+            app.storage_api.set_instance_admin_status(username, True)
+            app.logger.warning(f"Admin {current_admin} granted admin status to {username}")
+        elif action == "revoke":
+            app.storage_api.set_instance_admin_status(username, False)
+            app.logger.warning(f"Admin {current_admin} revoked admin status from {username}")
+        else:
+            app.logger.error(f"Unknown action: {action}")
+
+        return redirect(url_for("admin.admin_panel"))
+
+    users = app.storage_api.get_all_users()
+    return render_template("admin_panel.html", courses=get_courses(app), users=users)
+
+
+@root_bp.route("/update_profile", methods=["POST"])
+@requires_auth
+def update_profile() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+
+    def _validate_params(param: str) -> str | None:
+        return param if (re.match(r"^[a-zA-Zа-яА-Я_-]{1,50}$", param) is not None) else None
+
+    request_username = request.form.get("username", None)
+    new_first_name = _validate_params(request.form.get("first_name", "").strip())
+    new_last_name = _validate_params(request.form.get("last_name", "").strip())
+
+    if request_username is None:
+        abort(HTTPStatus.BAD_REQUEST)
+
+    if app.debug:
+        current_username = request_username
+    else:
+        current_username = session["gitlab"]["username"]
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError as e:
+        app.logger.error(f"CSRF validation failed: {e}")
+        return render_template("courses.html", error_message="CSRF Error")
+
+    if request_username != current_username and not app.storage_api.check_if_instance_admin(current_username):
+        abort(HTTPStatus.FORBIDDEN)
+
+    app.storage_api.update_user_profile(request_username, new_first_name, new_last_name)
+
+    referrer = request.referrer
+    if referrer:
+        referrer_url = urlparse(referrer)
+        current_url = urlparse(request.host_url)
+
+        if referrer_url.netloc == current_url.netloc and referrer_url.scheme in ("http", "https"):
+            return redirect(referrer)
+
+    return redirect(url_for("root.index"))

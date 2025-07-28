@@ -52,6 +52,12 @@ class StorageApi(ABC):
     ) -> StoredUser: ...
 
     @abstractmethod
+    def check_if_instance_admin(
+        self,
+        username: str,
+    ) -> bool: ...
+
+    @abstractmethod
     def check_if_course_admin(
         self,
         course_name: str,
@@ -149,6 +155,19 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_all_courses_names(self) -> list[str]: ...
+
+    @abstractmethod
+    def get_all_users(self) -> list[StoredUser]: ...
+
+    @abstractmethod
+    def set_instance_admin_status(
+        self,
+        username: str,
+        is_admin: bool,
+    ) -> None: ...
+
+    @abstractmethod
+    def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
 
 
 @dataclass

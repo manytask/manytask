@@ -41,6 +41,7 @@ class DatabaseConfig:
     """Configuration for Database connection and settings."""
 
     database_url: str
+    zero_admin_username: str
     apply_migrations: bool = False
 
 
@@ -67,6 +68,16 @@ class DataBaseApi(StorageApi):
                 self._apply_migrations(self.database_url)
             else:
                 logger.error("There are pending migrations that have not been applied")
+
+        # Create the zero-admin user if it does not exist
+        with Session(self.engine) as session:
+            self._update_or_create(
+                session,
+                models.User,
+                username=config.zero_admin_username,
+                defaults={"first_name": "Zero", "last_name": "Admin", "is_instance_admin": True},
+            )
+            session.commit()
 
     def get_scores(
         self,
@@ -138,6 +149,25 @@ class DataBaseApi(StorageApi):
                 last_name=user_on_course.user.last_name,
                 course_admin=user_on_course.is_course_admin,
             )
+
+    def check_if_instance_admin(
+        self,
+        username: str,
+    ) -> bool:
+        """Method for checking user's admin status
+
+        :param username: user name
+
+        :return: if the user is an admin on any course
+        """
+
+        with Session(self.engine) as session:
+            try:
+                user = self._get(session, models.User, username=username)
+                return user.is_instance_admin
+            except NoResultFound as e:
+                logger.info(f"There was an exception when checking user admin status: {e}")
+                return False
 
     def check_if_course_admin(
         self,
@@ -631,6 +661,71 @@ class DataBaseApi(StorageApi):
 
             result = [course.name for course in courses]
             return result
+
+    def get_all_users(self) -> list[StoredUser]:
+        """Get all users from the database
+
+        :return: list of all users
+        """
+        with Session(self.engine) as session:
+            users = session.query(models.User).all()
+            return [
+                StoredUser(
+                    username=user.username,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    course_admin=user.is_instance_admin,
+                )
+                for user in users
+            ]
+
+    def set_instance_admin_status(self, username: str, is_admin: bool) -> None:
+        """Change user admin status
+
+        :param username: user name
+        :param is_admin: new admin status
+        """
+        with Session(self.engine) as session:
+            try:
+                if not is_admin:
+                    admin_count = session.query(func.count()).filter(models.User.is_instance_admin.is_(True)).scalar()
+                    if admin_count <= 1:
+                        logger.error("Cannot remove the last admin")
+                        return
+
+                self._update(session, models.User, defaults={"is_instance_admin": is_admin}, username=username)
+
+            except NoResultFound:
+                logger.error(f"User {username} not found in the database")
+
+    def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
+        """Update user profile information
+        :param username: user name
+        :param new_first_name: new first name
+        :param new_last_name: new last name
+        """
+        with Session(self.engine) as session:
+            try:
+                user = self._get(session, models.User, username=username)
+                old_first_name, old_last_name = user.first_name, user.last_name
+
+                if new_first_name:
+                    user.first_name = new_first_name
+                if new_last_name:
+                    user.last_name = new_last_name
+
+                session.commit()
+
+                changes = []
+                if new_first_name:
+                    changes.append(f"first_name: {old_first_name} -> {new_first_name}")
+                if new_last_name:
+                    changes.append(f"last_name: {old_last_name} -> {new_last_name}")
+
+                if changes:
+                    logger.info(f"Updated user {username} profile: {', '.join(changes)}")
+            except NoResultFound:
+                logger.error(f"User {username} not found in the database")
 
     def _update_task_groups_from_config(
         self,

@@ -228,22 +228,6 @@ class GitLabApi(RmsApi):
         except gitlab.GitlabCreateError:
             logger.info(f"Access already granted for {rms_user.username} or smth happened")
 
-    def check_is_course_admin(self, user_id: int, course_group: str) -> bool:
-        try:
-            admin_group = self._get_group_by_name(course_group)
-            admin_group_member = admin_group.members_all.get(user_id)
-        except Exception:
-            return False
-
-        if not admin_group_member:
-            return False
-
-        return True
-
-    def check_is_gitlab_admin(self, user_id: int) -> bool:
-        user = self._gitlab.users.get(user_id)
-        return user.is_admin
-
     def _construct_rms_user(
         self,
         user: dict[str, Any],

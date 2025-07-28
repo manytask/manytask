@@ -95,8 +95,7 @@ def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student | Respon
     except Exception:
         logger.error("Failed login in gitlab, redirect to login", exc_info=True)
         session.pop("gitlab", None)
-        redirect_uri = url_for("root.login", _external=True)
-        return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
+        return redirect(url_for("root.signup"))
 
 
 def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -111,9 +110,6 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 
         oauth = app.oauth
 
-        if "code" in request.args:
-            return handle_oauth_callback(oauth, app)
-
         if valid_session(session):
             student_or_resp = get_authenticate_student(oauth, app)
 
@@ -121,8 +117,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
                 return student_or_resp
         else:
             logger.info("Redirect to login in Gitlab")
-            redirect_uri = url_for("root.login", _external=True)
-            return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
+            return redirect(url_for("root.signup"))
 
         return f(*args, **kwargs)
 
@@ -178,7 +173,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             course.course_name,
             student.username,
             app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-            app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
+            app.storage_api.check_if_instance_admin(student.username),
         )
 
         return f(*args, **kwargs)
@@ -197,8 +192,8 @@ def requires_admin(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        user_id = session["gitlab"]["user_id"]
-        if not app.gitlab_api.check_is_gitlab_admin(user_id):
+        username = session["gitlab"]["username"]
+        if not app.storage_api.check_if_instance_admin(username):
             abort(HTTPStatus.FORBIDDEN)
 
         return f(*args, **kwargs)
