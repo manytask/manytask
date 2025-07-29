@@ -29,14 +29,14 @@ The full `Manytask` setup includes:
 * Manytask instance - web application managing students' grades and deadlines
 
 So the main aims of Manytask:
-* Store and manage students' grades (store, provide, show, edit, ect)
+* Store and manage students' grades (store, provide, show, edit, etc.)
 * Show web page with grades and deadlines for student
 * Manage users and repositories creation
 
 Functions for which Manytask is NOT intended:
 * Test students' solutions
 * Be language/course specific
-* Substitute for Lerning Management System (LMS)
+* Substitute for Learning Management System (LMS)
 
 ## Acknowledgment
 
