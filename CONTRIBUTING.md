@@ -5,7 +5,7 @@ It's highly welcomed, and it can help the project to develop and become more use
 
 ## How Can I Contribute?
 
-We track our progress using GitHub Projects (https://github.com/orgs/manytask/projects/3). Chose and issue or create a new one, assign it to yourself, file a PR.
+We track our progress using GitHub Projects (https://github.com/orgs/manytask/projects/3). Chose any issue or create a new one, assign it to yourself, file a PR.
 
 ## Git Commit Messages and PR description
 
