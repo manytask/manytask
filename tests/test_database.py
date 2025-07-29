@@ -179,16 +179,19 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     username1 = "username1"
     first_name1 = "Ivan"
     last_name1 = "Ivanov"
+    rms_id1 = 1
     username2 = "username2"
     first_name2 = "John"
     last_name2 = "Smith"
+    rms_id2 = 2
     username3 = "username3"
     first_name3 = "Peter"
     last_name3 = "Nordstrom"
+    rms_id3 = 3
 
-    db_api_with_two_initialized_courses.create_user_if_not_exist(username1, first_name1, last_name1)
-    db_api_with_two_initialized_courses.create_user_if_not_exist(username2, first_name2, last_name2)
-    db_api_with_two_initialized_courses.create_user_if_not_exist(username3, first_name3, last_name3)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username1, first_name1, last_name1, rms_id1)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username2, first_name2, last_name2, rms_id2)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username3, first_name3, last_name3, rms_id3)
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(username1) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(username2) == []

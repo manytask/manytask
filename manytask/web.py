@@ -228,7 +228,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             )
 
     first_name, last_name = student.name.split()  # TODO: come up with how to separate names
-    app.storage_api.create_user_if_not_exist(student.username, first_name, last_name)
+    app.storage_api.create_user_if_not_exist(student.username, first_name, last_name, student.id)
 
     app.storage_api.sync_stored_user(
         course.course_name,

@@ -23,6 +23,7 @@ TEST_USERNAME = "test_user"
 TEST_FIRST_NAME = "Ivan"
 TEST_LAST_NAME = "Ivanov"
 TEST_NAME = "Ivan Ivanov"
+TEST_RMS_ID = 456
 INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
@@ -111,7 +112,11 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def __init__(self):
             self.scores = {}
             self.stored_user = StoredUser(
-                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
+                username=TEST_USERNAME,
+                first_name=TEST_FIRST_NAME,
+                last_name=TEST_LAST_NAME,
+                rms_id=TEST_RMS_ID,
+                course_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
 
@@ -139,6 +144,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 username=username,
                 first_name=self.stored_user.first_name,
                 last_name=self.stored_user.last_name,
+                rms_id=self.stored_user.rms_id,
                 course_admin=True,
             )
 
