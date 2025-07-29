@@ -89,7 +89,7 @@ def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student:
     return student
 
 
-def __redirect_to_login() -> Callable[..., Any]:
+def __redirect_to_login() -> Response:
     session.pop("gitlab", None)
     return redirect(url_for("root.signup"))
 
