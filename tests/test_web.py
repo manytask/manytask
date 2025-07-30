@@ -78,6 +78,9 @@ def mock_gitlab_api():
         def get_student(user_id: int):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
+        def check_authenticated_student(self, access_token):
+            pass
+
         def get_student_by_username(self, username: str) -> Student:
             return Student(
                 id=1,
