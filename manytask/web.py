@@ -356,7 +356,7 @@ def create_course() -> ResponseReturnValue:
         return render_template(
             "create_course.html",
             generated_token=generate_token_hex(24),
-            error_message=f"Курс с названием '{settings.course_name}' уже существует",
+            error_message=f"Course with name '{settings.course_name}' already exists.",
         )
 
     return render_template(
