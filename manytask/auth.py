@@ -2,6 +2,7 @@ import logging
 from functools import wraps
 from http import HTTPStatus
 from typing import Any, Callable
+from urllib.error import HTTPError
 
 from authlib.integrations.flask_client import OAuth
 from flask import abort, current_app, flash, redirect, request, session, url_for
@@ -82,20 +83,19 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     return redirect(redirect_url)
 
 
-def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student | Response:
+def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student:
     """Getting student and update session"""
 
-    try:
-        # This is where the auth_api should be user instead of gitlab/rms
-        rms_user = app.rms_api.get_authenticated_rms_user(session["gitlab"]["access_token"])
-        student = Student(id=rms_user.id, username=rms_user.username, name=rms_user.name)
-        session["gitlab"].update(set_oauth_session(student))
-        return student
+    # This is where the auth_api should be user instead of gitlab/rms
+    rms_user = app.rms_api.get_authenticated_rms_user(session["gitlab"]["access_token"])
+    student = Student(id=rms_user.id, username=rms_user.username, name=rms_user.name)
+    session["gitlab"].update(set_oauth_session(student))
+    return student
 
-    except Exception:
-        logger.error("Failed login in gitlab, redirect to login", exc_info=True)
-        session.pop("gitlab", None)
-        return redirect(url_for("root.signup"))
+
+def __redirect_to_login() -> Response:
+    session.pop("gitlab", None)
+    return redirect(url_for("root.signup"))
 
 
 def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -108,16 +108,15 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        oauth = app.oauth
-
         if valid_session(session):
-            student_or_resp = get_authenticate_student(oauth, app)
-
-            if not isinstance(student_or_resp, Student):
-                return student_or_resp
+            try:
+                app.gitlab_api.check_authenticated_rms_user(session["gitlab"]["access_token"])
+            except (HTTPError, KeyError) as e:
+                logger.error(f"Failed login in gitlab, redirect to login: {e}", exc_info=True)
+                return __redirect_to_login()
         else:
-            logger.info("Redirect to login in Gitlab")
-            return redirect(url_for("root.signup"))
+            logger.error("Failed to verify session.", exc_info=True)
+            return __redirect_to_login()
 
         return f(*args, **kwargs)
 
@@ -161,7 +160,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         oauth = app.oauth
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
-        student: Student = get_authenticate_student(oauth, app)  # type: ignore
+        student: Student = get_authenticate_student(oauth, app)
 
         if not handle_course_membership(app, course, student.username) or not app.rms_api.check_project_exists(
             project_name=student.username, project_group=course.gitlab_course_students_group
