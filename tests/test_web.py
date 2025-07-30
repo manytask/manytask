@@ -156,6 +156,10 @@ def mock_storage_api(mock_course):  # noqa: C901
             return []
 
         @staticmethod
+        def get_grades(*_args, **_kwargs):
+            return {}
+
+        @staticmethod
         def get_course(_name):
             return mock_course
 

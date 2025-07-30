@@ -29,27 +29,8 @@ SCORES = {
 }
 
 
-class MockFinalGradeConfig:
-    def __init__(self, grade_config):
-        self.grade_config = grade_config
-        self.grade_order = sorted(self.grade_config.keys(), reverse=True)
-
-    def evaluate(self, row):
-        for grade in self.grade_order:
-            if self.grade_config[grade].evaluate(row):
-                return grade
-
-
-class MockGradeConfig:
-    def __init__(self, formulas):
-        self.formulas = formulas
-
-    def evaluate(self, row):
-        return all(row[key] >= value for key, value in self.formulas.items())
-
-
 @pytest.fixture
-def app():
+def app():  # noqa: C901
     app = Flask(__name__)
 
     class MockStorageApi:
@@ -67,6 +48,23 @@ def app():
                 self.is_bonus = is_bonus
                 self.is_large = is_large
 
+        class MockFinalGradeConfig:
+            def __init__(self, grade_config):
+                self.grade_config = grade_config
+                self.grade_order = sorted(self.grade_config.keys(), reverse=True)
+
+            def evaluate(self, row):
+                for grade in self.grade_order:
+                    if self.grade_config[grade].evaluate(row):
+                        return grade
+
+        class MockGradeConfig:
+            def __init__(self, formulas):
+                self.formulas = formulas
+
+            def evaluate(self, row):
+                return all(row[key] >= value for key, value in self.formulas.items())
+
         def __init__(self):
             self.groups = [
                 self.MockGroup(
@@ -80,21 +78,21 @@ def app():
                 )
             ]
 
-            self.grades_config = MockFinalGradeConfig(
+            self.grades_config = self.MockFinalGradeConfig(
                 {
-                    5: MockGradeConfig(
+                    5: self.MockGradeConfig(
                         {
                             "total_score": 300,
                             "large_count": 1,
                         }
                     ),
-                    4: MockGradeConfig({"total_score": 250, "large_count": 1}),
-                    3: MockGradeConfig(
+                    4: self.MockGradeConfig({"total_score": 250, "large_count": 1}),
+                    3: self.MockGradeConfig(
                         {
                             "total_score": 200,
                         }
                     ),
-                    2: MockGradeConfig(
+                    2: self.MockGradeConfig(
                         {
                             "total_score": 0,
                         }
