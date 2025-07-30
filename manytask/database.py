@@ -42,7 +42,7 @@ class DatabaseConfig:
     """Configuration for Database connection and settings."""
 
     database_url: str
-    zero_admin_username: str
+    instance_admin_username: str
     apply_migrations: bool = False
 
 
@@ -70,13 +70,13 @@ class DataBaseApi(StorageApi):
             else:
                 logger.error("There are pending migrations that have not been applied")
 
-        # Create the zero-admin user if it does not exist
+        # Create the zero-instance admin user if it does not exist
         with Session(self.engine) as session:
             self._update_or_create(
                 session,
                 models.User,
-                username=config.zero_admin_username,
-                defaults={"first_name": "Zero", "last_name": "Admin", "is_instance_admin": True},
+                username=config.instance_admin_username,
+                defaults={"first_name": "Instance", "last_name": "Admin", "is_instance_admin": True},
             )
             session.commit()
 
