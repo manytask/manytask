@@ -191,18 +191,28 @@ class ManytaskDeadlinesConfig(BaseModel):
         return self.schedule
 
 
-class PrimaryGradeFormula(BaseModel):
-    formulas: dict[Path, Union[int, float]] = Field(default_factory=dict)
+class ManytaskFinalGradeConfig(BaseModel):
+    grades: dict[int, list[dict[Path, Union[int, float]]]] = Field(default_factory=dict)
+    grades_order: list[int] = Field(default_factory=list)
 
-    def evaluate(self, scores: dict[str, Any]) -> bool:
-        for path, limit in self.formulas.items():
-            try:
-                attribute = PrimaryGradeFormula.get_attribute(path, scores)
-            except ValueError:
-                return False
-            if attribute < limit:
-                return False
-        return True
+    @model_validator(mode="after")
+    def check_grade_names_initialization(self) -> ManytaskFinalGradeConfig:
+        if len(self.grades.keys()) == 0:
+            raise ValueError("No grades defined")
+
+        return self
+
+    @model_validator(mode="after")
+    def populate_grades_order(self) -> ManytaskFinalGradeConfig:
+        self.grades_order = sorted(list(self.grades.keys()), reverse=True)
+        return self
+
+    def evaluate(self, scores: dict[str, Any]) -> Optional[int]:
+        for grade in self.grades_order:
+            if ManytaskFinalGradeConfig.evaluate_grade(self.grades[grade], scores):
+                return grade
+
+        raise ValueError("No grade matched")
 
     @staticmethod
     def get_attribute(path: Path, scores: dict[str, Any]) -> Any:
@@ -221,39 +231,23 @@ class PrimaryGradeFormula(BaseModel):
 
         return attribute
 
+    @staticmethod
+    def evaluate_primary_formula(formula: dict[Path, Union[int, float]], scores: dict[str, Any]) -> bool:
+        for path, limit in formula.items():
+            try:
+                attribute = ManytaskFinalGradeConfig.get_attribute(path, scores)
+            except ValueError:
+                return False
+            if attribute < limit:
+                return False
+        return True
 
-class ManytaskGradeConfig(BaseModel):
-    formulas: list[PrimaryGradeFormula] = Field(default_factory=list)
-
-    def evaluate(self, scores: dict[str, Any]) -> bool:
-        for formula in self.formulas:
-            if formula.evaluate(scores):
+    @staticmethod
+    def evaluate_grade(grade_config: list[dict[Path, Union[int, float]]], scores: dict[str, Any]) -> bool:
+        for formula in grade_config:
+            if ManytaskFinalGradeConfig.evaluate_primary_formula(formula, scores):
                 return True
         return False
-
-
-class ManytaskFinalGradeConfig(BaseModel):
-    grades: dict[int, ManytaskGradeConfig] = Field(default_factory=dict)
-    grades_order: list[int] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def check_grade_names_initialization(self) -> ManytaskFinalGradeConfig:
-        if len(self.grades.keys()) == 0:
-            raise ValueError("No grades defined")
-
-        return self
-
-    @model_validator(mode="after")
-    def populate_grades_order(self) -> ManytaskFinalGradeConfig:
-        self.grades_order = sorted(list(self.grades.keys()), reverse=True)
-        return self
-
-    def evaluate(self, scores: dict[str, Any]) -> Optional[int]:
-        for grade in self.grades_order:
-            if self.grades[grade].evaluate(scores):
-                return grade
-
-        raise ValueError("No grade matched")
 
 
 class ManytaskConfig(BaseModel):

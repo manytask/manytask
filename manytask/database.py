@@ -22,10 +22,8 @@ from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
     ManytaskFinalGradeConfig,
-    ManytaskGradeConfig,
     ManytaskGroupConfig,
     ManytaskTaskConfig,
-    PrimaryGradeFormula,
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
@@ -257,14 +255,14 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             course = DataBaseApi._get(session, models.Course, name=course_name)
 
-            grades: dict[int, ManytaskGradeConfig] = {}
+            grades: dict[int, list[dict[Path, int | float]]] = {}
             for grade in course.course_grades:
                 formulas = []
                 for f in grade.primary_formulas.all():
                     f.primary_formula
-                    formulas.append(PrimaryGradeFormula(formulas={Path(k): v for k, v in f.primary_formula.items()}))
+                    formulas.append({Path(k): v for k, v in f.primary_formula.items()})
 
-                grades[grade.grade] = ManytaskGradeConfig(formulas=formulas)
+                grades[grade.grade] = formulas
 
             grades_order = sorted(list(grades.keys()), reverse=True)
             return ManytaskFinalGradeConfig(grades=grades, grades_order=grades_order)
@@ -912,8 +910,8 @@ class DataBaseApi(StorageApi):
                     session, models.ComplexFormula, grade=grade, course_id=course.id
                 )
 
-                for primary_formula in grades_config.grades[grade].formulas:
-                    primary_formula_dict = {str(k): v for k, v in primary_formula.formulas.items()}
+                for primary_formula in grades_config.grades[grade]:
+                    primary_formula_dict = {str(k): v for k, v in primary_formula.items()}
                     self._update_or_create(
                         session,
                         models.PrimaryFormula,
@@ -947,8 +945,7 @@ class DataBaseApi(StorageApi):
                 )
 
                 new_primary_formulas_set = set(
-                    {str(k): v for k, v in primary_formula.formulas.items()}
-                    for primary_formula in grades_config.grades[grade].formulas
+                    {str(k): v for k, v in primary_formula.items()} for primary_formula in grades_config.grades[grade]
                 )
 
                 # remove deleted primary formulas

@@ -51,29 +51,30 @@ deadlines:
           score: 10
 
 grades:
-  5: [
-    {
-      "pecent": 90,
-      "large_count": 1,
-    },
-    {
-      "percent": 80,
-      "large_count": 2,
-    }
-  ]
-  4: [
-    {
-      "percent": 80,
-      "large_count": 1,
-    }
-  ]
-  3: [
-    {
-      "percent": 70,
-    }
-  ]
-  2: [
-    {
-      "": 0
-    }
-  ]
+  grades:
+    5: [
+      {
+        "percent": 90,
+        "large_count": 1,
+      },
+      {
+        "percent": 80,
+        "large_count": 2,
+      }
+    ]
+    4: [
+      {
+        "percent": 80,
+        "large_count": 1,
+      }
+    ]
+    3: [
+      {
+        "percent": 70,
+      }
+    ]
+    2: [
+      {
+        "": 0
+      }
+    ]
