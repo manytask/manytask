@@ -228,22 +228,6 @@ class GitLabApi(RmsApi):
         except gitlab.GitlabCreateError:
             logger.info(f"Access already granted for {student.username} or smth happened")
 
-    def check_is_course_admin(self, user_id: int, course_group: str) -> bool:
-        try:
-            admin_group = self._get_group_by_name(course_group)
-            admin_group_member = admin_group.members_all.get(user_id)
-        except Exception:
-            return False
-
-        if not admin_group_member:
-            return False
-
-        return True
-
-    def check_is_gitlab_admin(self, user_id: int) -> bool:
-        user = self._gitlab.users.get(user_id)
-        return user.is_admin
-
     def _parse_user_to_student(
         self,
         user: dict[str, Any],
@@ -282,6 +266,14 @@ class GitLabApi(RmsApi):
         student = potential_students[0]
         logger.info(f'User found: "{student.username}"')
         return student
+
+    def check_authenticated_student(
+        self,
+        oauth_token: str,
+    ) -> None:
+        headers = {"Authorization": "Bearer " + oauth_token}
+        response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
+        response.raise_for_status()
 
     def get_authenticated_student(
         self,

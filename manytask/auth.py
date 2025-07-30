@@ -2,6 +2,7 @@ import logging
 from functools import wraps
 from http import HTTPStatus
 from typing import Any, Callable
+from urllib.error import HTTPError
 
 from authlib.integrations.flask_client import OAuth
 from flask import abort, current_app, flash, redirect, request, session, url_for
@@ -80,19 +81,17 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     return redirect(redirect_url)
 
 
-def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student | Response:
+def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student:
     """Getting student and update session"""
 
-    try:
-        student = app.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
-        session["gitlab"].update(set_oauth_session(student))
-        return student
+    student = app.gitlab_api.get_authenticated_student(session["gitlab"]["access_token"])
+    session["gitlab"].update(set_oauth_session(student))
+    return student
 
-    except Exception:
-        logger.error("Failed login in gitlab, redirect to login", exc_info=True)
-        session.pop("gitlab", None)
-        redirect_uri = url_for("root.login", _external=True)
-        return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
+
+def __redirect_to_login() -> Response:
+    session.pop("gitlab", None)
+    return redirect(url_for("root.signup"))
 
 
 def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -105,20 +104,15 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        oauth = app.oauth
-
-        if "code" in request.args:
-            return handle_oauth_callback(oauth, app)
-
         if valid_session(session):
-            student_or_resp = get_authenticate_student(oauth, app)
-
-            if not isinstance(student_or_resp, Student):
-                return student_or_resp
+            try:
+                app.gitlab_api.check_authenticated_student(session["gitlab"]["access_token"])
+            except (HTTPError, KeyError) as e:
+                logger.error(f"Failed login in gitlab, redirect to login: {e}", exc_info=True)
+                return __redirect_to_login()
         else:
-            logger.info("Redirect to login in Gitlab")
-            redirect_uri = url_for("root.login", _external=True)
-            return oauth.gitlab.authorize_redirect(redirect_uri, state=request.url)
+            logger.error("Failed to verify session.", exc_info=True)
+            return __redirect_to_login()
 
         return f(*args, **kwargs)
 
@@ -162,7 +156,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         oauth = app.oauth
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
-        student: Student = get_authenticate_student(oauth, app)  # type: ignore
+        student: Student = get_authenticate_student(oauth, app)
 
         if not handle_course_membership(app, course, student.username) or not app.rms_api.check_project_exists(
             username=student.username, course_students_group=course.gitlab_course_students_group
@@ -174,7 +168,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             course.course_name,
             student.username,
             app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-            app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
+            app.storage_api.check_if_instance_admin(student.username),
         )
 
         return f(*args, **kwargs)
@@ -193,8 +187,8 @@ def requires_admin(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        user_id = session["gitlab"]["user_id"]
-        if not app.gitlab_api.check_is_gitlab_admin(user_id):
+        username = session["gitlab"]["username"]
+        if not app.storage_api.check_if_instance_admin(username):
             abort(HTTPStatus.FORBIDDEN)
 
         return f(*args, **kwargs)

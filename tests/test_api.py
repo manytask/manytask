@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 import yaml
 from dotenv import load_dotenv
-from flask import Flask, json
+from flask import Flask, json, url_for
 from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import StoredUser
@@ -195,6 +195,9 @@ def mock_gitlab_api(mock_student):
             if username == TEST_USERNAME:
                 return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
             raise GitLabApiException("Student not found")
+
+        def check_authenticated_student(self, access_token):
+            pass
 
         def get_authenticated_student(self, access_token):
             return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
@@ -386,12 +389,13 @@ def test_update_database_invalid_score_type(app, authenticated_client):
 
 
 def test_update_database_unauthorized(app, mock_gitlab_oauth):
-    app.oauth = mock_gitlab_oauth
-    test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
-    response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
-    # Signup
-    assert response.status_code == HTTPStatus.FOUND
-    assert response.location == f"http://localhost/api/{TEST_COURSE_NAME}/database/update"
+    with app.test_request_context():
+        app.oauth = mock_gitlab_oauth
+        test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
+        # Signup
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == url_for("root.signup")
 
 
 def test_update_database_not_ready(app, authenticated_client):

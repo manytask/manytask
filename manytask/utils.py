@@ -16,8 +16,10 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     else:
         student_id = session["gitlab"]["user_id"]
         student = app.gitlab_api.get_student(student_id)
-
-        courses_names = app.storage_api.get_user_courses_names(student.username)
+        if app.storage_api.check_if_instance_admin(student.username):
+            courses_names = app.storage_api.get_all_courses_names()
+        else:
+            courses_names = app.storage_api.get_user_courses_names(student.username)
 
     return [
         {

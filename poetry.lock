@@ -1504,14 +1504,14 @@ cli = ["click (>=5.0)"]
 
 [[package]]
 name = "python-gitlab"
-version = "6.1.0"
+version = "6.2.0"
 description = "The python wrapper for the GitLab REST and GraphQL APIs."
 optional = false
 python-versions = ">=3.9.0"
 groups = ["main"]
 files = [
-    {file = "python_gitlab-6.1.0-py3-none-any.whl", hash = "sha256:d36fb714cfde7773dcd6c19dd714bdb6e4dfb00a7ef694c8da176335da171b23"},
-    {file = "python_gitlab-6.1.0.tar.gz", hash = "sha256:062d6943699b09bce40f727f0d0906a0b254ca455593f81745bb1a352535ee77"},
+    {file = "python_gitlab-6.2.0-py3-none-any.whl", hash = "sha256:8adf2bbf1ac8a5224ee04a456d318da0d15128606711e8c8e1a2ff050968432b"},
+    {file = "python_gitlab-6.2.0.tar.gz", hash = "sha256:b88c79cea65dd2425922c829730ea95827ed7132d869b8532b90a8c7199cc1a6"},
 ]
 
 [package.dependencies]
@@ -1810,14 +1810,14 @@ sqlcipher = ["sqlcipher3_binary"]
 
 [[package]]
 name = "testcontainers"
-version = "4.10.0"
+version = "4.12.0"
 description = "Python library for throwaway instances of anything that can run in a Docker container"
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["dev"]
 files = [
-    {file = "testcontainers-4.10.0-py3-none-any.whl", hash = "sha256:31ed1a81238c7e131a2a29df6db8f23717d892b592fa5a1977fd0dcd0c23fc23"},
-    {file = "testcontainers-4.10.0.tar.gz", hash = "sha256:03f85c3e505d8b4edeb192c72a961cebbcba0dd94344ae778b4a159cb6dcf8d3"},
+    {file = "testcontainers-4.12.0-py3-none-any.whl", hash = "sha256:26caef57e642d5e8c5fcc593881cf7df3ab0f0dc9170fad22765b184e226ab15"},
+    {file = "testcontainers-4.12.0.tar.gz", hash = "sha256:13ee89cae995e643f225665aad8b200b25c4f219944a6f9c0b03249ec3f31b8d"},
 ]
 
 [package.dependencies]
@@ -1831,10 +1831,10 @@ wrapt = "*"
 arangodb = ["python-arango (>=7.8,<8.0)"]
 aws = ["boto3", "httpx"]
 azurite = ["azure-storage-blob (>=12.19,<13.0)"]
-chroma = ["chromadb-client"]
+chroma = ["chromadb-client (>=1.0.0,<2.0.0)"]
 clickhouse = ["clickhouse-driver"]
 cosmosdb = ["azure-cosmos"]
-db2 = ["ibm_db_sa", "sqlalchemy"]
+db2 = ["ibm_db_sa ; platform_machine != \"aarch64\" and platform_machine != \"arm64\"", "sqlalchemy"]
 generic = ["httpx", "redis"]
 google = ["google-cloud-datastore (>=2)", "google-cloud-pubsub (>=2)"]
 influxdb = ["influxdb", "influxdb-client"]
@@ -1844,10 +1844,11 @@ localstack = ["boto3"]
 mailpit = ["cryptography"]
 minio = ["minio"]
 mongodb = ["pymongo"]
-mssql = ["pymssql", "sqlalchemy"]
+mssql = ["pymssql ; platform_machine != \"arm64\" or python_version >= \"3.10\"", "sqlalchemy"]
 mysql = ["pymysql[rsa]", "sqlalchemy"]
 nats = ["nats-py"]
 neo4j = ["neo4j"]
+openfga = ["openfga-sdk ; python_version >= \"3.10\""]
 opensearch = ["opensearch-py"]
 oracle = ["oracledb", "sqlalchemy"]
 oracle-free = ["oracledb", "sqlalchemy"]
@@ -2083,4 +2084,4 @@ email = ["email-validator"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "45dce906b9c8278350b219b0b874b3d4b31773cdba78c3e9898d88b74e3d2635"
+content-hash = "97087d27aadec824e659a8e4487cd33dd51e099af7429fc58e8264f67dc55b71"
