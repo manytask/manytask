@@ -51,28 +51,29 @@ deadlines:
           score: 10
 
 grades:
-  "A":
-    connective: or
-    subformulas:
-      - connective: and
-        subformulas:
-          - path: percent
-            attribute_min: 90
-          - path: large_count
-            attribute_min: 1
-      - connective: and
-        subformulas:
-          - path: percent
-            attribute_min: 80
-          - path: large_count
-            attribute_min: 2
-  "B":
-    connective: and
-    subformulas:
-      - path: percent
-        attribute_min: 80
-      - path: large_count
-        attribute_min: 1
-  "C":
-    path: percent
-    attribute_min: 70
+  5: [
+    {
+      "pecent": 90,
+      "large_count": 1,
+    },
+    {
+      "percent": 80,
+      "large_count": 2,
+    }
+  ]
+  4: [
+    {
+      "percent": 80,
+      "large_count": 1,
+    }
+  ]
+  3: [
+    {
+      "percent": 70,
+    }
+  ]
+  2: [
+    {
+      "": 0
+    }
+  ]
