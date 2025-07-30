@@ -267,6 +267,14 @@ class GitLabApi(RmsApi):
         logger.info(f'User found: "{student.username}"')
         return student
 
+    def check_authenticated_student(
+        self,
+        oauth_token: str,
+    ) -> None:
+        headers = {"Authorization": "Bearer " + oauth_token}
+        response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
+        response.raise_for_status()
+
     def get_authenticated_student(
         self,
         oauth_token: str,
