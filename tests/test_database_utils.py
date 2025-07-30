@@ -19,13 +19,13 @@ STUDENT_3 = "student3"
 STUDENT_NAMES = {
     STUDENT_1: [constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1],
     STUDENT_2: [constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2],
-    STUDENT_3: [constants.TEST_FIRST_NAME_3, constants.TEST_LAST_NAME_3]
+    STUDENT_3: [constants.TEST_FIRST_NAME_3, constants.TEST_LAST_NAME_3],
 }
 
 SCORES = {
     STUDENT_1: {TASK_1: 100, TASK_2: 90, TASK_LARGE: 200, "total": 390, "large_count": 1, "grade": 5},
     STUDENT_2: {TASK_1: 80, TASK_2: 85, TASK_LARGE: 100, "total": 265, "large_count": 1, "grade": 4},
-    STUDENT_2: {TASK_1: 80, TASK_2: 85, TASK_LARGE: 30, "total": 195, "large_count": 0, "grade": 2},
+    STUDENT_3: {TASK_1: 80, TASK_2: 85, TASK_LARGE: 30, "total": 195, "large_count": 0, "grade": 2},
 }
 
 
@@ -80,22 +80,27 @@ def app():
                 )
             ]
 
-            self.grades_config = MockFinalGradeConfig({
-                5: MockGradeConfig({
-                        "total": 300,
-                        "large_count": 1,
-                    }),
-                4: MockGradeConfig({
-                        "total": 250,
-                        "large_count": 1
-                    }),
-                3: MockGradeConfig({
-                        "total": 200,
-                    }),
-                2: MockGradeConfig({
-                        "total": 0,
-                    })
-            })
+            self.grades_config = self.MockFinalGradeConfig(
+                {
+                    5: self.MockGradeConfig(
+                        {
+                            "total": 300,
+                            "large_count": 1,
+                        }
+                    ),
+                    4: self.MockGradeConfig({"total": 250, "large_count": 1}),
+                    3: self.MockGradeConfig(
+                        {
+                            "total": 200,
+                        }
+                    ),
+                    2: self.MockGradeConfig(
+                        {
+                            "total": 0,
+                        }
+                    ),
+                }
+            )
 
         def get_groups(self, _course_name):
             return self.groups
