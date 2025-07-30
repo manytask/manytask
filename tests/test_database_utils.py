@@ -84,19 +84,19 @@ def app():
                 {
                     5: MockGradeConfig(
                         {
-                            "total": 300,
+                            "total_score": 300,
                             "large_count": 1,
                         }
                     ),
-                    4: MockGradeConfig({"total": 250, "large_count": 1}),
+                    4: MockGradeConfig({"total_score": 250, "large_count": 1}),
                     3: MockGradeConfig(
                         {
-                            "total": 200,
+                            "total_score": 200,
                         }
                     ),
                     2: MockGradeConfig(
                         {
-                            "total": 0,
+                            "total_score": 0,
                         }
                     ),
                 }
