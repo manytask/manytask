@@ -117,6 +117,50 @@ def db_api(tables, postgres_container):
 
 
 @pytest.fixture
+def first_course_grade_config():
+    with open(GRADE_CONFIG_FILES[0], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
+
+
+@pytest.fixture
+def first_course_grade_config_with_changed_numbers():
+    with open(GRADE_CONFIG_FILES[0], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    grade_config_data_changed_numbers = dict()
+    grade_config_data_changed_numbers["grades"] = dict()
+    for key, value in grade_config_data["grades"]["grades"].items():
+        grade_config_data_changed_numbers["grades"][key + 2] = value.copy()
+
+    return ManytaskFinalGradeConfig(**grade_config_data_changed_numbers)
+
+
+@pytest.fixture
+def second_course_grade_config():
+    with open(GRADE_CONFIG_FILES[1], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
+
+
+@pytest.fixture
+def second_course_grade_config_with_additional_grade():
+    with open(GRADE_CONFIG_FILES[1], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    grade_config_data["grades"]["grades"][3] = [
+        {
+            "percent": 50,
+            "large_count": 1,
+        },
+    ]
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
+
+
+@pytest.fixture
 def first_course_config():
     return CourseConfig(
         course_name=FIRST_COURSE_NAME,
@@ -219,50 +263,6 @@ def first_course_deadlines_config_with_changed_order_of_tasks():
     )
 
     return ManytaskDeadlinesConfig(**deadlines_config_data["deadlines"])
-
-
-@pytest.fixture
-def first_course_grade_config():
-    with open(GRADE_CONFIG_FILES[0], "r") as f:
-        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-
-    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
-
-
-@pytest.fixture
-def first_course_grade_config_with_changed_numbers():
-    with open(GRADE_CONFIG_FILES[0], "r") as f:
-        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-
-    grade_config_data_changed_numbers = dict()
-    grade_config_data_changed_numbers["grades"] = dict()
-    for key, value in grade_config_data["grades"]["grades"].items():
-        grade_config_data_changed_numbers["grades"][key + 2] = value.copy()
-
-    return ManytaskFinalGradeConfig(**grade_config_data_changed_numbers)
-
-
-@pytest.fixture
-def second_course_grade_config():
-    with open(GRADE_CONFIG_FILES[1], "r") as f:
-        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-
-    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
-
-
-@pytest.fixture
-def second_course_grade_config_with_additional_grade():
-    with open(GRADE_CONFIG_FILES[1], "r") as f:
-        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-
-    grade_config_data["grades"]["grades"][3] = [
-        {
-            "percent": 50,
-            "large_count": 1,
-        },
-    ]
-
-    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
 
 
 def update_course(
