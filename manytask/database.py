@@ -941,12 +941,12 @@ class DataBaseApi(StorageApi):
                     session.query(models.PrimaryFormula).filter_by(complex_id=complex_formula.id).all()
                 )
                 existing_primary_formulas_set = set(
-                    set((k, v) for k, v in primary_formula.primary_formula.items())
+                    frozenset((k, v) for k, v in primary_formula.primary_formula.items())
                     for primary_formula in existing_primary_formulas
                 )
 
                 new_primary_formulas_set = set(
-                    set((str(k), v) for k, v in primary_formula.items())
+                    frozenset((str(k), v) for k, v in primary_formula.items())
                     for primary_formula in grades_config.grades[grade]
                 )
 
