@@ -22,7 +22,11 @@ Use `WSL 2`, if you are using Windows
    psql postgresql://<username>:<password>@localhost:5432/<database name>
    ```
    
-4. After this, copy `.env.example` to `.env` and in `FLASK_SECRET_KEY` write random string, in `DATABASE_URL` write the URL from
+
+4. Copy `.env.example` to `.env` in your working folder. In this file:
+- Set `FLASK_SECRET_KEY` to random string
+- Set `DATABASE_URL` to `psql` URL above
+- Set the username for the first instance admin with 'INITIAL_INSTANCE_ADMIN'
 previous point, in `ZERO_ADMIN` write yours username.
 
 5. Try to start `Manytask`:
