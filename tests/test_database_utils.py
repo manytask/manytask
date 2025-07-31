@@ -104,7 +104,7 @@ def app():
             pass
 
     app.storage_api = MockStorageApi()
-    app.gitlab_api = MockGitLabApi()
+    app.rms_api = MockGitLabApi()
 
     return app
 
