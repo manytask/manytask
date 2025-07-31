@@ -459,7 +459,7 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
             assert isinstance(final_grade_config.grades[grade], list)
             assert len(final_grade_config.grades[grade]) == 1
             assert isinstance(final_grade_config.grades[grade][0], dict)
-            assert final_grade_config.grades[grade][0][Path("percent")] == 0
+            assert final_grade_config.grades[grade][0][Path("")] == 0
 
 
 def test_updating_course(
