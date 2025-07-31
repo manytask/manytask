@@ -941,26 +941,36 @@ class DataBaseApi(StorageApi):
                     session.query(models.PrimaryFormula).filter_by(complex_id=complex_formula.id).all()
                 )
                 existing_primary_formulas_set = set(
-                    primary_formula.primary_formula for primary_formula in existing_primary_formulas
+                    set((k, v) for k, v in primary_formula.primary_formula.items())
+                    for primary_formula in existing_primary_formulas
                 )
 
                 new_primary_formulas_set = set(
-                    {str(k): v for k, v in primary_formula.items()} for primary_formula in grades_config.grades[grade]
+                    set((str(k), v) for k, v in primary_formula.items())
+                    for primary_formula in grades_config.grades[grade]
                 )
 
                 # remove deleted primary formulas
                 for formula in existing_primary_formulas_set - new_primary_formulas_set:
+                    formula_dict = dict()
+                    for (k, v) in formula:
+                        formula_dict[k] = v
+
                     session.query(models.PrimaryFormula).filter_by(
                         complex_id=complex_formula.id,
-                        primary_formula=formula,
+                        primary_formula=formula_dict,
                     ).delete()
 
                 # add new primary formulas
                 for formula in new_primary_formulas_set - existing_primary_formulas_set:
+                    formula_dict = dict()
+                    for (k, v) in formula:
+                        formula_dict[k] = v
+
                     self._update_or_create(
                         session,
                         models.PrimaryFormula,
-                        create_defaults={"primary_formula": formula},
+                        create_defaults={"primary_formula": formula_dict},
                         complex_id=complex_formula.id,
                     )
 
