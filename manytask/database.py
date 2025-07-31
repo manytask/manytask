@@ -925,6 +925,19 @@ class DataBaseApi(StorageApi):
 
             # remove deleted grafes
             for grade in existing_complex_formulas_grades - config_complex_formulas_grades:
+                complex_formula = (
+                    session.query(models.ComplexFormula)
+                    .filter_by(
+                        course_id=course.id,
+                        grade=grade,
+                    )
+                    .one()
+                )
+
+                session.query(models.PrimaryFormula).filter_by(
+                    complex_id=complex_formula.id,
+                ).delete()
+
                 session.query(models.ComplexFormula).filter_by(
                     course_id=course.id,
                     grade=grade,
