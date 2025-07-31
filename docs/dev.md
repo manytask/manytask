@@ -17,7 +17,7 @@ Use `WSL 2`, if you are using Windows
    \q
     ```
    
-3. Now you can connect to this database using `psql`:
+3. Now you can connect to the database using `psql`:
    ```bash
    psql postgresql://<username>:<password>@localhost:5432/<database name>
    ```
