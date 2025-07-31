@@ -1590,7 +1590,7 @@ def test_grade_config_estimation(
     ]
     mock_grades = [4, 5, 2, 4, 2]
     mock_grades_updated = [4, 5, 3, 4, 2]
-    grade_config_data = db_api_with_initialized_first_course.get_grades(SECOND_COURSE_NAME)
+    grade_config_data = db_api_with_two_initialized_courses.get_grades(SECOND_COURSE_NAME)
 
     for i, score in enumerate(mock_scores):
         assert grade_config_data.evaluate(score) == mock_grades[i]
