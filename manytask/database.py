@@ -921,10 +921,10 @@ class DataBaseApi(StorageApi):
 
                 for primary_formula in grades_config.grades[grade]:
                     primary_formula_dict = {str(k): v for k, v in primary_formula.items()}
-                    self._update_or_create(
+                    self._create(
                         session,
                         models.PrimaryFormula,
-                        create_defaults={"primary_formula": primary_formula_dict},
+                        primary_formula=primary_formula_dict,
                         complex_id=complex_formula.id,
                     )
 
@@ -966,7 +966,6 @@ class DataBaseApi(StorageApi):
                     frozenset((k, v) for k, v in primary_formula.primary_formula.items())
                     for primary_formula in existing_primary_formulas
                 )
-
                 new_primary_formulas_set = set(
                     frozenset((str(k), v) for k, v in primary_formula.items())
                     for primary_formula in grades_config.grades[grade]
@@ -989,10 +988,10 @@ class DataBaseApi(StorageApi):
                     for k, v in formula:
                         formula_dict[k] = v
 
-                    self._update_or_create(
+                    self._create(
                         session,
                         models.PrimaryFormula,
-                        create_defaults={"primary_formula": formula_dict},
+                        primary_formula=formula_dict,
                         complex_id=complex_formula.id,
                     )
 
