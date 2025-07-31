@@ -953,7 +953,7 @@ class DataBaseApi(StorageApi):
                 # remove deleted primary formulas
                 for formula in existing_primary_formulas_set - new_primary_formulas_set:
                     formula_dict = dict()
-                    for (k, v) in formula:
+                    for k, v in formula:
                         formula_dict[k] = v
 
                     session.query(models.PrimaryFormula).filter_by(
@@ -964,7 +964,7 @@ class DataBaseApi(StorageApi):
                 # add new primary formulas
                 for formula in new_primary_formulas_set - existing_primary_formulas_set:
                     formula_dict = dict()
-                    for (k, v) in formula:
+                    for k, v in formula:
                         formula_dict[k] = v
 
                     self._update_or_create(
