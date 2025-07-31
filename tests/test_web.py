@@ -194,7 +194,7 @@ def mock_storage_api(mock_course):  # noqa: C901
             return True
 
         @staticmethod
-        def create_user_if_not_exist(username: str, first_name: str, last_name: str) -> None:
+        def create_user_if_not_exist(username: str, first_name: str, last_name: str, rms_id: int) -> None:
             pass
 
         def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
