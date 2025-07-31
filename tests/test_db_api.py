@@ -12,7 +12,13 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, Uni
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
-from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskUiConfig
+from manytask.config import (
+    ManytaskConfig,
+    ManytaskDeadlinesConfig,
+    ManytaskFinalGradeConfig,
+    ManytaskGroupConfig,
+    ManytaskUiConfig,
+)
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig
 from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
@@ -22,6 +28,11 @@ from tests import constants
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",
     "tests/.deadlines.test2.yml",
+]
+
+GRADE_CONFIG_FILES = [  # part of manytask config file
+    "tests/.grades.test.yml",
+    "tests/.grades.test2.yml",
 ]
 
 FIXED_CURRENT_TIME = datetime(2025, 4, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
@@ -210,16 +221,69 @@ def first_course_deadlines_config_with_changed_order_of_tasks():
     return ManytaskDeadlinesConfig(**deadlines_config_data["deadlines"])
 
 
+@pytest.fixture
+def first_course_grade_config():
+    with open(GRADE_CONFIG_FILES[0], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
+
+
+@pytest.fixture
+def first_course_grade_config_with_changed_numbers():
+    with open(GRADE_CONFIG_FILES[0], "r'") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    grade_config_data_changed_numbers = dict()
+    grade_config_data_changed_numbers["grades"] = dict()
+    for key, value in grade_config_data["grades"]["grades"].items():
+        grade_config_data_changed_numbers["grades"][key + 2] = value.copy()
+
+    return ManytaskFinalGradeConfig(**grade_config_data_changed_numbers["grades"])
+
+
+@pytest.fixture
+def second_course_grade_config():
+    with open(GRADE_CONFIG_FILES[1], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
+
+
+@pytest.fixture
+def second_course_grade_config_with_additional_grade():
+    with open(GRADE_CONFIG_FILES[1], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    grade_config_data["grades"]["grades"][3] = [
+        {
+            "percent": 50,
+            "large_count": 1,
+        },
+    ]
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
+
+
 def update_course(
-    db_api: DataBaseApi, course_name: str, ui_config: ManytaskUiConfig, deadlines_config: ManytaskDeadlinesConfig
+    db_api: DataBaseApi,
+    course_name: str,
+    ui_config: ManytaskUiConfig,
+    deadlines_config: ManytaskDeadlinesConfig,
+    final_grade_config: ManytaskFinalGradeConfig | None = None,
 ) -> None:
     """Update created course"""
-    config = ManytaskConfig(version=1, ui=ui_config, deadlines=deadlines_config)
+    config = ManytaskConfig(version=1, ui=ui_config, deadlines=deadlines_config, grades=final_grade_config)
 
     db_api.update_course(course_name=course_name, config=config)
 
 
-def create_course(db_api: DataBaseApi, course_config: CourseConfig, deadlines_config: ManytaskDeadlinesConfig) -> None:
+def create_course(
+    db_api: DataBaseApi,
+    course_config: CourseConfig,
+    deadlines_config: ManytaskDeadlinesConfig,
+    final_grade_config: ManytaskFinalGradeConfig | None = None,
+) -> None:
     """Create and update course"""
     db_api.create_course(settings_config=course_config)
 
@@ -231,6 +295,7 @@ def create_course(db_api: DataBaseApi, course_config: CourseConfig, deadlines_co
             links=course_config.links,
         ),
         deadlines_config,
+        final_grade_config,
     )
 
 
@@ -239,17 +304,25 @@ def edit_course(db_api: DataBaseApi, course_config: CourseConfig) -> None:
 
 
 @pytest.fixture
-def db_api_with_initialized_first_course(db_api, first_course_config, first_course_deadlines_config):
-    create_course(db_api, first_course_config, first_course_deadlines_config)
+def db_api_with_initialized_first_course(
+    db_api, first_course_config, first_course_deadlines_config, first_course_grade_config
+):
+    create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
     return db_api
 
 
 @pytest.fixture
 def db_api_with_two_initialized_courses(
-    db_api, first_course_config, first_course_deadlines_config, second_course_config, second_course_deadlines_config
+    db_api,
+    first_course_config,
+    first_course_deadlines_config,
+    second_course_config,
+    second_course_deadlines_config,
+    first_course_grade_config,
+    second_course_grade_config,
 ):
-    create_course(db_api, first_course_config, first_course_deadlines_config)
-    create_course(db_api, second_course_config, second_course_deadlines_config)
+    create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
+    create_course(db_api, second_course_config, second_course_deadlines_config, second_course_grade_config)
     return db_api
 
 
@@ -308,7 +381,7 @@ def test_not_initialized_course(session, db_api, first_course_config):
     assert max_score_started == 0
 
 
-def test_initialized_course(db_api_with_initialized_first_course, session):
+def test_initialized_course(db_api_with_initialized_first_course, session):  # noqa: PLR0915
     expected_task_groups = 6
     expected_tasks = 19
     bonus_tasks = ("task_0_2", "task_1_3")
@@ -316,6 +389,10 @@ def test_initialized_course(db_api_with_initialized_first_course, session):
     special_tasks = ("task_1_1",)
     disabled_groups = ("group_4",)
     disabled_tasks = ("task_2_1",)
+    grades_order = [5, 4, 3, 2]
+    lowest_grade = 2
+    grade_config_list_length = 2
+    grade_config_lowest_percent = 50
 
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
@@ -367,6 +444,22 @@ def test_initialized_course(db_api_with_initialized_first_course, session):
 
         assert task.score == expected_task_score
 
+    final_grade_config = db_api_with_initialized_first_course.get_grades(FIRST_COURSE_NAME)
+    assert final_grade_config.grades_order == grades_order
+
+    for grade in final_grade_config.grades_order:
+        if grade != lowest_grade:
+            assert isinstance(final_grade_config.grades[grade], list)
+            assert len(final_grade_config.grades[grade]) == grade_config_list_length
+            assert isinstance(final_grade_config.grades[grade][0], dict)
+            assert final_grade_config.grades[grade][0]["percent"] >= grade_config_lowest_percent
+            assert final_grade_config.grades[grade][0]["large_count"] >= 1
+        else:
+            assert isinstance(final_grade_config.grades[grade], list)
+            assert len(final_grade_config.grades[grade]) == 1
+            assert isinstance(final_grade_config.grades[grade][0], dict)
+            assert final_grade_config.grades[grade][0]["percent"] == 0
+
 
 def test_updating_course(
     db_api,
@@ -374,6 +467,7 @@ def test_updating_course(
     first_course_deadlines_config,
     second_course_deadlines_config,
     first_course_updated_ui_config,
+    first_course_grade_config_with_changed_numbers,
     session,
 ):
     expected_task_groups = 8
@@ -384,8 +478,16 @@ def test_updating_course(
     disabled_groups = ("group_6",)
     disabled_tasks = ("task_2_2",)
 
-    create_course(db_api, first_course_config, first_course_deadlines_config)
-    update_course(db_api, FIRST_COURSE_NAME, first_course_updated_ui_config, second_course_deadlines_config)
+    create_course(
+        db_api, first_course_config, first_course_deadlines_config, first_course_grade_config_with_changed_numbers
+    )
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        first_course_updated_ui_config,
+        second_course_deadlines_config,
+        first_course_grade_config_with_changed_numbers,
+    )
 
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
@@ -441,15 +543,20 @@ def test_resync_with_changed_task_name(
     first_course_deadlines_config,
     first_course_deadlines_config_with_changed_task_name,
     first_course_updated_ui_config,
+    first_course_grade_config,
     session,
 ):
     expected_task_groups = 6
     expected_tasks = 20
     disabled_tasks = ("task_0_0", "task_2_1")
 
-    create_course(db_api, first_course_config, first_course_deadlines_config)
+    create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
     update_course(
-        db_api, FIRST_COURSE_NAME, first_course_updated_ui_config, first_course_deadlines_config_with_changed_task_name
+        db_api,
+        FIRST_COURSE_NAME,
+        first_course_updated_ui_config,
+        first_course_deadlines_config_with_changed_task_name,
+        first_course_grade_config,
     )
 
     stats = db_api.get_stats(FIRST_COURSE_NAME)
@@ -1465,3 +1572,36 @@ def test_update_user_profile(db_api, session):
 
     assert updated_user.first_name == "FirstName"
     assert updated_user.last_name == "LastName"
+
+
+def test_grade_config_estimation(
+    db_api_with_two_initialized_courses,
+    first_course_updated_ui_config,
+    second_course_deadlines_config,
+    second_course_grade_config_with_additional_grade,
+    session,
+):
+    mock_scores = [
+        {"percent": 75.0, "large_count": 2, "scores": {}},
+        {"percent": 83.2, "large_count": 3, "scores": {}},
+        {"percent": 92.7, "large_count": 1, "scores": {}},
+        {"percent": 60.4, "large_count": 2, "scores": {}},
+        {"percent": 52.8, "large_count": 0, "scores": {}},
+    ]
+    mock_grades = [4, 5, 2, 4, 2]
+    mock_grades_updated = [4, 5, 3, 4, 2]
+    grade_config_data = db_api_with_initialized_first_course.get_grades(SECOND_COURSE_NAME)
+
+    for i, score in enumerate(mock_scores):
+        assert grade_config_data.evaluate(score) == mock_grades[i]
+
+    update_course(
+        db_api_with_two_initialized_courses,
+        SECOND_COURSE_NAME,
+        first_course_updated_ui_config,
+        second_course_deadlines_config,
+        second_course_grade_config_with_additional_grade,
+    )
+
+    for i, score in enumerate(mock_scores):
+        assert grade_config_data.evaluate(score) == mock_grades_updated[i]
