@@ -95,7 +95,7 @@ def mock_current_time():
 def db_config(db_url):
     return DatabaseConfig(
         database_url=db_url,
-        zero_admin_username="zero_admin",
+        instance_admin_username="instance_admin",
         apply_migrations=True,
     )
 
@@ -986,7 +986,7 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container, first_cou
         db_api = DataBaseApi(
             DatabaseConfig(
                 database_url=postgres_container.get_connection_url(),
-                zero_admin_username="admin",
+                instance_admin_username="admin",
                 apply_migrations=False,
             )
         )
@@ -1421,7 +1421,7 @@ def test_edit_course(db_api_with_initialized_first_course, edited_first_course_c
     )
 
 
-def test_zero_admin_is_in_db_and_set_admin_status(db_api, session):
+def test_zero_instance_admin_is_in_db_and_set_admin_status(db_api, session):
     assert session.query(User).count() == 1
     assert session.query(User).one().is_instance_admin
 
