@@ -1,0 +1,37 @@
+grades:
+  grades:
+    5: [
+      {
+        "percent": 90,
+        "large_count": 1,
+      },
+      {
+        "percent": 80,
+        "large_count": 2,
+      }
+    ]
+    4: [
+      {
+        "percent": 80,
+        "large_count": 1,
+      },
+      {
+        "percent": 70,
+        "large_count": 2,
+      }
+    ]
+    3: [
+      {
+        "percent": 60,
+        "large_count": 1,
+      },
+      {
+        "percent": 50,
+        "large_count": 2,
+      }
+    ]
+    2: [
+      {
+        "": 0
+      }
+    ]
