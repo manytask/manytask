@@ -1,4 +1,4 @@
-# Development
+# Development guide
 
 ## How to deploy manytask locally
 Use `WSL 2`, if you are using Windows
