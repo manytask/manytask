@@ -448,7 +448,7 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
     final_grade_config = db_api_with_initialized_first_course.get_grades(FIRST_COURSE_NAME)
     assert final_grade_config.grades_order == grades_order
 
-    print(final_grade_config, file=stderr)
+    print("final_grade_config before check", final_grade_config, file=stderr)
 
     for grade in final_grade_config.grades_order:
         if grade != lowest_grade:

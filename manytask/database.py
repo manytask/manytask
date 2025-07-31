@@ -2,7 +2,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from sys import stderr
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 from zoneinfo import ZoneInfo
 
@@ -916,22 +915,18 @@ class DataBaseApi(StorageApi):
 
             # add new grades
             for grade in config_complex_formulas_grades - existing_complex_formulas_grades:
-                print(f"Adding new grade {grade} for course {course_name}", file=stderr)
                 complex_formula = self._update_or_create(
                     session, models.ComplexFormula, grade=grade, course_id=course.id
                 )
-                print("#0", complex_formula.primary_formulas, file=stderr)
 
                 for primary_formula in grades_config.grades[grade]:
                     primary_formula_dict = {str(k): v for k, v in primary_formula.items()}
-                    primary_formula_added = self._update_or_create(
+                    self._update_or_create(
                         session,
                         models.PrimaryFormula,
                         create_defaults={"primary_formula": primary_formula_dict},
                         complex_id=complex_formula.id,
                     )
-                    print("#1", primary_formula_dict, file=stderr)
-                    print("#2", primary_formula_added.primary_formula, file=stderr)
 
             # remove deleted grafes
             for grade in existing_complex_formulas_grades - config_complex_formulas_grades:
