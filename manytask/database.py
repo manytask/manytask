@@ -257,13 +257,22 @@ class DataBaseApi(StorageApi):
             course = DataBaseApi._get(session, models.Course, name=course_name)
 
             grades: dict[int, list[dict[Path, int | float]]] = {}
-            for grade in course.course_grades:
-                formulas = []
-                for f in grade.primary_formulas.all():
-                    f.primary_formula
-                    formulas.append({Path(k): v for k, v in f.primary_formula.items()})
 
-                grades[grade.grade] = formulas
+            complex_formulas = (
+                session.query(models.ComplexFormula).filter(models.ComplexFormula.course_id == course.id).all()
+            )
+
+            for complex_formula in complex_formulas:
+                primary_formulas = (
+                    session.query(models.PrimaryFormula)
+                    .filter(models.PrimaryFormula.complex_id == complex_formula.id)
+                    .all()
+                )
+
+                grades[complex_formula.grade] = [
+                    {Path(k): v for k, v in primary_formula.primary_formula.items()}
+                    for primary_formula in primary_formulas
+                ]
 
             grades_order = sorted(list(grades.keys()), reverse=True)
             return ManytaskFinalGradeConfig(grades=grades, grades_order=grades_order)
