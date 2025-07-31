@@ -172,17 +172,17 @@ def signup() -> ResponseReturnValue:
         firstname = request.form["firstname"].strip()
         lastname = request.form["lastname"].strip()
 
-        # create user in database if not yet there
-        app.storage_api.create_user_if_not_exist(username, firstname, lastname)
-
         # register user in gitlab
-        app.rms_api.register_new_user(
+        rms_id = app.rms_api.register_new_user(
             username,
             firstname,
             lastname,
             request.form["email"].strip(),
             request.form["password"],
         )
+
+        # create user in database if not yet there
+        app.storage_api.create_user_if_not_exist(username, firstname, lastname, rms_id)
 
     # render template with error... if error
     except Exception as e:

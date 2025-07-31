@@ -48,7 +48,7 @@ class GitLabApi(RmsApi):
         lastname: str,
         email: str,
         password: str,
-    ) -> None:
+    ) -> int:
         logger.info(f"Creating user (username={username})")
         # was invented to distinguish between different groups of users automatically by secret
         new_user = self._gitlab.users.create(
@@ -62,6 +62,7 @@ class GitLabApi(RmsApi):
             }
         )
         logger.info(f"Gitlab user created {new_user}")
+        return new_user._attrs["id"]
 
     def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
         short_group_name = group_name.split("/")[-1]

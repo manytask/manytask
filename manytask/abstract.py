@@ -186,7 +186,7 @@ class RmsApi(ABC):
         lastname: str,
         email: str,
         password: str,
-    ) -> None: ...
+    ) -> int: ...
 
     @abstractmethod
     def create_public_repo(
