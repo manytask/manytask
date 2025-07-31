@@ -911,7 +911,7 @@ class DataBaseApi(StorageApi):
                 complex_formula = self._update_or_create(
                     session, models.ComplexFormula, grade=grade, course_id=course.id
                 )
-                print(complex_formula, file=stderr)
+                print(complex_formula.primary_formulas, file=stderr)
 
                 for primary_formula in grades_config.grades[grade]:
                     primary_formula_dict = {str(k): v for k, v in primary_formula.items()}
@@ -921,7 +921,7 @@ class DataBaseApi(StorageApi):
                         create_defaults={"primary_formula": primary_formula_dict},
                         complex_id=complex_formula.id,
                     )
-                    print(primary_formula_added, file=stderr)
+                    print(primary_formula_added.primary_formula, file=stderr)
 
             # remove deleted grafes
             for grade in existing_complex_formulas_grades - config_complex_formulas_grades:
