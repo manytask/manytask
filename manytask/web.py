@@ -106,7 +106,17 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
+        try:
+            student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
+        except Exception as e:
+            logger.warning(f"Can not find user {student.username}: {e}")
+            return render_template(
+                "signup.html",
+                error_message=str(e),
+                course_name=course.course_name,
+                course_favicon=app.favicon,
+                base_url=app.rms_api.base_url,
+            )
 
     # update cache if more than 1h passed or in debug mode
     try:
@@ -295,7 +305,17 @@ def show_database(course_name: str) -> ResponseReturnValue:
         )
 
         student = app.gitlab_api.get_student(user_id=student_id)
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
+        try:
+            student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
+        except Exception as e:
+            logger.warning(f"Can not find user {student.username}: {e}")
+            return render_template(
+                "signup.html",
+                error_message=str(e),
+                course_name=course.course_name,
+                course_favicon=app.favicon,
+                base_url=app.rms_api.base_url,
+            )
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
