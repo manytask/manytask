@@ -472,7 +472,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert session.query(UserOnCourse).count() == 0
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
 
     assert session.query(User).count() == USER_EXPECTED
@@ -541,7 +541,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
 
     assert (
@@ -588,7 +588,9 @@ def test_store_score_with_changed_task_name(
 ):
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
-    db_api.create_user_if_not_exist(constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME)
+    db_api.create_user_if_not_exist(
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
+    )
 
     db_api.store_score(
         FIRST_COURSE_NAME,
@@ -620,7 +622,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     assert session.query(UserOnCourse).count() == 0
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
 
     assert session.query(User).count() == USER_EXPECTED
@@ -632,6 +634,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
         course_admin=False,
     )
 
@@ -655,6 +658,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
         course_admin=True,
     )
 
@@ -675,6 +679,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
         course_admin=True,
     )
 
@@ -696,7 +701,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_stats_ratio = 0.5
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
-        constants.TEST_USERNAME_1, constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1
+        constants.TEST_USERNAME_1, constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1, constants.TEST_RMS_ID_1
     )
 
     db_api_with_initialized_first_course.store_score(
@@ -715,7 +720,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
     )
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
-        constants.TEST_USERNAME_2, constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2
+        constants.TEST_USERNAME_2, constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2, constants.TEST_RMS_ID_2
     )
 
     assert (
@@ -767,7 +772,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
 
     db_api_with_two_initialized_courses.store_score(
@@ -833,10 +838,10 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_stats_ratio = 0.5
 
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME_1, constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1
+        constants.TEST_USERNAME_1, constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1, constants.TEST_RMS_ID_1
     )
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME_2, constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2
+        constants.TEST_USERNAME_2, constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2, constants.TEST_RMS_ID_2
     )
 
     db_api_with_two_initialized_courses.store_score(
@@ -1025,13 +1030,14 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
 
     session.add(user)
     session.commit()
 
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
 
     score = db_api_with_two_initialized_courses.store_score(
@@ -1050,7 +1056,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
 
     def failing_update(_, score):
@@ -1203,13 +1209,14 @@ def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, 
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
     session.add(user)
     session.commit()
 
     assert session.query(User).filter_by(username=constants.TEST_USERNAME).one().id == user.id
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
     assert session.query(User).filter_by(username=constants.TEST_USERNAME).one().id == user.id
 
@@ -1217,7 +1224,7 @@ def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, 
 def test_create_user_if_not_exist_nonexisting(db_api_with_two_initialized_courses, session):
     assert session.query(User).filter_by(username=constants.TEST_USERNAME).one_or_none() is None
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
     assert session.query(User).filter_by(username=constants.TEST_USERNAME).one()
 
@@ -1432,6 +1439,7 @@ def test_zero_instance_admin_is_in_db_and_set_admin_status(db_api, session):
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
 
     assert not session.query(User).filter_by(username=constants.TEST_USERNAME).one().is_instance_admin
@@ -1446,6 +1454,7 @@ def test_update_user_profile(db_api, session):
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
 
     db_api.update_user_profile(constants.TEST_USERNAME, "NewFirstName", "NewLastName")
