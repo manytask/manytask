@@ -231,7 +231,7 @@ def first_course_grade_config():
 
 @pytest.fixture
 def first_course_grade_config_with_changed_numbers():
-    with open(GRADE_CONFIG_FILES[0], "r'") as f:
+    with open(GRADE_CONFIG_FILES[0], "r") as f:
         grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
 
     grade_config_data_changed_numbers = dict()
@@ -239,7 +239,7 @@ def first_course_grade_config_with_changed_numbers():
     for key, value in grade_config_data["grades"]["grades"].items():
         grade_config_data_changed_numbers["grades"][key + 2] = value.copy()
 
-    return ManytaskFinalGradeConfig(**grade_config_data_changed_numbers["grades"])
+    return ManytaskFinalGradeConfig(**grade_config_data_changed_numbers)
 
 
 @pytest.fixture
@@ -316,9 +316,9 @@ def db_api_with_two_initialized_courses(
     db_api,
     first_course_config,
     first_course_deadlines_config,
+    first_course_grade_config,
     second_course_config,
     second_course_deadlines_config,
-    first_course_grade_config,
     second_course_grade_config,
 ):
     create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
