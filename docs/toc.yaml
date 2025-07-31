@@ -30,6 +30,8 @@ items:
     href: production.md
   - name: Development setup
     href: dev.md
+  - name: REST API
+    href: api.md
   - name: Development strategy
     href: strategy.md
   - name: Deadline schedule
