@@ -1577,7 +1577,7 @@ def test_update_user_profile(db_api, session):
     assert updated_user.last_name == "LastName"
 
 
-def test_grade_config_estimation(
+def test_grade_config_estimation_with_adding_grade(
     db_api_with_two_initialized_courses,
     first_course_updated_ui_config,
     second_course_deadlines_config,
@@ -1604,6 +1604,50 @@ def test_grade_config_estimation(
         first_course_updated_ui_config,
         second_course_deadlines_config,
         second_course_grade_config_with_additional_grade,
+    )
+
+    grade_config_data = db_api_with_two_initialized_courses.get_grades(SECOND_COURSE_NAME)
+
+    for i, score in enumerate(mock_scores):
+        assert grade_config_data.evaluate(score) == mock_grades_updated[i]
+
+
+def test_grade_config_estimation_with_removing_grade(
+    db_api_with_two_initialized_courses,
+    first_course_updated_ui_config,
+    second_course_deadlines_config,
+    second_course_grade_config,
+    second_course_grade_config_with_additional_grade,
+    session,
+):
+    update_course(
+        db_api_with_two_initialized_courses,
+        SECOND_COURSE_NAME,
+        first_course_updated_ui_config,
+        second_course_deadlines_config,
+        second_course_grade_config_with_additional_grade,
+    )
+
+    mock_scores = [
+        {"percent": 75.0, "large_count": 2, "scores": {}},
+        {"percent": 83.2, "large_count": 3, "scores": {}},
+        {"percent": 92.7, "large_count": 1, "scores": {}},
+        {"percent": 60.4, "large_count": 2, "scores": {}},
+        {"percent": 52.8, "large_count": 0, "scores": {}},
+    ]
+    mock_grades = [4, 5, 3, 4, 2]
+    mock_grades_updated = [4, 5, 2, 4, 2]
+    grade_config_data = db_api_with_two_initialized_courses.get_grades(SECOND_COURSE_NAME)
+
+    for i, score in enumerate(mock_scores):
+        assert grade_config_data.evaluate(score) == mock_grades[i]
+
+    update_course(
+        db_api_with_two_initialized_courses,
+        SECOND_COURSE_NAME,
+        first_course_updated_ui_config,
+        second_course_deadlines_config,
+        second_course_grade_config,
     )
 
     grade_config_data = db_api_with_two_initialized_courses.get_grades(SECOND_COURSE_NAME)
