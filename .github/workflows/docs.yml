@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: '20.18.1'
       - name: Build
-        uses: diplodoc-platform/docs-build-action@latest
+        uses: diplodoc-platform/docs-build-action@v3.1.12
         with:
           src-root: './docs'
           build-root: './build'
