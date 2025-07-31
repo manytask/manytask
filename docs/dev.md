@@ -24,7 +24,7 @@ Use `WSL 2`, if you are using Windows
    
 
 4. Copy `.env.example` to `.env` in your working folder. In this file:
-- Set `FLASK_SECRET_KEY` to random string
+- Set `FLASK_SECRET_KEY` to a random string
 - Set `DATABASE_URL` to `psql` URL above
 - Set the username for the first instance admin with 'INITIAL_INSTANCE_ADMIN'
 
