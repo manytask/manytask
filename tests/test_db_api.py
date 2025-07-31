@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from sys import stderr
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -24,7 +25,6 @@ from manytask.course import CourseConfig
 from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests import constants
-from sys import stderr
 
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",

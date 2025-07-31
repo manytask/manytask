@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from sys import stderr
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 from zoneinfo import ZoneInfo
 
@@ -27,7 +28,6 @@ from .config import (
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
-from sys import stderr
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
