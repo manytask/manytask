@@ -37,6 +37,11 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '20.18.1'
+      - name: Install dependencies
+        run: |
+          npm install @diplodoc/cli
+          npm install undici@7.12.0
+          npm dedupe
       - name: Build
         uses: diplodoc-platform/docs-build-action@v3.1.12
         with:
