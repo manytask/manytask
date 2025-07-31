@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from sys import stderr
+from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -448,20 +448,18 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
     final_grade_config = db_api_with_initialized_first_course.get_grades(FIRST_COURSE_NAME)
     assert final_grade_config.grades_order == grades_order
 
-    print("final_grade_config before check", final_grade_config, file=stderr)
-
     for grade in final_grade_config.grades_order:
         if grade != lowest_grade:
             assert isinstance(final_grade_config.grades[grade], list)
             assert len(final_grade_config.grades[grade]) == grade_config_list_length
             assert isinstance(final_grade_config.grades[grade][0], dict)
-            assert final_grade_config.grades[grade][0]["percent"] >= grade_config_lowest_percent
-            assert final_grade_config.grades[grade][0]["large_count"] >= 1
+            assert final_grade_config.grades[grade][0][Path("percent")] >= grade_config_lowest_percent
+            assert final_grade_config.grades[grade][0][Path("large_count")] >= 1
         else:
             assert isinstance(final_grade_config.grades[grade], list)
             assert len(final_grade_config.grades[grade]) == 1
             assert isinstance(final_grade_config.grades[grade][0], dict)
-            assert final_grade_config.grades[grade][0]["percent"] == 0
+            assert final_grade_config.grades[grade][0][Path("percent")] == 0
 
 
 def test_updating_course(
