@@ -9,7 +9,7 @@ Use `WSL 2`, if you are using Windows
      sudo systemctl enable postgresql
     ```
    
-2. Now it is necessary to create `postgres` user and database:
+2. Create `postgres` user and database:
    ```bash
    sudo -u postgres psql
    CREATE USER <username> WITH PASSWORD '<password>' CREATEDB;
