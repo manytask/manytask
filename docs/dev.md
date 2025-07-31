@@ -27,7 +27,6 @@ Use `WSL 2`, if you are using Windows
 - Set `FLASK_SECRET_KEY` to random string
 - Set `DATABASE_URL` to `psql` URL above
 - Set the username for the first instance admin with 'INITIAL_INSTANCE_ADMIN'
-previous point, in `ZERO_ADMIN` write yours username.
 
 5. Try to start `Manytask`:
    ```bash
