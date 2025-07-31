@@ -110,7 +110,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 
         if valid_session(session):
             try:
-                app.gitlab_api.check_authenticated_rms_user(session["gitlab"]["access_token"])
+                app.rms_api.check_authenticated_rms_user(session["gitlab"]["access_token"])
             except (HTTPError, KeyError) as e:
                 logger.error(f"Failed login in gitlab, redirect to login: {e}", exc_info=True)
                 return __redirect_to_login()
