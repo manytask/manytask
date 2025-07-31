@@ -27,6 +27,7 @@ from .config import (
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
+from sys import stderr
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -906,6 +907,7 @@ class DataBaseApi(StorageApi):
 
             # add new grades
             for grade in config_complex_formulas_grades - existing_complex_formulas_grades:
+                print(f"Adding new grade {grade} for course {course_name}", file=stderr)
                 complex_formula = self._update_or_create(
                     session, models.ComplexFormula, grade=grade, course_id=course.id
                 )

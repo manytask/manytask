@@ -24,6 +24,7 @@ from manytask.course import CourseConfig
 from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests import constants
+from sys import stderr
 
 DEADLINES_CONFIG_FILES = [  # part of manytask config file
     "tests/.deadlines.test.yml",
@@ -446,6 +447,8 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
 
     final_grade_config = db_api_with_initialized_first_course.get_grades(FIRST_COURSE_NAME)
     assert final_grade_config.grades_order == grades_order
+
+    print(final_grade_config, file=stderr)
 
     for grade in final_grade_config.grades_order:
         if grade != lowest_grade:
