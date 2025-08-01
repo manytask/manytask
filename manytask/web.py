@@ -183,7 +183,13 @@ def signup() -> ResponseReturnValue:
             )
         except Exception:
             gitlab_access_token: str = session["gitlab"]["access_token"]
-            rms_id = app.rms_api.get_authenticated_rms_user(gitlab_access_token).id
+            rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
+            if rms_user.username != username:
+                raise Exception(
+                    f"You are trying to create user with username '{username}'."
+                    f"However, user that is currently logged to RMS has username '{rms_user.username}'."
+                )
+            rms_id = rms_user.id
 
         # create user in database if not yet there
         app.storage_api.create_user_if_not_exist(username, firstname, lastname, rms_id)
