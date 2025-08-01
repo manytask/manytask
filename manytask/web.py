@@ -105,8 +105,8 @@ def course_page(course_name: str) -> ResponseReturnValue:
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        student = app.gitlab_api.get_student(user_id=student_id)
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
+        rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     # update cache if more than 1h passed or in debug mode
     try:
@@ -218,8 +218,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error(f"CSRF validation failed: {e}")
         return render_template("create_project.html", error_message="CSRF Error")
 
-    username: str = session["gitlab"]["username"]
-    is_course_admin = app.storage_api.check_if_instance_admin(username)
+    gitlab_access_token: str = session["gitlab"]["access_token"]
+    rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
 
     if not secrets.compare_digest(request.form["secret"], course.registration_secret):
         if secrets.compare_digest(request.form["secret"], course.token):
@@ -235,9 +235,9 @@ def create_project(course_name: str) -> ResponseReturnValue:
     try:
         app.storage_api.sync_stored_user(
             course.course_name,
-            username,
-            app.rms_api.get_url_for_repo(username, course.gitlab_course_students_group),
-            is_course_admin,
+            rms_user.username,
+            app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
+            False,
         )
     except Exception as e:
         logger.warning(f"Failed to sync user to the database: {e}")
@@ -250,7 +250,9 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     # Create use if needed
     try:
-        app.rms_api.create_project(username, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        app.rms_api.create_project(
+            rms_user.username, course.gitlab_course_students_group, course.gitlab_course_public_repo
+        )
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
         return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
@@ -305,8 +307,8 @@ def show_database(course_name: str) -> ResponseReturnValue:
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        student = app.gitlab_api.get_student(user_id=student_id)
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
+        rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
