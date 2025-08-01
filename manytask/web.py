@@ -214,7 +214,9 @@ def create_project(course_name: str) -> ResponseReturnValue:
     gitlab_access_token: str = session["gitlab"]["access_token"]
     rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
 
-    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
+    # Set user to be course admin if they provided course token as a secret
+    is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
+    if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
         return render_template(
             "create_project.html",
             error_message="Invalid secret",
@@ -230,7 +232,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
         course.course_name,
         rms_user.username,
         app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
-        False,
+        is_course_admin,
     )
 
     # Create use if needed
