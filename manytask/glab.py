@@ -276,7 +276,7 @@ class GitLabApi(RmsApi):
         response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
         try:
             response.raise_for_status()
-        except (HTTPError, KeyError) as e:
+        except HTTPError as e:
             logger.info(f"User is not logged to GitLab: {e}", exc_info=True)
             return False
         return True
