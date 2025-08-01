@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Any
-from requests.exceptions import HTTPError
 
 import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
+from requests.exceptions import HTTPError
 
 from .abstract import RmsApi, RmsUser
 
