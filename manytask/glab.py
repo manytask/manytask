@@ -8,6 +8,7 @@ import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
+from gitlab import GitlabAuthenticationError, GitlabCreateError
 
 from .abstract import RmsApi, RmsUser
 
@@ -49,20 +50,22 @@ class GitLabApi(RmsApi):
         email: str,
         password: str,
     ) -> int:
-        logger.info(f"Creating user (username={username})")
-        # was invented to distinguish between different groups of users automatically by secret
-        new_user = self._gitlab.users.create(
-            {
-                "email": email,
-                "username": username,
-                "name": f"{firstname} {lastname}",
-                "external": False,
-                "password": password,
-                "skip_confirmation": True,
-            }
-        )
-        logger.info(f"Gitlab user created {new_user}")
-        return new_user._attrs["id"]
+        try:
+            logger.info(f"Creating user (username={username})")
+            new_user = self._gitlab.users.create(
+                {
+                    "email": email,
+                    "username": username,
+                    "name": f"{firstname} {lastname}",
+                    "external": False,
+                    "password": password,
+                    "skip_confirmation": True,
+                }
+            )
+            logger.info(f"Gitlab user created {new_user}")
+            return new_user._attrs["id"]
+        except (GitlabAuthenticationError, GitlabCreateError) as e:
+            raise GitLabApiException(f"Gitlab user creation failed for {username}: {e}")
 
     def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
         short_group_name = group_name.split("/")[-1]

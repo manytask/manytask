@@ -172,14 +172,18 @@ def signup() -> ResponseReturnValue:
         firstname = request.form["firstname"].strip()
         lastname = request.form["lastname"].strip()
 
-        # register user in gitlab
-        rms_id = app.rms_api.register_new_user(
-            username,
-            firstname,
-            lastname,
-            request.form["email"].strip(),
-            request.form["password"],
-        )
+        try:
+            # register user in gitlab
+            rms_id = app.rms_api.register_new_user(
+                username,
+                firstname,
+                lastname,
+                request.form["email"].strip(),
+                request.form["password"],
+            )
+        except Exception:
+            gitlab_access_token: str = session["gitlab"]["access_token"]
+            rms_id = app.rms_api.get_authenticated_rms_user(gitlab_access_token).id
 
         # create user in database if not yet there
         app.storage_api.create_user_if_not_exist(username, firstname, lastname, rms_id)
@@ -222,16 +226,13 @@ def create_project(course_name: str) -> ResponseReturnValue:
     rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
 
     if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        if secrets.compare_digest(request.form["secret"], course.token):
-            is_course_admin = True
-        else:
-            return render_template(
-                "create_project.html",
-                error_message="Invalid secret",
-                course_name=course.course_name,
-                course_favicon=app.favicon,
-                base_url=app.rms_api.base_url,
-            )
+        return render_template(
+            "create_project.html",
+            error_message="Invalid secret",
+            course_name=course.course_name,
+            course_favicon=app.favicon,
+            base_url=app.rms_api.base_url,
+        )
     try:
         app.storage_api.sync_stored_user(
             course.course_name,
