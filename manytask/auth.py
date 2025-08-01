@@ -2,7 +2,6 @@ import logging
 from functools import wraps
 from http import HTTPStatus
 from typing import Any, Callable
-from urllib.error import HTTPError
 
 from authlib.integrations.flask_client import OAuth
 from flask import abort, current_app, flash, redirect, request, session, url_for
