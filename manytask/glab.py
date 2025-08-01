@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Any
-from urllib.error import HTTPError
+from requests.exceptions import HTTPError
 
 import gitlab
 import gitlab.const
