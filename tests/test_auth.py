@@ -65,8 +65,8 @@ def mock_gitlab_api():
         def get_rms_user_by_id(user_id: int):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
 
-        def check_authenticated_rms_user(self, gitlab_access_token: str):
-            pass
+        def check_user_authenticated_in_rms(self, gitlab_access_token: str):
+            return True
 
         def get_authenticated_rms_user(self, gitlab_access_token: str):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)

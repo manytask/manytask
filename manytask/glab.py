@@ -8,6 +8,7 @@ import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
+from urllib.error import HTTPError
 
 from .abstract import RmsApi, RmsUser
 
@@ -267,13 +268,18 @@ class GitLabApi(RmsApi):
         logger.info(f'User found: "{rms_user.username}"')
         return rms_user
 
-    def check_authenticated_rms_user(
+    def check_user_authenticated_in_rms(
         self,
         oauth_token: str,
-    ) -> None:
+    ) -> bool:
         headers = {"Authorization": "Bearer " + oauth_token}
         response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except (HTTPError, KeyError) as e:
+            logger.info(f"User is not logged to GitLab: {e}", exc_info=True)
+            return False
+        return True
 
     def get_authenticated_rms_user(
         self,

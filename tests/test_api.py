@@ -202,8 +202,8 @@ def mock_gitlab_api(mock_rms_user):
                 return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
             raise GitLabApiException("User not found")
 
-        def check_authenticated_rms_user(self, access_token):
-            pass
+        def check_user_authenticated_in_rms(self, access_token):
+            return True
 
         def get_authenticated_rms_user(self, access_token):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
