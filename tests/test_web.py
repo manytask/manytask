@@ -72,7 +72,7 @@ def mock_gitlab_api():
         def register_new_user(username: str, firstname: str, lastname: str, email: str, password: str) -> int:
             if username != TEST_USERNAME:
                 raise Exception("Registration failed: Invalid username")
-            pass
+            return 1
 
         @staticmethod
         def get_rms_user_by_id(user_id: int):
