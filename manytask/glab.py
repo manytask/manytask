@@ -8,6 +8,7 @@ import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
+from gitlab import GitlabAuthenticationError, GitlabCreateError
 
 from .abstract import RmsApi, RmsUser
 
@@ -48,20 +49,23 @@ class GitLabApi(RmsApi):
         lastname: str,
         email: str,
         password: str,
-    ) -> None:
-        logger.info(f"Creating user (username={username})")
-        # was invented to distinguish between different groups of users automatically by secret
-        new_user = self._gitlab.users.create(
-            {
-                "email": email,
-                "username": username,
-                "name": f"{firstname} {lastname}",
-                "external": False,
-                "password": password,
-                "skip_confirmation": True,
-            }
-        )
-        logger.info(f"Gitlab user created {new_user}")
+    ) -> int:
+        try:
+            logger.info(f"Creating user (username={username})")
+            new_user = self._gitlab.users.create(
+                {
+                    "email": email,
+                    "username": username,
+                    "name": f"{firstname} {lastname}",
+                    "external": False,
+                    "password": password,
+                    "skip_confirmation": True,
+                }
+            )
+            logger.info(f"Gitlab user created {new_user}")
+            return new_user._attrs["id"]
+        except (GitlabAuthenticationError, GitlabCreateError) as e:
+            raise GitLabApiException(f"Gitlab user creation failed for {username}: {e}")
 
     def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
         short_group_name = group_name.split("/")[-1]
@@ -153,10 +157,12 @@ class GitLabApi(RmsApi):
 
     def create_project(
         self,
-        rms_user: RmsUser,
+        username: str,
         course_students_group: str,
         course_public_repo: str,
     ) -> None:
+        rms_user = self.get_rms_user_by_username(username)
+
         course_group = self._get_group_by_name(course_students_group)
 
         gitlab_project_path = f"{course_students_group}/{rms_user.username}"
