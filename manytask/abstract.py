@@ -249,10 +249,10 @@ class RmsApi(ABC):
     ) -> RmsUser: ...
 
     @abstractmethod
-    def check_authenticated_rms_user(
+    def check_user_authenticated_in_rms(
         self,
         oauth_token: str,
-    ) -> None: ...
+    ) -> bool: ...
 
     @abstractmethod
     def get_authenticated_rms_user(
