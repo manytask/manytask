@@ -7,24 +7,6 @@ from manytask.abstract import StoredUser
 from manytask.database_utils import get_database_table_data
 from tests import constants
 
-TASK_1 = "task1"
-TASK_2 = "task2"
-TASK_3 = "task3"
-TASK_LARGE = "task_large"
-
-STUDENT_1 = "student1"
-STUDENT_2 = "student2"
-
-STUDENT_NAMES = {
-    STUDENT_1: [constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1],
-    STUDENT_2: [constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2],
-}
-
-SCORES = {
-    STUDENT_1: {TASK_1: 100, TASK_2: 90, TASK_LARGE: 200, "total": 390, "large_count": 1},
-    STUDENT_2: {TASK_1: 80, TASK_2: 85, TASK_LARGE: 0, "total": 165, "large_count": 0},
-}
-
 
 @pytest.fixture
 def app():
@@ -49,10 +31,10 @@ def app():
                 self.MockGroup(
                     [
                         # name, enabled
-                        self.MockTask(TASK_1, 10, True, False, False),
-                        self.MockTask(TASK_2, 20, True, True, False),
-                        self.MockTask(TASK_3, 30, False, False, False),
-                        self.MockTask(TASK_LARGE, 200, True, False, True),
+                        self.MockTask(constants.TASK_1, 10, True, False, False),
+                        self.MockTask(constants.TASK_2, 20, True, True, False),
+                        self.MockTask(constants.TASK_3, 30, False, False, False),
+                        self.MockTask(constants.TASK_LARGE, 200, True, False, True),
                     ]
                 )
             ]
@@ -64,29 +46,29 @@ def app():
         def get_stored_user(_course_name, username):
             return StoredUser(
                 username=username,
-                first_name=STUDENT_NAMES[username][0],
-                last_name=STUDENT_NAMES[username][1],
+                first_name=constants.STUDENT_NAMES[username][0],
+                last_name=constants.STUDENT_NAMES[username][1],
                 course_admin=False,
             )
 
         @staticmethod
         def get_all_scores_with_names(_course_name):
             return {
-                STUDENT_1: (
+                constants.STUDENT_1: (
                     {
-                        TASK_1: SCORES[STUDENT_1][TASK_1],
-                        TASK_2: SCORES[STUDENT_1][TASK_2],
-                        TASK_LARGE: SCORES[STUDENT_1][TASK_LARGE],
+                        constants.TASK_1: constants.SCORES[constants.STUDENT_1][constants.TASK_1],
+                        constants.TASK_2: constants.SCORES[constants.STUDENT_1][constants.TASK_2],
+                        constants.TASK_LARGE: constants.SCORES[constants.STUDENT_1][constants.TASK_LARGE],
                     },
-                    STUDENT_NAMES[STUDENT_1],
+                    constants.STUDENT_NAMES[constants.STUDENT_1],
                 ),
-                STUDENT_2: (
+                constants.STUDENT_2: (
                     {
-                        TASK_1: SCORES[STUDENT_2][TASK_1],
-                        TASK_2: SCORES[STUDENT_2][TASK_2],
-                        TASK_LARGE: SCORES[STUDENT_2][TASK_LARGE],
+                        constants.TASK_1: constants.SCORES[constants.STUDENT_2][constants.TASK_1],
+                        constants.TASK_2: constants.SCORES[constants.STUDENT_2][constants.TASK_2],
+                        constants.TASK_LARGE: constants.SCORES[constants.STUDENT_2][constants.TASK_LARGE],
                     },
-                    STUDENT_NAMES[STUDENT_2],
+                    constants.STUDENT_NAMES[constants.STUDENT_2],
                 ),
             }
 
@@ -122,24 +104,24 @@ def test_get_database_table_data(app):
         tasks = result["tasks"]
         # Only enabled tasks
         assert len(tasks) == expected_tasks_count
-        assert tasks[0]["name"] == TASK_1
-        assert tasks[1]["name"] == TASK_2
-        assert tasks[2]["name"] == TASK_LARGE
+        assert tasks[0]["name"] == constants.TASK_1
+        assert tasks[1]["name"] == constants.TASK_2
+        assert tasks[2]["name"] == constants.TASK_LARGE
         assert all(task["score"] == 0 for task in tasks)
 
         students = result["students"]
         assert len(students) == expected_students_count
 
-        for student_id in [STUDENT_1, STUDENT_2]:
+        for student_id in [constants.STUDENT_1, constants.STUDENT_2]:
             student = next(s for s in students if s["username"] == student_id)
-            assert student["first_name"] == STUDENT_NAMES[student_id][0]
-            assert student["last_name"] == STUDENT_NAMES[student_id][1]
-            assert student["total_score"] == SCORES[student_id]["total"]
-            assert student["large_count"] == SCORES[student_id]["large_count"]
+            assert student["first_name"] == constants.STUDENT_NAMES[student_id][0]
+            assert student["last_name"] == constants.STUDENT_NAMES[student_id][1]
+            assert student["total_score"] == constants.SCORES[student_id]["total"]
+            assert student["large_count"] == constants.SCORES[student_id]["large_count"]
             assert student["scores"] == {
-                TASK_1: SCORES[student_id][TASK_1],
-                TASK_2: SCORES[student_id][TASK_2],
-                TASK_LARGE: SCORES[student_id][TASK_LARGE],
+                constants.TASK_1: constants.SCORES[student_id][constants.TASK_1],
+                constants.TASK_2: constants.SCORES[student_id][constants.TASK_2],
+                constants.TASK_LARGE: constants.SCORES[student_id][constants.TASK_LARGE],
             }
 
 
