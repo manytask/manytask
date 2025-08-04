@@ -61,21 +61,17 @@ def mock_gitlab_api():
 
         @staticmethod
         def get_student(user_id: int):
-            return Student(
-                id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_STUDENT_NAME
-            )
+            return Student(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_NAME)
 
         def get_student_by_username(self, username: str) -> Student:
             return Student(
                 id=1,
                 username=username,
-                name=constants.TEST_STUDENT_NAME,
+                name=constants.TEST_NAME,
             )
 
         def get_authenticated_student(self, gitlab_access_token: str):
-            return Student(
-                id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_STUDENT_NAME
-            )
+            return Student(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_NAME)
 
         @staticmethod
         def check_project_exists(username: str, course_students_group: str):
@@ -83,9 +79,7 @@ def mock_gitlab_api():
 
         @staticmethod
         def _parse_user_to_student(user: dict[str, Any]):
-            return Student(
-                id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_STUDENT_NAME
-            )
+            return Student(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_NAME)
 
     return MockGitlabApi()
 
@@ -426,7 +420,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
     ):
         app.oauth = mock_gitlab_oauth
         mock_get_authenticated_student.return_value = Student(
-            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_STUDENT_NAME
+            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_NAME
         )
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
@@ -471,7 +465,7 @@ def test_login_finish_get_with_code(app, mock_gitlab_oauth):
         app.oauth = mock_gitlab_oauth
 
         mock_get_authenticated_student.return_value = Student(
-            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_STUDENT_NAME
+            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_NAME
         )
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {

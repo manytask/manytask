@@ -26,7 +26,7 @@ def setup_environment(monkeypatch):
     if not os.getenv("MANYTASK_COURSE_TOKEN"):
         monkeypatch.setenv("MANYTASK_COURSE_TOKEN", "test_token")
     monkeypatch.setenv("FLASK_SECRET_KEY", "test_key")
-    monkeypatch.setenv("constants.TESTING", "true")
+    monkeypatch.setenv("TESTING", "true")
     yield
 
 
@@ -34,7 +34,7 @@ def setup_environment(monkeypatch):
 def app(mock_storage_api, mock_gitlab_api):
     app = Flask(__name__)
     app.config["DEBUG"] = False
-    app.config["constants.TESTING"] = True
+    app.config["TESTING"] = True
     app.secret_key = constants.TEST_SECRET_KEY
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
@@ -416,7 +416,7 @@ def test_update_database_not_ready(app, authenticated_client):
 def test_requires_token_invalid_token(app):
     client = app.test_client()
     headers = {"Authorization": "Bearer invalid_token"}
-    response = client.post("/api/{constants.TEST_COURSE_NAME}/report", headers=headers)
+    response = client.post(f"/api/{constants.TEST_COURSE_NAME}/report", headers=headers)
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 

@@ -1,8 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-# common constats
-# class CommonConstants:
+# common
 TEST_USERNAME = "username"
 TEST_FIRST_NAME = "First"
 TEST_LAST_NAME = "Last"
@@ -23,7 +22,7 @@ TEST_USER_ID = 123
 TEST_SECRET_KEY = "test_key"
 
 
-# test_api.py constants
+# test_api
 INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
@@ -32,15 +31,14 @@ TEST_INVALID_USER_ID = 321
 TEST_INVALID_USERNAME = "invalid_user"
 
 
-# test_auth.py constants
+# test_auth
 TEST_SECRET = "test_secret"
 TEST_TOKEN = "test_token"
 GITLAB_BASE_URL = "https://gitlab.com"
 TEST_VERSION = 1.5
-TEST_REPO = "test_repo"
 
 
-# test_database_utils.py
+# test_database_utils
 TASK_1 = "task1"
 TASK_2 = "task2"
 TASK_3 = "task3"
@@ -57,8 +55,8 @@ SCORES = {
 }
 
 
-# test_db_api.py constants
-DEADLINES_CONFIG_FILES = [  # part of manytask config file
+# test_db_api
+DEADLINES_CONFIG_FILES = [
     "tests/.deadlines.test.yml",
     "tests/.deadlines.test2.yml",
 ]
@@ -113,12 +111,7 @@ SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED = 540
 USER_EXPECTED = 2
 
 
-# test_glab.py constants
-# Constants for test data
-EXAMPLE_REPO_OWNER = "example_owner"
-EXAMPLE_REPO_NAME = "example_repo"
-EXAMPLE_HVCS_DOMAIN = "example.com"
-
+# test_glab
 TEST_USER_EMAIL = "test-email@test.ru"
 TEST_USER_PASSWORD = "testpassword"
 TEST_USER_FIRSTNAME = "testfirstname"
@@ -148,13 +141,13 @@ TEST_GROUP_STUDENT_NAME_FULL = "some / TestGroup / TestProject / Students"
 TEST_FORK_ID = 1
 
 
-# test_main.py constants
+# test_main
 TEST_STUDENTS_GROUP = "test_students"
 TEST_PUBLIC_REPO = "test_public_repo"
 TEST_CACHE_DIR = "/tmp/manytask_test_cache"
 
 
-# test_models.py
+# test_models
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 TEST_DEADLINE_DATA_INT = 12345
 TEST_GRADE_SCORE = 77
@@ -171,8 +164,3 @@ TEST_TASK_GROUP_POSITION = 5
 TEST_MAX_SUBMISSIONS = 10
 TEST_SUBMISSION_PENALTY = 0.1
 TEST_DEADLINE_STEPS = {0.4: datetime(2000, 1, 2, 3, 4, 5, 6, tzinfo=ZoneInfo("Europe/Berlin"))}
-
-
-# test_web.py constants
-TEST_STUDENT_NAME = "First Last"
-TEST_STUDENT_REPO = "students/test_user"
