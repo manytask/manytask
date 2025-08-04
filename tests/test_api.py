@@ -11,11 +11,11 @@ from dotenv import load_dotenv
 from flask import Flask, json, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import StoredUser
+from manytask.abstract import RmsUser, StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
-from manytask.glab import GitLabApiException, Student
+from manytask.glab import GitLabApiException
 from manytask.web import course_bp, root_bp
 
 TEST_USER_ID = 123
@@ -23,6 +23,7 @@ TEST_USERNAME = "test_user"
 TEST_FIRST_NAME = "Ivan"
 TEST_LAST_NAME = "Ivanov"
 TEST_NAME = "Ivan Ivanov"
+TEST_RMS_ID = 456
 INVALID_TASK_NAME = "invalid_task"
 TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
 TEST_TASK_NAME = "test_task"
@@ -95,14 +96,14 @@ def mock_group(mock_task):
 
 
 @pytest.fixture
-def mock_student():
-    class MockStudent:
-        def __init__(self, student_id, username, name):
-            self.id = student_id
+def mock_rms_user():
+    class MockRmsUser:
+        def __init__(self, user_id, username, name):
+            self.id = user_id
             self.username = username
             self.name = name
 
-    return MockStudent
+    return MockRmsUser
 
 
 @pytest.fixture
@@ -111,7 +112,11 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def __init__(self):
             self.scores = {}
             self.stored_user = StoredUser(
-                username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME, course_admin=False
+                username=TEST_USERNAME,
+                first_name=TEST_FIRST_NAME,
+                last_name=TEST_LAST_NAME,
+                rms_id=TEST_RMS_ID,
+                course_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
 
@@ -139,6 +144,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 username=username,
                 first_name=self.stored_user.first_name,
                 last_name=self.stored_user.last_name,
+                rms_id=self.stored_user.rms_id,
                 course_admin=True,
             )
 
@@ -180,34 +186,34 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
 
 @pytest.fixture
-def mock_gitlab_api(mock_student):
+def mock_gitlab_api(mock_rms_user):
     class MockGitlabApi:
         def __init__(self):
             self.course_admin = False
-            self._student_class = mock_student
+            self._rms_user_class = mock_rms_user
 
-        def get_student(self, user_id: int):
+        def get_rms_user_by_id(self, user_id: int):
             if user_id == TEST_USER_ID:
-                return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise GitLabApiException("Student not found")
+                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
+            raise GitLabApiException("User not found")
 
-        def get_student_by_username(self, username):
+        def get_rms_user_by_username(self, username):
             if username == TEST_USERNAME:
-                return self._student_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise GitLabApiException("Student not found")
+                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
+            raise GitLabApiException("User not found")
 
-        def check_authenticated_student(self, access_token):
+        def check_authenticated_rms_user(self, access_token):
             pass
 
-        def get_authenticated_student(self, access_token):
-            return Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        def get_authenticated_rms_user(self, access_token):
+            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
         @staticmethod
         def get_url_for_repo(username, course_students_group):
             return f"https://gitlab.com/{username}/test-repo"
 
         @staticmethod
-        def check_project_exists(_username, course_students_group):
+        def check_project_exists(_project_name, _project_group):
             return True
 
     return MockGitlabApi()
@@ -237,13 +243,13 @@ def authenticated_client(app, mock_gitlab_oauth):
     """
     with (
         app.test_client() as client,
-        patch.object(app.gitlab_api, "get_authenticated_student") as mock_get_authenticated_student,
-        patch.object(app.gitlab_api, "check_project_exists") as mock_check_project_exists,
+        patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
     ):
         app.oauth = mock_gitlab_oauth
 
-        mock_get_authenticated_student.return_value = Student(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -670,11 +676,11 @@ def test_validate_and_extract_params_get_student_by_id(app):
     form_data = {"user_id": TEST_USER_ID, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
-    student, task, group = _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+    rms_user, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
-    assert student.id == TEST_USER_ID
-    assert student.username == TEST_USERNAME
-    assert student.name == TEST_NAME
+    assert rms_user.id == TEST_USER_ID
+    assert rms_user.username == TEST_USERNAME
+    assert rms_user.name == TEST_NAME
     assert task.name == TEST_TASK_NAME
     assert group.name == TEST_TASK_GROUP_NAME
 
@@ -684,11 +690,11 @@ def test_validate_and_extract_params_get_student_by_username(app):
     form_data = {"username": TEST_USERNAME, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
-    student, task, group = _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+    rms_user, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
-    assert student.id == TEST_USER_ID
-    assert student.username == TEST_USERNAME
-    assert student.name == TEST_NAME
+    assert rms_user.id == TEST_USER_ID
+    assert rms_user.username == TEST_USERNAME
+    assert rms_user.name == TEST_NAME
     assert task.name == TEST_TASK_NAME
     assert group.name == TEST_TASK_GROUP_NAME
 
@@ -699,7 +705,7 @@ def test_validate_and_extract_params_no_student_name_or_id(app):
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert exc_info.value.code == HTTPStatus.BAD_REQUEST
 
@@ -710,7 +716,7 @@ def test_validate_and_extract_params_both_student_name_and_id(app):
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert exc_info.value.code == HTTPStatus.BAD_REQUEST
 
@@ -721,7 +727,7 @@ def test_validate_and_extract_params_user_id_not_an_int(app):
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert exc_info.value.code == HTTPStatus.BAD_REQUEST
 
@@ -732,7 +738,7 @@ def test_validate_and_extract_params_no_task_name(app):
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert exc_info.value.code == HTTPStatus.BAD_REQUEST
 
@@ -743,7 +749,7 @@ def test_validate_and_extract_params_student_id_not_found(app):
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
@@ -754,7 +760,7 @@ def test_validate_and_extract_params_student_username_not_found(app):
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
@@ -765,7 +771,7 @@ def test_validate_and_extract_params_task_not_found(app):
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
-        _validate_and_extract_params(form_data, app.gitlab_api, app.storage_api, course_name)
+        _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
