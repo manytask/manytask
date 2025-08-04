@@ -1,15 +1,35 @@
-version: "3.8"
-
-
 services:
+
+    docs:
+        build:
+            context: .
+            target: docs
+        container_name: test-manytask-docs
+        restart: always
+        network_mode: bridge
+        expose:
+            - "8080"
+        environment:
+            VIRTUAL_HOST: ${DOCS_VIRTUAL_HOST}
+            VIRTUAL_PORT: 80
+            LETSENCRYPT_HOST: ${DOCS_LETSENCRYPT_HOST}
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:5050/healthcheck" ]
+            interval: 1m
+            timeout: 15s
+            retries: 3
+            start_period: 30s
+
     manytask:
         build:
-            dockerfile: Dockerfile
             context: .
-        container_name: manytask
+            target: app
+        container_name: test-manytask
         env_file: .env
         environment:
-            FLASK_DEBUG: 0
+            VIRTUAL_HOST: ${APP_VIRTUAL_HOST}
+            VIRTUAL_PORT: 5050
+            LETSENCRYPT_HOST: ${APP_LETSENCRYPT_HOST}
         ports:
             - "8081:5050"
         volumes:
@@ -21,8 +41,10 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
-        networks:
-            - manytask_network
+        links:
+            -   postgres:postgres
+        network_mode: bridge
+
     postgres:
         image: postgres:17
         container_name: manytask_postgres
@@ -35,18 +57,13 @@ services:
         volumes:
             - postgres_data:/var/lib/postgresql/data
             - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-        networks:
-            - manytask_network
+        network_mode: bridge
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U adminmanytask -d manytask"]
             interval: 5s
             timeout: 5s
             retries: 5
 
-networks:
-    manytask_network:
-        driver: bridge
-        name: manytask_network
 
 volumes:
     postgres_data:

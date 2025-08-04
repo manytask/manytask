@@ -1,4 +1,4 @@
-FROM python:3.13-alpine AS builder
+FROM python:3.13-alpine AS app_builder
 
 WORKDIR /app
 
@@ -13,14 +13,14 @@ RUN python -m poetry config virtualenvs.create true \
 
 
 
-FROM python:3.13-alpine
+FROM python:3.13-alpine AS app
 
 RUN apk add --no-cache curl \
     && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=app_builder /app/.venv /app/.venv
 
 COPY ./manytask/ /app/manytask
 COPY VERSION /app/VERSION
@@ -46,3 +46,15 @@ RUN mkdir -p /root/.postgresql && \
 wget "https://storage.yandexcloud.net/cloud-certs/CA.pem" \
     --output-document /root/.postgresql/root.crt && \
 chmod 0600 /root/.postgresql/root.crt
+
+
+
+FROM node:24 AS docs_builder
+
+RUN npm i @diplodoc/cli -g
+COPY ./docs ./docs
+RUN rm -rf html
+RUN yfm -i ./docs -o ./html --allow-custom-resources
+
+FROM nginx AS docs
+COPY --from=docs_builder ./html /usr/share/nginx/html
