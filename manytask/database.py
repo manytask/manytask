@@ -197,13 +197,7 @@ class DataBaseApi(StorageApi):
                 logger.info(f"There was an exception when checking user admin status: {e}")
                 return False
 
-    def sync_stored_user(
-        self,
-        course_name: str,
-        username: str,
-        repo_name: str,
-        course_admin: bool,
-    ) -> StoredUser:
+    def sync_stored_user(self, course_name: str, username: str, course_admin: bool) -> StoredUser:
         """Method for sync user's gitlab and stored data
 
         :param course_name: course name
@@ -214,7 +208,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
+            user_on_course = self._get_or_create_user_on_course(session, username, course)
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
@@ -281,14 +275,7 @@ class DataBaseApi(StorageApi):
 
         return
 
-    def store_score(
-        self,
-        course_name: str,
-        username: str,
-        repo_name: str,
-        task_name: str,
-        update_fn: Callable[..., Any],
-    ) -> int:
+    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int:
         """Method for storing user's task score
 
         :param course_name: course name
@@ -306,7 +293,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
                 session.commit()
 
                 try:
@@ -900,11 +887,7 @@ class DataBaseApi(StorageApi):
             pass
 
     def _get_or_create_user_on_course(
-        self,
-        session: Session,
-        username: str,
-        course: models.Course,
-        repo_name: str | None = None,
+        self, session: Session, username: str, course: models.Course
     ) -> models.UserOnCourse:
         user = self._get(
             session,
@@ -912,15 +895,7 @@ class DataBaseApi(StorageApi):
             username=username,
         )
 
-        defaults = {}
-        if repo_name is not None:
-            defaults["repo_name"] = repo_name
-        else:
-            defaults["repo_name"] = ""
-
-        user_on_course = self._get_or_create(
-            session, models.UserOnCourse, defaults=defaults, user_id=user.id, course_id=course.id
-        )
+        user_on_course = self._get_or_create(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
 
         return user_on_course
 

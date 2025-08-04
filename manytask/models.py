@@ -91,7 +91,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(unique=True)
     first_name: Mapped[str]
     last_name: Mapped[str]
-    rms_id: Mapped[int] = mapped_column(unique=True)
+    rms_id: Mapped[int] = mapped_column(unique=True, nullable=True)
     is_instance_admin: Mapped[bool] = mapped_column(default=False, server_default="false")
 
     # relationships
@@ -143,7 +143,6 @@ class UserOnCourse(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey(User.id))
     course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
-    repo_name: Mapped[str]
     join_date: Mapped[datetime] = mapped_column(server_default=func.now())
     is_course_admin: Mapped[bool] = mapped_column(default=False)
 

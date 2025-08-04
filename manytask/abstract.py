@@ -66,13 +66,7 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
-    def sync_stored_user(
-        self,
-        course_name: str,
-        username: str,
-        repo_name: str,
-        course_admin: bool,
-    ) -> StoredUser: ...
+    def sync_stored_user(self, course_name: str, username: str, course_admin: bool) -> StoredUser: ...
 
     @abstractmethod
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
@@ -87,14 +81,7 @@ class StorageApi(ABC):
     def update_cached_scores(self, course_name: str) -> None: ...
 
     @abstractmethod
-    def store_score(
-        self,
-        course_name: str,
-        username: str,
-        repo_name: str,
-        task_name: str,
-        update_fn: Callable[..., Any],
-    ) -> int: ...
+    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
 
     @abstractmethod
     def create_course(
