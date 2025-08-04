@@ -7,41 +7,7 @@ from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 from requests import HTTPError
 
 from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, Student
-
-# Constants for test data
-EXAMPLE_REPO_OWNER = "example_owner"
-EXAMPLE_REPO_NAME = "example_repo"
-EXAMPLE_HVCS_DOMAIN = "example.com"
-
-TEST_USER_ID = 1
-TEST_USERNAME = "TestUser"
-TEST_USER_EMAIL = "test-email@test.ru"
-TEST_USER_PASSWORD = "testpassword"
-TEST_USER_FIRSTNAME = "testfirstname"
-TEST_USER_LASTNAME = "testlastname"
-TEST_USER_URL = "example_repo"
-
-TEST_PROJECT_ID = 1
-TEST_PROJECT_NAME = "TestProject"
-TEST_PROJECT_FULL_NAME = "some/TestGroup/TestProject"
-
-TEST_GROUP_ID = 1
-TEST_GROUP_NAME = "some/TestGroup"
-TEST_GROUP_NAME_SHORT = "TestGroup"
-TEST_GROUP_NAME_FULL = "some / TestGroup"
-
-TEST_GROUP_ID_PUBLIC = 2
-TEST_GROUP_PUBLIC_NAME = "some/TestGroup/TestProject/Public"
-TEST_GROUP_PUBLIC_NAME_SHORT = "Public"
-TEST_GROUP_PUBLIC_NAME_FULL = "some / TestGroup / TestProject / Public"
-TEST_GROUP_PUBLIC_DEFAULT_BRANCH = "main"
-
-TEST_GROUP_ID_STUDENT = 3
-TEST_GROUP_STUDENT_NAME = "some/TestGroup/TestProject/Students"
-TEST_GROUP_STUDENT_NAME_SHORT = "Students"
-TEST_GROUP_STUDENT_NAME_FULL = "some / TestGroup / TestProject / Students"
-
-TEST_FORK_ID = 1
+from tests import constants
 
 
 # Shared fixture logic
@@ -81,9 +47,9 @@ def create_mock_gitlab_project(project_id: int, namespace: str) -> Project:
 def mock_student() -> Student:
     """Fixture to create a mock Student object."""
     return Student(
-        id=TEST_USER_ID,
-        username=TEST_USERNAME,
-        name=TEST_USERNAME,
+        id=constants.TEST_USER_ID,
+        username=constants.TEST_USERNAME,
+        name=constants.TEST_USERNAME,
     )
 
 
@@ -91,8 +57,8 @@ def mock_student() -> Student:
 def mock_gitlab_fork() -> ProjectFork:
     """Fixture to create a mock ProjectFork object."""
     fork = mock.create_autospec(ProjectFork, instance=True)
-    fork.id = TEST_FORK_ID
-    fork.username = f"{TEST_GROUP_STUDENT_NAME_SHORT}/{TEST_USERNAME}"
+    fork.id = constants.TEST_FORK_ID
+    fork.username = f"{constants.TEST_GROUP_STUDENT_NAME_SHORT}/{constants.TEST_USERNAME}"
     return fork
 
 
@@ -100,40 +66,48 @@ def mock_gitlab_fork() -> ProjectFork:
 def mock_gitlab_group_member() -> GroupMember:
     """Fixture to create a mock GroupMember object."""
     member = mock.create_autospec(GroupMember, instance=True)
-    member.id = TEST_USER_ID
-    member.username = TEST_USERNAME
+    member.id = constants.TEST_USER_ID
+    member.username = constants.TEST_USERNAME
     return member
 
 
 @pytest.fixture
 def mock_gitlab_group() -> Group:
     """Fixture to create a mock course group."""
-    return create_mock_gitlab_group(TEST_GROUP_ID, TEST_GROUP_NAME_SHORT, TEST_GROUP_NAME_FULL)
+    return create_mock_gitlab_group(
+        constants.TEST_GROUP_ID, constants.TEST_GROUP_NAME_SHORT, constants.TEST_GROUP_NAME_FULL
+    )
 
 
 @pytest.fixture
 def mock_gitlab_group_public() -> Group:
     """Fixture to create a mock public group."""
-    return create_mock_gitlab_group(TEST_GROUP_ID_PUBLIC, TEST_GROUP_PUBLIC_NAME_SHORT, TEST_GROUP_PUBLIC_NAME_FULL)
+    return create_mock_gitlab_group(
+        constants.TEST_GROUP_ID_PUBLIC, constants.TEST_GROUP_PUBLIC_NAME_SHORT, constants.TEST_GROUP_PUBLIC_NAME_FULL
+    )
 
 
 @pytest.fixture
 def mock_gitlab_group_student() -> Group:
     """Fixture to create a mock student group."""
-    return create_mock_gitlab_group(TEST_GROUP_ID_STUDENT, TEST_GROUP_STUDENT_NAME_SHORT, TEST_GROUP_STUDENT_NAME_FULL)
+    return create_mock_gitlab_group(
+        constants.TEST_GROUP_ID_STUDENT, constants.TEST_GROUP_STUDENT_NAME_SHORT, constants.TEST_GROUP_STUDENT_NAME_FULL
+    )
 
 
 @pytest.fixture
 def mock_gitlab_project(mock_gitlab_group_member: GroupMember) -> Project:
     """Fixture to create a mock project with a group member."""
-    project = create_mock_gitlab_project(TEST_PROJECT_ID, TEST_PROJECT_FULL_NAME)
+    project = create_mock_gitlab_project(constants.TEST_PROJECT_ID, constants.TEST_PROJECT_FULL_NAME)
     return project
 
 
 @pytest.fixture
 def mock_gitlab_student_project(mock_gitlab_group_member: GroupMember) -> Project:
     """Fixture to create a mock student project."""
-    project = create_mock_gitlab_project(TEST_PROJECT_ID + 1, f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
+    project = create_mock_gitlab_project(
+        constants.TEST_PROJECT_ID + 1, f"{constants.TEST_GROUP_STUDENT_NAME}/{constants.TEST_USERNAME}"
+    )
     project.members.create = MagicMock(return_value=mock_gitlab_group_member)
     return project
 
@@ -141,18 +115,18 @@ def mock_gitlab_student_project(mock_gitlab_group_member: GroupMember) -> Projec
 @pytest.fixture
 def mock_gitlab_public_project() -> Project:
     """Fixture to create a mock public project."""
-    return create_mock_gitlab_project(TEST_PROJECT_ID + 2, TEST_GROUP_PUBLIC_NAME)
+    return create_mock_gitlab_project(constants.TEST_PROJECT_ID + 2, constants.TEST_GROUP_PUBLIC_NAME)
 
 
 @pytest.fixture
 def mock_gitlab_user() -> User:
     """Fixture to create a mock GitLab user."""
     user = mock.create_autospec(User, instance=True)
-    user.id = TEST_USER_ID
-    user.name = TEST_USERNAME
-    user.username = TEST_USERNAME
-    user.email = TEST_USER_EMAIL
-    user.web_url = TEST_USER_URL
+    user.id = constants.TEST_USER_ID
+    user.name = constants.TEST_USERNAME
+    user.username = constants.TEST_USERNAME
+    user.email = constants.TEST_USER_EMAIL
+    user.web_url = constants.TEST_USER_URL
     return user
 
 
@@ -188,11 +162,11 @@ def gitlab(
 def test_register_new_user(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
 
-    username = TEST_USERNAME
-    firstname = TEST_USER_FIRSTNAME
-    lastname = TEST_USER_LASTNAME
-    email = TEST_USER_EMAIL
-    password = TEST_USER_PASSWORD
+    username = constants.TEST_USERNAME
+    firstname = constants.TEST_USER_FIRSTNAME
+    lastname = constants.TEST_USER_LASTNAME
+    email = constants.TEST_USER_EMAIL
+    password = constants.TEST_USER_PASSWORD
 
     gitlab_api.register_new_user(username, firstname, lastname, email, password)
 
@@ -212,10 +186,10 @@ def test_get_project_by_name_success(gitlab, mock_gitlab_project):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_project]
 
-    project = gitlab_api._get_project_by_name(TEST_PROJECT_FULL_NAME)
+    project = gitlab_api._get_project_by_name(constants.TEST_PROJECT_FULL_NAME)
 
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=TEST_PROJECT_NAME)
-    assert project.path_with_namespace == TEST_PROJECT_FULL_NAME
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=constants.TEST_PROJECT_NAME)
+    assert project.path_with_namespace == constants.TEST_PROJECT_FULL_NAME
 
 
 def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
@@ -224,12 +198,12 @@ def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
     mock_gitlab_instance.projects.list.return_value = []
     mock_gitlab_instance.projects.create.return_value = mock_gitlab_project
 
-    gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
+    gitlab_api.create_public_repo(constants.TEST_GROUP_NAME, constants.TEST_GROUP_PUBLIC_NAME)
 
     mock_gitlab_instance.projects.create.assert_called_once_with(
         {
-            "name": TEST_GROUP_PUBLIC_NAME,
-            "path": TEST_GROUP_PUBLIC_NAME,
+            "name": constants.TEST_GROUP_PUBLIC_NAME,
+            "path": constants.TEST_GROUP_PUBLIC_NAME,
             "namespace_id": mock_gitlab_group.id,
             "visibility": "public",
             "shared_runners_enabled": True,
@@ -244,7 +218,7 @@ def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab
     mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group]
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_public_project]
 
-    gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
+    gitlab_api.create_public_repo(constants.TEST_GROUP_NAME, constants.TEST_GROUP_PUBLIC_NAME)
 
     mock_gitlab_instance.projects.create.assert_not_called()
 
@@ -254,12 +228,12 @@ def test_create_students_group(gitlab, mock_gitlab_group):
     mock_gitlab_instance.groups.list.return_value = []
     mock_gitlab_instance.groups.create.return_value = mock_gitlab_group
 
-    gitlab_api.create_students_group(TEST_GROUP_NAME)
+    gitlab_api.create_students_group(constants.TEST_GROUP_NAME)
 
     mock_gitlab_instance.groups.create.assert_called_once_with(
         {
-            "name": TEST_GROUP_NAME,
-            "path": TEST_GROUP_NAME,
+            "name": constants.TEST_GROUP_NAME,
+            "path": constants.TEST_GROUP_NAME,
             "visibility": "private",
             "lfs_enabled": True,
             "shared_runners_enabled": True,
@@ -271,7 +245,7 @@ def test_get_group_by_name_success(gitlab, mock_gitlab_group):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group]
 
-    result = gitlab_api._get_group_by_name(TEST_GROUP_NAME)
+    result = gitlab_api._get_group_by_name(constants.TEST_GROUP_NAME)
 
     assert result.name == mock_gitlab_group.name
     assert result.full_name == mock_gitlab_group.full_name
@@ -281,36 +255,36 @@ def test_get_project_by_name_not_found(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = []
 
-    with pytest.raises(RuntimeError, match=f"Unable to find project {TEST_PROJECT_FULL_NAME}"):
-        gitlab_api._get_project_by_name(TEST_PROJECT_FULL_NAME)
+    with pytest.raises(RuntimeError, match=f"Unable to find project {constants.TEST_PROJECT_FULL_NAME}"):
+        gitlab_api._get_project_by_name(constants.TEST_PROJECT_FULL_NAME)
 
 
 def test_get_group_by_name_not_found(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.groups.list.return_value = []
 
-    with pytest.raises(RuntimeError, match=f"Unable to find group {TEST_GROUP_NAME}"):
-        gitlab_api._get_group_by_name(TEST_GROUP_NAME)
+    with pytest.raises(RuntimeError, match=f"Unable to find group {constants.TEST_GROUP_NAME}"):
+        gitlab_api._get_group_by_name(constants.TEST_GROUP_NAME)
 
 
 def test_check_project_exists(gitlab, mock_gitlab_student_project):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_student_project]
 
-    exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
+    exists = gitlab_api.check_project_exists(constants.TEST_USERNAME, constants.TEST_GROUP_STUDENT_NAME)
 
     assert exists is True
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=TEST_USERNAME)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=constants.TEST_USERNAME)
 
 
 def test_check_project_not_exists(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = []
 
-    exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_NAME)
+    exists = gitlab_api.check_project_exists(constants.TEST_USERNAME, constants.TEST_GROUP_NAME)
 
     assert exists is False
-    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=TEST_USERNAME)
+    mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=constants.TEST_USERNAME)
 
 
 def test_create_project_existing_project(gitlab, mock_student, mock_gitlab_student_project, mock_gitlab_group_member):
@@ -319,7 +293,7 @@ def test_create_project_existing_project(gitlab, mock_student, mock_gitlab_stude
     mock_gitlab_instance.projects.get.return_value = mock_gitlab_student_project
     mock_gitlab_student_project.members.create.return_value = mock_gitlab_group_member
 
-    gitlab_api.create_project(mock_student, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
+    gitlab_api.create_project(mock_student, constants.TEST_GROUP_STUDENT_NAME, constants.TEST_GROUP_PUBLIC_NAME)
 
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_student.username)
     mock_gitlab_instance.projects.get.assert_called_with(mock_gitlab_student_project.id)
@@ -337,19 +311,19 @@ def test_create_project_no_existing_project_creates_fork(
     gitlab_api._get_project_by_name = MagicMock(return_value=mock_gitlab_student_project)
     mock_gitlab_student_project.forks.create.return_value = mock_gitlab_fork
 
-    gitlab_api.create_project(mock_student, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
+    gitlab_api.create_project(mock_student, constants.TEST_GROUP_STUDENT_NAME, constants.TEST_GROUP_PUBLIC_NAME)
 
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_student.username)
-    gitlab_api._get_project_by_name.assert_called_with(TEST_GROUP_PUBLIC_NAME)
-    gitlab_api._get_group_by_name.assert_called_with(TEST_GROUP_STUDENT_NAME)
+    gitlab_api._get_project_by_name.assert_called_with(constants.TEST_GROUP_PUBLIC_NAME)
+    gitlab_api._get_group_by_name.assert_called_with(constants.TEST_GROUP_STUDENT_NAME)
 
 
 def test_parse_user_to_student(gitlab, mock_student):
     gitlab_api, _ = gitlab
     user_dict = {
-        "id": TEST_USER_ID,
-        "username": TEST_USERNAME,
-        "name": TEST_USERNAME,
+        "id": constants.TEST_USER_ID,
+        "username": constants.TEST_USERNAME,
+        "name": constants.TEST_USERNAME,
     }
     student = gitlab_api._parse_user_to_student(user_dict)
 
@@ -360,37 +334,37 @@ def test_get_student_by_username_found(gitlab, mock_student):
     gitlab_api, _ = gitlab
     gitlab_api.get_students_by_username = MagicMock(return_value=[mock_student])
 
-    result_student = gitlab_api.get_student_by_username(TEST_USERNAME)
+    result_student = gitlab_api.get_student_by_username(constants.TEST_USERNAME)
 
     assert result_student == mock_student
-    gitlab_api.get_students_by_username.assert_called_once_with(TEST_USERNAME)
+    gitlab_api.get_students_by_username.assert_called_once_with(constants.TEST_USERNAME)
 
 
 def test_get_student_by_username_not_found(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.users.list.return_value = []
 
-    with pytest.raises(GitLabApiException, match=f"No students found for username {TEST_USERNAME}"):
-        gitlab_api.get_student_by_username(TEST_USERNAME)
+    with pytest.raises(GitLabApiException, match=f"No students found for username {constants.TEST_USERNAME}"):
+        gitlab_api.get_student_by_username(constants.TEST_USERNAME)
 
 
 def test_get_student_found(gitlab, mock_gitlab_user, mock_student):
     gitlab_api, mock_gitlab_instance = gitlab
     user_attrs = {
-        "id": TEST_USER_ID,
+        "id": constants.TEST_USER_ID,
         "username": "test_username",
         "name": "Test User",
-        "course_group": TEST_GROUP_NAME,
-        "course_students_group": TEST_GROUP_STUDENT_NAME,
+        "course_group": constants.TEST_GROUP_NAME,
+        "course_students_group": constants.TEST_GROUP_STUDENT_NAME,
     }
     mock_gitlab_user = MagicMock(_attrs=user_attrs)
     mock_gitlab_instance.users.get = MagicMock(return_value=mock_gitlab_user)
     gitlab_api._parse_user_to_student = MagicMock(return_value=mock_student)
 
-    student = gitlab_api.get_student(TEST_USER_ID)
+    student = gitlab_api.get_student(constants.TEST_USER_ID)
 
     assert student == mock_student
-    mock_gitlab_instance.users.get.assert_called_once_with(TEST_USER_ID)
+    mock_gitlab_instance.users.get.assert_called_once_with(constants.TEST_USER_ID)
     gitlab_api._parse_user_to_student.assert_called_once_with(user_attrs)
 
 
@@ -399,9 +373,9 @@ def test_get_student_not_found(gitlab):
     mock_gitlab_instance.users.get = MagicMock(side_effect=GitlabGetError("User not found"))
 
     with pytest.raises(GitlabGetError, match="User not found"):
-        gitlab_api.get_student(TEST_USER_ID)
+        gitlab_api.get_student(constants.TEST_USER_ID)
 
-    mock_gitlab_instance.users.get.assert_called_once_with(TEST_USER_ID)
+    mock_gitlab_instance.users.get.assert_called_once_with(constants.TEST_USER_ID)
 
 
 @patch("requests.get")
@@ -411,9 +385,9 @@ def test_get_authenticated_student_success(mock_get, gitlab, mock_student):
     headers = {"Authorization": f"Bearer {oauth_token}"}
 
     user_data = {
-        "id": TEST_USER_ID,
-        "username": TEST_USERNAME,
-        "name": TEST_USERNAME,
+        "id": constants.TEST_USER_ID,
+        "username": constants.TEST_USERNAME,
+        "name": constants.TEST_USERNAME,
     }
     mock_response = MagicMock()
     mock_response.json.return_value = user_data
@@ -448,13 +422,16 @@ def test_get_authenticated_student_failure(mock_get, gitlab):
 
 def test_get_url_for_task_base(gitlab):
     gitlab_api, _ = gitlab
-    url = gitlab_api.get_url_for_task_base(TEST_GROUP_PUBLIC_NAME, TEST_GROUP_PUBLIC_DEFAULT_BRANCH)
+    url = gitlab_api.get_url_for_task_base(constants.TEST_GROUP_PUBLIC_NAME, constants.TEST_GROUP_PUBLIC_DEFAULT_BRANCH)
 
-    assert url == f"{gitlab_api.base_url}/{TEST_GROUP_PUBLIC_NAME}/blob/{TEST_GROUP_PUBLIC_DEFAULT_BRANCH}"
+    assert (
+        url
+        == f"{gitlab_api.base_url}/{constants.TEST_GROUP_PUBLIC_NAME}/blob/{constants.TEST_GROUP_PUBLIC_DEFAULT_BRANCH}"
+    )
 
 
 def test_get_url_for_repo(gitlab):
     gitlab_api, _ = gitlab
-    url = gitlab_api.get_url_for_repo(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
+    url = gitlab_api.get_url_for_repo(constants.TEST_USERNAME, constants.TEST_GROUP_STUDENT_NAME)
 
-    assert url == f"{gitlab_api.base_url}/{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}"
+    assert url == f"{gitlab_api.base_url}/{constants.TEST_GROUP_STUDENT_NAME}/{constants.TEST_USERNAME}"
