@@ -9,7 +9,7 @@ import gitlab.const
 import gitlab.v4.objects
 import requests
 
-from .abstract import RmsApi, Student
+from .abstract import RmsApi, RmsUser
 
 logger = logging.getLogger(__name__)
 
@@ -133,66 +133,66 @@ class GitLabApi(RmsApi):
 
     def check_project_exists(
         self,
-        username: str,
-        course_students_group: str,
+        project_name: str,
+        project_group: str,
     ) -> bool:
-        gitlab_project_path = f"{course_students_group}/{username}"
+        gitlab_project_path = f"{project_group}/{project_name}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
-        for project in self._gitlab.projects.list(get_all=True, search=username):
+        for project in self._gitlab.projects.list(get_all=True, search=project_name):
             logger.info(f"Check project path: {project.path_with_namespace}")
 
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project {username} for group {course_students_group} exists")
+                logger.info(f"Project {project_name} for group {project_group} exists")
                 return True
 
-        logger.info(f"Project {username} for group {course_students_group} does not exist")
+        logger.info(f"Project {project_name} for group {project_group} does not exist")
         return False
 
     def create_project(
         self,
-        student: Student,
+        rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
     ) -> None:
         course_group = self._get_group_by_name(course_students_group)
 
-        gitlab_project_path = f"{course_students_group}/{student.username}"
+        gitlab_project_path = f"{course_students_group}/{rms_user.username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
-        for project in self._gitlab.projects.list(get_all=True, search=student.username):
+        for project in self._gitlab.projects.list(get_all=True, search=rms_user.username):
             logger.info(f"Check project path: {project.path_with_namespace}")
 
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project {student.username} for group {course_students_group} already exists")
+                logger.info(f"Project {rms_user.username} for group {course_students_group} already exists")
                 project = self._gitlab.projects.get(project.id)
 
-                # ensure student is a member of the project
+                # ensure user is a member of the project
                 try:
                     member = project.members.create(
                         {
-                            "user_id": student.id,
+                            "user_id": rms_user.id,
                             "access_level": gitlab.const.AccessLevel.DEVELOPER,
                         }
                     )
                     logger.info(f"Project exists, Access to fork granted for {member.username}")
                 except gitlab.GitlabCreateError:
-                    logger.info(f"Project exists, Access already granted for {student.username} or WTF")
+                    logger.info(f"Project exists, Access already granted for {rms_user.username} or WTF")
 
                 return
 
-        logger.info(f"Student username {student.username}")
+        logger.info(f"Username {rms_user.username}")
         logger.info(f"Course group {course_group.name}")
 
         course_public_project = self._get_project_by_name(course_public_repo)
         fork = course_public_project.forks.create(
             {
-                "name": student.username,
-                "path": student.username,
+                "name": rms_user.username,
+                "path": rms_user.username,
                 "namespace_id": course_group.id,
                 "forking_access_level": "disabled",
                 # MR target self main
@@ -220,61 +220,69 @@ class GitLabApi(RmsApi):
         try:
             member = project.members.create(
                 {
-                    "user_id": student.id,
+                    "user_id": rms_user.id,
                     "access_level": gitlab.const.AccessLevel.DEVELOPER,
                 }
             )
             logger.info(f"Access to fork granted for {member.username}")
         except gitlab.GitlabCreateError:
-            logger.info(f"Access already granted for {student.username} or smth happened")
+            logger.info(f"Access already granted for {rms_user.username} or smth happened")
 
-    def _parse_user_to_student(
+    def _construct_rms_user(
         self,
         user: dict[str, Any],
-    ) -> Student:
-        return Student(
+    ) -> RmsUser:
+        return RmsUser(
             id=user["id"],
             username=user["username"],
             name=user["name"],
         )
 
-    def get_students_by_username(
+    def _get_rms_users_by_username(
         self,
         username: str,
-    ) -> list[Student]:
+    ) -> list[RmsUser]:
         users = self._gitlab.users.list(get_all=True, username=username)
-        return [self._parse_user_to_student(user._attrs) for user in users]
+        return [self._construct_rms_user(user._attrs) for user in users]
 
-    def get_student(
+    def get_rms_user_by_id(
         self,
         user_id: int,
-    ) -> Student:
+    ) -> RmsUser:
         logger.info(f"Searching user {user_id}...")
         user = self._gitlab.users.get(user_id)
         logger.info(f'User found: "{user.username}"')
-        return self._parse_user_to_student(user._attrs)
+        return self._construct_rms_user(user._attrs)
 
-    def get_student_by_username(
+    def get_rms_user_by_username(
         self,
         username: str,
-    ) -> Student:
-        potential_students = self.get_students_by_username(username)
-        potential_students = [student for student in potential_students if student.username == username]
-        if len(potential_students) == 0:
-            raise GitLabApiException(f"No students found for username {username}")
+    ) -> RmsUser:
+        potential_rms_users = self._get_rms_users_by_username(username)
+        potential_rms_users = [rms_user for rms_user in potential_rms_users if rms_user.username == username]
+        if len(potential_rms_users) == 0:
+            raise GitLabApiException(f"No users found for username {username}")
 
-        student = potential_students[0]
-        logger.info(f'User found: "{student.username}"')
-        return student
+        rms_user = potential_rms_users[0]
+        logger.info(f'User found: "{rms_user.username}"')
+        return rms_user
 
-    def get_authenticated_student(
+    def check_authenticated_rms_user(
         self,
         oauth_token: str,
-    ) -> Student:
+    ) -> None:
         headers = {"Authorization": "Bearer " + oauth_token}
         response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
         response.raise_for_status()
-        return self._parse_user_to_student(response.json())
+
+    def get_authenticated_rms_user(
+        self,
+        oauth_token: str,
+    ) -> RmsUser:
+        headers = {"Authorization": "Bearer " + oauth_token}
+        response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
+        response.raise_for_status()
+        return self._construct_rms_user(response.json())
 
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"

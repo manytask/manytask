@@ -4,6 +4,8 @@ from zoneinfo import ZoneInfo
 from manytask.models import Course, Task, TaskGroup
 from manytask.config import ManytaskDeadlinesConfig
 from tests import constants
+from manytask.abstract import Student
+
 
 # ruff: noqa
 from tests.test_db_api import (
@@ -174,13 +176,13 @@ def test_get_courses_names_with_no_courses(db_api):
 
 def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME
+        constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME_1, constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1
+        constants.TEST_USERNAME_1, constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1, constants.TEST_RMS_ID_1
     )
     db_api_with_two_initialized_courses.create_user_if_not_exist(
-        constants.TEST_USERNAME_2, constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2
+        constants.TEST_USERNAME_2, constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2, constants.TEST_RMS_ID_2
     )
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(constants.TEST_USERNAME) == []

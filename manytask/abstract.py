@@ -12,6 +12,7 @@ class StoredUser:
     username: str
     first_name: str
     last_name: str
+    rms_id: int
     course_admin: bool = False
     # we can add more fields that we store
 
@@ -148,7 +149,7 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str) -> None: ...
+    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
 
     @abstractmethod
     def get_user_courses_names(self, username: str) -> list[str]: ...
@@ -168,6 +169,16 @@ class StorageApi(ABC):
 
     @abstractmethod
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
+
+
+@dataclass
+class RmsUser:
+    id: int
+    username: str
+    name: str
+
+    def __repr__(self) -> str:
+        return f"RmsUser(username={self.username})"
 
 
 class RmsApi(ABC):
@@ -203,14 +214,14 @@ class RmsApi(ABC):
     @abstractmethod
     def check_project_exists(
         self,
-        username: str,
-        course_students_group: str,
+        project_name: str,
+        project_group: str,
     ) -> bool: ...
 
     @abstractmethod
     def create_project(
         self,
-        student: Student,
+        rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
     ) -> None: ...
@@ -224,3 +235,27 @@ class RmsApi(ABC):
         username: str,
         course_students_group: str,
     ) -> str: ...
+
+    @abstractmethod
+    def get_rms_user_by_id(
+        self,
+        user_id: int,
+    ) -> RmsUser: ...
+
+    @abstractmethod
+    def get_rms_user_by_username(
+        self,
+        username: str,
+    ) -> RmsUser: ...
+
+    @abstractmethod
+    def check_authenticated_rms_user(
+        self,
+        oauth_token: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def get_authenticated_rms_user(
+        self,
+        oauth_token: str,
+    ) -> RmsUser: ...
