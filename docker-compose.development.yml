@@ -8,13 +8,13 @@ services:
         restart: always
         network_mode: bridge
         expose:
-            - "8080"
+            - "80"
         environment:
             VIRTUAL_HOST: ${DOCS_VIRTUAL_HOST}
             VIRTUAL_PORT: 80
             LETSENCRYPT_HOST: ${DOCS_LETSENCRYPT_HOST}
         healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:5050/healthcheck" ]
+            test: [ "CMD", "curl", "-f", "http://localhost:80" ]
             interval: 1m
             timeout: 15s
             retries: 3
