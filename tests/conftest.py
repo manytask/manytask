@@ -78,10 +78,20 @@ def tables(engine, alembic_cfg):
         command.downgrade(alembic_cfg, "base")  # Base.metadata.drop_all(engine)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def session(engine, tables):
-    with Session(engine) as session:
+    connection = engine.connect()
+    transaction = connection.begin()
+
+    session = Session(bind=connection)
+    session.expire_on_commit = False
+
+    try:
         yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture

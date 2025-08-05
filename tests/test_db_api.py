@@ -101,8 +101,10 @@ def db_config(db_url):
 
 
 @pytest.fixture
-def db_api(tables, postgres_container):
-    return DataBaseApi(db_config(postgres_container.get_connection_url()))
+def db_api(tables, postgres_container, session):
+    config = db_config(postgres_container.get_connection_url())
+    config.session_factory = lambda: session
+    return DataBaseApi(config)
 
 
 @pytest.fixture
