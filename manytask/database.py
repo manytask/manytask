@@ -280,7 +280,6 @@ class DataBaseApi(StorageApi):
 
         :param course_name: course name
         :param username: user name
-        :param repo_name: student's repo name
         :param task_name: task name
         :param update_fn: function for updating the score
 
