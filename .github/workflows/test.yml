@@ -42,6 +42,7 @@ jobs:
         run: poetry run pytest
 
   build-docker:
+    needs: test
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
       tags: manytask:${{ github.sha }}
