@@ -228,12 +228,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
     first_name, last_name = rms_user.name.split()  # TODO: come up with how to separate names
     app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, rms_user.id)
 
-    app.storage_api.sync_stored_user(
-        course.course_name,
-        rms_user.username,
-        app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
-        is_course_admin,
-    )
+    app.storage_api.sync_stored_user(course.course_name, rms_user.username, is_course_admin)
 
     # Create use if needed
     try:

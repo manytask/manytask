@@ -482,11 +482,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            "not_exist_task",
-            update_func(1),
+            FIRST_COURSE_NAME, constants.TEST_USERNAME, "not_exist_task", update_func(1)
         )
         == 0
     )
@@ -505,11 +501,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            "task_0_0",
-            update_func(1),
+            FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", update_func(1)
         )
         == 1
     )
@@ -548,11 +540,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            "task_1_3",
-            update_func(expected_score),
+            FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_1_3", update_func(expected_score)
         )
         == expected_score
     )
@@ -594,13 +582,7 @@ def test_store_score_with_changed_task_name(
         constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
 
-    db_api.store_score(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        "task_0_0",
-        update_func(10),
-    )
+    db_api.store_score(FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", update_func(10))
 
     update_course(
         db_api, FIRST_COURSE_NAME, first_course_updated_ui_config, first_course_deadlines_config_with_changed_task_name
@@ -650,10 +632,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
 
     # admin in gitlab
     stored_user = db_api_with_initialized_first_course.sync_stored_user(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        True,
+        FIRST_COURSE_NAME, constants.TEST_USERNAME, True
     )
 
     assert stored_user == StoredUser(
@@ -671,10 +650,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
 
     # lost admin rules in gitlab, but in database stored that user is admin
     stored_user = db_api_with_initialized_first_course.sync_stored_user(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        False,
+        FIRST_COURSE_NAME, constants.TEST_USERNAME, False
     )
 
     assert stored_user == StoredUser(
@@ -707,18 +683,10 @@ def test_many_users(db_api_with_initialized_first_course, session):
     )
 
     db_api_with_initialized_first_course.store_score(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME_1,
-        "task_0_0",
-        update_func(1),
+        FIRST_COURSE_NAME, constants.TEST_USERNAME_1, "task_0_0", update_func(1)
     )
     db_api_with_initialized_first_course.store_score(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME_1,
-        "task_1_3",
-        update_func(expected_score_1),
+        FIRST_COURSE_NAME, constants.TEST_USERNAME_1, "task_1_3", update_func(expected_score_1)
     )
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
@@ -727,11 +695,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME,
-            constants.TEST_USERNAME_2,
-            constants.TEST_REPO_NAME_2,
-            "task_0_0",
-            update_func(expected_score_2),
+            FIRST_COURSE_NAME, constants.TEST_USERNAME_2, "task_0_0", update_func(expected_score_2)
         )
         == expected_score_2
     )
@@ -778,18 +742,10 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     )
 
     db_api_with_two_initialized_courses.store_score(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        "task_0_0",
-        update_func(30),
+        FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", update_func(30)
     )
     db_api_with_two_initialized_courses.store_score(
-        SECOND_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        "task_1_3",
-        update_func(40),
+        SECOND_COURSE_NAME, constants.TEST_USERNAME, "task_1_3", update_func(40)
     )
     expected_users = 2
     expected_user_on_course = 2
@@ -847,40 +803,20 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     )
 
     db_api_with_two_initialized_courses.store_score(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME_1,
-        "task_0_0",
-        update_func(1),
+        FIRST_COURSE_NAME, constants.TEST_USERNAME_1, "task_0_0", update_func(1)
     )
     db_api_with_two_initialized_courses.store_score(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME_1,
-        "task_1_3",
-        update_func(expected_score_1),
+        FIRST_COURSE_NAME, constants.TEST_USERNAME_1, "task_1_3", update_func(expected_score_1)
     )
     db_api_with_two_initialized_courses.store_score(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_2,
-        constants.TEST_REPO_NAME_2,
-        "task_0_0",
-        update_func(expected_score_2),
+        FIRST_COURSE_NAME, constants.TEST_USERNAME_2, "task_0_0", update_func(expected_score_2)
     )
 
     db_api_with_two_initialized_courses.store_score(
-        SECOND_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME_1,
-        "task_1_0",
-        update_func(99),
+        SECOND_COURSE_NAME, constants.TEST_USERNAME_1, "task_1_0", update_func(99)
     )
     db_api_with_two_initialized_courses.store_score(
-        SECOND_COURSE_NAME,
-        constants.TEST_USERNAME_2,
-        constants.TEST_REPO_NAME_2,
-        "task_1_1",
-        update_func(7),
+        SECOND_COURSE_NAME, constants.TEST_USERNAME_2, "task_1_1", update_func(7)
     )
 
     assert session.query(User).count() == expected_users
@@ -1043,11 +979,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     )
 
     score = db_api_with_two_initialized_courses.store_score(
-        FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        "task_0_0",
-        update_func(1),
+        FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", update_func(1)
     )
     assert score == 1
 
@@ -1066,11 +998,7 @@ def test_store_score_update_error(db_api_with_two_initialized_courses, session):
 
     with pytest.raises(ValueError) as exc_info:
         db_api_with_two_initialized_courses.store_score(
-            FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            "task_0_0",
-            failing_update,
+            FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", failing_update
         )
     assert "Update failed" in str(exc_info.value)
 
@@ -1095,11 +1023,7 @@ def test_get_course_unknown(db_api_with_two_initialized_courses):
 def test_store_score_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
     with pytest.raises(NoResultFound):
         db_api_with_initialized_first_course.store_score(
-            FIRST_COURSE_NAME,
-            constants.TEST_USERNAME_2,
-            constants.TEST_REPO_NAME_2,
-            "task_0_0",
-            update_func(1),
+            FIRST_COURSE_NAME, constants.TEST_USERNAME_2, "task_0_0", update_func(1)
         )
 
 
@@ -1110,12 +1034,7 @@ def test_store_get_stored_user_raises_exception_if_user_does_not_exist(db_api_wi
 
 def test_store_sync_stored_user_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
     with pytest.raises(NoResultFound):
-        db_api_with_initialized_first_course.sync_stored_user(
-            FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            False,
-        )
+        db_api_with_initialized_first_course.sync_stored_user(FIRST_COURSE_NAME, constants.TEST_USERNAME, False)
 
 
 def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgres_container):
@@ -1152,9 +1071,7 @@ def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_cour
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
     )
-    user_on_course = UserOnCourse(
-        user_id=user.id, course_id=1, repo_name=constants.TEST_REPO_NAME, is_course_admin=False
-    )
+    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=False)
 
     session.add(user)
     session.add(user_on_course)
@@ -1173,9 +1090,7 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
     )
-    user_on_course = UserOnCourse(
-        user_id=user.id, course_id=1, repo_name=constants.TEST_REPO_NAME, is_course_admin=True
-    )
+    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=True)
 
     session.add(user)
     session.add(user_on_course)
@@ -1194,9 +1109,7 @@ def test_check_user_on_course(db_api_with_two_initialized_courses, session):
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
     )
-    user_on_course = UserOnCourse(
-        user_id=user.id, course_id=1, repo_name=constants.TEST_REPO_NAME, is_course_admin=True
-    )
+    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=True)
 
     session.add(user)
     session.add(user_on_course)

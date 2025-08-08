@@ -169,10 +169,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_stored_user(
-            course.course_name,
-            student.username,
-            app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-            app.storage_api.check_if_instance_admin(student.username),
+            course.course_name, student.username, app.storage_api.check_if_instance_admin(student.username)
         )
 
         return f(*args, **kwargs)

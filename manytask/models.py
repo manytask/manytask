@@ -143,7 +143,6 @@ class UserOnCourse(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey(User.id))
     course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
-    repo_name: Mapped[str]
     join_date: Mapped[datetime] = mapped_column(server_default=func.now())
     is_course_admin: Mapped[bool] = mapped_column(default=False)
 
