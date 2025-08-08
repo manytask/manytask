@@ -47,11 +47,33 @@ services:
             - vhost:/etc/nginx/vhost.d:rw
             - html:/usr/share/nginx/html:rw
 
+    docs:
+        build:
+            dockerfile: Dockerfile
+            context: .
+            target: docs
+        container_name: manytask-docs
+        restart: always
+        network_mode: bridge
+        expose:
+            - "8080"
+        environment:
+            VIRTUAL_HOST: ${DOCS_VIRTUAL_HOST}
+            VIRTUAL_PORT: 80
+            LETSENCRYPT_HOST: ${DOCS_LETSENCRYPT_HOST}
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:5050/healthcheck" ]
+            interval: 1m
+            timeout: 15s
+            retries: 3
+            start_period: 30s
+
     manytask:
         # image: manytask/manytask:latest  # set SPECIFIC version you'll use
         build:
             dockerfile: Dockerfile
             context: .
+            target: app
         container_name: manytask  # change this to your project name
         restart: always
         expose:
