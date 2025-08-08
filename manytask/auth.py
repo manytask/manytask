@@ -171,7 +171,6 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         app.storage_api.sync_stored_user(
             course.course_name,
             auth_user.username,
-            app.rms_api.get_url_for_repo(auth_user.username, course.gitlab_course_students_group),
             app.storage_api.check_if_instance_admin(auth_user.username),
         )
 
