@@ -20,16 +20,6 @@ class StoredUser:
         return f"StoredUser(username={self.username})"
 
 
-@dataclass
-class Student:
-    id: int
-    username: str
-    name: str
-
-    def __repr__(self) -> str:
-        return f"Student(username={self.username})"
-
-
 class StorageApi(ABC):
     @abstractmethod
     def get_scores(
@@ -246,3 +236,12 @@ class RmsApi(ABC):
         self,
         oauth_token: str,
     ) -> RmsUser: ...
+
+
+@dataclass
+class AuthenticatedUser:
+    id: int
+    username: str
+
+    def __repr__(self) -> str:
+        return f"AuthenticatedUser(username={self.username})"
