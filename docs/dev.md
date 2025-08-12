@@ -1,7 +1,7 @@
 # Development guide
 
 
-## How to get started development
+## How to get started developing
 ### 1. Prerequisites and Access
 
 Before starting development, ensure you have the necessary access:
@@ -11,9 +11,9 @@ Before starting development, ensure you have the necessary access:
 
 You can request these from **[@artemzhmurov](https://t.me/artemzhmurov)**.
 
-Additionally, you need to set up the virtual environment as described in [`dev_setup.md`](./dev_setup.md).
+Additionally, you need to set up the virtual environment as described in [dev_setup.md](./dev_setup.md).
 
----
+
 
 ### 2. Project Structure Overview
 
@@ -29,7 +29,7 @@ Below is a brief description of each main file in the project:
 - **`models.py`** – Database model definitions.
 - **`web.py`** – Endpoint definitions.
 
----
+
 
 ### 3. Deploying the Service on the Server
 
@@ -43,7 +43,7 @@ Below is a brief description of each main file in the project:
      Replace `*` with your desired name (avoid existing names!).
 3. Copy the **Application ID** and **Secret**.
 
----
+
 
 #### Step 2 — Clone the Project on the Server
 
@@ -53,35 +53,35 @@ Below is a brief description of each main file in the project:
 4. Copy `.env.example` to `.env`.
 5. Fill in `.env`:
 
-| Variable | Description |
-|----------|-------------|
-| `FLASK_SECRET_KEY` | Random string |
-| `GITLAB_ADMIN_TOKEN` | From `/srv/app/.env.common` |
-| `GITLAB_CLIENT_ID` | Application ID from Step 1 |
-| `GITLAB_CLIENT_SECRET` | Application Secret from Step 1 |
-| `INITIAL_INSTANCE_ADMIN` | Your GitLab username |
-| `DATABASE_URL` | Database connection string (can be taken from `init-db.sh`) |
+| Variable                 | Description                                                 |
+|--------------------------|-------------------------------------------------------------|
+| `FLASK_SECRET_KEY`       | Random string                                               |
+| `GITLAB_ADMIN_TOKEN`     | From `/srv/app/.env.common`                                 |
+| `GITLAB_CLIENT_ID`       | Application ID from Step 1                                  |
+| `GITLAB_CLIENT_SECRET`   | Application Secret from Step 1                              |
+| `INITIAL_INSTANCE_ADMIN` | Your GitLab username                                        |
+| `DATABASE_URL`           | Database connection string (can be taken from `init-db.sh`) |
 
----
+
 
 #### Step 3 — Start the Application
 
 ```bash
 docker compose up --build -d
 ```
----
+
 ### 4. Adding a Course
 #### Step 1 — Create the Course in the Admin Panel
 1. Go to admin/panel → create_course.
 2. Fill in all fields and remember the course token.
 3. Create the course.
----
+
 #### Step 2 — Create GitLab Groups and Projects
 1. In GitLab: https://gitlab.manytask2.org/groups/new
 2. Create an empty public group with the course name.
 3. Create a private subgroup (for student repositories).
 4. Create a public project inside the group — this will be the shared assignments repository.
----
+
 #### Step 3 — Link the Course in Manytask
 On the server:
 ```bash
@@ -96,7 +96,7 @@ curl -X POST \
 ```
 Replace `<course_name>` with your actual course name.
 Once done, your first course will be available in Manytask.
----
+
 
 ## How to deploy manytask locally
 Use `WSL 2`, if you are using Windows
@@ -119,7 +119,6 @@ Use `WSL 2`, if you are using Windows
    ```bash
    psql postgresql://<username>:<password>@localhost:5432/<database name>
    ```
-   
 
 4. Copy `.env.example` to `.env` in your working folder. In this file:
 - Set `FLASK_SECRET_KEY` to a random string
