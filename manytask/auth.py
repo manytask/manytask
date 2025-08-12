@@ -109,7 +109,9 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 
         if valid_session(session):
             if not app.rms_api.check_user_authenticated_in_rms(
-                app.oauth, session["gitlab"]["access_token"], session["gitlab"]["refresh_token"]
+                app.oauth,
+                session["gitlab"]["access_token"],
+                session["gitlab"]["refresh_token"],
             ):
                 return __redirect_to_login()
         else:

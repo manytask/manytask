@@ -9,6 +9,7 @@ import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
+from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import session
 from requests.exceptions import HTTPError
@@ -282,7 +283,6 @@ class GitLabApi(RmsApi):
         try:
             response.raise_for_status()
             return True
-
         except HTTPError as e:
             if e.response.status_code == HTTPStatus.UNAUTHORIZED:
                 try:
@@ -300,9 +300,10 @@ class GitLabApi(RmsApi):
                     response.raise_for_status()
 
                     session["gitlab"].update({"access_token": new_access, "refresh_token": new_refresh})
+                    logger.info("Token refreshed successfully.")
 
                     return True
-                except HTTPError as refresh_error:
+                except (HTTPError, OAuthError) as refresh_error:
                     logger.error(f"Failed to refresh token: {refresh_error}", exc_info=True)
                     return False
 
