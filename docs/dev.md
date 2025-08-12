@@ -11,7 +11,7 @@ Before starting development, ensure you have the necessary access:
 
 You can request these from **[@artemzhmurov](https://t.me/artemzhmurov)**.
 
-Additionally, you need to set up the virtual environment as described in [dev_setup.md](./dev_setup.md).
+Additionally, you need to set up the virtual environment as described in [Development setup](./dev_setup.md).
 
 
 
@@ -72,15 +72,15 @@ docker compose up --build -d
 
 ### 4. Adding a Course
 #### Step 1 — Create the Course in the Admin Panel
-1. Go to admin/panel → create_course.
+1. Go to `admin/panel` → create_course.
 2. Fill in all fields and remember the course token.
 3. Create the course.
 
 #### Step 2 — Create GitLab Groups and Projects
-1. In GitLab: https://gitlab.manytask2.org/groups/new
+1. In GitLab: [https://gitlab.manytask2.org/groups/new](https://gitlab.manytask2.org/groups/new)
 2. Create an empty public group with the course name.
 3. Create a private subgroup (for student repositories).
-4. Create a public project inside the group — this will be the shared assignments repository.
+4. Create a public project inside the group — this will be the shared assignment's repository.
 
 #### Step 3 — Link the Course in Manytask
 On the server:
