@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
+from authlib.integrations.flask_client import OAuth
+from flask import session
 from requests.exceptions import HTTPError
 
 from .abstract import RmsApi, RmsUser
@@ -270,23 +273,44 @@ class GitLabApi(RmsApi):
 
     def check_user_authenticated_in_rms(
         self,
-        oauth_token: str,
+        oauth: OAuth,
+        oauth_access_token: str,
+        oauth_refresh_token: str,
     ) -> bool:
-        headers = {"Authorization": "Bearer " + oauth_token}
-        response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
+        response = self._make_auth_request(oauth_access_token)
+
         try:
             response.raise_for_status()
+            return True
+
         except HTTPError as e:
+            if e.response.status_code == HTTPStatus.UNAUTHORIZED:
+                try:
+                    logger.info("Access token expired. Trying to refresh token.")
+
+                    new_tokens = oauth.gitlab.fetch_access_token(
+                        grant_type="refresh_token",
+                        refresh_token=oauth_refresh_token,
+                    )
+
+                    new_access = new_tokens.get("access_token")
+                    new_refresh = new_tokens.get("refresh_token", oauth_refresh_token)
+
+                    response = self._make_auth_request(new_access)
+                    response.raise_for_status()
+
+                    session["gitlab"].update({"access_token": new_access, "refresh_token": new_refresh})
+
+                    return True
+                except HTTPError as refresh_error:
+                    logger.error(f"Failed to refresh token: {refresh_error}", exc_info=True)
+                    return False
+
             logger.info(f"User is not logged to GitLab: {e}", exc_info=True)
             return False
-        return True
 
-    def get_authenticated_rms_user(
-        self,
-        oauth_token: str,
-    ) -> RmsUser:
-        headers = {"Authorization": "Bearer " + oauth_token}
-        response = requests.get(f"{self.base_url}/api/v4/user", headers=headers)
+    def get_authenticated_rms_user(self, oauth_access_token: str) -> RmsUser:
+        response = self._make_auth_request(oauth_access_token)
         response.raise_for_status()
         return self._construct_rms_user(response.json())
 
@@ -299,3 +323,7 @@ class GitLabApi(RmsApi):
         course_students_group: str,
     ) -> str:
         return f"{self.base_url}/{course_students_group}/{username}"
+
+    def _make_auth_request(self, token: str) -> requests.Response:
+        headers = {"Authorization": f"Bearer {token}"}
+        return requests.get(f"{self.base_url}/api/v4/user", headers=headers)

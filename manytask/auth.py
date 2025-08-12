@@ -108,7 +108,9 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
             return f(*args, **kwargs)
 
         if valid_session(session):
-            if not app.rms_api.check_user_authenticated_in_rms(session["gitlab"]["access_token"]):
+            if not app.rms_api.check_user_authenticated_in_rms(
+                app.oauth, session["gitlab"]["access_token"], session["gitlab"]["refresh_token"]
+            ):
                 return __redirect_to_login()
         else:
             logger.error("Failed to verify session.", exc_info=True)
