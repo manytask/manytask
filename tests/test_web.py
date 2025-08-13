@@ -148,7 +148,6 @@ def mock_storage_api(mock_course):  # noqa: C901
             self,
             course_name: str,
             username: str,
-            repo_name: str,
             course_admin: bool,
         ) -> StoredUser:
             self.stored_user.username = username

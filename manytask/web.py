@@ -213,29 +213,22 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     gitlab_access_token: str = session["gitlab"]["access_token"]
     rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
-    is_course_admin = app.storage_api.check_if_instance_admin(rms_user.username)
 
-    if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        if secrets.compare_digest(request.form["secret"], course.token):
-            is_course_admin = True
-        else:
-            return render_template(
-                "create_project.html",
-                error_message="Invalid secret",
-                course_name=course.course_name,
-                course_favicon=app.favicon,
-                base_url=app.rms_api.base_url,
-            )
+    # Set user to be course admin if they provided course token as a secret
+    is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
+    if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
+        return render_template(
+            "create_project.html",
+            error_message="Invalid secret",
+            course_name=course.course_name,
+            course_favicon=app.favicon,
+            base_url=app.rms_api.base_url,
+        )
 
     first_name, last_name = rms_user.name.split()  # TODO: come up with how to separate names
     app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, rms_user.id)
 
-    app.storage_api.sync_stored_user(
-        course.course_name,
-        rms_user.username,
-        app.rms_api.get_url_for_repo(rms_user.username, course.gitlab_course_students_group),
-        is_course_admin,
-    )
+    app.storage_api.sync_stored_user(course.course_name, rms_user.username, is_course_admin)
 
     # Create use if needed
     try:
