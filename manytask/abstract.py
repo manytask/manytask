@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
+from authlib.integrations.flask_client import OAuth
+
 from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig
 
@@ -226,15 +228,17 @@ class RmsApi(ABC):
     ) -> RmsUser: ...
 
     @abstractmethod
-    def check_authenticated_rms_user(
+    def check_user_authenticated_in_rms(
         self,
-        oauth_token: str,
-    ) -> None: ...
+        oauth: OAuth,
+        oauth_access_token: str,
+        oauth_refresh_token: str,
+    ) -> bool: ...
 
     @abstractmethod
     def get_authenticated_rms_user(
         self,
-        oauth_token: str,
+        oauth_access_token: str,
     ) -> RmsUser: ...
 
 

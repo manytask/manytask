@@ -2,7 +2,6 @@ import logging
 from functools import wraps
 from http import HTTPStatus
 from typing import Any, Callable
-from urllib.error import HTTPError
 
 from authlib.integrations.flask_client import OAuth
 from flask import abort, current_app, flash, redirect, request, session, url_for
@@ -109,10 +108,11 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
             return f(*args, **kwargs)
 
         if valid_session(session):
-            try:
-                app.rms_api.check_authenticated_rms_user(session["gitlab"]["access_token"])
-            except (HTTPError, KeyError) as e:
-                logger.error(f"Failed login in gitlab, redirect to login: {e}", exc_info=True)
+            if not app.rms_api.check_user_authenticated_in_rms(
+                app.oauth,
+                session["gitlab"]["access_token"],
+                session["gitlab"]["refresh_token"],
+            ):
                 return __redirect_to_login()
         else:
             logger.error("Failed to verify session.", exc_info=True)

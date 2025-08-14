@@ -65,8 +65,8 @@ def mock_gitlab_api():
         def get_rms_user_by_id(user_id: int):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
 
-        def check_authenticated_rms_user(self, gitlab_access_token: str):
-            pass
+        def check_user_authenticated_in_rms(self, oauth, oauth_access_token, oauth_refresh_token):
+            return True
 
         def get_authenticated_rms_user(self, gitlab_access_token: str):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
@@ -230,6 +230,7 @@ def test_requires_auth_with_valid_session(app, mock_gitlab_oauth):
             "username": "test_user",
             "user_id": 123,
             "access_token": TEST_TOKEN,
+            "refresh_token": TEST_TOKEN,
         }
         response = test_route(course_name=TEST_COURSE_NAME)
         assert response == "success"
@@ -343,6 +344,7 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
             "username": "test_user",
             "user_id": 123,
             "access_token": TEST_TOKEN,
+            "refresh_token": TEST_TOKEN,
         }
 
         response = test_route(course_name=TEST_COURSE_NAME)
@@ -365,6 +367,7 @@ def test_requires_admin_with_no_admin_rules(app, mock_gitlab_oauth):
             "username": "test_user",
             "user_id": 123,
             "access_token": TEST_TOKEN,
+            "refresh_token": TEST_TOKEN,
         }
 
         with pytest.raises(HTTPException) as e:

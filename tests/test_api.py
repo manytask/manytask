@@ -202,8 +202,8 @@ def mock_gitlab_api(mock_rms_user):
                 return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
             raise GitLabApiException("User not found")
 
-        def check_authenticated_rms_user(self, access_token):
-            pass
+        def check_user_authenticated_in_rms(self, oauth, oauth_access_token, oauth_refresh_token):
+            return True
 
         def get_authenticated_rms_user(self, access_token):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
@@ -491,6 +491,8 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
                 "version": 1.5,
                 "username": TEST_USERNAME,
                 "user_id": TEST_USER_ID,
+                "access_token": "123",
+                "refresh_token": "123",
             }
         response = client.get(f"/api/{TEST_COURSE_NAME}/database")
         assert response.status_code == HTTPStatus.FOUND  # Redirects to not ready page
