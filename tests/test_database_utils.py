@@ -15,9 +15,9 @@ TASK_LARGE = "task_large"
 STUDENT_1 = "student1"
 STUDENT_2 = "student2"
 
-STUDENT_NAMES = {
-    STUDENT_1: [constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1],
-    STUDENT_2: [constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2],
+STUDENT_DATA = {
+    STUDENT_1: [constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1, 1],
+    STUDENT_2: [constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2, 2],
 }
 
 SCORES = {
@@ -64,9 +64,9 @@ def app():
         def get_stored_user(username):
             return StoredUser(
                 username=username,
-                first_name=STUDENT_NAMES[username][0],
-                last_name=STUDENT_NAMES[username][1],
-                rms_id=123,
+                first_name=STUDENT_DATA[username][0],
+                last_name=STUDENT_DATA[username][1],
+                rms_id=STUDENT_DATA[username][2],
                 instance_admin=False,
             )
 
@@ -79,7 +79,7 @@ def app():
                         TASK_2: SCORES[STUDENT_1][TASK_2],
                         TASK_LARGE: SCORES[STUDENT_1][TASK_LARGE],
                     },
-                    STUDENT_NAMES[STUDENT_1],
+                    [STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]],
                 ),
                 STUDENT_2: (
                     {
@@ -87,7 +87,7 @@ def app():
                         TASK_2: SCORES[STUDENT_2][TASK_2],
                         TASK_LARGE: SCORES[STUDENT_2][TASK_LARGE],
                     },
-                    STUDENT_NAMES[STUDENT_2],
+                    [STUDENT_DATA[STUDENT_2][0], STUDENT_DATA[STUDENT_2][1]],
                 ),
             }
 
@@ -133,8 +133,8 @@ def test_get_database_table_data(app):
 
         for student_id in [STUDENT_1, STUDENT_2]:
             student = next(s for s in students if s["username"] == student_id)
-            assert student["first_name"] == STUDENT_NAMES[student_id][0]
-            assert student["last_name"] == STUDENT_NAMES[student_id][1]
+            assert student["first_name"] == STUDENT_DATA[student_id][0]
+            assert student["last_name"] == STUDENT_DATA[student_id][1]
             assert student["total_score"] == SCORES[student_id]["total"]
             assert student["large_count"] == SCORES[student_id]["large_count"]
             assert student["scores"] == {
