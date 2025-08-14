@@ -61,12 +61,13 @@ def app():
             return self.groups
 
         @staticmethod
-        def get_stored_user(_course_name, username):
+        def get_stored_user(username):
             return StoredUser(
                 username=username,
                 first_name=STUDENT_NAMES[username][0],
                 last_name=STUDENT_NAMES[username][1],
-                course_admin=False,
+                rms_id=123,
+                instance_admin=False,
             )
 
         @staticmethod

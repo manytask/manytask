@@ -173,7 +173,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_stored_user(self, _course_name, _username):
+        def get_stored_user(self, _username):
             return self.stored_user
 
         def check_if_instance_admin(self, _username):

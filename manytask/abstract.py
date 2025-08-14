@@ -40,7 +40,6 @@ class StorageApi(ABC):
     @abstractmethod
     def get_stored_user(
         self,
-        course_name: str,
         username: str,
     ) -> StoredUser: ...
 
