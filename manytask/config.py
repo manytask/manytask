@@ -26,6 +26,7 @@ class ManytaskDeadlinesType(Enum):
     HARD = "hard"
     INTERPOLATE = "interpolate"
 
+
 class ManytaskTaskConfig(BaseModel):
     task: str
 
