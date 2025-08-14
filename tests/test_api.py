@@ -491,8 +491,8 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
                 "version": 1.5,
                 "username": TEST_USERNAME,
                 "user_id": TEST_USER_ID,
-                "access_token": 123,
-                "refresh_token": 123,
+                "access_token": "123",
+                "refresh_token": "123",
             }
         response = client.get(f"/api/{TEST_COURSE_NAME}/database")
         assert response.status_code == HTTPStatus.FOUND  # Redirects to not ready page
