@@ -42,7 +42,7 @@ def test_create_project():
     api.create_project(user, "students-group", "public-repo")
 
     assert api.check_project_exists("student1", "students-group") is True
-    assert api.get_url_for_repo("student1", "students-group") == "https://memory.example.com/students-group/student1"
+    assert api.get_url_for_repo("student1", "students-group") == "https://mockrms.manytask.org/students-group/student1"
 
 
 def test_authenticated_user():
