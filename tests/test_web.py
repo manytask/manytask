@@ -78,8 +78,8 @@ def mock_gitlab_api():
         def get_rms_user_by_id(user_id: int):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_STUDENT_NAME)
 
-        def check_authenticated_rms_user(self, access_token):
-            pass
+        def check_user_authenticated_in_rms(self, oauth, oauth_access_token, oauth_refresh_token):
+            return True
 
         def get_rms_user_by_username(self, username: str) -> RmsUser:
             return RmsUser(
@@ -148,7 +148,6 @@ def mock_storage_api(mock_course):  # noqa: C901
             self,
             course_name: str,
             username: str,
-            repo_name: str,
             course_admin: bool,
         ) -> StoredUser:
             self.stored_user.username = username
@@ -273,6 +272,7 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
                 }
             app.oauth = mock_gitlab_oauth
             mock_check_user_on_course.return_value = False
@@ -359,6 +359,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
                 }
 
             app.oauth = mock_gitlab_oauth
@@ -379,6 +380,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
                 }
 
             app.storage_api.stored_user.course_admin = True
@@ -398,6 +400,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
                 }
             app.storage_api.stored_user.course_admin = False
             app.storage_api.instance_admin = True
