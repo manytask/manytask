@@ -26,12 +26,6 @@ class ManytaskDeadlinesType(Enum):
     HARD = "hard"
     INTERPOLATE = "interpolate"
 
-
-class ManytaskStorageType(Enum):
-    DataBase = "db"
-    GoogleSheets = "gsheets"
-
-
 class ManytaskTaskConfig(BaseModel):
     task: str
 
