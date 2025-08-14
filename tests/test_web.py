@@ -495,9 +495,7 @@ def test_login_finish_get_with_code(app, mock_gitlab_oauth):
     ):
         app.oauth = mock_gitlab_oauth
 
-        mock_get_authenticated_user.return_value = AuthenticatedUser(
-            id=TEST_USER_ID, username=TEST_USERNAME
-        )
+        mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
         mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
