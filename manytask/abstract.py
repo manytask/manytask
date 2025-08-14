@@ -160,6 +160,10 @@ class RmsUser:
         return f"RmsUser(username={self.username})"
 
 
+class RmsApiException(Exception):
+    pass
+
+
 class RmsApi(ABC):
     _base_url: str
 

@@ -1,11 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
-from .abstract import RmsApi, RmsUser
-
-
-class MemoryRmsApiException(Exception):
-    pass
+from .abstract import RmsApi, RmsApiException, RmsUser
 
 
 @dataclass
@@ -22,7 +18,7 @@ class MemoryGroup:
     projects: Dict[str, MemoryProject] = field(default_factory=dict)
 
 
-class MemoryRmsApi(RmsApi):
+class MockRmsApi(RmsApi):
     def __init__(self, base_url: str):
         self._base_url = base_url
         self.users: Dict[int, RmsUser] = {}
@@ -42,6 +38,9 @@ class MemoryRmsApi(RmsApi):
         email: str,
         password: str,
     ) -> None:
+        if username in self.users_by_username:
+            raise RmsApiException(f"User with username {username} already exists")
+
         user_id = max(self.users.keys(), default=0) + 1
         user = RmsUser(id=user_id, username=username, name=f"{firstname} {lastname}")
         self.users[user_id] = user
@@ -55,10 +54,10 @@ class MemoryRmsApi(RmsApi):
         project_path = f"{course_group}/{course_public_repo}"
         if project_path in self.projects:
             return  # Already exists
-        
+
         if course_group not in self.groups:
             self.groups[course_group] = MemoryGroup(name=course_group)
-            
+
         project = MemoryProject(name=course_public_repo, group=course_group, visibility="public")
         self.projects[project_path] = project
         self.groups[course_group].projects[course_public_repo] = project
@@ -90,16 +89,12 @@ class MemoryRmsApi(RmsApi):
             if rms_user.id not in self.projects[project_path].members:
                 self.projects[project_path].members.append(rms_user.id)
             return
-            
+
         # Create project if it doesn't exist
-        project = MemoryProject(
-            name=rms_user.username,
-            group=course_students_group,
-            visibility="private"
-        )
+        project = MemoryProject(name=rms_user.username, group=course_students_group, visibility="private")
         project.members.append(rms_user.id)
         self.projects[project_path] = project
-        
+
         # Add to group
         if course_students_group not in self.groups:
             self.groups[course_students_group] = MemoryGroup(name=course_students_group)
@@ -120,7 +115,7 @@ class MemoryRmsApi(RmsApi):
         user_id: int,
     ) -> RmsUser:
         if user_id not in self.users:
-            raise MemoryRmsApiException(f"User with id {user_id} not found")
+            raise RmsApiException(f"User with id {user_id} not found")
         return self.users[user_id]
 
     def get_rms_user_by_username(
@@ -128,19 +123,12 @@ class MemoryRmsApi(RmsApi):
         username: str,
     ) -> RmsUser:
         if username not in self.users_by_username:
-            raise MemoryRmsApiException(f"User with username {username} not found")
+            raise RmsApiException(f"User with username {username} not found")
         return self.users_by_username[username]
-
-    def check_authenticated_rms_user(
-        self,
-        oauth_token: str,
-    ) -> None:
-        # In-memory implementation doesn't require real authentication
-        pass
 
     def get_authenticated_rms_user(
         self,
-        oauth_token: str,
+        oauth_access_token: str,
     ) -> RmsUser:
         # For testing, return a dummy user
         return RmsUser(id=1, username="testuser", name="Test User")
