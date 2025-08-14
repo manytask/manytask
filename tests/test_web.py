@@ -111,10 +111,10 @@ def mock_storage_api(mock_course):  # noqa: C901
                 first_name=TEST_FIRST_NAME,
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_STUDENT_RMS_ID,
-                course_admin=False,
+                instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
-            self.instance_admin = False
+            self.course_admin = False
 
         @staticmethod
         def get_scores_update_timestamp(_course_name):
@@ -151,7 +151,7 @@ def mock_storage_api(mock_course):  # noqa: C901
             course_admin: bool,
         ) -> None:
             self.stored_user.username = username
-            self.stored_user.course_admin = self.stored_user.course_admin or self.instance_admin
+            self.course_admin = self.course_admin or self.stored_user.instance_admin
 
         @staticmethod
         def get_groups(*_args, **_kwargs):
@@ -177,10 +177,10 @@ def mock_storage_api(mock_course):  # noqa: C901
             return self.stored_user
 
         def check_if_instance_admin(self, _username):
-            return self.instance_admin
+            return self.stored_user.instance_admin
 
         def check_if_course_admin(self, _course_name, _username):
-            return self.stored_user.course_admin
+            return self.course_admin
 
         @staticmethod
         def update_cached_scores(_course_name):
@@ -191,8 +191,8 @@ def mock_storage_api(mock_course):  # noqa: C901
             return True
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
-            self.stored_user.course_admin = self.stored_user.course_admin or course_admin
-            return self.stored_user.course_admin
+            self.course_admin = self.course_admin or course_admin
+            return self.course_admin
 
         def max_score_started(self, _course_name):
             return 100
@@ -382,7 +382,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "refresh_token": TEST_TOKEN,
                 }
 
-            app.storage_api.stored_user.course_admin = True
+            app.storage_api.course_admin = True
 
             # not instance admin, but course admin
             response = client.get(path)
@@ -401,8 +401,8 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "access_token": TEST_TOKEN,
                     "refresh_token": TEST_TOKEN,
                 }
-            app.storage_api.stored_user.course_admin = False
-            app.storage_api.instance_admin = True
+            app.storage_api.course_admin = False
+            app.storage_api.stored_user.instance_admin = True
 
             # instance admin => course admin
             response = client.get(path)

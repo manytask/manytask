@@ -116,9 +116,10 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 first_name=TEST_FIRST_NAME,
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
-                course_admin=False,
+                instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
+            self.course_admin = False
 
         def store_score(self, _course_name, username, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
@@ -145,7 +146,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 first_name=self.stored_user.first_name,
                 last_name=self.stored_user.last_name,
                 rms_id=self.stored_user.rms_id,
-                course_admin=True,
+                instance_admin=True,
             )
 
         def check_if_course_admin(self, _course_name, _username):
@@ -161,8 +162,8 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             pass
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
-            self.stored_user.course_admin = course_admin
-            return self.stored_user.course_admin
+            self.course_admin = course_admin
+            return course_admin
 
         def check_user_on_course(self, *a, **k):
             return True

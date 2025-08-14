@@ -15,7 +15,7 @@ class StoredUser:
     first_name: str
     last_name: str
     rms_id: int
-    course_admin: bool = False
+    instance_admin: bool = False
     # we can add more fields that we store
 
     def __repr__(self) -> str:
