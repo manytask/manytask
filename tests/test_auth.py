@@ -30,7 +30,7 @@ TEST_REPO = "test_repo"
 
 
 @pytest.fixture
-def app(mock_gitlab_api, mock_storage_api):
+def app(mock_rms_api, mock_auth_api, mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
@@ -38,8 +38,8 @@ def app(mock_gitlab_api, mock_storage_api):
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
-    app.gitlab_api = mock_gitlab_api
-    app.rms_api = mock_gitlab_api
+    app.rms_api = mock_rms_api
+    app.auth_api = mock_auth_api
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
@@ -47,8 +47,8 @@ def app(mock_gitlab_api, mock_storage_api):
 
 
 @pytest.fixture
-def mock_gitlab_api():
-    class MockGitlabApi:
+def mock_rms_api():
+    class MockRmsApi:
         def __init__(self):
             self.course_admin = False
             self.base_url = GITLAB_BASE_URL
@@ -65,9 +65,6 @@ def mock_gitlab_api():
         def get_rms_user_by_id(user_id: int):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
 
-        def check_user_authenticated_in_rms(self, oauth, oauth_access_token, oauth_refresh_token):
-            return True
-
         def get_authenticated_rms_user(self, gitlab_access_token: str):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
 
@@ -79,7 +76,24 @@ def mock_gitlab_api():
         def _construct_rms_user(user: dict[str, Any]):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
-    return MockGitlabApi()
+    return MockRmsApi()
+
+
+@pytest.fixture
+def mock_auth_api():
+    class MockAuthApi:
+        def check_user_is_authenticated(
+            self,
+            oauth,
+            oauth_access_token: str,
+            oauth_refresh_token: str,
+        ) -> bool:
+            return True
+
+        def get_authenticated_user(self, access_token):
+            return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
+
+    return MockAuthApi()
 
 
 @pytest.fixture
@@ -221,10 +235,10 @@ def test_requires_auth_with_valid_session(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.gitlab_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
         session["gitlab"] = {
             "version": 1.5,
             "username": "test_user",
@@ -244,12 +258,12 @@ def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.gitlab_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
         patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
     ):
         app.oauth = mock_gitlab_oauth
         mock_check_user_on_course.return_value = True
-        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
         response = test_route(course_name=TEST_COURSE_NAME)
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("root.signup")
@@ -333,11 +347,11 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.gitlab_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
         patch.object(app.storage_api, "check_if_instance_admin") as mock_check_if_instance_admin,
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
         mock_check_if_instance_admin.return_value = True
         session["gitlab"] = {
             "version": 1.5,
@@ -358,10 +372,10 @@ def test_requires_admin_with_no_admin_rules(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.gitlab_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
+        mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
         session["gitlab"] = {
             "version": 1.5,
             "username": "test_user",

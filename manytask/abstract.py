@@ -228,14 +228,6 @@ class RmsApi(ABC):
     ) -> RmsUser: ...
 
     @abstractmethod
-    def check_user_authenticated_in_rms(
-        self,
-        oauth: OAuth,
-        oauth_access_token: str,
-        oauth_refresh_token: str,
-    ) -> bool: ...
-
-    @abstractmethod
     def get_authenticated_rms_user(
         self,
         oauth_access_token: str,
@@ -249,3 +241,19 @@ class AuthenticatedUser:
 
     def __repr__(self) -> str:
         return f"AuthenticatedUser(username={self.username})"
+
+
+class AuthApi(ABC):
+    @abstractmethod
+    def check_user_is_authenticated(
+        self,
+        oauth: OAuth,
+        oauth_access_token: str,
+        oauth_refresh_token: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def get_authenticated_user(
+        self,
+        oauth_access_token: str,
+    ) -> AuthenticatedUser: ...
