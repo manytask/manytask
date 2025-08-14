@@ -90,7 +90,7 @@
 
                             <select class="form-select" id="userToGrant" name="username" required size="5">
                                 {% for user in users %}
-                                    {% if not user.course_admin %}
+                                    {% if not user.instance_admin %}
                                         <option value="{{ user.username }}">{{ user.username }}</option>
                                     {% endif %}
                                 {% endfor %}
@@ -130,7 +130,7 @@
                             <select class="form-select" id="userToRevoke" name="username" required size="5">
                                 <option value="" disabled>Select a user</option>
                                 {% for user in users %}
-                                    {% if user.course_admin %}
+                                    {% if user.instance_admin %}
                                         <option value="{{ user.username }}">{{ user.username }}</option>
                                     {% endif %}
                                 {% endfor %}
