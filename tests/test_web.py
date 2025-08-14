@@ -144,15 +144,14 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_bonus_score(_course_name, _username):
             return 10
 
-        def sync_stored_user(
+        def sync_user_on_course(
             self,
             course_name: str,
             username: str,
             course_admin: bool,
-        ) -> StoredUser:
+        ) -> None:
             self.stored_user.username = username
             self.stored_user.course_admin = self.stored_user.course_admin or self.instance_admin
-            return self.stored_user
 
         @staticmethod
         def get_groups(*_args, **_kwargs):
