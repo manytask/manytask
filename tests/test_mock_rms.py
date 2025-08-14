@@ -1,6 +1,7 @@
 import pytest
 
-from manytask.mock_rms import MockRmsApi, MockRmsApiException
+from manytask.abstract import RmsApiException
+from manytask.mock_rms import MockRmsApi
 
 
 def test_register_new_user():
@@ -11,7 +12,7 @@ def test_register_new_user():
     assert user.username == "testuser"
     assert user.name == "Test User"
 
-    with pytest.raises(MockRmsApiException):
+    with pytest.raises(RmsApiException):
         api.get_rms_user_by_username("unknown")
 
 
