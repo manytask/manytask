@@ -53,14 +53,18 @@ class GitLabApi(RmsApi):
         students_group_name: str,
         default_branch: str,
     ) -> None:
-        logger.info(f"Creating course group {course_group_name}")
-        self.create_course_group(course_group_name)
+        try:
+            logger.info(f"Creating course group {course_group_name}")
+            self.create_course_group(course_group_name)
 
-        logger.info(f"Creating public repository {public_repo_name} in group {course_group_name}")
-        self.create_public_repo(course_group_name, public_repo_name, default_branch=default_branch)
+            logger.info(f"Creating public repository {public_repo_name} in group {course_group_name}")
+            self.create_public_repo(course_group_name, public_repo_name, default_branch=default_branch)
 
-        logger.info(f"Creating students group {students_group_name}")
-        self.create_students_group(course_group_name, students_group_name)
+            logger.info(f"Creating students group {students_group_name}")
+            self.create_students_group(course_group_name, students_group_name)
+        except RuntimeError as e:
+            logger.error(e)
+
 
     def register_new_user(
         self,
@@ -141,7 +145,7 @@ class GitLabApi(RmsApi):
                 }
             )
         except gitlab.GitlabError:
-            logger.error(f"Failed to create group {course_group} and it does not exist")
+            raise RuntimeError(f"Failed to create group {course_group} and it does not exist")
 
     def create_public_repo(
         self,
@@ -151,16 +155,16 @@ class GitLabApi(RmsApi):
     ) -> None:
         group = self._get_group_by_name(course_group)
         course_public_repo = course_public_repo_path.split("/")[-1]
-        project_full_path = f"{group.full_path}/{course_public_repo}"
+        project_full_path = f"{group.full_name}/{course_public_repo}"
 
         if self._project_exists(project_full_path):
-            logger.info(f"Project {project_full_path} already exists in group {group.full_path}")
+            logger.info(f"Project {project_full_path} already exists in group {group.full_name}")
             return
         try:
             self._gitlab.projects.create(
                 {
-                    "name": project_full_path,
-                    "path": project_full_path,
+                    "name": course_public_repo,
+                    "path": course_public_repo,
                     "namespace_id": group.id,
                     "visibility": "public",
                     "shared_runners_enabled": True,
@@ -170,9 +174,7 @@ class GitLabApi(RmsApi):
                 }
             )
         except gitlab.GitlabError:
-            logger.error(
-                f"Failed to create project {course_public_repo} in group {group.full_path} and it does not exist"
-            )
+            raise RuntimeError(f"Failed to create project {course_public_repo} in group {group.full_path} and it does not exist")
 
     def create_students_group(
         self,
@@ -181,9 +183,9 @@ class GitLabApi(RmsApi):
     ) -> None:
         group = self._get_group_by_name(course_group)
         course_students_group = course_students_group_path.split("/")[-1]
-        subgroup_full_path = f"{group.full_path}/{course_students_group}"
+        subgroup_full_path = f"{group.full_name}/{course_students_group}"
         if self._group_exists(subgroup_full_path):
-            logger.info(f"Group {subgroup_full_path} already exists in group {group.full_path}")
+            logger.info(f"Group {subgroup_full_path} already exists in group {group.full_name}")
             return
         try:
             self._gitlab.groups.create(
@@ -197,9 +199,7 @@ class GitLabApi(RmsApi):
                 }
             )
         except gitlab.GitlabError:
-            logger.error(
-                f"Failed to create group {course_students_group} in group {group.full_path} and it does not exist"
-            )
+            raise RuntimeError(f"Failed to create group {course_students_group} in group {group.full_name} and it does not exist")
 
     def check_project_exists(
         self,
