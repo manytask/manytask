@@ -150,7 +150,7 @@ class GitLabApi(RmsApi):
         default_branch: str = "main",
     ) -> None:
         group = self._get_group_by_name(course_group)
-        course_public_repo = course_public_repo_path.split('/')[-1]
+        course_public_repo = course_public_repo_path.split("/")[-1]
         project_full_path = f"{group.full_path}/{course_public_repo}"
 
         if self._project_exists(project_full_path):
