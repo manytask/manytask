@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from manytask.course import CourseStatus
 from manytask.models import Course, Task, TaskGroup
 from manytask.config import ManytaskDeadlinesConfig
 from tests import constants
@@ -26,9 +27,11 @@ from tests.constants import (
 from tests.test_db_api import (
     db_api,
     first_course_config,
+    edited_first_course_config,
     first_course_deadlines_config,
     first_course_grade_config,
     second_course_config,
+    edited_second_course_config,
     second_course_deadlines_config,
     second_course_grade_config,
     db_api_with_two_initialized_courses,
@@ -191,7 +194,9 @@ def test_get_courses_names_with_no_courses(db_api):
     assert db_api.get_all_courses_names_with_statuses() == []
 
 
-def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
+def test_get_courses_names_with_courses(
+    db_api_with_two_initialized_courses, edited_first_course_config, edited_second_course_config
+):
     db_api_with_two_initialized_courses.create_user_if_not_exist(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
@@ -206,7 +211,7 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_1) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_2) == []
     assert sorted(db_api_with_two_initialized_courses.get_all_courses_names_with_statuses()) == sorted(
-        [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
+        [(FIRST_COURSE_NAME, CourseStatus.HIDDEN), (SECOND_COURSE_NAME, CourseStatus.HIDDEN)]
     )
 
     db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, True)
@@ -214,8 +219,18 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_2, False)
     db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_2, True)
 
-    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME) == [FIRST_COURSE_NAME]
-    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_1) == [SECOND_COURSE_NAME]
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME) == []
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(username2) == []
+
+    db_api_with_two_initialized_courses.edit_course(edited_first_course_config)
+    db_api_with_two_initialized_courses.edit_course(edited_second_course_config)
+
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(username1) == [
+        (FIRST_COURSE_NAME, CourseStatus.IN_PROGRESS)
+    ]
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_1) == [
+        (SECOND_COURSE_NAME, CourseStatus.IN_PROGRESS)
+    ]
     assert sorted(db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_2)) == sorted(
-        [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
+        [(FIRST_COURSE_NAME, CourseStatus.IN_PROGRESS), (SECOND_COURSE_NAME, CourseStatus.IN_PROGRESS)]
     )

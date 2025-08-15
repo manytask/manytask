@@ -662,7 +662,8 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 return []
 
-            user_on_courses = user.users_on_courses.all()
+            hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
+            user_on_courses = user.users_on_courses.filter(models.Course.status.notin_(hidden_for_user)).all()
 
             result = [(user_on_course.course.name, user_on_course.course.status) for user_on_course in user_on_courses]
             return result
