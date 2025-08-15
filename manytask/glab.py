@@ -65,7 +65,6 @@ class GitLabApi(RmsApi):
         except RuntimeError as e:
             logger.error(e)
 
-
     def register_new_user(
         self,
         username: str,
@@ -174,7 +173,9 @@ class GitLabApi(RmsApi):
                 }
             )
         except gitlab.GitlabError:
-            raise RuntimeError(f"Failed to create project {course_public_repo} in group {group.full_name} and it does not exist")
+            raise RuntimeError(
+                f"Failed to create project {course_public_repo} in group {group.full_name} and it does not exist"
+            )
 
     def create_students_group(
         self,
@@ -199,7 +200,9 @@ class GitLabApi(RmsApi):
                 }
             )
         except gitlab.GitlabError:
-            raise RuntimeError(f"Failed to create group {course_students_group} in group {group.full_name} and it does not exist")
+            raise RuntimeError(
+                f"Failed to create group {course_students_group} in group {group.full_name} and it does not exist"
+            )
 
     def check_project_exists(
         self,
