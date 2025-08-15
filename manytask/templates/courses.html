@@ -10,14 +10,19 @@
         <ul class="course-list">
             {% for course in courses %}
                 <li class="course-item">
-                    <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
-                </li>
+    <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
+    <div class="status-container status-{{ course.status }}">
+        <span class="status-badge status-{{ course.status }}">
+            {{ course.status|replace('_', ' ') }}
+        </span>
+    </div>
+</li>
             {% else %}
                 Unfortunately, there are no courses yet.
             {% endfor %}
         </ul>
 
-        <form class="course-search-form" id="registerCourseForm" style="padding-top: 6rem">
+        <form class="course-search-form" id="registerCourseForm" style="padding-top: 4rem">
             <div class="d-flex flex-column align-items-center" style="gap: 0.8rem;">
                 <label for="courseInput" class="course-search-label">Register on new course</label>
                 <input type="text" class="form-control" id="courseInput" placeholder="Course title..." required>

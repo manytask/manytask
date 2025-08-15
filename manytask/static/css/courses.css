@@ -10,9 +10,10 @@
 }
 
 .course-item {
+    position: relative;
     border: 1px solid var(--bs-body-color);
     border-radius: 15px;
-    padding: 10px 20px;
+    padding: 10px 20px 25px;
     background-color: transparent;
     display: inline-block;
     width: 100%;
@@ -47,3 +48,95 @@
 .course-link:hover::after {
     width: 100%;
 }
+
+.status-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: capitalize;
+    letter-spacing: 0.4px;
+}
+
+.status-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: inherit;
+    border-radius: 0 0 14px 14px;
+}
+
+.status-created {
+    background-color: #bbdefb;
+    color: var(--bs-primary);
+}
+.status-hidden {
+    background-color: #e0e0e0;
+    color: #212121;
+}
+.status-in_progress {
+    background-color: #ffecb3;
+    color: #ff6f00;
+}
+.status-all_tasks_issued {
+    background-color: #c8e6c9;
+    color: var(--bs-success);
+}
+.status-doreshka {
+    background-color: #e1bee7;
+    color: #4a148c;
+}
+.status-finished {
+    background-color: #b2ebf2;
+    color: #006064;
+}
+
+/*.course-item {*/
+/*    position: relative;*/
+/*    border: 1px solid var(--bs-body-color);*/
+/*    border-radius: 15px;*/
+/*    padding: 15px 20px;*/
+/*    background-color: transparent;*/
+/*    display: inline-block;*/
+/*    width: 100%;*/
+/*    transition: background-color 0.3s ease, border-color 0.3s ease;*/
+/*    margin-bottom: 8px;*/
+/*    padding-bottom: 30px; !* Добавляем место для статуса *!*/
+/*}*/
+
+/*.course-link {*/
+/*    text-decoration: none;*/
+/*    color: inherit;*/
+/*    font-size: 1.2rem;*/
+/*    display: block;*/
+/*    position: relative;*/
+/*    transition: color 0.3s ease;*/
+/*    text-align: center;*/
+/*    !* Убираем padding-bottom, так как он теперь у course-item *!*/
+/*}*/
+
+/*.status-container {*/
+/*    position: absolute;*/
+/*    bottom: 5px; !* Отступ от нижнего края *!*/
+/*    left: 5px; !* Отступ от левого края *!*/
+/*    right: 5px; !* Отступ от правого края *!*/
+/*    height: 22px; !* Уменьшаем высоту *!*/
+/*    display: flex;*/
+/*    justify-content: center;*/
+/*    align-items: center;*/
+/*    background-color: inherit;*/
+/*    border-radius: 0 0 10px 10px; !* Меньше скругление *!*/
+/*    opacity: 0.9;*/
+/*}*/
+
+/*.status-badge {*/
+/*    padding: 2px 10px; !* Уменьшаем padding *!*/
+/*    border-radius: 8px;*/
+/*    font-size: 0.7rem; !* Уменьшаем шрифт *!*/
+/*    font-weight: 500;*/
+/*    text-transform: capitalize;*/
+/*    letter-spacing: 0.3px;*/
+/*}*/
