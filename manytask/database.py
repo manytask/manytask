@@ -203,7 +203,7 @@ class DataBaseApi(StorageApi):
                 logger.info(f"There was an exception when checking user admin status: {e}")
                 return False
 
-    def sync_stored_user(self, course_name: str, username: str, course_admin: bool) -> StoredUser:
+    def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None:
         """Method for sync user's gitlab and stored data
 
         :param course_name: course name
@@ -218,14 +218,6 @@ class DataBaseApi(StorageApi):
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
-
-            return StoredUser(
-                username=user_on_course.user.username,
-                first_name=user_on_course.user.first_name,
-                last_name=user_on_course.user.last_name,
-                rms_id=user_on_course.user.rms_id,
-                course_admin=user_on_course.is_course_admin,
-            )
 
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
         """Method for getting all users scores with names

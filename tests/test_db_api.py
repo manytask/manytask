@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskUiConfig
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig
-from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
+from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests import constants
 
@@ -601,7 +601,7 @@ def test_store_score_with_changed_task_name(
     assert scores == {}
 
 
-def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session):
+def test_sync_user_on_course(db_api_with_initialized_first_course, session):
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
 
@@ -612,36 +612,28 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 0
 
-    stored_user = db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, constants.TEST_USERNAME)
-
-    assert stored_user == StoredUser(
-        username=constants.TEST_USERNAME,
-        first_name=constants.TEST_FIRST_NAME,
-        last_name=constants.TEST_LAST_NAME,
-        rms_id=constants.TEST_RMS_ID,
-        course_admin=False,
+    is_user_on_course = db_api_with_initialized_first_course.check_user_on_course(
+        FIRST_COURSE_NAME, constants.TEST_USERNAME
     )
+    assert not is_user_on_course
+
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, constants.TEST_USERNAME, False)
 
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
         FIRST_COURSE_NAME, constants.TEST_USERNAME
     )
     assert not is_course_admin
 
+    is_user_on_course = db_api_with_initialized_first_course.check_user_on_course(
+        FIRST_COURSE_NAME, constants.TEST_USERNAME
+    )
+    assert is_user_on_course
+
     assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
 
     # admin in gitlab
-    stored_user = db_api_with_initialized_first_course.sync_stored_user(
-        FIRST_COURSE_NAME, constants.TEST_USERNAME, True
-    )
-
-    assert stored_user == StoredUser(
-        username=constants.TEST_USERNAME,
-        first_name=constants.TEST_FIRST_NAME,
-        last_name=constants.TEST_LAST_NAME,
-        rms_id=constants.TEST_RMS_ID,
-        course_admin=True,
-    )
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, constants.TEST_USERNAME, True)
 
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
         FIRST_COURSE_NAME, constants.TEST_USERNAME
@@ -649,17 +641,7 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     assert is_course_admin
 
     # lost admin rules in gitlab, but in database stored that user is admin
-    stored_user = db_api_with_initialized_first_course.sync_stored_user(
-        FIRST_COURSE_NAME, constants.TEST_USERNAME, False
-    )
-
-    assert stored_user == StoredUser(
-        username=constants.TEST_USERNAME,
-        first_name=constants.TEST_FIRST_NAME,
-        last_name=constants.TEST_LAST_NAME,
-        rms_id=constants.TEST_RMS_ID,
-        course_admin=True,
-    )
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, constants.TEST_USERNAME, False)
 
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
         FIRST_COURSE_NAME, constants.TEST_USERNAME
@@ -1032,9 +1014,9 @@ def test_store_get_stored_user_raises_exception_if_user_does_not_exist(db_api_wi
         db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, constants.TEST_USERNAME)
 
 
-def test_store_sync_stored_user_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
+def test_store_sync_user_on_course_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
     with pytest.raises(NoResultFound):
-        db_api_with_initialized_first_course.sync_stored_user(FIRST_COURSE_NAME, constants.TEST_USERNAME, False)
+        db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, constants.TEST_USERNAME, False)
 
 
 def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgres_container):
