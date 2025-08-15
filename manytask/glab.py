@@ -14,7 +14,7 @@ from authlib.integrations.flask_client import OAuth
 from flask import session
 from requests.exceptions import HTTPError
 
-from .abstract import RmsApi, RmsUser
+from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsUser
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class GitLabConfig:
     dry_run: bool = False
 
 
-class GitLabApi(RmsApi):
+class GitLabApi(RmsApi, AuthApi):
     def __init__(
         self,
         config: GitLabConfig,
@@ -272,7 +272,26 @@ class GitLabApi(RmsApi):
         logger.info(f'User found: "{rms_user.username}"')
         return rms_user
 
-    def check_user_authenticated_in_rms(
+    def get_authenticated_rms_user(self, oauth_access_token: str) -> RmsUser:
+        response = self._make_auth_request(oauth_access_token)
+        response.raise_for_status()
+        return self._construct_rms_user(response.json())
+
+    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
+        return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"
+
+    def get_url_for_repo(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str:
+        return f"{self.base_url}/{course_students_group}/{username}"
+
+    def _make_auth_request(self, token: str) -> requests.Response:
+        headers = {"Authorization": f"Bearer {token}"}
+        return requests.get(f"{self.base_url}/api/v4/user", headers=headers)
+
+    def check_user_is_authenticated(
         self,
         oauth: OAuth,
         oauth_access_token: str,
@@ -310,21 +329,12 @@ class GitLabApi(RmsApi):
             logger.info(f"User is not logged to GitLab: {e}", exc_info=True)
             return False
 
-    def get_authenticated_rms_user(self, oauth_access_token: str) -> RmsUser:
+    def get_authenticated_user(self, oauth_access_token: str) -> AuthenticatedUser:
         response = self._make_auth_request(oauth_access_token)
         response.raise_for_status()
-        return self._construct_rms_user(response.json())
+        user = response.json()
 
-    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
-        return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"
-
-    def get_url_for_repo(
-        self,
-        username: str,
-        course_students_group: str,
-    ) -> str:
-        return f"{self.base_url}/{course_students_group}/{username}"
-
-    def _make_auth_request(self, token: str) -> requests.Response:
-        headers = {"Authorization": f"Bearer {token}"}
-        return requests.get(f"{self.base_url}/api/v4/user", headers=headers)
+        return AuthenticatedUser(
+            id=user["id"],
+            username=user["username"],
+        )
