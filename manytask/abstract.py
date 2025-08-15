@@ -178,6 +178,21 @@ class RmsApi(ABC):
     ) -> None: ...
 
     @abstractmethod
+    def create_course_infrastructure(
+        self,
+        course_group_name: str,
+        public_repo_name: str,
+        students_group_name: str,
+        default_branch: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def create_course_group(
+        self,
+        course_group: str,
+    ) -> None: ...
+
+    @abstractmethod
     def create_public_repo(
         self,
         course_group: str,
@@ -187,6 +202,7 @@ class RmsApi(ABC):
     @abstractmethod
     def create_students_group(
         self,
+        course_group: str,
         course_students_group: str,
     ) -> None: ...
 
