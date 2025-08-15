@@ -187,8 +187,8 @@ def test_multiple_task_moves(db_api_with_two_initialized_courses, session):
 
 
 def test_get_courses_names_with_no_courses(db_api):
-    assert db_api.get_user_courses_names("some_user") == []
-    assert db_api.get_all_courses_names() == []
+    assert db_api.get_user_courses_names_with_statuses("some_user") == []
+    assert db_api.get_all_courses_names_with_statuses() == []
 
 
 def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
@@ -202,10 +202,10 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
         TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2
     )
 
-    assert db_api_with_two_initialized_courses.get_user_courses_names(TEST_USERNAME) == []
-    assert db_api_with_two_initialized_courses.get_user_courses_names(TEST_USERNAME_1) == []
-    assert db_api_with_two_initialized_courses.get_user_courses_names(TEST_USERNAME_2) == []
-    assert sorted(db_api_with_two_initialized_courses.get_all_courses_names()) == sorted(
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME) == []
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_1) == []
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_2) == []
+    assert sorted(db_api_with_two_initialized_courses.get_all_courses_names_with_statuses()) == sorted(
         [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
     )
 
@@ -214,8 +214,8 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_2, False)
     db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_2, True)
 
-    assert db_api_with_two_initialized_courses.get_user_courses_names(TEST_USERNAME) == [FIRST_COURSE_NAME]
-    assert db_api_with_two_initialized_courses.get_user_courses_names(TEST_USERNAME_1) == [SECOND_COURSE_NAME]
-    assert sorted(db_api_with_two_initialized_courses.get_user_courses_names(TEST_USERNAME_2)) == sorted(
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME) == [FIRST_COURSE_NAME]
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_1) == [SECOND_COURSE_NAME]
+    assert sorted(db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_2)) == sorted(
         [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
     )

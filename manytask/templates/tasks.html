@@ -6,11 +6,66 @@
 {% endblock %}
 
 {% block content %}
-    <div class="mb-3 mt-2 d-flex justify-content-end">
-        <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
-            Show past deadlines
-        </button>
-    </div>
+<div class="mb-3 mt-2 d-flex justify-content-between align-items-center">
+    <span class="course-status-badge status-{{ course_status.value }}">
+        <i class="fas
+           {% if course_status.value == 'created' %}fa-plus-circle
+           {% elif course_status.value == 'hidden' %}fa-eye-slash
+           {% elif course_status.value == 'in_progress' %}fa-spinner
+           {% elif course_status.value == 'all_tasks_issued' %}fa-check-circle
+           {% elif course_status.value == 'doreshka' %}fa-magic
+           {% elif course_status.value == 'finished' %}fa-flag-checkered
+           {% endif %} me-2"></i>
+        {{ course_status.value.replace("_", " ").title() }}
+    </span>
+    <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
+        Show past deadlines
+    </button>
+</div>
+
+<style>
+.course-status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid transparent;
+}
+
+/* Цвета статусов */
+.status-created {
+    background-color: #e3f2fd;
+    color: #0d47a1;
+    border-color: #bbdefb;
+}
+.status-hidden {
+    background-color: #f5f5f5;
+    color: #424242;
+    border-color: #e0e0e0;
+}
+.status-in_progress {
+    background-color: #fff8e1;
+    color: #ff8f00;
+    border-color: #ffe082;
+}
+.status-all_tasks_issued {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border-color: #c8e6c9;
+}
+.status-doreshka {
+    background-color: #f3e5f5;
+    color: #7b1fa2;
+    border-color: #ce93d8;
+}
+.status-finished {
+    background-color: #e1f5fe;
+    color: #0277bd;
+    border-color: #81d4fa;
+}
+</style>
     {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True)[::-1] %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
         {% set solved_group_scores = [] %}

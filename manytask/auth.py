@@ -10,7 +10,7 @@ from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
 from manytask.abstract import AuthenticatedUser
-from manytask.course import Course
+from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
 
 logger = logging.getLogger(__name__)
@@ -135,7 +135,7 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
             flash("Course not found", "course_not_found")
             abort(redirect(url_for("root.index")))
 
-        if not course.is_ready:
+        if course.status == CourseStatus.CREATED:
             abort(redirect(url_for("course.not_ready", course_name=course_name)))
 
         return f(*args, **kwargs)
