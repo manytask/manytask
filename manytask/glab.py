@@ -174,7 +174,7 @@ class GitLabApi(RmsApi):
                 }
             )
         except gitlab.GitlabError:
-            raise RuntimeError(f"Failed to create project {course_public_repo} in group {group.full_path} and it does not exist")
+            raise RuntimeError(f"Failed to create project {course_public_repo} in group {group.full_name} and it does not exist")
 
     def create_students_group(
         self,
