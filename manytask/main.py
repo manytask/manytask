@@ -46,6 +46,10 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     _create_app_config(app, debug, test)
 
+    app.oauth = _authenticate(
+        OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
+    )
+
     # logging
     logging.config.dictConfig(_logging_config(app))
 
@@ -125,9 +129,16 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     )
     if database_url is None:
         raise EnvironmentError("Unable to find DATABASE_URL env")
+
+    instance_admin_username = os.environ.get("INITIAL_INSTANCE_ADMIN", None)
+
+    if instance_admin_username is None:
+        raise EnvironmentError("Unable to find INITIAL_INSTANCE_ADMIN env")
+
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
+            instance_admin_username=instance_admin_username,
             apply_migrations=apply_migrations,
         )
     )
@@ -211,20 +222,19 @@ def _create_app_config(app: CustomFlask, debug: bool | None, test: bool) -> None
         raise EnvironmentError("Unable to find FLASK_SECRET_KEY env in production mode")
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex())
 
-    # oauth
-    oauth = OAuth(app)
-    _gitlab_base_url = app.app_config.gitlab_url
+
+def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: str) -> OAuth:
     oauth.register(
         name="gitlab",
-        client_id=app.app_config.gitlab_client_id,
-        client_secret=app.app_config.gitlab_client_secret,
-        authorize_url=f"{_gitlab_base_url}/oauth/authorize",
-        access_token_url=f"{_gitlab_base_url}/oauth/token",
-        userinfo_endpoint=f"{_gitlab_base_url}/oauth/userinfo",
-        jwks_uri=f"{_gitlab_base_url}/oauth/discovery/keys",
+        client_id=client_id,
+        client_secret=client_secret,
+        authorize_url=f"{base_url}/oauth/authorize",
+        access_token_url=f"{base_url}/oauth/token",
+        userinfo_endpoint=f"{base_url}/oauth/userinfo",
+        jwks_uri=f"{base_url}/oauth/discovery/keys",
         client_kwargs={
             "scope": "openid email profile read_user",
             "code_challenge_method": "S256",
         },
     )
-    app.oauth = oauth
+    return oauth

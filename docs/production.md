@@ -116,7 +116,7 @@ Please, refer to the example files and api docs.
 ### Install NPM:
 
 ```bash
-sudo apt intall npm
+sudo apt install npm
 ```
 
 ### Install YFM and build:
@@ -125,7 +125,7 @@ sudo apt intall npm
 sudo npm i @diplodoc/cli -g
 ```
 
-### Buld html from yml/md files:
+### Build html from yml/md files:
 
 ```bash
 yfm -i ./docs -o ./html --allow-custom-resources

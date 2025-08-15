@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
+from authlib.integrations.flask_client import OAuth
+
 from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig
 
@@ -12,21 +14,12 @@ class StoredUser:
     username: str
     first_name: str
     last_name: str
+    rms_id: int
     course_admin: bool = False
     # we can add more fields that we store
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
-
-
-@dataclass
-class Student:
-    id: int
-    username: str
-    name: str
-
-    def __repr__(self) -> str:
-        return f"Student(username={self.username})"
 
 
 class StorageApi(ABC):
@@ -52,6 +45,12 @@ class StorageApi(ABC):
     ) -> StoredUser: ...
 
     @abstractmethod
+    def check_if_instance_admin(
+        self,
+        username: str,
+    ) -> bool: ...
+
+    @abstractmethod
     def check_if_course_admin(
         self,
         course_name: str,
@@ -59,13 +58,7 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
-    def sync_stored_user(
-        self,
-        course_name: str,
-        username: str,
-        repo_name: str,
-        course_admin: bool,
-    ) -> StoredUser: ...
+    def sync_stored_user(self, course_name: str, username: str, course_admin: bool) -> StoredUser: ...
 
     @abstractmethod
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
@@ -80,14 +73,7 @@ class StorageApi(ABC):
     def update_cached_scores(self, course_name: str) -> None: ...
 
     @abstractmethod
-    def store_score(
-        self,
-        course_name: str,
-        username: str,
-        repo_name: str,
-        task_name: str,
-        update_fn: Callable[..., Any],
-    ) -> int: ...
+    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
 
     @abstractmethod
     def create_course(
@@ -142,13 +128,36 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str) -> None: ...
+    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
 
     @abstractmethod
     def get_user_courses_names(self, username: str) -> list[str]: ...
 
     @abstractmethod
     def get_all_courses_names(self) -> list[str]: ...
+
+    @abstractmethod
+    def get_all_users(self) -> list[StoredUser]: ...
+
+    @abstractmethod
+    def set_instance_admin_status(
+        self,
+        username: str,
+        is_admin: bool,
+    ) -> None: ...
+
+    @abstractmethod
+    def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
+
+
+@dataclass
+class RmsUser:
+    id: int
+    username: str
+    name: str
+
+    def __repr__(self) -> str:
+        return f"RmsUser(username={self.username})"
 
 
 class RmsApi(ABC):
@@ -200,14 +209,14 @@ class RmsApi(ABC):
     @abstractmethod
     def check_project_exists(
         self,
-        username: str,
-        course_students_group: str,
+        project_name: str,
+        project_group: str,
     ) -> bool: ...
 
     @abstractmethod
     def create_project(
         self,
-        student: Student,
+        rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
     ) -> None: ...
@@ -221,3 +230,38 @@ class RmsApi(ABC):
         username: str,
         course_students_group: str,
     ) -> str: ...
+
+    @abstractmethod
+    def get_rms_user_by_id(
+        self,
+        user_id: int,
+    ) -> RmsUser: ...
+
+    @abstractmethod
+    def get_rms_user_by_username(
+        self,
+        username: str,
+    ) -> RmsUser: ...
+
+    @abstractmethod
+    def check_user_authenticated_in_rms(
+        self,
+        oauth: OAuth,
+        oauth_access_token: str,
+        oauth_refresh_token: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def get_authenticated_rms_user(
+        self,
+        oauth_access_token: str,
+    ) -> RmsUser: ...
+
+
+@dataclass
+class AuthenticatedUser:
+    id: int
+    username: str
+
+    def __repr__(self) -> str:
+        return f"AuthenticatedUser(username={self.username})"

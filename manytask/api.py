@@ -13,13 +13,13 @@ from flask.typing import ResponseReturnValue
 
 from manytask.abstract import StorageApi
 from manytask.database import TaskDisabledError
-from manytask.glab import GitLabApi, GitLabApiException
+from manytask.glab import GitLabApiException
 
+from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .database_utils import get_database_table_data
-from .glab import Student
 from .main import CustomFlask
 
 logger = logging.getLogger(__name__)
@@ -95,8 +95,8 @@ def healthcheck() -> ResponseReturnValue:
 
 
 def _validate_and_extract_params(
-    form_data: dict[str, Any], gitlab_api: GitLabApi, storage_api: StorageApi, course_name: str
-) -> tuple[Student, ManytaskTaskConfig, ManytaskGroupConfig]:
+    form_data: dict[str, Any], rms_api: RmsApi, storage_api: StorageApi, course_name: str
+) -> tuple[RmsUser, ManytaskTaskConfig, ManytaskGroupConfig]:
     """Validate and extract parameters from form data."""
 
     if "user_id" in form_data and "username" in form_data:
@@ -104,7 +104,7 @@ def _validate_and_extract_params(
     elif "user_id" in form_data:
         try:
             user_id = int(form_data["user_id"])
-            student = gitlab_api.get_student(user_id)
+            rms_user = rms_api.get_rms_user_by_id(user_id)
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
         except GitLabApiException:
@@ -112,7 +112,7 @@ def _validate_and_extract_params(
     elif "username" in form_data:
         try:
             username = form_data["username"]
-            student = gitlab_api.get_student_by_username(username)
+            rms_user = rms_api.get_rms_user_by_username(username)
         except GitLabApiException:
             abort(HTTPStatus.NOT_FOUND, f"There is no student with username {username}")
     else:
@@ -127,7 +127,7 @@ def _validate_and_extract_params(
     except (KeyError, TaskDisabledError):
         abort(HTTPStatus.NOT_FOUND, f"There is no task with name `{task_name}` (or it is closed for submission)")
 
-    return student, task, group
+    return rms_user, task, group
 
 
 def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetime) -> datetime:
@@ -176,9 +176,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    student, task, group = _validate_and_extract_params(
-        request.form, app.gitlab_api, app.storage_api, course.course_name
-    )
+    rms_user, task, group = _validate_and_extract_params(request.form, app.rms_api, app.storage_api, course.course_name)
 
     reported_score = _process_score(request.form, task.score)
     if reported_score is None:
@@ -195,7 +193,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
     # Log with sanitized values
     logger.info(f"Use submit_time: {submit_time}")
     logger.info(
-        f"Will process score {reported_score} for @{student} on task {task.name} \
+        f"Will process score {reported_score} for @{rms_user} on task {task.name} \
             {'with' if check_deadline else 'without'} deadline check"
     )
 
@@ -207,17 +205,11 @@ def report_score(course_name: str) -> ResponseReturnValue:
         submit_time=submit_time,
         check_deadline=check_deadline,
     )
-    final_score = app.storage_api.store_score(
-        course.course_name,
-        student.username,
-        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-        task.name,
-        update_function,
-    )
+    final_score = app.storage_api.store_score(course.course_name, rms_user.username, task.name, update_function)
 
     return {
-        "user_id": student.id,
-        "username": student.username,
+        "user_id": rms_user.id,
+        "username": rms_user.username,
         "task": task.name,
         "score": final_score,
         "commit_time": submit_time.isoformat(sep=" ") if submit_time else "None",
@@ -232,20 +224,18 @@ def get_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    student, task, group = _validate_and_extract_params(
-        request.form, app.gitlab_api, app.storage_api, course.course_name
-    )
+    rms_user, task, group = _validate_and_extract_params(request.form, app.rms_api, app.storage_api, course.course_name)
 
-    student_scores = app.storage_api.get_scores(course.course_name, student.username)
+    student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
 
     try:
         student_task_score = student_scores[task.name]
     except Exception:
-        return f"Cannot get score for task {task.name} for {student.username}", HTTPStatus.NOT_FOUND
+        return f"Cannot get score for task {task.name} for {rms_user.username}", HTTPStatus.NOT_FOUND
 
     return {
-        "user_id": student.id,
-        "username": student.username,
+        "user_id": rms_user.id,
+        "username": rms_user.username,
         "task": task.name,
         "score": student_task_score,
     }, HTTPStatus.OK
@@ -319,8 +309,8 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    student = app.gitlab_api.get_student(session["gitlab"]["user_id"])
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, student.username)
+    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
@@ -336,15 +326,11 @@ def update_database(course_name: str) -> ResponseReturnValue:
     new_scores = data["scores"]
 
     try:
-        repo_name = app.rms_api.get_url_for_repo(
-            username=username, course_students_group=course.gitlab_course_students_group
-        )
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
                 storage_api.store_score(
                     course.course_name,
                     username=username,
-                    repo_name=repo_name,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )

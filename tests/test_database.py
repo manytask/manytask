@@ -3,7 +3,6 @@ from zoneinfo import ZoneInfo
 
 from manytask.models import Course, Task, TaskGroup
 from manytask.config import ManytaskDeadlinesConfig
-from manytask.glab import Student
 
 
 # ruff: noqa
@@ -179,16 +178,19 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
     username1 = "username1"
     first_name1 = "Ivan"
     last_name1 = "Ivanov"
+    rms_id1 = 1
     username2 = "username2"
     first_name2 = "John"
     last_name2 = "Smith"
+    rms_id2 = 2
     username3 = "username3"
     first_name3 = "Peter"
     last_name3 = "Nordstrom"
+    rms_id3 = 3
 
-    db_api_with_two_initialized_courses.create_user_if_not_exist(username1, first_name1, last_name1)
-    db_api_with_two_initialized_courses.create_user_if_not_exist(username2, first_name2, last_name2)
-    db_api_with_two_initialized_courses.create_user_if_not_exist(username3, first_name3, last_name3)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username1, first_name1, last_name1, rms_id1)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username2, first_name2, last_name2, rms_id2)
+    db_api_with_two_initialized_courses.create_user_if_not_exist(username3, first_name3, last_name3, rms_id3)
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(username1) == []
     assert db_api_with_two_initialized_courses.get_user_courses_names(username2) == []
@@ -197,10 +199,10 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
         [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
     )
 
-    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, username1, "repo1", True)
-    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, username2, "repo2", False)
-    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, username3, "repo3", False)
-    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, username3, "repo3", True)
+    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, username1, True)
+    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, username2, False)
+    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, username3, False)
+    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, username3, True)
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(username1) == [FIRST_COURSE_NAME]
     assert db_api_with_two_initialized_courses.get_user_courses_names(username2) == [SECOND_COURSE_NAME]

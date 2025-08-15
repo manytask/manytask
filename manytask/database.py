@@ -13,7 +13,7 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from pydantic import AnyUrl
 from sqlalchemy import and_, create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.sql.functions import func
 
 from . import models
@@ -41,7 +41,9 @@ class DatabaseConfig:
     """Configuration for Database connection and settings."""
 
     database_url: str
+    instance_admin_username: str
     apply_migrations: bool = False
+    session_factory: Optional[Callable[[], Session]] = None
 
 
 class DataBaseApi(StorageApi):
@@ -62,11 +64,26 @@ class DataBaseApi(StorageApi):
 
         self.engine = create_engine(self.database_url, echo=False)
 
+        if config.session_factory is None:
+            self._session_create: Callable[[], Session] = sessionmaker(bind=self.engine)
+        else:
+            self._session_create = config.session_factory
+
         if self._check_pending_migrations(self.database_url):
             if self.apply_migrations:
                 self._apply_migrations(self.database_url)
             else:
                 logger.error("There are pending migrations that have not been applied")
+
+        # Create the zero-instance admin user if it does not exist
+        with self._session_create() as session:
+            self._update_or_create(
+                session,
+                models.User,
+                username=config.instance_admin_username,
+                defaults={"first_name": "Instance", "last_name": "Admin", "is_instance_admin": True},
+            )
+            session.commit()
 
     def get_scores(
         self,
@@ -81,7 +98,7 @@ class DataBaseApi(StorageApi):
         :return: dict with the names of tasks and their scores
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             grades = self._get_scores(session, course_name, username, enabled=True, started=True, only_bonus=False)
 
             if grades is None:
@@ -106,7 +123,7 @@ class DataBaseApi(StorageApi):
         :return: user's total bonus score
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             grades = self._get_scores(session, course_name, username, enabled=True, started=True, only_bonus=True)
 
         if grades is None:
@@ -127,7 +144,7 @@ class DataBaseApi(StorageApi):
         :return: created or received StoredUser object
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             user_on_course = self._get_or_create_user_on_course(session, username, course)
             session.commit()
@@ -136,8 +153,28 @@ class DataBaseApi(StorageApi):
                 username=user_on_course.user.username,
                 first_name=user_on_course.user.first_name,
                 last_name=user_on_course.user.last_name,
+                rms_id=user_on_course.user.rms_id,
                 course_admin=user_on_course.is_course_admin,
             )
+
+    def check_if_instance_admin(
+        self,
+        username: str,
+    ) -> bool:
+        """Method for checking user's admin status
+
+        :param username: user name
+
+        :return: if the user is an admin on any course
+        """
+
+        with self._session_create() as session:
+            try:
+                user = self._get(session, models.User, username=username)
+                return user.is_instance_admin
+            except NoResultFound as e:
+                logger.info(f"There was an exception when checking user admin status: {e}")
+                return False
 
     def check_if_course_admin(
         self,
@@ -152,7 +189,7 @@ class DataBaseApi(StorageApi):
         :return: cif the user is an admin on the course
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
                 user = self._get(
@@ -166,13 +203,7 @@ class DataBaseApi(StorageApi):
                 logger.info(f"There was an exception when checking user admin status: {e}")
                 return False
 
-    def sync_stored_user(
-        self,
-        course_name: str,
-        username: str,
-        repo_name: str,
-        course_admin: bool,
-    ) -> StoredUser:
+    def sync_stored_user(self, course_name: str, username: str, course_admin: bool) -> StoredUser:
         """Method for sync user's gitlab and stored data
 
         :param course_name: course name
@@ -181,9 +212,9 @@ class DataBaseApi(StorageApi):
         :return: created or updated StoredUser object
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
+            user_on_course = self._get_or_create_user_on_course(session, username, course)
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
@@ -192,6 +223,7 @@ class DataBaseApi(StorageApi):
                 username=user_on_course.user.username,
                 first_name=user_on_course.user.first_name,
                 last_name=user_on_course.user.last_name,
+                rms_id=user_on_course.user.rms_id,
                 course_admin=user_on_course.is_course_admin,
             )
 
@@ -201,7 +233,7 @@ class DataBaseApi(StorageApi):
         :return: dict with the usernames as keys and a tuple of (first_name, last_name) and scores dict as values
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             all_users = self._get_all_users_on_course(session, course_name)
 
         scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
@@ -221,7 +253,7 @@ class DataBaseApi(StorageApi):
         :return: dict with the names of tasks and their stats
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             tasks = self._get_all_tasks(session, course_name, enabled=True, started=True)
 
             users_on_courses_count = self._get_course_users_on_courses_count(session, course_name)
@@ -249,19 +281,11 @@ class DataBaseApi(StorageApi):
 
         return
 
-    def store_score(
-        self,
-        course_name: str,
-        username: str,
-        repo_name: str,
-        task_name: str,
-        update_fn: Callable[..., Any],
-    ) -> int:
+    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int:
         """Method for storing user's task score
 
         :param course_name: course name
         :param username: user name
-        :param repo_name: student's repo name
         :param task_name: task name
         :param update_fn: function for updating the score
 
@@ -271,10 +295,10 @@ class DataBaseApi(StorageApi):
         # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
         # flags = ''
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course, repo_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
                 session.commit()
 
                 try:
@@ -305,7 +329,7 @@ class DataBaseApi(StorageApi):
         Get models.Course by course_name from database and convert it to course.Course
         """
         try:
-            with Session(self.engine) as session:
+            with self._session_create() as session:
                 course: models.Course = self._get(session, models.Course, name=course_name)
 
             return AppCourse(
@@ -337,7 +361,7 @@ class DataBaseApi(StorageApi):
         :return: is course created, false if course created before
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             try:
                 self._get(session, models.Course, name=settings_config.course_name)
             except NoResultFound:
@@ -372,7 +396,7 @@ class DataBaseApi(StorageApi):
         :return: True if course was updated, False if course not found
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             try:
                 self._update(
                     session,
@@ -405,7 +429,7 @@ class DataBaseApi(StorageApi):
         :param config: ManytaskConfig object
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             self._update(
                 session,
                 models.Course,
@@ -431,7 +455,7 @@ class DataBaseApi(StorageApi):
         :return: pair of ManytaskGroupConfig and ManytaskTaskConfig objects
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             try:
                 task = self._get_task_by_name_and_course_id(session, task_name, course.id)
@@ -498,7 +522,7 @@ class DataBaseApi(StorageApi):
         if now is None:
             now = self.get_now_with_timezone(course_name)
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
 
             query = (
@@ -552,12 +576,12 @@ class DataBaseApi(StorageApi):
     def get_now_with_timezone(self, course_name: str) -> datetime:
         """Get current time with course timezone"""
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
         return datetime.now(tz=ZoneInfo(course.timezone))
 
     def max_score(self, course_name: str, started: bool | None = True) -> int:
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             tasks = self._get_all_tasks(session, course_name, enabled=True, started=started, is_bonus=False)
 
         return sum(task.score for task in tasks)
@@ -568,7 +592,7 @@ class DataBaseApi(StorageApi):
     def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
         """Sync admin flag in gitlab and db"""
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             user = self._get(session, models.User, username=username)
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
@@ -580,13 +604,12 @@ class DataBaseApi(StorageApi):
                     user_id=user.id,
                     course_id=course.id,
                 )
-                session.refresh(user_on_course)
             return user_on_course.is_course_admin
 
     def check_user_on_course(self, course_name: str, username: str) -> bool:
         """Checking that user has been enrolled on course"""
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             user = self._get(session, models.User, username=username)
             try:
@@ -595,24 +618,24 @@ class DataBaseApi(StorageApi):
             except Exception:
                 return False
 
-    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str) -> None:
+    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None:
         """Create user in DB if not exist"""
 
-        with Session(self.engine) as session:
-            user = self._get_or_create(
+        with self._session_create() as session:
+            self._get_or_create(
                 session,
                 models.User,
                 username=username,
                 first_name=first_name,
+                rms_id=rms_id,
                 last_name=last_name,
             )
             session.commit()
-            session.refresh(user)
 
     def get_user_courses_names(self, username: str) -> list[str]:
         """Get a list of courses names that the user participates in"""
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             try:
                 user = self._get(session, models.User, username=username)
             except NoResultFound:
@@ -626,11 +649,77 @@ class DataBaseApi(StorageApi):
     def get_all_courses_names(self) -> list[str]:
         """Get a list of all courses names"""
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             courses = session.query(models.Course).all()
 
             result = [course.name for course in courses]
             return result
+
+    def get_all_users(self) -> list[StoredUser]:
+        """Get all users from the database
+
+        :return: list of all users
+        """
+        with self._session_create() as session:
+            users = session.query(models.User).all()
+            return [
+                StoredUser(
+                    username=user.username,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    rms_id=user.rms_id,
+                    course_admin=user.is_instance_admin,
+                )
+                for user in users
+            ]
+
+    def set_instance_admin_status(self, username: str, is_admin: bool) -> None:
+        """Change user admin status
+
+        :param username: user name
+        :param is_admin: new admin status
+        """
+        with self._session_create() as session:
+            try:
+                if not is_admin:
+                    admin_count = session.query(func.count()).filter(models.User.is_instance_admin.is_(True)).scalar()
+                    if admin_count <= 1:
+                        logger.error("Cannot remove the last admin")
+                        return
+
+                self._update(session, models.User, defaults={"is_instance_admin": is_admin}, username=username)
+
+            except NoResultFound:
+                logger.error(f"User {username} not found in the database")
+
+    def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
+        """Update user profile information
+        :param username: user name
+        :param new_first_name: new first name
+        :param new_last_name: new last name
+        """
+        with self._session_create() as session:
+            try:
+                user = self._get(session, models.User, username=username)
+                old_first_name, old_last_name = user.first_name, user.last_name
+
+                if new_first_name:
+                    user.first_name = new_first_name
+                if new_last_name:
+                    user.last_name = new_last_name
+
+                session.commit()
+
+                changes = []
+                if new_first_name:
+                    changes.append(f"first_name: {old_first_name} -> {new_first_name}")
+                if new_last_name:
+                    changes.append(f"last_name: {old_last_name} -> {new_last_name}")
+
+                if changes:
+                    logger.info(f"Updated user {username} profile: {', '.join(changes)}")
+            except NoResultFound:
+                logger.error(f"User {username} not found in the database")
 
     def _update_task_groups_from_config(
         self,
@@ -646,7 +735,7 @@ class DataBaseApi(StorageApi):
 
         :param deadlines_config: ManytaskDeadlinesConfig object
         """
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             new_task_names = set()
             new_task_to_group = {}
             for group in deadlines_config.groups:
@@ -708,7 +797,7 @@ class DataBaseApi(StorageApi):
         groups = deadlines_config.groups
 
         logger.info("Syncing database tasks...")
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
 
             existing_course_tasks = (
@@ -803,11 +892,7 @@ class DataBaseApi(StorageApi):
             pass
 
     def _get_or_create_user_on_course(
-        self,
-        session: Session,
-        username: str,
-        course: models.Course,
-        repo_name: str | None = None,
+        self, session: Session, username: str, course: models.Course
     ) -> models.UserOnCourse:
         user = self._get(
             session,
@@ -815,15 +900,7 @@ class DataBaseApi(StorageApi):
             username=username,
         )
 
-        defaults = {}
-        if repo_name is not None:
-            defaults["repo_name"] = repo_name
-        else:
-            defaults["repo_name"] = ""
-
-        user_on_course = self._get_or_create(
-            session, models.UserOnCourse, defaults=defaults, user_id=user.id, course_id=course.id
-        )
+        user_on_course = self._get_or_create(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
 
         return user_on_course
 
