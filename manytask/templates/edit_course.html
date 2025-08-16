@@ -36,7 +36,7 @@
                         <div class="col-md-6">
                             <input type="radio" class="btn-check" name="course_status" id="status_created" value="created"
                                    {% if course.status.value == 'created' %}checked{% endif %}>
-                            <label class="btn btn-outline-light d-flex justify-content-center align-items-center" for="status_created">
+                            <label class="btn btn-outline-info d-flex justify-content-center align-items-center" for="status_created">
                                 Created
                             </label>
                         </div>
@@ -52,7 +52,7 @@
                         <div class="col-md-6">
                             <input type="radio" class="btn-check" name="course_status" id="status_in_progress" value="in_progress"
                                    {% if course.status.value == 'in_progress' %}checked{% endif %}>
-                            <label class="btn btn-outline-primary d-flex justify-content-center align-items-center" for="status_in_progress">
+                            <label class="btn btn-outline-success d-flex justify-content-center align-items-center" for="status_in_progress">
                                 In Progress
                             </label>
                         </div>
@@ -68,7 +68,7 @@
                         <div class="col-md-6">
                             <input type="radio" class="btn-check" name="course_status" id="status_doreshka" value="doreshka"
                                    {% if course.status.value == 'doreshka' %}checked{% endif %}>
-                            <label class="btn btn-outline-info d-flex justify-content-center align-items-center" for="status_doreshka">
+                            <label class="btn btn-outline-danger d-flex justify-content-center align-items-center" for="status_doreshka">
                                  Doreshka
                             </label>
                         </div>
@@ -76,7 +76,7 @@
                         <div class="col-md-6">
                             <input type="radio" class="btn-check" name="course_status" id="status_finished" value="finished"
                                    {% if course.status.value == 'finished' %}checked{% endif %}>
-                            <label class="btn btn-outline-success d-flex justify-content-center align-items-center" for="status_finished">
+                            <label class="btn btn-outline-primary d-flex justify-content-center align-items-center" for="status_finished">
                                 Finished
                             </label>
                         </div>

@@ -328,3 +328,13 @@
     font-size: 0.85rem;
     font-weight: 500;
 }
+
+.course-status-badge {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid transparent;
+}
