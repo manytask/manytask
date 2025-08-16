@@ -30,6 +30,58 @@
                     <input type="text" class="form-control" id="token" name="token" value="{{ course.token }}" readonly disabled>
                     <div class="form-text">Token cannot be changed</div>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label">Course Status</label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_created" value="created"
+                                   {% if course.status.value == 'created' %}checked{% endif %}>
+                            <label class="btn btn-outline-info d-flex justify-content-center align-items-center" for="status_created">
+                                Created
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_hidden" value="hidden"
+                                   {% if course.status.value == 'hidden' %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary d-flex justify-content-center align-items-center" for="status_hidden">
+                                Hidden
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_in_progress" value="in_progress"
+                                   {% if course.status.value == 'in_progress' %}checked{% endif %}>
+                            <label class="btn btn-outline-success d-flex justify-content-center align-items-center" for="status_in_progress">
+                                In Progress
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_all_tasks_issued" value="all_tasks_issued"
+                                   {% if course.status.value == 'all_tasks_issued' %}checked{% endif %}>
+                            <label class="btn btn-outline-warning d-flex justify-content-center align-items-center" for="status_all_tasks_issued">
+                                All Tasks Issued
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_doreshka" value="doreshka"
+                                   {% if course.status.value == 'doreshka' %}checked{% endif %}>
+                            <label class="btn btn-outline-danger d-flex justify-content-center align-items-center" for="status_doreshka">
+                                 Doreshka
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_finished" value="finished"
+                                   {% if course.status.value == 'finished' %}checked{% endif %}>
+                            <label class="btn btn-outline-primary d-flex justify-content-center align-items-center" for="status_finished">
+                                Finished
+                            </label>
+                        </div>
+                    </div>
+                </div>
                 <div class="mb-3 form-check">
                     <input type="checkbox" class="form-check-input" id="show_allscores" name="show_allscores" {% if course.show_allscores %}checked{% endif %}>
                     <label class="form-check-label" for="show_allscores">Show All Scores</label>
