@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from flask import Flask, json, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import RmsUser, StoredUser
+from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
@@ -46,7 +46,7 @@ def setup_environment(monkeypatch):
 
 
 @pytest.fixture
-def app(mock_storage_api, mock_gitlab_api):
+def app(mock_storage_api, mock_rms_api, mock_auth_api):
     app = Flask(__name__)
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
@@ -55,8 +55,8 @@ def app(mock_storage_api, mock_gitlab_api):
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
     app.storage_api = mock_storage_api
-    app.gitlab_api = mock_gitlab_api
-    app.rms_api = mock_gitlab_api
+    app.rms_api = mock_rms_api
+    app.auth_api = mock_auth_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
 
@@ -186,8 +186,8 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
 
 @pytest.fixture
-def mock_gitlab_api(mock_rms_user):
-    class MockGitlabApi:
+def mock_rms_api(mock_rms_user):
+    class MockRmsApi:
         def __init__(self):
             self.course_admin = False
             self._rms_user_class = mock_rms_user
@@ -216,7 +216,24 @@ def mock_gitlab_api(mock_rms_user):
         def check_project_exists(_project_name, _project_group):
             return True
 
-    return MockGitlabApi()
+    return MockRmsApi()
+
+
+@pytest.fixture
+def mock_auth_api():
+    class MockAuthApi:
+        def check_user_is_authenticated(
+            self,
+            oauth,
+            oauth_access_token: str,
+            oauth_refresh_token: str,
+        ) -> bool:
+            return True
+
+        def get_authenticated_user(self, access_token):
+            return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
+
+    return MockAuthApi()
 
 
 @pytest.fixture
