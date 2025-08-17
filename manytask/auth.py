@@ -168,7 +168,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
-        app.storage_api.sync_stored_user(
+        app.storage_api.sync_user_on_course(
             course.course_name,
             auth_user.username,
             app.storage_api.check_if_instance_admin(auth_user.username),
