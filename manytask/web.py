@@ -366,7 +366,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
     course = app.storage_api.get_course(course_name)
 
     if not course:
-        flash("Course not found", category="course_not_found")
+        flash("course not found!", category="course_not_found")
         return redirect(url_for("root.index"))
 
     if request.method == "POST":

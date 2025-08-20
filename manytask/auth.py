@@ -132,7 +132,7 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
         course = app.storage_api.get_course(course_name)
 
         if course is None:
-            flash("Course not found", "course_not_found")
+            flash("course not found!", "course_not_found")
             abort(redirect(url_for("root.index")))
 
         if course.status == CourseStatus.CREATED:
@@ -164,7 +164,8 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
             course.course_name, auth_user.username
         ):
-            abort(redirect(url_for("course.not_ready", course_name=course.course_name)))
+            flash("course is hidden!", "course_hidden")
+            abort(redirect(url_for("root.index")))
 
         if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
             project_name=auth_user.username, project_group=course.gitlab_course_students_group
