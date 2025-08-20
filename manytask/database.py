@@ -82,7 +82,7 @@ class DataBaseApi(StorageApi):
                 session,
                 models.User,
                 username=config.instance_admin_username,
-                defaults={"first_name": "Instance", "last_name": "Admin", "is_instance_admin": True},
+                defaults={"first_name": "Instance", "last_name": "Admin", "is_instance_admin": True, "rms_id": -1},
             )
             session.commit()
 
@@ -246,7 +246,7 @@ class DataBaseApi(StorageApi):
         :return: dict with list of possible criterions for each grade
         """
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = DataBaseApi._get(session, models.Course, name=course_name)
 
             grades: dict[int, list[dict[Path, int | float]]] = {}
@@ -883,7 +883,7 @@ class DataBaseApi(StorageApi):
         if grades_config is None:
             return
 
-        with Session(self.engine) as session:
+        with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             existing_complex_formulas = session.query(models.ComplexFormula).filter_by(course_id=course.id).all()
 

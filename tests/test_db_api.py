@@ -1160,6 +1160,7 @@ def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_cour
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=False)
 
@@ -1179,6 +1180,7 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=True)
 
@@ -1198,6 +1200,7 @@ def test_check_user_on_course(db_api_with_two_initialized_courses, session):
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
     user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=True)
 
