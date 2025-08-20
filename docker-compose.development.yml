@@ -10,9 +10,9 @@ services:
         expose:
             - "80"
         environment:
-            VIRTUAL_HOST: ${DOCS_VIRTUAL_HOST}
+            VIRTUAL_HOST: ${DOCS_HOST}
             VIRTUAL_PORT: 80
-            LETSENCRYPT_HOST: ${DOCS_LETSENCRYPT_HOST}
+            LETSENCRYPT_HOST: ${DOCS_HOST}
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:80" ]
             interval: 1m
@@ -27,9 +27,9 @@ services:
         container_name: test-manytask
         env_file: .env
         environment:
-            VIRTUAL_HOST: ${APP_VIRTUAL_HOST}
+            VIRTUAL_HOST: ${APP_HOST}
             VIRTUAL_PORT: 5050
-            LETSENCRYPT_HOST: ${APP_LETSENCRYPT_HOST}
+            LETSENCRYPT_HOST: ${APP_HOST}
         ports:
             - "8081:5050"
         volumes:
