@@ -5,6 +5,8 @@ resources:
   style:
     - _assets/style/custom.css
 
+interface:
+    favicon-src: ../manytask/static/favicon.ico
+
 docs-viewer:
   project-name: manytask
-  favicon-src: https://github.com/manytask/identity/blob/main/favicons/favicon.ico
