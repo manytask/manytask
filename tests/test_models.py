@@ -17,7 +17,24 @@ from manytask.models import (
     User,
     UserOnCourse,
 )
-from tests import constants
+from tests.constants import (
+    SQLALCHEMY_DATABASE_URL,
+    TEST_DEADLINE_DATA_INT,
+    TEST_DEADLINE_ID,
+    TEST_DEADLINE_STEPS,
+    TEST_GRADE_COUNT,
+    TEST_GRADE_SCORE,
+    TEST_GRADE_SCORE_2,
+    TEST_GRADE_SCORE_3,
+    TEST_GRADE_SCORE_4,
+    TEST_MAX_SUBMISSIONS,
+    TEST_SUBMISSION_PENALTY,
+    TEST_TASK_COUNT,
+    TEST_TASK_COUNT_LARGE,
+    TEST_TASK_GROUP_POSITION,
+    TEST_TASK_POSITION,
+    TEST_TASK_SCORE,
+)
 
 
 def make_course(course_id, **kwargs):
@@ -38,7 +55,7 @@ def make_course(course_id, **kwargs):
 
 @pytest.fixture(scope="module")
 def engine():
-    return create_engine(constants.SQLALCHEMY_DATABASE_URL, echo=False)
+    return create_engine(SQLALCHEMY_DATABASE_URL, echo=False)
 
 
 @pytest.fixture(scope="module")
@@ -105,8 +122,8 @@ def test_course_deadlines_parameters(session):
         token="test_token_deadlines_parameters",
         show_allscores=True,
         timezone="Europe/Berlin",
-        max_submissions=constants.TEST_MAX_SUBMISSIONS,
-        submission_penalty=constants.TEST_SUBMISSION_PENALTY,
+        max_submissions=TEST_MAX_SUBMISSIONS,
+        submission_penalty=TEST_SUBMISSION_PENALTY,
     )
     session.add(course)
     session.commit()
@@ -117,8 +134,8 @@ def test_course_deadlines_parameters(session):
     assert retrieved.token == "test_token_deadlines_parameters"
     assert retrieved.show_allscores
     assert retrieved.timezone == "Europe/Berlin"
-    assert retrieved.max_submissions == constants.TEST_MAX_SUBMISSIONS
-    assert retrieved.submission_penalty == constants.TEST_SUBMISSION_PENALTY
+    assert retrieved.max_submissions == TEST_MAX_SUBMISSIONS
+    assert retrieved.submission_penalty == TEST_SUBMISSION_PENALTY
 
 
 def test_course_unique_name(session):
@@ -184,7 +201,7 @@ def test_deadline(session):
     session.add(course)
     session.commit()
 
-    deadline = Deadline(steps=constants.TEST_DEADLINE_STEPS)
+    deadline = Deadline(steps=TEST_DEADLINE_STEPS)
     session.add(deadline)
     task_group = TaskGroup(name="group1", deadline=deadline, course=course)
     session.add(task_group)
@@ -193,20 +210,20 @@ def test_deadline(session):
     retrieved = session.query(TaskGroup).filter_by(name="group1").first()
     assert retrieved.deadline is not None
 
-    assert retrieved.deadline.steps == constants.TEST_DEADLINE_STEPS
+    assert retrieved.deadline.steps == TEST_DEADLINE_STEPS
 
 
 def test_task_group(session):
     course = make_course("0002")
     session.add(course)
-    task_group = TaskGroup(name="group2", course=course, position=constants.TEST_TASK_GROUP_POSITION)
+    task_group = TaskGroup(name="group2", course=course, position=TEST_TASK_GROUP_POSITION)
     session.add(task_group)
     session.commit()
 
     retrieved = session.query(TaskGroup).filter_by(name="group2").first()
     assert retrieved.deadline is None
     assert retrieved.enabled
-    assert retrieved.position == constants.TEST_TASK_GROUP_POSITION
+    assert retrieved.position == TEST_TASK_GROUP_POSITION
 
 
 def test_deadline_steps(session, fixed_current_time):
@@ -217,14 +234,14 @@ def test_deadline_steps(session, fixed_current_time):
     deadline1 = Deadline(id=1001)
     deadline2 = Deadline(id=1002, steps={})
     deadline3 = Deadline(id=1003, steps=None)
-    deadline4 = Deadline(id=1004, steps=constants.TEST_DEADLINE_STEPS)
+    deadline4 = Deadline(id=1004, steps=TEST_DEADLINE_STEPS)
     session.add_all([deadline1, deadline2, deadline3, deadline4])
     session.commit()
 
     assert session.query(Deadline).filter_by(id=1001).one().steps == {}
     assert session.query(Deadline).filter_by(id=1002).one().steps == {}
     assert session.query(Deadline).filter_by(id=1003).one().steps == {}
-    assert session.query(Deadline).filter_by(id=1004).one().steps == constants.TEST_DEADLINE_STEPS
+    assert session.query(Deadline).filter_by(id=1004).one().steps == TEST_DEADLINE_STEPS
 
     class MyObject:
         def __init__(self, value):
@@ -237,7 +254,7 @@ def test_deadline_steps(session, fixed_current_time):
         Deadline(id=1008, steps={1, 2, 3}),
         Deadline(id=1009, steps=fixed_current_time),
         Deadline(id=1010, steps=[]),
-        Deadline(id=1011, steps=constants.TEST_DEADLINE_DATA_INT),
+        Deadline(id=1011, steps=TEST_DEADLINE_DATA_INT),
     ]
 
     for deadline in deadlines_bad_type:
@@ -250,9 +267,9 @@ def test_deadline_steps(session, fixed_current_time):
         assert "value must be a dict, not" in str(exc_info.value)
 
     deadlines_bad_key_type = [
-        Deadline(id=1021, steps={constants.TEST_DEADLINE_DATA_INT: constants.TEST_DEADLINE_STEPS[0.4]}),
-        Deadline(id=1022, steps={"0.4": constants.TEST_DEADLINE_STEPS[0.4]}),
-        Deadline(id=1023, steps={MyObject(10): constants.TEST_DEADLINE_STEPS[0.4]}),
+        Deadline(id=1021, steps={TEST_DEADLINE_DATA_INT: TEST_DEADLINE_STEPS[0.4]}),
+        Deadline(id=1022, steps={"0.4": TEST_DEADLINE_STEPS[0.4]}),
+        Deadline(id=1023, steps={MyObject(10): TEST_DEADLINE_STEPS[0.4]}),
     ]
 
     for deadline in deadlines_bad_key_type:
@@ -266,8 +283,8 @@ def test_deadline_steps(session, fixed_current_time):
 
     deadlines_bad_value_type = [
         Deadline(id=1031, steps={0.4: timedelta()}),
-        Deadline(id=1032, steps={0.4: constants.TEST_DEADLINE_STEPS[0.4].isoformat()}),
-        Deadline(id=1033, steps={0.4: constants.TEST_DEADLINE_STEPS}),
+        Deadline(id=1032, steps={0.4: TEST_DEADLINE_STEPS[0.4].isoformat()}),
+        Deadline(id=1033, steps={0.4: TEST_DEADLINE_STEPS}),
     ]
 
     for deadline in deadlines_bad_value_type:
@@ -279,7 +296,7 @@ def test_deadline_steps(session, fixed_current_time):
         assert isinstance(exc_info.value.orig, TypeError)
         assert "must be a datetime, not" in str(exc_info.value)
 
-    deadline_no_timezone = Deadline(id=1031, steps={0.4: constants.TEST_DEADLINE_STEPS[0.4].replace(tzinfo=None)})
+    deadline_no_timezone = Deadline(id=1031, steps={0.4: TEST_DEADLINE_STEPS[0.4].replace(tzinfo=None)})
 
     with pytest.raises(StatementError) as exc_info:
         session.add(deadline_no_timezone)
@@ -313,13 +330,13 @@ def test_task(session):
 
     task = Task(
         name="task_with_all_params",
-        score=constants.TEST_TASK_SCORE,
+        score=TEST_TASK_SCORE,
         is_bonus=True,
         is_large=True,
         is_special=True,
         enabled=False,
         url="https://www.python.org/about/gettingstarted/",
-        position=constants.TEST_TASK_POSITION,
+        position=TEST_TASK_POSITION,
         group=task_group,
     )
     session.add(task)
@@ -328,13 +345,13 @@ def test_task(session):
     retrieved_task = session.query(Task).filter_by(name="task_with_all_params").first()
     assert retrieved_task.group.course.name == "test_course_3"
     assert retrieved_task.group.name == "group3"
-    assert retrieved_task.score == constants.TEST_TASK_SCORE
+    assert retrieved_task.score == TEST_TASK_SCORE
     assert retrieved_task.is_bonus
     assert retrieved_task.is_large
     assert retrieved_task.is_special
     assert not retrieved_task.enabled
     assert retrieved_task.url == "https://www.python.org/about/gettingstarted/"
-    assert retrieved_task.position == constants.TEST_TASK_POSITION
+    assert retrieved_task.position == TEST_TASK_POSITION
 
 
 def test_grade(session, fixed_current_time):
@@ -346,15 +363,13 @@ def test_grade(session, fixed_current_time):
     session.add_all([user, course, user_on_course, task_group, task])
     session.commit()
 
-    grade = Grade(
-        user_on_course=user_on_course, task=task, score=constants.TEST_GRADE_SCORE, last_submit_date=fixed_current_time
-    )
+    grade = Grade(user_on_course=user_on_course, task=task, score=TEST_GRADE_SCORE, last_submit_date=fixed_current_time)
     session.add(grade)
     session.commit()
 
     retrieved_grade = session.query(Grade).first()
     assert retrieved_grade.user_on_course.user.username == "user2"
-    assert retrieved_grade.score == constants.TEST_GRADE_SCORE
+    assert retrieved_grade.score == TEST_GRADE_SCORE
     assert retrieved_grade.last_submit_date == fixed_current_time
 
 
@@ -395,7 +410,7 @@ def test_course_tasks(session):
     retrieved_course = session.query(Course).filter_by(name="test_course_11").first()
     retrieved_task_group = retrieved_course.task_groups.one()
 
-    assert len(retrieved_task_group.tasks.all()) == constants.TEST_TASK_COUNT
+    assert len(retrieved_task_group.tasks.all()) == TEST_TASK_COUNT
     task_names = [task.name for task in retrieved_task_group.tasks]
     assert "task11_1" in task_names
     assert "task11_2" in task_names
@@ -410,7 +425,7 @@ def test_task_group_tasks(session):
     session.commit()
 
     retrieved_group = session.query(TaskGroup).filter_by(name="group12").first()
-    assert len(retrieved_group.tasks.all()) == constants.TEST_TASK_COUNT
+    assert len(retrieved_group.tasks.all()) == TEST_TASK_COUNT
     task_names = [task.name for task in retrieved_group.tasks]
     assert "task12_1" in task_names
     assert "task12_2" in task_names
@@ -433,23 +448,23 @@ def test_cascade_delete_course(session):
     session.add_all([task1, task2, task3])
     session.commit()
 
-    grade1 = Grade(user_on_course=user_on_course1, task=task1, score=constants.TEST_DEADLINE_DATA_INT)
-    grade2 = Grade(user_on_course=user_on_course2, task=task1, score=constants.TEST_DEADLINE_DATA_INT)
-    grade3 = Grade(user_on_course=user_on_course2, task=task2, score=constants.TEST_DEADLINE_DATA_INT)
-    grade4 = Grade(user_on_course=user_on_course2, task=task3, score=constants.TEST_DEADLINE_DATA_INT)
+    grade1 = Grade(user_on_course=user_on_course1, task=task1, score=TEST_DEADLINE_DATA_INT)
+    grade2 = Grade(user_on_course=user_on_course2, task=task1, score=TEST_DEADLINE_DATA_INT)
+    grade3 = Grade(user_on_course=user_on_course2, task=task2, score=TEST_DEADLINE_DATA_INT)
+    grade4 = Grade(user_on_course=user_on_course2, task=task3, score=TEST_DEADLINE_DATA_INT)
     session.add_all([grade1, grade2, grade3, grade4])
     session.commit()
 
     assert session.query(Course).filter_by(name="test_course_cascade").first() is not None
     assert (
         session.query(TaskGroup).filter(TaskGroup.name.in_(["cascade_group1", "cascade_group2"])).count()
-        == constants.TEST_TASK_COUNT
+        == TEST_TASK_COUNT
     )
     assert (
         session.query(Task).filter(Task.name.in_(["cascade_task1", "cascade_task2", "cascade_task3"])).count()
-        == constants.TEST_TASK_COUNT_LARGE
+        == TEST_TASK_COUNT_LARGE
     )
-    assert session.query(Grade).filter_by(score=constants.TEST_DEADLINE_DATA_INT).count() == constants.TEST_GRADE_COUNT
+    assert session.query(Grade).filter_by(score=TEST_DEADLINE_DATA_INT).count() == TEST_GRADE_COUNT
 
     session.delete(course)
     session.commit()
@@ -457,17 +472,14 @@ def test_cascade_delete_course(session):
     assert session.query(Course).filter_by(name="test_course_cascade").first() is None
     assert session.query(TaskGroup).filter(TaskGroup.name.in_(["cascade_group1", "cascade_group2"])).count() == 0
     assert session.query(Task).filter(Task.name.in_(["cascade_task1", "cascade_task2", "cascade_task3"])).count() == 0
-    assert session.query(Grade).filter_by(score=constants.TEST_DEADLINE_DATA_INT).count() == 0
+    assert session.query(Grade).filter_by(score=TEST_DEADLINE_DATA_INT).count() == 0
 
-    assert (
-        session.query(User).filter(User.username.in_(["cascade_user1", "cascade_user2"])).count()
-        == constants.TEST_TASK_COUNT
-    )
+    assert session.query(User).filter(User.username.in_(["cascade_user1", "cascade_user2"])).count() == TEST_TASK_COUNT
 
 
 def test_cascade_delete_task_group(session):
     course = make_course("cascade2")
-    deadline = Deadline(id=constants.TEST_DEADLINE_ID, steps=constants.TEST_DEADLINE_STEPS)
+    deadline = Deadline(id=TEST_DEADLINE_ID, steps=TEST_DEADLINE_STEPS)
     task_group = TaskGroup(name="cascade_group3", course=course, deadline=deadline)
     task1 = Task(name="cascade_task4", group=task_group)
     task2 = Task(name="cascade_task5", group=task_group)
@@ -476,26 +488,23 @@ def test_cascade_delete_task_group(session):
 
     user = User(username="cascade_user3", first_name="Ivan", last_name="Ivanov", rms_id=71)
     user_on_course = UserOnCourse(user=user, course=course)
-    grade1 = Grade(user_on_course=user_on_course, task=task1, score=constants.TEST_GRADE_SCORE_2)
-    grade2 = Grade(user_on_course=user_on_course, task=task2, score=constants.TEST_GRADE_SCORE_2)
+    grade1 = Grade(user_on_course=user_on_course, task=task1, score=TEST_GRADE_SCORE_2)
+    grade2 = Grade(user_on_course=user_on_course, task=task2, score=TEST_GRADE_SCORE_2)
     session.add_all([user, user_on_course, grade1, grade2])
     session.commit()
 
     assert session.query(TaskGroup).filter_by(name="cascade_group3").first() is not None
-    assert (
-        session.query(Task).filter(Task.name.in_(["cascade_task4", "cascade_task5"])).count()
-        == constants.TEST_TASK_COUNT
-    )
-    assert session.query(Grade).filter_by(score=constants.TEST_GRADE_SCORE_2).count() == constants.TEST_TASK_COUNT
-    assert session.query(Deadline).filter_by(id=constants.TEST_DEADLINE_ID).count() == 1
+    assert session.query(Task).filter(Task.name.in_(["cascade_task4", "cascade_task5"])).count() == TEST_TASK_COUNT
+    assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_2).count() == TEST_TASK_COUNT
+    assert session.query(Deadline).filter_by(id=TEST_DEADLINE_ID).count() == 1
 
     session.delete(task_group)
     session.commit()
 
     assert session.query(TaskGroup).filter_by(name="cascade_group3").first() is None
     assert session.query(Task).filter(Task.name.in_(["cascade_task4", "cascade_task5"])).count() == 0
-    assert session.query(Grade).filter_by(score=constants.TEST_GRADE_SCORE_2).count() == 0
-    assert session.query(Deadline).filter_by(id=constants.TEST_DEADLINE_ID).count() == 0
+    assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_2).count() == 0
+    assert session.query(Deadline).filter_by(id=TEST_DEADLINE_ID).count() == 0
 
     retrieved_user = session.query(User).filter_by(username="cascade_user3").first()
     assert retrieved_user is not None
@@ -512,20 +521,20 @@ def test_cascade_delete_user(session):
     user_on_course = UserOnCourse(user=user, course=course)
     task_group = TaskGroup(name="cascade_group4", course=course)
     task = Task(name="cascade_task6", group=task_group)
-    grade = Grade(user_on_course=user_on_course, task=task, score=constants.TEST_GRADE_SCORE_3)
+    grade = Grade(user_on_course=user_on_course, task=task, score=TEST_GRADE_SCORE_3)
     session.add_all([user, course, user_on_course, task_group, task, grade])
     session.commit()
 
     assert session.query(User).filter_by(username="cascade_user4").first() is not None
     assert session.query(UserOnCourse).filter_by(course=course).first() is not None
-    assert session.query(Grade).filter_by(score=constants.TEST_GRADE_SCORE_3).count() == 1
+    assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_3).count() == 1
 
     session.delete(user)
     session.commit()
 
     assert session.query(User).filter_by(username="cascade_user4").first() is None
     assert session.query(UserOnCourse).filter_by(course=course).first() is None
-    assert session.query(Grade).filter_by(score=constants.TEST_GRADE_SCORE_3).count() == 0
+    assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_3).count() == 0
 
     assert session.query(Course).filter_by(name="test_course_cascade3").first() is not None
     assert session.query(TaskGroup).filter_by(name="cascade_group4").first() is not None
@@ -537,18 +546,18 @@ def test_cascade_delete_user_on_course(session):
     user_on_course = UserOnCourse(user=user, course=course)
     task_group = TaskGroup(name="cascade_group5", course=course)
     task = Task(name="cascade_task7", group=task_group)
-    grade = Grade(user_on_course=user_on_course, task=task, score=constants.TEST_GRADE_SCORE_4)
+    grade = Grade(user_on_course=user_on_course, task=task, score=TEST_GRADE_SCORE_4)
     session.add_all([user, course, user_on_course, task_group, task, grade])
     session.commit()
 
     assert session.query(UserOnCourse).filter_by(course=course).first() is not None
-    assert session.query(Grade).filter_by(score=constants.TEST_GRADE_SCORE_4).count() == 1
+    assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_4).count() == 1
 
     session.delete(user_on_course)
     session.commit()
 
     assert session.query(UserOnCourse).filter_by(course=course).first() is None
-    assert session.query(Grade).filter_by(score=constants.TEST_GRADE_SCORE_4).count() == 0
+    assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_4).count() == 0
 
     assert session.query(User).filter_by(username="cascade_user5").first() is not None
     assert session.query(Course).filter_by(name="test_course_cascade4").first() is not None

@@ -5,7 +5,12 @@ import pytest
 from dotenv import load_dotenv
 
 from manytask.main import CustomFlask, create_app
-from tests import constants
+from tests.constants import (
+    TEST_CACHE_DIR,
+    TEST_COURSE_NAME,
+    TEST_PUBLIC_REPO,
+    TEST_STUDENTS_GROUP,
+)
 
 
 @pytest.fixture
@@ -31,20 +36,20 @@ def mock_env(monkeypatch, postgres_container):
     set_if_missing("GITLAB_ADMIN_TOKEN", "test_admin_token")
     set_if_missing("GITLAB_CLIENT_ID", "test_client_id")
     set_if_missing("GITLAB_CLIENT_SECRET", "test_client_secret")
-    monkeypatch.setenv("GITLAB_COURSE_GROUP", constants.TEST_COURSE_NAME)
-    monkeypatch.setenv("GITLAB_COURSE_PUBLIC_REPO", constants.TEST_PUBLIC_REPO)
-    monkeypatch.setenv("GITLAB_COURSE_STUDENTS_GROUP", constants.TEST_STUDENTS_GROUP)
+    monkeypatch.setenv("GITLAB_COURSE_GROUP", TEST_COURSE_NAME)
+    monkeypatch.setenv("GITLAB_COURSE_PUBLIC_REPO", TEST_PUBLIC_REPO)
+    monkeypatch.setenv("GITLAB_COURSE_STUDENTS_GROUP", TEST_STUDENTS_GROUP)
     set_if_missing("GITLAB_DEFAULT_BRANCH", "main")
 
     set_if_missing("REGISTRATION_SECRET", "test_reg_secret")
     set_if_missing("SHOW_ALLSCORES", "true")
 
-    monkeypatch.setenv("CACHE_DIR", constants.TEST_CACHE_DIR)
+    monkeypatch.setenv("CACHE_DIR", TEST_CACHE_DIR)
     monkeypatch.setenv("DATABASE_URL", postgres_container.get_connection_url())
     monkeypatch.setenv("INITIAL_INSTANCE_ADMIN", "instance_admin")
     monkeypatch.setenv("APPLY_MIGRATIONS", "true")
 
-    os.makedirs(constants.TEST_CACHE_DIR, exist_ok=True)
+    os.makedirs(TEST_CACHE_DIR, exist_ok=True)
 
     return mock_env
 
@@ -57,19 +62,19 @@ def mock_gitlab():
 
         # Mock GitLab groups
         mock_course_group = MagicMock()
-        mock_course_group.name = constants.TEST_COURSE_NAME
-        mock_course_group.full_name = constants.TEST_COURSE_NAME
+        mock_course_group.name = TEST_COURSE_NAME
+        mock_course_group.full_name = TEST_COURSE_NAME
 
         mock_students_group = MagicMock()
-        mock_students_group.name = constants.TEST_STUDENTS_GROUP
-        mock_students_group.full_name = constants.TEST_STUDENTS_GROUP
+        mock_students_group.name = TEST_STUDENTS_GROUP
+        mock_students_group.full_name = TEST_STUDENTS_GROUP
 
         # Mock groups.list for search
         def mock_group_list_search(**kwargs):
             search = kwargs.get("search", "")
-            if search == constants.TEST_COURSE_NAME:
+            if search == TEST_COURSE_NAME:
                 return [mock_course_group]
-            elif search == constants.TEST_STUDENTS_GROUP:
+            elif search == TEST_STUDENTS_GROUP:
                 return [mock_students_group]
             return []
 
@@ -77,14 +82,14 @@ def mock_gitlab():
 
         # Mock GitLab projects
         mock_project_list = MagicMock()
-        mock_project_list.name = constants.TEST_PUBLIC_REPO
-        mock_project_list.path = constants.TEST_PUBLIC_REPO
-        mock_project_list.path_with_namespace = constants.TEST_PUBLIC_REPO
+        mock_project_list.name = TEST_PUBLIC_REPO
+        mock_project_list.path = TEST_PUBLIC_REPO
+        mock_project_list.path_with_namespace = TEST_PUBLIC_REPO
 
         # Mock projects.list for search
         def mock_project_list_search(**kwargs):
             search = kwargs.get("search", "")
-            if search in [constants.TEST_PUBLIC_REPO, f"{constants.TEST_COURSE_NAME}/{constants.TEST_PUBLIC_REPO}"]:
+            if search in [TEST_PUBLIC_REPO, f"{TEST_COURSE_NAME}/{TEST_PUBLIC_REPO}"]:
                 return [mock_project_list]
             return []
 
