@@ -134,7 +134,6 @@ class DataBaseApi(StorageApi):
 
     def get_stored_user(
         self,
-        course_name: str,
         username: str,
     ) -> StoredUser:
         """Method for getting user's stored data
@@ -146,16 +145,18 @@ class DataBaseApi(StorageApi):
         """
 
         with self._session_create() as session:
-            course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, username, course)
-            session.commit()
+            user = self._get(
+                session,
+                models.User,
+                username=username,
+            )
 
             return StoredUser(
-                username=user_on_course.user.username,
-                first_name=user_on_course.user.first_name,
-                last_name=user_on_course.user.last_name,
-                rms_id=user_on_course.user.rms_id,
-                course_admin=user_on_course.is_course_admin,
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                rms_id=user.rms_id,
+                instance_admin=user.is_instance_admin,
             )
 
     def check_if_instance_admin(
@@ -688,7 +689,7 @@ class DataBaseApi(StorageApi):
                     first_name=user.first_name,
                     last_name=user.last_name,
                     rms_id=user.rms_id,
-                    course_admin=user.is_instance_admin,
+                    instance_admin=user.is_instance_admin,
                 )
                 for user in users
             ]

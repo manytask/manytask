@@ -1119,7 +1119,7 @@ def test_store_score_raises_exception_if_user_does_not_exist(db_api_with_initial
 
 def test_store_get_stored_user_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
     with pytest.raises(NoResultFound):
-        db_api_with_initialized_first_course.get_stored_user(FIRST_COURSE_NAME, constants.TEST_USERNAME)
+        db_api_with_initialized_first_course.get_stored_user(constants.TEST_USERNAME)
 
 
 def test_store_sync_user_on_course_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):

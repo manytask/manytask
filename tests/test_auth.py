@@ -106,9 +106,10 @@ def mock_storage_api(mock_course):  # noqa: C901
                 first_name=TEST_FIRST_NAME,
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
-                course_admin=False,
+                instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
+            self.course_admin = False
 
         @staticmethod
         def get_scores_update_timestamp():
@@ -141,11 +142,11 @@ def mock_storage_api(mock_course):  # noqa: C901
             return False
 
         def check_if_course_admin(self, _course_name, _username):
-            return self.stored_user.course_admin
+            return self.course_admin
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
-            self.stored_user.course_admin = course_admin
-            return self.stored_user.course_admin
+            self.course_admin = course_admin
+            return course_admin
 
         def check_user_on_course(self, *a, **k):
             return True
