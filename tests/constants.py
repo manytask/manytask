@@ -15,13 +15,7 @@ TEST_RMS_ID_1 = 2
 TEST_USERNAME_2 = "user2"
 TEST_FIRST_NAME_2 = "First2"
 TEST_LAST_NAME_2 = "Last2"
-TEST_REPO_NAME_2 = "repo2"
 TEST_RMS_ID_2 = 3
-
-TEST_USERNAME_3 = "user3"
-TEST_FIRST_NAME_3 = "First3"
-TEST_LAST_NAME_3 = "Last3"
-TEST_REPO_NAME_3 = "repo3"
 
 TEST_NAME = "Ivan Ivanov"
 TEST_COURSE_NAME = "Test_Course"
