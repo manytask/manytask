@@ -121,6 +121,10 @@ def mock_auth_api():
 
 @pytest.fixture
 def mock_storage_api(mock_course):  # noqa: C901
+    class MockFinalGradeConfig:
+        def evaluate(self, *_args, **_kwargs):
+            return 5
+
     class MockStorageApi:
         def __init__(self):
             self.stored_user = StoredUser(
@@ -173,6 +177,10 @@ def mock_storage_api(mock_course):  # noqa: C901
         @staticmethod
         def get_groups(*_args, **_kwargs):
             return []
+
+        @staticmethod
+        def get_grades(*_args, **_kwargs):
+            return MockFinalGradeConfig()
 
         @staticmethod
         def get_course(_name):
