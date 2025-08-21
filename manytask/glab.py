@@ -46,6 +46,25 @@ class GitLabApi(RmsApi, AuthApi):
         self._base_url = config.base_url
         self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token)
 
+    def create_course_infrastructure(
+        self,
+        course_group_name: str,
+        public_repo_name: str,
+        students_group_name: str,
+        default_branch: str,
+    ) -> None:
+        try:
+            logger.info(f"Creating course group {course_group_name}")
+            self.create_course_group(course_group_name)
+
+            logger.info(f"Creating public repository {public_repo_name} in group {course_group_name}")
+            self.create_public_repo(course_group_name, public_repo_name, default_branch=default_branch)
+
+            logger.info(f"Creating students group {students_group_name}")
+            self.create_students_group(course_group_name, students_group_name)
+        except RuntimeError as e:
+            logger.error(e)
+
     def register_new_user(
         self,
         username: str,
@@ -93,48 +112,97 @@ class GitLabApi(RmsApi, AuthApi):
         except StopIteration:
             raise RuntimeError(f"Unable to find project {project_name}")
 
+    def _group_exists(self, group_name: str) -> bool:
+        try:
+            self._get_group_by_name(group_name)
+            return True
+        except RuntimeError:
+            return False
+
+    def _project_exists(self, project_name: str) -> bool:
+        try:
+            self._get_project_by_name(project_name)
+            return True
+        except RuntimeError:
+            return False
+
+    def create_course_group(
+        self,
+        course_group: str,
+    ) -> None:
+        if self._group_exists(course_group):
+            logger.info(f"Group {course_group} already exists")
+            return
+        try:
+            self._gitlab.groups.create(
+                {
+                    "name": course_group,
+                    "path": course_group,
+                    "visibility": "private",
+                    "lfs_enabled": True,
+                    "shared_runners_enabled": True,
+                }
+            )
+        except gitlab.GitlabError:
+            raise RuntimeError(f"Failed to create group {course_group} and it does not exist")
+
     def create_public_repo(
         self,
         course_group: str,
-        course_public_repo: str,
+        course_public_repo_path: str,
+        default_branch: str = "main",
     ) -> None:
         group = self._get_group_by_name(course_group)
+        course_public_repo = course_public_repo_path.split("/")[-1]
+        project_full_path = f"{group.full_name}/{course_public_repo}"
 
-        for project in self._gitlab.projects.list(get_all=True, search=course_public_repo):
-            if project.path_with_namespace == course_public_repo:
-                logger.info(f"Project {course_public_repo} already exists")
-                return
-
-        self._gitlab.projects.create(
-            {
-                "name": course_public_repo,
-                "path": course_public_repo,
-                "namespace_id": group.id,
-                "visibility": "public",
-                "shared_runners_enabled": True,
-                "auto_devops_enabled": False,
-                "initialize_with_readme": True,
-            }
-        )
+        if self._project_exists(project_full_path):
+            logger.info(f"Project {project_full_path} already exists in group {group.full_name}")
+            return
+        try:
+            self._gitlab.projects.create(
+                {
+                    "name": course_public_repo,
+                    "path": course_public_repo,
+                    "namespace_id": group.id,
+                    "visibility": "public",
+                    "shared_runners_enabled": True,
+                    "auto_devops_enabled": False,
+                    "initialize_with_readme": True,
+                    "default_branch": default_branch,
+                }
+            )
+        except gitlab.GitlabError:
+            raise RuntimeError(
+                f"Failed to create project {course_public_repo} in group {group.full_name} and it does not exist"
+            )
 
     def create_students_group(
         self,
-        course_students_group: str,
+        course_group: str,
+        course_students_group_path: str,
     ) -> None:
-        for group in self._gitlab.groups.list(get_all=True, search=course_students_group):
-            if group.name == course_students_group and group.full_name == course_students_group:
-                logger.info(f"Group {course_students_group} already exists")
-                return
-
-        self._gitlab.groups.create(
-            {
-                "name": course_students_group,
-                "path": course_students_group,
-                "visibility": "private",
-                "lfs_enabled": True,
-                "shared_runners_enabled": True,
-            }
-        )
+        group = self._get_group_by_name(course_group)
+        course_students_group = course_students_group_path.split("/")[-1]
+        subgroup_full_path = f"{group.full_name}/{course_students_group}"
+        if self._group_exists(subgroup_full_path):
+            logger.info(f"Group {subgroup_full_path} already exists in group {group.full_name}")
+            return
+        try:
+            self._gitlab.groups.create(
+                {
+                    "name": course_students_group,
+                    "path": course_students_group,
+                    "parent_id": group.id,
+                    "visibility": "private",
+                    "lfs_enabled": True,
+                    "shared_runners_enabled": True,
+                }
+            )
+        except gitlab.GitlabError:
+            raise RuntimeError(
+                f"Failed to create group {course_students_group} in group {group.full_name} and it does not exist"
+            )
 
     def check_project_exists(
         self,
