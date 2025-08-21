@@ -5,13 +5,11 @@ from zoneinfo import ZoneInfo
 TEST_USERNAME = "username"
 TEST_FIRST_NAME = "First"
 TEST_LAST_NAME = "Last"
-TEST_REPO_NAME = "repo1"
 TEST_RMS_ID = 1
 
 TEST_USERNAME_1 = "user1"
 TEST_FIRST_NAME_1 = "First"
 TEST_LAST_NAME_1 = "Last1"
-TEST_REPO_NAME_1 = "repo1"
 TEST_RMS_ID_1 = 2
 
 TEST_USERNAME_2 = "user2"
@@ -19,6 +17,11 @@ TEST_FIRST_NAME_2 = "First2"
 TEST_LAST_NAME_2 = "Last2"
 TEST_REPO_NAME_2 = "repo2"
 TEST_RMS_ID_2 = 3
+
+TEST_USERNAME_3 = "user3"
+TEST_FIRST_NAME_3 = "First3"
+TEST_LAST_NAME_3 = "Last3"
+TEST_REPO_NAME_3 = "repo3"
 
 TEST_NAME = "Ivan Ivanov"
 TEST_COURSE_NAME = "Test_Course"
@@ -49,9 +52,9 @@ TASK_3 = "task3"
 TASK_LARGE = "task_large"
 STUDENT_1 = "student1"
 STUDENT_2 = "student2"
-STUDENT_NAMES = {
-    STUDENT_1: [TEST_FIRST_NAME_1, TEST_LAST_NAME_1],
-    STUDENT_2: [TEST_FIRST_NAME_2, TEST_LAST_NAME_2],
+STUDENT_DATA = {
+    STUDENT_1: [TEST_FIRST_NAME_1, TEST_LAST_NAME_1, 1],
+    STUDENT_2: [TEST_FIRST_NAME_2, TEST_LAST_NAME_2, 2],
 }
 SCORES = {
     STUDENT_1: {TASK_1: 100, TASK_2: 90, TASK_LARGE: 200, "total": 390, "large_count": 1},
@@ -63,6 +66,10 @@ SCORES = {
 DEADLINES_CONFIG_FILES = [
     "tests/.deadlines.test.yml",
     "tests/.deadlines.test2.yml",
+]
+GRADE_CONFIG_FILES = [
+    "tests/.grades.test.yml",
+    "tests/.grades.test2.yml",
 ]
 FIXED_CURRENT_TIME = datetime(2025, 4, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
 FIRST_COURSE_NAME = "Test Course"

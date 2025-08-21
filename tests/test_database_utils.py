@@ -9,7 +9,7 @@ from tests import constants
 
 
 @pytest.fixture
-def app():
+def app():  # noqa: C901
     app = Flask(__name__)
 
     class MockStorageApi:
@@ -19,36 +19,80 @@ def app():
                 self.name = "test_group"
 
         class MockTask:
-            def __init__(self, name, score, enabled, is_bonus=False, is_large=False):
+            def __init__(self, name, score, min_score, enabled, is_bonus=False, is_large=False):
                 self.name = name
                 self.score = score
+                self.min_score = min_score
                 self.enabled = enabled
                 self.is_bonus = is_bonus
                 self.is_large = is_large
+
+        class MockFinalGradeConfig:
+            def __init__(self, grade_config):
+                self.grade_config = grade_config
+                self.grade_order = sorted(self.grade_config.keys(), reverse=True)
+
+            def evaluate(self, row):
+                for grade in self.grade_order:
+                    if self.grade_config[grade].evaluate(row):
+                        return grade
+
+        class MockGradeConfig:
+            def __init__(self, formulas):
+                self.formulas = formulas
+
+            def evaluate(self, row):
+                return all(row[key] >= value for key, value in self.formulas.items())
 
         def __init__(self):
             self.groups = [
                 self.MockGroup(
                     [
                         # name, enabled
-                        self.MockTask(constants.TASK_1, 10, True, False, False),
-                        self.MockTask(constants.TASK_2, 20, True, True, False),
-                        self.MockTask(constants.TASK_3, 30, False, False, False),
-                        self.MockTask(constants.TASK_LARGE, 200, True, False, True),
+                        self.MockTask(constants.TASK_1, 10, 0, True, False, False),
+                        self.MockTask(constants.TASK_2, 20, 0, True, True, False),
+                        self.MockTask(constants.TASK_3, 30, 0, False, False, False),
+                        self.MockTask(constants.TASK_LARGE, 200, 100, True, False, True),
                     ]
                 )
             ]
 
+            self.grades_config = self.MockFinalGradeConfig(
+                {
+                    5: self.MockGradeConfig(
+                        {
+                            "total_score": 300,
+                            "large_count": 1,
+                        }
+                    ),
+                    4: self.MockGradeConfig({"total_score": 250, "large_count": 1}),
+                    3: self.MockGradeConfig(
+                        {
+                            "total_score": 200,
+                        }
+                    ),
+                    2: self.MockGradeConfig(
+                        {
+                            "total_score": 0,
+                        }
+                    ),
+                }
+            )
+
         def get_groups(self, _course_name):
             return self.groups
 
+        def get_grades(self, _course_name):
+            return self.grades_config
+
         @staticmethod
-        def get_stored_user(_course_name, username):
+        def get_stored_user(username):
             return StoredUser(
                 username=username,
-                first_name=constants.STUDENT_NAMES[username][0],
-                last_name=constants.STUDENT_NAMES[username][1],
-                course_admin=False,
+                first_name=constants.STUDENT_DATA[username][0],
+                last_name=constants.STUDENT_DATA[username][1],
+                rms_id=constants.STUDENT_DATA[username][2],
+                instance_admin=False,
             )
 
         @staticmethod
@@ -60,7 +104,7 @@ def app():
                         constants.TASK_2: constants.SCORES[constants.STUDENT_1][constants.TASK_2],
                         constants.TASK_LARGE: constants.SCORES[constants.STUDENT_1][constants.TASK_LARGE],
                     },
-                    constants.STUDENT_NAMES[constants.STUDENT_1],
+                    (constants.STUDENT_DATA[constants.STUDENT_1][0], constants.STUDENT_DATA[constants.STUDENT_1][1]),
                 ),
                 constants.STUDENT_2: (
                     {
@@ -68,7 +112,7 @@ def app():
                         constants.TASK_2: constants.SCORES[constants.STUDENT_2][constants.TASK_2],
                         constants.TASK_LARGE: constants.SCORES[constants.STUDENT_2][constants.TASK_LARGE],
                     },
-                    constants.STUDENT_NAMES[constants.STUDENT_2],
+                    (constants.STUDENT_DATA[constants.STUDENT_2][0], constants.STUDENT_DATA[constants.STUDENT_2][1]),
                 ),
             }
 
@@ -114,8 +158,8 @@ def test_get_database_table_data(app):
 
         for student_id in [constants.STUDENT_1, constants.STUDENT_2]:
             student = next(s for s in students if s["username"] == student_id)
-            assert student["first_name"] == constants.STUDENT_NAMES[student_id][0]
-            assert student["last_name"] == constants.STUDENT_NAMES[student_id][1]
+            assert student["first_name"] == constants.STUDENT_DATA[student_id][0]
+            assert student["last_name"] == constants.STUDENT_DATA[student_id][1]
             assert student["total_score"] == constants.SCORES[student_id]["total"]
             assert student["large_count"] == constants.SCORES[student_id]["large_count"]
             assert student["scores"] == {

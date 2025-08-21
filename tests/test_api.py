@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from flask import Flask, json, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import RmsUser, StoredUser
+from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
@@ -31,7 +31,7 @@ def setup_environment(monkeypatch):
 
 
 @pytest.fixture
-def app(mock_storage_api, mock_gitlab_api):
+def app(mock_storage_api, mock_rms_api, mock_auth_api):
     app = Flask(__name__)
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
@@ -40,8 +40,8 @@ def app(mock_storage_api, mock_gitlab_api):
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
     app.storage_api = mock_storage_api
-    app.gitlab_api = mock_gitlab_api
-    app.rms_api = mock_gitlab_api
+    app.rms_api = mock_rms_api
+    app.auth_api = mock_auth_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
 
@@ -101,11 +101,12 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 first_name=constants.TEST_FIRST_NAME,
                 last_name=constants.TEST_LAST_NAME,
                 rms_id=constants.TEST_RMS_ID,
-                course_admin=False,
+                instance_admin=False,
             )
             self.course_name = constants.TEST_COURSE_NAME
+            self.course_admin = False
 
-        def store_score(self, _course_name, username, repo_name, task_name, update_fn):
+        def store_score(self, _course_name, username, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
             self.scores[f"{username}_{task_name}"] = new_score
@@ -122,7 +123,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_all_scores(course_name, self):
             return {"test_user": self.get_scores(course_name, "test_user")}
 
-        def get_stored_user(self, _course_name, username):
+        def get_stored_user(self, username):
             from manytask.abstract import StoredUser
 
             return StoredUser(
@@ -130,7 +131,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 first_name=self.stored_user.first_name,
                 last_name=self.stored_user.last_name,
                 rms_id=self.stored_user.rms_id,
-                course_admin=True,
+                instance_admin=True,
             )
 
         def check_if_course_admin(self, _course_name, _username):
@@ -146,8 +147,8 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             pass
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
-            self.stored_user.course_admin = course_admin
-            return self.stored_user.course_admin
+            self.course_admin = course_admin
+            return course_admin
 
         def check_user_on_course(self, *a, **k):
             return True
@@ -171,8 +172,8 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
 
 @pytest.fixture
-def mock_gitlab_api(mock_rms_user):
-    class MockGitlabApi:
+def mock_rms_api(mock_rms_user):
+    class MockRmsApi:
         def __init__(self):
             self.course_admin = False
             self._rms_user_class = mock_rms_user
@@ -187,8 +188,8 @@ def mock_gitlab_api(mock_rms_user):
                 return self._rms_user_class(constants.TEST_USER_ID, constants.TEST_USERNAME, constants.TEST_NAME)
             raise GitLabApiException("User not found")
 
-        def check_authenticated_rms_user(self, access_token):
-            pass
+        def check_user_authenticated_in_rms(self, oauth, oauth_access_token, oauth_refresh_token):
+            return True
 
         def get_authenticated_rms_user(self, access_token):
             return RmsUser(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name="")
@@ -201,7 +202,24 @@ def mock_gitlab_api(mock_rms_user):
         def check_project_exists(_project_name, _project_group):
             return True
 
-    return MockGitlabApi()
+    return MockRmsApi()
+
+
+@pytest.fixture
+def mock_auth_api():
+    class MockAuthApi:
+        def check_user_is_authenticated(
+            self,
+            oauth,
+            oauth_access_token: str,
+            oauth_refresh_token: str,
+        ) -> bool:
+            return True
+
+        def get_authenticated_user(self, access_token):
+            return AuthenticatedUser(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME)
+
+    return MockAuthApi()
 
 
 @pytest.fixture
@@ -490,6 +508,8 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
                 "version": 1.5,
                 "username": constants.TEST_USERNAME,
                 "user_id": constants.TEST_USER_ID,
+                "access_token": "123",
+                "refresh_token": "123",
             }
         response = client.get(f"/api/{constants.TEST_COURSE_NAME}/database")
         assert response.status_code == HTTPStatus.FOUND  # Redirects to not ready page

@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -12,10 +13,16 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, Uni
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
-from manytask.config import ManytaskConfig, ManytaskDeadlinesConfig, ManytaskGroupConfig, ManytaskUiConfig
+from manytask.config import (
+    ManytaskConfig,
+    ManytaskDeadlinesConfig,
+    ManytaskFinalGradeConfig,
+    ManytaskGroupConfig,
+    ManytaskUiConfig,
+)
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig
-from manytask.database import DataBaseApi, DatabaseConfig, StoredUser, TaskDisabledError
+from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests import constants
 
@@ -44,8 +51,54 @@ def db_config(db_url):
 
 
 @pytest.fixture
-def db_api(tables, postgres_container):
-    return DataBaseApi(db_config(postgres_container.get_connection_url()))
+def db_api(tables, postgres_container, session):
+    config = db_config(postgres_container.get_connection_url())
+    config.session_factory = lambda: session
+    return DataBaseApi(config)
+
+
+@pytest.fixture
+def first_course_grade_config():
+    with open(constants.GRADE_CONFIG_FILES[0], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
+
+
+@pytest.fixture
+def first_course_grade_config_with_changed_numbers():
+    with open(constants.GRADE_CONFIG_FILES[0], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    grade_config_data_changed_numbers = dict()
+    grade_config_data_changed_numbers["grades"] = dict()
+    for key, value in grade_config_data["grades"]["grades"].items():
+        grade_config_data_changed_numbers["grades"][key + 2] = value.copy()
+
+    return ManytaskFinalGradeConfig(**grade_config_data_changed_numbers)
+
+
+@pytest.fixture
+def second_course_grade_config():
+    with open(constants.GRADE_CONFIG_FILES[1], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
+
+
+@pytest.fixture
+def second_course_grade_config_with_additional_grade():
+    with open(constants.GRADE_CONFIG_FILES[1], "r") as f:
+        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+
+    grade_config_data["grades"]["grades"][3] = [
+        {
+            "percent": 50,
+            "large_count": 1,
+        },
+    ]
+
+    return ManytaskFinalGradeConfig(**grade_config_data["grades"])
 
 
 @pytest.fixture
@@ -154,15 +207,24 @@ def first_course_deadlines_config_with_changed_order_of_tasks():
 
 
 def update_course(
-    db_api: DataBaseApi, course_name: str, ui_config: ManytaskUiConfig, deadlines_config: ManytaskDeadlinesConfig
+    db_api: DataBaseApi,
+    course_name: str,
+    ui_config: ManytaskUiConfig,
+    deadlines_config: ManytaskDeadlinesConfig,
+    final_grade_config: ManytaskFinalGradeConfig | None = None,
 ) -> None:
     """Update created course"""
-    config = ManytaskConfig(version=1, ui=ui_config, deadlines=deadlines_config)
+    config = ManytaskConfig(version=1, ui=ui_config, deadlines=deadlines_config, grades=final_grade_config)
 
     db_api.update_course(course_name=course_name, config=config)
 
 
-def create_course(db_api: DataBaseApi, course_config: CourseConfig, deadlines_config: ManytaskDeadlinesConfig) -> None:
+def create_course(
+    db_api: DataBaseApi,
+    course_config: CourseConfig,
+    deadlines_config: ManytaskDeadlinesConfig,
+    final_grade_config: ManytaskFinalGradeConfig | None = None,
+) -> None:
     """Create and update course"""
     db_api.create_course(settings_config=course_config)
 
@@ -174,6 +236,7 @@ def create_course(db_api: DataBaseApi, course_config: CourseConfig, deadlines_co
             links=course_config.links,
         ),
         deadlines_config,
+        final_grade_config,
     )
 
 
@@ -182,17 +245,25 @@ def edit_course(db_api: DataBaseApi, course_config: CourseConfig) -> None:
 
 
 @pytest.fixture
-def db_api_with_initialized_first_course(db_api, first_course_config, first_course_deadlines_config):
-    create_course(db_api, first_course_config, first_course_deadlines_config)
+def db_api_with_initialized_first_course(
+    db_api, first_course_config, first_course_deadlines_config, first_course_grade_config
+):
+    create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
     return db_api
 
 
 @pytest.fixture
 def db_api_with_two_initialized_courses(
-    db_api, first_course_config, first_course_deadlines_config, second_course_config, second_course_deadlines_config
+    db_api,
+    first_course_config,
+    first_course_deadlines_config,
+    first_course_grade_config,
+    second_course_config,
+    second_course_deadlines_config,
+    second_course_grade_config,
 ):
-    create_course(db_api, first_course_config, first_course_deadlines_config)
-    create_course(db_api, second_course_config, second_course_deadlines_config)
+    create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
+    create_course(db_api, second_course_config, second_course_deadlines_config, second_course_grade_config)
     return db_api
 
 
@@ -251,7 +322,7 @@ def test_not_initialized_course(session, db_api, first_course_config):
     assert max_score_started == 0
 
 
-def test_initialized_course(db_api_with_initialized_first_course, session):
+def test_initialized_course(db_api_with_initialized_first_course, session):  # noqa: PLR0915
     expected_task_groups = 6
     expected_tasks = 19
     bonus_tasks = ("task_0_2", "task_1_3")
@@ -259,6 +330,10 @@ def test_initialized_course(db_api_with_initialized_first_course, session):
     special_tasks = ("task_1_1",)
     disabled_groups = ("group_4",)
     disabled_tasks = ("task_2_1",)
+    grades_order = [5, 4, 3, 2]
+    lowest_grade = 2
+    grade_config_list_length = 2
+    grade_config_lowest_percent = 50
 
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
@@ -310,6 +385,22 @@ def test_initialized_course(db_api_with_initialized_first_course, session):
 
         assert task.score == expected_task_score
 
+    final_grade_config = db_api_with_initialized_first_course.get_grades(constants.FIRST_COURSE_NAME)
+    assert final_grade_config.grades_order == grades_order
+
+    for grade in final_grade_config.grades_order:
+        if grade != lowest_grade:
+            assert isinstance(final_grade_config.grades[grade], list)
+            assert len(final_grade_config.grades[grade]) == grade_config_list_length
+            assert isinstance(final_grade_config.grades[grade][0], dict)
+            assert final_grade_config.grades[grade][0][Path("percent")] >= grade_config_lowest_percent
+            assert final_grade_config.grades[grade][0][Path("large_count")] >= 1
+        else:
+            assert isinstance(final_grade_config.grades[grade], list)
+            assert len(final_grade_config.grades[grade]) == 1
+            assert isinstance(final_grade_config.grades[grade][0], dict)
+            assert final_grade_config.grades[grade][0][Path("")] == 0
+
 
 def test_updating_course(
     db_api,
@@ -317,6 +408,7 @@ def test_updating_course(
     first_course_deadlines_config,
     second_course_deadlines_config,
     first_course_updated_ui_config,
+    first_course_grade_config_with_changed_numbers,
     session,
 ):
     expected_task_groups = 8
@@ -327,8 +419,16 @@ def test_updating_course(
     disabled_groups = ("group_6",)
     disabled_tasks = ("task_2_2",)
 
-    create_course(db_api, first_course_config, first_course_deadlines_config)
-    update_course(db_api, constants.FIRST_COURSE_NAME, first_course_updated_ui_config, second_course_deadlines_config)
+    create_course(
+        db_api, first_course_config, first_course_deadlines_config, first_course_grade_config_with_changed_numbers
+    )
+    update_course(
+        db_api,
+        constants.FIRST_COURSE_NAME,
+        first_course_updated_ui_config,
+        second_course_deadlines_config,
+        first_course_grade_config_with_changed_numbers,
+    )
 
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
@@ -384,18 +484,20 @@ def test_resync_with_changed_task_name(
     first_course_deadlines_config,
     first_course_deadlines_config_with_changed_task_name,
     first_course_updated_ui_config,
+    first_course_grade_config,
     session,
 ):
     expected_task_groups = 6
     expected_tasks = 20
     disabled_tasks = ("task_0_0", "task_2_1")
 
-    create_course(db_api, first_course_config, first_course_deadlines_config)
+    create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
     update_course(
         db_api,
         constants.FIRST_COURSE_NAME,
         first_course_updated_ui_config,
         first_course_deadlines_config_with_changed_task_name,
+        first_course_grade_config,
     )
 
     stats = db_api.get_stats(constants.FIRST_COURSE_NAME)
@@ -426,11 +528,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            constants.FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            "not_exist_task",
-            update_func(1),
+            constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, "not_exist_task", update_func(1)
         )
         == 0
     )
@@ -449,11 +547,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            constants.FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            "task_0_0",
-            update_func(1),
+            constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", update_func(1)
         )
         == 1
     )
@@ -494,11 +588,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            constants.FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            "task_1_3",
-            update_func(expected_score),
+            constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_1_3", update_func(expected_score)
         )
         == expected_score
     )
@@ -542,13 +632,7 @@ def test_store_score_with_changed_task_name(
         constants.TEST_USERNAME, constants.TEST_FIRST_NAME, constants.TEST_LAST_NAME, constants.TEST_RMS_ID
     )
 
-    db_api.store_score(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        "task_0_0",
-        update_func(10),
-    )
+    db_api.store_score(constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", update_func(10))
 
     update_course(
         db_api,
@@ -570,7 +654,7 @@ def test_store_score_with_changed_task_name(
     assert scores == {}
 
 
-def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session):
+def test_sync_user_on_course(db_api_with_initialized_first_course, session):
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
 
@@ -581,16 +665,13 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     assert session.query(User).count() == constants.USER_EXPECTED
     assert session.query(UserOnCourse).count() == 0
 
-    stored_user = db_api_with_initialized_first_course.get_stored_user(
+    is_user_on_course = db_api_with_initialized_first_course.check_user_on_course(
         constants.FIRST_COURSE_NAME, constants.TEST_USERNAME
     )
+    assert not is_user_on_course
 
-    assert stored_user == StoredUser(
-        username=constants.TEST_USERNAME,
-        first_name=constants.TEST_FIRST_NAME,
-        last_name=constants.TEST_LAST_NAME,
-        rms_id=constants.TEST_RMS_ID,
-        course_admin=False,
+    db_api_with_initialized_first_course.sync_user_on_course(
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, False
     )
 
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
@@ -598,24 +679,16 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     )
     assert not is_course_admin
 
+    is_user_on_course = db_api_with_initialized_first_course.check_user_on_course(
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME
+    )
+    assert is_user_on_course
+
     assert session.query(User).count() == constants.USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
 
     # admin in gitlab
-    stored_user = db_api_with_initialized_first_course.sync_stored_user(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        True,
-    )
-
-    assert stored_user == StoredUser(
-        username=constants.TEST_USERNAME,
-        first_name=constants.TEST_FIRST_NAME,
-        last_name=constants.TEST_LAST_NAME,
-        rms_id=constants.TEST_RMS_ID,
-        course_admin=True,
-    )
+    db_api_with_initialized_first_course.sync_user_on_course(constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, True)
 
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
         constants.FIRST_COURSE_NAME, constants.TEST_USERNAME
@@ -623,19 +696,8 @@ def test_get_and_sync_stored_user(db_api_with_initialized_first_course, session)
     assert is_course_admin
 
     # lost admin rules in gitlab, but in database stored that user is admin
-    stored_user = db_api_with_initialized_first_course.sync_stored_user(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        False,
-    )
-
-    assert stored_user == StoredUser(
-        username=constants.TEST_USERNAME,
-        first_name=constants.TEST_FIRST_NAME,
-        last_name=constants.TEST_LAST_NAME,
-        rms_id=constants.TEST_RMS_ID,
-        course_admin=True,
+    db_api_with_initialized_first_course.sync_user_on_course(
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, False
     )
 
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(
@@ -660,18 +722,10 @@ def test_many_users(db_api_with_initialized_first_course, session):
     )
 
     db_api_with_initialized_first_course.store_score(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME,
-        "task_0_0",
-        update_func(1),
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_1, "task_0_0", update_func(1)
     )
     db_api_with_initialized_first_course.store_score(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME,
-        "task_1_3",
-        update_func(expected_score_1),
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_1, "task_1_3", update_func(expected_score_1)
     )
 
     db_api_with_initialized_first_course.create_user_if_not_exist(
@@ -680,11 +734,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
     assert (
         db_api_with_initialized_first_course.store_score(
-            constants.FIRST_COURSE_NAME,
-            constants.TEST_USERNAME_2,
-            constants.TEST_REPO_NAME_1,
-            "task_0_0",
-            update_func(expected_score_2),
+            constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_2, "task_0_0", update_func(expected_score_2)
         )
         == expected_score_2
     )
@@ -735,18 +785,10 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     )
 
     db_api_with_two_initialized_courses.store_score(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        "task_0_0",
-        update_func(30),
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", update_func(30)
     )
     db_api_with_two_initialized_courses.store_score(
-        constants.SECOND_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        "task_1_3",
-        update_func(40),
+        constants.SECOND_COURSE_NAME, constants.TEST_USERNAME, "task_1_3", update_func(40)
     )
     expected_users = 2
     expected_user_on_course = 2
@@ -808,40 +850,20 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     )
 
     db_api_with_two_initialized_courses.store_score(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME,
-        "task_0_0",
-        update_func(1),
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_1, "task_0_0", update_func(1)
     )
     db_api_with_two_initialized_courses.store_score(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME,
-        "task_1_3",
-        update_func(expected_score_1),
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_1, "task_1_3", update_func(expected_score_1)
     )
     db_api_with_two_initialized_courses.store_score(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME_2,
-        constants.TEST_REPO_NAME_1,
-        "task_0_0",
-        update_func(expected_score_2),
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_2, "task_0_0", update_func(expected_score_2)
     )
 
     db_api_with_two_initialized_courses.store_score(
-        constants.SECOND_COURSE_NAME,
-        constants.TEST_USERNAME_1,
-        constants.TEST_REPO_NAME,
-        "task_1_0",
-        update_func(99),
+        constants.SECOND_COURSE_NAME, constants.TEST_USERNAME_1, "task_1_0", update_func(99)
     )
     db_api_with_two_initialized_courses.store_score(
-        constants.SECOND_COURSE_NAME,
-        constants.TEST_USERNAME_2,
-        constants.TEST_REPO_NAME_1,
-        "task_1_1",
-        update_func(7),
+        constants.SECOND_COURSE_NAME, constants.TEST_USERNAME_2, "task_1_1", update_func(7)
     )
 
     assert session.query(User).count() == expected_users
@@ -1012,11 +1034,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     )
 
     score = db_api_with_two_initialized_courses.store_score(
-        constants.FIRST_COURSE_NAME,
-        constants.TEST_USERNAME,
-        constants.TEST_REPO_NAME,
-        "task_0_0",
-        update_func(1),
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", update_func(1)
     )
     assert score == 1
 
@@ -1035,11 +1053,7 @@ def test_store_score_update_error(db_api_with_two_initialized_courses, session):
 
     with pytest.raises(ValueError) as exc_info:
         db_api_with_two_initialized_courses.store_score(
-            constants.FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            "task_0_0",
-            failing_update,
+            constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, "task_0_0", failing_update
         )
     assert "Update failed" in str(exc_info.value)
 
@@ -1064,26 +1078,19 @@ def test_get_course_unknown(db_api_with_two_initialized_courses):
 def test_store_score_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
     with pytest.raises(NoResultFound):
         db_api_with_initialized_first_course.store_score(
-            constants.FIRST_COURSE_NAME,
-            constants.TEST_USERNAME_2,
-            constants.TEST_REPO_NAME_1,
-            "task_0_0",
-            update_func(1),
+            constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_2, "task_0_0", update_func(1)
         )
 
 
 def test_store_get_stored_user_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
     with pytest.raises(NoResultFound):
-        db_api_with_initialized_first_course.get_stored_user(constants.FIRST_COURSE_NAME, constants.TEST_USERNAME)
+        db_api_with_initialized_first_course.get_stored_user(constants.TEST_USERNAME)
 
 
-def test_store_sync_stored_user_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
+def test_store_sync_user_on_course_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
     with pytest.raises(NoResultFound):
-        db_api_with_initialized_first_course.sync_stored_user(
-            constants.FIRST_COURSE_NAME,
-            constants.TEST_USERNAME,
-            constants.TEST_REPO_NAME,
-            False,
+        db_api_with_initialized_first_course.sync_user_on_course(
+            constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, False
         )
 
 
@@ -1120,10 +1127,9 @@ def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_cour
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
-    user_on_course = UserOnCourse(
-        user_id=user.id, course_id=1, repo_name=constants.TEST_REPO_NAME, is_course_admin=False
-    )
+    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=False)
 
     session.add(user)
     session.add(user_on_course)
@@ -1143,10 +1149,9 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
-    user_on_course = UserOnCourse(
-        user_id=user.id, course_id=1, repo_name=constants.TEST_REPO_NAME, is_course_admin=True
-    )
+    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=True)
 
     session.add(user)
     session.add(user_on_course)
@@ -1166,10 +1171,9 @@ def test_check_user_on_course(db_api_with_two_initialized_courses, session):
         username=constants.TEST_USERNAME,
         first_name=constants.TEST_FIRST_NAME,
         last_name=constants.TEST_LAST_NAME,
+        rms_id=constants.TEST_RMS_ID,
     )
-    user_on_course = UserOnCourse(
-        user_id=user.id, course_id=1, repo_name=constants.TEST_REPO_NAME, is_course_admin=True
-    )
+    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=True)
 
     session.add(user)
     session.add(user_on_course)
@@ -1457,3 +1461,82 @@ def test_update_user_profile(db_api, session):
 
     assert updated_user.first_name == "FirstName"
     assert updated_user.last_name == "LastName"
+
+
+def test_grade_config_estimation_with_adding_grade(
+    db_api_with_two_initialized_courses,
+    first_course_updated_ui_config,
+    second_course_deadlines_config,
+    second_course_grade_config_with_additional_grade,
+    session,
+):
+    mock_scores = [
+        {"percent": 75.0, "large_count": 2, "scores": {}},
+        {"percent": 83.2, "large_count": 3, "scores": {}},
+        {"percent": 92.7, "large_count": 1, "scores": {}},
+        {"percent": 60.4, "large_count": 2, "scores": {}},
+        {"percent": 52.8, "large_count": 0, "scores": {}},
+    ]
+    mock_grades = [4, 5, 2, 4, 2]
+    mock_grades_updated = [4, 5, 3, 4, 2]
+    grade_config_data = db_api_with_two_initialized_courses.get_grades(constants.SECOND_COURSE_NAME)
+
+    for i, score in enumerate(mock_scores):
+        assert grade_config_data.evaluate(score) == mock_grades[i]
+
+    update_course(
+        db_api_with_two_initialized_courses,
+        constants.SECOND_COURSE_NAME,
+        first_course_updated_ui_config,
+        second_course_deadlines_config,
+        second_course_grade_config_with_additional_grade,
+    )
+
+    grade_config_data = db_api_with_two_initialized_courses.get_grades(constants.SECOND_COURSE_NAME)
+
+    for i, score in enumerate(mock_scores):
+        assert grade_config_data.evaluate(score) == mock_grades_updated[i]
+
+
+def test_grade_config_estimation_with_removing_grade(
+    db_api_with_two_initialized_courses,
+    first_course_updated_ui_config,
+    second_course_deadlines_config,
+    second_course_grade_config,
+    second_course_grade_config_with_additional_grade,
+    session,
+):
+    update_course(
+        db_api_with_two_initialized_courses,
+        constants.SECOND_COURSE_NAME,
+        first_course_updated_ui_config,
+        second_course_deadlines_config,
+        second_course_grade_config_with_additional_grade,
+    )
+
+    mock_scores = [
+        {"percent": 75.0, "large_count": 2, "scores": {}},
+        {"percent": 83.2, "large_count": 3, "scores": {}},
+        {"percent": 92.7, "large_count": 1, "scores": {}},
+        {"percent": 60.4, "large_count": 2, "scores": {}},
+        {"percent": 52.8, "large_count": 0, "scores": {}},
+    ]
+    mock_grades = [4, 5, 3, 4, 2]
+    mock_grades_updated = [4, 5, 2, 4, 2]
+    grade_config_data = db_api_with_two_initialized_courses.get_grades(constants.SECOND_COURSE_NAME)
+
+    for i, score in enumerate(mock_scores):
+        assert grade_config_data.evaluate(score) == mock_grades[i]
+
+    update_course(
+        db_api_with_two_initialized_courses,
+        constants.SECOND_COURSE_NAME,
+        first_course_updated_ui_config,
+        second_course_deadlines_config,
+        second_course_grade_config,
+    )
+
+    grade_config_data = db_api_with_two_initialized_courses.get_grades(constants.SECOND_COURSE_NAME)
+
+    for i, score in enumerate(mock_scores):
+        assert grade_config_data.evaluate(score) == mock_grades_updated[i]

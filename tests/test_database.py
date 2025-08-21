@@ -4,7 +4,6 @@ from zoneinfo import ZoneInfo
 from manytask.models import Course, Task, TaskGroup
 from manytask.config import ManytaskDeadlinesConfig
 from tests import constants
-from manytask.abstract import Student
 
 
 # ruff: noqa
@@ -12,8 +11,10 @@ from tests.test_db_api import (
     db_api,
     first_course_config,
     first_course_deadlines_config,
+    first_course_grade_config,
     second_course_config,
     second_course_deadlines_config,
+    second_course_grade_config,
     db_api_with_two_initialized_courses,
 )
 
@@ -192,17 +193,15 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
         [constants.FIRST_COURSE_NAME, constants.SECOND_COURSE_NAME]
     )
 
-    db_api_with_two_initialized_courses.sync_stored_user(
-        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, "repo1", True
+    db_api_with_two_initialized_courses.sync_user_on_course(constants.FIRST_COURSE_NAME, constants.TEST_USERNAME, True)
+    db_api_with_two_initialized_courses.sync_user_on_course(
+        constants.SECOND_COURSE_NAME, constants.TEST_USERNAME_1, False
     )
-    db_api_with_two_initialized_courses.sync_stored_user(
-        constants.SECOND_COURSE_NAME, constants.TEST_USERNAME_1, "repo2", False
+    db_api_with_two_initialized_courses.sync_user_on_course(
+        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_2, False
     )
-    db_api_with_two_initialized_courses.sync_stored_user(
-        constants.FIRST_COURSE_NAME, constants.TEST_USERNAME_2, "repo3", False
-    )
-    db_api_with_two_initialized_courses.sync_stored_user(
-        constants.SECOND_COURSE_NAME, constants.TEST_USERNAME_2, "repo3", True
+    db_api_with_two_initialized_courses.sync_user_on_course(
+        constants.SECOND_COURSE_NAME, constants.TEST_USERNAME_2, True
     )
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(constants.TEST_USERNAME) == [

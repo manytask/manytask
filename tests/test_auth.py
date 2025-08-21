@@ -10,14 +10,14 @@ import pytest
 from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import RmsUser, StoredUser, Student
+from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
 from manytask.web import course_bp, root_bp
 from tests import constants
 
 
 @pytest.fixture
-def app(mock_gitlab_api, mock_storage_api):
+def app(mock_rms_api, mock_auth_api, mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
@@ -25,8 +25,8 @@ def app(mock_gitlab_api, mock_storage_api):
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
-    app.gitlab_api = mock_gitlab_api
-    app.rms_api = mock_gitlab_api
+    app.rms_api = mock_rms_api
+    app.auth_api = mock_auth_api
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
@@ -34,8 +34,8 @@ def app(mock_gitlab_api, mock_storage_api):
 
 
 @pytest.fixture
-def mock_gitlab_api():
-    class MockGitlabApi:
+def mock_rms_api():
+    class MockRmsApi:
         def __init__(self):
             self.course_admin = False
             self.base_url = constants.GITLAB_BASE_URL
@@ -52,9 +52,7 @@ def mock_gitlab_api():
         def get_rms_user_by_id(user_id: int):
             return RmsUser(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_NAME)
 
-        def check_authenticated_rms_user(self, gitlab_access_token: str):
-            pass
-
+        @staticmethod
         def get_authenticated_rms_user(self, gitlab_access_token: str):
             return RmsUser(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=constants.TEST_NAME)
 
@@ -66,7 +64,24 @@ def mock_gitlab_api():
         def _construct_rms_user(user: dict[str, Any]):
             return RmsUser(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name="")
 
-    return MockGitlabApi()
+    return MockRmsApi()
+
+
+@pytest.fixture
+def mock_auth_api():
+    class MockAuthApi:
+        def check_user_is_authenticated(
+            self,
+            oauth,
+            oauth_access_token: str,
+            oauth_refresh_token: str,
+        ) -> bool:
+            return True
+
+        def get_authenticated_user(self, access_token):
+            return AuthenticatedUser(id=constants.TEST_USER_ID, username=constants.TEST_USERNAME)
+
+    return MockAuthApi()
 
 
 @pytest.fixture
@@ -78,9 +93,10 @@ def mock_storage_api(mock_course):  # noqa: C901
                 first_name=constants.TEST_FIRST_NAME,
                 last_name=constants.TEST_LAST_NAME,
                 rms_id=constants.TEST_RMS_ID,
-                course_admin=False,
+                instance_admin=False,
             )
             self.course_name = constants.TEST_COURSE_NAME
+            self.course_admin = False
 
         @staticmethod
         def get_scores_update_timestamp():
@@ -113,11 +129,11 @@ def mock_storage_api(mock_course):  # noqa: C901
             return False
 
         def check_if_course_admin(self, _course_name, _username):
-            return self.stored_user.course_admin
+            return self.course_admin
 
-        def sync_and_get_admin_status(self, course_name: str, student: Student, course_admin: bool) -> bool:
-            self.stored_user.course_admin = course_admin
-            return self.stored_user.course_admin
+        def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
+            self.course_admin = course_admin
+            return course_admin
 
         def check_user_on_course(self, *a, **k):
             return True
@@ -208,17 +224,18 @@ def test_requires_auth_with_valid_session(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.gitlab_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_rms_user.return_value = Student(
-            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=""
+        mock_get_authenticated_user.return_value = AuthenticatedUser(
+            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME
         )
         session["gitlab"] = {
             "version": 1.5,
             "username": "test_user",
             "user_id": 123,
             "access_token": constants.TEST_TOKEN,
+            "refresh_token": constants.TEST_TOKEN,
         }
         response = test_route(course_name=constants.TEST_COURSE_NAME)
         assert response == "success"
@@ -232,13 +249,13 @@ def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.gitlab_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_rms_user,
         patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
     ):
         app.oauth = mock_gitlab_oauth
         mock_check_user_on_course.return_value = True
-        mock_get_authenticated_rms_user.return_value = Student(
-            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=""
+        mock_get_authenticated_rms_user.return_value = AuthenticatedUser(
+            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME
         )
         response = test_route(course_name=constants.TEST_COURSE_NAME)
         assert response.status_code == HTTPStatus.FOUND
@@ -288,21 +305,21 @@ def test_requires_ready_but_not_ready(app):
 
 def test_set_oauth_session():
     tokens = {"access_token": "token", "refresh_token": "refresh_token"}
-    student = Student(id=1, username="Test Name", name="Name")
-    result = set_oauth_session(student, tokens)
+    auth_user = AuthenticatedUser(id=1, username="Test Name")
+    result = set_oauth_session(auth_user, tokens)
     assert result["access_token"] == tokens["access_token"]
     assert result["refresh_token"] == tokens["refresh_token"]
-    assert result["username"] == student.username
-    assert result["user_id"] == student.id
+    assert result["username"] == auth_user.username
+    assert result["user_id"] == auth_user.id
 
 
 def test_set_oauth_session_only_student():
-    student = Student(id=1, username="Test Name", name="Name")
-    result = set_oauth_session(student)
+    auth_user = AuthenticatedUser(id=1, username="Test Name")
+    result = set_oauth_session(auth_user)
     assert "access_token" not in result
     assert "refresh_token" not in result
-    assert result["username"] == student.username
-    assert result["user_id"] == student.id
+    assert result["username"] == auth_user.username
+    assert result["user_id"] == auth_user.id
 
 
 def test_requires_admin_in_debug_mode(app):
@@ -323,12 +340,12 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.gitlab_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
         patch.object(app.storage_api, "check_if_instance_admin") as mock_check_if_instance_admin,
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_rms_user.return_value = Student(
-            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=""
+        mock_get_authenticated_user.return_value = AuthenticatedUser(
+            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME
         )
         mock_check_if_instance_admin.return_value = True
         session["gitlab"] = {
@@ -336,6 +353,7 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
             "username": "test_user",
             "user_id": 123,
             "access_token": constants.TEST_TOKEN,
+            "refresh_token": constants.TEST_TOKEN,
         }
 
         response = test_route(course_name=constants.TEST_COURSE_NAME)
@@ -349,17 +367,18 @@ def test_requires_admin_with_no_admin_rules(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.gitlab_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_rms_user.return_value = Student(
-            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME, name=""
+        mock_get_authenticated_user.return_value = AuthenticatedUser(
+            id=constants.TEST_USER_ID, username=constants.TEST_USERNAME
         )
         session["gitlab"] = {
             "version": 1.5,
             "username": "test_user",
             "user_id": 123,
             "access_token": constants.TEST_TOKEN,
+            "refresh_token": constants.TEST_TOKEN,
         }
 
         with pytest.raises(HTTPException) as e:
