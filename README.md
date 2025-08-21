@@ -56,6 +56,7 @@ Current developers:
 * [Ivan Gorobets](https://github.com/KIoppert)
 * [Ivan Komarov](https://github.com/gagarinkomar)
 * [Alexander Kostrikov](https://github.com/akostrikov)
+* [Daniil Maslov](https://github.com/dmasloff)
 * [Alexey Seliverstov](https://github.com/prawwtocol)
 * [Artem Zhmurov](https://github.com/zhmurov)
 
