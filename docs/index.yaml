@@ -13,7 +13,7 @@ blocks:
       - text: 'App'
         theme: 'outlined'
         size: 'promo'
-        url: 'https://app.manytask2.org/'
+        url: 'https://app.manytask.org/'
       - text: 'GitHub'
         theme: 'outlined'
         size: 'promo'
