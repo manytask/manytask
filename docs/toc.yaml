@@ -11,7 +11,7 @@ navigation:
     leftItems:
       - type: link
         text: App
-        url: https://app.manytask2.org/
+        url: https://app.manytask.org/
       - type: link
         text: Documentation
         url: ./production.html
