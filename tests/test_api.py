@@ -17,22 +17,22 @@ from manytask.api import bp as api_bp
 from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.glab import GitLabApiException
 from manytask.web import course_bp, root_bp
-
-TEST_USER_ID = 123
-TEST_USERNAME = "test_user"
-TEST_FIRST_NAME = "Ivan"
-TEST_LAST_NAME = "Ivanov"
-TEST_NAME = "Ivan Ivanov"
-TEST_RMS_ID = 456
-INVALID_TASK_NAME = "invalid_task"
-TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
-TEST_TASK_NAME = "test_task"
-TEST_TASK_GROUP_NAME = "test_task_group"
-TEST_SECRET_KEY = "test_key"
-TEST_COURSE_NAME = "Test_Course"
-
-TEST_INVALID_USER_ID = 321
-TEST_INVALID_USERNAME = "invalid_user"
+from tests.constants import (
+    INVALID_TASK_NAME,
+    TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
+    TEST_COURSE_NAME,
+    TEST_FIRST_NAME,
+    TEST_INVALID_USER_ID,
+    TEST_INVALID_USERNAME,
+    TEST_LAST_NAME,
+    TEST_NAME,
+    TEST_RMS_ID,
+    TEST_SECRET_KEY,
+    TEST_TASK_GROUP_NAME,
+    TEST_TASK_NAME,
+    TEST_USER_ID,
+    TEST_USERNAME,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -340,7 +340,12 @@ def test_report_score_missing_user(app):
 
 def test_report_score_success(app):
     with app.test_request_context():
-        data = {"task": TEST_TASK_NAME, "user_id": str(TEST_USER_ID), "score": "90", "check_deadline": "True"}
+        data = {
+            "task": TEST_TASK_NAME,
+            "user_id": str(TEST_USER_ID),
+            "score": "90",
+            "check_deadline": "True",
+        }
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
         expected_data = {"username": TEST_USERNAME, "score": 90}
 
@@ -355,7 +360,12 @@ def test_get_score_success(app):
     with app.test_request_context():
         data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
-        expected_data = {"score": 80, "task": TEST_TASK_NAME, "user_id": TEST_USER_ID, "username": TEST_USERNAME}
+        expected_data = {
+            "score": 80,
+            "task": TEST_TASK_NAME,
+            "user_id": TEST_USER_ID,
+            "username": TEST_USERNAME,
+        }
 
         response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/score", data=data, headers=headers)
         assert response.status_code == HTTPStatus.OK
@@ -440,7 +450,7 @@ def test_update_database_not_ready(app, authenticated_client):
 def test_requires_token_invalid_token(app):
     client = app.test_client()
     headers = {"Authorization": "Bearer invalid_token"}
-    response = client.post("/api/{TEST_COURSE_NAME}/report", headers=headers)
+    response = client.post(f"/api/{TEST_COURSE_NAME}/report", headers=headers)
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
@@ -583,7 +593,9 @@ def test_get_score_invalid_student(app):
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
 
     response = client.get(
-        f"/api/{TEST_COURSE_NAME}/score", data={"username": "nonexistent_user", "task": TEST_TASK_NAME}, headers=headers
+        f"/api/{TEST_COURSE_NAME}/score",
+        data={"username": "nonexistent_user", "task": TEST_TASK_NAME},
+        headers=headers,
     )
     assert response.status_code == HTTPStatus.NOT_FOUND
 
@@ -732,7 +744,11 @@ def test_validate_and_extract_params_no_student_name_or_id(app):
 
 def test_validate_and_extract_params_both_student_name_and_id(app):
     """Test parsing form data user is not defined"""
-    form_data = {"user_id": TEST_USER_ID, "username": TEST_USERNAME, "task": TEST_TASK_NAME}
+    form_data = {
+        "user_id": TEST_USER_ID,
+        "username": TEST_USERNAME,
+        "task": TEST_TASK_NAME,
+    }
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:

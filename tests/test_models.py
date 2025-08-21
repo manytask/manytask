@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from typing import Optional
-from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine
@@ -18,24 +17,24 @@ from manytask.models import (
     User,
     UserOnCourse,
 )
-
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-
-TEST_DEADLINE_DATA_INT = 12345
-TEST_GRADE_SCORE = 77
-TEST_TASK_COUNT = 2
-TEST_TASK_COUNT_LARGE = 3
-TEST_GRADE_COUNT = 4
-TEST_DEADLINE_ID = 12345
-TEST_GRADE_SCORE_2 = 123456
-TEST_GRADE_SCORE_3 = 1234567
-TEST_GRADE_SCORE_4 = 12345678
-TEST_TASK_SCORE = 100
-TEST_TASK_POSITION = 7
-TEST_TASK_GROUP_POSITION = 5
-TEST_MAX_SUBMISSIONS = 10
-TEST_SUBMISSION_PENALTY = 0.1
-TEST_DEADLINE_STEPS = {0.4: datetime(2000, 1, 2, 3, 4, 5, 6, tzinfo=ZoneInfo("Europe/Berlin"))}
+from tests.constants import (
+    SQLALCHEMY_DATABASE_URL,
+    TEST_DEADLINE_DATA_INT,
+    TEST_DEADLINE_ID,
+    TEST_DEADLINE_STEPS,
+    TEST_GRADE_COUNT,
+    TEST_GRADE_SCORE,
+    TEST_GRADE_SCORE_2,
+    TEST_GRADE_SCORE_3,
+    TEST_GRADE_SCORE_4,
+    TEST_MAX_SUBMISSIONS,
+    TEST_SUBMISSION_PENALTY,
+    TEST_TASK_COUNT,
+    TEST_TASK_COUNT_LARGE,
+    TEST_TASK_GROUP_POSITION,
+    TEST_TASK_POSITION,
+    TEST_TASK_SCORE,
+)
 
 
 def make_course(course_id, **kwargs):

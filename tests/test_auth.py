@@ -13,20 +13,18 @@ from werkzeug.exceptions import HTTPException
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
 from manytask.web import course_bp, root_bp
-
-TEST_USERNAME = "test_user"
-TEST_FIRST_NAME = "Ivan"
-TEST_LAST_NAME = "Ivanov"
-TEST_NAME = "Ivan Ivanov"
-TEST_RMS_ID = 123
-TEST_SECRET = "test_secret"
-TEST_KEY = "test_key"
-TEST_TOKEN = "test_token"
-TEST_COURSE_NAME = "Test Course"
-GITLAB_BASE_URL = "https://gitlab.com"
-TEST_VERSION = 1.5
-TEST_USER_ID = 123
-TEST_REPO = "test_repo"
+from tests.constants import (
+    GITLAB_BASE_URL,
+    TEST_COURSE_NAME,
+    TEST_FIRST_NAME,
+    TEST_LAST_NAME,
+    TEST_NAME,
+    TEST_RMS_ID,
+    TEST_SECRET,
+    TEST_TOKEN,
+    TEST_USER_ID,
+    TEST_USERNAME,
+)
 
 
 @pytest.fixture
@@ -260,12 +258,12 @@ def test_requires_auth_with_invalid_session(app, mock_gitlab_oauth):
 
     with (
         app.test_request_context(),
-        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
+        patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_rms_user,
         patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
     ):
         app.oauth = mock_gitlab_oauth
         mock_check_user_on_course.return_value = True
-        mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
+        mock_get_authenticated_rms_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
         response = test_route(course_name=TEST_COURSE_NAME)
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("root.signup")

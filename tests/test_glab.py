@@ -7,41 +7,32 @@ from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 from requests import HTTPError
 
 from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, RmsUser
-
-# Constants for test data
-EXAMPLE_REPO_OWNER = "example_owner"
-EXAMPLE_REPO_NAME = "example_repo"
-EXAMPLE_HVCS_DOMAIN = "example.com"
-
-TEST_USER_ID = 1
-TEST_USERNAME = "TestUser"
-TEST_USER_EMAIL = "test-email@test.ru"
-TEST_USER_PASSWORD = "testpassword"
-TEST_USER_FIRSTNAME = "testfirstname"
-TEST_USER_LASTNAME = "testlastname"
-TEST_USER_URL = "example_repo"
-
-TEST_PROJECT_ID = 1
-TEST_PROJECT_NAME = "TestProject"
-TEST_PROJECT_FULL_NAME = "some/TestGroup/TestProject"
-
-TEST_GROUP_ID = 1
-TEST_GROUP_NAME = "some/TestGroup"
-TEST_GROUP_NAME_SHORT = "TestGroup"
-TEST_GROUP_NAME_FULL = "some / TestGroup"
-
-TEST_GROUP_ID_PUBLIC = 2
-TEST_GROUP_PUBLIC_NAME = "some/TestGroup/TestProject/Public"
-TEST_GROUP_PUBLIC_NAME_SHORT = "Public"
-TEST_GROUP_PUBLIC_NAME_FULL = "some / TestGroup / TestProject / Public"
-TEST_GROUP_PUBLIC_DEFAULT_BRANCH = "main"
-
-TEST_GROUP_ID_STUDENT = 3
-TEST_GROUP_STUDENT_NAME = "some/TestGroup/TestProject/Students"
-TEST_GROUP_STUDENT_NAME_SHORT = "Students"
-TEST_GROUP_STUDENT_NAME_FULL = "some / TestGroup / TestProject / Students"
-
-TEST_FORK_ID = 1
+from tests.constants import (
+    TEST_FORK_ID,
+    TEST_GROUP_ID,
+    TEST_GROUP_ID_PUBLIC,
+    TEST_GROUP_ID_STUDENT,
+    TEST_GROUP_NAME,
+    TEST_GROUP_NAME_FULL,
+    TEST_GROUP_NAME_SHORT,
+    TEST_GROUP_PUBLIC_DEFAULT_BRANCH,
+    TEST_GROUP_PUBLIC_NAME,
+    TEST_GROUP_PUBLIC_NAME_FULL,
+    TEST_GROUP_PUBLIC_NAME_SHORT,
+    TEST_GROUP_STUDENT_NAME,
+    TEST_GROUP_STUDENT_NAME_FULL,
+    TEST_GROUP_STUDENT_NAME_SHORT,
+    TEST_PROJECT_FULL_NAME,
+    TEST_PROJECT_ID,
+    TEST_PROJECT_NAME,
+    TEST_USER_EMAIL,
+    TEST_USER_FIRSTNAME,
+    TEST_USER_ID,
+    TEST_USER_LASTNAME,
+    TEST_USER_PASSWORD,
+    TEST_USER_URL,
+    TEST_USERNAME,
+)
 
 
 # Shared fixture logic

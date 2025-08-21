@@ -5,12 +5,12 @@ import pytest
 from dotenv import load_dotenv
 
 from manytask.main import CustomFlask, create_app
-
-TEST_COURSE_NAME = "test_course"
-TEST_STUDENTS_GROUP = "test_students"
-TEST_PUBLIC_REPO = "test_public_repo"
-
-TEST_CACHE_DIR = "/tmp/manytask_test_cache"
+from tests.constants import (
+    TEST_CACHE_DIR,
+    TEST_COURSE_NAME,
+    TEST_PUBLIC_REPO,
+    TEST_STUDENTS_GROUP,
+)
 
 
 @pytest.fixture
