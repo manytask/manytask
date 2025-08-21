@@ -3,7 +3,9 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
-from constants import (
+from manytask.abstract import StoredUser
+from manytask.database_utils import get_database_table_data
+from tests.constants import (
     SCORES,
     STUDENT_1,
     STUDENT_2,
@@ -13,8 +15,6 @@ from constants import (
     TASK_3,
     TASK_LARGE,
 )
-from manytask.abstract import StoredUser
-from manytask.database_utils import get_database_table_data
 
 
 @pytest.fixture

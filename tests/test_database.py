@@ -5,7 +5,7 @@ from manytask.models import Course, Task, TaskGroup
 from manytask.config import ManytaskDeadlinesConfig
 from tests import constants
 
-from constants import (
+from tests.constants import (
     FIRST_COURSE_NAME,
     SECOND_COURSE_NAME,
     TEST_USERNAME,

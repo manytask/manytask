@@ -11,7 +11,13 @@ from dotenv import load_dotenv
 from flask import Flask, json, url_for
 from werkzeug.exceptions import HTTPException
 
-from constants import (
+from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
+from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
+from manytask.api import bp as api_bp
+from manytask.database import DataBaseApi, TaskDisabledError
+from manytask.glab import GitLabApiException
+from manytask.web import course_bp, root_bp
+from tests.constants import (
     INVALID_TASK_NAME,
     TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
     TEST_COURSE_NAME,
@@ -27,12 +33,6 @@ from constants import (
     TEST_USER_ID,
     TEST_USERNAME,
 )
-from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
-from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
-from manytask.api import bp as api_bp
-from manytask.database import DataBaseApi, TaskDisabledError
-from manytask.glab import GitLabApiException
-from manytask.web import course_bp, root_bp
 
 
 @pytest.fixture(autouse=True)

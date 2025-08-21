@@ -10,7 +10,10 @@ import pytest
 from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from constants import (
+from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
+from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
+from manytask.web import course_bp, root_bp
+from tests.constants import (
     GITLAB_BASE_URL,
     TEST_COURSE_NAME,
     TEST_FIRST_NAME,
@@ -22,9 +25,6 @@ from constants import (
     TEST_USER_ID,
     TEST_USERNAME,
 )
-from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
-from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
-from manytask.web import course_bp, root_bp
 
 
 @pytest.fixture
