@@ -38,3 +38,5 @@ items:
     href: strategy.md
   - name: Deadline schedule
     href: deadline_schedule.md
+  - name: Course grading
+    href: grading.md
