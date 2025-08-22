@@ -15,7 +15,7 @@ Conditions are represented in the form of the list of dicts, those dicts consist
 - `Key` is a STRING that specifies path in the student's grade.
 - `Value` is an INTEGER or FLOAT that specifies minimum value of the attribute on the path `Key`.
 
-The student's grade dict meets the conditions of the grade dict if ALL values by their paths(`Keys`)
+The student's grade dict meets the conditions of the grade dict if ALL values by their paths (`Keys`)
 are greater or equal than corresponding `Values` in the grade dict.
 The student's grade dict meets the conditions of the list of grade dicts if it meets the conditions of AT LEAST ONE of the grade dicts inside it.
 In the words of logic, each grade config is represented by `Disjunctive normal form` -- list of dicts.
