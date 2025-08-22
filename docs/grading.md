@@ -12,7 +12,7 @@ from the highest grade to the lowest and stops this process with the first suita
 
 Conditions are represented in the form of the list of dicts, those dicts consist of Key-Value pairs.
 
-- `Key` is a STRING that specifies path in the student's grade.
+- `Key` is a STRING that specifies path in the student's grade dict.
 - `Value` is an INTEGER or FLOAT that specifies minimum value of the attribute on the path `Key`.
 
 The student's grade dict meets the conditions of the grade dict if ALL values by their paths (`Keys`)
