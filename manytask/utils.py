@@ -1,3 +1,4 @@
+import re
 import secrets
 
 from flask import session, url_for
@@ -28,3 +29,7 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
         }
         for course_name in courses_names
     ]
+
+
+def validate_name(name: str) -> str | None:
+    return name if (re.match(r"^[a-zA-Zа-яА-Я_-]{1,50}$", name) is not None) else None

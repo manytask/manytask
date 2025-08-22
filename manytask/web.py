@@ -1,5 +1,4 @@
 import logging
-import re
 import secrets
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -12,11 +11,19 @@ from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
-from .auth import handle_oauth_callback, requires_admin, requires_auth, requires_course_access, requires_ready
+from .auth import (
+    handle_oauth_callback,
+    requires_admin,
+    requires_auth,
+    requires_course_access,
+    requires_ready,
+    valid_gitlab_session,
+    valid_user_session,
+)
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
-from .utils import generate_token_hex, get_courses
+from .utils import generate_token_hex, get_courses, validate_name
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -60,7 +67,8 @@ def login() -> ResponseReturnValue:
     oauth: OAuth = app.oauth
 
     redirect_uri = url_for("root.login_finish", _external=True)
-    return oauth.gitlab.authorize_redirect(redirect_uri, state=url_for("root.index"))
+    return_to = request.args.get("return_to", url_for("root.index"))
+    return oauth.gitlab.authorize_redirect(redirect_uri, state=return_to)
 
 
 @root_bp.route("/login_finish")
@@ -99,14 +107,12 @@ def course_page(course_name: str) -> ResponseReturnValue:
             student_course_admin = False
     else:
         student_username = session["gitlab"]["username"]
-        student_id = session["gitlab"]["user_id"]
 
         student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["username"])
 
     # update cache if more than 1h passed or in debug mode
     try:
@@ -162,17 +168,30 @@ def signup() -> ResponseReturnValue:
             manytask_version=app.manytask_version,
         )
 
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError as e:
+        app.logger.error(f"CSRF validation failed: {e}")
+        return render_template("signup.html", error_message="CSRF Error")
+
     # ----  register a new user ---- #
 
     try:
         if not secrets.compare_digest(request.form["password"], request.form["password2"]):
             raise Exception("Passwords don't match")
 
+        firstname = validate_name(request.form.get("firstname", "").strip())
+        lastname = validate_name(request.form.get("lastname", "").strip())
+        if firstname is None or lastname is None:
+            raise Exception(
+                "Firstname and lastname must be 1-50 characters and contain only letters, hyphens, or underscores."
+            )
+
         # register user in gitlab
         app.rms_api.register_new_user(
             request.form["username"].strip(),
-            request.form["firstname"].strip(),
-            request.form["lastname"].strip(),
+            firstname,
+            lastname,
             request.form["email"].strip(),
             request.form["password"],
         )
@@ -188,6 +207,52 @@ def signup() -> ResponseReturnValue:
         )
 
     return redirect(url_for("root.login"))
+
+
+@root_bp.route("/signup_finish")
+def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
+    app: CustomFlask = current_app  # type: ignore
+    return_to = request.args.get("return_to", url_for("root.index"))
+
+    if not valid_gitlab_session(session):
+        return redirect(url_for("root.signup"))
+
+    if valid_user_session(session):
+        logger.warning(f"User already has username={session['username']} in session")
+        return redirect(return_to)
+
+    stored_user_or_none = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])
+    if stored_user_or_none is not None:
+        session["username"] = stored_user_or_none.username
+        return redirect(return_to)
+
+    if request.method == "GET":
+        return render_template(
+            "signup_finish.html",
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+        )
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError as e:
+        app.logger.error(f"CSRF validation failed: {e}")
+        return render_template("signup_finish.html", error_message="CSRF Error")
+
+    firstname = validate_name(request.form.get("firstname", "").strip())
+    lastname = validate_name(request.form.get("lastname", "").strip())
+    if firstname is None or lastname is None:
+        return render_template(
+            "signup_finish.html",
+            error_message="Firstname and lastname must be 1-50 characters "
+            "and contain only letters, hyphens, or underscores.",
+        )
+
+    app.storage_api.create_user_if_not_exist(
+        session["gitlab"]["username"], firstname, lastname, session["gitlab"]["user_id"]
+    )
+    session["username"] = session["gitlab"]["username"]
+    return redirect(return_to)
 
 
 @course_bp.route("/create_project", methods=["GET", "POST"])
@@ -224,9 +289,6 @@ def create_project(course_name: str) -> ResponseReturnValue:
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
         )
-
-    first_name, last_name = rms_user.name.split()  # TODO: come up with how to separate names
-    app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, rms_user.id)
 
     app.storage_api.sync_user_on_course(course.course_name, rms_user.username, is_course_admin)
 
@@ -281,14 +343,12 @@ def show_database(course_name: str) -> ResponseReturnValue:
             student_course_admin = False
     else:
         student_username = session["gitlab"]["username"]
-        student_id = session["gitlab"]["user_id"]
 
         student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["username"])
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
@@ -432,12 +492,9 @@ def admin_panel() -> ResponseReturnValue:
 def update_profile() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    def _validate_params(param: str) -> str | None:
-        return param if (re.match(r"^[a-zA-Zа-яА-Я_-]{1,50}$", param) is not None) else None
-
     request_username = request.form.get("username", None)
-    new_first_name = _validate_params(request.form.get("first_name", "").strip())
-    new_last_name = _validate_params(request.form.get("last_name", "").strip())
+    new_first_name = validate_name(request.form.get("first_name", "").strip())
+    new_last_name = validate_name(request.form.get("last_name", "").strip())
 
     if request_username is None:
         abort(HTTPStatus.BAD_REQUEST)

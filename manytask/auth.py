@@ -16,7 +16,7 @@ from manytask.main import CustomFlask
 logger = logging.getLogger(__name__)
 
 
-def valid_session(user_session: SessionMixin) -> bool:
+def valid_gitlab_session(user_session: SessionMixin) -> bool:
     SESSION_VERSION = 1.5
     return (
         "gitlab" in user_session
@@ -25,6 +25,10 @@ def valid_session(user_session: SessionMixin) -> bool:
         and "username" in user_session["gitlab"]
         and "user_id" in user_session["gitlab"]
     )
+
+
+def valid_user_session(user_session: SessionMixin) -> bool:
+    return "username" in user_session
 
 
 def set_oauth_session(
@@ -65,7 +69,7 @@ def handle_course_membership(app: CustomFlask, course: Course, username: str) ->
 def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     """Process oauth2 callback with code for auth, if success set auth session and sync user's data to database"""
 
-    redirect_url = request.args.get("state") or url_for("root.index")
+    return_to = request.args.get("state", url_for("root.index"))
 
     try:
         # This is where the oath_api should be used
@@ -73,12 +77,13 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
         auth_user = app.auth_api.get_authenticated_user(gitlab_oauth_token["access_token"])
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
-        return redirect(redirect_url)
+        return redirect(return_to)
 
+    session.pop("username", None)
     session.setdefault("gitlab", {}).update(set_oauth_session(auth_user, gitlab_oauth_token))
     session.permanent = True
 
-    return redirect(redirect_url)
+    return redirect(url_for("root.signup_finish", return_to=return_to))
 
 
 def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
@@ -95,6 +100,10 @@ def __redirect_to_login() -> Response:
     return redirect(url_for("root.signup"))
 
 
+def __redirect_to_login_finish() -> Response:
+    return redirect(url_for("root.login_finish"))
+
+
 def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
     """Check authentication"""
 
@@ -105,16 +114,19 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        if valid_session(session):
-            if not app.auth_api.check_user_is_authenticated(
-                app.oauth,
-                session["gitlab"]["access_token"],
-                session["gitlab"]["refresh_token"],
-            ):
-                return __redirect_to_login()
-        else:
+        if not valid_gitlab_session(session):
             logger.error("Failed to verify session.", exc_info=True)
             return __redirect_to_login()
+
+        if not app.auth_api.check_user_is_authenticated(
+            app.oauth,
+            session["gitlab"]["access_token"],
+            session["gitlab"]["refresh_token"],
+        ):
+            return __redirect_to_login()
+
+        if not valid_user_session(session):
+            return __redirect_to_login_finish()
 
         return f(*args, **kwargs)
 

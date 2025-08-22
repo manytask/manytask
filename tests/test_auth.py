@@ -11,7 +11,7 @@ from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
-from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
+from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_gitlab_session
 from manytask.web import course_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
@@ -192,7 +192,7 @@ def test_valid_session_with_valid_data(app):
             "username": "test_user",
             "user_id": 123,
         }
-        assert valid_session(session) is True
+        assert valid_gitlab_session(session) is True
 
 
 def test_valid_session_with_invalid_version(app):
@@ -202,19 +202,19 @@ def test_valid_session_with_invalid_version(app):
             "username": "test_user",
             "user_id": 123,
         }
-        assert valid_session(session) is False
+        assert valid_gitlab_session(session) is False
 
 
 def test_valid_session_with_missing_data(app):
     # missing user_id
     with app.test_request_context():
         session["gitlab"] = {"version": 1.5, "username": "test_user"}
-        assert valid_session(session) is False
+        assert valid_gitlab_session(session) is False
 
 
 def test_valid_session_with_empty_session(app):
     with app.test_request_context():
-        assert valid_session(session) is False
+        assert valid_gitlab_session(session) is False
 
 
 def test_requires_auth_in_debug_mode(app):
