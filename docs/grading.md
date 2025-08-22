@@ -12,7 +12,7 @@ from the highest grade to the lowest and stops this process with the first suita
 
 Conditions are represented in the form of the list of dicts, those dicts consist of Key-Value pairs.
 
-- `Key` is a STRING that specifies path in the student's grade dict accessible in `manytask/database_utils.py`.
+- `Key` is a STRING that specifies path in the student's grade.
 - `Value` is an INTEGER or FLOAT that specifies minimum value of the attribute on the path `Key`.
 
 The student's grade dict meets the conditions of the grade dict if ALL values by their paths(`Keys`)
@@ -82,11 +82,26 @@ grades:
     ]
 ```
 
-You could easily apply pattern(of grade 2) from this example to make empty, mocked conditions for the lowest grade.
+You could easily apply pattern (of grade 2) from this example to make empty, mocked conditions for the lowest grade.
 
 It is worth mentioning that suggested system is quite flexible and allows you to use both high level features, like
-`percent`, `large_count`, `total_score` and so on and make more specific condtions, like achieving a certain minimum
-score in a chosen task. To do that you need to specify the path to this task's grade in the student dict accessible
-to function from file `manytask/database_utils.py`.
+`percent`, `large_count` or `total_score` and make more specific condtions, like achieving a certain minimum
+score in a chosen task. For example, if you want to grade students with 5 if they did not solve any big homeworks, but got 100 points for task `impossible` you could achieve it in the following fashion.
+
+```yaml
+grades:
+    5: [
+      {
+        "percent": 90,
+        "large_count": 1,
+      },
+      {
+        "percent": 80,
+        "scores/impossible": 100,
+      }
+    ]
+    ...
+```
+
 Moreover, you could specify the minimum score needed to consider large task solved,
 but it is a part of a task config rather than a feature of the grading system.
