@@ -38,10 +38,16 @@ class StorageApi(ABC):
     ) -> int: ...
 
     @abstractmethod
-    def get_stored_user(
+    def get_stored_user_by_username(
         self,
         username: str,
     ) -> StoredUser: ...
+
+    @abstractmethod
+    def get_stored_user_by_rms_id(
+        self,
+        rms_id: int,
+    ) -> StoredUser | None: ...
 
     @abstractmethod
     def check_if_instance_admin(

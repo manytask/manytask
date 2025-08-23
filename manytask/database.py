@@ -132,16 +132,15 @@ class DataBaseApi(StorageApi):
 
         return sum([grade.score for grade in grades])
 
-    def get_stored_user(
+    def get_stored_user_by_username(
         self,
         username: str,
     ) -> StoredUser:
         """Method for getting user's stored data
 
-        :param course_name: course name
         :param username: user name
 
-        :return: created or received StoredUser object
+        :return: StoredUser object
         """
 
         with self._session_create() as session:
@@ -158,6 +157,36 @@ class DataBaseApi(StorageApi):
                 rms_id=user.rms_id,
                 instance_admin=user.is_instance_admin,
             )
+
+    def get_stored_user_by_rms_id(
+        self,
+        rms_id: int,
+    ) -> StoredUser | None:
+        """Method for getting user's stored data
+
+        :param rms_id:
+
+        :return: StoredUser object if exist else None
+        """
+
+        with self._session_create() as session:
+            try:
+                user = self._get(
+                    session,
+                    models.User,
+                    rms_id=rms_id,
+                )
+
+                return StoredUser(
+                    username=user.username,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    rms_id=user.rms_id,
+                    instance_admin=user.is_instance_admin,
+                )
+
+            except NoResultFound:
+                return None
 
     def check_if_instance_admin(
         self,
