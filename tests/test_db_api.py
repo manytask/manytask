@@ -69,7 +69,7 @@ def db_config(db_url):
     return DatabaseConfig(
         database_url=db_url,
         instance_admin_username="instance_admin",
-        instance_admin_rms_id=1,
+        instance_admin_rms_id=-1,
         apply_migrations=True,
     )
 
@@ -939,7 +939,7 @@ def test_auto_tables_creation(engine, alembic_cfg, postgres_container, first_cou
             DatabaseConfig(
                 database_url=postgres_container.get_connection_url(),
                 instance_admin_username="admin",
-                instance_admin_rms_id=1,
+                instance_admin_rms_id=-1,
                 apply_migrations=False,
             )
         )
