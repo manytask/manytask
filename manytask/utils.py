@@ -28,3 +28,11 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
         }
         for course_name in courses_names
     ]
+
+
+def check_admin(app: CustomFlask) -> bool:
+    if app.debug:
+        return True
+    else:
+        student_username = session["gitlab"]["username"]
+        return app.storage_api.check_if_instance_admin(student_username)
