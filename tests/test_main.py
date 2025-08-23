@@ -97,7 +97,8 @@ def mock_gitlab():
 
         # Mock GitLab RMS user for instance admin
         mock_rms_user = MagicMock()
-        mock_rms_user.username = os.getenv("INITIAL_INSTANCE_ADMIN")
+        mock_rms_user.username = os.getenv("INITIAL_INSTANCE_ADMIN", "instance_admin")
+        mock_rms_user.id = 12345
         gitlab_instance.get_rms_user_by_username.return_value = mock_rms_user
 
         yield mock
