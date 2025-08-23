@@ -53,9 +53,11 @@ The project would not be possible without an effort of many developers, includin
 Current developers:
 
 * [Sofia Anokhovskaya](https://github.com/cin-bun)
+* [Olga Gorbunova](https://github.com/elyaishere)
 * [Ivan Gorobets](https://github.com/KIoppert)
 * [Ivan Komarov](https://github.com/gagarinkomar)
 * [Alexander Kostrikov](https://github.com/akostrikov)
+* [Daniil Maslov](https://github.com/dmasloff)
 * [Alexey Seliverstov](https://github.com/prawwtocol)
 * [Artem Zhmurov](https://github.com/zhmurov)
 

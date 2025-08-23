@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from authlib.integrations.flask_client import OAuth
 
-from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
+from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig
 
 
@@ -15,7 +15,7 @@ class StoredUser:
     first_name: str
     last_name: str
     rms_id: int
-    course_admin: bool = False
+    instance_admin: bool = False
     # we can add more fields that we store
 
     def __repr__(self) -> str:
@@ -40,7 +40,6 @@ class StorageApi(ABC):
     @abstractmethod
     def get_stored_user(
         self,
-        course_name: str,
         username: str,
     ) -> StoredUser: ...
 
@@ -58,10 +57,13 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
-    def sync_stored_user(self, course_name: str, username: str, course_admin: bool) -> StoredUser: ...
+    def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
+
+    @abstractmethod
+    def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig: ...
 
     @abstractmethod
     def get_stats(self, course_name: str) -> dict[str, float]: ...
@@ -228,14 +230,6 @@ class RmsApi(ABC):
     ) -> RmsUser: ...
 
     @abstractmethod
-    def check_user_authenticated_in_rms(
-        self,
-        oauth: OAuth,
-        oauth_access_token: str,
-        oauth_refresh_token: str,
-    ) -> bool: ...
-
-    @abstractmethod
     def get_authenticated_rms_user(
         self,
         oauth_access_token: str,
@@ -249,3 +243,19 @@ class AuthenticatedUser:
 
     def __repr__(self) -> str:
         return f"AuthenticatedUser(username={self.username})"
+
+
+class AuthApi(ABC):
+    @abstractmethod
+    def check_user_is_authenticated(
+        self,
+        oauth: OAuth,
+        oauth_access_token: str,
+        oauth_refresh_token: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def get_authenticated_user(
+        self,
+        oauth_access_token: str,
+    ) -> AuthenticatedUser: ...

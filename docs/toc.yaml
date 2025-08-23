@@ -11,7 +11,7 @@ navigation:
     leftItems:
       - type: link
         text: App
-        url: https://app.manytask2.org/
+        url: https://app.manytask.org/
       - type: link
         text: Documentation
         url: ./production.html
@@ -38,3 +38,5 @@ items:
     href: strategy.md
   - name: Deadline schedule
     href: deadline_schedule.md
+  - name: Course grading
+    href: grading.md

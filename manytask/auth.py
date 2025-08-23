@@ -70,8 +70,7 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     try:
         # This is where the oath_api should be used
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        rms_user = app.rms_api.get_authenticated_rms_user(gitlab_oauth_token["access_token"])
-        auth_user = AuthenticatedUser(id=rms_user.id, username=rms_user.username)
+        auth_user = app.auth_api.get_authenticated_user(gitlab_oauth_token["access_token"])
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
         return redirect(redirect_url)
@@ -86,8 +85,7 @@ def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     """Getting student and update session"""
 
     # This is where the auth_api should be user instead of gitlab/rms
-    rms_user = app.rms_api.get_authenticated_rms_user(session["gitlab"]["access_token"])
-    auth_user = AuthenticatedUser(id=rms_user.id, username=rms_user.username)
+    auth_user = app.auth_api.get_authenticated_user(session["gitlab"]["access_token"])
     session["gitlab"].update(set_oauth_session(auth_user))
     return auth_user
 
@@ -108,7 +106,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
             return f(*args, **kwargs)
 
         if valid_session(session):
-            if not app.rms_api.check_user_authenticated_in_rms(
+            if not app.auth_api.check_user_is_authenticated(
                 app.oauth,
                 session["gitlab"]["access_token"],
                 session["gitlab"]["refresh_token"],
@@ -168,7 +166,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
-        app.storage_api.sync_stored_user(
+        app.storage_api.sync_user_on_course(
             course.course_name,
             auth_user.username,
             app.storage_api.check_if_instance_admin(auth_user.username),

@@ -5,29 +5,20 @@ from flask import Flask
 
 from manytask.abstract import StoredUser
 from manytask.database_utils import get_database_table_data
-from tests import constants
-
-TASK_1 = "task1"
-TASK_2 = "task2"
-TASK_3 = "task3"
-TASK_LARGE = "task_large"
-
-STUDENT_1 = "student1"
-STUDENT_2 = "student2"
-
-STUDENT_NAMES = {
-    STUDENT_1: [constants.TEST_FIRST_NAME_1, constants.TEST_LAST_NAME_1],
-    STUDENT_2: [constants.TEST_FIRST_NAME_2, constants.TEST_LAST_NAME_2],
-}
-
-SCORES = {
-    STUDENT_1: {TASK_1: 100, TASK_2: 90, TASK_LARGE: 200, "total": 390, "large_count": 1},
-    STUDENT_2: {TASK_1: 80, TASK_2: 85, TASK_LARGE: 0, "total": 165, "large_count": 0},
-}
+from tests.constants import (
+    SCORES,
+    STUDENT_1,
+    STUDENT_2,
+    STUDENT_DATA,
+    TASK_1,
+    TASK_2,
+    TASK_3,
+    TASK_LARGE,
+)
 
 
 @pytest.fixture
-def app():
+def app():  # noqa: C901
     app = Flask(__name__)
 
     class MockStorageApi:
@@ -37,36 +28,80 @@ def app():
                 self.name = "test_group"
 
         class MockTask:
-            def __init__(self, name, score, enabled, is_bonus=False, is_large=False):
+            def __init__(self, name, score, min_score, enabled, is_bonus=False, is_large=False):
                 self.name = name
                 self.score = score
+                self.min_score = min_score
                 self.enabled = enabled
                 self.is_bonus = is_bonus
                 self.is_large = is_large
+
+        class MockFinalGradeConfig:
+            def __init__(self, grade_config):
+                self.grade_config = grade_config
+                self.grade_order = sorted(self.grade_config.keys(), reverse=True)
+
+            def evaluate(self, row):
+                for grade in self.grade_order:
+                    if self.grade_config[grade].evaluate(row):
+                        return grade
+
+        class MockGradeConfig:
+            def __init__(self, formulas):
+                self.formulas = formulas
+
+            def evaluate(self, row):
+                return all(row[key] >= value for key, value in self.formulas.items())
 
         def __init__(self):
             self.groups = [
                 self.MockGroup(
                     [
                         # name, enabled
-                        self.MockTask(TASK_1, 10, True, False, False),
-                        self.MockTask(TASK_2, 20, True, True, False),
-                        self.MockTask(TASK_3, 30, False, False, False),
-                        self.MockTask(TASK_LARGE, 200, True, False, True),
+                        self.MockTask(TASK_1, 10, 0, True, False, False),
+                        self.MockTask(TASK_2, 20, 0, True, True, False),
+                        self.MockTask(TASK_3, 30, 0, False, False, False),
+                        self.MockTask(TASK_LARGE, 200, 100, True, False, True),
                     ]
                 )
             ]
 
+            self.grades_config = self.MockFinalGradeConfig(
+                {
+                    5: self.MockGradeConfig(
+                        {
+                            "total_score": 300,
+                            "large_count": 1,
+                        }
+                    ),
+                    4: self.MockGradeConfig({"total_score": 250, "large_count": 1}),
+                    3: self.MockGradeConfig(
+                        {
+                            "total_score": 200,
+                        }
+                    ),
+                    2: self.MockGradeConfig(
+                        {
+                            "total_score": 0,
+                        }
+                    ),
+                }
+            )
+
         def get_groups(self, _course_name):
             return self.groups
 
+        def get_grades(self, _course_name):
+            return self.grades_config
+
         @staticmethod
-        def get_stored_user(_course_name, username):
+        def get_stored_user(username):
             return StoredUser(
                 username=username,
-                first_name=STUDENT_NAMES[username][0],
-                last_name=STUDENT_NAMES[username][1],
-                course_admin=False,
+                first_name=STUDENT_DATA[username][0],
+                last_name=STUDENT_DATA[username][1],
+                rms_id=STUDENT_DATA[username][2],
+                instance_admin=False,
             )
 
         @staticmethod
@@ -78,7 +113,7 @@ def app():
                         TASK_2: SCORES[STUDENT_1][TASK_2],
                         TASK_LARGE: SCORES[STUDENT_1][TASK_LARGE],
                     },
-                    STUDENT_NAMES[STUDENT_1],
+                    (STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]),
                 ),
                 STUDENT_2: (
                     {
@@ -86,7 +121,7 @@ def app():
                         TASK_2: SCORES[STUDENT_2][TASK_2],
                         TASK_LARGE: SCORES[STUDENT_2][TASK_LARGE],
                     },
-                    STUDENT_NAMES[STUDENT_2],
+                    (STUDENT_DATA[STUDENT_2][0], STUDENT_DATA[STUDENT_2][1]),
                 ),
             }
 
@@ -132,8 +167,8 @@ def test_get_database_table_data(app):
 
         for student_id in [STUDENT_1, STUDENT_2]:
             student = next(s for s in students if s["username"] == student_id)
-            assert student["first_name"] == STUDENT_NAMES[student_id][0]
-            assert student["last_name"] == STUDENT_NAMES[student_id][1]
+            assert student["first_name"] == STUDENT_DATA[student_id][0]
+            assert student["last_name"] == STUDENT_DATA[student_id][1]
             assert student["total_score"] == SCORES[student_id]["total"]
             assert student["large_count"] == SCORES[student_id]["large_count"]
             assert student["scores"] == {
