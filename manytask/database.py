@@ -43,6 +43,7 @@ class DatabaseConfig:
 
     database_url: str
     instance_admin_username: str
+    instance_admin_rms_id: int
     apply_migrations: bool = False
     session_factory: Optional[Callable[[], Session]] = None
 
@@ -82,7 +83,12 @@ class DataBaseApi(StorageApi):
                 session,
                 models.User,
                 username=config.instance_admin_username,
-                defaults={"first_name": "Instance", "last_name": "Admin", "is_instance_admin": True, "rms_id": -1},
+                defaults={
+                    "first_name": "Instance",
+                    "last_name": "Admin",
+                    "is_instance_admin": True,
+                    "rms_id": config.instance_admin_rms_id,
+                },
             )
             session.commit()
 
