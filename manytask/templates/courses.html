@@ -11,8 +11,11 @@
             Show completed courses
         </button>
 
-        <div id="finishedWrapper" class="hidden mb-4">
+        <div id="finishedWrapper" class="hidden mb-2">
             <ul class="course-list">
+                {% if not courses | selectattr('status', 'equalto', 'finished') | list %}
+                    No finished courses yet.
+                {% endif %}
                 {% for course in courses if course.status == 'finished' %}
                     <li class="course-item">
                         <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>

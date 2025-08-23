@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
+from manytask.course import CourseStatus
+
 
 class ManytaskUiConfig(BaseModel):
     task_url_template: str  # $GROUP_NAME $TASK_NAME vars are available
@@ -249,6 +251,7 @@ class ManytaskConfig(BaseModel):
     """Manytask configuration."""
 
     version: int  # if config exists, version is always present
+    status: CourseStatus | None = None
 
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig

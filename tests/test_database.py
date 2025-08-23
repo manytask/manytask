@@ -220,12 +220,12 @@ def test_get_courses_names_with_courses(
     db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_2, True)
 
     assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME) == []
-    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(username2) == []
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_2) == []
 
     db_api_with_two_initialized_courses.edit_course(edited_first_course_config)
     db_api_with_two_initialized_courses.edit_course(edited_second_course_config)
 
-    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(username1) == [
+    assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME) == [
         (FIRST_COURSE_NAME, CourseStatus.IN_PROGRESS)
     ]
     assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME_1) == [

@@ -459,7 +459,7 @@ class DataBaseApi(StorageApi):
             )
 
         self._update_task_groups_from_config(course_name, config.deadlines)
-        self._sync_columns(course_name, config.deadlines)
+        self._sync_columns(course_name, config.deadlines, config.status)
         self._sync_grades_config(course_name, config.grades)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
@@ -809,21 +809,26 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         deadlines_config: ManytaskDeadlinesConfig,
+        status: CourseStatus | None,
     ) -> None:
         """Method for updating deadlines config
 
         :param course_name: course name
         :param deadlines_config: ManytaskDeadlinesConfig object
+        :param status: status of course
         """
 
         groups = deadlines_config.groups
 
-        logger.info("Syncing database tasks...")
+        logger.info("Syncing course in database...")
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
 
             if course.status == CourseStatus.CREATED:
                 course.status = CourseStatus.HIDDEN
+
+            if status is not None:
+                course.status = status
 
             existing_course_tasks = (
                 session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()
