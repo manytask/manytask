@@ -17,7 +17,8 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
         for task in group.tasks:
             if task.enabled:
                 all_tasks.append({"name": task.name, "score": 0, "group": group.name})
-                max_score += task.score
+                if not task.is_bonus:
+                    max_score += task.score
                 if task.is_large:
                     large_tasks.append((task.name, task.min_score))
 
