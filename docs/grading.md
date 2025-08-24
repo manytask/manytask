@@ -7,7 +7,7 @@ To configurate how final grade is computed you need to specify it in the course 
 
 Each grade is described by its value and conditions needed to achieve it.
 Values are UNIQUE INTEGERS organized with respect to the logic <<THE HIGHER THE VALUE, THE BETTER THE GRADE>>,
-it is CRUCIAL since during the evalutation process program tries to fit student into the specified patterns
+it is CRUCIAL since during the evaluation process program tries to fit student into the specified patterns
 from the highest grade to the lowest and stops this process with the first suitable mark.
 
 Conditions are represented in the form of the list of dicts, those dicts consist of Key-Value pairs.
@@ -85,7 +85,7 @@ grades:
 You could easily apply pattern (of grade 2) from this example to make empty, mocked conditions for the lowest grade.
 
 It is worth mentioning that suggested system is quite flexible and allows you to use both high level features, like
-`percent`, `large_count` or `total_score` and make more specific condtions, like achieving a certain minimum
+`percent`, `large_count` or `total_score` and make more specific conditions, like achieving a certain minimum
 score in a chosen task. For example, if you want to grade students with 5 if they did not solve any big homeworks, but got 100 points for task `impossible` you could achieve it in the following fashion.
 
 ```yaml
