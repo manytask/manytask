@@ -348,8 +348,17 @@ def test_logout(app):
 
 def test_not_ready(app):
     with app.test_request_context():
-        response = app.test_client().get(f"/{TEST_COURSE_NAME}/not_ready")
-        assert response.status_code == HTTPStatus.FOUND
+        with (
+            app.test_client() as client,
+            patch.object(app.storage_api, "check_if_instance_admin") as mock_check_if_instance_admin,
+        ):
+            with client.session_transaction() as sess:
+                sess["gitlab"] = {
+                    "username": TEST_USERNAME,
+                }
+            mock_check_if_instance_admin.return_value = True
+            response = client.get(f"/{TEST_COURSE_NAME}/not_ready")
+            assert response.status_code == HTTPStatus.FOUND
 
 
 def check_admin_in_data(response, check_true):
