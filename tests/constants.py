@@ -43,6 +43,7 @@ TEST_VERSION = 1.5
 TASK_1 = "task1"
 TASK_2 = "task2"
 TASK_3 = "task3"
+MAX_SCORE = 210
 TASK_LARGE = "task_large"
 STUDENT_1 = "student1"
 STUDENT_2 = "student2"
