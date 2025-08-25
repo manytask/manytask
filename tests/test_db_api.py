@@ -21,7 +21,7 @@ from manytask.config import (
     ManytaskUiConfig,
 )
 from manytask.course import Course as ManytaskCourse
-from manytask.course import CourseConfig
+from manytask.course import CourseConfig, CourseStatus
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests.constants import (
@@ -136,7 +136,7 @@ def first_course_config():
         registration_secret="secret",
         token="test_token",
         show_allscores=True,
-        is_ready=False,
+        status=CourseStatus.CREATED,
         task_url_template="https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME",
         links={"TG Channel": "https://t.me/joinchat/", "TG Chat": "https://t.me/joinchat/"},
     )
@@ -152,6 +152,7 @@ def edited_first_course_config(first_course_config):
     edited_config.registration_secret = "secret2"
     edited_config.token = "test_token"
     edited_config.show_allscores = False
+    edited_config.status = CourseStatus.IN_PROGRESS
 
     return edited_config
 
@@ -175,10 +176,18 @@ def second_course_config():
         registration_secret="secret",
         token="another_test_token",
         show_allscores=True,
-        is_ready=False,
+        status=CourseStatus.CREATED,
         task_url_template="https://gitlab.test.com/another_test/$GROUP_NAME/$TASK_NAME",
         links={"TG Chat": "https://t.me/joinchat2/"},
     )
+
+
+@pytest.fixture
+def edited_second_course_config(second_course_config):
+    edited_config = second_course_config
+    edited_config.status = CourseStatus.IN_PROGRESS
+
+    return edited_config
 
 
 @pytest.fixture
@@ -319,7 +328,7 @@ def test_not_initialized_course(session, db_api, first_course_config):
     assert course.registration_secret == "secret"
     assert course.token == "test_token"
     assert course.show_allscores
-    assert not course.is_ready
+    assert course.status == CourseStatus.CREATED
 
     assert course.gitlab_course_group == "test_course_group"
     assert course.gitlab_course_public_repo == "test_course_public_repo"
@@ -366,7 +375,7 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
     assert course.registration_secret == "secret"
     assert course.token == "test_token"
     assert course.show_allscores
-    assert course.is_ready
+    assert course.status
 
     assert course.gitlab_course_group == "test_course_group"
     assert course.gitlab_course_public_repo == "test_course_public_repo"
@@ -461,7 +470,7 @@ def test_updating_course(
     assert course.registration_secret == "secret"
     assert course.token == "test_token"
     assert course.show_allscores
-    assert course.is_ready
+    assert course.status
 
     assert course.gitlab_course_group == "test_course_group"
     assert course.gitlab_course_public_repo == "test_course_public_repo"
@@ -1014,11 +1023,11 @@ def test_store_score_update_error(db_api_with_two_initialized_courses, session):
 
 
 def test_get_course_success(db_api_with_two_initialized_courses, first_course_config, second_course_config):
-    first_course_config.is_ready = True
+    first_course_config.status = CourseStatus.HIDDEN
     course = db_api_with_two_initialized_courses.get_course(FIRST_COURSE_NAME)
     assert course.__dict__ == ManytaskCourse(first_course_config).__dict__
 
-    second_course_config.is_ready = True
+    second_course_config.status = CourseStatus.HIDDEN
     course = db_api_with_two_initialized_courses.get_course(SECOND_COURSE_NAME)
     assert course.__dict__ == ManytaskCourse(second_course_config).__dict__
 
@@ -1335,7 +1344,7 @@ def test_edit_course(db_api_with_initialized_first_course, edited_first_course_c
     assert course.registration_secret == edited_first_course_config.registration_secret
     assert course.token == "test_token"
     assert not course.show_allscores
-    assert not course.is_ready
+    assert course.status == CourseStatus.IN_PROGRESS
 
     assert course.gitlab_course_group == edited_first_course_config.gitlab_course_group
     assert course.gitlab_course_public_repo == edited_first_course_config.gitlab_course_public_repo

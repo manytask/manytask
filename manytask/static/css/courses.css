@@ -6,13 +6,14 @@
     flex-direction: column;
     gap: 10px;
     align-items: flex-start;
-    min-width: 10vw;
+    min-width: 12vw;
 }
 
 .course-item {
+    position: relative;
     border: 1px solid var(--bs-body-color);
     border-radius: 15px;
-    padding: 10px 20px;
+    padding: 10px 20px 22px;
     background-color: transparent;
     display: inline-block;
     width: 100%;
@@ -46,4 +47,66 @@
 
 .course-link:hover::after {
     width: 100%;
+}
+
+.status-badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: capitalize;
+    opacity: 0.85;
+}
+
+.status-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: inherit;
+    border-radius: 0 0 14px 14px;
+    border-top: 1px solid var(--bs-body-color);
+}
+
+.status-created {
+    background-color: var(--bs-info-bg-subtle);
+    color: var(--bs-info-text-emphasis);
+    border-color: var(--bs-info-border-subtle);
+}
+
+.status-hidden {
+    background-color: var(--bs-secondary-bg-subtle);
+    color: var(--bs-secondary-text-emphasis);
+    border-color: var(--bs-secondary-border-subtle);
+}
+
+.status-in_progress {
+
+    background-color: var(--bs-success-bg-subtle);
+    color: var(--bs-success-text-emphasis);
+    border-color: var(--bs-success-border-subtle);
+}
+
+.status-all_tasks_issued {
+    background-color: var(--bs-warning-bg-subtle);
+    color: var(--bs-warning-text-emphasis);
+    border-color: var(--bs-warning-border-subtle);
+}
+
+.status-doreshka {
+    background-color: var(--bs-danger-bg-subtle);
+    color: var(--bs-danger-text-emphasis);
+    border-color: var(--bs-danger-border-subtle);
+}
+
+.status-finished {
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+    border-color: var(--bs-primary-border-subtle);
+}
+
+.hidden {
+    display: none;
 }
