@@ -6,7 +6,7 @@ from typing import Any, Callable
 from authlib.integrations.flask_client import OAuth
 
 from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
-from .course import Course, CourseConfig
+from .course import Course, CourseConfig, CourseStatus
 
 
 @dataclass
@@ -133,10 +133,10 @@ class StorageApi(ABC):
     def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
 
     @abstractmethod
-    def get_user_courses_names(self, username: str) -> list[str]: ...
+    def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
-    def get_all_courses_names(self) -> list[str]: ...
+    def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
     def get_all_users(self) -> list[StoredUser]: ...

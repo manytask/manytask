@@ -12,6 +12,7 @@ from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
+from manytask.course import CourseStatus
 from manytask.web import course_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
@@ -276,7 +277,7 @@ def test_requires_ready(app):
 
     @dataclass
     class Course:
-        is_ready = True
+        status = CourseStatus.IN_PROGRESS
 
     with (
         app.test_request_context(),
@@ -295,7 +296,7 @@ def test_requires_ready_but_not_ready(app):
 
     @dataclass
     class Course:
-        is_ready = False
+        status = CourseStatus.CREATED
 
     with (
         app.test_request_context(),

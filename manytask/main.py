@@ -13,6 +13,7 @@ from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import abstract, config, course, database, glab, local_config
+from .course import CourseStatus
 
 load_dotenv("../.env")  # take environment variables from .env.
 
@@ -113,7 +114,7 @@ def _create_debug_course(app: CustomFlask) -> None:
         registration_secret="registration_secret",
         token="token",
         show_allscores=True,
-        is_ready=False,
+        status=CourseStatus.CREATED,
         task_url_template="",
         links={},
     )
