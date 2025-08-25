@@ -23,7 +23,7 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
                     if task.is_large:
                         large_tasks.append((task.name, task.min_score))
 
-    table_data = {"tasks": all_tasks, "students": []}
+    table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
     for username, (student_scores, name) in scores_and_names.items():
         total_score = sum(student_scores.values())
