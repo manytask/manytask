@@ -1,3 +1,4 @@
+import datetime
 from dataclasses import dataclass
 
 import pytest
@@ -17,6 +18,7 @@ def app():  # noqa: C901
             def __init__(self, tasks):
                 self.tasks = tasks
                 self.name = "test_group"
+                self.start = datetime.datetime.now()
 
         class MockTask:
             def __init__(self, name, score, min_score, enabled, is_bonus=False, is_large=False):
@@ -84,6 +86,9 @@ def app():  # noqa: C901
 
         def get_grades(self, _course_name):
             return self.grades_config
+
+        def get_now_with_timezone(self, course_name):
+            return datetime.datetime.now() + datetime.timedelta(hours=1)
 
         @staticmethod
         def get_stored_user(username):
@@ -177,7 +182,7 @@ def test_get_database_table_data_no_scores(app):
         app.storage_api.get_all_scores_with_names = lambda _course_name: {}
         result = get_database_table_data(app, "test_course")
 
-        assert result["max_score"] == MAX_SCORE
+        assert "max_score" not in result
         assert "tasks" in result
         assert "students" in result
         assert len(result["tasks"]) == expected_tasks_count
