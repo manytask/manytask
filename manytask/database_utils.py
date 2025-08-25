@@ -14,15 +14,16 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
     large_tasks = []
     max_score: int = 0
     for group in storage_api.get_groups(course_name):
-        for task in group.tasks:
-            if task.enabled:
-                all_tasks.append({"name": task.name, "score": 0, "group": group.name})
-                if not task.is_bonus:
-                    max_score += task.score
-                if task.is_large:
-                    large_tasks.append((task.name, task.min_score))
+        if group.start <= storage_api.get_now_with_timezone(course_name):
+            for task in group.tasks:
+                if task.enabled:
+                    all_tasks.append({"name": task.name, "score": 0, "group": group.name})
+                    if not task.is_bonus:
+                        max_score += task.score
+                    if task.is_large:
+                        large_tasks.append((task.name, task.min_score))
 
-    table_data = {"tasks": all_tasks, "students": []}
+    table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
     for username, (student_scores, name) in scores_and_names.items():
         total_score = sum(student_scores.values())
@@ -45,5 +46,6 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
             row["grade"] = None
 
         table_data["students"].append(row)
+        table_data["max_score"] = max_score
 
     return table_data

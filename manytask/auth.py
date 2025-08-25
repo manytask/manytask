@@ -10,7 +10,7 @@ from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
 from manytask.abstract import AuthenticatedUser
-from manytask.course import Course
+from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
 
 logger = logging.getLogger(__name__)
@@ -132,10 +132,10 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
         course = app.storage_api.get_course(course_name)
 
         if course is None:
-            flash("Course not found", "course_not_found")
+            flash("course not found!", "course_not_found")
             abort(redirect(url_for("root.index")))
 
-        if not course.is_ready:
+        if course.status == CourseStatus.CREATED:
             abort(redirect(url_for("course.not_ready", course_name=course_name)))
 
         return f(*args, **kwargs)
@@ -157,8 +157,15 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         oauth = app.oauth
 
+        hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
+
+        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
+            course.course_name, auth_user.username
+        ):
+            flash("course is hidden!", "course_hidden")
+            abort(redirect(url_for("root.index")))
 
         if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
             project_name=auth_user.username, project_group=course.gitlab_course_students_group

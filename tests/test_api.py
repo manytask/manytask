@@ -14,6 +14,7 @@ from werkzeug.exceptions import HTTPException
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
+from manytask.course import CourseStatus
 from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.glab import GitLabApiException
 from manytask.web import course_bp, root_bp
@@ -242,7 +243,7 @@ def mock_course():
     class MockCourse:
         def __init__(self):
             self.course_name = TEST_COURSE_NAME
-            self.is_ready = True
+            self.status = CourseStatus.IN_PROGRESS
             self.show_allscores = True
             self.registration_secret = "test_secret"
             self.token = os.environ["MANYTASK_COURSE_TOKEN"]
@@ -437,7 +438,7 @@ def test_update_database_not_ready(app, authenticated_client):
 
         @dataclass
         class Course:
-            is_ready = False
+            status = CourseStatus.CREATED
 
         mock_get_course.return_value = Course()
 
@@ -508,7 +509,7 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
 
         @dataclass
         class Course:
-            is_ready = False
+            status = CourseStatus.CREATED
 
         mock_get_course.return_value = Course()
         app.debug = False  # Disable debug mode to test auth

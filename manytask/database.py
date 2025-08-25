@@ -27,6 +27,7 @@ from .config import (
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
+from .course import CourseStatus
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -359,7 +360,7 @@ class DataBaseApi(StorageApi):
                     registration_secret=course.registration_secret,
                     token=course.token,
                     show_allscores=course.show_allscores,
-                    is_ready=course.is_ready,
+                    status=course.status,
                     task_url_template=course.task_url_template,
                     links=course.links,
                 )
@@ -389,7 +390,7 @@ class DataBaseApi(StorageApi):
                     registration_secret=settings_config.registration_secret,
                     token=settings_config.token,
                     show_allscores=settings_config.show_allscores,
-                    is_ready=settings_config.is_ready,
+                    status=settings_config.status,
                     gitlab_course_group=settings_config.gitlab_course_group,
                     gitlab_course_public_repo=settings_config.gitlab_course_public_repo,
                     gitlab_course_students_group=settings_config.gitlab_course_students_group,
@@ -425,7 +426,7 @@ class DataBaseApi(StorageApi):
                         "gitlab_default_branch": settings_config.gitlab_default_branch,
                         "registration_secret": settings_config.registration_secret,
                         "show_allscores": settings_config.show_allscores,
-                        "is_ready": settings_config.is_ready,
+                        "status": settings_config.status,
                         "task_url_template": settings_config.task_url_template,
                         "links": settings_config.links,
                     },
@@ -451,7 +452,6 @@ class DataBaseApi(StorageApi):
                 session,
                 models.Course,
                 defaults={
-                    "is_ready": True,
                     "task_url_template": config.ui.task_url_template,
                     "links": config.ui.links,
                 },
@@ -459,7 +459,7 @@ class DataBaseApi(StorageApi):
             )
 
         self._update_task_groups_from_config(course_name, config.deadlines)
-        self._sync_columns(course_name, config.deadlines)
+        self._sync_columns(course_name, config.deadlines, config.status)
         self._sync_grades_config(course_name, config.grades)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
@@ -653,7 +653,7 @@ class DataBaseApi(StorageApi):
             )
             session.commit()
 
-    def get_user_courses_names(self, username: str) -> list[str]:
+    def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]:
         """Get a list of courses names that the user participates in"""
 
         with self._session_create() as session:
@@ -662,18 +662,19 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 return []
 
-            user_on_courses = user.users_on_courses.all()
+            hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
+            user_on_courses = user.users_on_courses.filter(models.Course.status.notin_(hidden_for_user)).all()
 
-            result = [user_on_course.course.name for user_on_course in user_on_courses]
+            result = [(user_on_course.course.name, user_on_course.course.status) for user_on_course in user_on_courses]
             return result
 
-    def get_all_courses_names(self) -> list[str]:
+    def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]:
         """Get a list of all courses names"""
 
         with self._session_create() as session:
             courses = session.query(models.Course).all()
 
-            result = [course.name for course in courses]
+            result = [(course.name, course.status) for course in courses]
             return result
 
     def get_all_users(self) -> list[StoredUser]:
@@ -808,18 +809,26 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         deadlines_config: ManytaskDeadlinesConfig,
+        status: CourseStatus | None,
     ) -> None:
         """Method for updating deadlines config
 
         :param course_name: course name
         :param deadlines_config: ManytaskDeadlinesConfig object
+        :param status: status of course
         """
 
         groups = deadlines_config.groups
 
-        logger.info("Syncing database tasks...")
+        logger.info("Syncing course in database...")
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
+
+            if course.status == CourseStatus.CREATED:
+                course.status = CourseStatus.HIDDEN
+
+            if status is not None:
+                course.status = status
 
             existing_course_tasks = (
                 session.query(models.Task).join(models.TaskGroup).filter(models.TaskGroup.course_id == course.id).all()

@@ -13,6 +13,7 @@ from flask_wtf import CSRFProtect
 
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import bp as api_bp
+from manytask.course import CourseStatus
 from manytask.database import TaskDisabledError
 from manytask.web import admin_bp, course_bp, root_bp
 from tests.constants import (
@@ -141,12 +142,12 @@ def mock_storage_api(mock_course):  # noqa: C901
             return datetime.now(tz=ZoneInfo("UTC"))
 
         @staticmethod
-        def get_all_courses_names():
-            return "test_course_names"
+        def get_all_courses_names_with_statuses():
+            return [("test_course_names", CourseStatus.CREATED)]
 
         @staticmethod
-        def get_user_courses_names(_username):
-            return "test_course_names"
+        def get_user_courses_names_with_statuses(_username):
+            return [("test_course_names", CourseStatus.CREATED)]
 
         @staticmethod
         def get_scores(_course_name, _username):
@@ -234,7 +235,7 @@ def mock_course():
     class MockCourse:
         def __init__(self):
             self.course_name = TEST_COURSE_NAME
-            self.is_ready = True
+            self.status = CourseStatus.IN_PROGRESS
             self.show_allscores = True
             self.registration_secret = TEST_SECRET
             self.gitlab_course_group = "test_group"
@@ -271,7 +272,7 @@ def test_course_page_not_ready(app, mock_gitlab_oauth):
 
         @dataclass
         class Course:
-            is_ready = False
+            status = CourseStatus.CREATED
 
         mock_get_course.return_value = Course()
         app.oauth = mock_gitlab_oauth

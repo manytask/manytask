@@ -125,7 +125,10 @@
                                 totalScore += rowData.scores[key];
                             }
                         }
+                        const maxScore = {{ max_score }}
+                        const newPercent = maxScore === 0 ? 0 : totalScore / maxScore * 100;
                         row.update({total_score: totalScore});
+                        row.update({percent: newPercent});
                         editModal.hide();
                     } else {
                         alert('Failed to update: ' + data.message);
@@ -239,6 +242,8 @@
                             title: "Grade",
                             field: "grade",
                             frozen: true,
+                            sorter: "number",
+                            hozAlign: "center",
                             minWidth: 1,
                             with: 200,
                             headerTooltip: "Course grade"
@@ -259,7 +264,10 @@
                             sorter: "number",
                             hozAlign: "center",
                             minWidth: 1,
-                            headerTooltip: "% completed"
+                            headerTooltip: "% completed",
+                            formatter: function(cell, formatterParams, onRendered) {
+                                return cell.getValue().toFixed(1);
+                            }
                         },
                         {
                             title: "LHW",

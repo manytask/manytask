@@ -2,10 +2,12 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, MetaData, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
+
+from .course import CourseStatus
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +135,11 @@ class Course(Base):
     registration_secret: Mapped[str]
     token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
-    is_ready: Mapped[bool] = mapped_column(server_default="true", default=True)
+    status: Mapped[CourseStatus] = mapped_column(
+        Enum(CourseStatus, name="course_status", native_enum=False),
+        default=CourseStatus.CREATED,
+        server_default="CREATED",
+    )
 
     # gitlab parameters
     gitlab_course_group: Mapped[str]
