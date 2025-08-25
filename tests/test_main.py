@@ -95,11 +95,15 @@ def mock_gitlab():
 
         gitlab_instance.projects.list.side_effect = mock_project_list_search
 
-        # Mock GitLab RMS user for instance admin
         mock_rms_user = MagicMock()
-        mock_rms_user.username = os.getenv("INITIAL_INSTANCE_ADMIN", "instance_admin")
-        mock_rms_user.id = 12345
-        gitlab_instance.get_rms_user_by_username.return_value = mock_rms_user
+        mock_rms_user._attrs = {"id": 12345, "username": "", "name": "Test User"}
+
+        def mock_get_rms_user(**kwargs):
+            username = kwargs.get("username", "")
+            mock_rms_user._attrs["username"] = username
+            return [mock_rms_user]
+
+        gitlab_instance.users.list.side_effect = mock_get_rms_user
 
         yield mock
 
