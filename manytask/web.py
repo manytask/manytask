@@ -16,7 +16,7 @@ from .auth import handle_oauth_callback, requires_admin, requires_auth, requires
 from .course import Course, CourseConfig, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
-from .utils import generate_token_hex, get_courses
+from .utils import check_admin, generate_token_hex, get_courses
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -38,12 +38,7 @@ def index() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     courses = get_courses(app)
-
-    if app.debug:
-        is_admin = True
-    else:
-        student_username = session["gitlab"]["username"]
-        is_admin = app.storage_api.check_if_instance_admin(student_username)
+    is_admin = check_admin(app)
 
     return render_template(
         "courses.html",
@@ -245,6 +240,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     course = app.storage_api.get_course(course_name)
+    is_admin = check_admin(app)
 
     if course is None:
         return redirect(url_for("root.index"))
@@ -253,9 +249,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
         return redirect(url_for("course.course_page", course_name=course_name))
 
     return render_template(
-        "not_ready.html",
-        course_name=course.course_name,
-        manytask_version=app.manytask_version,
+        "not_ready.html", course_name=course.course_name, manytask_version=app.manytask_version, is_admin=is_admin
     )
 
 
