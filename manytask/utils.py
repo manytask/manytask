@@ -2,6 +2,7 @@ import secrets
 
 from flask import session, url_for
 
+from manytask.abstract import RmsUser
 from manytask.main import CustomFlask
 
 
@@ -37,3 +38,12 @@ def check_admin(app: CustomFlask) -> bool:
     else:
         student_username = session["gitlab"]["username"]
         return app.storage_api.check_if_instance_admin(student_username)
+
+
+def guess_first_last_name(user: RmsUser) -> tuple[str, str]:
+    # TODO: implement better method for separating names
+    name = user.name
+    parts = name.split()
+    if len(parts) == 2:
+        return tuple(parts) # type: ignore
+    return name, ""

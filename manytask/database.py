@@ -646,10 +646,12 @@ class DataBaseApi(StorageApi):
             self._get_or_create(
                 session,
                 models.User,
+                defaults=dict(
+                    first_name=first_name,
+                    rms_id=rms_id,
+                    last_name=last_name,
+                ),
                 username=username,
-                first_name=first_name,
-                rms_id=rms_id,
-                last_name=last_name,
             )
             session.commit()
 
