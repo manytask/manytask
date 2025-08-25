@@ -34,6 +34,7 @@ jobs:
     with:
       platforms: linux/amd64,linux/arm64
       tags: manytask/manytask:${{ github.ref_name }}
+      target: app
       push: true
     secrets:
       registry_username: ${{ secrets.DOCKERHUB_USERNAME }}
