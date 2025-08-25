@@ -16,7 +16,7 @@ from .auth import handle_oauth_callback, requires_admin, requires_auth, requires
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
-from .utils import check_admin, generate_token_hex, get_courses
+from .utils import check_admin, generate_token_hex, get_courses, guess_first_last_name
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -221,7 +221,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    first_name, last_name = rms_user.name.split()  # TODO: come up with how to separate names
+    first_name, last_name = guess_first_last_name(rms_user)
     app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, rms_user.id)
 
     app.storage_api.sync_user_on_course(course.course_name, rms_user.username, is_course_admin)
