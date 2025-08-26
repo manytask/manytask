@@ -79,11 +79,12 @@ class DataBaseApi(StorageApi):
 
         # Create the zero-instance admin user if it does not exist
         with self._session_create() as session:
-            self._get_or_create(
+            self._update_or_create(
                 session,
                 models.User,
                 username=config.instance_admin_username,
-                defaults={"first_name": "Instance", "last_name": "Admin", "is_instance_admin": True, "rms_id": -1},
+                defaults={"is_instance_admin": True},
+                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": -1},
             )
             session.commit()
 
@@ -1177,9 +1178,9 @@ class DataBaseApi(StorageApi):
                 session,
                 model,
                 instance,
-                defaults=None,
+                defaults = None,
+                create_defaults = defaults,
                 **kwargs,
-                **(defaults or {}),
             )
         except Exception:
             session.rollback()
