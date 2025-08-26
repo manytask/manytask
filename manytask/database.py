@@ -1178,8 +1178,8 @@ class DataBaseApi(StorageApi):
                 session,
                 model,
                 instance,
-                defaults = None,
-                create_defaults = defaults,
+                defaults=None,
+                create_defaults=defaults,
                 **kwargs,
             )
         except Exception:
