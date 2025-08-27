@@ -20,4 +20,4 @@ jobs:
         script: |
           cd /srv/manytask/app_deploy
           sudo git pull origin main
-          sudo docker compose -f docker-compose.development.yml up --build -d
+          sudo docker compose -f docker-compose.development.yml up --build --force-recreate -d

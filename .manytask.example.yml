@@ -1,5 +1,5 @@
 version: 1
-
+#status: created # created | hidden | in_progress | all_tasks_issued | doreshka | finished
 
 ui:
   task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$TASK_NAME

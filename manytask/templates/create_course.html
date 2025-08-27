@@ -133,13 +133,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     gitlabGroupField.addEventListener('input', function () {
         const groupName = gitlabGroupField.value;
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const semester = month >= 0 && month <= 5 ? 'spring' : 'fall';
 
         if (!publicRepoChanged) {
-            publicRepoField.value = groupName + '/public-repo';
+            publicRepoField.value = `${groupName}/public-${year}-${semester}`;
         }
 
         if (!studentsGroupChanged) {
-            studentsGroupField.value = groupName + '/private-repo';
+            studentsGroupField.value = `${groupName}/students-${year}-${semester}`;
         }
 
     });

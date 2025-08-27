@@ -13,10 +13,10 @@ from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
 from .auth import handle_oauth_callback, requires_admin, requires_auth, requires_course_access, requires_ready
-from .course import Course, CourseConfig, get_current_time
+from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
-from .utils import generate_token_hex, get_courses
+from .utils import check_admin, generate_token_hex, get_courses, guess_first_last_name
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -38,12 +38,7 @@ def index() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     courses = get_courses(app)
-
-    if app.debug:
-        is_admin = True
-    else:
-        student_username = session["gitlab"]["username"]
-        is_admin = app.storage_api.check_if_instance_admin(student_username)
+    is_admin = check_admin(app)
 
     return render_template(
         "courses.html",
@@ -130,6 +125,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         task_base_url=app.rms_api.get_url_for_task_base(course.gitlab_course_public_repo, course.gitlab_default_branch),
         username=student_username,
         course_name=course.course_name,
+        course_status=course.status,
         app=app,
         gitlab_url=app.rms_api.base_url,
         allscores_url=allscores_url,
@@ -225,7 +221,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    first_name, last_name = rms_user.name.split()  # TODO: come up with how to separate names
+    first_name, last_name = guess_first_last_name(rms_user)
     app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, rms_user.id)
 
     app.storage_api.sync_user_on_course(course.course_name, rms_user.username, is_course_admin)
@@ -245,17 +241,16 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     course = app.storage_api.get_course(course_name)
+    is_admin = check_admin(app)
 
     if course is None:
         return redirect(url_for("root.index"))
 
-    if course.is_ready:
+    if course.status != CourseStatus.CREATED:
         return redirect(url_for("course.course_page", course_name=course_name))
 
     return render_template(
-        "not_ready.html",
-        course_name=course.course_name,
-        manytask_version=app.manytask_version,
+        "not_ready.html", course_name=course.course_name, manytask_version=app.manytask_version, is_admin=is_admin
     )
 
 
@@ -312,6 +307,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=app.manytask_version,
         courses=courses,
+        max_score=table_data["max_score"],
     )
 
 
@@ -338,7 +334,7 @@ def create_course() -> ResponseReturnValue:
             registration_secret=request.form["registration_secret"],
             token=request.form["token"],
             show_allscores=request.form.get("show_allscores", "off") == "on",
-            is_ready=False,
+            status=CourseStatus.CREATED,
             task_url_template="",
             links={},
         )
@@ -365,7 +361,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
     course = app.storage_api.get_course(course_name)
 
     if not course:
-        flash("Курс не найден", category="course_not_found")
+        flash("course not found!", category="course_not_found")
         return redirect(url_for("root.index"))
 
     if request.method == "POST":
@@ -373,7 +369,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
             app.logger.error(f"CSRF validation failed: {e}")
-            return render_template("create_project.html", error_message="CSRF Error")
+            return render_template("edit_course.html", error_message="CSRF Error")
         updated_settings = CourseConfig(
             course_name=course_name,
             gitlab_course_group=request.form["gitlab_course_group"],
@@ -383,7 +379,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             registration_secret=request.form["registration_secret"],
             token=course.token,
             show_allscores=request.form.get("show_allscores", "off") == "on",
-            is_ready=course.is_ready,
+            status=CourseStatus(request.form["course_status"]),
             task_url_template=course.task_url_template,
             links=course.links,
         )
@@ -391,7 +387,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         if app.storage_api.edit_course(updated_settings):
             return redirect(url_for("course.course_page", course_name=course_name))
 
-        return render_template("edit_course.html", course=updated_settings, error_message="Ошибка при обновлении курса")
+        return render_template("edit_course.html", course=updated_settings, error_message="Error while updating course")
 
     return render_template("edit_course.html", course=course)
 

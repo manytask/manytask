@@ -7,17 +7,45 @@
 {% block body %}
     <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
         <h1 class="mt-4 mb-3">List of courses</h1>
+        <button id="toggleFinishedBtn" class="btn btn-outline-secondary mt-2 mb-2">
+            Show completed courses
+        </button>
+
+        <div id="finishedWrapper" class="hidden mb-2">
+            <ul class="course-list">
+                {% if not courses | selectattr('status', 'equalto', 'finished') | list %}
+                    No finished courses yet.
+                {% endif %}
+                {% for course in courses if course.status == 'finished' %}
+                    <li class="course-item">
+                        <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
+                        <div class="status-container status-{{ course.status }}">
+                    <span class="status-badge status-{{ course.status }}">
+                        {{ course.status|replace('_', ' ') }}
+                    </span>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+
         <ul class="course-list">
-            {% for course in courses %}
+            {% for course in courses if course.status != 'finished' %}
                 <li class="course-item">
                     <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
+                    <div class="status-container status-{{ course.status }}">
+                    <span class="status-badge status-{{ course.status }}">
+                        {{ course.status|replace('_', ' ') }}
+                    </span>
+                    </div>
                 </li>
             {% else %}
                 Unfortunately, there are no courses yet.
             {% endfor %}
         </ul>
 
-        <form class="course-search-form" id="registerCourseForm" style="padding-top: 6rem">
+        <form class="course-search-form" id="registerCourseForm" style="padding-top: 3.5rem">
             <div class="d-flex flex-column align-items-center" style="gap: 0.8rem;">
                 <label for="courseInput" class="course-search-label">Register on new course</label>
                 <input type="text" class="form-control" id="courseInput" placeholder="Course title..." required>
@@ -38,5 +66,16 @@
             const course = document.getElementById('courseInput').value.trim()
             window.location.href = `/${course}`;
         });
+
+        const toggleBtn = document.getElementById('toggleFinishedBtn');
+        const finishedWrapper = document.getElementById('finishedWrapper');
+        let finishedVisible = false;
+
+        toggleBtn.addEventListener('click', () => {
+            finishedVisible = !finishedVisible;
+            finishedWrapper.classList.toggle('hidden', !finishedVisible);
+            toggleBtn.textContent = finishedVisible ? 'Hide completed courses' : 'Show completed courses';
+        });
+
     </script>
 {% endblock %}

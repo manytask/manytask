@@ -10,8 +10,9 @@ from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
 from manytask.abstract import AuthenticatedUser
-from manytask.course import Course
+from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
+from manytask.utils import guess_first_last_name
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,18 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     try:
         # This is where the oath_api should be used
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        auth_user = app.auth_api.get_authenticated_user(gitlab_oauth_token["access_token"])
+        token = gitlab_oauth_token["access_token"]
+        auth_user = app.auth_api.get_authenticated_user(token)
+        rms_user = app.rms_api.get_authenticated_rms_user(token)
+
+        first_name, last_name = guess_first_last_name(rms_user)
+
+        app.storage_api.create_user_if_not_exist(
+            username=rms_user.username,
+            first_name=first_name,
+            last_name=last_name,
+            rms_id=rms_user.id,
+        )
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
         return redirect(redirect_url)
@@ -132,10 +144,10 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
         course = app.storage_api.get_course(course_name)
 
         if course is None:
-            flash("Course not found", "course_not_found")
+            flash("course not found!", "course_not_found")
             abort(redirect(url_for("root.index")))
 
-        if not course.is_ready:
+        if course.status == CourseStatus.CREATED:
             abort(redirect(url_for("course.not_ready", course_name=course_name)))
 
         return f(*args, **kwargs)
@@ -157,8 +169,15 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         oauth = app.oauth
 
+        hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
+
+        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
+            course.course_name, auth_user.username
+        ):
+            flash("course is hidden!", "course_hidden")
+            abort(redirect(url_for("root.index")))
 
         if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
             project_name=auth_user.username, project_group=course.gitlab_course_students_group
