@@ -1,12 +1,18 @@
 name: Test
 
-on: [push, pull_request]
-
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+      
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -36,6 +42,7 @@ jobs:
         run: poetry run pytest
 
   build-docker:
+    needs: test
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
       tags: manytask:${{ github.sha }}

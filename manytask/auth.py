@@ -2,7 +2,6 @@ import logging
 from functools import wraps
 from http import HTTPStatus
 from typing import Any, Callable
-from urllib.error import HTTPError
 
 from authlib.integrations.flask_client import OAuth
 from flask import abort, current_app, flash, redirect, request, session, url_for
@@ -10,8 +9,8 @@ from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
-from manytask.abstract import Student
-from manytask.course import Course
+from manytask.abstract import AuthenticatedUser
+from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
 
 logger = logging.getLogger(__name__)
@@ -29,13 +28,13 @@ def valid_session(user_session: SessionMixin) -> bool:
 
 
 def set_oauth_session(
-    student: Student, oauth_tokens: dict[str, str] | None = None, version: float = 1.5
+    auth_user: AuthenticatedUser, oauth_tokens: dict[str, str] | None = None, version: float = 1.5
 ) -> dict[str, Any]:
     """Set oauth creds in session for student"""
 
     result: dict[str, Any] = {
-        "username": student.username,
-        "user_id": student.id,
+        "username": auth_user.username,
+        "user_id": auth_user.id,
         "version": version,
     }
     if oauth_tokens:
@@ -71,26 +70,24 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     try:
         # This is where the oath_api should be used
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        rms_user = app.rms_api.get_authenticated_rms_user(gitlab_oauth_token["access_token"])
-        student = Student(id=rms_user.id, username=rms_user.username, name=rms_user.name)
+        auth_user = app.auth_api.get_authenticated_user(gitlab_oauth_token["access_token"])
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
         return redirect(redirect_url)
 
-    session.setdefault("gitlab", {}).update(set_oauth_session(student, gitlab_oauth_token))
+    session.setdefault("gitlab", {}).update(set_oauth_session(auth_user, gitlab_oauth_token))
     session.permanent = True
 
     return redirect(redirect_url)
 
 
-def get_authenticate_student(oauth: OAuth, app: CustomFlask) -> Student:
+def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     """Getting student and update session"""
 
     # This is where the auth_api should be user instead of gitlab/rms
-    rms_user = app.rms_api.get_authenticated_rms_user(session["gitlab"]["access_token"])
-    student = Student(id=rms_user.id, username=rms_user.username, name=rms_user.name)
-    session["gitlab"].update(set_oauth_session(student))
-    return student
+    auth_user = app.auth_api.get_authenticated_user(session["gitlab"]["access_token"])
+    session["gitlab"].update(set_oauth_session(auth_user))
+    return auth_user
 
 
 def __redirect_to_login() -> Response:
@@ -109,10 +106,11 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
             return f(*args, **kwargs)
 
         if valid_session(session):
-            try:
-                app.rms_api.check_authenticated_rms_user(session["gitlab"]["access_token"])
-            except (HTTPError, KeyError) as e:
-                logger.error(f"Failed login in gitlab, redirect to login: {e}", exc_info=True)
+            if not app.auth_api.check_user_is_authenticated(
+                app.oauth,
+                session["gitlab"]["access_token"],
+                session["gitlab"]["refresh_token"],
+            ):
                 return __redirect_to_login()
         else:
             logger.error("Failed to verify session.", exc_info=True)
@@ -134,10 +132,10 @@ def requires_ready(f: Callable[..., Any]) -> Callable[..., Any]:
         course = app.storage_api.get_course(course_name)
 
         if course is None:
-            flash("Course not found", "course_not_found")
+            flash("course not found!", "course_not_found")
             abort(redirect(url_for("root.index")))
 
-        if not course.is_ready:
+        if course.status == CourseStatus.CREATED:
             abort(redirect(url_for("course.not_ready", course_name=course_name)))
 
         return f(*args, **kwargs)
@@ -159,20 +157,26 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         oauth = app.oauth
 
+        hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
-        student: Student = get_authenticate_student(oauth, app)
+        auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
 
-        if not handle_course_membership(app, course, student.username) or not app.rms_api.check_project_exists(
-            project_name=student.username, project_group=course.gitlab_course_students_group
+        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
+            course.course_name, auth_user.username
+        ):
+            flash("course is hidden!", "course_hidden")
+            abort(redirect(url_for("root.index")))
+
+        if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
+            project_name=auth_user.username, project_group=course.gitlab_course_students_group
         ):
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
-        app.storage_api.sync_stored_user(
+        app.storage_api.sync_user_on_course(
             course.course_name,
-            student.username,
-            app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
-            app.storage_api.check_if_instance_admin(student.username),
+            auth_user.username,
+            app.storage_api.check_if_instance_admin(auth_user.username),
         )
 
         return f(*args, **kwargs)

@@ -4,10 +4,10 @@ from manytask.abstract import StoredUser
 def test_stored_user():
     stored_user1 = StoredUser("user1", "Ivan", "Ivanov", 123)
 
-    assert not stored_user1.course_admin
+    assert not stored_user1.instance_admin
     assert repr(stored_user1) == "StoredUser(username=user1)"
 
     stored_user2 = StoredUser("user2", "Ivan", "Ivanov", 456, True)
 
-    assert stored_user2.course_admin
+    assert stored_user2.instance_admin
     assert repr(stored_user2) == "StoredUser(username=user2)"

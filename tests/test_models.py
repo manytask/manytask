@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from typing import Optional
-from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import create_engine
@@ -18,24 +17,24 @@ from manytask.models import (
     User,
     UserOnCourse,
 )
-
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-
-TEST_DEADLINE_DATA_INT = 12345
-TEST_GRADE_SCORE = 77
-TEST_TASK_COUNT = 2
-TEST_TASK_COUNT_LARGE = 3
-TEST_GRADE_COUNT = 4
-TEST_DEADLINE_ID = 12345
-TEST_GRADE_SCORE_2 = 123456
-TEST_GRADE_SCORE_3 = 1234567
-TEST_GRADE_SCORE_4 = 12345678
-TEST_TASK_SCORE = 100
-TEST_TASK_POSITION = 7
-TEST_TASK_GROUP_POSITION = 5
-TEST_MAX_SUBMISSIONS = 10
-TEST_SUBMISSION_PENALTY = 0.1
-TEST_DEADLINE_STEPS = {0.4: datetime(2000, 1, 2, 3, 4, 5, 6, tzinfo=ZoneInfo("Europe/Berlin"))}
+from tests.constants import (
+    SQLALCHEMY_DATABASE_URL,
+    TEST_DEADLINE_DATA_INT,
+    TEST_DEADLINE_ID,
+    TEST_DEADLINE_STEPS,
+    TEST_GRADE_COUNT,
+    TEST_GRADE_SCORE,
+    TEST_GRADE_SCORE_2,
+    TEST_GRADE_SCORE_3,
+    TEST_GRADE_SCORE_4,
+    TEST_MAX_SUBMISSIONS,
+    TEST_SUBMISSION_PENALTY,
+    TEST_TASK_COUNT,
+    TEST_TASK_COUNT_LARGE,
+    TEST_TASK_GROUP_POSITION,
+    TEST_TASK_POSITION,
+    TEST_TASK_SCORE,
+)
 
 
 def make_course(course_id, **kwargs):
@@ -155,7 +154,7 @@ def test_user_on_course(session):
     session.add_all([user, course])
     session.commit()
 
-    user_on_course = UserOnCourse(user=user, course=course, repo_name="user1_repo")
+    user_on_course = UserOnCourse(user=user, course=course)
     session.add(user_on_course)
     session.commit()
 
@@ -167,13 +166,13 @@ def test_user_on_course(session):
     assert len(retrieved_course.users_on_courses.all()) == 1
     assert retrieved_course.users_on_courses[0].user.username == "user1"
 
-    retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
+    retrieved_user_on_course = session.query(UserOnCourse).filter_by(course=course).first()
     assert retrieved_user_on_course.is_course_admin is False
 
     retrieved_user_on_course.is_course_admin = True
     session.commit()
 
-    retrieved_user_on_course = session.query(UserOnCourse).filter_by(repo_name="user1_repo").first()
+    retrieved_user_on_course = session.query(UserOnCourse).filter_by(course=course).first()
     assert retrieved_user_on_course.is_course_admin is True
 
 
@@ -183,14 +182,14 @@ def test_user_on_course_unique_ids(session):
     user2 = User(username="user002", first_name="Ivan", last_name="Olegov", rms_id=32)
     course2 = make_course("002")
 
-    user_on_course1 = UserOnCourse(user=user1, course=course1, repo_name="user_repo01")
-    user_on_course2 = UserOnCourse(user=user1, course=course2, repo_name="user_repo02")
-    user_on_course3 = UserOnCourse(user=user2, course=course1, repo_name="user_repo03")
-    user_on_course4 = UserOnCourse(user=user2, course=course2, repo_name="user_repo04")
+    user_on_course1 = UserOnCourse(user=user1, course=course1)
+    user_on_course2 = UserOnCourse(user=user1, course=course2)
+    user_on_course3 = UserOnCourse(user=user2, course=course1)
+    user_on_course4 = UserOnCourse(user=user2, course=course2)
     session.add_all([user_on_course1, user_on_course2, user_on_course3, user_on_course4])
     session.commit()
 
-    user_on_course5 = UserOnCourse(user=user1, course=course1, repo_name="user_repo05")
+    user_on_course5 = UserOnCourse(user=user1, course=course1)
 
     session.add(user_on_course5)
     with pytest.raises(IntegrityError):
@@ -358,7 +357,7 @@ def test_task(session):
 def test_grade(session, fixed_current_time):
     user = User(username="user2", first_name="Ivan", last_name="Ivanov", rms_id=41)
     course = make_course("4")
-    user_on_course = UserOnCourse(user=user, course=course, repo_name="repo_name1")
+    user_on_course = UserOnCourse(user=user, course=course)
     task_group = TaskGroup(name="group4", course=course)
     task = Task(name="task2", group=task_group)
     session.add_all([user, course, user_on_course, task_group, task])
@@ -379,8 +378,8 @@ def test_grade_unique_ids(session, fixed_current_time):
     task_group = TaskGroup(name="group101", course=course)
     user1 = User(username="user101", first_name="Ivan", last_name="Ivanov", rms_id=51)
     user2 = User(username="user102", first_name="Ivan", last_name="Olegov", rms_id=52)
-    user_on_course1 = UserOnCourse(user=user1, course=course, repo_name="repo_name1")
-    user_on_course2 = UserOnCourse(user=user2, course=course, repo_name="repo_name1")
+    user_on_course1 = UserOnCourse(user=user1, course=course)
+    user_on_course2 = UserOnCourse(user=user2, course=course)
     task1 = Task(name="task101", group=task_group)
     task2 = Task(name="task102", group=task_group)
     session.add_all([course, task_group, user1, user2, task1, task2, user_on_course1, user_on_course2])
@@ -438,8 +437,8 @@ def test_cascade_delete_course(session):
     task_group2 = TaskGroup(name="cascade_group2", course=course)
     user1 = User(username="cascade_user1", first_name="Ivan", last_name="Ivanov", rms_id=61)
     user2 = User(username="cascade_user2", first_name="Ivan", last_name="Olegov", rms_id=62)
-    user_on_course1 = UserOnCourse(user=user1, course=course, repo_name="cascade_repo1")
-    user_on_course2 = UserOnCourse(user=user2, course=course, repo_name="cascade_repo2")
+    user_on_course1 = UserOnCourse(user=user1, course=course)
+    user_on_course2 = UserOnCourse(user=user2, course=course)
     session.add_all([course, task_group1, task_group2, user1, user2, user_on_course1, user_on_course2])
     session.commit()
 
@@ -465,10 +464,6 @@ def test_cascade_delete_course(session):
         session.query(Task).filter(Task.name.in_(["cascade_task1", "cascade_task2", "cascade_task3"])).count()
         == TEST_TASK_COUNT_LARGE
     )
-    assert (
-        session.query(UserOnCourse).filter(UserOnCourse.repo_name.in_(["cascade_repo1", "cascade_repo2"])).count()
-        == TEST_TASK_COUNT
-    )
     assert session.query(Grade).filter_by(score=TEST_DEADLINE_DATA_INT).count() == TEST_GRADE_COUNT
 
     session.delete(course)
@@ -477,9 +472,6 @@ def test_cascade_delete_course(session):
     assert session.query(Course).filter_by(name="test_course_cascade").first() is None
     assert session.query(TaskGroup).filter(TaskGroup.name.in_(["cascade_group1", "cascade_group2"])).count() == 0
     assert session.query(Task).filter(Task.name.in_(["cascade_task1", "cascade_task2", "cascade_task3"])).count() == 0
-    assert (
-        session.query(UserOnCourse).filter(UserOnCourse.repo_name.in_(["cascade_repo1", "cascade_repo2"])).count() == 0
-    )
     assert session.query(Grade).filter_by(score=TEST_DEADLINE_DATA_INT).count() == 0
 
     assert session.query(User).filter(User.username.in_(["cascade_user1", "cascade_user2"])).count() == TEST_TASK_COUNT
@@ -495,7 +487,7 @@ def test_cascade_delete_task_group(session):
     session.commit()
 
     user = User(username="cascade_user3", first_name="Ivan", last_name="Ivanov", rms_id=71)
-    user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo3")
+    user_on_course = UserOnCourse(user=user, course=course)
     grade1 = Grade(user_on_course=user_on_course, task=task1, score=TEST_GRADE_SCORE_2)
     grade2 = Grade(user_on_course=user_on_course, task=task2, score=TEST_GRADE_SCORE_2)
     session.add_all([user, user_on_course, grade1, grade2])
@@ -526,7 +518,7 @@ def test_cascade_delete_task_group(session):
 def test_cascade_delete_user(session):
     user = User(username="cascade_user4", first_name="Ivan", last_name="Ivanov", rms_id=81)
     course = make_course("cascade3")
-    user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo4")
+    user_on_course = UserOnCourse(user=user, course=course)
     task_group = TaskGroup(name="cascade_group4", course=course)
     task = Task(name="cascade_task6", group=task_group)
     grade = Grade(user_on_course=user_on_course, task=task, score=TEST_GRADE_SCORE_3)
@@ -534,14 +526,14 @@ def test_cascade_delete_user(session):
     session.commit()
 
     assert session.query(User).filter_by(username="cascade_user4").first() is not None
-    assert session.query(UserOnCourse).filter_by(repo_name="cascade_repo4").first() is not None
+    assert session.query(UserOnCourse).filter_by(course=course).first() is not None
     assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_3).count() == 1
 
     session.delete(user)
     session.commit()
 
     assert session.query(User).filter_by(username="cascade_user4").first() is None
-    assert session.query(UserOnCourse).filter_by(repo_name="cascade_repo4").first() is None
+    assert session.query(UserOnCourse).filter_by(course=course).first() is None
     assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_3).count() == 0
 
     assert session.query(Course).filter_by(name="test_course_cascade3").first() is not None
@@ -551,20 +543,20 @@ def test_cascade_delete_user(session):
 def test_cascade_delete_user_on_course(session):
     user = User(username="cascade_user5", first_name="Ivan", last_name="Ivanov", rms_id=91)
     course = make_course("cascade4")
-    user_on_course = UserOnCourse(user=user, course=course, repo_name="cascade_repo5")
+    user_on_course = UserOnCourse(user=user, course=course)
     task_group = TaskGroup(name="cascade_group5", course=course)
     task = Task(name="cascade_task7", group=task_group)
     grade = Grade(user_on_course=user_on_course, task=task, score=TEST_GRADE_SCORE_4)
     session.add_all([user, course, user_on_course, task_group, task, grade])
     session.commit()
 
-    assert session.query(UserOnCourse).filter_by(repo_name="cascade_repo5").first() is not None
+    assert session.query(UserOnCourse).filter_by(course=course).first() is not None
     assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_4).count() == 1
 
     session.delete(user_on_course)
     session.commit()
 
-    assert session.query(UserOnCourse).filter_by(repo_name="cascade_repo5").first() is None
+    assert session.query(UserOnCourse).filter_by(course=course).first() is None
     assert session.query(Grade).filter_by(score=TEST_GRADE_SCORE_4).count() == 0
 
     assert session.query(User).filter_by(username="cascade_user5").first() is not None
