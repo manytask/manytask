@@ -177,7 +177,7 @@ class RmsApi(ABC):
         lastname: str,
         email: str,
         password: str,
-    ) -> None: ...
+    ) -> int: ...
 
     @abstractmethod
     def create_public_repo(
@@ -202,7 +202,7 @@ class RmsApi(ABC):
     @abstractmethod
     def create_project(
         self,
-        rms_user: RmsUser,
+        username: str,
         course_students_group: str,
         course_public_repo: str,
     ) -> None: ...
