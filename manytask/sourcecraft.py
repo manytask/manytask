@@ -38,24 +38,25 @@ class SourcecraftApi(RmsApi):
         self._api_url = config.api_url
         self._admin_token = config.admin_token
         self._org_slug = config.org_slug
-        self._course_name = config.course_name
+        # self._course_name = config.course_name
         # Initialize any additional Sourcecraft-specific components here
         logger.info(f"Initializing SourcecraftApi with base_url: {self.base_url}")
 
-    def _create_template_repo(self) -> None:
+    def _create_template_repo(self, repo_slug: str) -> None:
         """This method triggers SourceCraft CI, so creation is actually async and
         returned json is an operation which caller can poll to check if creation is finished.
         """
-        url = f"{self._api_url}/{self._org_slug}/{self._course_name}/ci_workflows/upsert-template-repo-workflow/trigger"
+        url = f"{self._api_url}/{self._org_slug}/{repo_slug}/ci_workflows/upsert-template-repo-workflow/trigger"
         headers = {
             "Authorization": f"Bearer {self._admin_token}",
             "Content-Type": "application/json",
         }
-        data = {}
+        data: dict[str, Any] = {}
         response = requests.post(url, json=data, headers=headers)
         response.raise_for_status()
         return response.json()
 
+    # TODO: seems unused, remove?
     def create_public_repo(
         self,
         course_group: str,
@@ -63,12 +64,13 @@ class SourcecraftApi(RmsApi):
     ) -> None:
         """Create a public repository for course materials.
 
-        :param course_group: UNUSED
+        :param course_group: actually a course name
         :param course_public_repo: UNUSED
         """
-        logger.info(f"Creating public repo: {self._course_name}-template")
-        self._create_template_repo()
+        logger.info(f"Creating public repo: {course_group}-template")
+        self._create_template_repo(f"{course_group}-template")
 
+    # TODO: seems unused, remove?
     def create_students_group(
         self,
         course_students_group: str,
@@ -82,15 +84,15 @@ class SourcecraftApi(RmsApi):
     def check_project_exists(
         self,
         project_name: str,
-        project_group: str,
+        destination: str,
     ) -> bool:
         """Check if a project exists in the given group.
 
-        :param project_name: Actually a username of a student
-        :param project_group: UNUSED
+        :param project_name: Username of a student
+        :param destination: Course name
         :return: True if project exists, False otherwise
         """
-        url = f"{self._api_url}/repos/{self._org_slug}/{self._course_name}-{project_name}"
+        url = f"{self._api_url}/repos/{self._org_slug}/{destination}-{project_name}"
         headers = {
             "Authorization": f"Bearer {self._admin_token}",
             "Content-Type": "application/json",
@@ -105,16 +107,16 @@ class SourcecraftApi(RmsApi):
             response.raise_for_status()
             return False
 
-    def _create_student_repo(self, login: str) -> None:
+    def _create_student_repo(self, course_name: str, login: str) -> None:
         """This method triggers SourceCraft CI, so creation is actually async and
         returned json is an operation which caller can poll to check if creation is finished.
         """
-        url = f"{self._api_url}/{self._org_slug}/{self._course_name}/ci_workflows/upsert-student-repo-workflow/trigger"
+        url = f"{self._api_url}/{self._org_slug}/{course_name}/ci_workflows/upsert-student-repo-workflow/trigger"
         headers = {
             "Authorization": f"Bearer {self._admin_token}",
             "Content-Type": "application/json",
         }
-        data = {"inputs": {"login": login}}
+        data: dict[str, Any] = {"inputs": {"login": login}}
         response = requests.post(url, json=data, headers=headers)
         response.raise_for_status()
         return response.json()
@@ -122,27 +124,39 @@ class SourcecraftApi(RmsApi):
     def create_project(
         self,
         rms_user: RmsUser,
-        course_students_group: str,
-        course_public_repo: str,
+        destination: str,
+        template: str,
     ) -> None:
         """Create a personal repo for a student.
 
         :param rms_user: User information
-        :param course_students_group: UNUSED
-        :param course_public_repo: UNUSED
+        :param destination: Course name
+        :param template: UNUSED, repo will be created from main course repo
         """
-        logger.info(f"Creating repo for user {rms_user.username} in group {course_students_group}")
-        self._create_student_repo(rms_user.username)
+        logger.info(f"Creating repo for user {rms_user.username}")
+        self._create_student_repo(destination, rms_user.username)
 
-    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
+    def get_url_for_task_base(self, template: str, default_branch: str) -> str:
         """Get URL for task base directory in the public repository.
 
-        :param course_public_repo: Name of the public course repository
+        :param template: Slug of the public course repository
         :param default_branch: Default branch name
         :return: URL to the task base directory
         """
-        logger.info(f"Getting task base URL for repo {course_public_repo}, branch {default_branch}")
-        return f"{self._base_url}/{self._org_slug}/{course_public_repo}?ref={default_branch}"
+        return f"{self._base_url}/{self._org_slug}/{template}?ref={default_branch}"
+
+    def get_url_for_repo(
+        self,
+        username: str,
+        destination: str,
+    ) -> str:
+        """Get URL for a student's repository.
+
+        :param username: Student's username
+        :param course_students_group: Actually a course name
+        :return: URL to the student's repository
+        """
+        return f"{self._base_url}/{self._org_slug}/{destination}-{username}"
 
     def register_new_user(
         self,
@@ -162,20 +176,6 @@ class SourcecraftApi(RmsApi):
         """
         logger.info(f"Creating user (username={username})")
         raise NotImplementedError("register_new_user method not implemented yet")
-
-    def get_url_for_repo(
-        self,
-        username: str,
-        course_students_group: str,
-    ) -> str:
-        """Get URL for a student's repository.
-
-        :param username: Student's username
-        :param course_students_group: Name of the students group
-        :return: URL to the student's repository
-        """
-        logger.info(f"Getting repo URL for user {username} in group {course_students_group}")
-        raise NotImplementedError("get_url_for_repo method not implemented yet")
 
     def get_rms_user_by_id(
         self,
