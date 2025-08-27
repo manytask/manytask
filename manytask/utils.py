@@ -45,5 +45,5 @@ def guess_first_last_name(user: RmsUser) -> tuple[str, str]:
     name = user.name
     parts = name.split()
     if len(parts) == 2:
-        return tuple(parts) # type: ignore
+        return tuple(parts)  # type: ignore
     return name, ""
