@@ -136,7 +136,10 @@ def _database_storage_setup(app: CustomFlask, rms_api: abstract.RmsApi) -> abstr
     if instance_admin_username is None:
         raise EnvironmentError("Unable to find INITIAL_INSTANCE_ADMIN env")
 
-    rms_user = rms_api.get_rms_user_by_username(instance_admin_username)
+    if app.debug:
+        rms_user = abstract.RmsUser(id=-1, username="username", name="First Last")
+    else:
+        rms_user = rms_api.get_rms_user_by_username(instance_admin_username)
 
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
