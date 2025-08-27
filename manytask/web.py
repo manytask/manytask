@@ -87,7 +87,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
     if app.debug:
         student_username = "guest"
         student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
+            username=student_username, destination=course.gitlab_course_students_group
         )
 
         if request.args.get("admin", None) in ("true", "1", "yes", None):
@@ -99,7 +99,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_id = session["gitlab"]["user_id"]
 
         student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
+            username=student_username, destination=course.gitlab_course_students_group
         )
 
         rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
@@ -288,7 +288,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
     if app.debug:
         student_username = "guest"
         student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
+            username=student_username, destination=course.gitlab_course_students_group
         )
 
         if request.args.get("admin", None) in ("true", "1", "yes", None):
@@ -300,7 +300,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         student_id = session["gitlab"]["user_id"]
 
         student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
+            username=student_username, destination=course.gitlab_course_students_group
         )
 
         rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)

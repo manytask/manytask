@@ -180,7 +180,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             abort(redirect(url_for("root.index")))
 
         if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
-            project_name=auth_user.username, project_group=course.gitlab_course_students_group
+            project_name=auth_user.username, destination=course.gitlab_course_students_group
         ):
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 

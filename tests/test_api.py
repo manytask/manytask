@@ -214,7 +214,7 @@ def mock_rms_api(mock_rms_user):
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
 
         @staticmethod
-        def get_url_for_repo(username, course_students_group):
+        def get_url_for_repo(username, destination):
             return f"https://gitlab.com/{username}/test-repo"
 
         @staticmethod

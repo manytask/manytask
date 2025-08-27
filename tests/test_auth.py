@@ -53,12 +53,12 @@ def mock_rms_api():
             self.base_url = GITLAB_BASE_URL
 
         @staticmethod
-        def get_url_for_repo(username: str, course_students_group: str):
+        def get_url_for_repo(username: str, destination: str):
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
-        def get_url_for_task_base(course_public_repo: str, default_branch: str):
-            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
+        def get_url_for_task_base(template: str, default_branch: str):
+            return f"{GITLAB_BASE_URL}/{template}/blob/{default_branch}"
 
         @staticmethod
         def get_rms_user_by_id(user_id: int):

@@ -196,25 +196,25 @@ class RmsApi(ABC):
     def check_project_exists(
         self,
         project_name: str,
-        project_group: str,
+        destination: str,
     ) -> bool: ...
 
     @abstractmethod
     def create_project(
         self,
         rms_user: RmsUser,
-        course_students_group: str,
-        course_public_repo: str,
+        destination: str,
+        template: str,
     ) -> None: ...
 
     @abstractmethod
-    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str: ...
+    def get_url_for_task_base(self, template: str, default_branch: str) -> str: ...
 
     @abstractmethod
     def get_url_for_repo(
         self,
         username: str,
-        course_students_group: str,
+        destination: str,
     ) -> str: ...
 
     @abstractmethod
