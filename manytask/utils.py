@@ -41,9 +41,11 @@ def check_admin(app: CustomFlask) -> bool:
 
 
 def guess_first_last_name(user: RmsUser) -> tuple[str, str]:
+    PARTS_IN_NAME = 2
+
     # TODO: implement better method for separating names
     name = user.name
     parts = name.split()
-    if len(parts) == 2:
+    if len(parts) == PARTS_IN_NAME:
         return tuple(parts)  # type: ignore
     return name, ""
