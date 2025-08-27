@@ -83,7 +83,8 @@ class DataBaseApi(StorageApi):
                 session,
                 models.User,
                 username=config.instance_admin_username,
-                defaults={"first_name": "Instance", "last_name": "Admin", "is_instance_admin": True, "rms_id": -1},
+                defaults={"is_instance_admin": True},
+                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": -1},
             )
             session.commit()
 
@@ -646,10 +647,12 @@ class DataBaseApi(StorageApi):
             self._get_or_create(
                 session,
                 models.User,
+                defaults=dict(
+                    first_name=first_name,
+                    rms_id=rms_id,
+                    last_name=last_name,
+                ),
                 username=username,
-                first_name=first_name,
-                rms_id=rms_id,
-                last_name=last_name,
             )
             session.commit()
 
@@ -1171,7 +1174,14 @@ class DataBaseApi(StorageApi):
     ) -> ModelType:
         try:
             instance = DataBaseApi._query_with_for_update(session, model, **kwargs)
-            return DataBaseApi._create_or_update_instance(session, model, instance, defaults, **kwargs)
+            return DataBaseApi._create_or_update_instance(
+                session,
+                model,
+                instance,
+                defaults=None,
+                create_defaults=defaults,
+                **kwargs,
+            )
         except Exception:
             session.rollback()
             raise
