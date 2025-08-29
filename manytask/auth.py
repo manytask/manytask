@@ -12,6 +12,7 @@ from werkzeug import Response
 from manytask.abstract import AuthenticatedUser
 from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
+from manytask.utils import guess_first_last_name
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,18 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     try:
         # This is where the oath_api should be used
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        auth_user = app.auth_api.get_authenticated_user(gitlab_oauth_token["access_token"])
+        token = gitlab_oauth_token["access_token"]
+        auth_user = app.auth_api.get_authenticated_user(token)
+        rms_user = app.rms_api.get_authenticated_rms_user(token)
+
+        first_name, last_name = guess_first_last_name(rms_user)
+
+        app.storage_api.create_user_if_not_exist(
+            username=rms_user.username,
+            first_name=first_name,
+            last_name=last_name,
+            rms_id=rms_user.id,
+        )
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
         return redirect(redirect_url)
