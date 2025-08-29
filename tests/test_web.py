@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from authlib.integrations.base_client import OAuthError
+from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
 
@@ -311,16 +312,23 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
 
 
 def test_signup_get(app):
+    CSRFProtect(app)
     with app.test_request_context():
         response = app.test_client().get("/signup")
         assert response.status_code == HTTPStatus.OK
 
 
 def test_signup_post_password_mismatch(app, mock_course):
-    with app.test_request_context():
-        response = app.test_client().post(
+    CSRFProtect(app)
+    with app.test_client() as client:
+        response = client.get("/signup")
+        soup = BeautifulSoup(response.data, "html.parser")
+        csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+        response = client.post(
             "/signup",
             data={
+                "csrf_token": csrf_token,
                 "username": TEST_USERNAME,
                 "firstname": "Test",
                 "lastname": "User",
@@ -457,6 +465,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
 
 
 def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
+    CSRFProtect(app)
     data = {
         "username": TEST_USERNAME,
         "firstname": "Test",
@@ -466,12 +475,13 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
         "password2": "password",
         "secret": mock_course.registration_secret,
     }
+
     with (
         patch.object(app.rms_api, "register_new_user") as mock_register_new_user,
         patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
-        app.test_request_context(),
+        # app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
         mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
@@ -480,18 +490,22 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
             "access_token": "test_token",
             "refresh_token": "test_token",
         }
+        with app.test_client() as client:
+            response = client.get("/signup")
+            soup = BeautifulSoup(response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+            data["csrf_token"] = csrf_token
+            response = client.post(url_for("root.signup", course_name=TEST_COURSE_NAME), data=data)
+            assert response.status_code == HTTPStatus.FOUND
+            assert response.location == url_for("root.login")
 
-        response = app.test_client().post(url_for("root.signup", course_name=TEST_COURSE_NAME), data=data)
-        assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("root.login")
-
-        mock_register_new_user.assert_called_once()
-        args, _ = mock_register_new_user.call_args
-        assert args[0] == TEST_USERNAME
-        assert args[1] == "Test"
-        assert args[2] == "User"
-        assert args[3] == "test@example.com"
-        assert args[4] == "password"
+            mock_register_new_user.assert_called_once()
+            args, _ = mock_register_new_user.call_args
+            assert args[0] == TEST_USERNAME
+            assert args[1] == "Test"
+            assert args[2] == "User"
+            assert args[3] == "test@example.com"
+            assert args[4] == "password"
 
 
 def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
