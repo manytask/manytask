@@ -164,8 +164,9 @@ def signup() -> ResponseReturnValue:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
         app.logger.error(f"CSRF validation failed: {e}")
-        return render_template("signup.html", course_favicon=app.favicon,
-                               manytask_version=app.manytask_version, error_message="CSRF Error")
+        return render_template(
+            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+        )
 
     try:
         if not secrets.compare_digest(request.form["password"], request.form["password2"]):
