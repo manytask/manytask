@@ -85,7 +85,11 @@ class DataBaseApi(StorageApi):
                 models.User,
                 username=config.instance_admin_username,
                 defaults={"is_instance_admin": True},
-                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": config.instance_admin_rms_id},
+                create_defaults={
+                    "first_name": "Instance",
+                    "last_name": "Admin",
+                    "rms_id": config.instance_admin_rms_id,
+                },
             )
             session.commit()
 
