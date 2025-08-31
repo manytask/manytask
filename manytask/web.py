@@ -174,8 +174,7 @@ def signup() -> ResponseReturnValue:
 
         # register user in gitlab
         username, firstname, lastname, email = map(
-            lambda attr: request.form[attr].strip(),
-            ("username", "firstname", "lastname", "email")
+            lambda attr: request.form[attr].strip(), ("username", "firstname", "lastname", "email")
         )
         rms_user = app.rms_api.register_new_user(
             username,
