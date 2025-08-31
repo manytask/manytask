@@ -228,6 +228,9 @@ def mock_storage_api(mock_course):  # noqa: C901
         def max_score_started(self, _course_name):
             return 100
 
+        def create_user_if_not_exist(self, username: str, firstname: str, lastname: str, rms_id: int):
+            pass
+
     return MockStorageApi()
 
 
