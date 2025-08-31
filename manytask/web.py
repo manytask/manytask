@@ -173,12 +173,23 @@ def signup() -> ResponseReturnValue:
             raise Exception("Passwords don't match")
 
         # register user in gitlab
-        app.rms_api.register_new_user(
-            request.form["username"].strip(),
-            request.form["firstname"].strip(),
-            request.form["lastname"].strip(),
-            request.form["email"].strip(),
+        username, firstname, lastname, email = map(
+            lambda attr: request.form[attr].strip(),
+            ("username", "firstname", "lastname", "email")
+        )
+        rms_user = app.rms_api.register_new_user(
+            username,
+            firstname,
+            lastname,
+            email,
             request.form["password"],
+        )
+
+        app.storage_api.create_user_if_not_exist(
+            username,
+            firstname,
+            lastname,
+            rms_user.id,
         )
 
     # render template with error... if error

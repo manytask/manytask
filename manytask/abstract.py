@@ -177,7 +177,7 @@ class RmsApi(ABC):
         lastname: str,
         email: str,
         password: str,
-    ) -> None: ...
+    ) -> RmsUser: ...
 
     @abstractmethod
     def create_public_repo(

@@ -70,9 +70,9 @@ def mock_rms_api():
             return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
 
         @staticmethod
-        def register_new_user(username: str, firstname: str, lastname: str, email: str, password: str):
+        def register_new_user(username: str, firstname: str, lastname: str, email: str, password: str) -> RmsUser:
             if username == TEST_USERNAME:
-                return True
+                return RmsUser(id=TEST_USER_ID, username=username, name=f"{firstname} {lastname}")
             raise Exception("Registration failed")
 
         @staticmethod
