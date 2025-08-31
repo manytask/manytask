@@ -467,7 +467,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                 check_func(response, True)
 
 
-def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
+def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_course):
     CSRFProtect(app)
     data = {
         "username": TEST_USERNAME,
@@ -480,10 +480,11 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
     }
 
     with (
-        patch.object(app.rms_api, "register_new_user") as mock_register_new_user,
+        patch.object(app.rms_api, "register_new_user") as mock_register_new_rms_user,
         patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+        patch.object(mock_storage_api, "create_user_if_not_exist") as mock_register_new_mt_user,
         # app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
@@ -493,6 +494,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
             "access_token": "test_token",
             "refresh_token": "test_token",
         }
+        mock_register_new_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="Test User")
         with app.test_client() as client:
             response = client.get("/signup")
             soup = BeautifulSoup(response.data, "html.parser")
@@ -502,13 +504,15 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_course):
             assert response.status_code == HTTPStatus.FOUND
             assert response.location == url_for("root.login")
 
-            mock_register_new_user.assert_called_once()
-            args, _ = mock_register_new_user.call_args
-            assert args[0] == TEST_USERNAME
-            assert args[1] == "Test"
-            assert args[2] == "User"
-            assert args[3] == "test@example.com"
-            assert args[4] == "password"
+            mock_register_new_rms_user.assert_called_once_with(
+                TEST_USERNAME,
+                "Test",
+                "User",
+                "test@example.com",
+                "password",
+            )
+
+            mock_register_new_mt_user.assert_called_once_with(TEST_USERNAME, "Test", "User", TEST_USER_ID)
 
 
 def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
