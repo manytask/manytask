@@ -176,7 +176,9 @@ def report_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    rms_user, course, task, group = _validate_and_extract_params(request.form, app.rms_api, app.storage_api, course.course_name)
+    rms_user, course, task, group = _validate_and_extract_params(
+        request.form, app.rms_api, app.storage_api, course.course_name
+    )
 
     reported_score = _process_score(request.form, task.score)
     if reported_score is None:
@@ -224,7 +226,9 @@ def get_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    rms_user, _, task, group = _validate_and_extract_params(request.form, app.rms_api, app.storage_api, course.course_name)
+    rms_user, _, task, group = _validate_and_extract_params(
+        request.form, app.rms_api, app.storage_api, course.course_name
+    )
 
     student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
 

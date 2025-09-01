@@ -451,9 +451,7 @@ class DataBaseApi(StorageApi):
         self._sync_columns(course_name, config.deadlines, config.status)
         self._sync_grades_config(course_name, config.grades)
 
-    def find_task(
-        self, course_name: str, task_name: str
-    ) -> tuple[AppCourse, ManytaskGroupConfig, ManytaskTaskConfig]:
+    def find_task(self, course_name: str, task_name: str) -> tuple[AppCourse, ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
 
         Raise TaskDisabledError if task or its group is disabled
