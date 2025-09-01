@@ -198,7 +198,7 @@ def mock_storage_api(mock_course):  # noqa: C901
                 raise KeyError("Task not found")
             if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
                 raise TaskDisabledError(f"Task {task_name} is disabled")
-            return None, None
+            return None, None, None
 
         @staticmethod
         def get_now_with_timezone(_course_name):

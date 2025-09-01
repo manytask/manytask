@@ -14,6 +14,7 @@ from werkzeug.exceptions import HTTPException
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
+from manytask.config import ManytaskDeadlinesType
 from manytask.course import CourseStatus
 from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.glab import GitLabApiException
@@ -175,7 +176,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 raise KeyError("Task not found")
             if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
                 raise TaskDisabledError(f"Task {task_name} is disabled")
-            return mock_group, mock_task
+            return mock_course, mock_group, mock_task
 
         @staticmethod
         def get_now_with_timezone(_course_name):
@@ -251,6 +252,7 @@ def mock_course():
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"
             self.gitlab_default_branch = "main"
+            self.deadlines_type = ManytaskDeadlinesType.HARD
 
     return MockCourse()
 
@@ -303,16 +305,14 @@ def test_parse_flags_past_date():
 
 
 def test_update_score_basic(app):
-    group = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[0]
-    task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[1]
+    _, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
     updated_score = 80
     score = _update_score(group, task, updated_score, "", 0, datetime.now(tz=ZoneInfo("UTC")))
     assert score == updated_score
 
 
 def test_update_score_with_old_score(app):
-    group = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[0]
-    task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[1]
+    _, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
     updated_score = 70
     old_score = 80
     score = _update_score(group, task, updated_score, "", old_score, datetime.now(tz=ZoneInfo("UTC")))
@@ -467,8 +467,7 @@ def test_parse_flags_invalid_date(app):
 
 
 def test_update_score_after_deadline(app):
-    group = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)[0]
-    task = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)[1]
+    _, group, task = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)
     score = 100
     flags = ""
     old_score = 0
@@ -709,7 +708,7 @@ def test_validate_and_extract_params_get_student_by_id(app):
     form_data = {"user_id": TEST_USER_ID, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
-    rms_user, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+    rms_user, _, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert rms_user.id == TEST_USER_ID
     assert rms_user.username == TEST_USERNAME
@@ -723,7 +722,7 @@ def test_validate_and_extract_params_get_student_by_username(app):
     form_data = {"username": TEST_USERNAME, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
-    rms_user, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+    rms_user, _, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert rms_user.id == TEST_USER_ID
     assert rms_user.username == TEST_USERNAME

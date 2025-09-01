@@ -21,7 +21,7 @@ from manytask.config import (
     ManytaskUiConfig,
 )
 from manytask.course import Course as ManytaskCourse
-from manytask.course import CourseConfig, CourseStatus
+from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests.constants import (
@@ -138,6 +138,7 @@ def first_course_config():
         status=CourseStatus.CREATED,
         task_url_template="https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME",
         links={"TG Channel": "https://t.me/joinchat/", "TG Chat": "https://t.me/joinchat/"},
+        deadlines_type=ManytaskDeadlinesType.HARD,
     )
 
 
@@ -178,6 +179,7 @@ def second_course_config():
         status=CourseStatus.CREATED,
         task_url_template="https://gitlab.test.com/another_test/$GROUP_NAME/$TASK_NAME",
         links={"TG Chat": "https://t.me/joinchat2/"},
+        deadlines_type=ManytaskDeadlinesType.HARD,
     )
 
 
@@ -1196,10 +1198,11 @@ def check_find_task(
                 assert str(e.value) == f"Task {task.name} group {group.name} is disabled"
                 continue
 
-            found_group, found_task = db_api.find_task(course_name, task.name)
+            found_course, found_group, found_task = db_api.find_task(course_name, task.name)
 
             assert found_group == group
             assert found_task == task
+            assert found_course.course_name == course_name
 
 
 @pytest.mark.parametrize("course_number", [1, 2])

@@ -351,21 +351,7 @@ class DataBaseApi(StorageApi):
             with self._session_create() as session:
                 course: models.Course = self._get(session, models.Course, name=course_name)
 
-            return AppCourse(
-                AppCourseConfig(
-                    course_name=course_name,
-                    gitlab_course_group=course.gitlab_course_group,
-                    gitlab_course_public_repo=course.gitlab_course_public_repo,
-                    gitlab_course_students_group=course.gitlab_course_students_group,
-                    gitlab_default_branch=course.gitlab_default_branch,
-                    registration_secret=course.registration_secret,
-                    token=course.token,
-                    show_allscores=course.show_allscores,
-                    status=course.status,
-                    task_url_template=course.task_url_template,
-                    links=course.links,
-                )
-            )
+            return course.to_app_course()
         except NoResultFound:
             return None
 
@@ -398,6 +384,7 @@ class DataBaseApi(StorageApi):
                     gitlab_default_branch=settings_config.gitlab_default_branch,
                     task_url_template=settings_config.task_url_template,
                     links=settings_config.links,
+                    deadlines_type=settings_config.deadlines_type,
                 )
                 return True
 
@@ -430,6 +417,7 @@ class DataBaseApi(StorageApi):
                         "status": settings_config.status,
                         "task_url_template": settings_config.task_url_template,
                         "links": settings_config.links,
+                        "deadlines_type": settings_config.deadlines_type,
                     },
                     name=settings_config.course_name,
                 )
@@ -463,7 +451,9 @@ class DataBaseApi(StorageApi):
         self._sync_columns(course_name, config.deadlines, config.status)
         self._sync_grades_config(course_name, config.grades)
 
-    def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
+    def find_task(
+        self, course_name: str, task_name: str
+    ) -> tuple[AppCourse, ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
 
         Raise TaskDisabledError if task or its group is disabled
@@ -521,7 +511,7 @@ class DataBaseApi(StorageApi):
             is_special=task.is_special,
         )
 
-        return group_config, task_config
+        return course.to_app_course(), group_config, task_config
 
     def get_groups(
         self,

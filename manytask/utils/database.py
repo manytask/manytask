@@ -1,6 +1,6 @@
 from typing import Any
 
-from .main import CustomFlask
+from manytask.main import CustomFlask
 
 
 def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any]:
