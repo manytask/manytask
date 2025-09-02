@@ -12,6 +12,8 @@ from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
+from manytask.course import ManytaskDeadlinesType
+
 from .auth import handle_oauth_callback, requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
@@ -357,6 +359,7 @@ def create_course() -> ResponseReturnValue:
             status=CourseStatus.CREATED,
             task_url_template="",
             links={},
+            deadlines_type=ManytaskDeadlinesType.HARD,
         )
 
         if app.storage_api.create_course(settings):
@@ -402,6 +405,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             status=CourseStatus(request.form["course_status"]),
             task_url_template=course.task_url_template,
             links=course.links,
+            deadlines_type=course.deadlines_type,
         )
 
         if app.storage_api.edit_course(updated_settings):
