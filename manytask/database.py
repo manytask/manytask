@@ -13,7 +13,7 @@ from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from pydantic import AnyUrl
 from sqlalchemy import and_, create_engine
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import func
 
 from . import models
@@ -28,6 +28,7 @@ from .config import (
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
 from .course import CourseStatus
+from .models import Course, Deadline, Grade, Task, TaskGroup, UserOnCourse
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -273,17 +274,40 @@ class DataBaseApi(StorageApi):
         """
 
         with self._session_create() as session:
-            tasks = self._get_all_tasks(session, course_name, enabled=True, started=True)
+            users_on_courses_count = (
+                session.query(func.count(UserOnCourse.id))
+                .join(Course, Course.id == UserOnCourse.course_id)
+                .filter(Course.name == course_name)
+                .scalar()
+            )
 
-            users_on_courses_count = self._get_course_users_on_courses_count(session, course_name)
-            tasks_stats: dict[str, float] = {}
-            for task in tasks:
-                if users_on_courses_count == 0:
-                    tasks_stats[task.name] = 0
-                else:
-                    tasks_stats[task.name] = self._get_task_submits_count(session, task.id) / users_on_courses_count
+            task_submits = (
+                session.query(
+                    Task.id,
+                    Task.name,
+                    func.count(Grade.id).label("submits_count"),
+                )
+                .join(TaskGroup, Task.group_id == TaskGroup.id)
+                .join(Course, Course.id == TaskGroup.course_id)
+                .join(Deadline, TaskGroup.deadline_id == Deadline.id)
+                .outerjoin(
+                    Grade,
+                    and_(Grade.task_id == Task.id),
+                )
+                .filter(
+                    Course.name == course_name,
+                    Task.enabled.is_(True),
+                    TaskGroup.enabled.is_(True),
+                    self.get_now_with_timezone(course_name) >= models.Deadline.start,
+                )
+                .group_by(Task.id, Task.name)
+                .all()
+            )
 
-        return tasks_stats
+            return {
+                task_name: 0 if users_on_courses_count == 0 else submits_count / users_on_courses_count
+                for task_id, task_name, submits_count in task_submits
+            }
 
     def get_scores_update_timestamp(self, course_name: str) -> str:
         """Method(deprecated) for getting last cached scores update timestamp
@@ -487,7 +511,7 @@ class DataBaseApi(StorageApi):
                 raise TaskDisabledError(f"Task {task_name} group {task.group.name} is disabled")
 
             group = task.group
-            group_tasks = group.tasks.all()
+            group_tasks = group.tasks
             group_deadlines = group.deadline
 
         group_config = ManytaskGroupConfig(
@@ -547,7 +571,13 @@ class DataBaseApi(StorageApi):
             course = self._get(session, models.Course, name=course_name)
 
             query = (
-                session.query(models.TaskGroup).join(models.Deadline).filter(models.TaskGroup.course_id == course.id)
+                session.query(models.TaskGroup)
+                .join(models.Deadline)
+                .filter(models.TaskGroup.course_id == course.id)
+                .options(
+                    joinedload(models.TaskGroup.deadline),
+                    selectinload(models.TaskGroup.tasks).selectinload(models.Task.grades),
+                )
             )
 
             if enabled is not None:
@@ -1264,7 +1294,12 @@ class DataBaseApi(StorageApi):
         started: bool | None = None,
         only_bonus: bool = False,
     ) -> Iterable["models.Grade"]:
-        query = user_on_course.grades.join(models.Task).join(models.TaskGroup).join(models.Deadline)
+        query = (
+            user_on_course.grades.options(selectinload(models.Grade.task))
+            .join(models.Task)
+            .join(models.TaskGroup)
+            .join(models.Deadline)
+        )
 
         if enabled is not None:
             query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
@@ -1304,19 +1339,21 @@ class DataBaseApi(StorageApi):
             .join(models.TaskGroup)
             .join(models.Deadline)
             .filter(models.TaskGroup.course_id == course.id)
+            .options(selectinload(models.Task.grades))
         )
 
         if enabled is not None:
             query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
 
         if is_bonus is not None:
-            query = query.filter(and_(models.Task.is_bonus == is_bonus))
+            query = query.filter(models.Task.is_bonus == is_bonus)
 
         if started is not None:
+            now = self.get_now_with_timezone(course_name)
             if started:
-                query = query.filter(self.get_now_with_timezone(course_name) >= models.Deadline.start)
+                query = query.filter(now >= models.Deadline.start)
             else:
-                query = query.filter(self.get_now_with_timezone(course_name) < models.Deadline.start)
+                query = query.filter(now < models.Deadline.start)
 
         return query.all()
 
