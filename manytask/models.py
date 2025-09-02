@@ -160,7 +160,7 @@ class Course(Base):
     deadlines_type: Mapped[ManytaskDeadlinesType] = mapped_column(
         Enum(ManytaskDeadlinesType, name="deadlines_type", native_enum=False),
         default=ManytaskDeadlinesType.HARD,
-        server_default="hard",
+        server_default="HARD",
     )
 
     __table_args__ = (

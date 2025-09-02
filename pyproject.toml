@@ -141,9 +141,3 @@ max-args = 7
 
 [tool.ruff.lint.isort]
 known-first-party = ["manytask", "tests"]
-
-[tool.alembic]
-script_location = "%(here)s/manytask/migrations"
-prepend_sys_path = [
-    "."
-]
