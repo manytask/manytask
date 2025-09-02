@@ -67,9 +67,7 @@ class ManytaskGroupConfig(BaseModel):
         return list(zip(map(self.get_deadline, [*self.steps.values(), self.end]), [1.0, *self.steps.keys()]))
 
     def get_percents_after_deadline(self) -> list[tuple[datetime, float]]:
-        return list(
-            zip(map(self.get_deadline, [self.start, *self.steps.values()]), [1.0, *self.steps.keys()])
-        )
+        return list(zip(map(self.get_deadline, [self.start, *self.steps.values()]), [1.0, *self.steps.keys()]))
 
     def get_displayed_deadlines(self, deadlines_type: ManytaskDeadlinesType) -> list[tuple[datetime, float]]:
         if deadlines_type == ManytaskDeadlinesType.HARD:
