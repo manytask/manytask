@@ -97,7 +97,6 @@ class ManytaskGroupConfig(BaseModel):
                 p2=((date - start).total_seconds(), percent),
                 x=(now - start).total_seconds(),
             )
-            break
 
         # None if now is before start, ok if last_point[1] is zero
         return (last_point and last_point[1]) or 0.0
