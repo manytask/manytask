@@ -16,7 +16,6 @@ from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
 
-
 from . import models
 from .abstract import StorageApi, StoredUser
 from .config import (
