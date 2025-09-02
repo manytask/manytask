@@ -11,10 +11,10 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from pydantic import AnyUrl
-from sqlalchemy import and_, create_engine
+from sqlalchemy import and_, create_engine, select
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.sql.functions import func
+from sqlalchemy.sql.functions import coalesce, func
 
 from . import models
 from .abstract import StorageApi, StoredUser
@@ -28,6 +28,7 @@ from .config import (
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
 from .course import CourseStatus
+from .models import Course, Grade, Task, TaskGroup, User, UserOnCourse
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -64,7 +65,7 @@ class DataBaseApi(StorageApi):
         self.database_url = config.database_url
         self.apply_migrations = config.apply_migrations
 
-        self.engine = create_engine(self.database_url, echo=False)
+        self.engine = create_engine(self.database_url, echo=True, echo_pool="debug")
 
         if config.session_factory is None:
             self._session_create: Callable[[], Session] = sessionmaker(bind=self.engine)
@@ -224,22 +225,38 @@ class DataBaseApi(StorageApi):
             session.commit()
 
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
-        """Method for getting all users scores with names
-        :param course_name: course name
-        :return: dict with the usernames as keys and a tuple of (first_name, last_name) and scores dict as values
-        """
+        """Get all users' scores with names for the given course."""
 
         with self._session_create() as session:
-            all_users = self._get_all_users_on_course(session, course_name)
-
-        scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
-        for user in all_users:
-            scores_and_names[user.username] = (
-                self.get_scores(course_name, user.username),
-                (user.first_name, user.last_name),
+            statement = (
+                select(
+                    User.username,
+                    User.first_name,
+                    User.last_name,
+                    Task.name,
+                    coalesce(Grade.score, 0),
+                )
+                .join(UserOnCourse, UserOnCourse.user_id == User.id)
+                .join(Course, Course.id == UserOnCourse.course_id)
+                .outerjoin(Grade, (Grade.user_on_course_id == UserOnCourse.id))
+                .outerjoin(Task, (Task.id == Grade.task_id) & (Task.enabled.is_(True)))
+                .outerjoin(TaskGroup, (TaskGroup.id == Task.group_id) & (TaskGroup.enabled.is_(True)))
+                .where(
+                    Course.name == course_name,
+                )
             )
 
-        return scores_and_names
+            rows = session.execute(statement).all()
+
+            scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
+
+            for username, first_name, last_name, task_name, score in rows:
+                if username not in scores_and_names:
+                    scores_and_names[username] = ({}, (first_name, last_name))
+                if task_name is not None:
+                    scores_and_names[username][0][task_name] = score
+
+            return scores_and_names
 
     def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig:
         """Method for getting config with grades for the course
@@ -1279,15 +1296,6 @@ class DataBaseApi(StorageApi):
             query = query.filter(models.Task.is_bonus)
 
         return query.all()
-
-    @staticmethod
-    def _get_all_users_on_course(
-        session: Session,
-        course_name: str,
-    ) -> Iterable["models.User"]:
-        course = DataBaseApi._get(session, models.Course, name=course_name)
-
-        return [user_on_course.user for user_on_course in course.users_on_courses.all()]
 
     def _get_all_tasks(
         self,
