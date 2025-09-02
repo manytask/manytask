@@ -67,6 +67,7 @@ def _parse_flags(flags: str | None) -> timedelta:
     return extra_time
 
 
+# ruff: noqa PLR0913
 def _update_score(
     course: Course,
     group: ManytaskGroupConfig,

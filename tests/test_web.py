@@ -14,7 +14,7 @@ from flask_wtf import CSRFProtect
 
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import bp as api_bp
-from manytask.course import CourseStatus
+from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import TaskDisabledError
 from manytask.web import admin_bp, course_bp, root_bp
 from tests.constants import (
@@ -248,6 +248,7 @@ def mock_course():
             self.gitlab_default_branch = "main"
             self.task_url_template = "test_task_url_template"
             self.links = {}
+            self.deadlines_type = ManytaskDeadlinesType.HARD
 
     return MockCourse()
 

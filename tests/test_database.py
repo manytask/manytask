@@ -22,7 +22,8 @@ from tests.constants import (
 )
 
 # Mocks for tests
-from tests.test_db_api import (  # noqa: F401
+# ruff: noqa F401
+from tests.test_db_api import (
     db_api,
     db_api_with_two_initialized_courses,
     edited_first_course_config,
