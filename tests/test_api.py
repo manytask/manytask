@@ -1,4 +1,8 @@
+from typing import Callable
+from manytask.config import ManytaskTaskConfig
+from manytask.config import ManytaskGroupConfig
 import os
+from pytest import approx
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -88,7 +92,7 @@ def mock_group(mock_task):
             self.tasks = [mock_task]
 
         @staticmethod
-        def get_current_percent_multiplier(now):
+        def get_current_percent_multiplier(now, deadlines_type):
             return 1.0
 
         def get_tasks(self):
@@ -305,18 +309,105 @@ def test_parse_flags_past_date():
 
 
 def test_update_score_basic(app):
-    _, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
+    course, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
     updated_score = 80
-    score = _update_score(group, task, updated_score, "", 0, datetime.now(tz=ZoneInfo("UTC")))
+    score = _update_score(course, group, task, updated_score, "", 0, datetime.now(tz=ZoneInfo("UTC")))
     assert score == updated_score
 
 
 def test_update_score_with_old_score(app):
-    _, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
+    course, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
     updated_score = 70
     old_score = 80
-    score = _update_score(group, task, updated_score, "", old_score, datetime.now(tz=ZoneInfo("UTC")))
+    score = _update_score(course, group, task, updated_score, "", old_score, datetime.now(tz=ZoneInfo("UTC")))
     assert score == old_score  # Should keep higher old score
+
+
+def create_percent_multiplier_calculator(
+    start: datetime,
+    duration: timedelta,
+    steps: dict[float, datetime | timedelta],
+    deadlines_type: ManytaskDeadlinesType,
+) -> Callable:
+    group = ManytaskGroupConfig(
+        group="test",
+        enabled=True,
+        start=start,
+        end=start + duration,
+        steps={
+            1.0: timedelta(days=2),
+            0.5: start + timedelta(days=4),
+            0.25: start + timedelta(days=8),
+        },
+        tasks=[
+            ManytaskTaskConfig(
+                task=TEST_TASK_NAME,
+                score=100,
+            )
+        ],
+    )
+
+    def get_percent_multiplier(**kwargs) -> float:
+        return group.get_current_percent_multiplier(start + timedelta(**kwargs), deadlines_type)
+
+    return get_percent_multiplier
+
+
+def test_interpolated_scores(mock_task):
+    start = datetime(2025, 9, 1)
+    get_percent_multiplier = create_percent_multiplier_calculator(
+        start=start,
+        duration=timedelta(days=10),
+        steps={
+            1.0: timedelta(days=2),
+            0.5: start + timedelta(days=4),
+            0.25: start + timedelta(days=8),
+        },
+        deadlines_type=ManytaskDeadlinesType.INTERPOLATE,
+    )
+
+    assert get_percent_multiplier(days=0) == approx(1.0)
+    assert get_percent_multiplier(days=1) == approx(1.0)
+    assert get_percent_multiplier(days=2) == approx(1.0)
+    assert get_percent_multiplier(days=2, hours=9, minutes=36) == approx(0.9)
+    assert get_percent_multiplier(days=3) == approx(0.75)
+    assert get_percent_multiplier(days=4) == approx(0.5)
+    assert get_percent_multiplier(days=5) == approx(0.4375)
+    assert get_percent_multiplier(days=6) == approx(0.375)
+    assert get_percent_multiplier(days=7) == approx(0.3125)
+    assert get_percent_multiplier(days=8) == approx(0.25)
+    assert get_percent_multiplier(days=9) == approx(0.25)
+    assert get_percent_multiplier(days=9, hours=23, minutes=59, seconds=59) == approx(0.25)
+    assert get_percent_multiplier(days=10, seconds=1) == approx(0)
+
+
+def test_hard_scores(mock_task):
+    start = datetime(2025, 9, 1)
+    get_percent_multiplier = create_percent_multiplier_calculator(
+        start=start,
+        duration=timedelta(days=10),
+        steps={
+            1.0: timedelta(days=2),
+            0.5: start + timedelta(days=4),
+            0.25: start + timedelta(days=8),
+        },
+        deadlines_type=ManytaskDeadlinesType.HARD,
+    )
+
+    assert get_percent_multiplier(days=0) == approx(1.0)
+    assert get_percent_multiplier(days=1) == approx(1.0)
+    assert get_percent_multiplier(days=2) == approx(1.0)
+    assert get_percent_multiplier(days=3) == approx(1.0)
+    assert get_percent_multiplier(days=3, hours=23, minutes=59, seconds=59) == approx(1.0)
+    assert get_percent_multiplier(days=4, seconds=1) == approx(0.5)
+    assert get_percent_multiplier(days=5) == approx(0.5)
+    assert get_percent_multiplier(days=6) == approx(0.5)
+    assert get_percent_multiplier(days=7) == approx(0.5)
+    assert get_percent_multiplier(days=7, hours=23, minutes=59, seconds=59) == approx(0.5)
+    assert get_percent_multiplier(days=8, seconds=1) == approx(0.25)
+    assert get_percent_multiplier(days=9) == approx(0.25)
+    assert get_percent_multiplier(days=9, hours=23, minutes=59, seconds=59) == approx(0.25)
+    assert get_percent_multiplier(days=10, seconds=1) == approx(0)
 
 
 def test_report_score_missing_task(app):
@@ -467,15 +558,15 @@ def test_parse_flags_invalid_date(app):
 
 
 def test_update_score_after_deadline(app):
-    _, group, task = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)
+    course, group, task = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)
     score = 100
     flags = ""
     old_score = 0
     submit_time = datetime.now(ZoneInfo("UTC"))
 
     # Test with check_deadline=True
-    result = _update_score(group, task, score, flags, old_score, submit_time, check_deadline=True)
-    assert result == score * group.get_current_percent_multiplier(submit_time)
+    result = _update_score(course, group, task, score, flags, old_score, submit_time, check_deadline=True)
+    assert result == score * group.get_current_percent_multiplier(submit_time, course.deadlines_type)
 
 
 def test_update_config_success(app):

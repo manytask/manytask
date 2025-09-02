@@ -68,6 +68,7 @@ def _parse_flags(flags: str | None) -> timedelta:
 
 
 def _update_score(
+    course: Course,
     group: ManytaskGroupConfig,
     task: ManytaskTaskConfig,
     score: int,
@@ -82,7 +83,10 @@ def _update_score(
     if check_deadline:
         extra_time = _parse_flags(flags)
 
-        multiplier = group.get_current_percent_multiplier(now=submit_time - extra_time)
+        multiplier = group.get_current_percent_multiplier(
+            now=submit_time - extra_time,
+            deadlines_type=course.deadlines_type,
+        )
         score = int(score * multiplier)
 
     return max(old_score, score)
@@ -201,6 +205,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
 
     update_function = functools.partial(
         _update_score,
+        course,
         group,
         task,
         reported_score,

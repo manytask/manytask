@@ -68,7 +68,7 @@ class ManytaskGroupConfig(BaseModel):
 
     def get_percents_after_deadline(self) -> list[tuple[datetime, float]]:
         return list(
-            zip(map(self.get_deadline, [self.start, *self.steps.values(), self.end]), [1.0, *self.steps.keys(), 0.0])
+            zip(map(self.get_deadline, [self.start, *self.steps.values()]), [1.0, *self.steps.keys()])
         )
 
     def get_deadline(self, date_or_delta: datetime | timedelta) -> datetime:
@@ -77,6 +77,8 @@ class ManytaskGroupConfig(BaseModel):
         return self.start + date_or_delta
 
     def get_current_percent_multiplier(self, now: datetime, deadlines_type: ManytaskDeadlinesType) -> float:
+        if now >= self.get_deadline(self.end):
+            return 0.0
         last_point = None
         for date, percent in self.get_percents_after_deadline():
             if now < date:
