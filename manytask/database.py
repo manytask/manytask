@@ -443,6 +443,7 @@ class DataBaseApi(StorageApi):
                 defaults={
                     "task_url_template": config.ui.task_url_template,
                     "links": config.ui.links,
+                    "deadlines_type": config.deadlines.deadlines,
                 },
                 name=course_name,
             )
