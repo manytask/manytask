@@ -1,11 +1,8 @@
-from typing import Callable
-from manytask.config import ManytaskTaskConfig
-from manytask.config import ManytaskGroupConfig
 import os
-from pytest import approx
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from typing import Callable
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -13,12 +10,13 @@ import pytest
 import yaml
 from dotenv import load_dotenv
 from flask import Flask, json, url_for
+from pytest import approx
 from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
-from manytask.config import ManytaskDeadlinesType
+from manytask.config import ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
 from manytask.course import CourseStatus
 from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.glab import GitLabApiException
