@@ -85,19 +85,21 @@ class ManytaskGroupConfig(BaseModel):
             return 0.0
         last_point = None
         for date, percent in self.get_percents_after_deadline():
-            if now < date:
-                if deadlines_type == ManytaskDeadlinesType.INTERPOLATE:
-                    if last_point is None:
-                        break
-                    start = last_point[0]
-                    return lerp(
-                        p1=(0.0, last_point[1]),
-                        p2=((date - start).total_seconds(), percent),
-                        x=(now - start).total_seconds(),
-                    )
+            if now >= date:
+                last_point = (date, percent)
+                continue
+
+            if deadlines_type == ManytaskDeadlinesType.HARD or last_point is None:
                 break
-            last_point = (date, percent)
-        # None if now is before start
+            start = last_point[0]
+            return lerp(
+                p1=(0.0, last_point[1]),
+                p2=((date - start).total_seconds(), percent),
+                x=(now - start).total_seconds(),
+            )
+            break
+
+        # None if now is before start, ok if last_point[1] is zero
         return (last_point and last_point[1]) or 0.0
 
     def replace_timezone(self, timezone: ZoneInfo) -> None:
