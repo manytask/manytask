@@ -309,11 +309,9 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
-    table_data = get_database_table_data(app, course.course_name)
 
     return render_template(
         "database.html",
-        table_data=table_data,
         course_name=course.course_name,
         scores=scores,
         bonus_score=bonus_score,
@@ -329,7 +327,6 @@ def show_database(course_name: str) -> ResponseReturnValue:
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=app.manytask_version,
         courses=courses,
-        max_score=table_data["max_score"],
     )
 
 

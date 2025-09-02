@@ -58,6 +58,7 @@
 
 
     <script>
+        let maxScore = 0;
         let currentEditCell = null;
         let editModal = null;
         const mincolwidth = 30;
@@ -125,7 +126,6 @@
                                 totalScore += rowData.scores[key];
                             }
                         }
-                        const maxScore = {{ max_score }}
                         const newPercent = maxScore === 0 ? 0 : totalScore / maxScore * 100;
                         row.update({total_score: totalScore});
                         row.update({percent: newPercent});
@@ -285,6 +285,7 @@
                     }
 
                     const taskGroups = {};
+                    maxScore = data.max_score;
 
                     data.tasks.forEach(task => {
                         const groupName = task.group || 'ungrouped';
