@@ -17,7 +17,6 @@ from manytask.course import ManytaskDeadlinesType
 from .auth import handle_oauth_callback, requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.database import get_database_table_data
 from .utils.flask import check_admin, get_courses
 from .utils.generic import generate_token_hex, guess_first_last_name
 
