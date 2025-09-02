@@ -65,7 +65,7 @@ class DataBaseApi(StorageApi):
         self.database_url = config.database_url
         self.apply_migrations = config.apply_migrations
 
-        self.engine = create_engine(self.database_url, echo=True, echo_pool="debug")
+        self.engine = create_engine(self.database_url, echo=False)
 
         if config.session_factory is None:
             self._session_create: Callable[[], Session] = sessionmaker(bind=self.engine)
