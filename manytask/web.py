@@ -144,6 +144,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         is_course_admin=student_course_admin,
         cache_time=cache_delta,
         courses=courses,
+        deadlines_type=course.deadlines_type,
     )
 
 

@@ -71,6 +71,12 @@ class ManytaskGroupConfig(BaseModel):
             zip(map(self.get_deadline, [self.start, *self.steps.values()]), [1.0, *self.steps.keys()])
         )
 
+    def get_displayed_deadlines(self, deadlines_type: ManytaskDeadlinesType) -> list[tuple[datetime, float]]:
+        if deadlines_type == ManytaskDeadlinesType.HARD:
+            return self.get_percents_before_deadline()
+        else:
+            return self.get_percents_after_deadline()[1:]
+
     def get_deadline(self, date_or_delta: datetime | timedelta) -> datetime:
         if isinstance(date_or_delta, datetime):
             return date_or_delta
