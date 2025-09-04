@@ -1171,7 +1171,7 @@ class DataBaseApi(StorageApi):
         instance = DataBaseApi._get(session, model, **kwargs)
 
         if defaults:
-            logger.debug(f"Updating {model.__name__} {kwargs} with defaults: {defaults}")
+            logger.debug(f"Updating {model.__name__} {kwargs}")
             for key, value in defaults.items():
                 setattr(instance, key, value)
             session.commit()
@@ -1325,7 +1325,9 @@ class DataBaseApi(StorageApi):
             )
         except Exception:
             session.rollback()
-            logger.exception(f"Failed to get or create grade for user_on_course_id={user_on_course_id}, task_id={task_id}")
+            logger.exception(
+                f"Failed to get or create grade for user_on_course_id={user_on_course_id}, task_id={task_id}"
+            )
             raise
 
     @staticmethod
