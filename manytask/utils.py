@@ -5,12 +5,14 @@ from flask import session, url_for
 from manytask.abstract import RmsUser
 from manytask.main import CustomFlask
 
+
 def sanitize_log_data(data: str | None) -> str | None:
     """Sanitize form data."""
     if data is None:
         return None
     sanitized_data = data.replace("\r", "").replace("\n", "")
     return sanitized_data
+
 
 def generate_token_hex(bytes_count: int = 24) -> str:
     return secrets.token_hex(nbytes=bytes_count)
