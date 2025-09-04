@@ -142,7 +142,7 @@ class GitLabApi(RmsApi, AuthApi):
         logger.info(f"Checking if project exists path={gitlab_project_path}")
 
         for project in self._gitlab.projects.list(get_all=True, search=project_name):
-            logger.info(f"Found project candidate path={project.path_with_namespace}")
+            logger.debug(f"Found project candidate path={project.path_with_namespace}")
 
             # Because of implicit conversion
             # TODO: make global problem solve
