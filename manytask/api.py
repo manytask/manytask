@@ -21,6 +21,7 @@ from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .database_utils import get_database_table_data
 from .main import CustomFlask
+from .utils import sanitize_log_data
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
@@ -140,20 +141,20 @@ def _validate_and_extract_params(
     try:
         group, task = storage_api.find_task(course_name, task_name)
     except (KeyError, TaskDisabledError):
-        logger.warning(f"Task not found or disabled: {task_name}")
+        logger.warning(f"Task not found or disabled: {sanitize_log_data(task_name)}")
         abort(HTTPStatus.NOT_FOUND, f"There is no task with name `{task_name}` (or it is closed for submission)")
 
     return rms_user, task, group
 
 
 def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetime) -> datetime:
-    logger.debug(f"submit_time_str={submit_time_str}")
+    """Process and validate submit time."""
     submit_time = None
     if submit_time_str:
         try:
             submit_time = datetime.strptime(submit_time_str, "%Y-%m-%d %H:%M:%S%z")
         except ValueError:
-            logger.warning(f"Invalid submit_time format: {submit_time_str}")
+            logger.warning(f"Invalid submit_time format: {sanitize_log_data(submit_time_str)}")
             submit_time = None
 
     submit_time = submit_time or now_with_timezone
@@ -168,7 +169,7 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         return None
 
     score_str = form_data["score"]
-    logger.debug(f"Raw score input: {score_str}")
+    logger.debug(f"Raw score input: {sanitize_log_data(score_str)}")
     try:
         min_score = 0.0
         max_score = 2.0
@@ -350,7 +351,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     username = data["username"]
     new_scores = data["scores"]
-    logger.info(f"Updating scores for user={username}: {new_scores}")
+    logger.info(f"Updating scores for user={sanitize_log_data(username)}: {sanitize_log_data(new_scores)}")
 
     try:
         for task_name, new_score in new_scores.items():
@@ -361,7 +362,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )
-        logger.info(f"Successfully updated scores for user={username}")
+        logger.info(f"Successfully updated scores for user={sanitize_log_data(username)}")
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error updating database: {str(e)}")

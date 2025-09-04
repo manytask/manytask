@@ -12,7 +12,7 @@ from werkzeug import Response
 from manytask.abstract import AuthenticatedUser
 from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
-from manytask.utils import guess_first_last_name
+from manytask.utils import guess_first_last_name, sanitize_log_data
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     """Process oauth2 callback with code for auth, if success set auth session and sync user's data to database"""
 
     redirect_url = request.args.get("state") or url_for("root.index")
-    logger.debug(f"Processing callback, redirect_url={redirect_url}")
+    logger.debug(f"Processing callback, redirect_url={sanitize_log_data(redirect_url)}")
 
     try:
         # This is where the oath_api should be used
