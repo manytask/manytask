@@ -518,12 +518,8 @@ class DataBaseApi(StorageApi):
                 raise KeyError(f"Task {task_name} not found")
 
             if not task.enabled:
-                logger.warning(f"Task '{task_name}' is disabled in course '{course_name}'")
                 raise TaskDisabledError(f"Task {task_name} is disabled")
             if not task.group.enabled:
-                logger.warning(
-                    f"Task group '{task.group.name}' for task '{task_name}' is disabled in course '{course_name}'"
-                )
                 raise TaskDisabledError(f"Task {task_name} group {task.group.name} is disabled")
 
             group = task.group
@@ -688,7 +684,7 @@ class DataBaseApi(StorageApi):
                 logger.info(f"User '{username}' is enrolled in course '{course_name}'")
                 return True
             except Exception:
-                logger.warning(f"User '{username}' is NOT enrolled in course '{course_name}'")
+                logger.warning(f"User '{username}' isn't enrolled in course '{course_name}'")
                 return False
 
     def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None:
@@ -1098,15 +1094,12 @@ class DataBaseApi(StorageApi):
                 command.upgrade(alembic_cfg, "head")  # models.Base.metadata.create_all(self.engine)
             logger.info("Migrations applied successfully")
         except IntegrityError as e:  # if tables are created concurrently
-            logger.warning(f"IntegrityError during migrations: {e}")
             if not isinstance(e.orig, UniqueViolation):
                 raise
         except ProgrammingError as e:  # if tables are created concurrently
-            logger.warning(f"ProgrammingError during migrations: {e}")
             if not isinstance(e.orig, DuplicateColumn):
                 raise
         except DuplicateTable:  # if tables are created concurrently
-            logger.warning("DuplicateTable detected, ignoring")
             pass
 
     def _get_or_create_user_on_course(
