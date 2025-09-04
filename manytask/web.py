@@ -62,7 +62,10 @@ def login_finish() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     oauth: OAuth = app.oauth
 
-    return handle_oauth_callback(oauth, app)
+    result = handle_oauth_callback(oauth, app)
+    if "gitlab" in session:
+        logger.info(f"User {session['gitlab']['username']} successfully authenticated")
+    return result
 
 
 @root_bp.route("/logout")
@@ -189,6 +192,7 @@ def signup() -> ResponseReturnValue:
             lastname,
             rms_user.id,
         )
+        logger.info(f"Successfully registered new user: {username}")
 
     # render template with error... if error
     except Exception as e:
@@ -246,6 +250,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
     # Create use if needed
     try:
         app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        logger.info(f"Successfully created project for user {rms_user.username} in course {course.course_name}")
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
         return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
@@ -354,6 +359,7 @@ def create_course() -> ResponseReturnValue:
         )
 
         if app.storage_api.create_course(settings):
+            logger.info(f"Successfully created new course: {settings.course_name}")
             return redirect(url_for("course.course_page", course_name=settings.course_name))
 
         return render_template(
@@ -399,6 +405,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         )
 
         if app.storage_api.edit_course(updated_settings):
+            logger.info(f"Successfully updated course settings for: {course_name}")
             return redirect(url_for("course.course_page", course_name=course_name))
 
         return render_template("edit_course.html", course=updated_settings, error_message="Error while updating course")
@@ -467,6 +474,7 @@ def update_profile() -> ResponseReturnValue:
         abort(HTTPStatus.FORBIDDEN)
 
     app.storage_api.update_user_profile(request_username, new_first_name, new_last_name)
+    logger.info(f"Successfully updated profile for user: {request_username}")
 
     referrer = request.referrer
     if referrer:

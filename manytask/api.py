@@ -32,17 +32,25 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         app: CustomFlask = current_app  # type: ignore
 
         course_name = kwargs["course_name"]
+
+        logger.debug(f"Checking token for course={course_name}")
+
         course = app.storage_api.get_course(course_name)
         if course is None:
+            logger.warning(f"Course not found: {course_name}")
             abort(HTTPStatus.NOT_FOUND, "Course not found")
 
         course_token = course.token
         token = request.form.get("token", request.headers.get("Authorization", ""))
         if not token or not course_token:
+            logger.warning(f"Missing token for course={course_name}")
             abort(HTTPStatus.FORBIDDEN)
         token = token.split()[-1]
         if not secrets.compare_digest(token, course_token):
+            logger.warning(f"Invalid token for course={course_name}")
             abort(HTTPStatus.FORBIDDEN)
+
+        logger.debug(f"Token validated for course={course_name}")
         return f(*args, **kwargs)
 
     return decorated
@@ -64,6 +72,7 @@ def _parse_flags(flags: str | None) -> timedelta:
         if parsed is not None and get_current_time() <= parsed:
             days = int(flags[left_colon + 1 : right_colon])
             extra_time = timedelta(days=days)
+            logger.debug(f"Parsed extra_time={extra_time} from flags={flags}")
     return extra_time
 
 
@@ -76,6 +85,10 @@ def _update_score(
     submit_time: datetime,
     check_deadline: bool = True,
 ) -> int:
+    logger.debug(
+        f"Update score: task={task.name}, old_score={old_score}, new_score={score}, "
+        f"flags={flags}, submit_time={submit_time}, check_deadline={check_deadline}"
+    )
     if old_score < 0:
         return old_score
 
@@ -84,6 +97,7 @@ def _update_score(
 
         multiplier = group.get_current_percent_multiplier(now=submit_time - extra_time)
         score = int(score * multiplier)
+        logger.debug(f"Applied multiplier={multiplier}, adjusted_score={score}")
 
     return max(old_score, score)
 
@@ -105,6 +119,7 @@ def _validate_and_extract_params(
         try:
             user_id = int(form_data["user_id"])
             rms_user = rms_api.get_rms_user_by_id(user_id)
+            logger.info(f"Found user by id={user_id}: {rms_user.username}")
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
         except GitLabApiException:
@@ -125,18 +140,20 @@ def _validate_and_extract_params(
     try:
         group, task = storage_api.find_task(course_name, task_name)
     except (KeyError, TaskDisabledError):
+        logger.warning(f"Task not found or disabled: {task_name}")
         abort(HTTPStatus.NOT_FOUND, f"There is no task with name `{task_name}` (or it is closed for submission)")
 
     return rms_user, task, group
 
 
 def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetime) -> datetime:
-    """Process and validate submit time."""
+    logger.debug(f"submit_time_str={submit_time_str}")
     submit_time = None
     if submit_time_str:
         try:
             submit_time = datetime.strptime(submit_time_str, "%Y-%m-%d %H:%M:%S%z")
         except ValueError:
+            logger.warning(f"Invalid submit_time format: {submit_time_str}")
             submit_time = None
 
     submit_time = submit_time or now_with_timezone
@@ -147,9 +164,11 @@ def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetim
 def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
     """Process and validate score from form data."""
     if "score" not in form_data:
+        logger.debug("No score provided, will use default")
         return None
 
     score_str = form_data["score"]
+    logger.debug(f"Raw score input: {score_str}")
     try:
         min_score = 0.0
         max_score = 2.0
@@ -193,8 +212,8 @@ def report_score(course_name: str) -> ResponseReturnValue:
     # Log with sanitized values
     logger.info(f"Use submit_time: {submit_time}")
     logger.info(
-        f"Will process score {reported_score} for @{rms_user} on task {task.name} \
-            {'with' if check_deadline else 'without'} deadline check"
+        f"user={rms_user.username} (id={rms_user.id}), task={task.name}, "
+        f"reported_score={reported_score}, submit_time={submit_time}, check_deadline={check_deadline}"
     )
 
     update_function = functools.partial(
@@ -206,6 +225,8 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
     )
     final_score = app.storage_api.store_score(course.course_name, rms_user.username, task.name, update_function)
+
+    logger.info(f"Stored final_score={final_score} for user={rms_user.username}, task={task.name}")
 
     return {
         "user_id": rms_user.id,
@@ -230,6 +251,7 @@ def get_score(course_name: str) -> ResponseReturnValue:
 
     try:
         student_task_score = student_scores[task.name]
+        logger.info(f"user={rms_user.username}, task={task.name}, score={student_task_score}")
     except Exception:
         return f"Cannot get score for task {task.name} for {rms_user.username}", HTTPStatus.NOT_FOUND
 
@@ -246,7 +268,7 @@ def get_score(course_name: str) -> ResponseReturnValue:
 def update_config(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    logger.info("Running update_config")
+    logger.info(f"Running update_config for course={course_name}")
 
     # ----- get and validate request parameters ----- #
     try:
@@ -255,9 +277,9 @@ def update_config(course_name: str) -> ResponseReturnValue:
 
         # Store the new config
         app.store_config(course_name, config_data)
-    except Exception as e:
-        logger.exception(e)
-        return f"Invalid config\n {e}", HTTPStatus.BAD_REQUEST
+        logger.info(f"Stored new config for course={course_name}")
+    except Exception:
+        return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
     return "", HTTPStatus.OK
 
@@ -267,11 +289,12 @@ def update_config(course_name: str) -> ResponseReturnValue:
 def update_cache(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    logger.info("Running update_cache")
+    logger.info(f"Updating cached scores for course={course_name}")
 
     # ----- logic ----- #
     app.storage_api.update_cached_scores(course_name)
 
+    logger.info(f"Cache updated for course={course_name}")
     return "", HTTPStatus.OK
 
 
@@ -281,6 +304,7 @@ def update_cache(course_name: str) -> ResponseReturnValue:
 def get_database(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
+    logger.info(f"Fetching database snapshot for course={course_name}")
     table_data = get_database_table_data(app, course_name)
     return jsonify(table_data)
 
@@ -310,6 +334,8 @@ def update_database(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+    logger.info(f"Request by admin={rms_user.username} for course={course_name}")
+
     student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     if not student_course_admin:
@@ -324,6 +350,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     username = data["username"]
     new_scores = data["scores"]
+    logger.info(f"Updating scores for user={username}: {new_scores}")
 
     try:
         for task_name, new_score in new_scores.items():
@@ -334,6 +361,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )
+        logger.info(f"Successfully updated scores for user={username}")
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error updating database: {str(e)}")
