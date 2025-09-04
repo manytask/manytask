@@ -193,13 +193,6 @@ class ManytaskFinalGradeConfig(BaseModel):
     grades_order: list[int] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def check_grade_names_initialization(self) -> ManytaskFinalGradeConfig:
-        if len(self.grades.keys()) == 0:
-            raise ValueError("No grades defined")
-
-        return self
-
-    @model_validator(mode="after")
     def populate_grades_order(self) -> ManytaskFinalGradeConfig:
         self.grades_order = sorted(list(self.grades.keys()), reverse=True)
         return self
@@ -208,6 +201,10 @@ class ManytaskFinalGradeConfig(BaseModel):
         for grade in self.grades_order:
             if ManytaskFinalGradeConfig.evaluate_grade(self.grades[grade], scores):
                 return grade
+
+        # shortcut for courses that do not use builtin grading system
+        if len(self.grades_order) == 0:
+            return 0
 
         raise ValueError("No grade matched")
 
