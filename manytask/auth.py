@@ -201,6 +201,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             logger.info(f"User {auth_user.username} missing membership or project")
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
+        # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_user_on_course(
             course.course_name,
             auth_user.username,

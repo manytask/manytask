@@ -280,6 +280,7 @@ def update_config(course_name: str) -> ResponseReturnValue:
         app.store_config(course_name, config_data)
         logger.info(f"Stored new config for course={course_name}")
     except Exception:
+        logger.exception(f"Error while updating config for course={course_name}", exc_info=True)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
     return "", HTTPStatus.OK
