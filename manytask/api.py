@@ -280,6 +280,7 @@ def update_config(course_name: str) -> ResponseReturnValue:
         app.store_config(course_name, config_data)
         logger.info(f"Stored new config for course={course_name}")
     except Exception:
+        logger.exception(f"Error while updating config for course={course_name}", exc_info=True)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
     return "", HTTPStatus.OK
@@ -351,7 +352,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     username = data["username"]
     new_scores = data["scores"]
-    logger.info(f"Updating scores for user={sanitize_log_data(username)}: {sanitize_log_data(new_scores)}")
+    logger.info(f"Updating scores for user={sanitize_log_data(username)}: {new_scores}")
 
     try:
         for task_name, new_score in new_scores.items():
