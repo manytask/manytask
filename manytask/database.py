@@ -900,7 +900,8 @@ class DataBaseApi(StorageApi):
 
     def _sync_grades_config(self, course_name: str, grades_config: ManytaskFinalGradeConfig | None) -> None:
         if grades_config is None:
-            return
+            # shortcut to remove existing grade formulas
+            grades_config = ManytaskFinalGradeConfig(grades={}, grades_order=[])
 
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
@@ -926,7 +927,7 @@ class DataBaseApi(StorageApi):
                         complex_id=complex_formula.id,
                     )
 
-            # remove deleted grafes
+            # remove deleted grades
             for grade in existing_complex_formulas_grades - config_complex_formulas_grades:
                 complex_formula = (
                     session.query(models.ComplexFormula)
