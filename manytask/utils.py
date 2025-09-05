@@ -1,8 +1,8 @@
+import re
 import secrets
 
 from flask import session, url_for
 
-from manytask.abstract import RmsUser
 from manytask.main import CustomFlask
 
 
@@ -14,13 +14,10 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     if app.debug:
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
 
+    if app.storage_api.check_if_instance_admin(session["profile"]["username"]):
+        courses_names = app.storage_api.get_all_courses_names_with_statuses()
     else:
-        rms_user_id = session["gitlab"]["user_id"]
-        rms_user = app.rms_api.get_rms_user_by_id(rms_user_id)
-        if app.storage_api.check_if_instance_admin(rms_user.username):
-            courses_names = app.storage_api.get_all_courses_names_with_statuses()
-        else:
-            courses_names = app.storage_api.get_user_courses_names_with_statuses(rms_user.username)
+        courses_names = app.storage_api.get_user_courses_names_with_statuses(session["profile"]["username"])
 
     return [
         {
@@ -40,12 +37,5 @@ def check_admin(app: CustomFlask) -> bool:
         return app.storage_api.check_if_instance_admin(student_username)
 
 
-def guess_first_last_name(user: RmsUser) -> tuple[str, str]:
-    PARTS_IN_NAME = 2
-
-    # TODO: implement better method for separating names
-    name = user.name
-    parts = name.split()
-    if len(parts) == PARTS_IN_NAME:
-        return tuple(parts)  # type: ignore
-    return name, ""
+def validate_name(name: str) -> str | None:
+    return name if (re.match(r"^[a-zA-Zа-яА-Я_-]{1,50}$", name) is not None) else None
