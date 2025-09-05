@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, Response
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -102,7 +102,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     logger.info("Init success")
 
     @app.after_request
-    def add_cache_control(response):
+    def add_cache_control(response: Response) -> Response:
         if request.path.startswith("/static/"):
             response.headers["Cache-Control"] = "public, max-age=3600"
         return response
