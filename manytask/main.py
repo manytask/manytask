@@ -104,7 +104,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     @app.after_request
     def add_cache_control(response):
         if request.path.startswith("/static/"):
-            response.headers["Cache-Control"] = f"public, max-age=3600"
+            response.headers["Cache-Control"] = "public, max-age=3600"
         return response
 
     return app
