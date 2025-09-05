@@ -91,16 +91,6 @@ def app():  # noqa: C901
             return datetime.datetime.now() + datetime.timedelta(hours=1)
 
         @staticmethod
-        def get_stored_user(username):
-            return StoredUser(
-                username=username,
-                first_name=STUDENT_DATA[username][0],
-                last_name=STUDENT_DATA[username][1],
-                rms_id=STUDENT_DATA[username][2],
-                instance_admin=False,
-            )
-
-        @staticmethod
         def get_all_scores_with_names(_course_name):
             return {
                 STUDENT_1: (

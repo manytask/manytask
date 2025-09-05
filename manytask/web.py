@@ -182,9 +182,9 @@ def signup() -> ResponseReturnValue:
             lambda attr: request.form[attr].strip(), ("username", "firstname", "lastname", "email")
         )
 
-        firstname = validate_name(firstname)
-        lastname = validate_name(lastname)
-        if firstname is None or lastname is None:
+        validated_firstname = validate_name(firstname)
+        validated_lastname = validate_name(lastname)
+        if validated_firstname is None or validated_lastname is None:
             raise Exception(
                 "Firstname and lastname must be 1-50 characters and contain only letters, hyphens, or underscores."
             )
@@ -192,8 +192,8 @@ def signup() -> ResponseReturnValue:
         # register user in gitlab
         app.rms_api.register_new_user(
             username,
-            firstname,
-            lastname,
+            validated_firstname,
+            validated_lastname,
             email,
             request.form["password"],
         )
@@ -297,7 +297,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    app.storage_api.sync_user_on_course(course.course_name, rms_user.username, is_course_admin)
+    app.storage_api.sync_user_on_course(course.course_name, session["profile"]["username"], is_course_admin)
 
     # Create use if needed
     try:
