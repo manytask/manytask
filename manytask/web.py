@@ -190,12 +190,19 @@ def signup() -> ResponseReturnValue:
             )
 
         # register user in gitlab
-        app.rms_api.register_new_user(
+        rms_user = app.rms_api.register_new_user(
             username,
             validated_firstname,
             validated_lastname,
             email,
             request.form["password"],
+        )
+
+        app.storage_api.update_or_create_user(
+            username,
+            validated_firstname,
+            validated_lastname,
+            rms_user.id,
         )
 
     # render template with error... if error
