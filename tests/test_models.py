@@ -410,7 +410,7 @@ def test_course_tasks(session):
     retrieved_course = session.query(Course).filter_by(name="test_course_11").first()
     retrieved_task_group = retrieved_course.task_groups.one()
 
-    assert len(retrieved_task_group.tasks.all()) == TEST_TASK_COUNT
+    assert len(retrieved_task_group.tasks) == TEST_TASK_COUNT
     task_names = [task.name for task in retrieved_task_group.tasks]
     assert "task11_1" in task_names
     assert "task11_2" in task_names
@@ -425,7 +425,7 @@ def test_task_group_tasks(session):
     session.commit()
 
     retrieved_group = session.query(TaskGroup).filter_by(name="group12").first()
-    assert len(retrieved_group.tasks.all()) == TEST_TASK_COUNT
+    assert len(retrieved_group.tasks) == TEST_TASK_COUNT
     task_names = [task.name for task in retrieved_group.tasks]
     assert "task12_1" in task_names
     assert "task12_2" in task_names
