@@ -1,6 +1,6 @@
 from typing import Any
 
-from manytask.main import CustomFlask
+from .main import CustomFlask
 
 
 def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any]:
@@ -13,15 +13,15 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
     all_tasks = []
     large_tasks = []
     max_score: int = 0
-    for group in storage_api.get_groups(course_name):
-        if group.start <= storage_api.get_now_with_timezone(course_name):
-            for task in group.tasks:
-                if task.enabled:
-                    all_tasks.append({"name": task.name, "score": 0, "group": group.name})
-                    if not task.is_bonus:
-                        max_score += task.score
-                    if task.is_large:
-                        large_tasks.append((task.name, task.min_score))
+
+    for group in storage_api.get_groups(course_name, enabled=True, started=True):
+        for task in group.tasks:
+            if task.enabled:
+                all_tasks.append({"name": task.name, "score": 0, "group": group.name})
+                if not task.is_bonus:
+                    max_score += task.score
+                if task.is_large:
+                    large_tasks.append((task.name, task.min_score))
 
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
@@ -43,7 +43,7 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
         try:
             row["grade"] = grades_config.evaluate(row)
         except ValueError:
-            row["grade"] = 0
+            row["grade"] = None
 
         table_data["students"].append(row)
         table_data["max_score"] = max_score
