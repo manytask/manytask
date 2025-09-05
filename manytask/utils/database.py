@@ -13,7 +13,6 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
     all_tasks = []
     large_tasks = []
     max_score: int = 0
-
     for group in storage_api.get_groups(course_name, enabled=True, started=True):
         for task in group.tasks:
             if task.enabled:
