@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from flask import Flask, request, Response
+from flask import Flask, Response, request
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
