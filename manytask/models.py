@@ -7,7 +7,9 @@ from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
-from .course import CourseStatus
+from .course import Course as AppCourse
+from .course import CourseConfig as AppCourseConfig
+from .course import CourseStatus, ManytaskDeadlinesType
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +157,11 @@ class Course(Base):
     timezone: Mapped[str] = mapped_column(default="UTC", server_default="UTC")
     max_submissions: Mapped[Optional[int]]
     submission_penalty: Mapped[float] = mapped_column(default=0, server_default="0")
+    deadlines_type: Mapped[ManytaskDeadlinesType] = mapped_column(
+        Enum(ManytaskDeadlinesType, name="deadlines_type", native_enum=False),
+        default=ManytaskDeadlinesType.HARD,
+        server_default="HARD",
+    )
 
     __table_args__ = (
         UniqueConstraint("name", name="uq_courses_name"),
@@ -171,6 +178,24 @@ class Course(Base):
     course_grades: DynamicMapped["ComplexFormula"] = relationship(
         back_populates="course", cascade="all, delete-orphan", order_by="ComplexFormula.grade"
     )
+
+    def to_app_course(self) -> AppCourse:
+        return AppCourse(
+            AppCourseConfig(
+                course_name=self.name,
+                gitlab_course_group=self.gitlab_course_group,
+                gitlab_course_public_repo=self.gitlab_course_public_repo,
+                gitlab_course_students_group=self.gitlab_course_students_group,
+                gitlab_default_branch=self.gitlab_default_branch,
+                registration_secret=self.registration_secret,
+                token=self.token,
+                show_allscores=self.show_allscores,
+                status=self.status,
+                task_url_template=self.task_url_template,
+                links=self.links,
+                deadlines_type=self.deadlines_type,
+            )
+        )
 
 
 class UserOnCourse(Base):

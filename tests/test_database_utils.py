@@ -5,7 +5,7 @@ import pytest
 from flask import Flask
 
 from manytask.abstract import StoredUser
-from manytask.database_utils import get_database_table_data
+from manytask.utils.database import get_database_table_data
 from tests.constants import MAX_SCORE, SCORES, STUDENT_1, STUDENT_2, STUDENT_DATA, TASK_1, TASK_2, TASK_3, TASK_LARGE
 
 

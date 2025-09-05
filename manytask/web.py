@@ -12,10 +12,13 @@ from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
+from manytask.course import ManytaskDeadlinesType
+
 from .auth import handle_oauth_callback, requires_admin, requires_auth, requires_course_access, requires_ready
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils import check_admin, generate_token_hex, get_courses, guess_first_last_name
+from .utils.flask import check_admin, get_courses
+from .utils.generic import generate_token_hex, guess_first_last_name
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -142,6 +145,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         is_course_admin=student_course_admin,
         cache_time=cache_delta,
         courses=courses,
+        deadlines_type=course.deadlines_type,
     )
 
 
@@ -238,7 +242,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    first_name, last_name = guess_first_last_name(rms_user)
+    first_name, last_name = guess_first_last_name(rms_user.name)
     app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, rms_user.id)
 
     app.storage_api.sync_user_on_course(course.course_name, rms_user.username, is_course_admin)
@@ -351,6 +355,7 @@ def create_course() -> ResponseReturnValue:
             status=CourseStatus.CREATED,
             task_url_template="",
             links={},
+            deadlines_type=ManytaskDeadlinesType.HARD,
         )
 
         if app.storage_api.create_course(settings):
@@ -396,6 +401,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             status=CourseStatus(request.form["course_status"]),
             task_url_template=course.task_url_template,
             links=course.links,
+            deadlines_type=course.deadlines_type,
         )
 
         if app.storage_api.edit_course(updated_settings):

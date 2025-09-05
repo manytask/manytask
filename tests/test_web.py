@@ -14,7 +14,7 @@ from flask_wtf import CSRFProtect
 
 from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import bp as api_bp
-from manytask.course import CourseStatus
+from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import TaskDisabledError
 from manytask.web import admin_bp, course_bp, root_bp
 from tests.constants import (
@@ -198,7 +198,7 @@ def mock_storage_api(mock_course):  # noqa: C901
                 raise KeyError("Task not found")
             if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
                 raise TaskDisabledError(f"Task {task_name} is disabled")
-            return None, None
+            return None, None, None
 
         @staticmethod
         def get_now_with_timezone(_course_name):
@@ -248,6 +248,7 @@ def mock_course():
             self.gitlab_default_branch = "main"
             self.task_url_template = "test_task_url_template"
             self.links = {}
+            self.deadlines_type = ManytaskDeadlinesType.HARD
 
     return MockCourse()
 

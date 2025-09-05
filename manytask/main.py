@@ -12,6 +12,8 @@ from flask import Flask
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from manytask.course import ManytaskDeadlinesType
+
 from . import abstract, config, course, database, glab, local_config
 from .course import CourseStatus
 
@@ -117,6 +119,7 @@ def _create_debug_course(app: CustomFlask) -> None:
         status=CourseStatus.CREATED,
         task_url_template="",
         links={},
+        deadlines_type=ManytaskDeadlinesType.HARD,
     )
     app.storage_api.create_course(course_config)
 
