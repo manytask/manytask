@@ -497,6 +497,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
         patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+        patch.object(mock_storage_api, "update_or_create_user") as mock_register_new_mt_user,
         # app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
@@ -523,6 +524,8 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
                 "test@example.com",
                 "password",
             )
+
+            mock_register_new_mt_user.assert_called_once_with(TEST_USERNAME, "Test", "User", TEST_USER_ID)
 
 
 def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
