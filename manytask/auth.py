@@ -12,7 +12,7 @@ from werkzeug import Response
 from manytask.abstract import AuthenticatedUser
 from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
-from manytask.utils import guess_first_last_name, sanitize_log_data
+from manytask.utils.generic import guess_first_last_name, sanitize_log_data
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
         rms_user = app.rms_api.get_authenticated_rms_user(token)
         logger.info(f"Authenticated user={auth_user.username}")
 
-        first_name, last_name = guess_first_last_name(rms_user)
+        first_name, last_name = guess_first_last_name(rms_user.name)
 
         app.storage_api.create_user_if_not_exist(
             username=rms_user.username,

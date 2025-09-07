@@ -1,8 +1,5 @@
-import secrets
-
 from flask import session, url_for
 
-from manytask.abstract import RmsUser
 from manytask.main import CustomFlask
 
 
@@ -13,9 +10,6 @@ def sanitize_log_data(data: str | None) -> str | None:
     sanitized_data = data.replace("\r", "").replace("\n", "")
     return sanitized_data
 
-
-def generate_token_hex(bytes_count: int = 24) -> str:
-    return secrets.token_hex(nbytes=bytes_count)
 
 
 def get_courses(app: CustomFlask) -> list[dict[str, str]]:
@@ -46,14 +40,3 @@ def check_admin(app: CustomFlask) -> bool:
     else:
         student_username = session["gitlab"]["username"]
         return app.storage_api.check_if_instance_admin(student_username)
-
-
-def guess_first_last_name(user: RmsUser) -> tuple[str, str]:
-    PARTS_IN_NAME = 2
-
-    # TODO: implement better method for separating names
-    name = user.name
-    parts = name.split()
-    if len(parts) == PARTS_IN_NAME:
-        return tuple(parts)  # type: ignore
-    return name, ""

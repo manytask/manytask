@@ -1,6 +1,6 @@
 from typing import Any
 
-from .main import CustomFlask
+from manytask.main import CustomFlask
 
 
 def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any]:
@@ -43,7 +43,7 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
         try:
             row["grade"] = grades_config.evaluate(row)
         except ValueError:
-            row["grade"] = None
+            row["grade"] = 0
 
         table_data["students"].append(row)
         table_data["max_score"] = max_score

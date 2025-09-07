@@ -19,9 +19,8 @@ from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
-from .database_utils import get_database_table_data
 from .main import CustomFlask
-from .utils import sanitize_log_data
+from .utils.database import get_database_table_data
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
@@ -77,7 +76,9 @@ def _parse_flags(flags: str | None) -> timedelta:
     return extra_time
 
 
+# ruff: noqa PLR0913
 def _update_score(
+    course: Course,
     group: ManytaskGroupConfig,
     task: ManytaskTaskConfig,
     score: int,
@@ -96,7 +97,10 @@ def _update_score(
     if check_deadline:
         extra_time = _parse_flags(flags)
 
-        multiplier = group.get_current_percent_multiplier(now=submit_time - extra_time)
+        multiplier = group.get_current_percent_multiplier(
+            now=submit_time - extra_time,
+            deadlines_type=course.deadlines_type,
+        )
         score = int(score * multiplier)
         logger.debug(f"Applied multiplier={multiplier}, adjusted_score={score}")
 
@@ -111,7 +115,7 @@ def healthcheck() -> ResponseReturnValue:
 
 def _validate_and_extract_params(
     form_data: dict[str, Any], rms_api: RmsApi, storage_api: StorageApi, course_name: str
-) -> tuple[RmsUser, ManytaskTaskConfig, ManytaskGroupConfig]:
+) -> tuple[RmsUser, Course, ManytaskTaskConfig, ManytaskGroupConfig]:
     """Validate and extract parameters from form data."""
 
     if "user_id" in form_data and "username" in form_data:
@@ -139,12 +143,12 @@ def _validate_and_extract_params(
     task_name = form_data["task"]
 
     try:
-        group, task = storage_api.find_task(course_name, task_name)
+        course, group, task = storage_api.find_task(course_name, task_name)
     except (KeyError, TaskDisabledError):
         logger.warning(f"Task not found or disabled: {sanitize_log_data(task_name)}")
         abort(HTTPStatus.NOT_FOUND, f"There is no task with name `{task_name}` (or it is closed for submission)")
 
-    return rms_user, task, group
+    return rms_user, course, task, group
 
 
 def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetime) -> datetime:
@@ -196,7 +200,9 @@ def report_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    rms_user, task, group = _validate_and_extract_params(request.form, app.rms_api, app.storage_api, course.course_name)
+    rms_user, course, task, group = _validate_and_extract_params(
+        request.form, app.rms_api, app.storage_api, course.course_name
+    )
 
     reported_score = _process_score(request.form, task.score)
     if reported_score is None:
@@ -219,6 +225,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
 
     update_function = functools.partial(
         _update_score,
+        course,
         group,
         task,
         reported_score,
@@ -246,7 +253,9 @@ def get_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    rms_user, task, group = _validate_and_extract_params(request.form, app.rms_api, app.storage_api, course.course_name)
+    rms_user, _, task, group = _validate_and_extract_params(
+        request.form, app.rms_api, app.storage_api, course.course_name
+    )
 
     student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
 
