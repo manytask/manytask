@@ -81,7 +81,7 @@ def app():  # noqa: C901
                 }
             )
 
-        def get_groups(self, _course_name):
+        def get_groups(self, _course_name, enabled, started):
             return self.groups
 
         def get_grades(self, _course_name):
