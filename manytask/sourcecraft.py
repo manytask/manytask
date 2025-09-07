@@ -1,45 +1,45 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any
 
 import requests
 
-from .abstract import RmsApi, RmsUser
+from .abstract import RmsApi, RmsUser, StorageApi, StoredUser
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class SourcecraftConfig:
+class SourceCraftConfig:
     """Configuration for Sourcecraft API connection and course settings."""
 
     base_url: str
     api_url: str
     admin_token: str
     org_slug: str
-    course_name: str
     dry_run: bool = False
 
 
-class SourcecraftApi(RmsApi):
+class SourceCraftApi(RmsApi):
     def __init__(
         self,
-        config: SourcecraftConfig,
+        config: SourceCraftConfig,
+        storage_api: StorageApi,
     ):
         """Initialize Sourcecraft API client with configuration.
 
         :param config: SourcecraftConfig instance containing all necessary settings
         """
+        self._storage_api: StorageApi = storage_api
         self.dry_run = config.dry_run
         self._base_url = config.base_url
         self._api_url = config.api_url
         self._admin_token = config.admin_token
         self._org_slug = config.org_slug
-        # self._course_name = config.course_name
-        # Initialize any additional Sourcecraft-specific components here
         logger.info(f"Initializing SourcecraftApi with base_url: {self.base_url}")
 
     def _create_template_repo(self, repo_slug: str) -> None:
@@ -92,7 +92,7 @@ class SourcecraftApi(RmsApi):
         :param destination: Course name
         :return: True if project exists, False otherwise
         """
-        url = f"{self._api_url}/repos/{self._org_slug}/{destination}-{project_name}"
+        url = f"{self._api_url}/repos/{self._org_slug}/{destination}-{self._normalize_string(project_name)}"
         headers = {
             "Authorization": f"Bearer {self._admin_token}",
             "Content-Type": "application/json",
@@ -107,16 +107,54 @@ class SourcecraftApi(RmsApi):
             response.raise_for_status()
             return False
 
+    def _normalize_string(self, text: str) -> str:
+        """Normalize string by applying multiple transformation rules.
+
+        Rules applied:
+        1. Convert all letters to lowercase
+        2. Replace [\\s_.@]+ with '-'
+        3. Remove all characters not matching [A-Za-z0-9\\-]
+        4. Replace multiple consecutive dashes with single dash
+        5. Strip leading and trailing dashes
+
+        :param text: Input string to normalize
+        :return: Normalized string suitable for use as slug
+        """
+        # 1. Convert to lowercase
+        result = text.lower()
+
+        # 2. Replace spaces, underscores, dots, @ with dashes
+        result = re.sub(r"[\s_.@]+", "-", result)
+
+        # 3. Remove all characters not matching [A-Za-z0-9\-]
+        result = re.sub(r"[^A-Za-z0-9\-]+", "", result)
+
+        # 4. Replace multiple consecutive dashes with single dash
+        result = re.sub(r"-{2,}", "-", result)
+
+        # 5. Strip leading and trailing dashes
+        result = result.strip("-")
+
+        return result
+
     def _create_student_repo(self, course_name: str, login: str) -> None:
         """This method triggers SourceCraft CI, so creation is actually async and
         returned json is an operation which caller can poll to check if creation is finished.
         """
+        slug = self._normalize_string(login)
         url = f"{self._api_url}/{self._org_slug}/{course_name}/ci_workflows/upsert-student-repo-workflow/trigger"
         headers = {
             "Authorization": f"Bearer {self._admin_token}",
             "Content-Type": "application/json",
         }
-        data: dict[str, Any] = {"inputs": {"login": login}}
+        data: dict[str, Any] = {
+            "input": {
+                "values": [
+                    {"name": "student-login", "value": slug},
+                    {"name": "student-email", "value": f"{login}@yandex.ru"},
+                ]
+            }
+        }
         response = requests.post(url, json=data, headers=headers)
         response.raise_for_status()
         return response.json()
@@ -125,7 +163,7 @@ class SourcecraftApi(RmsApi):
         self,
         rms_user: RmsUser,
         destination: str,
-        template: str,
+        public_repo: str,
     ) -> None:
         """Create a personal repo for a student.
 
@@ -136,14 +174,14 @@ class SourcecraftApi(RmsApi):
         logger.info(f"Creating repo for user {rms_user.username}")
         self._create_student_repo(destination, rms_user.username)
 
-    def get_url_for_task_base(self, template: str, default_branch: str) -> str:
+    def get_url_for_task_base(self, public_repo: str, default_branch: str) -> str:
         """Get URL for task base directory in the public repository.
 
-        :param template: Slug of the public course repository
+        :param public_repo: Slug of the public course repository
         :param default_branch: Default branch name
         :return: URL to the task base directory
         """
-        return f"{self._base_url}/{self._org_slug}/{template}?ref={default_branch}"
+        return f"{self._base_url}/{self._org_slug}/{public_repo}?ref={default_branch}"
 
     def get_url_for_repo(
         self,
@@ -156,7 +194,7 @@ class SourcecraftApi(RmsApi):
         :param course_students_group: Actually a course name
         :return: URL to the student's repository
         """
-        return f"{self._base_url}/{self._org_slug}/{destination}-{username}"
+        return f"{self._base_url}/{self._org_slug}/{destination}-{self._normalize_string(username)}"
 
     def register_new_user(
         self,
@@ -166,41 +204,24 @@ class SourcecraftApi(RmsApi):
         email: str,
         password: str,
     ) -> None:
-        """Register a new user in Sourcecraft.
-
-        :param username: User's username
-        :param firstname: User's first name
-        :param lastname: User's last name
-        :param email: User's email address
-        :param password: User's password
-        """
-        logger.info(f"Creating user (username={username})")
-        raise NotImplementedError("register_new_user method not implemented yet")
+        # do nothing
+        return None
 
     def get_rms_user_by_id(
         self,
         user_id: int,
     ) -> RmsUser:
-        """Get user information by user ID.
-
-        :param user_id: User's ID
-        :return: RmsUser object with user information
-        """
-        logger.info(f"Searching user by ID: {user_id}")
-        raise NotImplementedError("get_rms_user_by_id method not implemented yet")
+        storedUser: StoredUser = self._storage_api.get_stored_user_by_id(user_id)
+        return storedUser.rms_identity
 
     def get_rms_user_by_username(
         self,
         username: str,
     ) -> RmsUser:
-        """Get user information by username.
+        storedUser: StoredUser = self._storage_api.get_stored_user(username)
+        return storedUser.rms_identity
 
-        :param username: User's username
-        :return: RmsUser object with user information
-        """
-        logger.info(f"Searching user by username: {username}")
-        raise NotImplementedError("get_rms_user_by_username method not implemented yet")
-
+    # TODO: seems unused, remove?
     def get_authenticated_rms_user(
         self,
         oauth_access_token: str,
@@ -212,12 +233,3 @@ class SourcecraftApi(RmsApi):
         """
         logger.info("Getting authenticated user from OAuth token")
         raise NotImplementedError("get_authenticated_rms_user method not implemented yet")
-
-    def _construct_rms_user(self, user_data: dict[str, Any]) -> RmsUser:
-        """Construct RmsUser object from API response data.
-
-        :param user_data: User data from API response
-        :return: RmsUser object
-        """
-        logger.info("Constructing RmsUser from API data")
-        raise NotImplementedError("_construct_rms_user method not implemented yet")

@@ -7,8 +7,10 @@
             <a href="{{ url_for('root.login') }}" class="btn btn-primary p-3">
                 <span class="fs-2">Login</span>
                 <br>
-                with {{ base_url }}
+                with {{ auth_backend }}
             </a>
+
+            {% if auth_backend == "gitlab" %}
 
             <br>
             <span>OR</span>
@@ -52,6 +54,7 @@
 
                 <button class="btn btn-primary w-100 py-2 mt-2" type="submit" value="Register">Sign up</button>
             </form>
+            {% endif %}
         </div>
     </div>
 

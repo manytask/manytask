@@ -66,8 +66,8 @@ def mock_rms_api():
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
-        def get_url_for_task_base(template: str, default_branch: str):
-            return f"{GITLAB_BASE_URL}/{template}/blob/{default_branch}"
+        def get_url_for_task_base(public_repo: str, default_branch: str):
+            return f"{GITLAB_BASE_URL}/{public_repo}/blob/{default_branch}"
 
         @staticmethod
         def register_new_user(username: str, firstname: str, lastname: str, email: str, password: str) -> RmsUser:
@@ -115,7 +115,9 @@ def mock_auth_api():
             return True
 
         def get_authenticated_user(self, access_token):
-            return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
+            return AuthenticatedUser(
+                id=TEST_USER_ID, username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME
+            )
 
     return MockAuthApi()
 

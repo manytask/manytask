@@ -163,7 +163,7 @@ class GitLabApi(RmsApi, AuthApi):
         self,
         rms_user: RmsUser,
         destination: str,
-        template: str,
+        public_repo: str,
     ) -> None:
         course_group = self._get_group_by_name(destination)
 
@@ -196,7 +196,7 @@ class GitLabApi(RmsApi, AuthApi):
         logger.info(f"Username {rms_user.username}")
         logger.info(f"Course group {course_group.name}")
 
-        course_public_project = self._get_project_by_name(template)
+        course_public_project = self._get_project_by_name(public_repo)
         fork = course_public_project.forks.create(
             {
                 "name": rms_user.username,
@@ -280,8 +280,8 @@ class GitLabApi(RmsApi, AuthApi):
         response.raise_for_status()
         return self._construct_rms_user(response.json())
 
-    def get_url_for_task_base(self, template: str, default_branch: str) -> str:
-        return f"{self.base_url}/{template}/blob/{default_branch}"
+    def get_url_for_task_base(self, public_repo: str, default_branch: str) -> str:
+        return f"{self.base_url}/{public_repo}/blob/{default_branch}"
 
     def get_url_for_repo(
         self,
@@ -310,7 +310,7 @@ class GitLabApi(RmsApi, AuthApi):
                 try:
                     logger.info("Access token expired. Trying to refresh token.")
 
-                    new_tokens = oauth.gitlab.fetch_access_token(
+                    new_tokens = oauth.remote_app.fetch_access_token(
                         grant_type="refresh_token",
                         refresh_token=oauth_refresh_token,
                     )
@@ -337,7 +337,10 @@ class GitLabApi(RmsApi, AuthApi):
         response.raise_for_status()
         user = response.json()
 
+        first_name, last_name = user.get("name", "").split()  # TODO: come up with how to separate names
         return AuthenticatedUser(
-            id=user["id"],
-            username=user["username"],
+            id=user.get("id"),
+            username=user.get("username"),
+            first_name=first_name,
+            last_name=last_name,
         )

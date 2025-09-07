@@ -162,6 +162,25 @@ class DataBaseApi(StorageApi):
                 instance_admin=user.is_instance_admin,
             )
 
+    def get_stored_user_by_id(
+        self,
+        user_id: int,
+    ) -> StoredUser:
+        """Method for getting user's stored data by id"""
+        with self._session_create() as session:
+            user = self._get(
+                session,
+                models.User,
+                id=user_id,
+            )
+            return StoredUser(
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                rms_id=user.rms_id,
+                instance_admin=user.is_instance_admin,
+            )
+
     def check_if_instance_admin(
         self,
         username: str,

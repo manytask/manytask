@@ -14,7 +14,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from manytask.course import ManytaskDeadlinesType
 
-from . import abstract, config, course, database, glab, local_config
+from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_auth
 from .course import CourseStatus
 
 load_dotenv("../.env")  # take environment variables from .env.
@@ -49,14 +49,15 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     _create_app_config(app, debug, test)
 
-    app.oauth = _authenticate(
-        OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
-    )
+    auth_backend = app.app_config.auth_backend
+    rms_backend = app.app_config.rms_backend
 
     # logging
     logging.config.dictConfig(_logging_config(app))
 
     # api objects
+    app.storage_api = _database_storage_setup(app)
+
     gitlab_api: glab.GitLabApi = glab.GitLabApi(
         glab.GitLabConfig(
             base_url=app.app_config.gitlab_url,
@@ -64,8 +65,50 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         )
     )
 
-    app.rms_api = gitlab_api
-    app.auth_api = gitlab_api
+    sourcecraft_api: sourcecraft.SourceCraftApi = sourcecraft.SourceCraftApi(
+        sourcecraft.SourceCraftConfig(
+            base_url=app.app_config.sourcecraft_base_url,
+            api_url=app.app_config.sourcecraft_api_url,
+            org_slug=app.app_config.sourcecraft_org_slug,
+            admin_token=app.app_config.sourcecraft_admin_token,
+            dry_run=app.debug,
+        ),
+        app.storage_api,
+    )
+
+    yandex_auth_api: yandex_auth.YandexAuthApi = yandex_auth.YandexAuthApi(
+        yandex_auth.YandexAuthConfig(
+            client_id=app.app_config.yandex_client_id,
+            client_secret=app.app_config.yandex_client_secret,
+            dry_run=app.debug,  # использовать debug режим для dry_run
+        )
+    )
+
+    match auth_backend:
+        case "gitlab":
+            app.oauth = _authenticate_gitlab(
+                OAuth(app),
+                app.app_config.gitlab_url,
+                app.app_config.gitlab_client_id,
+                app.app_config.gitlab_client_secret,
+            )
+            app.auth_api = gitlab_api
+        case "yandex":
+            app.oauth = _authenticate_yandex(
+                OAuth(app), app.app_config.yandex_client_id, app.app_config.yandex_client_secret
+            )
+            app.auth_api = yandex_auth_api
+        case _:
+            raise ValueError(f"Invalid auth backend: {auth_backend}")
+
+    match rms_backend:
+        case "sourcecraft":
+            app.rms_api = sourcecraft_api
+        case "gitlab":
+            app.rms_api = gitlab_api
+        case _:
+            raise ValueError(f"Invalid rms backend: {rms_backend}")
+
     app.csrf = CSRFProtect(app)
 
     # read VERSION file to get a version
@@ -75,8 +118,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             app.manytask_version = f.read().strip()
     except FileNotFoundError:
         pass
-
-    app.storage_api = _database_storage_setup(app)
 
     # for https support
     _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
@@ -227,9 +268,9 @@ def _create_app_config(app: CustomFlask, debug: bool | None, test: bool) -> None
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex())
 
 
-def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: str) -> OAuth:
+def _authenticate_gitlab(oauth: OAuth, base_url: str, client_id: str, client_secret: str) -> OAuth:
     oauth.register(
-        name="gitlab",
+        name="app",
         client_id=client_id,
         client_secret=client_secret,
         authorize_url=f"{base_url}/oauth/authorize",
@@ -240,5 +281,18 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
             "scope": "openid email profile read_user",
             "code_challenge_method": "S256",
         },
+    )
+    return oauth
+
+
+def _authenticate_yandex(oauth: OAuth, client_id: str, client_secret: str) -> OAuth:
+    oauth.register(
+        name="remote_app",
+        client_id=client_id,
+        client_secret=client_secret,
+        access_token_url="https://oauth.yandex.com/token",
+        authorize_url="https://oauth.yandex.com/authorize",
+        api_base_url="https://login.yandex.ru/info",
+        client_kwargs={"scope": "login:info"},
     )
     return oauth

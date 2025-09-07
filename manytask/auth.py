@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 def valid_session(user_session: SessionMixin) -> bool:
     SESSION_VERSION = 1.5
     return (
-        "gitlab" in user_session
-        and "version" in user_session["gitlab"]
-        and user_session["gitlab"]["version"] >= SESSION_VERSION
-        and "username" in user_session["gitlab"]
-        and "user_id" in user_session["gitlab"]
+        "auth" in user_session
+        and "version" in user_session["auth"]
+        and user_session["auth"]["version"] >= SESSION_VERSION
+        and "username" in user_session["auth"]
+        and "user_id" in user_session["auth"]
     )
 
 
@@ -70,24 +70,19 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
 
     try:
         # This is where the oath_api should be used
-        gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        token = gitlab_oauth_token["access_token"]
-        auth_user = app.auth_api.get_authenticated_user(token)
-        rms_user = app.rms_api.get_authenticated_rms_user(token)
-
-        first_name, last_name = guess_first_last_name(rms_user.name)
-
-        app.storage_api.create_user_if_not_exist(
-            username=rms_user.username,
-            first_name=first_name,
-            last_name=last_name,
-            rms_id=rms_user.id,
-        )
+        tokens = oauth.remote_app.authorize_access_token()
+        auth_user = app.auth_api.get_authenticated_user(tokens["access_token"])
     except Exception:
-        logger.error("Gitlab authorization failed", exc_info=True)
+        logger.error("Authentication failed", exc_info=True)
         return redirect(redirect_url)
 
-    session.setdefault("gitlab", {}).update(set_oauth_session(auth_user, gitlab_oauth_token))
+    first_name = auth_user.first_name or "Firstname"
+    last_name = auth_user.last_name or "Lastname"
+    # Assume that rms user's username and id are the same as in auth. This is true for GitLab but not for SourceCraft.
+    # Leave this assumption for now because we don't check rms user for SourceCraft at all.
+    app.storage_api.create_user_if_not_exist(auth_user.username, first_name, last_name, auth_user.id)
+
+    session.setdefault("auth", {}).update(set_oauth_session(auth_user, tokens))
     session.permanent = True
 
     return redirect(redirect_url)
@@ -97,13 +92,13 @@ def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     """Getting student and update session"""
 
     # This is where the auth_api should be user instead of gitlab/rms
-    auth_user = app.auth_api.get_authenticated_user(session["gitlab"]["access_token"])
-    session["gitlab"].update(set_oauth_session(auth_user))
+    auth_user = app.auth_api.get_authenticated_user(session["auth"]["access_token"])
+    session["auth"].update(set_oauth_session(auth_user))
     return auth_user
 
 
 def __redirect_to_login() -> Response:
-    session.pop("gitlab", None)
+    session.pop("auth", None)
     return redirect(url_for("root.signup"))
 
 
@@ -120,8 +115,8 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if valid_session(session):
             if not app.auth_api.check_user_is_authenticated(
                 app.oauth,
-                session["gitlab"]["access_token"],
-                session["gitlab"]["refresh_token"],
+                session["auth"]["access_token"],
+                session["auth"]["refresh_token"],
             ):
                 return __redirect_to_login()
         else:
@@ -184,7 +179,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         ):
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
-        # sync user's data from gitlab to database  TODO: optimize it
+        # sync user's data from auth to database  TODO: optimize it
         app.storage_api.sync_user_on_course(
             course.course_name,
             auth_user.username,
@@ -207,7 +202,7 @@ def requires_admin(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        username = session["gitlab"]["username"]
+        username = session["auth"]["username"]
         if not app.storage_api.check_if_instance_admin(username):
             abort(HTTPStatus.FORBIDDEN)
 
