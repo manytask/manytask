@@ -21,6 +21,8 @@ from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
+from .utils.generic import sanitize_log_data
+
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")

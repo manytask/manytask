@@ -3,15 +3,6 @@ from flask import session, url_for
 from manytask.main import CustomFlask
 
 
-def sanitize_log_data(data: str | None) -> str | None:
-    """Sanitize form data."""
-    if data is None:
-        return None
-    sanitized_data = data.replace("\r", "").replace("\n", "")
-    return sanitized_data
-
-
-
 def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     if app.debug:
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
