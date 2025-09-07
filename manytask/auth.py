@@ -46,7 +46,7 @@ def set_oauth_session(
     return result
 
 
-def handle_course_membership(app: CustomFlask, course: Course, username: str) -> bool | str | Response:
+def handle_course_membership(app: CustomFlask, course: Course, username: str) -> bool:
     """Checking user on course"""
 
     try:
@@ -174,8 +174,14 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             flash("course is hidden!", "course_hidden")
             abort(redirect(url_for("root.index")))
 
-        if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
-            project_name=auth_user.username, destination=course.gitlab_course_students_group
+        is_course_member = handle_course_membership(app, course, auth_user.username)
+        is_project_exists = app.rms_api.check_project_exists(
+            project_name=auth_user.username, destination=course.course_name
+        )
+
+        # for Sourcecraft project creation is async, so let's assume it exists if student is on course
+        if not (is_course_member and is_project_exists) or (
+            app.app_config.rms_backend == "sourcecraft" and not is_course_member
         ):
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
