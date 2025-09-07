@@ -102,6 +102,7 @@ class SourceCraftApi(RmsApi):
         if response.status_code == HTTPStatus.OK:
             return True
         elif response.status_code == HTTPStatus.NOT_FOUND:
+            logger.info(f"Project {destination}-{self._normalize_string(project_name)} not found")
             return False
         else:
             response.raise_for_status()

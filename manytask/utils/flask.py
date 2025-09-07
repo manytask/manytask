@@ -9,7 +9,6 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
 
     else:
         username = session["auth"]["username"]
-        # rms_user = app.rms_api.get_rms_user_by_username(rms_username)
         if app.storage_api.check_if_instance_admin(username):
             courses_names = app.storage_api.get_all_courses_names_with_statuses()
         else:
