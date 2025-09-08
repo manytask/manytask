@@ -14,6 +14,8 @@ from authlib.integrations.flask_client import OAuth
 from flask import session
 from requests.exceptions import HTTPError
 
+from manytask.utils.generic import guess_first_last_name
+
 from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsUser
 
 logger = logging.getLogger(__name__)
@@ -336,8 +338,7 @@ class GitLabApi(RmsApi, AuthApi):
         response = self._make_auth_request(oauth_access_token)
         response.raise_for_status()
         user = response.json()
-
-        first_name, last_name = user.get("name", "").split()  # TODO: come up with how to separate names
+        first_name, last_name = guess_first_last_name(user.get("name", ""))
         return AuthenticatedUser(
             id=user.get("id"),
             username=user.get("username"),

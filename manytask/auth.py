@@ -12,7 +12,6 @@ from werkzeug import Response
 from manytask.abstract import AuthenticatedUser
 from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
-from manytask.utils.generic import guess_first_last_name
 
 logger = logging.getLogger(__name__)
 
