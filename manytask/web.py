@@ -158,7 +158,7 @@ def signup() -> ResponseReturnValue:
         )
 
     # early exit for SourceCraft
-    if app.config.get("AUTH_API") == "sourcecraft":
+    if app.auth_api.name == "YandexID":
         return redirect(url_for("root.login"))
 
     # ----  register a new user ---- #
@@ -168,7 +168,11 @@ def signup() -> ResponseReturnValue:
     except ValidationError as e:
         app.logger.error(f"CSRF validation failed: {e}")
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            "signup.html",
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
+            auth_backend=app.auth_api.name,
         )
 
     try:
@@ -202,6 +206,7 @@ def signup() -> ResponseReturnValue:
             error_message=str(e),
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
+            auth_backend=app.auth_api.name,
         )
 
     return redirect(url_for("root.login"))
@@ -251,7 +256,12 @@ def create_project(course_name: str) -> ResponseReturnValue:
         )
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
-        return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
+        return render_template(
+            "signup.html",
+            error_message=ex.error_message,
+            course_name=course.course_name,
+            auth_backend=app.auth_api.name,
+        )
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
