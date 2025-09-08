@@ -105,7 +105,7 @@ class YandexAuthApi(AuthApi):
                     if not new_tokens:
                         return False
 
-                    new_access = new_tokens.get("access_token")
+                    new_access = new_tokens.get("access_token", "")
                     new_refresh = new_tokens.get("refresh_token", oauth_refresh_token)
                     # Попытка с новым токеном
                     response = self._make_auth_request(new_access)

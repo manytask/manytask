@@ -204,9 +204,8 @@ class SourceCraftApi(RmsApi):
         lastname: str,
         email: str,
         password: str,
-    ) -> None:
-        # do nothing
-        return None
+    ) -> RmsUser:
+        raise NotImplementedError("register_new_user method not implemented yet")
 
     def get_rms_user_by_id(
         self,

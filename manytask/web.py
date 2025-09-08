@@ -18,7 +18,7 @@ from .auth import handle_oauth_callback, requires_admin, requires_auth, requires
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.flask import check_admin, get_courses
-from .utils.generic import generate_token_hex, guess_first_last_name
+from .utils.generic import generate_token_hex
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -307,7 +307,6 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
     scores = storage_api.get_scores(course.course_name, username)
     bonus_score = storage_api.get_bonus_score(course.course_name, username)
-    table_data = get_database_table_data(app, course.course_name)
 
     return render_template(
         "database.html",
@@ -326,7 +325,6 @@ def show_database(course_name: str) -> ResponseReturnValue:
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=app.manytask_version,
         courses=courses,
-        max_score=table_data["max_score"],
     )
 
 
