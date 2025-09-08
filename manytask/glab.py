@@ -352,3 +352,7 @@ class GitLabApi(RmsApi, AuthApi):
             first_name=first_name,
             last_name=last_name,
         )
+
+    @property
+    def name(self) -> str:
+        return "GitLab"

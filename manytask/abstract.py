@@ -62,6 +62,10 @@ class AuthApi(ABC):
         oauth_access_token: str,
     ) -> AuthenticatedUser: ...
 
+    @property
+    @abstractmethod
+    def name(self) -> str: ...
+
 
 class StorageApi(ABC):
     @abstractmethod

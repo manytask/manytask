@@ -199,3 +199,7 @@ class YandexAuthApi(AuthApi):
             )
         except Exception as e:
             raise YandexAuthApiException(f"Неожиданная ошибка получения профиля Яндекс: {e}")
+
+    @property
+    def name(self) -> str:
+        return "YandexID"

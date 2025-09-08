@@ -218,6 +218,10 @@ def mock_rms_api(mock_rms_user):
             return f"https://gitlab.com/{username}/test-repo"
 
         @staticmethod
+        def get_url_for_repo_submits(username, destination):
+            return f"https://gitlab.com/{username}/test-repo/pipelines"
+
+        @staticmethod
         def check_project_exists(_project_name, _project_group):
             return True
 
@@ -268,7 +272,7 @@ def authenticated_client(app, mock_gitlab_oauth):
         app.test_client() as client,
         patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+        patch.object(mock_gitlab_oauth.remote_app, "authorize_access_token") as mock_authorize_access_token,
     ):
         app.oauth = mock_gitlab_oauth
 

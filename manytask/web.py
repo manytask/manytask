@@ -154,7 +154,7 @@ def signup() -> ResponseReturnValue:
             "signup.html",
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
-            auth_backend=app.app_config.auth_backend,
+            auth_backend=app.auth_api.name,
         )
 
     # early exit for SourceCraft

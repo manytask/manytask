@@ -66,6 +66,10 @@ def mock_rms_api():
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
+        def get_url_for_repo_submits(username: str, destination: str):
+            return f"{GITLAB_BASE_URL}/{username}/repo/pipelines"
+
+        @staticmethod
         def get_url_for_task_base(public_repo: str, default_branch: str):
             return f"{GITLAB_BASE_URL}/{public_repo}/blob/{default_branch}"
 
@@ -486,7 +490,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
         patch.object(app.rms_api, "register_new_user") as mock_register_new_rms_user,
         patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+        patch.object(mock_gitlab_oauth.remote_app, "authorize_access_token") as mock_authorize_access_token,
         patch.object(mock_storage_api, "create_user_if_not_exist") as mock_register_new_mt_user,
         # app.test_request_context(),
     ):
@@ -523,7 +527,7 @@ def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
         app.oauth = mock_gitlab_oauth
 
         with (
-            patch.object(mock_gitlab_oauth.gitlab, "authorize_redirect") as mock_authorize_redirect,
+            patch.object(mock_gitlab_oauth.remote_app, "authorize_redirect") as mock_authorize_redirect,
             app.test_request_context(),
         ):
             app.test_client().get(url_for("root.login"))
@@ -536,7 +540,7 @@ def test_login_finish_get_with_code(app, mock_gitlab_oauth):
     with (
         patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+        patch.object(mock_gitlab_oauth.remote_app, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
@@ -562,7 +566,7 @@ def test_login_finish_get_with_code(app, mock_gitlab_oauth):
 
 def test_login_oauth_error(app, mock_gitlab_oauth):
     with (
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token", side_effect=OAuthError("OAuth error")),
+        patch.object(mock_gitlab_oauth.remote_app, "authorize_access_token", side_effect=OAuthError("OAuth error")),
         app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
