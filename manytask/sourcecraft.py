@@ -197,6 +197,13 @@ class SourceCraftApi(RmsApi):
         """
         return f"{self._base_url}/{self._org_slug}/{destination}-{self._normalize_string(username)}"
 
+    def get_url_for_repo_submits(
+        self,
+        username: str,
+        destination: str,
+    ) -> str:
+        return f"{self.get_url_for_repo(username, destination)}/cicd/runs"
+
     def register_new_user(
         self,
         username: str,

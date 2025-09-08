@@ -292,6 +292,13 @@ class GitLabApi(RmsApi, AuthApi):
     ) -> str:
         return f"{self.base_url}/{destination}/{username}"
 
+    def get_url_for_repo_submits(
+        self,
+        username: str,
+        destination: str,
+    ) -> str:
+        return f"{self.base_url}/{destination}/{username}/pipelines"
+
     def _make_auth_request(self, token: str) -> requests.Response:
         headers = {"Authorization": f"Bearer {token}"}
         return requests.get(f"{self.base_url}/api/v4/user", headers=headers)

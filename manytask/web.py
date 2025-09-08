@@ -115,13 +115,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
     tasks_scores = storage_api.get_scores(course.course_name, username)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
-    match app.app_config.rms_backend:
-        case "gitlab":
-            student_ci_url = f"{student_repo}/pipelines"
-        case "sourcecraft":
-            student_ci_url = f"{student_repo}/cicd/runs"
-        case _:
-            raise ValueError(f"Invalid rms backend: {app.app_config.rms_backend}")
+    student_ci_url = app.rms_api.get_url_for_repo_submits(username, course.gitlab_course_students_group)
 
     return render_template(
         "tasks.html",

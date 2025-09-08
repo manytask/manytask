@@ -255,6 +255,13 @@ class RmsApi(ABC):
     ) -> str: ...
 
     @abstractmethod
+    def get_url_for_repo_submits(
+        self,
+        username: str,
+        destination: str,
+    ) -> str: ...
+
+    @abstractmethod
     def get_rms_user_by_id(
         self,
         user_id: int,
