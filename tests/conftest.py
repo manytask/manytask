@@ -97,7 +97,7 @@ def session(engine, tables):
 @pytest.fixture
 def mock_gitlab_oauth():
     class MockGitlabOauth:
-        class gitlab:
+        class remote_app:
             @staticmethod
             def authorize_access_token():
                 return {"access_token": "", "refresh_token": ""}

@@ -14,6 +14,8 @@ from authlib.integrations.flask_client import OAuth
 from flask import session
 from requests.exceptions import HTTPError
 
+from manytask.utils.generic import guess_first_last_name
+
 from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsUser
 
 logger = logging.getLogger(__name__)
@@ -142,9 +144,9 @@ class GitLabApi(RmsApi, AuthApi):
     def check_project_exists(
         self,
         project_name: str,
-        project_group: str,
+        destination: str,
     ) -> bool:
-        gitlab_project_path = f"{project_group}/{project_name}"
+        gitlab_project_path = f"{destination}/{project_name}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
         for project in self._gitlab.projects.list(get_all=True, search=project_name):
@@ -153,21 +155,21 @@ class GitLabApi(RmsApi, AuthApi):
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project {project_name} for group {project_group} exists")
+                logger.info(f"Project {project_name} for group {destination} exists")
                 return True
 
-        logger.info(f"Project {project_name} for group {project_group} does not exist")
+        logger.info(f"Project {project_name} for group {destination} does not exist")
         return False
 
     def create_project(
         self,
         rms_user: RmsUser,
-        course_students_group: str,
-        course_public_repo: str,
+        destination: str,
+        public_repo: str,
     ) -> None:
-        course_group = self._get_group_by_name(course_students_group)
+        course_group = self._get_group_by_name(destination)
 
-        gitlab_project_path = f"{course_students_group}/{rms_user.username}"
+        gitlab_project_path = f"{destination}/{rms_user.username}"
         logger.info(f"Gitlab project path: {gitlab_project_path}")
 
         for project in self._gitlab.projects.list(get_all=True, search=rms_user.username):
@@ -176,7 +178,7 @@ class GitLabApi(RmsApi, AuthApi):
             # Because of implicit conversion
             # TODO: make global problem solve
             if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project {rms_user.username} for group {course_students_group} already exists")
+                logger.info(f"Project {rms_user.username} for group {destination} already exists")
                 project = self._gitlab.projects.get(project.id)
 
                 # ensure user is a member of the project
@@ -196,7 +198,7 @@ class GitLabApi(RmsApi, AuthApi):
         logger.info(f"Username {rms_user.username}")
         logger.info(f"Course group {course_group.name}")
 
-        course_public_project = self._get_project_by_name(course_public_repo)
+        course_public_project = self._get_project_by_name(public_repo)
         fork = course_public_project.forks.create(
             {
                 "name": rms_user.username,
@@ -280,15 +282,22 @@ class GitLabApi(RmsApi, AuthApi):
         response.raise_for_status()
         return self._construct_rms_user(response.json())
 
-    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
-        return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"
+    def get_url_for_task_base(self, public_repo: str, default_branch: str) -> str:
+        return f"{self.base_url}/{public_repo}/blob/{default_branch}"
 
     def get_url_for_repo(
         self,
         username: str,
-        course_students_group: str,
+        destination: str,
     ) -> str:
-        return f"{self.base_url}/{course_students_group}/{username}"
+        return f"{self.base_url}/{destination}/{username}"
+
+    def get_url_for_repo_submits(
+        self,
+        username: str,
+        destination: str,
+    ) -> str:
+        return f"{self.base_url}/{destination}/{username}/pipelines"
 
     def _make_auth_request(self, token: str) -> requests.Response:
         headers = {"Authorization": f"Bearer {token}"}
@@ -310,7 +319,7 @@ class GitLabApi(RmsApi, AuthApi):
                 try:
                     logger.info("Access token expired. Trying to refresh token.")
 
-                    new_tokens = oauth.gitlab.fetch_access_token(
+                    new_tokens = oauth.remote_app.fetch_access_token(
                         grant_type="refresh_token",
                         refresh_token=oauth_refresh_token,
                     )
@@ -321,7 +330,7 @@ class GitLabApi(RmsApi, AuthApi):
                     response = self._make_auth_request(new_access)
                     response.raise_for_status()
 
-                    session["gitlab"].update({"access_token": new_access, "refresh_token": new_refresh})
+                    session["auth"].update({"access_token": new_access, "refresh_token": new_refresh})
                     logger.info("Token refreshed successfully.")
 
                     return True
@@ -336,8 +345,14 @@ class GitLabApi(RmsApi, AuthApi):
         response = self._make_auth_request(oauth_access_token)
         response.raise_for_status()
         user = response.json()
-
+        first_name, last_name = guess_first_last_name(user.get("name", ""))
         return AuthenticatedUser(
-            id=user["id"],
-            username=user["username"],
+            id=user.get("id"),
+            username=user.get("username"),
+            first_name=first_name,
+            last_name=last_name,
         )
+
+    @property
+    def name(self) -> str:
+        return "GitLab"

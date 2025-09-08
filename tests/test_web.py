@@ -62,12 +62,16 @@ def mock_rms_api():
             self.base_url = GITLAB_BASE_URL
 
         @staticmethod
-        def get_url_for_repo(username: str, course_students_group: str):
+        def get_url_for_repo(username: str, destination: str):
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
-        def get_url_for_task_base(course_public_repo: str, default_branch: str):
-            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
+        def get_url_for_repo_submits(username: str, destination: str):
+            return f"{GITLAB_BASE_URL}/{username}/repo/pipelines"
+
+        @staticmethod
+        def get_url_for_task_base(public_repo: str, default_branch: str):
+            return f"{GITLAB_BASE_URL}/{public_repo}/blob/{default_branch}"
 
         @staticmethod
         def register_new_user(username: str, firstname: str, lastname: str, email: str, password: str) -> RmsUser:
@@ -93,7 +97,7 @@ def mock_rms_api():
             return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
 
         @staticmethod
-        def check_project_exists(project_name: str, project_group: str):
+        def check_project_exists(project_name: str, destination: str):
             return True
 
         @staticmethod
@@ -115,7 +119,13 @@ def mock_auth_api():
             return True
 
         def get_authenticated_user(self, access_token):
-            return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
+            return AuthenticatedUser(
+                id=TEST_USER_ID, username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME
+            )
+
+        @property
+        def name(self) -> str:
+            return "GitLab"
 
     return MockAuthApi()
 
@@ -205,6 +215,9 @@ def mock_storage_api(mock_course):  # noqa: C901
             return datetime.now(tz=ZoneInfo("UTC"))
 
         def get_stored_user(self, _username):
+            return self.stored_user
+
+        def get_stored_user_by_id(self, _user_id):
             return self.stored_user
 
         def check_if_instance_admin(self, _username):
@@ -301,7 +314,7 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
         ):
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
@@ -327,7 +340,7 @@ def test_signup_post_password_mismatch(app, mock_course):
     with app.test_client() as client:
         response = client.get("/signup")
         soup = BeautifulSoup(response.data, "html.parser")
-        csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+        csrf_token = soup.find("input", {"name": "csrf_token"})["value"]  # type: ignore
 
         response = client.post(
             "/signup",
@@ -350,12 +363,12 @@ def test_logout(app):
     with app.test_request_context():
         with app.test_client() as client:
             with client.session_transaction() as sess:
-                sess["gitlab"] = {"version": TEST_VERSION, "username": TEST_USERNAME}
+                sess["auth"] = {"version": TEST_VERSION, "username": TEST_USERNAME}
             response = client.get("/logout")
             assert response.status_code == HTTPStatus.FOUND
             assert response.headers["Location"] == "/"
             with client.session_transaction() as sess:
-                assert "gitlab" not in sess
+                assert "auth" not in sess
 
 
 def test_not_ready(app):
@@ -365,7 +378,7 @@ def test_not_ready(app):
             patch.object(app.storage_api, "check_if_instance_admin") as mock_check_if_instance_admin,
         ):
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "username": TEST_USERNAME,
                 }
             mock_check_if_instance_admin.return_value = True
@@ -407,7 +420,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
     with app.test_request_context():
         with app.test_client() as client:
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
@@ -428,7 +441,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                 check_func(response, False)
 
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
@@ -448,7 +461,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                 check_func(response, True)
 
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
@@ -484,7 +497,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
         patch.object(app.rms_api, "register_new_user") as mock_register_new_rms_user,
         patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+        patch.object(mock_gitlab_oauth.remote_app, "authorize_access_token") as mock_authorize_access_token,
         patch.object(mock_storage_api, "create_user_if_not_exist") as mock_register_new_mt_user,
         # app.test_request_context(),
     ):
@@ -499,7 +512,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
         with app.test_client() as client:
             response = client.get("/signup")
             soup = BeautifulSoup(response.data, "html.parser")
-            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]  # type: ignore
             data["csrf_token"] = csrf_token
             response = client.post(url_for("root.signup", course_name=TEST_COURSE_NAME), data=data)
             assert response.status_code == HTTPStatus.FOUND
@@ -521,7 +534,7 @@ def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
         app.oauth = mock_gitlab_oauth
 
         with (
-            patch.object(mock_gitlab_oauth.gitlab, "authorize_redirect") as mock_authorize_redirect,
+            patch.object(mock_gitlab_oauth.remote_app, "authorize_redirect") as mock_authorize_redirect,
             app.test_request_context(),
         ):
             app.test_client().get(url_for("root.login"))
@@ -534,7 +547,7 @@ def test_login_finish_get_with_code(app, mock_gitlab_oauth):
     with (
         patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
         patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+        patch.object(mock_gitlab_oauth.remote_app, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
@@ -560,7 +573,7 @@ def test_login_finish_get_with_code(app, mock_gitlab_oauth):
 
 def test_login_oauth_error(app, mock_gitlab_oauth):
     with (
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token", side_effect=OAuthError("OAuth error")),
+        patch.object(mock_gitlab_oauth.remote_app, "authorize_access_token", side_effect=OAuthError("OAuth error")),
         app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth

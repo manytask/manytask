@@ -10,6 +10,27 @@ from .course import Course, CourseConfig, CourseStatus
 
 
 @dataclass
+class AuthenticatedUser:
+    id: int
+    username: str
+    first_name: str | None = None
+    last_name: str | None = None
+
+    def __repr__(self) -> str:
+        return f"AuthenticatedUser(username={self.username}, first_name={self.first_name}, last_name={self.last_name})"
+
+
+@dataclass
+class RmsUser:
+    id: int
+    username: str
+    name: str
+
+    def __repr__(self) -> str:
+        return f"RmsUser(username={self.username})"
+
+
+@dataclass
 class StoredUser:
     username: str
     first_name: str
@@ -20,6 +41,30 @@ class StoredUser:
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
+
+    @property
+    def rms_identity(self) -> RmsUser:
+        return RmsUser(id=self.rms_id, username=self.username, name=f"{self.first_name} {self.last_name}")
+
+
+class AuthApi(ABC):
+    @abstractmethod
+    def check_user_is_authenticated(
+        self,
+        oauth: OAuth,
+        oauth_access_token: str,
+        oauth_refresh_token: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def get_authenticated_user(
+        self,
+        oauth_access_token: str,
+    ) -> AuthenticatedUser: ...
+
+    @property
+    @abstractmethod
+    def name(self) -> str: ...
 
 
 class StorageApi(ABC):
@@ -41,6 +86,12 @@ class StorageApi(ABC):
     def get_stored_user(
         self,
         username: str,
+    ) -> StoredUser: ...
+
+    @abstractmethod
+    def get_stored_user_by_id(
+        self,
+        user_id: int,
     ) -> StoredUser: ...
 
     @abstractmethod
@@ -152,16 +203,6 @@ class StorageApi(ABC):
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
 
 
-@dataclass
-class RmsUser:
-    id: int
-    username: str
-    name: str
-
-    def __repr__(self) -> str:
-        return f"RmsUser(username={self.username})"
-
-
 class RmsApi(ABC):
     _base_url: str
 
@@ -196,25 +237,32 @@ class RmsApi(ABC):
     def check_project_exists(
         self,
         project_name: str,
-        project_group: str,
+        destination: str,
     ) -> bool: ...
 
     @abstractmethod
     def create_project(
         self,
         rms_user: RmsUser,
-        course_students_group: str,
-        course_public_repo: str,
+        destination: str,
+        public_repo: str,
     ) -> None: ...
 
     @abstractmethod
-    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str: ...
+    def get_url_for_task_base(self, public_repo: str, default_branch: str) -> str: ...
 
     @abstractmethod
     def get_url_for_repo(
         self,
         username: str,
-        course_students_group: str,
+        destination: str,
+    ) -> str: ...
+
+    @abstractmethod
+    def get_url_for_repo_submits(
+        self,
+        username: str,
+        destination: str,
     ) -> str: ...
 
     @abstractmethod
@@ -234,28 +282,3 @@ class RmsApi(ABC):
         self,
         oauth_access_token: str,
     ) -> RmsUser: ...
-
-
-@dataclass
-class AuthenticatedUser:
-    id: int
-    username: str
-
-    def __repr__(self) -> str:
-        return f"AuthenticatedUser(username={self.username})"
-
-
-class AuthApi(ABC):
-    @abstractmethod
-    def check_user_is_authenticated(
-        self,
-        oauth: OAuth,
-        oauth_access_token: str,
-        oauth_refresh_token: str,
-    ) -> bool: ...
-
-    @abstractmethod
-    def get_authenticated_user(
-        self,
-        oauth_access_token: str,
-    ) -> AuthenticatedUser: ...

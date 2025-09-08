@@ -53,12 +53,12 @@ def mock_rms_api():
             self.base_url = GITLAB_BASE_URL
 
         @staticmethod
-        def get_url_for_repo(username: str, course_students_group: str):
+        def get_url_for_repo(username: str, destination: str):
             return f"{GITLAB_BASE_URL}/{username}/repo"
 
         @staticmethod
-        def get_url_for_task_base(course_public_repo: str, default_branch: str):
-            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
+        def get_url_for_task_base(template: str, default_branch: str):
+            return f"{GITLAB_BASE_URL}/{template}/blob/{default_branch}"
 
         @staticmethod
         def get_rms_user_by_id(user_id: int):
@@ -92,6 +92,10 @@ def mock_auth_api():
 
         def get_authenticated_user(self, access_token):
             return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
+
+        @property
+        def name(self) -> str:
+            return "GitLab"
 
     return MockAuthApi()
 
@@ -188,7 +192,7 @@ def mock_course():
 
 def test_valid_session_with_valid_data(app):
     with app.test_request_context():
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.5,
             "username": "test_user",
             "user_id": 123,
@@ -198,7 +202,7 @@ def test_valid_session_with_valid_data(app):
 
 def test_valid_session_with_invalid_version(app):
     with app.test_request_context():
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.0,
             "username": "test_user",
             "user_id": 123,
@@ -209,7 +213,7 @@ def test_valid_session_with_invalid_version(app):
 def test_valid_session_with_missing_data(app):
     # missing user_id
     with app.test_request_context():
-        session["gitlab"] = {"version": 1.5, "username": "test_user"}
+        session["auth"] = {"version": 1.5, "username": "test_user"}
         assert valid_session(session) is False
 
 
@@ -240,7 +244,7 @@ def test_requires_auth_with_valid_session(app, mock_gitlab_oauth):
     ):
         app.oauth = mock_gitlab_oauth
         mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.5,
             "username": "test_user",
             "user_id": 123,
@@ -354,7 +358,7 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
         app.oauth = mock_gitlab_oauth
         mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
         mock_check_if_instance_admin.return_value = True
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.5,
             "username": "test_user",
             "user_id": 123,
@@ -377,7 +381,7 @@ def test_requires_admin_with_no_admin_rules(app, mock_gitlab_oauth):
     ):
         app.oauth = mock_gitlab_oauth
         mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.5,
             "username": "test_user",
             "user_id": 123,

@@ -18,7 +18,7 @@ from .auth import handle_oauth_callback, requires_admin, requires_auth, requires
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.flask import check_admin, get_courses
-from .utils.generic import generate_token_hex, guess_first_last_name
+from .utils.generic import generate_token_hex
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -57,7 +57,7 @@ def login() -> ResponseReturnValue:
     oauth: OAuth = app.oauth
 
     redirect_uri = url_for("root.login_finish", _external=True)
-    return oauth.gitlab.authorize_redirect(redirect_uri, state=url_for("root.index"))
+    return oauth.remote_app.authorize_redirect(redirect_uri, state=url_for("root.index"))
 
 
 @root_bp.route("/login_finish")
@@ -70,7 +70,7 @@ def login_finish() -> ResponseReturnValue:
 
 @root_bp.route("/logout")
 def logout() -> ResponseReturnValue:
-    session.pop("gitlab", None)
+    session.pop("auth", None)
     return redirect(url_for("root.index"))
 
 
@@ -85,25 +85,19 @@ def course_page(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     if app.debug:
-        student_username = "guest"
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
+        username = "guest"
+        student_repo = app.rms_api.get_url_for_repo(username=username, destination=course.gitlab_course_students_group)
 
         if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
     else:
-        student_username = session["gitlab"]["username"]
-        student_id = session["gitlab"]["user_id"]
+        username = session["auth"]["username"]
 
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
+        student_repo = app.rms_api.get_url_for_repo(username=username, destination=course.gitlab_course_students_group)
 
-        rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, username)
 
     # update cache if more than 1h passed or in debug mode
     try:
@@ -118,14 +112,15 @@ def course_page(course_name: str) -> ResponseReturnValue:
         cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
 
     # get scores
-    tasks_scores = storage_api.get_scores(course.course_name, student_username)
+    tasks_scores = storage_api.get_scores(course.course_name, username)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
+    student_ci_url = app.rms_api.get_url_for_repo_submits(username, course.gitlab_course_students_group)
 
     return render_template(
         "tasks.html",
         task_base_url=app.rms_api.get_url_for_task_base(course.gitlab_course_public_repo, course.gitlab_default_branch),
-        username=student_username,
+        username=username,
         course_name=course.course_name,
         course_status=course.status,
         app=app,
@@ -133,12 +128,12 @@ def course_page(course_name: str) -> ResponseReturnValue:
         allscores_url=allscores_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
-        student_ci_url=f"{student_repo}/pipelines",
+        student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         task_url_template=course.task_url_template,
         links=course.links,
         scores=tasks_scores,
-        bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
+        bonus_score=storage_api.get_bonus_score(course.course_name, username),
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=app.favicon,
@@ -159,7 +154,12 @@ def signup() -> ResponseReturnValue:
             "signup.html",
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
+            auth_backend=app.auth_api.name,
         )
+
+    # early exit for SourceCraft
+    if app.auth_api.name == "YandexID":
+        return redirect(url_for("root.login"))
 
     # ----  register a new user ---- #
 
@@ -168,7 +168,11 @@ def signup() -> ResponseReturnValue:
     except ValidationError as e:
         app.logger.error(f"CSRF validation failed: {e}")
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            "signup.html",
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
+            auth_backend=app.auth_api.name,
         )
 
     try:
@@ -202,6 +206,7 @@ def signup() -> ResponseReturnValue:
             error_message=str(e),
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
+            auth_backend=app.auth_api.name,
         )
 
     return redirect(url_for("root.login"))
@@ -228,8 +233,9 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error(f"CSRF validation failed: {e}")
         return render_template("create_project.html", error_message="CSRF Error")
 
-    gitlab_access_token: str = session["gitlab"]["access_token"]
-    rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
+    access_token: str = session["auth"]["access_token"]
+    auth_user = app.auth_api.get_authenticated_user(access_token)
+    user = app.storage_api.get_stored_user(auth_user.username)
 
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
@@ -242,17 +248,20 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    first_name, last_name = guess_first_last_name(rms_user.name)
-    app.storage_api.create_user_if_not_exist(rms_user.username, first_name, last_name, rms_user.id)
+    app.storage_api.sync_user_on_course(course.course_name, user.username, is_course_admin)
 
-    app.storage_api.sync_user_on_course(course.course_name, rms_user.username, is_course_admin)
-
-    # Create use if needed
     try:
-        app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        app.rms_api.create_project(
+            user.rms_identity, course.gitlab_course_students_group, course.gitlab_course_public_repo
+        )
     except gitlab.GitlabError as ex:
         logger.error(f"Project creation failed: {ex.error_message}")
-        return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
+        return render_template(
+            "signup.html",
+            error_message=ex.error_message,
+            course_name=course.course_name,
+            auth_backend=app.auth_api.name,
+        )
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
@@ -286,35 +295,29 @@ def show_database(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     if app.debug:
-        student_username = "guest"
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
+        username = "guest"
+        student_repo = app.rms_api.get_url_for_repo(username=username, destination=course.gitlab_course_students_group)
 
         if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
     else:
-        student_username = session["gitlab"]["username"]
-        student_id = session["gitlab"]["user_id"]
+        username = session["auth"]["username"]
 
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
+        student_repo = app.rms_api.get_url_for_repo(username=username, destination=course.gitlab_course_students_group)
 
-        rms_user = app.rms_api.get_rms_user_by_id(user_id=student_id)
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, username)
 
-    scores = storage_api.get_scores(course.course_name, student_username)
-    bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
+    scores = storage_api.get_scores(course.course_name, username)
+    bonus_score = storage_api.get_bonus_score(course.course_name, username)
 
     return render_template(
         "database.html",
         course_name=course.course_name,
         scores=scores,
         bonus_score=bonus_score,
-        username=student_username,
+        username=username,
         is_course_admin=student_course_admin,
         app=app,
         course_favicon=app.favicon,
@@ -426,7 +429,7 @@ def admin_panel() -> ResponseReturnValue:
 
         action = request.form.get("action", "")
         username = request.form.get("username", "")
-        current_admin = session["gitlab"]["username"]
+        current_admin = session["auth"]["username"]
 
         if action == "grant":
             app.storage_api.set_instance_admin_status(username, True)
@@ -461,7 +464,7 @@ def update_profile() -> ResponseReturnValue:
     if app.debug:
         current_username = request_username
     else:
-        current_username = session["gitlab"]["username"]
+        current_username = session["auth"]["username"]
 
     try:
         validate_csrf(request.form.get("csrf_token"))
