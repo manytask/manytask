@@ -361,6 +361,8 @@ def recalculate_grade(course_name: str) -> ResponseReturnValue:
         new_grade = 0
     except Exception as e:
         logger.error(f"Error calculating grade: {str(e)}")
-        return jsonify({"success": False, "message": "Internal error during grade recalculation"}), HTTPStatus.INTERNAL_SERVER_ERROR
+        return jsonify(
+            {"success": False, "message": "Internal error during grade recalculation"}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     return jsonify({"success": True, "grade": new_grade}), HTTPStatus.OK
