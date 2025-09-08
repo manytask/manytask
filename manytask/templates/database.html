@@ -126,6 +126,7 @@
                                 totalScore += rowData.scores[key];
                             }
                         }
+                        totalScore += rowData.bonus;
                         const newPercent = maxScore === 0 ? 0 : totalScore / maxScore * 100;
                         row.update({total_score: totalScore});
                         row.update({percent: newPercent});
@@ -277,6 +278,18 @@
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Number of Large Homeworks"
+                        },
+                        {
+                            title: "Bonus",
+                            field: "bonus",
+                            frozen: true,
+                            sorter: "number",
+                            hozAlign: "center",
+                            minWidth: 1,
+                            headerTooltip: "Bonus scores",
+                            cellClick: function (e, cell) {
+                                editCell(cell);
+                            },
                         }
                     ];
 

@@ -28,6 +28,7 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
         total_score = sum(student_scores.values())
         large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
         first_name, last_name = name
+        bonus_score = student_scores.pop("bonus_score", 0)
 
         row = {
             "username": username,
@@ -37,6 +38,7 @@ def get_database_table_data(app: CustomFlask, course_name: str) -> dict[str, Any
             "total_score": total_score,
             "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
             "large_count": large_count,
+            "bonus": bonus_score,
         }
 
         try:

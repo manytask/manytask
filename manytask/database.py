@@ -233,6 +233,7 @@ class DataBaseApi(StorageApi):
                     User.username,
                     User.first_name,
                     User.last_name,
+                    UserOnCourse.bonus_score,
                     Task.name,
                     coalesce(Grade.score, 0),
                 )
@@ -250,9 +251,9 @@ class DataBaseApi(StorageApi):
 
             scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
 
-            for username, first_name, last_name, task_name, score in rows:
+            for username, first_name, last_name, bonus_score, task_name, score in rows:
                 if username not in scores_and_names:
-                    scores_and_names[username] = ({}, (first_name, last_name))
+                    scores_and_names[username] = ({"bonus_score": bonus_score}, (first_name, last_name))
                 if task_name is not None:
                     scores_and_names[username][0][task_name] = score
 
@@ -337,6 +338,13 @@ class DataBaseApi(StorageApi):
                 user_on_course = self._get_or_create_user_on_course(session, username, course)
                 session.commit()
 
+                if task_name == "Bonus":
+                    score = update_fn("", course)
+                    user_on_course.bonus_score = score
+                    session.commit()
+                    logger.info(f"Setting bonus score = {score} for {user_on_course.user.username}")
+                    return score
+
                 try:
                     task = self._get_task_by_name_and_course_id(session, task_name, course.id)
                 except NoResultFound:
@@ -348,7 +356,7 @@ class DataBaseApi(StorageApi):
                 grade.last_submit_date = datetime.now(timezone.utc)
 
                 session.commit()
-                logger.info(f"Setting score = {new_score}")
+                logger.info(f"Setting score = {new_score} for {user_on_course.user.username} to {task_name}")
                 return new_score
 
             except Exception as e:
