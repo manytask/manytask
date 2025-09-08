@@ -178,10 +178,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             project_name=auth_user.username, destination=course.course_name
         )
 
-        # for Sourcecraft project creation is async, so let's assume it exists if student is on course
-        if not (is_course_member and is_project_exists) or (
-            app.app_config.rms_backend == "sourcecraft" and not is_course_member
-        ):
+        if not (is_course_member and is_project_exists):
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from auth to database  TODO: optimize it

@@ -103,6 +103,13 @@ class SourceCraftApi(RmsApi):
             return True
         elif response.status_code == HTTPStatus.NOT_FOUND:
             logger.info(f"Project {destination}-{self._normalize_string(project_name)} not found")
+            if self._storage_api.check_user_on_course(destination, project_name):
+                # for Sourcecraft project creation is async, so let's assume it is creating if student is on course
+                # TODO: come up with a better way to check if project is creating
+                logger.info(
+                    f"Project {destination}-{self._normalize_string(project_name)} is most probably still creating..."
+                )
+                return True
             return False
         else:
             response.raise_for_status()
