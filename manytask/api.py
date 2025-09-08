@@ -348,3 +348,18 @@ def update_database(course_name: str) -> ResponseReturnValue:
     except Exception as e:
         logger.error(f"Error updating database: {str(e)}")
         return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
+
+@bp.post("/database/recalculate_grade")
+@requires_auth
+@requires_ready
+def recalculate_grade(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app # type: ignore
+    try:
+        new_grade = app.storage_api.get_grades(course_name).evaluate(request.get_json()["data"])
+    except ValueError:
+        new_grade = 0
+    except Exception as e:
+        logger.error(f"Error calculating grade: {str(e)}")
+        return jsonify({"success": False, "message": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+    return jsonify({"success": True, "grade": new_grade}), HTTPStatus.OK

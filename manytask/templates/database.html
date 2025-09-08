@@ -129,10 +129,36 @@
                         const newPercent = maxScore === 0 ? 0 : totalScore / maxScore * 100;
                         row.update({total_score: totalScore});
                         row.update({percent: newPercent});
+                        rowData.total_score = totalScore;
+                        rowData.percent = newPercent;
                         editModal.hide();
                     } else {
                         alert('Failed to update: ' + data.message);
                     }
+
+                    console.log(rowData.percent);
+                    fetch('{{ url_for("api.recalculate_grade", course_name=course_name) }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            username: username,
+                            data: rowData
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                row.update({grade: data.grade});
+                            } else {
+                                alert('Failed to update: ' + data.message);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error calculating new grade:', error);
+                            alert('Failed to calculate new grade. Try refresh page.');
+                        });
                 })
                 .catch(error => {
                     console.error('Error updating entry:', error);
@@ -265,7 +291,7 @@
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "% completed",
-                            formatter: function(cell, formatterParams, onRendered) {
+                            formatter: function (cell, formatterParams, onRendered) {
                                 return cell.getValue().toFixed(1);
                             }
                         },
