@@ -330,7 +330,7 @@ class GitLabApi(RmsApi, AuthApi):
                     response = self._make_auth_request(new_access)
                     response.raise_for_status()
 
-                    session["gitlab"].update({"access_token": new_access, "refresh_token": new_refresh})
+                    session["auth"].update({"access_token": new_access, "refresh_token": new_refresh})
                     logger.info("Token refreshed successfully.")
 
                     return True

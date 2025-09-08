@@ -49,6 +49,15 @@ def mock_env(monkeypatch, postgres_container):
     monkeypatch.setenv("INITIAL_INSTANCE_ADMIN", "instance_admin")
     monkeypatch.setenv("APPLY_MIGRATIONS", "true")
 
+    monkeypatch.setenv("AUTH_BACKEND", "gitlab")
+    monkeypatch.setenv("RMS_BACKEND", "gitlab")
+    monkeypatch.setenv("SOURCECRAFT_BASE_URL", "https://sourcecraft.dev")
+    monkeypatch.setenv("SOURCECRAFT_API_URL", "https://api.sourcecraft.tech")
+    monkeypatch.setenv("SOURCECRAFT_ORG_SLUG", "manytask")
+    monkeypatch.setenv("SOURCECRAFT_ADMIN_TOKEN", "test_admin_token")
+    monkeypatch.setenv("YANDEX_CLIENT_ID", "test_yandex_client_id")
+    monkeypatch.setenv("YANDEX_CLIENT_SECRET", "test_yandex_client_secret")
+
     os.makedirs(TEST_CACHE_DIR, exist_ok=True)
 
     return mock_env

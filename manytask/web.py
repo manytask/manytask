@@ -419,7 +419,7 @@ def admin_panel() -> ResponseReturnValue:
 
         action = request.form.get("action", "")
         username = request.form.get("username", "")
-        current_admin = session["gitlab"]["username"]
+        current_admin = session["auth"]["username"]
 
         if action == "grant":
             app.storage_api.set_instance_admin_status(username, True)
@@ -454,7 +454,7 @@ def update_profile() -> ResponseReturnValue:
     if app.debug:
         current_username = request_username
     else:
-        current_username = session["gitlab"]["username"]
+        current_username = session["auth"]["username"]
 
     try:
         validate_csrf(request.form.get("csrf_token"))

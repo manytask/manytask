@@ -123,6 +123,10 @@ def mock_auth_api():
                 id=TEST_USER_ID, username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME
             )
 
+        @property
+        def name(self) -> str:
+            return "GitLab"
+
     return MockAuthApi()
 
 

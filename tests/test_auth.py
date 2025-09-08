@@ -93,6 +93,10 @@ def mock_auth_api():
         def get_authenticated_user(self, access_token):
             return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
 
+        @property
+        def name(self) -> str:
+            return "GitLab"
+
     return MockAuthApi()
 
 
