@@ -54,8 +54,8 @@ class LocalConfig:
 @dataclass
 class DebugLocalConfig(LocalConfig):
     # basic
-    auth_backend: str = "sourcecraft"
-    rms_backend: str = "sourcecraft"
+    auth_backend: str = "gitlab"
+    rms_backend: str = "gitlab"
 
     # gitlab
     gitlab_url: str = "https://gitlab.manytask.org"
