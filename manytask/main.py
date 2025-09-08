@@ -270,7 +270,7 @@ def _create_app_config(app: CustomFlask, debug: bool | None, test: bool) -> None
 
 def _authenticate_gitlab(oauth: OAuth, base_url: str, client_id: str, client_secret: str) -> OAuth:
     oauth.register(
-        name="app",
+        name="remote_app",
         client_id=client_id,
         client_secret=client_secret,
         authorize_url=f"{base_url}/oauth/authorize",
