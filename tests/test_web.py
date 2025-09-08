@@ -340,7 +340,7 @@ def test_signup_post_password_mismatch(app, mock_course):
     with app.test_client() as client:
         response = client.get("/signup")
         soup = BeautifulSoup(response.data, "html.parser")
-        csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+        csrf_token = soup.find("input", {"name": "csrf_token"})["value"]  # type: ignore
 
         response = client.post(
             "/signup",
@@ -512,7 +512,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
         with app.test_client() as client:
             response = client.get("/signup")
             soup = BeautifulSoup(response.data, "html.parser")
-            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]  # type: ignore
             data["csrf_token"] = csrf_token
             response = client.post(url_for("root.signup", course_name=TEST_COURSE_NAME), data=data)
             assert response.status_code == HTTPStatus.FOUND
