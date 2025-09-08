@@ -303,7 +303,7 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
         ):
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
@@ -352,12 +352,12 @@ def test_logout(app):
     with app.test_request_context():
         with app.test_client() as client:
             with client.session_transaction() as sess:
-                sess["gitlab"] = {"version": TEST_VERSION, "username": TEST_USERNAME}
+                sess["auth"] = {"version": TEST_VERSION, "username": TEST_USERNAME}
             response = client.get("/logout")
             assert response.status_code == HTTPStatus.FOUND
             assert response.headers["Location"] == "/"
             with client.session_transaction() as sess:
-                assert "gitlab" not in sess
+                assert "auth" not in sess
 
 
 def test_not_ready(app):
@@ -367,7 +367,7 @@ def test_not_ready(app):
             patch.object(app.storage_api, "check_if_instance_admin") as mock_check_if_instance_admin,
         ):
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "username": TEST_USERNAME,
                 }
             mock_check_if_instance_admin.return_value = True
@@ -409,7 +409,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
     with app.test_request_context():
         with app.test_client() as client:
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
@@ -430,7 +430,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                 check_func(response, False)
 
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
@@ -450,7 +450,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                 check_func(response, True)
 
             with client.session_transaction() as sess:
-                sess["gitlab"] = {
+                sess["auth"] = {
                     "version": TEST_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,

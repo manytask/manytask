@@ -13,8 +13,8 @@ from .course import Course, CourseConfig, CourseStatus
 class AuthenticatedUser:
     id: int
     username: str
-    first_name: str | None
-    last_name: str | None
+    first_name: str | None = None
+    last_name: str | None = None
 
     def __repr__(self) -> str:
         return f"AuthenticatedUser(username={self.username}, first_name={self.first_name}, last_name={self.last_name})"
