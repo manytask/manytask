@@ -1,11 +1,3 @@
-networks:
-  manytask-net:
-    name: nginx-manytask-net
-    driver: bridge
-  postgres-net-src:
-    name: postgres-net-src
-    driver: bridge
-
 volumes:
     cache-src:
     solutions-src:
@@ -32,8 +24,7 @@ services:
             timeout: 15s
             retries: 3
             start_period: 30s
-        networks:
-            - manytask-net
+        network_mode: bridge
     manytask:
         # image: manytask/manytask:latest  # set SPECIFIC version you'll use
         build:
@@ -57,9 +48,7 @@ services:
                 condition: service_healthy
         links:
             -   postgres:postgres
-        networks:
-            - manytask-net
-            - postgres-net-src
+        network_mode: bridge
     postgres:
         image: postgres:17
         container_name: manytask_postgres_src
@@ -71,8 +60,7 @@ services:
             - "5433:5432"
         volumes:
             - postgres_data_src:/var/lib/postgresql/data
-        networks:
-            - postgres-net-src
+        network_mode: bridge
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U postgres -d manytask"]
             interval: 10s
