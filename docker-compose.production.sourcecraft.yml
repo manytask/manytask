@@ -65,7 +65,7 @@ services:
         environment:
             VIRTUAL_HOST: docs-src.manytask2.org
             VIRTUAL_PORT: 80
-            LETSENCRYPT_HOST: docs-src.manytask2.org
+            LETSENCRYPT_HOST: docs.manytask2.org
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:80" ]
             interval: 1m
@@ -88,7 +88,7 @@ services:
         environment:
             VIRTUAL_HOST: src.manytask2.org
             VIRTUAL_PORT: 5050
-            LETSENCRYPT_HOST: src.manytask2.org
+            LETSENCRYPT_HOST: app.manytask2.org
             LETSENCRYPT_EMAIL: no-reply@manytask.org
         volumes:
             - cache-src:/cache
