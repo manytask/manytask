@@ -25,7 +25,7 @@ services:
         container_name: nginx-proxy-src
         restart: always
         ports:
-            - "8080:80"
+            - "8181:80"
             - "8443:443"
         environment:
             DHPARAM_SKIP: "true"
