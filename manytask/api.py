@@ -323,9 +323,7 @@ def get_database(course_name: str) -> ResponseReturnValue:
         abort(HTTPStatus.NOT_FOUND, "Course not found")
 
     rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    # More round trips to the God of round trips!
-    is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username) or \
-        storage_api.check_if_instance_admin(rms_user.username)
+    is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     logger.info(f"Fetching database snapshot for course={course_name}")
     table_data = get_database_table_data(app, course, include_repo_urls=is_course_admin)
