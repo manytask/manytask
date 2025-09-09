@@ -136,7 +136,6 @@
                         alert('Failed to update: ' + data.message);
                     }
 
-                    console.log(rowData.percent);
                     fetch('{{ url_for("api.recalculate_grade", course_name=course_name) }}', {
                         method: 'POST',
                         headers: {
