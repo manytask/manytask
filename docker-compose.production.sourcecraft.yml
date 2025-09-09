@@ -1,15 +1,58 @@
 networks:
-  manytask-net:
-    external: true
-    name: nginx-manytask-net
+  manytask-net-src:
+    name: nginx-manytask-net-src
+    driver: bridge
 
 volumes:
     cache-src:
     solutions-src:
     postgres_data_src:
         name: manytask_postgres_data_src
+    acme-src:
+        name: acme-src
+    certs-src:
+        name: certs-src
+    vhost-src:
+        name: vhost-src
+    html-src:
+        name: html-src
+    conf-src:
+        name: conf-src
 
 services:
+    nginx-proxy:
+        image: nginxproxy/nginx-proxy:1.7.0
+        container_name: nginx-proxy-src
+        restart: always
+        ports:
+            - "8080:80"
+            - "8443:443"
+        environment:
+            DHPARAM_SKIP: "true"
+        volumes:
+            - certs-src:/etc/nginx/certs:ro
+            - vhost-src:/etc/nginx/vhost.d
+            - html-src:/usr/share/nginx/html
+            - /var/run/docker.sock:/tmp/docker.sock:ro
+            - conf-src:/etc/nginx/conf.d
+        networks:
+            - manytask-net-src
+
+    acme-companion:
+        image: nginxproxy/acme-companion:2.5.2
+        container_name: nginx-proxy-acme-src
+        restart: always
+        environment:
+            DEFAULT_EMAIL: no-reply@manytask.org
+            NGINX_PROXY_CONTAINER: nginx-proxy-src
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - acme-src:/etc/acme.sh
+            - certs-src:/etc/nginx/certs:rw
+            - vhost-src:/etc/nginx/vhost.d:rw
+            - html-src:/usr/share/nginx/html:rw
+        networks:
+            - manytask-net-src
     docs:
         build:
             dockerfile: Dockerfile
@@ -30,7 +73,7 @@ services:
             retries: 3
             start_period: 30s
         networks:
-            - manytask-net
+            - manytask-net-src
     manytask:
         # image: manytask/manytask:latest  # set SPECIFIC version you'll use
         build:
@@ -49,11 +92,16 @@ services:
             LETSENCRYPT_EMAIL: no-reply@manytask.org
         volumes:
             - cache-src:/cache
+        depends_on:
+            postgres:
+                condition: service_healthy
+        links:
+            -   postgres:postgres
         networks:
-            - manytask-net
+            - manytask-net-src
     postgres:
         image: postgres:17
-        container_name: manytask_postgres
+        container_name: manytask_postgres_src
         env_file: .env.src
         environment:
             POSTGRES_USER: ${POSTGRES_USER}
@@ -64,7 +112,8 @@ services:
         volumes:
             - postgres_data_src:/var/lib/postgresql/data
             - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-        network_mode: bridge
+        networks:
+            - manytask-net-src
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
             interval: 5s
