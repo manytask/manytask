@@ -111,11 +111,10 @@ services:
             - "5433:5432"
         volumes:
             - postgres_data_src:/var/lib/postgresql/data
-            - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
         networks:
             - manytask-net-src
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
             interval: 5s
             timeout: 5s
             retries: 5
