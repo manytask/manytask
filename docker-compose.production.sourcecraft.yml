@@ -52,6 +52,7 @@ services:
     postgres:
         image: postgres:17
         container_name: manytask_postgres
+        env_file: .env.src
         environment:
             POSTGRES_USER: ${POSTGRES_USER}
             POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
