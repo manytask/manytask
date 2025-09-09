@@ -1,7 +1,7 @@
 networks:
   manytask-net:
-    external: true
     name: nginx-manytask-net
+    driver: bridge
   postgres-net-src:
     name: postgres-net-src
     driver: bridge
