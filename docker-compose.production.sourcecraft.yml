@@ -1,6 +1,9 @@
 networks:
-  manytask-net-src:
-    name: nginx-manytask-net-src
+  manytask-net:
+    external: true
+    name: nginx-manytask-net
+  postgres-net-src:
+    name: postgres-net-src
     driver: bridge
 
 volumes:
@@ -8,51 +11,8 @@ volumes:
     solutions-src:
     postgres_data_src:
         name: manytask_postgres_data_src
-    acme-src:
-        name: acme-src
-    certs-src:
-        name: certs-src
-    vhost-src:
-        name: vhost-src
-    html-src:
-        name: html-src
-    conf-src:
-        name: conf-src
 
 services:
-    nginx-proxy:
-        image: nginxproxy/nginx-proxy:1.7.0
-        container_name: nginx-proxy-src
-        restart: always
-        ports:
-            - "8181:80"
-            - "8443:443"
-        environment:
-            DHPARAM_SKIP: "true"
-        volumes:
-            - certs-src:/etc/nginx/certs:ro
-            - vhost-src:/etc/nginx/vhost.d
-            - html-src:/usr/share/nginx/html
-            - /var/run/docker.sock:/tmp/docker.sock:ro
-            - conf-src:/etc/nginx/conf.d
-        networks:
-            - manytask-net-src
-
-    acme-companion:
-        image: nginxproxy/acme-companion:2.5.2
-        container_name: nginx-proxy-acme-src
-        restart: always
-        environment:
-            DEFAULT_EMAIL: no-reply@manytask.org
-            NGINX_PROXY_CONTAINER: nginx-proxy-src
-        volumes:
-            - /var/run/docker.sock:/var/run/docker.sock:ro
-            - acme-src:/etc/acme.sh
-            - certs-src:/etc/nginx/certs:rw
-            - vhost-src:/etc/nginx/vhost.d:rw
-            - html-src:/usr/share/nginx/html:rw
-        networks:
-            - manytask-net-src
     docs:
         build:
             dockerfile: Dockerfile
@@ -65,7 +25,7 @@ services:
         environment:
             VIRTUAL_HOST: docs-src.manytask2.org
             VIRTUAL_PORT: 80
-            LETSENCRYPT_HOST: docs.manytask2.org
+            LETSENCRYPT_HOST: docs-src.manytask2.org
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:80" ]
             interval: 1m
@@ -73,7 +33,7 @@ services:
             retries: 3
             start_period: 30s
         networks:
-            - manytask-net-src
+            - manytask-net
     manytask:
         # image: manytask/manytask:latest  # set SPECIFIC version you'll use
         build:
@@ -88,8 +48,8 @@ services:
         environment:
             VIRTUAL_HOST: src.manytask2.org
             VIRTUAL_PORT: 5050
-            # LETSENCRYPT_HOST: app.manytask2.org
-            # LETSENCRYPT_EMAIL: no-reply@manytask.org
+            LETSENCRYPT_HOST: src.manytask2.org
+            LETSENCRYPT_EMAIL: no-reply@manytask.org
         volumes:
             - cache-src:/cache
         depends_on:
@@ -98,7 +58,8 @@ services:
         links:
             -   postgres:postgres
         networks:
-            - manytask-net-src
+            - manytask-net
+            - postgres-net-src
     postgres:
         image: postgres:17
         container_name: manytask_postgres_src
@@ -111,7 +72,7 @@ services:
         volumes:
             - postgres_data_src:/var/lib/postgresql/data
         networks:
-            - manytask-net-src
+            - postgres-net-src
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U postgres -d manytask"]
             interval: 10s
