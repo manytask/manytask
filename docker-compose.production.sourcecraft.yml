@@ -6,6 +6,8 @@ networks:
 volumes:
     cache-src:
     solutions-src:
+    postgres_data_src:
+        name: manytask_postgres_data_src
 
 services:
     docs:
@@ -60,7 +62,7 @@ services:
         ports:
             - "5433:5432"
         volumes:
-            - postgres_data:/var/lib/postgresql/data
+            - postgres_data_src:/var/lib/postgresql/data
             - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
         network_mode: bridge
         healthcheck:
