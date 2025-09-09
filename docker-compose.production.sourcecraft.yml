@@ -88,8 +88,8 @@ services:
         environment:
             VIRTUAL_HOST: src.manytask2.org
             VIRTUAL_PORT: 5050
-            LETSENCRYPT_HOST: app.manytask2.org
-            LETSENCRYPT_EMAIL: no-reply@manytask.org
+            # LETSENCRYPT_HOST: app.manytask2.org
+            # LETSENCRYPT_EMAIL: no-reply@manytask.org
         volumes:
             - cache-src:/cache
         depends_on:
