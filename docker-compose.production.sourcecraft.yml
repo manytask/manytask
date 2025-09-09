@@ -102,11 +102,10 @@ services:
     postgres:
         image: postgres:17
         container_name: manytask_postgres_src
-        env_file: .env.src
         environment:
-            POSTGRES_USER: ${POSTGRES_USER}
-            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-            POSTGRES_DB: ${POSTGRES_DB}
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+            POSTGRES_DB: manytask
         ports:
             - "5433:5432"
         volumes:
@@ -114,7 +113,8 @@ services:
         networks:
             - manytask-net-src
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U postgres"]
-            interval: 5s
+            test: ["CMD-SHELL", "pg_isready -U postgres -d manytask"]
+            interval: 10s
             timeout: 5s
             retries: 5
+            start_period: 30s
