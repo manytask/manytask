@@ -2,9 +2,9 @@
 set -e
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    CREATE USER adminmanytask WITH PASSWORD 'adminpass';
-    CREATE DATABASE manytask;
-    GRANT ALL PRIVILEGES ON DATABASE manytask TO adminmanytask;
-    \c manytask
-    GRANT ALL ON SCHEMA public TO adminmanytask;
+    CREATE USER "$POSTGRES_USER" WITH PASSWORD "$POSTGRES_PASSWORD";
+    CREATE DATABASE "$POSTGRES_DB";
+    GRANT ALL PRIVILEGES ON DATABASE "$POSTGRES_DB" TO "$POSTGRES_USER";
+    \c "$POSTGRES_DB"
+    GRANT ALL ON SCHEMA public TO "$POSTGRES_USER";
 EOSQL
