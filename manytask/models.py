@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
@@ -242,7 +242,7 @@ class TaskGroup(Base):
     deadline: Mapped["Deadline"] = relationship(
         back_populates="task_group", cascade="all, delete-orphan", single_parent=True
     )
-    tasks: DynamicMapped["Task"] = relationship(
+    tasks: Mapped[List["Task"]] = relationship(
         back_populates="group", cascade="all, delete-orphan", order_by="Task.position"
     )
 
@@ -264,7 +264,7 @@ class Task(Base):
 
     # relationships
     group: Mapped["TaskGroup"] = relationship(back_populates="tasks")
-    grades: DynamicMapped["Grade"] = relationship(back_populates="task", cascade="all, delete-orphan")
+    grades: Mapped[List["Grade"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
 
 class Grade(Base):

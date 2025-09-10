@@ -5,7 +5,8 @@
     {% set solved_score = scores.values() | sum() %}
     {% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
     {% set solved_score_string = solved_score ~ bonus_score_string %}
-    {% set solved_percent = "0.0" if app.storage_api.max_score_started(course_name) == 0 else (solved_score / app.storage_api.max_score_started(course_name) * 100) | round(1, 'common') %}
+    {% set max_started = app.storage_api.max_score_started(course_name) %}
+    {% set solved_percent = "0.0" if max_started == 0 else (solved_score / max_started * 100) | round(1, 'common') %}
 
     <nav class="navbar navbar-expand-lg bg-body fixed-top shadow-sm">
         <div class="container-fluid d-flex justify-content-between align-items-center">
@@ -102,7 +103,7 @@
 
                 <div class="nav-score-display d-flex flex-column align-items-center justify-content-center me-2 px-3 py-1 shadow-sm">
                     <span class="fw-bold">{{ solved_percent }}%</span>
-                    <small class="text-muted">{{ solved_score_string }}/{{ app.storage_api.max_score_started(course_name) }}</small>
+                    <small class="text-muted">{{ solved_score_string }}/{{ max_started }}</small>
                 </div>
 
                 <div class="dropdown">
