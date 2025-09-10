@@ -501,7 +501,10 @@ def test_update_database_missing_fields(app, authenticated_client):
 
 
 def test_update_database_success(app, authenticated_client):
-    test_data = {"row_data": {"username": TEST_USERNAME, "total_score": 0, "large_count": 0, "scores": {}}, "scores": {"task1": 90, "task2": 85}}
+    test_data = {
+        "row_data": {"username": TEST_USERNAME, "total_score": 0, "large_count": 0, "scores": {}},
+        "scores": {"task1": 90, "task2": 85},
+    }
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
     assert response.status_code == HTTPStatus.OK
     data = json.loads(response.data)
@@ -708,7 +711,10 @@ def test_update_database_invalid_task(app, authenticated_client, mock_gitlab_oau
             "username": TEST_USERNAME,
             "user_id": TEST_USER_ID,
         }
-    data = {"row_data": {"username": TEST_USERNAME, "total_score": 0, "large_count": 0, "scores": {}}, "scores": {INVALID_TASK_NAME: 100}}
+    data = {
+        "row_data": {"username": TEST_USERNAME, "total_score": 0, "large_count": 0, "scores": {}},
+        "scores": {INVALID_TASK_NAME: 100},
+    }
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
     # API silently ignores invalid tasks
     assert response.status_code == HTTPStatus.OK
