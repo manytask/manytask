@@ -164,7 +164,7 @@ def _logging_config(app: CustomFlask) -> dict[str, Any]:
         },
         "handlers": {
             "console": {
-                "level": "INFO",
+                "level": "DEBUG" if app.debug else "INFO",
                 "class": "logging.StreamHandler",
                 "formatter": "default",
                 "stream": "ext://sys.stdout",
