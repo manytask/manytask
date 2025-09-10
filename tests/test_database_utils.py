@@ -125,6 +125,7 @@ def app():  # noqa: C901
         def get_course(_name):
             @dataclass
             class Course:
+                course_name: str = "test_course"
                 gitlab_course_group: str = "test_course_group"
                 gitlab_course_students_group: str = "test_course_students_group"
 
@@ -145,7 +146,8 @@ def test_get_database_table_data(app):
     expected_students_count = 2
 
     with app.test_request_context():
-        result = get_database_table_data(app, "test_course")
+        test_course = app.storage_api.get_course("test_course")
+        result = get_database_table_data(app, test_course)
 
         assert result["max_score"] == MAX_SCORE
         assert "tasks" in result
@@ -180,7 +182,8 @@ def test_get_database_table_data_no_scores(app):
 
     with app.test_request_context():
         app.storage_api.get_all_scores_with_names = lambda _course_name: {}
-        result = get_database_table_data(app, "test_course")
+        test_course = app.storage_api.get_course("test_course")
+        result = get_database_table_data(app, test_course)
 
         assert "max_score" not in result
         assert "tasks" in result

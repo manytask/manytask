@@ -222,7 +222,18 @@
                             frozen: true,
                             minWidth: 1,
                             width: 120,
-                            headerTooltip: "Username"
+                            headerTooltip: "Username",
+                            formatter: function(cell) {
+                                const value = cell.getValue();
+                                const rowData = cell.getRow().getData();
+                                {% if is_course_admin %}
+                                if (rowData && rowData.repo_url) {
+                                    const url = rowData.repo_url;
+                                    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+                                }
+                                {% endif %}
+                                return value;
+                            }
                         },
                         {
                             title: "First<br>Name",
