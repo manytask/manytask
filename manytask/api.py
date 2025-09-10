@@ -1,7 +1,9 @@
+from manytask.auth import check_authenticated
 from __future__ import annotations
 
 import functools
 import logging
+from enum import Enum
 import secrets
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -21,11 +23,36 @@ from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
-from .utils.generic import sanitize_log_data
 
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
+
+
+def get_course_or_not_found(app: CustomFlask, course_name: str) -> Course:
+    course = app.storage_api.get_course(course_name)
+    if course is None:
+        logger.warning(f"Course not found: {course_name}")
+        abort(HTTPStatus.NOT_FOUND, "Course not found")
+    return course
+
+
+def check_token(app: CustomFlask, course: Course) -> bool:
+    course_name = course.course_name
+    logger.debug(f"Checking token for course={course_name}")
+
+    course_token = course.token
+    token = request.form.get("token", request.headers.get("Authorization", ""))
+    if not token or not course_token:
+        logger.warning(f"Missing token for course={course_name}")
+        return False
+    token = token.split()[-1]
+    if not secrets.compare_digest(token, course_token):
+        logger.warning(f"Invalid token for course={course_name}")
+        return False
+
+    logger.debug(f"Token validated for course={course_name}")
+    return True
 
 
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -34,26 +61,33 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         app: CustomFlask = current_app  # type: ignore
 
         course_name = kwargs["course_name"]
-
-        logger.debug(f"Checking token for course={course_name}")
-
-        course = app.storage_api.get_course(course_name)
-        if course is None:
-            logger.warning(f"Course not found: {course_name}")
-            abort(HTTPStatus.NOT_FOUND, "Course not found")
-
-        course_token = course.token
-        token = request.form.get("token", request.headers.get("Authorization", ""))
-        if not token or not course_token:
-            logger.warning(f"Missing token for course={course_name}")
-            abort(HTTPStatus.FORBIDDEN)
-        token = token.split()[-1]
-        if not secrets.compare_digest(token, course_token):
-            logger.warning(f"Invalid token for course={course_name}")
+        course = get_course_or_not_found(app, course_name)
+        if not check_token(app, course):
             abort(HTTPStatus.FORBIDDEN)
 
-        logger.debug(f"Token validated for course={course_name}")
         return f(*args, **kwargs)
+
+    return decorated
+
+
+class AuthMethod(Enum):
+    COURSE_TOKEN = "course_token"
+    SESSION = "session"
+
+
+def requires_auth_or_token[T](f: Callable[..., T]) -> Callable[..., T]:
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> T:
+        app: CustomFlask = current_app  # type: ignore
+
+        course_name = kwargs["course_name"]
+        course = get_course_or_not_found(app, course_name)
+        if check_authenticated(app):
+            return f(*args, **kwargs, method=AuthMethod.SESSION)
+        if check_token(app, course):
+            return f(*args, **kwargs, method=AuthMethod.COURSE_TOKEN)
+
+        abort(HTTPStatus.FORBIDDEN)
 
     return decorated
 
@@ -312,28 +346,29 @@ def update_cache(course_name: str) -> ResponseReturnValue:
 
 
 @bp.get("/database")
-@requires_auth
+@requires_auth_or_token
 @requires_ready
-def get_database(course_name: str) -> ResponseReturnValue:
+def get_database(course_name: str, method: AuthMethod) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     storage_api = app.storage_api
-    course = app.storage_api.get_course(course_name)
-    if course is None:
-        abort(HTTPStatus.NOT_FOUND, "Course not found")
+    course = get_course_or_not_found(app, course_name)
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+    include_repo_urls = True
+
+    if method == AuthMethod.SESSION:
+        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+        include_repo_urls = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
     logger.info(f"Fetching database snapshot for course={course_name}")
-    table_data = get_database_table_data(app, course, include_repo_urls=is_course_admin)
+    table_data = get_database_table_data(app, course, include_repo_urls=include_repo_urls)
     return jsonify(table_data)
 
 
 @bp.post("/database/update")
-@requires_auth
+@requires_auth_or_token
 @requires_ready
-def update_database(course_name: str) -> ResponseReturnValue:
+def update_database(course_name: str, method: AuthMethod) -> ResponseReturnValue:
     """
     Update student scores in the database via API endpoint.
 
@@ -354,13 +389,14 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    logger.info(f"Request by admin={rms_user.username} for course={course_name}")
+    if method == AuthMethod.SESSION:
+        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+        logger.info(f"Request by admin={rms_user.username} for course={course_name}")
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
-    if not student_course_admin:
-        return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
+        if not student_course_admin:
+            return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
 
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST

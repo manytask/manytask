@@ -119,6 +119,27 @@ def __redirect_to_login() -> Response:
     return redirect(url_for("root.signup"))
 
 
+def check_authenticated(app: CustomFlask) -> bool:
+    if app.debug:
+        return True
+
+    if not valid_session(session):
+        logger.error("Failed to verify session.", exc_info=True)
+        return False
+
+    logger.debug("Session valid, checking with auth_api")
+    if not app.auth_api.check_user_is_authenticated(
+        app.oauth,
+        session["gitlab"]["access_token"],
+        session["gitlab"]["refresh_token"],
+    ):
+        logger.warning("Session not authenticated, redirecting to login")
+        return False
+
+    logger.debug("Auth check passed")
+    return True
+
+
 def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
     """Check authentication"""
 
@@ -126,24 +147,10 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
     def decorated(*args: Any, **kwargs: Any) -> Any:
         app: CustomFlask = current_app  # type: ignore
 
-        if app.debug:
-            return f(*args, **kwargs)
-
-        if valid_session(session):
-            logger.debug("Session valid, checking with auth_api")
-            if not app.auth_api.check_user_is_authenticated(
-                app.oauth,
-                session["gitlab"]["access_token"],
-                session["gitlab"]["refresh_token"],
-            ):
-                logger.warning("Session not authenticated, redirecting to login")
-                return __redirect_to_login()
-        else:
-            logger.error("Failed to verify session.", exc_info=True)
+        if not check_authenticated(app):
             return __redirect_to_login()
-
-        logger.debug("Auth check passed")
-        return f(*args, **kwargs)
+        else:
+            return f(*args, **kwargs)
 
     return decorated
 
