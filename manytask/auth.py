@@ -113,7 +113,7 @@ def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     return auth_user
 
 
-def __redirect_to_login() -> Response:
+def redirect_to_login() -> Response:
     logger.debug("Clearing session and redirecting to signup")
     session.pop("gitlab", None)
     return redirect(url_for("root.signup"))
@@ -148,7 +148,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         app: CustomFlask = current_app  # type: ignore
 
         if not check_authenticated(app):
-            return __redirect_to_login()
+            return redirect_to_login()
         else:
             return f(*args, **kwargs)
 

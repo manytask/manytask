@@ -13,6 +13,7 @@ from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
 
 from manytask.abstract import StorageApi
+from manytask.auth import redirect_to_login
 from manytask.database import TaskDisabledError
 from manytask.glab import GitLabApiException
 
@@ -75,9 +76,9 @@ class AuthMethod(Enum):
     SESSION = "session"
 
 
-def requires_auth_or_token[T](f: Callable[..., T]) -> Callable[..., T]:
+def requires_auth_or_token[Any](f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
-    def decorated(*args: Any, **kwargs: Any) -> T:
+    def decorated(*args: Any, **kwargs: Any):
         app: CustomFlask = current_app  # type: ignore
 
         course_name = kwargs["course_name"]
@@ -87,7 +88,10 @@ def requires_auth_or_token[T](f: Callable[..., T]) -> Callable[..., T]:
         if check_token(app, course):
             return f(*args, **kwargs, method=AuthMethod.COURSE_TOKEN)
 
-        abort(HTTPStatus.FORBIDDEN)
+        if "User-Agent" in request.headers:
+            return redirect_to_login()
+        else:
+            abort(HTTPStatus.FORBIDDEN)
 
     return decorated
 
