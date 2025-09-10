@@ -58,7 +58,6 @@
 
 
     <script>
-        let maxScore = 0;
         let currentEditCell = null;
         let editModal = null;
         const mincolwidth = 30;
@@ -98,66 +97,29 @@
 
             const row = currentEditCell.getRow();
             const rowData = row.getData();
-            const username = rowData.username;
             const taskName = currentEditCell.getColumn().getDefinition().title;
 
             // Update database
-            const scores = {};
-            scores[taskName] = newScore;
+            const newScores = {};
+            newScores[taskName] = newScore;
             fetch('{{ url_for("api.update_database", course_name=course_name) }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    username: username,
-                    scores: scores
+                    row_data: rowData,
+                    scores: newScores
                 })
             })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        currentEditCell.setValue(newScore);
-
-                        // Recalculate total score - update total score column
-                        let totalScore = 0;
-                        for (const key in rowData.scores) {
-                            if (rowData.scores[key]) {
-                                totalScore += rowData.scores[key];
-                            }
-                        }
-                        const newPercent = maxScore === 0 ? 0 : totalScore / maxScore * 100;
-                        row.update({total_score: totalScore});
-                        row.update({percent: newPercent});
-                        rowData.total_score = totalScore;
-                        rowData.percent = newPercent;
+                        row.update(data.row_data)
                         editModal.hide();
                     } else {
                         alert('Failed to update: ' + data.message);
                     }
-
-                    fetch('{{ url_for("api.recalculate_grade", course_name=course_name) }}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            username: username,
-                            data: rowData
-                        })
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                row.update({grade: data.grade});
-                            } else {
-                                alert('Failed to update: ' + data.message);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error calculating new grade:', error);
-                            alert('Failed to calculate new grade. Try refresh page.');
-                        });
                 })
                 .catch(error => {
                     console.error('Error updating entry:', error);
@@ -310,7 +272,6 @@
                     }
 
                     const taskGroups = {};
-                    maxScore = data.max_score;
 
                     data.tasks.forEach(task => {
                         const groupName = task.group || 'ungrouped';
