@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
 
 
+def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Course:
+    course = storage_api.get_course(course_name)
+    if course is None:
+        logger.warning(f"Course not found: {course_name}")
+        abort(HTTPStatus.NOT_FOUND, "Course not found")
+    return course
+
+
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
@@ -37,10 +45,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
 
         logger.debug(f"Checking token for course={course_name}")
 
-        course = app.storage_api.get_course(course_name)
-        if course is None:
-            logger.warning(f"Course not found: {course_name}")
-            abort(HTTPStatus.NOT_FOUND, "Course not found")
+        course = __get_course_or_not_found(app.storage_api, course_name)
 
         course_token = course.token
         token = request.form.get("token", request.headers.get("Authorization", ""))
@@ -329,9 +334,7 @@ def get_database(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     storage_api = app.storage_api
-    course = app.storage_api.get_course(course_name)
-    if course is None:
-        abort(HTTPStatus.NOT_FOUND, "Course not found")
+    course = __get_course_or_not_found(storage_api, course_name)
 
     rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
     is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
