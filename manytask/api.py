@@ -1,4 +1,3 @@
-from manytask.auth import check_authenticated
 from __future__ import annotations
 
 import functools
@@ -18,7 +17,8 @@ from manytask.database import TaskDisabledError
 from manytask.glab import GitLabApiException
 
 from .abstract import RmsApi, RmsUser
-from .auth import requires_auth, requires_ready
+from .auth import requires_ready, check_authenticated
+from .utils.generic import sanitize_log_data
 from .config import ManytaskGroupConfig, ManytaskTaskConfig
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .main import CustomFlask
