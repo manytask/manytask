@@ -239,7 +239,7 @@ class Task(Base):
 
     # relationships
     group: Mapped["TaskGroup"] = relationship(back_populates="tasks")
-    grades: Mapped["Grade"] = relationship(back_populates="task", cascade="all, delete-orphan")
+    grades: Mapped[List["Grade"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
 
 class Grade(Base):

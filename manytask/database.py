@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
+from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast, List
 from zoneinfo import ZoneInfo
 
 from alembic import command
@@ -11,7 +11,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from pydantic import AnyUrl
-from sqlalchemy import and_, create_engine, select
+from sqlalchemy import and_, create_engine, select, Row
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
@@ -297,33 +297,16 @@ class DataBaseApi(StorageApi):
                 .scalar()
             )
 
-            task_submits = (
-                session.query(
-                    Task.id,
-                    Task.name,
-                    func.count(Grade.id).label("submits_count"),
-                )
-                .join(TaskGroup, Task.group_id == TaskGroup.id)
-                .join(Course, Course.id == TaskGroup.course_id)
-                .join(Deadline, TaskGroup.deadline_id == Deadline.id)
-                .outerjoin(
-                    Grade,
-                    and_(Grade.task_id == Task.id),
-                )
-                .filter(
-                    Course.name == course_name,
-                    Task.enabled.is_(True),
-                    TaskGroup.enabled.is_(True),
-                    self.get_now_with_timezone(course_name) >= models.Deadline.start,
-                )
-                .group_by(Task.id, Task.name)
-                .all()
-            )
-
+            # fmt: off
             return {
-                task_name: 0 if users_on_courses_count == 0 else submits_count / users_on_courses_count
-                for task_id, task_name, submits_count in task_submits
+                task_name: (
+                    submits_count / users_on_courses_count
+                    if users_on_courses_count > 0
+                    else 0
+                )
+                for task_id, task_name, submits_count in self._get_tasks_submits_count(session, course_name)
             }
+            # fmt: on
 
     def get_scores_update_timestamp(self, course_name: str) -> str:
         """Method(deprecated) for getting last cached scores update timestamp
@@ -1373,13 +1356,30 @@ class DataBaseApi(StorageApi):
 
         return session.query(func.count(models.UserOnCourse.id)).filter_by(course_id=course.id).one()[0]
 
-    @staticmethod
-    def _get_task_submits_count(
+    def _get_tasks_submits_count(
+        self,
         session: Session,
-        task_id: int,
-    ) -> int:
+        course_name: str,
+    ) -> list[Row[tuple[int, str, int]]]:
         return (
-            session.query(func.count(models.Grade.id))
-            .filter(and_(models.Grade.task_id == task_id, models.Grade.score > 0))
-            .one()[0]
+            session.query(
+                Task.id,
+                Task.name,
+                func.count(Grade.id),
+            )
+            .join(TaskGroup, Task.group_id == TaskGroup.id)
+            .join(Course, Course.id == TaskGroup.course_id)
+            .join(Deadline, TaskGroup.deadline_id == Deadline.id)
+            .outerjoin(
+                Grade,
+                and_(Grade.task_id == Task.id),
+            )
+            .filter(
+                Course.name == course_name,
+                Task.enabled.is_(True),
+                TaskGroup.enabled.is_(True),
+                self.get_now_with_timezone(course_name) >= models.Deadline.start,
+            )
+            .group_by(Task.id, Task.name)
+            .all()
         )
