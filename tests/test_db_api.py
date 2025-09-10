@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -18,6 +18,7 @@ from manytask.config import (
     ManytaskDeadlinesConfig,
     ManytaskFinalGradeConfig,
     ManytaskGroupConfig,
+    ManytaskTaskConfig,
     ManytaskUiConfig,
 )
 from manytask.course import Course as ManytaskCourse
@@ -357,8 +358,8 @@ def test_not_initialized_course(session, db_api, first_course_config):
 
 
 def test_initialized_course(db_api_with_initialized_first_course, session):  # noqa: PLR0915
-    expected_task_groups = 6
-    expected_tasks = 19
+    expected_task_groups = 7
+    expected_tasks = 20
     bonus_tasks = ("task_0_2", "task_1_3")
     large_tasks = "task_5_0"
     special_tasks = ("task_1_1",)
@@ -403,6 +404,9 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
 
     tasks = session.query(Task).all()
     for task in tasks:
+        if task.group.name == "Bonus group":
+            assert task.name == "bonus_score"
+            continue
         assert task.group.name == "group_" + task.name[len("task_")]
 
         assert task.is_bonus == (task.name in bonus_tasks)
@@ -445,8 +449,8 @@ def test_updating_course(
     first_course_grade_config_with_changed_numbers,
     session,
 ):
-    expected_task_groups = 8
-    expected_tasks = 28
+    expected_task_groups = 9
+    expected_tasks = 29
     bonus_tasks = ("task_0_2", "task_1_3", "task_6_0")
     large_tasks = ("task_5_0", "task_5_1")
     special_tasks = ("task_1_1", "task_6_0")
@@ -495,6 +499,9 @@ def test_updating_course(
 
     tasks = session.query(Task).all()
     for task in tasks:
+        if task.group.name == "Bonus group":
+            assert task.name == "bonus_score"
+            continue
         assert task.group.name == "group_" + task.name[len("task_")]
 
         assert task.is_bonus == (task.name in bonus_tasks)
@@ -521,8 +528,8 @@ def test_resync_with_changed_task_name(
     first_course_grade_config,
     session,
 ):
-    expected_task_groups = 6
-    expected_tasks = 20
+    expected_task_groups = 7
+    expected_tasks = 21
     disabled_tasks = ("task_0_0", "task_2_1")
 
     create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
@@ -544,9 +551,12 @@ def test_resync_with_changed_task_name(
 
     tasks = session.query(Task).all()
     for task in tasks:
-        assert task.group.name == "group_" + task.name[len("task_")]
+        if task.group.name == "Bonus group":
+            assert task.name == "bonus_score"
+        else:
+            assert task.group.name == "group_" + task.name[len("task_")]
 
-        assert task.enabled != (task.name in disabled_tasks)
+            assert task.enabled != (task.name in disabled_tasks)
 
 
 def test_store_score(db_api_with_initialized_first_course, session):
@@ -602,8 +612,38 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert stats["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_0_0")
 
-    assert all_scores == {TEST_USERNAME: ({"bonus_score": 0, "task_0_0": 1}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
+    assert all_scores == {TEST_USERNAME: ({"task_0_0": 1}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
     assert bonus_score == 0
+    assert scores == {"task_0_0": 1}
+
+
+def test_store_bonus_score(db_api_with_initialized_first_course, session):
+    assert session.query(User).count() == 1
+    assert session.query(UserOnCourse).count() == 0
+
+    db_api_with_initialized_first_course.create_user_if_not_exist(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
+    )
+
+    assert session.query(User).count() == USER_EXPECTED
+    assert session.query(UserOnCourse).count() == 0
+
+    assert (
+        db_api_with_initialized_first_course.store_score(
+            FIRST_COURSE_NAME, TEST_USERNAME, "bonus_score", update_func(1)
+        )
+        == 1
+    )
+
+    assert (
+        db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(1))
+        == 1
+    )
+
+    all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
+    scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
+
+    assert all_scores == {TEST_USERNAME: ({"bonus_score": 1, "task_0_0": 1}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
     assert scores == {"task_0_0": 1}
 
 
@@ -638,9 +678,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     assert stats["task_1_3"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_1_3")
 
-    assert all_scores == {
-        TEST_USERNAME: ({"bonus_score": 0, "task_1_3": expected_score}, (TEST_FIRST_NAME, TEST_LAST_NAME))
-    }
+    assert all_scores == {TEST_USERNAME: ({"task_1_3": expected_score}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
     assert bonus_score == expected_score
     assert scores == {"task_1_3": expected_score}
 
@@ -673,7 +711,7 @@ def test_store_score_with_changed_task_name(
     assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
     assert all(v == 0.0 for k, v in stats.items())
 
-    assert all_scores == {TEST_USERNAME: ({"bonus_score": 0}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
+    assert all_scores == {TEST_USERNAME: ({"task_0_0": 10}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
     assert bonus_score == 0
     assert scores == {}
 
@@ -765,11 +803,11 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
     assert all_scores == {
         TEST_USERNAME_1: (
-            {"bonus_score": 0, "task_0_0": 1, "task_1_3": expected_score_1},
+            {"task_0_0": 1, "task_1_3": expected_score_1},
             (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
         ),
         TEST_USERNAME_2: (
-            {"bonus_score": 0, "task_0_0": expected_score_2},
+            {"task_0_0": expected_score_2},
             (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
         ),
     }
@@ -803,7 +841,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     assert stats1["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats1.items() if k != "task_0_0")
 
-    assert all_scores1 == {TEST_USERNAME: ({"bonus_score": 0, "task_0_0": 30}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
+    assert all_scores1 == {TEST_USERNAME: ({"task_0_0": 30}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
     assert bonus_score_user1 == 0
     assert scores_user1 == {"task_0_0": 30}
 
@@ -817,9 +855,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     assert all(v == 0.0 for k, v in stats2.items() if k != "task_1_3")
 
     user2_score = 40
-    assert all_scores2 == {
-        TEST_USERNAME: ({"bonus_score": 0, "task_1_3": user2_score}, (TEST_FIRST_NAME, TEST_LAST_NAME))
-    }
+    assert all_scores2 == {TEST_USERNAME: ({"task_1_3": user2_score}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
     assert bonus_score_user2 == user2_score
     assert scores_user2 == {"task_1_3": user2_score}
 
@@ -868,11 +904,11 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
 
     assert all_scores1 == {
         TEST_USERNAME_1: (
-            {"bonus_score": 0, "task_0_0": 1, "task_1_3": expected_score_1},
+            {"task_0_0": 1, "task_1_3": expected_score_1},
             (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
         ),
         TEST_USERNAME_2: (
-            {"bonus_score": 0, "task_0_0": expected_score_2},
+            {"task_0_0": expected_score_2},
             (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
         ),
     }
@@ -894,8 +930,8 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     assert all(v == 0.0 for k, v in stats2.items() if k not in ["task_1_0", "task_1_1"])
 
     assert all_scores2 == {
-        TEST_USERNAME_1: ({"bonus_score": 0, "task_1_0": 99}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1)),
-        TEST_USERNAME_2: ({"bonus_score": 0, "task_1_1": 7}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2)),
+        TEST_USERNAME_1: ({"task_1_0": 99}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1)),
+        TEST_USERNAME_2: ({"task_1_1": 7}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2)),
     }
     assert bonus_score2_user1 == 0
     assert scores2_user1 == {"task_1_0": 99}
@@ -1271,7 +1307,28 @@ def check_get_groups(
 
     assert len([group.name for group in result_groups]) == len(set([group.name for group in result_groups]))
 
-    groups = [change_timedelta_to_datetime(group) for group in course_deadlines_config.groups]
+    bonus_group = ManytaskGroupConfig(
+        group="Bonus group",
+        start=datetime(2000, 1, 1, 0, 0, tzinfo=timezone.utc),
+        end=datetime(3000, 1, 1, 0, 0, tzinfo=timezone.utc),
+        steps={},
+        enabled=False,
+        tasks=[
+            ManytaskTaskConfig(
+                task="bonus_score",
+                enabled=False,
+                score=0,
+                min_score=0,
+                special=0,
+                is_bonus=False,
+                is_large=False,
+                is_special=False,
+                url=None,
+            )
+        ],
+    )
+
+    groups = [change_timedelta_to_datetime(group) for group in [bonus_group] + course_deadlines_config.groups]
 
     if enabled is not None:
         groups = [group for group in groups if group.enabled == enabled]

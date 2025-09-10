@@ -99,7 +99,7 @@
             const row = currentEditCell.getRow();
             const rowData = row.getData();
             const username = rowData.username;
-            const taskName = currentEditCell.getColumn().getDefinition().title;
+            const taskName = currentEditCell.getColumn().getDefinition().field.split(".")[1];
 
             // Update database
             const scores = {};
@@ -126,7 +126,6 @@
                                 totalScore += rowData.scores[key];
                             }
                         }
-                        totalScore += rowData.bonus;
                         const newPercent = maxScore === 0 ? 0 : totalScore / maxScore * 100;
                         row.update({total_score: totalScore});
                         row.update({percent: newPercent});
@@ -281,7 +280,7 @@
                         },
                         {
                             title: "Bonus",
-                            field: "bonus",
+                            field: "scores.bonus_score",
                             frozen: true,
                             sorter: "number",
                             hozAlign: "center",

@@ -206,7 +206,6 @@ class UserOnCourse(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
     join_date: Mapped[datetime] = mapped_column(server_default=func.now())
     is_course_admin: Mapped[bool] = mapped_column(default=False)
-    bonus_score: Mapped[int] = mapped_column(default="0", server_default="0")
 
     __table_args__ = (UniqueConstraint("user_id", "course_id", name="_user_course_uc"),)
 

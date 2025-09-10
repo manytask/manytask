@@ -28,7 +28,7 @@ from .config import (
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
 from .course import CourseStatus
-from .models import Course, Grade, Task, TaskGroup, User, UserOnCourse
+from .models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -236,7 +236,6 @@ class DataBaseApi(StorageApi):
                     User.username,
                     User.first_name,
                     User.last_name,
-                    UserOnCourse.bonus_score,
                     Task.name,
                     coalesce(Grade.score, 0),
                 )
@@ -254,9 +253,9 @@ class DataBaseApi(StorageApi):
 
             scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
 
-            for username, first_name, last_name, bonus_score, task_name, score in rows:
+            for username, first_name, last_name, task_name, score in rows:
                 if username not in scores_and_names:
-                    scores_and_names[username] = ({"bonus_score": bonus_score}, (first_name, last_name))
+                    scores_and_names[username] = ({}, (first_name, last_name))
                 if task_name is not None:
                     scores_and_names[username][0][task_name] = score
 
@@ -342,13 +341,6 @@ class DataBaseApi(StorageApi):
                 user_on_course = self._get_or_create_user_on_course(session, username, course)
                 session.commit()
 
-                if task_name == "Bonus":
-                    score = update_fn("", course)
-                    user_on_course.bonus_score = score
-                    session.commit()
-                    logger.info(f"Setting bonus score = {score} for {user_on_course.user.username}")
-                    return score
-
                 try:
                     task = self._get_task_by_name_and_course_id(session, task_name, course.id)
                 except NoResultFound:
@@ -357,13 +349,16 @@ class DataBaseApi(StorageApi):
 
                 grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
                 new_score = update_fn("", grade.score)
-                old_score = grade.score
                 grade.score = new_score
                 grade.last_submit_date = datetime.now(timezone.utc)
 
                 session.commit()
                 logger.info(
-                    f"Updated score for user '{username}' on task '{task_name}' from {old_score} to {new_score} for {user_on_course.user.username} to {task_name}"
+                    "Setting score to %d for user_id=%s (username=%s) on task=%s",
+                    new_score,
+                    user_on_course.user.id,
+                    user_on_course.user.username,
+                    task_name,
                 )
                 return new_score
 
@@ -407,7 +402,7 @@ class DataBaseApi(StorageApi):
                 return False
             except NoResultFound:
                 logger.debug(f"Creating new course '{settings_config.course_name}'")
-                self._create(
+                course = self._create(
                     session,
                     models.Course,
                     name=settings_config.course_name,
@@ -423,6 +418,7 @@ class DataBaseApi(StorageApi):
                     links=settings_config.links,
                     deadlines_type=settings_config.deadlines_type,
                 )
+                self._create_group_and_task_for_bonus_score(session, course)
                 logger.info(f"Successfully created course '{settings_config.course_name}'")
                 return True
 
@@ -1133,6 +1129,20 @@ class DataBaseApi(StorageApi):
 
         grades = self._get_all_grades(user_on_course, enabled=enabled, started=started, only_bonus=only_bonus)
         return grades
+
+    def _create_group_and_task_for_bonus_score(self, session: Session, course: models.Course) -> None:
+        bonus_group = self._create(
+            session,
+            models.TaskGroup,
+            name="Bonus group",
+            course_id=course.id,
+            deadline=Deadline(),
+            position=9999,
+            enabled=False,
+        )
+        self._create(
+            session, models.Task, name="bonus_score", group_id=bonus_group.id, score=0, enabled=False, position=0
+        )
 
     @staticmethod
     def _convert_timedelta_to_datetime(start: datetime, value: datetime | timedelta) -> datetime:
