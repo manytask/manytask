@@ -25,6 +25,8 @@ from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests.constants import (
+    BONUS_GROUP,
+    BONUS_SCORE,
     DEADLINES_CONFIG_FILES,
     FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED,
     FIRST_COURSE_EXPECTED_STATS_KEYS,
@@ -403,8 +405,8 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
 
     tasks = session.query(Task).all()
     for task in tasks:
-        if task.group.name == "Bonus group":
-            assert task.name == "bonus_score"
+        if task.group.name == BONUS_GROUP:
+            assert task.name == BONUS_SCORE
             continue
         assert task.group.name == "group_" + task.name[len("task_")]
 
@@ -498,7 +500,7 @@ def test_updating_course(
 
     tasks = session.query(Task).all()
     for task in tasks:
-        if task.group.name == "Bonus group":
+        if task.group.name == BONUS_GROUP:
             assert task.name == "bonus_score"
             continue
         assert task.group.name == "group_" + task.name[len("task_")]
@@ -550,7 +552,7 @@ def test_resync_with_changed_task_name(
 
     tasks = session.query(Task).all()
     for task in tasks:
-        if task.group.name == "Bonus group":
+        if task.group.name == BONUS_GROUP:
             assert task.name == "bonus_score"
         else:
             assert task.group.name == "group_" + task.name[len("task_")]
