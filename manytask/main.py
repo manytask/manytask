@@ -8,12 +8,14 @@ from typing import Any
 import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from flask import Flask, Response, request
+from flask import Flask
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import abstract, config, course, database, glab, local_config
 from .course import CourseStatus
+
+MAX_AGE_IN_SECONDS = 86400
 
 load_dotenv("../.env")  # take environment variables from .env.
 
@@ -99,13 +101,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
         app.store_config("python2025", debug_manytask_config_data)
 
-    logger.info("Init success")
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = MAX_AGE_IN_SECONDS
 
-    @app.after_request
-    def add_cache_control(response: Response) -> Response:
-        if request.path.startswith("/static/"):
-            response.headers["Cache-Control"] = "public, max-age=3600"
-        return response
+    logger.info("Init success")
 
     return app
 
