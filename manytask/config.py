@@ -188,7 +188,6 @@ class ManytaskDeadlinesConfig(BaseModel):
         if tasks_names_duplicates:
             raise ValueError(f"Task names should be unique, duplicates: {tasks_names_duplicates}")
 
-
         # # group names and task names not intersect (except single task in a group with the same name)
         # no_single_task_groups = [group for group in data if not (len(group.tasks) == 1
         # and group.name == group.tasks[0].name)]
