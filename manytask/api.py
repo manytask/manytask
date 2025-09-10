@@ -317,8 +317,16 @@ def update_cache(course_name: str) -> ResponseReturnValue:
 def get_database(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
+    storage_api = app.storage_api
+    course = app.storage_api.get_course(course_name)
+    if course is None:
+        abort(HTTPStatus.NOT_FOUND, "Course not found")
+
+    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+    is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+
     logger.info(f"Fetching database snapshot for course={course_name}")
-    table_data = get_database_table_data(app, course_name)
+    table_data = get_database_table_data(app, course, include_repo_urls=is_course_admin)
     return jsonify(table_data)
 
 

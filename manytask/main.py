@@ -17,6 +17,8 @@ from manytask.course import ManytaskDeadlinesType
 from . import abstract, config, course, database, glab, local_config
 from .course import CourseStatus
 
+MAX_AGE_IN_SECONDS = 86400
+
 load_dotenv("../.env")  # take environment variables from .env.
 
 
@@ -100,6 +102,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         with open(".manytask.example.yml", "r") as f:
             debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
         app.store_config("python2025", debug_manytask_config_data)
+
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = MAX_AGE_IN_SECONDS
 
     logger.info("Init success")
 
