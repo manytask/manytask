@@ -345,14 +345,10 @@ def update_database(course_name: str) -> ResponseReturnValue:
         }
         "row_data": {
                         "username": username,
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "grade": grade,
                         "total_score": total_score,
-                        "percent": percent,
                         "large_count": large_count,
                         "scores": {
-                             "task_name": score_value
+                             "task_name": old_score_value
                         }
                      }
     }
