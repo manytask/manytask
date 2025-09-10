@@ -10,6 +10,7 @@ from typing import Any, Callable
 import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
+from enum import Enum
 
 from manytask.abstract import StorageApi
 from manytask.database import TaskDisabledError
@@ -63,13 +64,18 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     return decorated
 
 
+class AuthMethod(Enum):
+    COURSE_TOKEN = "course_token"
+    SESSION = "session"
+
+
 def requires_auth_or_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         if "User-Agent" in request.headers:
-            return requires_auth(f)(*args, **kwargs)
+            return requires_auth(f)(*args, **kwargs, auth_method=AuthMethod.SESSION)
         else:
-            return requires_token(f)(*args, **kwargs)
+            return requires_token(f)(*args, **kwargs, auth_method=AuthMethod.COURSE_TOKEN)
 
     return decorated
 
@@ -330,24 +336,27 @@ def update_cache(course_name: str) -> ResponseReturnValue:
 @bp.get("/database")
 @requires_auth_or_token
 @requires_ready
-def get_database(course_name: str) -> ResponseReturnValue:
+def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     storage_api = app.storage_api
     course = __get_course_or_not_found(storage_api, course_name)
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+    if auth_method == AuthMethod.SESSION:
+        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+        include_repo_urls = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+    else:
+        include_repo_urls = True
 
     logger.info(f"Fetching database snapshot for course={course_name}")
-    table_data = get_database_table_data(app, course, include_repo_urls=is_course_admin)
+    table_data = get_database_table_data(app, course, include_repo_urls=include_repo_urls)
     return jsonify(table_data)
 
 
 @bp.post("/database/update")
 @requires_auth_or_token
 @requires_ready
-def update_database(course_name: str) -> ResponseReturnValue:
+def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnValue:
     """
     Update student scores in the database via API endpoint.
 
@@ -368,13 +377,14 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    logger.info(f"Request by admin={rms_user.username} for course={course_name}")
+    if auth_method == AuthMethod.SESSION:
+        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+        logger.info(f"Request by admin={rms_user.username} for course={course_name}")
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
 
-    if not student_course_admin:
-        return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
+        if not student_course_admin:
+            return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
 
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
