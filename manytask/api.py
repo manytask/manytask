@@ -72,10 +72,10 @@ class AuthMethod(Enum):
 def requires_auth_or_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        if "User-Agent" in request.headers:
-            return requires_auth(f)(*args, **kwargs, auth_method=AuthMethod.SESSION)
-        else:
+        if "Authorization" in request.headers:
             return requires_token(f)(*args, **kwargs, auth_method=AuthMethod.COURSE_TOKEN)
+        else:
+            return requires_auth(f)(*args, **kwargs, auth_method=AuthMethod.SESSION)
 
     return decorated
 
