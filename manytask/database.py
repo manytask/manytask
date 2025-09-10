@@ -11,7 +11,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from pydantic import AnyUrl
-from sqlalchemy import and_, create_engine, select
+from sqlalchemy import and_, create_engine, or_, select
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
@@ -28,7 +28,7 @@ from .config import (
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
 from .course import CourseStatus
-from .models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
+from .models import Course, Grade, Task, TaskGroup, User, UserOnCourse
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -242,8 +242,8 @@ class DataBaseApi(StorageApi):
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
                 .join(Course, Course.id == UserOnCourse.course_id)
                 .outerjoin(Grade, (Grade.user_on_course_id == UserOnCourse.id))
-                .outerjoin(Task, (Task.id == Grade.task_id) & (Task.enabled.is_(True)))
-                .outerjoin(TaskGroup, (TaskGroup.id == Task.group_id) & (TaskGroup.enabled.is_(True)))
+                .outerjoin(Task, (Task.id == Grade.task_id))
+                .outerjoin(TaskGroup, (TaskGroup.id == Task.group_id))
                 .where(
                     Course.name == course_name,
                 )
@@ -402,7 +402,7 @@ class DataBaseApi(StorageApi):
                 return False
             except NoResultFound:
                 logger.debug(f"Creating new course '{settings_config.course_name}'")
-                course = self._create(
+                self._create(
                     session,
                     models.Course,
                     name=settings_config.course_name,
@@ -418,7 +418,6 @@ class DataBaseApi(StorageApi):
                     links=settings_config.links,
                     deadlines_type=settings_config.deadlines_type,
                 )
-                self._create_group_and_task_for_bonus_score(session, course)
                 logger.info(f"Successfully created course '{settings_config.course_name}'")
                 return True
 
@@ -1127,22 +1126,10 @@ class DataBaseApi(StorageApi):
         except NoResultFound:
             return None
 
-        grades = self._get_all_grades(user_on_course, enabled=enabled, started=started, only_bonus=only_bonus)
+        grades = self._get_all_grades(
+            user_on_course, enabled=enabled, started=started, only_bonus=only_bonus, include_bonus_score=True
+        )
         return grades
-
-    def _create_group_and_task_for_bonus_score(self, session: Session, course: models.Course) -> None:
-        bonus_group = self._create(
-            session,
-            models.TaskGroup,
-            name="Bonus group",
-            course_id=course.id,
-            deadline=Deadline(),
-            position=9999,
-            enabled=False,
-        )
-        self._create(
-            session, models.Task, name="bonus_score", group_id=bonus_group.id, score=0, enabled=False, position=0
-        )
 
     @staticmethod
     def _convert_timedelta_to_datetime(start: datetime, value: datetime | timedelta) -> datetime:
@@ -1368,11 +1355,20 @@ class DataBaseApi(StorageApi):
         enabled: bool | None = None,
         started: bool | None = None,
         only_bonus: bool = False,
+        include_bonus_score: bool = False,
     ) -> Iterable["models.Grade"]:
         query = user_on_course.grades.join(models.Task).join(models.TaskGroup).join(models.Deadline)
 
         if enabled is not None:
-            query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
+            if include_bonus_score:
+                query = query.filter(
+                    or_(
+                        and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled),
+                        models.Task.name == "bonus_score",
+                    )
+                )
+            else:
+                query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
 
         if started is not None:
             if started:

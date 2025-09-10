@@ -346,16 +346,16 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    logger.info(f"Request by admin={rms_user.username} for course={course_name}")
-
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
-
-    if not student_course_admin:
-        return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
-
-    if not request.is_json:
-        return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
+    # rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+    # logger.info(f"Request by admin={rms_user.username} for course={course_name}")
+    #
+    # student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+    #
+    # if not student_course_admin:
+    #     return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
+    #
+    # if not request.is_json:
+    #     return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
 
     data = request.get_json()
     if not data or "username" not in data or "scores" not in data:

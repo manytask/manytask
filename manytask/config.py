@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -188,13 +188,13 @@ class ManytaskDeadlinesConfig(BaseModel):
         if tasks_names_duplicates:
             raise ValueError(f"Task names should be unique, duplicates: {tasks_names_duplicates}")
 
-        # shouldn't be task with name 'bonus_score'
-        if "bonus_score" in tasks_names:
-            raise ValueError("Task name shouldn't be 'bonus_score'.")
-
-        # shouldn't be group with name 'Bonus group'
-        if "Bonus group" in group_names:
-            raise ValueError("Group name shouldn't be 'Bonus group'.")
+        # # shouldn't be task with name 'bonus_score'
+        # if "bonus_score" in tasks_names:
+        #     raise ValueError("Task name shouldn't be 'bonus_score'.")
+        #
+        # # shouldn't be group with name 'Bonus group'
+        # if "Bonus group" in group_names:
+        #     raise ValueError("Group name shouldn't be 'Bonus group'.")
 
         # # group names and task names not intersect (except single task in a group with the same name)
         # no_single_task_groups = [group for group in data if not (len(group.tasks) == 1
@@ -208,6 +208,23 @@ class ManytaskDeadlinesConfig(BaseModel):
         for group in self.schedule:
             group.replace_timezone(timezone)
         return self
+
+    @model_validator(mode="before")
+    @classmethod
+    def add_extra_group(cls, data: dict[str, Any]) -> Any:
+        schedule = data.get("schedule", [])
+
+        schedule.append(
+            {
+                "group": "Bonus group",
+                "start": datetime(2000, 1, 1, 0, 0, tzinfo=timezone.utc),
+                "end": datetime(3000, 1, 1, 0, 0, tzinfo=timezone.utc),
+                "enabled": False,
+                "tasks": [{"task": "bonus_score", "score": 0, "is_bonus": True}],
+            }
+        )
+        data["schedule"] = schedule
+        return data
 
     @property
     def groups(

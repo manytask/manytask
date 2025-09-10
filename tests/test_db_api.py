@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -18,7 +18,6 @@ from manytask.config import (
     ManytaskDeadlinesConfig,
     ManytaskFinalGradeConfig,
     ManytaskGroupConfig,
-    ManytaskTaskConfig,
     ManytaskUiConfig,
 )
 from manytask.course import Course as ManytaskCourse
@@ -1307,28 +1306,7 @@ def check_get_groups(
 
     assert len([group.name for group in result_groups]) == len(set([group.name for group in result_groups]))
 
-    bonus_group = ManytaskGroupConfig(
-        group="Bonus group",
-        start=datetime(2000, 1, 1, 0, 0, tzinfo=timezone.utc),
-        end=datetime(3000, 1, 1, 0, 0, tzinfo=timezone.utc),
-        steps={},
-        enabled=False,
-        tasks=[
-            ManytaskTaskConfig(
-                task="bonus_score",
-                enabled=False,
-                score=0,
-                min_score=0,
-                special=0,
-                is_bonus=False,
-                is_large=False,
-                is_special=False,
-                url=None,
-            )
-        ],
-    )
-
-    groups = [change_timedelta_to_datetime(group) for group in [bonus_group] + course_deadlines_config.groups]
+    groups = [change_timedelta_to_datetime(group) for group in course_deadlines_config.groups]
 
     if enabled is not None:
         groups = [group for group in groups if group.enabled == enabled]
