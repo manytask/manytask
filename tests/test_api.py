@@ -483,7 +483,6 @@ def test_update_database_missing_fields(app, authenticated_client):
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert data["success"] is False
-    print(data["message"])
     assert "Invalid request data" in data["message"]
 
     # Partial data
