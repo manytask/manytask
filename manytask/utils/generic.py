@@ -20,4 +20,4 @@ def lerp(p1: tuple[float, float], p2: tuple[float, float], x: float) -> float:
 
 
 def validate_name(name: str) -> str | None:
-    return name if (re.match(r"^[a-zA-Zа-яА-Я_-]{1,50}$", name) is not None) else None
+    return name if (re.match(r"^[a-zA-Zа-яА-Я-]{1,50}$", name) is not None) else None
