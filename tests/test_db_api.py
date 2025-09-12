@@ -622,7 +622,7 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
 
-    db_api_with_initialized_first_course.create_user_if_not_exist(
+    db_api_with_initialized_first_course.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
 
