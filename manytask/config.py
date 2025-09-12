@@ -21,7 +21,7 @@ class RowData(BaseModel):
 
 
 class ManytaskUpdateDatabasePayload(BaseModel):
-    new_scores: Dict[str, Union[int, float]] = Field(...)
+    new_scores: Dict[str, Union[Any]] = Field(...)
     row_data: RowData
 
 

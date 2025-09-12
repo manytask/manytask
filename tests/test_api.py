@@ -483,20 +483,28 @@ def test_update_database_missing_fields(app, authenticated_client):
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert data["success"] is False
-    assert "Missing required fields" in data["message"]
+    print(data["message"])
+    assert "Invalid request data" in data["message"]
 
     # Partial data
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json={"username": TEST_USERNAME})
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert data["success"] is False
-    assert "Missing required fields" in data["message"]
+    assert "Invalid request data" in data["message"]
 
 
 def test_update_database_success(app, authenticated_client):
     test_data = {
-        "row_data": {"username": TEST_USERNAME, "total_score": 0, "large_count": 0, "scores": {}},
-        "scores": {"task1": 90, "task2": 85},
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {"task1": 90, "task2": 85},
     }
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
     assert response.status_code == HTTPStatus.OK
@@ -506,8 +514,15 @@ def test_update_database_success(app, authenticated_client):
 
 def test_update_database_invalid_score_type(app, authenticated_client):
     test_data = {
-        "row_data": {"username": TEST_USERNAME, "total_score": 0, "large_count": 0, "scores": {}},
-        "scores": {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {
             "task1": "not a number",  # invalid score type
             "task2": 85,
         },
@@ -648,7 +663,7 @@ def test_update_database_missing_student(app, authenticated_client, mock_gitlab_
     data = {"scores": {TEST_TASK_NAME: 100}}
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    assert "Missing required fields" in json.loads(response.data)["message"]
+    assert "Invalid request data" in json.loads(response.data)["message"]
 
 
 def test_report_score_with_flags(app):
@@ -705,8 +720,15 @@ def test_update_database_invalid_task(app, authenticated_client, mock_gitlab_oau
             "user_id": TEST_USER_ID,
         }
     data = {
-        "row_data": {"username": TEST_USERNAME, "total_score": 0, "large_count": 0, "scores": {}},
-        "scores": {INVALID_TASK_NAME: 100},
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {INVALID_TASK_NAME: 100},
     }
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
     # API silently ignores invalid tasks
@@ -723,8 +745,15 @@ def test_update_database_invalid_score_value(app, authenticated_client, mock_git
             "user_id": TEST_USER_ID,
         }
     data = {
-        "row_data": {"username": TEST_USERNAME, "total_score": 0, "large_count": 0, "scores": {}},
-        "scores": {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {
             TEST_TASK_NAME: -1  # Invalid score value
         },
     }
