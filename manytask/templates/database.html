@@ -99,7 +99,7 @@
             const row = currentEditCell.getRow();
             const rowData = row.getData();
             const username = rowData.username;
-            const taskName = currentEditCell.getColumn().getDefinition().title;
+            const taskName = currentEditCell.getColumn().getDefinition().field.split(".")[1];
 
             // Update database
             const scores = {};
@@ -288,6 +288,18 @@
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Number of Large Homeworks"
+                        },
+                        {
+                            title: "Bonus",
+                            field: "scores.bonus_score",
+                            frozen: true,
+                            sorter: "number",
+                            hozAlign: "center",
+                            minWidth: 1,
+                            headerTooltip: "Bonus scores",
+                            cellClick: function (e, cell) {
+                                editCell(cell);
+                            },
                         }
                     ];
 
