@@ -14,10 +14,17 @@ from wtforms import ValidationError
 from manytask.course import ManytaskDeadlinesType
 
 from .abstract import ClientProfile
-from .auth import (handle_oauth_callback, redirect_to_login_with_bad_session,
-                   requires_admin, requires_auth, requires_course_access,
-                   requires_ready, set_client_profile_session,
-                   valid_client_profile_session, valid_gitlab_session)
+from .auth import (
+    handle_oauth_callback,
+    redirect_to_login_with_bad_session,
+    requires_admin,
+    requires_auth,
+    requires_course_access,
+    requires_ready,
+    set_client_profile_session,
+    valid_client_profile_session,
+    valid_gitlab_session,
+)
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.flask import check_admin, get_courses

@@ -721,7 +721,8 @@ class DataBaseApi(StorageApi):
 
         with self._session_create() as session:
             logger.debug(
-                f"Creating or updating user '{username}' (first_name={first_name}, last_name={last_name}, rms_id={rms_id})"
+                f"Creating or updating user '{username}' "
+                f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id})"
             )
             self._update_or_create(
                 session,

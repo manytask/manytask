@@ -354,7 +354,7 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    logger.info(f"Request by admin={session["profile"]["username"]} for course={course_name}")
+    logger.info(f"Request by admin={session['profile']['username']} for course={course_name}")
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
 
