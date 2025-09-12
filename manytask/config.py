@@ -19,6 +19,7 @@ class RowData(BaseModel):
     grade: int
     scores: Dict[str, int]
 
+
 class ManytaskUpdateDatabasePayload(BaseModel):
     new_scores: Dict[str, Union[int, float]] = Field(...)
     row_data: RowData
