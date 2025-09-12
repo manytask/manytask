@@ -2,13 +2,27 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.utils.generic import lerp
+
+
+class RowData(BaseModel):
+    username: str
+    total_score: int
+    percent: float
+    large_count: int
+    grade: int
+    scores: Dict[str, int]
+
+
+class ManytaskUpdateDatabasePayload(BaseModel):
+    new_scores: Dict[str, Union[Any]] = Field(...)
+    row_data: RowData
 
 
 class ManytaskUiConfig(BaseModel):
