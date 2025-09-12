@@ -389,7 +389,8 @@ def update_database(course_name: str) -> ResponseReturnValue:
         row_data.total_score = total_score
         max_score = app.storage_api.max_score_started(course.course_name)
         row_data.percent = total_score * 100 / max_score if max_score > 0 else 0
-        row_data.grade = storage_api.get_grades(course.course_name).evaluate(row_data.model_dump())
+        new_grade = storage_api.get_grades(course.course_name).evaluate(row_data.model_dump())
+        row_data.grade = 0 if new_grade is None else new_grade
 
         logger.info(f"Successfully updated scores for user={sanitize_log_data(username)}")
         return jsonify(
