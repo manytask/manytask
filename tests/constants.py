@@ -36,7 +36,8 @@ TEST_INVALID_USERNAME = "invalid_user"
 TEST_SECRET = "test_secret"
 TEST_TOKEN = "test_token"
 GITLAB_BASE_URL = "https://gitlab.com"
-TEST_VERSION = 1.5
+TEST_GITLAB_SESSION_VERSION = 1.5
+TEST_CLIENT_PROFILE_SESSION_VERSION = 1.0
 
 
 # test_database_utils

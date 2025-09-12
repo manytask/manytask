@@ -142,17 +142,6 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_all_scores(course_name, self):
             return {"test_user": self.get_scores(course_name, "test_user")}
 
-        def get_stored_user(self, username):
-            from manytask.abstract import StoredUser
-
-            return StoredUser(
-                username=username,
-                first_name=self.stored_user.first_name,
-                last_name=self.stored_user.last_name,
-                rms_id=self.stored_user.rms_id,
-                instance_admin=True,
-            )
-
         def check_if_course_admin(self, _course_name, _username):
             return True
 
@@ -285,6 +274,10 @@ def authenticated_client(app, mock_gitlab_oauth):
                 "user_id": TEST_USER_ID,
                 "access_token": "",
                 "refresh_token": "",
+            }
+            session["profile"] = {
+                "version": 1.0,
+                "username": TEST_USERNAME,
             }
         yield client
 

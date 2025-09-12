@@ -4,20 +4,19 @@ from http import HTTPStatus
 from typing import Any, Callable
 
 from authlib.integrations.flask_client import OAuth
-from flask import abort, current_app, flash, redirect, request, session, url_for
+from flask import abort, current_app, flash, redirect, session, url_for
 from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
-from manytask.abstract import AuthenticatedUser
+from manytask.abstract import AuthenticatedUser, ClientProfile
 from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
-from manytask.utils.generic import guess_first_last_name, sanitize_log_data
 
 logger = logging.getLogger(__name__)
 
 
-def valid_session(user_session: SessionMixin) -> bool:
+def valid_gitlab_session(user_session: SessionMixin) -> bool:
     SESSION_VERSION = 1.5
     result = (
         "gitlab" in user_session
@@ -26,7 +25,19 @@ def valid_session(user_session: SessionMixin) -> bool:
         and "username" in user_session["gitlab"]
         and "user_id" in user_session["gitlab"]
     )
-    logger.debug(f"Session_valid={result}")
+    logger.debug(f"Gitlab_session_valid={result}")
+    return result
+
+
+def valid_client_profile_session(user_session: SessionMixin) -> bool:
+    SESSION_VERSION = 1.0
+    result = (
+        "profile" in user_session
+        and "version" in user_session["profile"]
+        and user_session["profile"]["version"] >= SESSION_VERSION
+        and "username" in user_session["profile"]
+    )
+    logger.debug(f"Client_profile_session_valid={result}")
     return result
 
 
@@ -49,6 +60,14 @@ def set_oauth_session(
     return result
 
 
+def set_client_profile_session(client_profile: ClientProfile, version: float = 1.0) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "username": client_profile.username,
+        "version": version,
+    }
+    return result
+
+
 def handle_course_membership(app: CustomFlask, course: Course, username: str) -> bool | str | Response:
     """Checking user on course"""
 
@@ -67,11 +86,12 @@ def handle_course_membership(app: CustomFlask, course: Course, username: str) ->
         return False
 
 
+def __redirect_to_signup_finish() -> Response:
+    return redirect(url_for("root.signup_finish"))
+
+
 def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     """Process oauth2 callback with code for auth, if success set auth session and sync user's data to database"""
-
-    redirect_url = request.args.get("state") or url_for("root.index")
-    logger.debug(f"Processing callback, redirect_url={sanitize_log_data(redirect_url)}")
 
     try:
         # This is where the oath_api should be used
@@ -80,27 +100,16 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
         logger.info("OAuth token received")
 
         auth_user = app.auth_api.get_authenticated_user(token)
-        rms_user = app.rms_api.get_authenticated_rms_user(token)
-        logger.info(f"Authenticated user={auth_user.username}")
-
-        first_name, last_name = guess_first_last_name(rms_user.name)
-
-        app.storage_api.create_user_if_not_exist(
-            username=rms_user.username,
-            first_name=first_name,
-            last_name=last_name,
-            rms_id=rms_user.id,
-        )
-        logger.info(f"Synced user={rms_user.username} to DB")
     except Exception:
         logger.error("Gitlab authorization failed", exc_info=True)
-        return redirect(redirect_url)
+        return redirect(url_for("root.index"))
 
+    session.pop("username", None)
     session.setdefault("gitlab", {}).update(set_oauth_session(auth_user, gitlab_oauth_token))
     session.permanent = True
     logger.info(f"Session set for user={auth_user.username}")
 
-    return redirect(redirect_url)
+    return __redirect_to_signup_finish()
 
 
 def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
@@ -113,7 +122,7 @@ def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     return auth_user
 
 
-def __redirect_to_login() -> Response:
+def redirect_to_login_with_bad_session() -> Response:
     logger.debug("Clearing session and redirecting to signup")
     session.pop("gitlab", None)
     return redirect(url_for("root.signup"))
@@ -129,18 +138,20 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        if valid_session(session):
-            logger.debug("Session valid, checking with auth_api")
-            if not app.auth_api.check_user_is_authenticated(
-                app.oauth,
-                session["gitlab"]["access_token"],
-                session["gitlab"]["refresh_token"],
-            ):
-                logger.warning("Session not authenticated, redirecting to login")
-                return __redirect_to_login()
-        else:
-            logger.error("Failed to verify session.", exc_info=True)
-            return __redirect_to_login()
+        if not valid_gitlab_session(session):
+            logger.error("Failed to verify gitlab session.", exc_info=True)
+            return redirect_to_login_with_bad_session()
+
+        if not app.auth_api.check_user_is_authenticated(
+            app.oauth,
+            session["gitlab"]["access_token"],
+            session["gitlab"]["refresh_token"],
+        ):
+            logger.warning("Session not authenticated, redirecting to login")
+            return redirect_to_login_with_bad_session()
+
+        if not valid_client_profile_session(session):
+            return __redirect_to_signup_finish()
 
         logger.debug("Auth check passed")
         return f(*args, **kwargs)
