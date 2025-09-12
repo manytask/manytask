@@ -196,13 +196,13 @@ def test_get_courses_names_with_no_courses(db_api):
 def test_get_courses_names_with_courses(
     db_api_with_two_initialized_courses, edited_first_course_config, edited_second_course_config
 ):
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1
     )
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2
     )
 
