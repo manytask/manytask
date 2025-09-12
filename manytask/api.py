@@ -343,10 +343,10 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    logger.info(f"Request by admin={rms_user.username} for course={course_name}")
+    logger.info(f"Request by admin={session['profile']['username']} for course={course_name}")
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
+
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
 
