@@ -242,8 +242,8 @@ class DataBaseApi(StorageApi):
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
                 .join(Course, Course.id == UserOnCourse.course_id)
                 .outerjoin(Grade, (Grade.user_on_course_id == UserOnCourse.id))
-                .outerjoin(Task, (Task.id == Grade.task_id))
-                .outerjoin(TaskGroup, (TaskGroup.id == Task.group_id))
+                .outerjoin(Grade.task)
+                .outerjoin(Task.group)
                 .where(
                     Course.name == course_name,
                 )
@@ -1377,15 +1377,10 @@ class DataBaseApi(StorageApi):
         )
 
         if enabled is not None:
+            cond = and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled)
             if include_bonus_score:
-                query = query.filter(
-                    or_(
-                        and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled),
-                        models.Task.name == "bonus_score",
-                    )
-                )
-            else:
-                query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
+                cond = or_(cond, models.Task.name == "bonus_score")
+            query = query.filter(cond)
 
         if started is not None:
             if started:
