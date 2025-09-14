@@ -11,6 +11,7 @@ import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
 from enum import Enum
+from pydantic import ValidationError
 
 from manytask.abstract import StorageApi
 from manytask.database import TaskDisabledError
@@ -18,7 +19,7 @@ from manytask.glab import GitLabApiException
 
 from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
-from .config import ManytaskGroupConfig, ManytaskTaskConfig
+from .config import ManytaskGroupConfig, ManytaskTaskConfig, ManytaskUpdateDatabasePayload
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
@@ -358,19 +359,7 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
 @requires_ready
 def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnValue:
     """
-    Update student scores in the database via API endpoint.
-
-    This endpoint accepts POST requests with JSON data containing a username and scores to update.
-    The request body should be in the format:
-    {
-        "username": str,
-        "scores": {
-            "task_name": score_value
-        }
-    }
-
-    Returns:
-        ResponseReturnValue: JSON response with success status and optional error message
+    Update student scores in the database via API endpoint and recalculate grade.
     """
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
@@ -378,10 +367,9 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     storage_api = app.storage_api
 
     if auth_method == AuthMethod.SESSION:
-        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-        logger.info(f"Request by admin={rms_user.username} for course={course_name}")
-
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        username = session['profile']['username']
+        logger.info(f"Request by admin={username} for course={course_name}")
+        student_course_admin = storage_api.check_if_course_admin(course_name, username)
 
         if not student_course_admin:
             return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
@@ -389,25 +377,55 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
 
-    data = request.get_json()
-    if not data or "username" not in data or "scores" not in data:
-        return jsonify({"success": False, "message": "Missing required fields"}), HTTPStatus.BAD_REQUEST
+    try:
+        payload = ManytaskUpdateDatabasePayload.model_validate(request.get_json())
+    except ValidationError as exc:
+        logger.warning(f"Invalid request payload: {exc.errors()}")
+        return jsonify(
+            {"success": False, "message": "Invalid request data", "errors": exc.errors()}
+        ), HTTPStatus.BAD_REQUEST
 
-    username = data["username"]
-    new_scores = data["scores"]
+    new_scores = payload.new_scores
+    row_data = payload.row_data
+
+    username = row_data.username
+    total_score = row_data.total_score
     logger.info(f"Updating scores for user={sanitize_log_data(username)}: {new_scores}")
 
     try:
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
-                storage_api.store_score(
+                new_score = storage_api.store_score(
                     course.course_name,
                     username=username,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )
-        logger.info(f"Successfully updated scores for user={sanitize_log_data(username)}")
-        return jsonify({"success": True})
+                total_score += new_score - row_data.scores.get(task_name, 0)
+                row_data.scores[task_name] = new_score
     except Exception as e:
         logger.error(f"Error updating database: {str(e)}")
-        return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
+        return jsonify(
+            {"success": False, "message": "Internal error when trying to store score"}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+    try:
+        row_data.total_score = total_score
+        max_score = app.storage_api.max_score_started(course.course_name)
+        row_data.percent = total_score * 100 / max_score if max_score > 0 else 0
+        new_grade = storage_api.get_grades(course.course_name).evaluate(row_data.model_dump())
+        row_data.grade = 0 if new_grade is None else new_grade
+
+        logger.info(f"Successfully updated scores for user={sanitize_log_data(username)}")
+        return jsonify(
+            {
+                "success": True,
+                "row_data": row_data.model_dump_json(),
+            }
+        ), HTTPStatus.OK
+
+    except Exception as e:
+        logger.error(f"Error calculating grade: {str(e)}")
+        return jsonify(
+            {"success": False, "message": "Internal error when calculating new grade. Try refresh page."}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR

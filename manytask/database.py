@@ -11,7 +11,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from pydantic import AnyUrl
-from sqlalchemy import Row, and_, create_engine, select
+from sqlalchemy import Row, and_, create_engine, or_, select
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
@@ -135,7 +135,7 @@ class DataBaseApi(StorageApi):
 
         return sum([grade.score for grade in grades])
 
-    def get_stored_user(
+    def get_stored_user_by_username(
         self,
         username: str,
     ) -> StoredUser:
@@ -161,6 +161,34 @@ class DataBaseApi(StorageApi):
                 rms_id=user.rms_id,
                 instance_admin=user.is_instance_admin,
             )
+
+    def get_stored_user_by_rms_id(
+        self,
+        rms_id: int,
+    ) -> StoredUser | None:
+        """Method for getting user's stored data
+        :param rms_id:
+        :return: StoredUser object if exist else None
+        """
+
+        with self._session_create() as session:
+            try:
+                user = self._get(
+                    session,
+                    models.User,
+                    rms_id=rms_id,
+                )
+
+                return StoredUser(
+                    username=user.username,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    rms_id=user.rms_id,
+                    instance_admin=user.is_instance_admin,
+                )
+
+            except NoResultFound:
+                return None
 
     def check_if_instance_admin(
         self,
@@ -242,8 +270,8 @@ class DataBaseApi(StorageApi):
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
                 .join(Course, Course.id == UserOnCourse.course_id)
                 .outerjoin(Grade, (Grade.user_on_course_id == UserOnCourse.id))
-                .outerjoin(Task, (Task.id == Grade.task_id) & (Task.enabled.is_(True)))
-                .outerjoin(TaskGroup, (TaskGroup.id == Task.group_id) & (TaskGroup.enabled.is_(True)))
+                .outerjoin(Grade.task)
+                .outerjoin(Task.group)
                 .where(
                     Course.name == course_name,
                 )
@@ -355,13 +383,16 @@ class DataBaseApi(StorageApi):
 
                 grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
                 new_score = update_fn("", grade.score)
-                old_score = grade.score
                 grade.score = new_score
                 grade.last_submit_date = datetime.now(timezone.utc)
 
                 session.commit()
                 logger.info(
-                    f"Updated score for user '{username}' on task '{task_name}' from {old_score} to {new_score}"
+                    "Setting score to %d for user_id=%s (username=%s) on task=%s",
+                    new_score,
+                    user_on_course.user.id,
+                    user_on_course.user.username,
+                    task_name,
                 )
                 return new_score
 
@@ -688,25 +719,28 @@ class DataBaseApi(StorageApi):
                 logger.warning(f"User '{username}' isn't enrolled in course '{course_name}'")
                 return False
 
-    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None:
-        """Create user in DB if not exist"""
+    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int) -> None:
+        """Update or create user in DB"""
 
         with self._session_create() as session:
             logger.debug(
-                f"Ensuring user '{username}' exists (first_name={first_name}, last_name={last_name}, rms_id={rms_id})"
+                f"Creating or updating user '{username}' "
+                f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id})"
             )
-            self._get_or_create(
+            self._update_or_create(
                 session,
                 models.User,
                 defaults=dict(
-                    first_name=first_name,
                     rms_id=rms_id,
+                ),
+                create_defaults=dict(
+                    first_name=first_name,
                     last_name=last_name,
                 ),
                 username=username,
             )
             session.commit()
-            logger.info(f"User '{username}' ensured in database")
+            logger.info(f"User '{username}' created or updated in database")
 
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]:
         """Get a list of courses names that the user participates in"""
@@ -1135,7 +1169,9 @@ class DataBaseApi(StorageApi):
         except NoResultFound:
             return None
 
-        grades = self._get_all_grades(user_on_course, enabled=enabled, started=started, only_bonus=only_bonus)
+        grades = self._get_all_grades(
+            user_on_course, enabled=enabled, started=started, only_bonus=only_bonus, include_bonus_score=True
+        )
         return grades
 
     @staticmethod
@@ -1362,6 +1398,7 @@ class DataBaseApi(StorageApi):
         enabled: bool | None = None,
         started: bool | None = None,
         only_bonus: bool = False,
+        include_bonus_score: bool = False,
     ) -> Iterable["models.Grade"]:
         query = (
             user_on_course.grades.options(selectinload(models.Grade.task))
@@ -1371,7 +1408,10 @@ class DataBaseApi(StorageApi):
         )
 
         if enabled is not None:
-            query = query.filter(and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled))
+            cond = and_(models.Task.enabled == enabled, models.TaskGroup.enabled == enabled)
+            if include_bonus_score:
+                cond = or_(cond, models.Task.name == "bonus_score")
+            query = query.filter(cond)
 
         if started is not None:
             if started:

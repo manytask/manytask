@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
-from manytask.abstract import StoredUser
 from manytask.utils.database import get_database_table_data
 from tests.constants import MAX_SCORE, SCORES, STUDENT_1, STUDENT_2, STUDENT_DATA, TASK_1, TASK_2, TASK_3, TASK_LARGE
 
@@ -89,16 +88,6 @@ def app():  # noqa: C901
 
         def get_now_with_timezone(self, course_name):
             return datetime.datetime.now() + datetime.timedelta(hours=1)
-
-        @staticmethod
-        def get_stored_user(username):
-            return StoredUser(
-                username=username,
-                first_name=STUDENT_DATA[username][0],
-                last_name=STUDENT_DATA[username][1],
-                rms_id=STUDENT_DATA[username][2],
-                instance_admin=False,
-            )
 
         @staticmethod
         def get_all_scores_with_names(_course_name):
