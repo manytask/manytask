@@ -367,7 +367,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     storage_api = app.storage_api
 
     if auth_method == AuthMethod.SESSION:
-        username = session['profile']['username']
+        username = session["profile"]["username"]
         logger.info(f"Request by admin={username} for course={course_name}")
         student_course_admin = storage_api.check_if_course_admin(course_name, username)
 
