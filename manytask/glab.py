@@ -152,9 +152,11 @@ class GitLabApi(RmsApi, AuthApi):
             logger.info(f"Project exists project_name={project_name} group={project_group}")
             return True
 
-        logger.info(f"Project does not match the expected pattern:\n"
-                    f"got project candidate path={projects[0].path_with_namespace}\n"
-                    f"awaited project_name={project_name} group={project_group}")
+        logger.info(
+            f"Project does not match the expected pattern:\n"
+            f"got project candidate path={projects[0].path_with_namespace}\n"
+            f"awaited project_name={project_name} group={project_group}"
+        )
         return False
 
     def create_project(self, rms_user: RmsUser, course_students_group: str, course_public_repo: str) -> None:
