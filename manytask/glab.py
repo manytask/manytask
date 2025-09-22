@@ -141,16 +141,22 @@ class GitLabApi(RmsApi, AuthApi):
         gitlab_project_path = f"{project_group}/{project_name}"
         logger.info(f"Checking if project exists path={gitlab_project_path}")
 
-        for project in self._gitlab.projects.list(get_all=True, search=project_name):
-            logger.debug(f"Found project candidate path={project.path_with_namespace}")
+        projects = self._gitlab.projects.list(get_all=False, search=gitlab_project_path)
 
-            # Because of implicit conversion
-            # TODO: make global problem solve
-            if project.path_with_namespace == gitlab_project_path:
-                logger.info(f"Project exists project_name={project_name} group={project_group}")
-                return True
+        if len(projects) == 0:
+            logger.info(f"Project does not exist project_name={project_name} group={project_group}")
+            return False
 
-        logger.info(f"Project does not exist project_name={project_name} group={project_group}")
+        logger.debug(f"Found project candidate path={projects[0].path_with_namespace}")
+        if projects[0].path_with_namespace == gitlab_project_path:
+            logger.info(f"Project exists project_name={project_name} group={project_group}")
+            return True
+
+        logger.info(
+            f"Project does not match the expected pattern:\n"
+            f"got project candidate path={projects[0].path_with_namespace}\n"
+            f"awaited project_name={project_name} group={project_group}"
+        )
         return False
 
     def create_project(self, rms_user: RmsUser, course_students_group: str, course_public_repo: str) -> None:
