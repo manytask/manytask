@@ -3,10 +3,20 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEZONE = ZoneInfo("Europe/Moscow")
+
+
+class CourseStatus(Enum):
+    CREATED = "created"
+    HIDDEN = "hidden"
+    IN_PROGRESS = "in_progress"
+    ALL_TASKS_ISSUED = "all_tasks_issued"
+    DORESHKA = "doreshka"
+    FINISHED = "finished"
 
 
 def parse_time(time: str, tz: ZoneInfo = DEFAULT_TIMEZONE) -> datetime:
@@ -32,6 +42,11 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
     return current_time
 
 
+class ManytaskDeadlinesType(Enum):
+    HARD = "hard"
+    INTERPOLATE = "interpolate"
+
+
 @dataclass
 class CourseConfig:
     """Configuration for Course settings."""
@@ -47,10 +62,11 @@ class CourseConfig:
     token: str
     show_allscores: bool
 
-    is_ready: bool
+    status: CourseStatus
 
     task_url_template: str
     links: dict[str, str]
+    deadlines_type: ManytaskDeadlinesType
 
 
 class Course:
@@ -73,8 +89,9 @@ class Course:
         self.registration_secret = config.registration_secret
         self.token = config.token
         self.show_allscores = config.show_allscores
+        self.deadlines_type = config.deadlines_type
 
-        self.is_ready = config.is_ready
+        self.status = config.status
 
         self.task_url_template = config.task_url_template
         self.links = config.links

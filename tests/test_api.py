@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from typing import Callable
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -9,30 +10,33 @@ import pytest
 import yaml
 from dotenv import load_dotenv
 from flask import Flask, json, url_for
+from pytest import approx
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import RmsUser, StoredUser
+from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
+from manytask.config import ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.course import CourseStatus
 from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.glab import GitLabApiException
 from manytask.web import course_bp, root_bp
-
-TEST_USER_ID = 123
-TEST_USERNAME = "test_user"
-TEST_FIRST_NAME = "Ivan"
-TEST_LAST_NAME = "Ivanov"
-TEST_NAME = "Ivan Ivanov"
-TEST_RMS_ID = 456
-INVALID_TASK_NAME = "invalid_task"
-TASK_NAME_WITH_DISABLED_TASK_OR_GROUP = "disabled_task"
-TEST_TASK_NAME = "test_task"
-TEST_TASK_GROUP_NAME = "test_task_group"
-TEST_SECRET_KEY = "test_key"
-TEST_COURSE_NAME = "Test_Course"
-
-TEST_INVALID_USER_ID = 321
-TEST_INVALID_USERNAME = "invalid_user"
+from tests.constants import (
+    INVALID_TASK_NAME,
+    TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
+    TEST_COURSE_NAME,
+    TEST_FIRST_NAME,
+    TEST_INVALID_USER_ID,
+    TEST_INVALID_USERNAME,
+    TEST_LAST_NAME,
+    TEST_NAME,
+    TEST_RMS_ID,
+    TEST_SECRET_KEY,
+    TEST_TASK_GROUP_NAME,
+    TEST_TASK_NAME,
+    TEST_USER_ID,
+    TEST_USERNAME,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -46,7 +50,7 @@ def setup_environment(monkeypatch):
 
 
 @pytest.fixture
-def app(mock_storage_api, mock_gitlab_api):
+def app(mock_storage_api, mock_rms_api, mock_auth_api):
     app = Flask(__name__)
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
@@ -55,8 +59,8 @@ def app(mock_storage_api, mock_gitlab_api):
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
     app.storage_api = mock_storage_api
-    app.gitlab_api = mock_gitlab_api
-    app.rms_api = mock_gitlab_api
+    app.rms_api = mock_rms_api
+    app.auth_api = mock_auth_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
 
@@ -86,7 +90,7 @@ def mock_group(mock_task):
             self.tasks = [mock_task]
 
         @staticmethod
-        def get_current_percent_multiplier(now):
+        def get_current_percent_multiplier(now, deadlines_type):
             return 1.0
 
         def get_tasks(self):
@@ -116,9 +120,10 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 first_name=TEST_FIRST_NAME,
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
-                course_admin=False,
+                instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
+            self.course_admin = False
 
         def store_score(self, _course_name, username, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
@@ -137,17 +142,6 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_all_scores(course_name, self):
             return {"test_user": self.get_scores(course_name, "test_user")}
 
-        def get_stored_user(self, _course_name, username):
-            from manytask.abstract import StoredUser
-
-            return StoredUser(
-                username=username,
-                first_name=self.stored_user.first_name,
-                last_name=self.stored_user.last_name,
-                rms_id=self.stored_user.rms_id,
-                course_admin=True,
-            )
-
         def check_if_course_admin(self, _course_name, _username):
             return True
 
@@ -161,11 +155,21 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             pass
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
-            self.stored_user.course_admin = course_admin
-            return self.stored_user.course_admin
+            self.course_admin = course_admin
+            return course_admin
 
         def check_user_on_course(self, *a, **k):
             return True
+
+        def max_score_started(self, _):
+            return 0
+
+        def get_grades(self, _):
+            class MockManytaskFinalGradeConfig:
+                def evaluate(self, _):
+                    return 0
+
+            return MockManytaskFinalGradeConfig()
 
         @staticmethod
         def find_task(_course_name, task_name):
@@ -173,7 +177,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 raise KeyError("Task not found")
             if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
                 raise TaskDisabledError(f"Task {task_name} is disabled")
-            return mock_group, mock_task
+            return mock_course, mock_group, mock_task
 
         @staticmethod
         def get_now_with_timezone(_course_name):
@@ -186,8 +190,8 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
 
 @pytest.fixture
-def mock_gitlab_api(mock_rms_user):
-    class MockGitlabApi:
+def mock_rms_api(mock_rms_user):
+    class MockRmsApi:
         def __init__(self):
             self.course_admin = False
             self._rms_user_class = mock_rms_user
@@ -216,7 +220,24 @@ def mock_gitlab_api(mock_rms_user):
         def check_project_exists(_project_name, _project_group):
             return True
 
-    return MockGitlabApi()
+    return MockRmsApi()
+
+
+@pytest.fixture
+def mock_auth_api():
+    class MockAuthApi:
+        def check_user_is_authenticated(
+            self,
+            oauth,
+            oauth_access_token: str,
+            oauth_refresh_token: str,
+        ) -> bool:
+            return True
+
+        def get_authenticated_user(self, access_token):
+            return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
+
+    return MockAuthApi()
 
 
 @pytest.fixture
@@ -224,7 +245,7 @@ def mock_course():
     class MockCourse:
         def __init__(self):
             self.course_name = TEST_COURSE_NAME
-            self.is_ready = True
+            self.status = CourseStatus.IN_PROGRESS
             self.show_allscores = True
             self.registration_secret = "test_secret"
             self.token = os.environ["MANYTASK_COURSE_TOKEN"]
@@ -232,6 +253,7 @@ def mock_course():
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"
             self.gitlab_default_branch = "main"
+            self.deadlines_type = ManytaskDeadlinesType.HARD
 
     return MockCourse()
 
@@ -263,6 +285,10 @@ def authenticated_client(app, mock_gitlab_oauth):
                 "access_token": "",
                 "refresh_token": "",
             }
+            session["profile"] = {
+                "version": 1.0,
+                "username": TEST_USERNAME,
+            }
         yield client
 
 
@@ -284,20 +310,105 @@ def test_parse_flags_past_date():
 
 
 def test_update_score_basic(app):
-    group = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[0]
-    task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[1]
+    course, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
     updated_score = 80
-    score = _update_score(group, task, updated_score, "", 0, datetime.now(tz=ZoneInfo("UTC")))
+    score = _update_score(course, group, task, updated_score, "", 0, datetime.now(tz=ZoneInfo("UTC")))
     assert score == updated_score
 
 
 def test_update_score_with_old_score(app):
-    group = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[0]
-    task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")[1]
+    course, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
     updated_score = 70
     old_score = 80
-    score = _update_score(group, task, updated_score, "", old_score, datetime.now(tz=ZoneInfo("UTC")))
+    score = _update_score(course, group, task, updated_score, "", old_score, datetime.now(tz=ZoneInfo("UTC")))
     assert score == old_score  # Should keep higher old score
+
+
+def create_percent_multiplier_calculator(
+    start: datetime,
+    duration: timedelta,
+    steps: dict[float, datetime | timedelta],
+    deadlines_type: ManytaskDeadlinesType,
+) -> Callable:
+    group = ManytaskGroupConfig(
+        group="test",
+        enabled=True,
+        start=start,
+        end=start + duration,
+        steps={
+            1.0: timedelta(days=2),
+            0.5: start + timedelta(days=4),
+            0.25: start + timedelta(days=8),
+        },
+        tasks=[
+            ManytaskTaskConfig(
+                task=TEST_TASK_NAME,
+                score=100,
+            )
+        ],
+    )
+
+    def get_percent_multiplier(**kwargs) -> float:
+        return group.get_current_percent_multiplier(start + timedelta(**kwargs), deadlines_type)
+
+    return get_percent_multiplier
+
+
+def test_interpolated_scores(mock_task):
+    start = datetime(2025, 9, 1)
+    get_percent_multiplier = create_percent_multiplier_calculator(
+        start=start,
+        duration=timedelta(days=10),
+        steps={
+            1.0: timedelta(days=2),
+            0.5: start + timedelta(days=4),
+            0.25: start + timedelta(days=8),
+        },
+        deadlines_type=ManytaskDeadlinesType.INTERPOLATE,
+    )
+
+    assert get_percent_multiplier(days=0) == approx(1.0)
+    assert get_percent_multiplier(days=1) == approx(1.0)
+    assert get_percent_multiplier(days=2) == approx(1.0)
+    assert get_percent_multiplier(days=2, hours=9, minutes=36) == approx(0.9)
+    assert get_percent_multiplier(days=3) == approx(0.75)
+    assert get_percent_multiplier(days=4) == approx(0.5)
+    assert get_percent_multiplier(days=5) == approx(0.4375)
+    assert get_percent_multiplier(days=6) == approx(0.375)
+    assert get_percent_multiplier(days=7) == approx(0.3125)
+    assert get_percent_multiplier(days=8) == approx(0.25)
+    assert get_percent_multiplier(days=9) == approx(0.25)
+    assert get_percent_multiplier(days=9, hours=23, minutes=59, seconds=59) == approx(0.25)
+    assert get_percent_multiplier(days=10, seconds=1) == approx(0)
+
+
+def test_hard_scores(mock_task):
+    start = datetime(2025, 9, 1)
+    get_percent_multiplier = create_percent_multiplier_calculator(
+        start=start,
+        duration=timedelta(days=10),
+        steps={
+            1.0: timedelta(days=2),
+            0.5: start + timedelta(days=4),
+            0.25: start + timedelta(days=8),
+        },
+        deadlines_type=ManytaskDeadlinesType.HARD,
+    )
+
+    assert get_percent_multiplier(days=0) == approx(1.0)
+    assert get_percent_multiplier(days=1) == approx(1.0)
+    assert get_percent_multiplier(days=2) == approx(1.0)
+    assert get_percent_multiplier(days=3) == approx(1.0)
+    assert get_percent_multiplier(days=3, hours=23, minutes=59, seconds=59) == approx(1.0)
+    assert get_percent_multiplier(days=4, seconds=1) == approx(0.5)
+    assert get_percent_multiplier(days=5) == approx(0.5)
+    assert get_percent_multiplier(days=6) == approx(0.5)
+    assert get_percent_multiplier(days=7) == approx(0.5)
+    assert get_percent_multiplier(days=7, hours=23, minutes=59, seconds=59) == approx(0.5)
+    assert get_percent_multiplier(days=8, seconds=1) == approx(0.25)
+    assert get_percent_multiplier(days=9) == approx(0.25)
+    assert get_percent_multiplier(days=9, hours=23, minutes=59, seconds=59) == approx(0.25)
+    assert get_percent_multiplier(days=10, seconds=1) == approx(0)
 
 
 def test_report_score_missing_task(app):
@@ -322,7 +433,12 @@ def test_report_score_missing_user(app):
 
 def test_report_score_success(app):
     with app.test_request_context():
-        data = {"task": TEST_TASK_NAME, "user_id": str(TEST_USER_ID), "score": "90", "check_deadline": "True"}
+        data = {
+            "task": TEST_TASK_NAME,
+            "user_id": str(TEST_USER_ID),
+            "score": "90",
+            "check_deadline": "True",
+        }
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
         expected_data = {"username": TEST_USERNAME, "score": 90}
 
@@ -337,7 +453,12 @@ def test_get_score_success(app):
     with app.test_request_context():
         data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
-        expected_data = {"score": 80, "task": TEST_TASK_NAME, "user_id": TEST_USER_ID, "username": TEST_USERNAME}
+        expected_data = {
+            "score": 80,
+            "task": TEST_TASK_NAME,
+            "user_id": TEST_USER_ID,
+            "username": TEST_USERNAME,
+        }
 
         response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/score", data=data, headers=headers)
         assert response.status_code == HTTPStatus.OK
@@ -362,18 +483,28 @@ def test_update_database_missing_fields(app, authenticated_client):
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert data["success"] is False
-    assert "Missing required fields" in data["message"]
+    assert "Invalid request data" in data["message"]
 
     # Partial data
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json={"username": TEST_USERNAME})
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert data["success"] is False
-    assert "Missing required fields" in data["message"]
+    assert "Invalid request data" in data["message"]
 
 
 def test_update_database_success(app, authenticated_client):
-    test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
+    test_data = {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {"task1": 90, "task2": 85},
+    }
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
     assert response.status_code == HTTPStatus.OK
     data = json.loads(response.data)
@@ -382,8 +513,15 @@ def test_update_database_success(app, authenticated_client):
 
 def test_update_database_invalid_score_type(app, authenticated_client):
     test_data = {
-        "username": TEST_USERNAME,
-        "scores": {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {
             "task1": "not a number",  # invalid score type
             "task2": 85,
         },
@@ -409,7 +547,7 @@ def test_update_database_not_ready(app, authenticated_client):
 
         @dataclass
         class Course:
-            is_ready = False
+            status = CourseStatus.CREATED
 
         mock_get_course.return_value = Course()
 
@@ -422,7 +560,7 @@ def test_update_database_not_ready(app, authenticated_client):
 def test_requires_token_invalid_token(app):
     client = app.test_client()
     headers = {"Authorization": "Bearer invalid_token"}
-    response = client.post("/api/{TEST_COURSE_NAME}/report", headers=headers)
+    response = client.post(f"/api/{TEST_COURSE_NAME}/report", headers=headers)
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
@@ -438,16 +576,15 @@ def test_parse_flags_invalid_date(app):
 
 
 def test_update_score_after_deadline(app):
-    group = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)[0]
-    task = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)[1]
+    course, group, task = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)
     score = 100
     flags = ""
     old_score = 0
     submit_time = datetime.now(ZoneInfo("UTC"))
 
     # Test with check_deadline=True
-    result = _update_score(group, task, score, flags, old_score, submit_time, check_deadline=True)
-    assert result == score * group.get_current_percent_multiplier(submit_time)
+    result = _update_score(course, group, task, score, flags, old_score, submit_time, check_deadline=True)
+    assert result == score * group.get_current_percent_multiplier(submit_time, course.deadlines_type)
 
 
 def test_update_config_success(app):
@@ -480,7 +617,7 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
 
         @dataclass
         class Course:
-            is_ready = False
+            status = CourseStatus.CREATED
 
         mock_get_course.return_value = Course()
         app.debug = False  # Disable debug mode to test auth
@@ -525,7 +662,7 @@ def test_update_database_missing_student(app, authenticated_client, mock_gitlab_
     data = {"scores": {TEST_TASK_NAME: 100}}
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    assert "Missing required fields" in json.loads(response.data)["message"]
+    assert "Invalid request data" in json.loads(response.data)["message"]
 
 
 def test_report_score_with_flags(app):
@@ -565,7 +702,9 @@ def test_get_score_invalid_student(app):
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
 
     response = client.get(
-        f"/api/{TEST_COURSE_NAME}/score", data={"username": "nonexistent_user", "task": TEST_TASK_NAME}, headers=headers
+        f"/api/{TEST_COURSE_NAME}/score",
+        data={"username": "nonexistent_user", "task": TEST_TASK_NAME},
+        headers=headers,
     )
     assert response.status_code == HTTPStatus.NOT_FOUND
 
@@ -579,7 +718,17 @@ def test_update_database_invalid_task(app, authenticated_client, mock_gitlab_oau
             "username": TEST_USERNAME,
             "user_id": TEST_USER_ID,
         }
-    data = {"username": TEST_USERNAME, "scores": {INVALID_TASK_NAME: 100}}
+    data = {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {INVALID_TASK_NAME: 100},
+    }
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
     # API silently ignores invalid tasks
     assert response.status_code == HTTPStatus.OK
@@ -595,8 +744,15 @@ def test_update_database_invalid_score_value(app, authenticated_client, mock_git
             "user_id": TEST_USER_ID,
         }
     data = {
-        "username": TEST_USERNAME,
-        "scores": {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {
             TEST_TASK_NAME: -1  # Invalid score value
         },
     }
@@ -678,7 +834,7 @@ def test_validate_and_extract_params_get_student_by_id(app):
     form_data = {"user_id": TEST_USER_ID, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
-    rms_user, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+    rms_user, _, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert rms_user.id == TEST_USER_ID
     assert rms_user.username == TEST_USERNAME
@@ -692,7 +848,7 @@ def test_validate_and_extract_params_get_student_by_username(app):
     form_data = {"username": TEST_USERNAME, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
-    rms_user, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
+    rms_user, _, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
     assert rms_user.id == TEST_USER_ID
     assert rms_user.username == TEST_USERNAME
@@ -714,7 +870,11 @@ def test_validate_and_extract_params_no_student_name_or_id(app):
 
 def test_validate_and_extract_params_both_student_name_and_id(app):
     """Test parsing form data user is not defined"""
-    form_data = {"user_id": TEST_USER_ID, "username": TEST_USERNAME, "task": TEST_TASK_NAME}
+    form_data = {
+        "user_id": TEST_USER_ID,
+        "username": TEST_USERNAME,
+        "task": TEST_TASK_NAME,
+    }
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:

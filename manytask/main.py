@@ -12,7 +12,12 @@ from flask import Flask
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from manytask.course import ManytaskDeadlinesType
+
 from . import abstract, config, course, database, glab, local_config
+from .course import CourseStatus
+
+MAX_AGE_IN_SECONDS = 86400
 
 load_dotenv("../.env")  # take environment variables from .env.
 
@@ -21,8 +26,8 @@ class CustomFlask(Flask):
     csrf: CSRFProtect
     oauth: OAuth
     app_config: local_config.LocalConfig  # TODO: check if we need it
-    gitlab_api: glab.GitLabApi
     rms_api: abstract.RmsApi
+    auth_api: abstract.AuthApi
     storage_api: abstract.StorageApi
 
     manytask_version: str | None = None
@@ -61,8 +66,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         )
     )
 
-    app.gitlab_api = gitlab_api
     app.rms_api = gitlab_api
+    app.auth_api = gitlab_api
     app.csrf = CSRFProtect(app)
 
     # read VERSION file to get a version
@@ -98,6 +103,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
         app.store_config("python2025", debug_manytask_config_data)
 
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = MAX_AGE_IN_SECONDS
+
     logger.info("Init success")
 
     return app
@@ -113,9 +120,10 @@ def _create_debug_course(app: CustomFlask) -> None:
         registration_secret="registration_secret",
         token="token",
         show_allscores=True,
-        is_ready=False,
+        status=CourseStatus.CREATED,
         task_url_template="",
         links={},
+        deadlines_type=ManytaskDeadlinesType.HARD,
     )
     app.storage_api.create_course(course_config)
 
@@ -160,7 +168,7 @@ def _logging_config(app: CustomFlask) -> dict[str, Any]:
         },
         "handlers": {
             "console": {
-                "level": "INFO",
+                "level": "DEBUG" if app.debug else "INFO",
                 "class": "logging.StreamHandler",
                 "formatter": "default",
                 "stream": "ext://sys.stdout",

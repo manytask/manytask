@@ -26,11 +26,11 @@
     {% endif %}
 
     <div class="position-fixed top-0 end-0 p-3" style="z-index: 11">
-    {% with messages = get_flashed_messages(category_filter=["course_not_found"]) %}
+    {% with messages = get_flashed_messages() %}
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                  <strong>Error:</strong> course not found!
+                  <strong>Error:</strong> {{ message }}
                   <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             {% endfor %}

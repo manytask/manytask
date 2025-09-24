@@ -5,8 +5,8 @@ from typing import Any, Callable
 
 from authlib.integrations.flask_client import OAuth
 
-from .config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
-from .course import Course, CourseConfig
+from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
+from .course import Course, CourseConfig, CourseStatus
 
 
 @dataclass
@@ -15,7 +15,7 @@ class StoredUser:
     first_name: str
     last_name: str
     rms_id: int
-    course_admin: bool = False
+    instance_admin: bool = False
     # we can add more fields that we store
 
     def __repr__(self) -> str:
@@ -38,11 +38,16 @@ class StorageApi(ABC):
     ) -> int: ...
 
     @abstractmethod
-    def get_stored_user(
+    def get_stored_user_by_username(
         self,
-        course_name: str,
         username: str,
     ) -> StoredUser: ...
+
+    @abstractmethod
+    def get_stored_user_by_rms_id(
+        self,
+        rms_id: int,
+    ) -> StoredUser | None: ...
 
     @abstractmethod
     def check_if_instance_admin(
@@ -58,10 +63,13 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
-    def sync_stored_user(self, course_name: str, username: str, course_admin: bool) -> StoredUser: ...
+    def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
+
+    @abstractmethod
+    def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig: ...
 
     @abstractmethod
     def get_stats(self, course_name: str) -> dict[str, float]: ...
@@ -101,7 +109,7 @@ class StorageApi(ABC):
     ) -> Course | None: ...
 
     @abstractmethod
-    def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]: ...
+    def find_task(self, course_name: str, task_name: str) -> tuple[Course, ManytaskGroupConfig, ManytaskTaskConfig]: ...
 
     @abstractmethod
     def get_groups(
@@ -128,13 +136,13 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
+    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
 
     @abstractmethod
-    def get_user_courses_names(self, username: str) -> list[str]: ...
+    def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
-    def get_all_courses_names(self) -> list[str]: ...
+    def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
     def get_all_users(self) -> list[StoredUser]: ...
@@ -179,7 +187,7 @@ class RmsApi(ABC):
         lastname: str,
         email: str,
         password: str,
-    ) -> None: ...
+    ) -> RmsUser: ...
 
     @abstractmethod
     def create_public_repo(
@@ -232,14 +240,6 @@ class RmsApi(ABC):
     ) -> RmsUser: ...
 
     @abstractmethod
-    def check_user_authenticated_in_rms(
-        self,
-        oauth: OAuth,
-        oauth_access_token: str,
-        oauth_refresh_token: str,
-    ) -> bool: ...
-
-    @abstractmethod
     def get_authenticated_rms_user(
         self,
         oauth_access_token: str,
@@ -253,3 +253,27 @@ class AuthenticatedUser:
 
     def __repr__(self) -> str:
         return f"AuthenticatedUser(username={self.username})"
+
+
+@dataclass
+class ClientProfile:
+    username: str
+
+    def __repr__(self) -> str:
+        return f"ClientProfile(username={self.username})"
+
+
+class AuthApi(ABC):
+    @abstractmethod
+    def check_user_is_authenticated(
+        self,
+        oauth: OAuth,
+        oauth_access_token: str,
+        oauth_refresh_token: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def get_authenticated_user(
+        self,
+        oauth_access_token: str,
+    ) -> AuthenticatedUser: ...

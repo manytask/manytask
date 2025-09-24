@@ -1,11 +1,15 @@
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, MetaData, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
+
+from .course import Course as AppCourse
+from .course import CourseConfig as AppCourseConfig
+from .course import CourseStatus, ManytaskDeadlinesType
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +88,33 @@ class StrStrDict(TypeDecorator[Optional[dict[str, str]]]):
         return value
 
 
+class StrIntFloatDict(TypeDecorator[Optional[dict[str, int | float]]]):
+    impl = JSON
+    cache_ok = True
+
+    def process_bind_param(
+        self, value: Optional[dict[str, int | float]], dialect: Dialect
+    ) -> Optional[dict[str, int | float]]:
+        if value is None:
+            return None
+
+        if not isinstance(value, dict):
+            raise TypeError(f"value must be a dict, not {type(value)}")
+
+        for k, v in value.items():
+            if not isinstance(k, str):
+                raise TypeError(f"Key {k} must be a str, not {type(k)}")
+            if not isinstance(v, int) and not isinstance(v, float):
+                raise TypeError(f"Value {v} must be a str, not {type(v)}")
+
+        return value
+
+    def process_result_value(
+        self, value: Optional[dict[str, int | float]], dialect: Dialect
+    ) -> Optional[dict[str, int | float]]:
+        return value
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -106,7 +137,11 @@ class Course(Base):
     registration_secret: Mapped[str]
     token: Mapped[str] = mapped_column(unique=True)
     show_allscores: Mapped[bool] = mapped_column(default=False)
-    is_ready: Mapped[bool] = mapped_column(server_default="true", default=True)
+    status: Mapped[CourseStatus] = mapped_column(
+        Enum(CourseStatus, name="course_status", native_enum=False),
+        default=CourseStatus.CREATED,
+        server_default="CREATED",
+    )
 
     # gitlab parameters
     gitlab_course_group: Mapped[str]
@@ -122,6 +157,11 @@ class Course(Base):
     timezone: Mapped[str] = mapped_column(default="UTC", server_default="UTC")
     max_submissions: Mapped[Optional[int]]
     submission_penalty: Mapped[float] = mapped_column(default=0, server_default="0")
+    deadlines_type: Mapped[ManytaskDeadlinesType] = mapped_column(
+        Enum(ManytaskDeadlinesType, name="deadlines_type", native_enum=False),
+        default=ManytaskDeadlinesType.HARD,
+        server_default="HARD",
+    )
 
     __table_args__ = (
         UniqueConstraint("name", name="uq_courses_name"),
@@ -135,6 +175,27 @@ class Course(Base):
     users_on_courses: DynamicMapped["UserOnCourse"] = relationship(
         back_populates="course", cascade="all, delete-orphan"
     )
+    course_grades: DynamicMapped["ComplexFormula"] = relationship(
+        back_populates="course", cascade="all, delete-orphan", order_by="ComplexFormula.grade"
+    )
+
+    def to_app_course(self) -> AppCourse:
+        return AppCourse(
+            AppCourseConfig(
+                course_name=self.name,
+                gitlab_course_group=self.gitlab_course_group,
+                gitlab_course_public_repo=self.gitlab_course_public_repo,
+                gitlab_course_students_group=self.gitlab_course_students_group,
+                gitlab_default_branch=self.gitlab_default_branch,
+                registration_secret=self.registration_secret,
+                token=self.token,
+                show_allscores=self.show_allscores,
+                status=self.status,
+                task_url_template=self.task_url_template,
+                links=self.links,
+                deadlines_type=self.deadlines_type,
+            )
+        )
 
 
 class UserOnCourse(Base):
@@ -181,7 +242,7 @@ class TaskGroup(Base):
     deadline: Mapped["Deadline"] = relationship(
         back_populates="task_group", cascade="all, delete-orphan", single_parent=True
     )
-    tasks: DynamicMapped["Task"] = relationship(
+    tasks: Mapped[List["Task"]] = relationship(
         back_populates="group", cascade="all, delete-orphan", order_by="Task.position"
     )
 
@@ -193,6 +254,7 @@ class Task(Base):
     name: Mapped[str]
     group_id: Mapped[int] = mapped_column(ForeignKey(TaskGroup.id))
     score: Mapped[int] = mapped_column(server_default="0", default=0)
+    min_score: Mapped[int] = mapped_column(server_default="0", default=0)
     is_bonus: Mapped[bool] = mapped_column(default=False)
     is_large: Mapped[bool] = mapped_column(server_default="false", default=False)
     is_special: Mapped[bool] = mapped_column(server_default="false", default=False)
@@ -202,7 +264,7 @@ class Task(Base):
 
     # relationships
     group: Mapped["TaskGroup"] = relationship(back_populates="tasks")
-    grades: DynamicMapped["Grade"] = relationship(back_populates="task", cascade="all, delete-orphan")
+    grades: Mapped[List["Grade"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
 
 class Grade(Base):
@@ -219,3 +281,28 @@ class Grade(Base):
     # relationships
     user_on_course: Mapped["UserOnCourse"] = relationship(back_populates="grades")
     task: Mapped["Task"] = relationship(back_populates="grades")
+
+
+class ComplexFormula(Base):
+    __tablename__ = "complex_formulas"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    grade: Mapped[int] = mapped_column(default=0, server_default="0")
+    course_id: Mapped[int] = mapped_column(ForeignKey(Course.id))
+
+    # relationships
+    primary_formulas: DynamicMapped["PrimaryFormula"] = relationship(
+        back_populates="complex_formula", cascade="all, delete-orphan"
+    )
+    course: Mapped["Course"] = relationship(back_populates="course_grades")
+
+
+class PrimaryFormula(Base):
+    __tablename__ = "primary_formulas"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    complex_id: Mapped[int] = mapped_column(ForeignKey(ComplexFormula.id))
+    primary_formula: Mapped[dict[str, int | float]] = mapped_column(StrIntFloatDict, server_default="{}", default=dict)
+
+    # relationships
+    complex_formula: Mapped["ComplexFormula"] = relationship(back_populates="primary_formulas")

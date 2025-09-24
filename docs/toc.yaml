@@ -11,7 +11,7 @@ navigation:
     leftItems:
       - type: link
         text: App
-        url: https://app.manytask2.org/
+        url: https://app.manytask.org/
       - type: link
         text: Documentation
         url: ./production.html
@@ -28,13 +28,17 @@ items:
     href: system_setup.md
   - name: Production
     href: production.md
+  - name: Development strategy
+    href: strategy.md
   - name: Development setup
     href: dev_setup.md
   - name: Development
     href: dev.md
   - name: REST API
     href: api.md
-  - name: Development strategy
-    href: strategy.md
   - name: Deadline schedule
     href: deadline_schedule.md
+  - name: Course grading
+    href: grading.md
+  - name: Course statuses
+    href: course_statuses.md

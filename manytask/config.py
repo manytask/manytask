@@ -1,11 +1,28 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Optional, Union
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
+
+from manytask.course import CourseStatus, ManytaskDeadlinesType
+from manytask.utils.generic import lerp
+
+
+class RowData(BaseModel):
+    username: str
+    total_score: int
+    percent: float
+    large_count: int
+    grade: int
+    scores: Dict[str, int]
+
+
+class ManytaskUpdateDatabasePayload(BaseModel):
+    new_scores: Dict[str, Union[Any]] = Field(...)
+    row_data: RowData
 
 
 class ManytaskUiConfig(BaseModel):
@@ -22,22 +39,14 @@ class ManytaskUiConfig(BaseModel):
         return data
 
 
-class ManytaskDeadlinesType(Enum):
-    HARD = "hard"
-    INTERPOLATE = "interpolate"
-
-
-class ManytaskStorageType(Enum):
-    DataBase = "db"
-    GoogleSheets = "gsheets"
-
-
 class ManytaskTaskConfig(BaseModel):
     task: str
 
     enabled: bool = True
 
     score: int
+    # Minimum score to count the task, only significant for large tasks
+    min_score: int = 0
     special: int = 0
 
     is_bonus: bool = False
@@ -68,18 +77,43 @@ class ManytaskGroupConfig(BaseModel):
     def name(self) -> str:
         return self.group
 
-    def get_percents_before_deadline(self) -> dict[float, datetime]:
-        return {
-            percent: (date_or_delta if isinstance(date_or_delta, datetime) else self.start + date_or_delta)
-            for percent, date_or_delta in zip([1.0, *self.steps.keys()], [*self.steps.values(), self.end])
-        }
+    def get_percents_before_deadline(self) -> list[tuple[datetime, float]]:
+        return list(zip(map(self.get_deadline, [*self.steps.values(), self.end]), [1.0, *self.steps.keys()]))
 
-    def get_current_percent_multiplier(self, now: datetime) -> float:
-        percents = self.get_percents_before_deadline()
-        for percent, date in percents.items():
-            if now <= date:
-                return percent
-        return 0.0
+    def get_percents_after_deadline(self) -> list[tuple[datetime, float]]:
+        return list(zip(map(self.get_deadline, [self.start, *self.steps.values()]), [1.0, *self.steps.keys()]))
+
+    def get_displayed_deadlines(self, deadlines_type: ManytaskDeadlinesType) -> list[tuple[datetime, float]]:
+        if deadlines_type == ManytaskDeadlinesType.HARD:
+            return self.get_percents_before_deadline()
+        else:
+            return self.get_percents_after_deadline()[1:]
+
+    def get_deadline(self, date_or_delta: datetime | timedelta) -> datetime:
+        if isinstance(date_or_delta, datetime):
+            return date_or_delta
+        return self.start + date_or_delta
+
+    def get_current_percent_multiplier(self, now: datetime, deadlines_type: ManytaskDeadlinesType) -> float:
+        if now >= self.get_deadline(self.end):
+            return 0.0
+        last_point = None
+        for date, percent in self.get_percents_after_deadline():
+            if now >= date:
+                last_point = (date, percent)
+                continue
+
+            if deadlines_type == ManytaskDeadlinesType.HARD or last_point is None:
+                break
+            start = last_point[0]
+            return lerp(
+                p1=(0.0, last_point[1]),
+                p2=((date - start).total_seconds(), percent),
+                x=(now - start).total_seconds(),
+            )
+
+        # None if now is before start, ok if last_point[1] is zero
+        return (last_point and last_point[1]) or 0.0
 
     def replace_timezone(self, timezone: ZoneInfo) -> None:
         self.start = self.start.replace(tzinfo=timezone)
@@ -181,6 +215,23 @@ class ManytaskDeadlinesConfig(BaseModel):
             group.replace_timezone(timezone)
         return self
 
+    @model_validator(mode="before")
+    @classmethod
+    def add_extra_group(cls, data: dict[str, Any]) -> Any:
+        schedule = data.get("schedule", [])
+
+        schedule.append(
+            {
+                "group": "Bonus group",
+                "start": datetime(2000, 1, 1, 0, 0, tzinfo=timezone.utc),
+                "end": datetime(3000, 1, 1, 0, 0, tzinfo=timezone.utc),
+                "enabled": False,
+                "tasks": [{"task": "bonus_score", "score": 0, "is_bonus": True}],
+            }
+        )
+        data["schedule"] = schedule
+        return data
+
     @property
     def groups(
         self,
@@ -188,13 +239,71 @@ class ManytaskDeadlinesConfig(BaseModel):
         return self.schedule
 
 
+class ManytaskFinalGradeConfig(BaseModel):
+    grades: dict[int, list[dict[Path, Union[int, float]]]] = Field(default_factory=dict)
+    grades_order: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def populate_grades_order(self) -> ManytaskFinalGradeConfig:
+        self.grades_order = sorted(list(self.grades.keys()), reverse=True)
+        return self
+
+    def evaluate(self, scores: dict[str, Any]) -> Optional[int]:
+        for grade in self.grades_order:
+            if ManytaskFinalGradeConfig.evaluate_grade(self.grades[grade], scores):
+                return grade
+
+        # shortcut for courses that do not use builtin grading system
+        if len(self.grades_order) == 0:
+            return 0
+
+        raise ValueError("No grade matched")
+
+    @staticmethod
+    def get_attribute(path: Path, scores: dict[str, Any]) -> Any:
+        # empty path means always true: dummy case for lowest mark
+        if len(path.parts) == 0:
+            return True
+
+        attribute = scores
+        for dir in path.parts:
+            if not isinstance(attribute, dict):
+                raise ValueError(f"Path <{path}> not found in scores data <{scores}>")
+            try:
+                attribute = attribute[dir]
+            except KeyError:
+                raise ValueError(f"Path <{path}> not found in scores data <{scores}>")
+
+        return attribute
+
+    @staticmethod
+    def evaluate_primary_formula(formula: dict[Path, Union[int, float]], scores: dict[str, Any]) -> bool:
+        for path, limit in formula.items():
+            try:
+                attribute = ManytaskFinalGradeConfig.get_attribute(path, scores)
+            except ValueError:
+                return False
+            if attribute < limit:
+                return False
+        return True
+
+    @staticmethod
+    def evaluate_grade(grade_config: list[dict[Path, Union[int, float]]], scores: dict[str, Any]) -> bool:
+        for formula in grade_config:
+            if ManytaskFinalGradeConfig.evaluate_primary_formula(formula, scores):
+                return True
+        return False
+
+
 class ManytaskConfig(BaseModel):
     """Manytask configuration."""
 
     version: int  # if config exists, version is always present
+    status: CourseStatus | None = None
 
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
+    grades: Optional[ManytaskFinalGradeConfig] = None
 
     @field_validator("version")
     @classmethod

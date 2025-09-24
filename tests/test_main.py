@@ -5,12 +5,12 @@ import pytest
 from dotenv import load_dotenv
 
 from manytask.main import CustomFlask, create_app
-
-TEST_COURSE_NAME = "test_course"
-TEST_STUDENTS_GROUP = "test_students"
-TEST_PUBLIC_REPO = "test_public_repo"
-
-TEST_CACHE_DIR = "/tmp/manytask_test_cache"
+from tests.constants import (
+    TEST_CACHE_DIR,
+    TEST_COURSE_NAME,
+    TEST_PUBLIC_REPO,
+    TEST_STUDENTS_GROUP,
+)
 
 
 @pytest.fixture
@@ -47,7 +47,6 @@ def mock_env(monkeypatch, postgres_container):
     monkeypatch.setenv("CACHE_DIR", TEST_CACHE_DIR)
     monkeypatch.setenv("DATABASE_URL", postgres_container.get_connection_url())
     monkeypatch.setenv("INITIAL_INSTANCE_ADMIN", "instance_admin")
-    monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course")
     monkeypatch.setenv("APPLY_MIGRATIONS", "true")
 
     os.makedirs(TEST_CACHE_DIR, exist_ok=True)
@@ -114,11 +113,11 @@ def test_create_app_production_with_db(mock_env, mock_gitlab, monkeypatch):
     assert "gitlab" in app.oauth._clients
 
     assert hasattr(app, "storage_api")
-    assert hasattr(app, "gitlab_api")
+    assert hasattr(app, "rms_api")
+    assert hasattr(app, "auth_api")
 
 
 def test_create_app_debug(mock_env, mock_gitlab):
-    mock_env.monkeypatch.setenv("UNIQUE_COURSE_NAME", "test_course_debug")
     app = create_app(debug=True)
     assert isinstance(app, CustomFlask)
     assert app.debug is True

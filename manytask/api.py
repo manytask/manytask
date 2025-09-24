@@ -10,6 +10,7 @@ from typing import Any, Callable
 import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
+from pydantic import ValidationError
 
 from manytask.abstract import StorageApi
 from manytask.database import TaskDisabledError
@@ -17,10 +18,12 @@ from manytask.glab import GitLabApiException
 
 from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
-from .config import ManytaskGroupConfig, ManytaskTaskConfig
+from .config import ManytaskGroupConfig, ManytaskTaskConfig, ManytaskUpdateDatabasePayload
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
-from .database_utils import get_database_table_data
 from .main import CustomFlask
+from .utils.database import get_database_table_data
+from .utils.generic import sanitize_log_data
+
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
@@ -32,17 +35,25 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         app: CustomFlask = current_app  # type: ignore
 
         course_name = kwargs["course_name"]
+
+        logger.debug(f"Checking token for course={course_name}")
+
         course = app.storage_api.get_course(course_name)
         if course is None:
+            logger.warning(f"Course not found: {course_name}")
             abort(HTTPStatus.NOT_FOUND, "Course not found")
 
         course_token = course.token
         token = request.form.get("token", request.headers.get("Authorization", ""))
         if not token or not course_token:
+            logger.warning(f"Missing token for course={course_name}")
             abort(HTTPStatus.FORBIDDEN)
         token = token.split()[-1]
         if not secrets.compare_digest(token, course_token):
+            logger.warning(f"Invalid token for course={course_name}")
             abort(HTTPStatus.FORBIDDEN)
+
+        logger.debug(f"Token validated for course={course_name}")
         return f(*args, **kwargs)
 
     return decorated
@@ -64,10 +75,13 @@ def _parse_flags(flags: str | None) -> timedelta:
         if parsed is not None and get_current_time() <= parsed:
             days = int(flags[left_colon + 1 : right_colon])
             extra_time = timedelta(days=days)
+            logger.debug(f"Parsed extra_time={extra_time} from flags={flags}")
     return extra_time
 
 
+# ruff: noqa PLR0913
 def _update_score(
+    course: Course,
     group: ManytaskGroupConfig,
     task: ManytaskTaskConfig,
     score: int,
@@ -76,14 +90,22 @@ def _update_score(
     submit_time: datetime,
     check_deadline: bool = True,
 ) -> int:
+    logger.debug(
+        f"Update score: task={task.name}, old_score={old_score}, new_score={score}, "
+        f"flags={flags}, submit_time={submit_time}, check_deadline={check_deadline}"
+    )
     if old_score < 0:
         return old_score
 
     if check_deadline:
         extra_time = _parse_flags(flags)
 
-        multiplier = group.get_current_percent_multiplier(now=submit_time - extra_time)
+        multiplier = group.get_current_percent_multiplier(
+            now=submit_time - extra_time,
+            deadlines_type=course.deadlines_type,
+        )
         score = int(score * multiplier)
+        logger.debug(f"Applied multiplier={multiplier}, adjusted_score={score}")
 
     return max(old_score, score)
 
@@ -96,7 +118,7 @@ def healthcheck() -> ResponseReturnValue:
 
 def _validate_and_extract_params(
     form_data: dict[str, Any], rms_api: RmsApi, storage_api: StorageApi, course_name: str
-) -> tuple[RmsUser, ManytaskTaskConfig, ManytaskGroupConfig]:
+) -> tuple[RmsUser, Course, ManytaskTaskConfig, ManytaskGroupConfig]:
     """Validate and extract parameters from form data."""
 
     if "user_id" in form_data and "username" in form_data:
@@ -105,6 +127,7 @@ def _validate_and_extract_params(
         try:
             user_id = int(form_data["user_id"])
             rms_user = rms_api.get_rms_user_by_id(user_id)
+            logger.info(f"Found user by id={user_id}: {rms_user.username}")
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
         except GitLabApiException:
@@ -123,11 +146,12 @@ def _validate_and_extract_params(
     task_name = form_data["task"]
 
     try:
-        group, task = storage_api.find_task(course_name, task_name)
+        course, group, task = storage_api.find_task(course_name, task_name)
     except (KeyError, TaskDisabledError):
+        logger.warning(f"Task not found or disabled: {sanitize_log_data(task_name)}")
         abort(HTTPStatus.NOT_FOUND, f"There is no task with name `{task_name}` (or it is closed for submission)")
 
-    return rms_user, task, group
+    return rms_user, course, task, group
 
 
 def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetime) -> datetime:
@@ -137,6 +161,7 @@ def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetim
         try:
             submit_time = datetime.strptime(submit_time_str, "%Y-%m-%d %H:%M:%S%z")
         except ValueError:
+            logger.warning(f"Invalid submit_time format: {sanitize_log_data(submit_time_str)}")
             submit_time = None
 
     submit_time = submit_time or now_with_timezone
@@ -147,9 +172,11 @@ def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetim
 def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
     """Process and validate score from form data."""
     if "score" not in form_data:
+        logger.debug("No score provided, will use default")
         return None
 
     score_str = form_data["score"]
+    logger.debug(f"Raw score input: {sanitize_log_data(score_str)}")
     try:
         min_score = 0.0
         max_score = 2.0
@@ -176,7 +203,9 @@ def report_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    rms_user, task, group = _validate_and_extract_params(request.form, app.rms_api, app.storage_api, course.course_name)
+    rms_user, course, task, group = _validate_and_extract_params(
+        request.form, app.rms_api, app.storage_api, course.course_name
+    )
 
     reported_score = _process_score(request.form, task.score)
     if reported_score is None:
@@ -193,12 +222,13 @@ def report_score(course_name: str) -> ResponseReturnValue:
     # Log with sanitized values
     logger.info(f"Use submit_time: {submit_time}")
     logger.info(
-        f"Will process score {reported_score} for @{rms_user} on task {task.name} \
-            {'with' if check_deadline else 'without'} deadline check"
+        f"user={rms_user.username} (id={rms_user.id}), task={task.name}, "
+        f"reported_score={reported_score}, submit_time={submit_time}, check_deadline={check_deadline}"
     )
 
     update_function = functools.partial(
         _update_score,
+        course,
         group,
         task,
         reported_score,
@@ -206,6 +236,8 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
     )
     final_score = app.storage_api.store_score(course.course_name, rms_user.username, task.name, update_function)
+
+    logger.info(f"Stored final_score={final_score} for user={rms_user.username}, task={task.name}")
 
     return {
         "user_id": rms_user.id,
@@ -224,12 +256,15 @@ def get_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    rms_user, task, group = _validate_and_extract_params(request.form, app.rms_api, app.storage_api, course.course_name)
+    rms_user, _, task, group = _validate_and_extract_params(
+        request.form, app.rms_api, app.storage_api, course.course_name
+    )
 
     student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
 
     try:
         student_task_score = student_scores[task.name]
+        logger.info(f"user={rms_user.username}, task={task.name}, score={student_task_score}")
     except Exception:
         return f"Cannot get score for task {task.name} for {rms_user.username}", HTTPStatus.NOT_FOUND
 
@@ -246,7 +281,7 @@ def get_score(course_name: str) -> ResponseReturnValue:
 def update_config(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    logger.info("Running update_config")
+    logger.info(f"Running update_config for course={course_name}")
 
     # ----- get and validate request parameters ----- #
     try:
@@ -255,9 +290,10 @@ def update_config(course_name: str) -> ResponseReturnValue:
 
         # Store the new config
         app.store_config(course_name, config_data)
-    except Exception as e:
-        logger.exception(e)
-        return f"Invalid config\n {e}", HTTPStatus.BAD_REQUEST
+        logger.info(f"Stored new config for course={course_name}")
+    except Exception:
+        logger.exception(f"Error while updating config for course={course_name}", exc_info=True)
+        return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
     return "", HTTPStatus.OK
 
@@ -267,11 +303,12 @@ def update_config(course_name: str) -> ResponseReturnValue:
 def update_cache(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    logger.info("Running update_cache")
+    logger.info(f"Updating cached scores for course={course_name}")
 
     # ----- logic ----- #
     app.storage_api.update_cached_scores(course_name)
 
+    logger.info(f"Cache updated for course={course_name}")
     return "", HTTPStatus.OK
 
 
@@ -281,7 +318,16 @@ def update_cache(course_name: str) -> ResponseReturnValue:
 def get_database(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    table_data = get_database_table_data(app, course_name)
+    storage_api = app.storage_api
+    course = app.storage_api.get_course(course_name)
+    if course is None:
+        abort(HTTPStatus.NOT_FOUND, "Course not found")
+
+    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+    is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+
+    logger.info(f"Fetching database snapshot for course={course_name}")
+    table_data = get_database_table_data(app, course, include_repo_urls=is_course_admin)
     return jsonify(table_data)
 
 
@@ -290,27 +336,16 @@ def get_database(course_name: str) -> ResponseReturnValue:
 @requires_ready
 def update_database(course_name: str) -> ResponseReturnValue:
     """
-    Update student scores in the database via API endpoint.
-
-    This endpoint accepts POST requests with JSON data containing a username and scores to update.
-    The request body should be in the format:
-    {
-        "username": str,
-        "scores": {
-            "task_name": score_value
-        }
-    }
-
-    Returns:
-        ResponseReturnValue: JSON response with success status and optional error message
+    Update student scores in the database via API endpoint and recalculate grade.
     """
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     storage_api = app.storage_api
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+    logger.info(f"Request by admin={session['profile']['username']} for course={course_name}")
+
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
@@ -318,23 +353,55 @@ def update_database(course_name: str) -> ResponseReturnValue:
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
 
-    data = request.get_json()
-    if not data or "username" not in data or "scores" not in data:
-        return jsonify({"success": False, "message": "Missing required fields"}), HTTPStatus.BAD_REQUEST
+    try:
+        payload = ManytaskUpdateDatabasePayload.model_validate(request.get_json())
+    except ValidationError as exc:
+        logger.warning(f"Invalid request payload: {exc.errors()}")
+        return jsonify(
+            {"success": False, "message": "Invalid request data", "errors": exc.errors()}
+        ), HTTPStatus.BAD_REQUEST
 
-    username = data["username"]
-    new_scores = data["scores"]
+    new_scores = payload.new_scores
+    row_data = payload.row_data
+
+    username = row_data.username
+    total_score = row_data.total_score
+    logger.info(f"Updating scores for user={sanitize_log_data(username)}: {new_scores}")
 
     try:
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
-                storage_api.store_score(
+                new_score = storage_api.store_score(
                     course.course_name,
                     username=username,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )
-        return jsonify({"success": True})
+                total_score += new_score - row_data.scores.get(task_name, 0)
+                row_data.scores[task_name] = new_score
     except Exception as e:
         logger.error(f"Error updating database: {str(e)}")
-        return jsonify({"success": False, "message": "Internal error when trying to store score"}), 500
+        return jsonify(
+            {"success": False, "message": "Internal error when trying to store score"}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+    try:
+        row_data.total_score = total_score
+        max_score = app.storage_api.max_score_started(course.course_name)
+        row_data.percent = total_score * 100 / max_score if max_score > 0 else 0
+        new_grade = storage_api.get_grades(course.course_name).evaluate(row_data.model_dump())
+        row_data.grade = 0 if new_grade is None else new_grade
+
+        logger.info(f"Successfully updated scores for user={sanitize_log_data(username)}")
+        return jsonify(
+            {
+                "success": True,
+                "row_data": row_data.model_dump_json(),
+            }
+        ), HTTPStatus.OK
+
+    except Exception as e:
+        logger.error(f"Error calculating grade: {str(e)}")
+        return jsonify(
+            {"success": False, "message": "Internal error when calculating new grade. Try refresh page."}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR

@@ -80,7 +80,7 @@
 
 .nav-score-display:hover {
     background-color: var(--bs-primary);
-    border-radius: 1rem;
+    border-radius: 1.35rem;
     color: white;
 }
 
