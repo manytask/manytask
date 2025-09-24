@@ -10,6 +10,7 @@ from typing import Any, Callable
 import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
+from enum import Enum
 from pydantic import ValidationError
 
 from manytask.abstract import StorageApi
@@ -29,6 +30,14 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
 
 
+def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Course:
+    course = storage_api.get_course(course_name)
+    if course is None:
+        logger.warning(f"Course not found: {course_name}")
+        abort(HTTPStatus.NOT_FOUND, "Course not found")
+    return course
+
+
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
@@ -38,10 +47,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
 
         logger.debug(f"Checking token for course={course_name}")
 
-        course = app.storage_api.get_course(course_name)
-        if course is None:
-            logger.warning(f"Course not found: {course_name}")
-            abort(HTTPStatus.NOT_FOUND, "Course not found")
+        course = __get_course_or_not_found(app.storage_api, course_name)
 
         course_token = course.token
         token = request.form.get("token", request.headers.get("Authorization", ""))
@@ -55,6 +61,22 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
 
         logger.debug(f"Token validated for course={course_name}")
         return f(*args, **kwargs)
+
+    return decorated
+
+
+class AuthMethod(Enum):
+    COURSE_TOKEN = "course_token"
+    SESSION = "session"
+
+
+def requires_auth_or_token(f: Callable[..., Any]) -> Callable[..., Any]:
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        if "Authorization" in request.headers:
+            return requires_token(f)(*args, **kwargs, auth_method=AuthMethod.COURSE_TOKEN)
+        else:
+            return requires_auth(f)(*args, **kwargs, auth_method=AuthMethod.SESSION)
 
     return decorated
 
@@ -313,28 +335,29 @@ def update_cache(course_name: str) -> ResponseReturnValue:
 
 
 @bp.get("/database")
-@requires_auth
+@requires_auth_or_token
 @requires_ready
-def get_database(course_name: str) -> ResponseReturnValue:
+def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     storage_api = app.storage_api
-    course = app.storage_api.get_course(course_name)
-    if course is None:
-        abort(HTTPStatus.NOT_FOUND, "Course not found")
+    course = __get_course_or_not_found(storage_api, course_name)
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-    is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+    if auth_method == AuthMethod.SESSION:
+        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
+        include_repo_urls = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+    else:
+        include_repo_urls = True
 
     logger.info(f"Fetching database snapshot for course={course_name}")
-    table_data = get_database_table_data(app, course, include_repo_urls=is_course_admin)
+    table_data = get_database_table_data(app, course, include_repo_urls=include_repo_urls)
     return jsonify(table_data)
 
 
 @bp.post("/database/update")
-@requires_auth
+@requires_auth_or_token
 @requires_ready
-def update_database(course_name: str) -> ResponseReturnValue:
+def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnValue:
     """
     Update student scores in the database via API endpoint and recalculate grade.
     """
@@ -343,12 +366,13 @@ def update_database(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    logger.info(f"Request by admin={session['profile']['username']} for course={course_name}")
+    if auth_method == AuthMethod.SESSION:
+        username = session["profile"]["username"]
+        logger.info(f"Request by admin={username} for course={course_name}")
+        student_course_admin = storage_api.check_if_course_admin(course_name, username)
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
-
-    if not student_course_admin:
-        return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
+        if not student_course_admin:
+            return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
 
     if not request.is_json:
         return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
