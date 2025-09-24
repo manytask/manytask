@@ -15,7 +15,9 @@ To achieve these goals:
 
 ## Improve the User management and better use course admin status ([#610](https://github.com/manytask/manytask/issues/610))
 
-**The target** is to be able to separate instance admin, course admin (teacher), program manager and student. Instance admin should be able to see all the courses, promote other people to be instance admin, course admin or manager, edit information on the course, create new courses, edit the course results table. Teachers should be able to create new courses, edit scores table on their courses, promote other users to teachers on their course. Program managers should be able to see the scores table but should not appear in one as a student. On the main page, the instance admin should only see courses they are registered to. But they should be able to see a table with all the courses on the instance in the admin area. We should also move towards allowing all the users (including students) to create their courses, but how this can be organized is not clear on this stage. Perhaps, we should allow adding courses in "users/[username]" namespace as it is done in e.g. GitLab with repositories. But the root namespace should only be available for instance admins. Ideally, we should move towards more organized workspace with folders with the same structure as in the GitLab instance itself: [organization]/[corse_name]/[year]-[semester] (e.g. hse/python/2025-fall).
+**The target** All courses are assigned to a Namespace. Namespace should have at least one Admin. Namespace can be created by Instance Admin. When created a group with respective name is also created on GitLab. In future, every user can have their own Namespace (under their name), where they can create courses.
+
+### General info
 
 Currently, the only users that can create courses is the instance admins. These can see and edit all the courses that are running on the instance. For the small organization that runs several courses, this may be acceptable, but when the number of courses increases, managing the whole list may be troublesome. Also, not having an option to assign admin role to a single course, somewhat restricts involving the students into the course management (they will have access to other courses, where they might still be students). Hence, clear role separation is needed.
 
@@ -35,7 +37,7 @@ This task needs more planning with several options considered. We should researc
 
 ## Update the Checker infrastructure, fix and add tests, consolidate code and docs in the main repository ([#611](https://github.com/manytask/manytask/issues/611))
 
-**The target** here is to have Checker repo merged into the Manytask repo. The extra copy and logic on parsing .manytask.yml course config should be removed into common space. It is essential to keep an option to install Checker independently from Manytask and clear instructions on how to do this should be provided. The Checker should be using the same infrastructure as Manytask web app, its tests and linters should be integrated into the same CI/CD workflow and the project tracking should be done in the same GitHub project. The documentation should be updated and merged as well.
+**The target** here is to have Checker repo merged into the Manytask repo. The extra copy and logic on parsing .manytask.yml course config should be removed into common space. It is essential to keep an option to install Checker independently from Manytask and clear instructions on how to do this should be provided. The Checker should be using the same infrastructure as Manytask web app, its tests and linters should be integrated into the same CI/CD workflow and the project tracking should be done in the same GitHub project.
 
 ### General info
 
@@ -66,20 +68,25 @@ Cons:
 - Docs for **teachers** on how to create course, what should be in the private repo and how to set up deployment
 - Docs for **admins** so that they can deploy and maintain their own instance of Manytask
 - Docs for **developers** on how to start contributing to the code, run the dev instance and test the code locally.
+Docs from checker repo should also be updated and transferred to the new location.
 
 ### General info
 
 Current documentation lacks structure, may be deprecated and scattered between projects. We should move towards having single location for all the docs. The docs should be accessible from the landing page.
 
+## Autascale runners
+
 ## Re-work the UI ([#407](https://github.com/manytask/manytask/issues/407))
 
-**Target 1** is to re-work the scores table, that should be updated asynchronously, look better and be searchable. Other requests from the teachers: should be able to add comment on a student, which is not visible for the students, be able to hide a person from the list. We may consider an option to bundle with a third-part spreadsheet app if a suitable option exists.
+**Target 1** is to re-work the scores table, that should be updated asynchronously.
+
+Other requests from the teachers: should be able to add comment on a student, which is not visible for the students, be able to hide a person from the list.
+
+We may consider an option to bundle with a third-part spreadsheet app if a suitable option exists.
 
 **Target 2** is to improve the way the task are shown, introducing dependencies on the tasks and proposing options for the next course to take, when the course is near completion. The dependencies can be added to the .manytask.yml file. This representation can be completely independent with an option to switch between it and the current one.
 
 **Target 3** Add a place to show lectures that are rendered from the content in the private/public repo. Something similar to github pages but with clear and documented way to add the notes to the course. Note that we can also make use from the Long Read as A Service (LAAS) project, that was developed in one of the Yandex Education hackathon.
-
-**Target 4** is to add a deadlines calendar, which will help in planning resources needed for the grading infrastructure. We can take inspiration from the GitHub/GitLab commits heatmap.
 
 ### Scores table
 
@@ -99,7 +106,9 @@ When several courses have their deadline for the homework on one day, it may be 
 
 ## Template for the courses ([#613](https://github.com/manytask/manytask/issues/613))
 
-**The target** is to have course templates for several programming languages, including one that shows how to run a custom .sh script for testing and integrate it into the grading workflow. This also include updating current courses so that they will take full benefits from checker infrastructure and so that courses will have the same solution submission workflow for all the courses (i.e. students should directly push to their fork on gitlab to initiate testing and grading). The templates should also include an option to deploy lecture notes as `docs as code` (the source files should be converted to html/pdf from md/latex files upon submission and the resulting rendered slides/notes should be available from the Manytask interface). Having both a template and an example is also an option, if the latter include tasks that use different programming languages and/or testing scripts.
+**The target** is to have course template for Python/C++/Bash, so that the creation of the new courses will be straightforward.
+
+This also include updating current courses so that they will take full benefits from checker infrastructure and so that courses will have the same solution submission workflow for all the courses (i.e. students should directly push to their fork on gitlab to initiate testing and grading). The templates should also include an option to deploy lecture notes as `docs as code` (the source files should be converted to html/pdf from md/latex files upon submission and the resulting rendered slides/notes should be available from the Manytask interface). Having both a template and an example is also an option, if the latter include tasks that use different programming languages and/or testing scripts.
 
 ### General info
 
@@ -115,5 +124,5 @@ As the semester progresses, teacher issue tasks and sets deadlines to them. They
 
 ## Improve and document the Manytask app deployment workflow ([#612](https://github.com/manytask/manytask/issues/612))
 
-**The target** is to help system administrators (or teachers that have the required knowledge) to deploy Manytask on their premises. This may include scripts and step-by-step instruction on how to set up the Manytask instance in the cloud or on the server.
+**The target** is to help system administrators (or teachers that have the required knowledge) to deploy Manytask on their premises. This may include Terraform specs and step-by-step instruction on how to set up the Manytask instance in the cloud or on the server.
 
