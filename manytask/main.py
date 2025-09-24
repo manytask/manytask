@@ -12,8 +12,12 @@ from flask import Flask
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from manytask.course import ManytaskDeadlinesType
+
 from . import abstract, config, course, database, glab, local_config
 from .course import CourseStatus
+
+MAX_AGE_IN_SECONDS = 86400
 
 load_dotenv("../.env")  # take environment variables from .env.
 
@@ -99,6 +103,8 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
         app.store_config("python2025", debug_manytask_config_data)
 
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = MAX_AGE_IN_SECONDS
+
     logger.info("Init success")
 
     return app
@@ -117,6 +123,7 @@ def _create_debug_course(app: CustomFlask) -> None:
         status=CourseStatus.CREATED,
         task_url_template="",
         links={},
+        deadlines_type=ManytaskDeadlinesType.HARD,
     )
     app.storage_api.create_course(course_config)
 
@@ -167,7 +174,7 @@ def _logging_config(app: CustomFlask) -> dict[str, Any]:
         },
         "handlers": {
             "console": {
-                "level": "INFO",
+                "level": "DEBUG" if app.debug else "INFO",
                 "class": "logging.StreamHandler",
                 "formatter": "default",
                 "stream": "ext://sys.stdout",

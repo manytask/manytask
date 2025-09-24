@@ -1,17 +1,12 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from manytask.config import ManytaskDeadlinesConfig
 from manytask.course import CourseStatus
 from manytask.models import Course, Task, TaskGroup
-from manytask.config import ManytaskDeadlinesConfig
-from tests import constants
-
 from tests.constants import (
     FIRST_COURSE_NAME,
     SECOND_COURSE_NAME,
-    TEST_USERNAME,
-    TEST_USERNAME_1,
-    TEST_USERNAME_2,
     TEST_FIRST_NAME,
     TEST_FIRST_NAME_1,
     TEST_FIRST_NAME_2,
@@ -21,20 +16,24 @@ from tests.constants import (
     TEST_RMS_ID,
     TEST_RMS_ID_1,
     TEST_RMS_ID_2,
+    TEST_USERNAME,
+    TEST_USERNAME_1,
+    TEST_USERNAME_2,
 )
 
-# ruff: noqa
+# Mocks for tests
+# ruff: noqa F401
 from tests.test_db_api import (
     db_api,
-    first_course_config,
+    db_api_with_two_initialized_courses,
     edited_first_course_config,
+    edited_second_course_config,
+    first_course_config,
     first_course_deadlines_config,
     first_course_grade_config,
     second_course_config,
-    edited_second_course_config,
     second_course_deadlines_config,
     second_course_grade_config,
-    db_api_with_two_initialized_courses,
 )
 
 
@@ -197,13 +196,13 @@ def test_get_courses_names_with_no_courses(db_api):
 def test_get_courses_names_with_courses(
     db_api_with_two_initialized_courses, edited_first_course_config, edited_second_course_config
 ):
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1
     )
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2
     )
 

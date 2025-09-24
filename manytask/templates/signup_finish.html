@@ -4,17 +4,6 @@
 
     <div class="d-flex align-items-center justify-content-center bg-body-tertiary container-fluid p-3">
         <div class="d-flex flex-column align-items-center justify-content-center form-signin px-4 py-4 rounded m-auto container-sm" style="background-color: var(--bs-body-bg); max-width: 400px;">
-            <a href="{{ url_for('root.login') }}" class="btn btn-primary p-3">
-                <span class="fs-2">Login</span>
-                <br>
-                with {{ base_url }}
-            </a>
-
-            <br>
-            <span>OR</span>
-            <br>
-
-
             <form method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 {% if error_message %}
@@ -23,10 +12,6 @@
                     </div>
                 {% endif %}
 
-                <div class="form-floating my-2">
-                    <input type="text" name="username" class="form-control" id="floatingUsername" placeholder="username" pattern="\S*" minlength="1" maxlength="32" required>
-                    <label for="floatingUsername">Username</label>
-                </div>
                 <div class="d-flex flex-row justify-content-between w-100 my-2">
                     <div class="form-floating me-2">
                         <input type="text" name="firstname" class="form-control" id="floatingFirstname" placeholder="Firstname" pattern="\S*" minlength="2" maxlength="32" required>
@@ -37,20 +22,7 @@
                         <label for="floatingLastname">Last name</label>
                     </div>
                 </div>
-                <div class="form-floating my-2">
-                    <input type="email" name="email" class="form-control" id="floatingEmail" placeholder="name@example.com" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" required>
-                    <label for="floatingEmail">Email address</label>
-                </div>
-                <div class="form-floating my-2">
-                    <input type="password" name="password" class="form-control" id="floatingPassword" placeholder="Password" pattern="\S*" minlength="6" required>
-                    <label for="floatingPassword">Password</label>
-                </div>
-                <div class="form-floating my-2">
-                    <input type="password" name="password2" class="form-control" id="floatingPassword" placeholder="Re-type password" pattern="\S*" minlength="6" required>
-                    <label for="floatingPassword">Re-type password</label>
-                </div>
-
-                <button class="btn btn-primary w-100 py-2 mt-2" type="submit" value="Register">Sign up</button>
+                <button class="btn btn-primary w-100 py-2 mt-2" type="submit" value="Register">Finish registration</button>
             </form>
         </div>
     </div>

@@ -4,8 +4,7 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
-from manytask.abstract import StoredUser
-from manytask.database_utils import get_database_table_data
+from manytask.utils.database import get_database_table_data
 from tests.constants import MAX_SCORE, SCORES, STUDENT_1, STUDENT_2, STUDENT_DATA, TASK_1, TASK_2, TASK_3, TASK_LARGE
 
 
@@ -81,7 +80,7 @@ def app():  # noqa: C901
                 }
             )
 
-        def get_groups(self, _course_name):
+        def get_groups(self, _course_name, enabled, started):
             return self.groups
 
         def get_grades(self, _course_name):
@@ -89,16 +88,6 @@ def app():  # noqa: C901
 
         def get_now_with_timezone(self, course_name):
             return datetime.datetime.now() + datetime.timedelta(hours=1)
-
-        @staticmethod
-        def get_stored_user(username):
-            return StoredUser(
-                username=username,
-                first_name=STUDENT_DATA[username][0],
-                last_name=STUDENT_DATA[username][1],
-                rms_id=STUDENT_DATA[username][2],
-                instance_admin=False,
-            )
 
         @staticmethod
         def get_all_scores_with_names(_course_name):
@@ -125,6 +114,7 @@ def app():  # noqa: C901
         def get_course(_name):
             @dataclass
             class Course:
+                course_name: str = "test_course"
                 gitlab_course_group: str = "test_course_group"
                 gitlab_course_students_group: str = "test_course_students_group"
 
@@ -145,7 +135,8 @@ def test_get_database_table_data(app):
     expected_students_count = 2
 
     with app.test_request_context():
-        result = get_database_table_data(app, "test_course")
+        test_course = app.storage_api.get_course("test_course")
+        result = get_database_table_data(app, test_course)
 
         assert result["max_score"] == MAX_SCORE
         assert "tasks" in result
@@ -180,7 +171,8 @@ def test_get_database_table_data_no_scores(app):
 
     with app.test_request_context():
         app.storage_api.get_all_scores_with_names = lambda _course_name: {}
-        result = get_database_table_data(app, "test_course")
+        test_course = app.storage_api.get_course("test_course")
+        result = get_database_table_data(app, test_course)
 
         assert "max_score" not in result
         assert "tasks" in result

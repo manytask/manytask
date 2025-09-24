@@ -48,7 +48,7 @@
                         </div>
                     {% endif %}
                     {% set last = namespace(start=group.start) %}
-                    {% for percent, deadline in group.get_percents_before_deadline().items() %}
+                    {% for deadline, percent in group.get_displayed_deadlines(deadlines_type) %}
                         {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
                         {% set is_expired = deadline < now %}
                         <div class="task-deadline {% if deadline < now %}passed-deadline{% endif %}"

@@ -98,37 +98,25 @@
             const row = currentEditCell.getRow();
             const rowData = row.getData();
             const username = rowData.username;
-            const taskName = currentEditCell.getColumn().getDefinition().title;
+            const taskName = currentEditCell.getColumn().getDefinition().field.split(".")[1];
 
             // Update database
-            const scores = {};
-            scores[taskName] = newScore;
+            const newScores = {};
+            newScores[taskName] = newScore;
             fetch('{{ url_for("api.update_database", course_name=course_name) }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    username: username,
-                    scores: scores
+                    row_data: rowData,
+                    new_scores: newScores
                 })
             })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        currentEditCell.setValue(newScore);
-
-                        // Recalculate total score - update total score column
-                        let totalScore = 0;
-                        for (const key in rowData.scores) {
-                            if (rowData.scores[key]) {
-                                totalScore += rowData.scores[key];
-                            }
-                        }
-                        const maxScore = {{ max_score }}
-                        const newPercent = maxScore === 0 ? 0 : totalScore / maxScore * 100;
-                        row.update({total_score: totalScore});
-                        row.update({percent: newPercent});
+                        row.update(data.row_data)
                         editModal.hide();
                     } else {
                         alert('Failed to update: ' + data.message);
@@ -222,7 +210,18 @@
                             frozen: true,
                             minWidth: 1,
                             width: 120,
-                            headerTooltip: "Username"
+                            headerTooltip: "Username",
+                            formatter: function(cell) {
+                                const value = cell.getValue();
+                                const rowData = cell.getRow().getData();
+                                {% if is_course_admin %}
+                                if (rowData && rowData.repo_url) {
+                                    const url = rowData.repo_url;
+                                    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+                                }
+                                {% endif %}
+                                return value;
+                            }
                         },
                         {
                             title: "First<br>Name",
@@ -265,7 +264,7 @@
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "% completed",
-                            formatter: function(cell, formatterParams, onRendered) {
+                            formatter: function (cell, formatterParams, onRendered) {
                                 return cell.getValue().toFixed(1);
                             }
                         },
@@ -277,6 +276,18 @@
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Number of Large Homeworks"
+                        },
+                        {
+                            title: "Bonus",
+                            field: "scores.bonus_score",
+                            frozen: true,
+                            sorter: "number",
+                            hozAlign: "center",
+                            minWidth: 1,
+                            headerTooltip: "Bonus scores",
+                            cellClick: function (e, cell) {
+                                editCell(cell);
+                            },
                         }
                     ];
 

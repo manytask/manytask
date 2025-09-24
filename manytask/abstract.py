@@ -38,10 +38,16 @@ class StorageApi(ABC):
     ) -> int: ...
 
     @abstractmethod
-    def get_stored_user(
+    def get_stored_user_by_username(
         self,
         username: str,
     ) -> StoredUser: ...
+
+    @abstractmethod
+    def get_stored_user_by_rms_id(
+        self,
+        rms_id: int,
+    ) -> StoredUser | None: ...
 
     @abstractmethod
     def check_if_instance_admin(
@@ -103,7 +109,7 @@ class StorageApi(ABC):
     ) -> Course | None: ...
 
     @abstractmethod
-    def find_task(self, course_name: str, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]: ...
+    def find_task(self, course_name: str, task_name: str) -> tuple[Course, ManytaskGroupConfig, ManytaskTaskConfig]: ...
 
     @abstractmethod
     def get_groups(
@@ -130,7 +136,7 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
+    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
 
     @abstractmethod
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]: ...
@@ -177,7 +183,7 @@ class RmsApi(ABC):
         lastname: str,
         email: str,
         password: str,
-    ) -> None: ...
+    ) -> RmsUser: ...
 
     @abstractmethod
     def create_public_repo(
@@ -243,6 +249,14 @@ class AuthenticatedUser:
 
     def __repr__(self) -> str:
         return f"AuthenticatedUser(username={self.username})"
+
+
+@dataclass
+class ClientProfile:
+    username: str
+
+    def __repr__(self) -> str:
+        return f"ClientProfile(username={self.username})"
 
 
 class AuthApi(ABC):
