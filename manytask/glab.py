@@ -14,13 +14,9 @@ from authlib.integrations.flask_client import OAuth
 from flask import session
 from requests.exceptions import HTTPError
 
-from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsUser
+from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsApiException, RmsUser
 
 logger = logging.getLogger(__name__)
-
-
-class GitLabApiException(Exception):
-    pass
 
 
 @dataclass
@@ -262,7 +258,7 @@ class GitLabApi(RmsApi, AuthApi):
         potential_rms_users = [rms_user for rms_user in potential_rms_users if rms_user.username == username]
         if len(potential_rms_users) == 0:
             logger.error(f"No users found username={username}")
-            raise GitLabApiException(f"No users found for username {username}")
+            raise RmsApiException(f"No users found for username {username}")
 
         rms_user = potential_rms_users[0]
         logger.info(f"User found username={rms_user.username}")
