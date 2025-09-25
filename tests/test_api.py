@@ -19,19 +19,23 @@ from manytask.api import bp as api_bp
 from manytask.config import ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
 from manytask.course import CourseStatus
 from manytask.database import DataBaseApi, TaskDisabledError
-from manytask.glab import GitLabApiException
+from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, root_bp
 from tests.constants import (
+    GITLAB_BASE_URL,
     INVALID_TASK_NAME,
     TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
     TEST_COURSE_NAME,
+    TEST_EMAIL,
     TEST_FIRST_NAME,
     TEST_INVALID_USER_ID,
     TEST_INVALID_USERNAME,
     TEST_LAST_NAME,
-    TEST_NAME,
+    TEST_PASSWORD,
+    TEST_PUBLIC_REPO,
     TEST_RMS_ID,
     TEST_SECRET_KEY,
+    TEST_STUDENTS_GROUP,
     TEST_TASK_GROUP_NAME,
     TEST_TASK_NAME,
     TEST_USER_ID,
@@ -50,7 +54,7 @@ def setup_environment(monkeypatch):
 
 
 @pytest.fixture
-def app(mock_storage_api, mock_rms_api, mock_auth_api):
+def app(mock_storage_api, mock_auth_api):
     app = Flask(__name__)
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
@@ -59,7 +63,7 @@ def app(mock_storage_api, mock_rms_api, mock_auth_api):
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
     app.storage_api = mock_storage_api
-    app.rms_api = mock_rms_api
+    app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     app.auth_api = mock_auth_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
@@ -97,17 +101,6 @@ def mock_group(mock_task):
             return self.tasks
 
     return MockGroup()
-
-
-@pytest.fixture
-def mock_rms_user():
-    class MockRmsUser:
-        def __init__(self, user_id, username, name):
-            self.id = user_id
-            self.username = username
-            self.name = name
-
-    return MockRmsUser
 
 
 @pytest.fixture
@@ -190,40 +183,6 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
 
 @pytest.fixture
-def mock_rms_api(mock_rms_user):
-    class MockRmsApi:
-        def __init__(self):
-            self.course_admin = False
-            self._rms_user_class = mock_rms_user
-
-        def get_rms_user_by_id(self, user_id: int):
-            if user_id == TEST_USER_ID:
-                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise GitLabApiException("User not found")
-
-        def get_rms_user_by_username(self, username):
-            if username == TEST_USERNAME:
-                return self._rms_user_class(TEST_USER_ID, TEST_USERNAME, TEST_NAME)
-            raise GitLabApiException("User not found")
-
-        def check_user_authenticated_in_rms(self, oauth, oauth_access_token, oauth_refresh_token):
-            return True
-
-        def get_authenticated_rms_user(self, access_token):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-
-        @staticmethod
-        def get_url_for_repo(username, course_students_group):
-            return f"https://gitlab.com/{username}/test-repo"
-
-        @staticmethod
-        def check_project_exists(_project_name, _project_group):
-            return True
-
-    return MockRmsApi()
-
-
-@pytest.fixture
 def mock_auth_api():
     class MockAuthApi:
         def check_user_is_authenticated(
@@ -265,14 +224,15 @@ def authenticated_client(app, mock_gitlab_oauth):
     """
     with (
         app.test_client() as client,
-        patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
-        patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
     ):
         app.oauth = mock_gitlab_oauth
 
-        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-        mock_check_project_exists.return_value = True
+        rms_user: RmsUser = app.rms_api.register_new_user(
+            TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
+        )
+        app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
             "refresh_token": "test_token",
@@ -412,8 +372,9 @@ def test_hard_scores(mock_task):
 
 
 def test_report_score_missing_task(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     with app.test_request_context():
-        data = {"user_id": str(TEST_USER_ID)}
+        data = {"user_id": str(rms_user.id)}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
 
         response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
@@ -432,10 +393,11 @@ def test_report_score_missing_user(app):
 
 
 def test_report_score_success(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     with app.test_request_context():
         data = {
             "task": TEST_TASK_NAME,
-            "user_id": str(TEST_USER_ID),
+            "user_id": str(rms_user.id),
             "score": "90",
             "check_deadline": "True",
         }
@@ -450,14 +412,15 @@ def test_report_score_success(app):
 
 
 def test_get_score_success(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     with app.test_request_context():
         data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
         expected_data = {
             "score": 80,
             "task": TEST_TASK_NAME,
-            "user_id": TEST_USER_ID,
-            "username": TEST_USERNAME,
+            "user_id": rms_user.id,
+            "username": rms_user.username,
         }
 
         response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/score", data=data, headers=headers)
@@ -623,11 +586,14 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
         app.debug = False  # Disable debug mode to test auth
         app.oauth = mock_gitlab_oauth
         client = app.test_client()
+        rms_user = app.rms_api.register_new_user(
+            TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
+        )
         with client.session_transaction() as session:
             session["gitlab"] = {
                 "version": 1.5,
-                "username": TEST_USERNAME,
-                "user_id": TEST_USER_ID,
+                "username": rms_user.username,
+                "user_id": rms_user.id,
                 "access_token": "123",
                 "refresh_token": "123",
             }
@@ -638,11 +604,12 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
 def test_update_database_invalid_json(app, authenticated_client, mock_gitlab_oauth):
     app.oauth = mock_gitlab_oauth
     client = app.test_client()
+    rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
         session["gitlab"] = {
             "version": 1.5,
-            "username": TEST_USERNAME,
-            "user_id": TEST_USER_ID,
+            "username": rms_user.username,
+            "user_id": rms_user.id,
         }
     response = authenticated_client.post(
         f"/api/{TEST_COURSE_NAME}/database/update", data="invalid json", content_type="application/json"
@@ -653,11 +620,12 @@ def test_update_database_invalid_json(app, authenticated_client, mock_gitlab_oau
 def test_update_database_missing_student(app, authenticated_client, mock_gitlab_oauth):
     app.oauth = mock_gitlab_oauth
     client = app.test_client()
+    rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
         session["gitlab"] = {
             "version": 1.5,
-            "username": TEST_USERNAME,
-            "user_id": TEST_USER_ID,
+            "username": rms_user.username,
+            "user_id": rms_user.id,
         }
     data = {"scores": {TEST_TASK_NAME: 100}}
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
@@ -668,9 +636,9 @@ def test_update_database_missing_student(app, authenticated_client, mock_gitlab_
 def test_report_score_with_flags(app):
     client = app.test_client()
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
-
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     data = {
-        "user_id": str(TEST_USER_ID),
+        "user_id": str(rms_user.id),
         "task": TEST_TASK_NAME,
         "score": "100",  # API expects string
         "flags": "flag:2024-03-20T15:30:00",
@@ -712,11 +680,12 @@ def test_get_score_invalid_student(app):
 def test_update_database_invalid_task(app, authenticated_client, mock_gitlab_oauth):
     app.oauth = mock_gitlab_oauth
     client = app.test_client()
+    rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
         session["gitlab"] = {
             "version": 1.5,
-            "username": TEST_USERNAME,
-            "user_id": TEST_USER_ID,
+            "username": rms_user.username,
+            "user_id": rms_user.id,
         }
     data = {
         "row_data": {
@@ -737,11 +706,12 @@ def test_update_database_invalid_task(app, authenticated_client, mock_gitlab_oau
 def test_update_database_invalid_score_value(app, authenticated_client, mock_gitlab_oauth):
     app.oauth = mock_gitlab_oauth
     client = app.test_client()
+    rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
         session["gitlab"] = {
             "version": 1.5,
-            "username": TEST_USERNAME,
-            "user_id": TEST_USER_ID,
+            "username": rms_user.username,
+            "user_id": rms_user.id,
         }
     data = {
         "row_data": {
@@ -831,28 +801,34 @@ def test_process_score_invalid_format():
 
 def test_validate_and_extract_params_get_student_by_id(app):
     """Test parsing form data getting student by username"""
-    form_data = {"user_id": TEST_USER_ID, "task": TEST_TASK_NAME}
+    created_rms_user: RmsUser = app.rms_api.register_new_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
+    )
+    form_data = {"user_id": created_rms_user.id, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
     rms_user, _, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
-    assert rms_user.id == TEST_USER_ID
-    assert rms_user.username == TEST_USERNAME
-    assert rms_user.name == TEST_NAME
+    assert rms_user.id == created_rms_user.id
+    assert rms_user.username == created_rms_user.username
+    assert rms_user.name == created_rms_user.name
     assert task.name == TEST_TASK_NAME
     assert group.name == TEST_TASK_GROUP_NAME
 
 
 def test_validate_and_extract_params_get_student_by_username(app):
     """Test parsing form data getting student by id"""
-    form_data = {"username": TEST_USERNAME, "task": TEST_TASK_NAME}
+    created_rms_user: RmsUser = app.rms_api.register_new_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
+    )
+    form_data = {"username": created_rms_user.username, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
     rms_user, _, task, group = _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
-    assert rms_user.id == TEST_USER_ID
-    assert rms_user.username == TEST_USERNAME
-    assert rms_user.name == TEST_NAME
+    assert rms_user.id == created_rms_user.id
+    assert rms_user.username == created_rms_user.username
+    assert rms_user.name == created_rms_user.name
     assert task.name == TEST_TASK_NAME
     assert group.name == TEST_TASK_GROUP_NAME
 
@@ -861,6 +837,7 @@ def test_validate_and_extract_params_no_student_name_or_id(app):
     """Test parsing form data user is not defined"""
     form_data = {"task": TEST_TASK_NAME}
     course_name = "Pyhton"
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
 
     with pytest.raises(HTTPException) as exc_info:
         _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
@@ -870,9 +847,12 @@ def test_validate_and_extract_params_no_student_name_or_id(app):
 
 def test_validate_and_extract_params_both_student_name_and_id(app):
     """Test parsing form data user is not defined"""
+    created_rms_user: RmsUser = app.rms_api.register_new_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
+    )
     form_data = {
-        "user_id": TEST_USER_ID,
-        "username": TEST_USERNAME,
+        "user_id": created_rms_user.id,
+        "username": created_rms_user.username,
         "task": TEST_TASK_NAME,
     }
     course_name = "Pyhton"
@@ -896,7 +876,10 @@ def test_validate_and_extract_params_user_id_not_an_int(app):
 
 def test_validate_and_extract_params_no_task_name(app):
     """Test parsing form data when task is not defined"""
-    form_data = {"username": TEST_USERNAME}
+    created_rms_user: RmsUser = app.rms_api.register_new_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
+    )
+    form_data = {"username": created_rms_user.username}
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
@@ -907,6 +890,7 @@ def test_validate_and_extract_params_no_task_name(app):
 
 def test_validate_and_extract_params_student_id_not_found(app):
     """Test parsing form data wrong id"""
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     form_data = {"user_id": TEST_INVALID_USER_ID, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
@@ -918,6 +902,7 @@ def test_validate_and_extract_params_student_id_not_found(app):
 
 def test_validate_and_extract_params_student_username_not_found(app):
     """Test parsing form data wrong username"""
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     form_data = {"username": TEST_INVALID_USERNAME, "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
@@ -929,7 +914,10 @@ def test_validate_and_extract_params_student_username_not_found(app):
 
 def test_validate_and_extract_params_task_not_found(app):
     """Test parsing form data wrong task name"""
-    form_data = {"user_id": TEST_USER_ID, "task": INVALID_TASK_NAME}
+    created_rms_user: RmsUser = app.rms_api.register_new_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
+    )
+    form_data = {"user_id": created_rms_user.id, "task": INVALID_TASK_NAME}
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:

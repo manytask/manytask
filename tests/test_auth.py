@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
-from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -10,7 +9,7 @@ import pytest
 from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
+from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.auth import (
     requires_admin,
     requires_auth,
@@ -22,11 +21,9 @@ from manytask.auth import (
 from manytask.course import CourseStatus
 from manytask.web import course_bp, root_bp
 from tests.constants import (
-    GITLAB_BASE_URL,
     TEST_COURSE_NAME,
     TEST_FIRST_NAME,
     TEST_LAST_NAME,
-    TEST_NAME,
     TEST_RMS_ID,
     TEST_SECRET,
     TEST_TOKEN,
@@ -36,7 +33,7 @@ from tests.constants import (
 
 
 @pytest.fixture
-def app(mock_rms_api, mock_auth_api, mock_storage_api):
+def app(mock_auth_api, mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
@@ -44,46 +41,11 @@ def app(mock_rms_api, mock_auth_api, mock_storage_api):
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
-    app.rms_api = mock_rms_api
     app.auth_api = mock_auth_api
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
     return app
-
-
-@pytest.fixture
-def mock_rms_api():
-    class MockRmsApi:
-        def __init__(self):
-            self.course_admin = False
-            self.base_url = GITLAB_BASE_URL
-
-        @staticmethod
-        def get_url_for_repo(username: str, course_students_group: str):
-            return f"{GITLAB_BASE_URL}/{username}/repo"
-
-        @staticmethod
-        def get_url_for_task_base(course_public_repo: str, default_branch: str):
-            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
-
-        @staticmethod
-        def get_rms_user_by_id(user_id: int):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-        @staticmethod
-        def get_authenticated_rms_user(self, gitlab_access_token: str):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-        @staticmethod
-        def check_project_exists(_project_name: str, _project_group: str):
-            return True
-
-        @staticmethod
-        def _construct_rms_user(user: dict[str, Any]):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-
-    return MockRmsApi()
 
 
 @pytest.fixture
