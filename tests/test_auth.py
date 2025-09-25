@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
-from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -10,7 +9,7 @@ import pytest
 from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
+from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.auth import (
     requires_admin,
     requires_auth,
@@ -22,11 +21,9 @@ from manytask.auth import (
 from manytask.course import CourseStatus
 from manytask.web import course_bp, root_bp
 from tests.constants import (
-    GITLAB_BASE_URL,
     TEST_COURSE_NAME,
     TEST_FIRST_NAME,
     TEST_LAST_NAME,
-    TEST_NAME,
     TEST_RMS_ID,
     TEST_SECRET,
     TEST_TOKEN,
@@ -49,6 +46,7 @@ def app(mock_auth_api, mock_storage_api):
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
     return app
+
 
 @pytest.fixture
 def mock_auth_api():
