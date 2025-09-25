@@ -39,14 +39,15 @@ class MockRmsApi(RmsApi):
         lastname: str,
         email: str,
         password: str,
-    ) -> None:
+    ) -> RmsUser:
         if username in self.users_by_username:
             raise RmsApiException(f"User with username {username} already exists")
 
         user_id = max(self.users.keys(), default=0) + 1
-        user = RmsUser(id=user_id, username=username, name=f"{firstname} {lastname}")
+        user: RmsUser = RmsUser(id=user_id, username=username, name=f"{firstname} {lastname}")
         self.users[user_id] = user
         self.users_by_username[username] = user
+        return user
 
     def create_public_repo(
         self,
