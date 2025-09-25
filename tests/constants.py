@@ -6,6 +6,8 @@ TEST_USERNAME = "username"
 TEST_FIRST_NAME = "First"
 TEST_LAST_NAME = "Last"
 TEST_RMS_ID = 1
+TEST_EMAIL = "user@manytask.org"
+TEST_PASSWORD = "qwerty"
 
 TEST_USERNAME_1 = "user1"
 TEST_FIRST_NAME_1 = "First"
