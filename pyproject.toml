@@ -131,3 +131,6 @@ max-complexity = 15
 [tool.ruff.lint.pylint]
 max-nested-blocks = 5
 max-args = 7
+
+[tool.ruff.lint.isort]
+known-first-party = ["manytask", "tests"]
