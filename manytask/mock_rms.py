@@ -142,5 +142,5 @@ class MockRmsApi(RmsApi):
         self,
         oauth_access_token: str,
     ) -> RmsUser:
-        # For testing, return a dummy user
-        return RmsUser(id=1, username="testuser", name="Test User")
+        # For testing, return last registered user
+        return self.users[-1]
