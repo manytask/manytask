@@ -27,6 +27,7 @@ class MockRmsApi(RmsApi):
         self.users_by_username: Dict[str, RmsUser] = {}
         self.groups: Dict[str, MockRmsGroup] = {}
         self.projects: Dict[str, MockRmsProject] = {}  # key: "group/project"
+        self.last_user: int = -1
 
     @property
     def base_url(self) -> str:
@@ -47,6 +48,7 @@ class MockRmsApi(RmsApi):
         user: RmsUser = RmsUser(id=user_id, username=username, name=f"{firstname} {lastname}")
         self.users[user_id] = user
         self.users_by_username[username] = user
+        self.last_user = user_id
         return user
 
     def create_public_repo(
@@ -143,4 +145,4 @@ class MockRmsApi(RmsApi):
         oauth_access_token: str,
     ) -> RmsUser:
         # For testing, return last registered user
-        return self.users[-1]
+        return self.users[self.last_user]
