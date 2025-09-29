@@ -1520,7 +1520,7 @@ class DataBaseApi(StorageApi):
 
                 user_on_course.comment = comment
                 session.commit()
-                
+
                 logger.info(f"Updated comment for user {username} in course {course_name}: -> '{comment}'")
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
