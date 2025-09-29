@@ -345,12 +345,12 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
 
     if auth_method == AuthMethod.SESSION:
         rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-        include_repo_urls = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
     else:
-        include_repo_urls = True
+        is_course_admin = True
 
     logger.info("Fetching database snapshot for course=%s", course_name)
-    table_data = get_database_table_data(app, course, include_repo_urls=include_repo_urls)
+    table_data = get_database_table_data(app, course, include_admin_data=is_course_admin)
     return jsonify(table_data)
 
 
@@ -428,4 +428,43 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
         logger.error("Error calculating grade: %s", str(e))
         return jsonify(
             {"success": False, "message": "Internal error when calculating new grade. Try refresh page."}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.post("/comment/update")
+@requires_auth
+@requires_ready
+def update_comment(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
+
+    storage_api = app.storage_api
+
+    profile_username_ = session["profile"]["username"]
+    logger.info("Comment update request by user=%s for course=%s", profile_username_, course_name)
+
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username_)
+
+    if not student_course_admin:
+        return jsonify({"success": False, "message": "Only course admins can update comments"}), HTTPStatus.FORBIDDEN
+
+    if not request.is_json:
+        return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
+
+    try:
+        data = request.get_json()
+        username = data.get("username")
+
+        if not username:
+            return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
+
+        storage_api.update_student_comment(course.course_name, username, data.get("comment"))
+
+        logger.info("Successfully updated comment for user=%s", sanitize_log_data(username))
+        return jsonify({"success": True}), HTTPStatus.OK
+
+    except Exception as e:
+        logger.error("Error updating comment: %s", str(e))
+        return jsonify(
+            {"success": False, "message": "Internal error when updating comment"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
