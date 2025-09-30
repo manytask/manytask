@@ -92,7 +92,7 @@
                     {% if task.url %}
                         {% set task_link = task.url %}
                     {% else %}
-                        {% set task_link = task_url_template | replace('$GROUP_NAME', group.name) | replace('$TASK_NAME', task.name) %}
+                        {% set task_link = task_url_template | replace('$GROUP_NAME', group.name) | replace('$TASK_NAME', task.name) | replace('$USER_NAME', username) %}
                     {% endif %}
 
                     {% if scores.get(task.name, 0) == task.score %}
