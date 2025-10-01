@@ -1,14 +1,28 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.utils.generic import lerp
+
+
+class RowData(BaseModel):
+    username: str
+    total_score: int
+    percent: float
+    large_count: int
+    grade: int
+    scores: Dict[str, int]
+
+
+class ManytaskUpdateDatabasePayload(BaseModel):
+    new_scores: Dict[str, Union[Any]] = Field(...)
+    row_data: RowData
 
 
 class ManytaskUiConfig(BaseModel):
@@ -200,6 +214,23 @@ class ManytaskDeadlinesConfig(BaseModel):
         for group in self.schedule:
             group.replace_timezone(timezone)
         return self
+
+    @model_validator(mode="before")
+    @classmethod
+    def add_extra_group(cls, data: dict[str, Any]) -> Any:
+        schedule = data.get("schedule", [])
+
+        schedule.append(
+            {
+                "group": "Bonus group",
+                "start": datetime(2000, 1, 1, 0, 0, tzinfo=timezone.utc),
+                "end": datetime(3000, 1, 1, 0, 0, tzinfo=timezone.utc),
+                "enabled": False,
+                "tasks": [{"task": "bonus_score", "score": 0, "is_bonus": True}],
+            }
+        )
+        data["schedule"] = schedule
+        return data
 
     @property
     def groups(

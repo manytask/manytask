@@ -25,6 +25,8 @@ from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
 from tests.constants import (
+    BONUS_GROUP,
+    BONUS_SCORE,
     DEADLINES_CONFIG_FILES,
     FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED,
     FIRST_COURSE_EXPECTED_STATS_KEYS,
@@ -357,8 +359,8 @@ def test_not_initialized_course(session, db_api, first_course_config):
 
 
 def test_initialized_course(db_api_with_initialized_first_course, session):  # noqa: PLR0915
-    expected_task_groups = 6
-    expected_tasks = 19
+    expected_task_groups = 7
+    expected_tasks = 20
     bonus_tasks = ("task_0_2", "task_1_3")
     large_tasks = "task_5_0"
     special_tasks = ("task_1_1",)
@@ -403,6 +405,9 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
 
     tasks = session.query(Task).all()
     for task in tasks:
+        if task.group.name == BONUS_GROUP:
+            assert task.name == BONUS_SCORE
+            continue
         assert task.group.name == "group_" + task.name[len("task_")]
 
         assert task.is_bonus == (task.name in bonus_tasks)
@@ -445,8 +450,8 @@ def test_updating_course(
     first_course_grade_config_with_changed_numbers,
     session,
 ):
-    expected_task_groups = 8
-    expected_tasks = 28
+    expected_task_groups = 9
+    expected_tasks = 29
     bonus_tasks = ("task_0_2", "task_1_3", "task_6_0")
     large_tasks = ("task_5_0", "task_5_1")
     special_tasks = ("task_1_1", "task_6_0")
@@ -495,6 +500,9 @@ def test_updating_course(
 
     tasks = session.query(Task).all()
     for task in tasks:
+        if task.group.name == BONUS_GROUP:
+            assert task.name == "bonus_score"
+            continue
         assert task.group.name == "group_" + task.name[len("task_")]
 
         assert task.is_bonus == (task.name in bonus_tasks)
@@ -521,8 +529,8 @@ def test_resync_with_changed_task_name(
     first_course_grade_config,
     session,
 ):
-    expected_task_groups = 6
-    expected_tasks = 20
+    expected_task_groups = 7
+    expected_tasks = 21
     disabled_tasks = ("task_0_0", "task_2_1")
 
     create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
@@ -544,16 +552,19 @@ def test_resync_with_changed_task_name(
 
     tasks = session.query(Task).all()
     for task in tasks:
-        assert task.group.name == "group_" + task.name[len("task_")]
+        if task.group.name == BONUS_GROUP:
+            assert task.name == "bonus_score"
+        else:
+            assert task.group.name == "group_" + task.name[len("task_")]
 
-        assert task.enabled != (task.name in disabled_tasks)
+            assert task.enabled != (task.name in disabled_tasks)
 
 
 def test_store_score(db_api_with_initialized_first_course, session):
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
 
-    db_api_with_initialized_first_course.create_user_if_not_exist(
+    db_api_with_initialized_first_course.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
 
@@ -607,10 +618,40 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert scores == {"task_0_0": 1}
 
 
+def test_store_bonus_score(db_api_with_initialized_first_course, session):
+    assert session.query(User).count() == 1
+    assert session.query(UserOnCourse).count() == 0
+
+    db_api_with_initialized_first_course.update_or_create_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
+    )
+
+    assert session.query(User).count() == USER_EXPECTED
+    assert session.query(UserOnCourse).count() == 0
+
+    assert (
+        db_api_with_initialized_first_course.store_score(
+            FIRST_COURSE_NAME, TEST_USERNAME, "bonus_score", update_func(1)
+        )
+        == 1
+    )
+
+    assert (
+        db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(1))
+        == 1
+    )
+
+    all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
+    scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
+
+    assert all_scores == {TEST_USERNAME: ({"bonus_score": 1, "task_0_0": 1}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
+    assert scores == {"bonus_score": 1, "task_0_0": 1}
+
+
 def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
 
-    db_api_with_initialized_first_course.create_user_if_not_exist(
+    db_api_with_initialized_first_course.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
 
@@ -652,7 +693,7 @@ def test_store_score_with_changed_task_name(
 ):
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
-    db_api.create_user_if_not_exist(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID)
+    db_api.update_or_create_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID)
 
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(10))
 
@@ -671,7 +712,7 @@ def test_store_score_with_changed_task_name(
     assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
     assert all(v == 0.0 for k, v in stats.items())
 
-    assert all_scores == {TEST_USERNAME: ({}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
+    assert all_scores == {TEST_USERNAME: ({"task_0_0": 10}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
     assert bonus_score == 0
     assert scores == {}
 
@@ -680,7 +721,7 @@ def test_sync_user_on_course(db_api_with_initialized_first_course, session):
     assert session.query(User).count() == 1
     assert session.query(UserOnCourse).count() == 0
 
-    db_api_with_initialized_first_course.create_user_if_not_exist(
+    db_api_with_initialized_first_course.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
 
@@ -725,7 +766,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_grades = 3
     expected_stats_ratio = 0.5
 
-    db_api_with_initialized_first_course.create_user_if_not_exist(
+    db_api_with_initialized_first_course.update_or_create_user(
         TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1
     )
 
@@ -734,7 +775,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
         FIRST_COURSE_NAME, TEST_USERNAME_1, "task_1_3", update_func(expected_score_1)
     )
 
-    db_api_with_initialized_first_course.create_user_if_not_exist(
+    db_api_with_initialized_first_course.update_or_create_user(
         TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2
     )
 
@@ -778,7 +819,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
 
@@ -828,10 +869,10 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_grades = 5
     expected_stats_ratio = 0.5
 
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1
     )
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2
     )
 
@@ -993,7 +1034,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     session.add(user)
     session.commit()
 
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
 
@@ -1008,7 +1049,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
 
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
 
@@ -1044,7 +1085,7 @@ def test_store_score_raises_exception_if_user_does_not_exist(db_api_with_initial
 
 def test_store_get_stored_user_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
     with pytest.raises(NoResultFound):
-        db_api_with_initialized_first_course.get_stored_user(TEST_USERNAME)
+        db_api_with_initialized_first_course.get_stored_user_by_username(TEST_USERNAME)
 
 
 def test_store_sync_user_on_course_raises_exception_if_user_does_not_exist(db_api_with_initialized_first_course):
@@ -1136,7 +1177,7 @@ def test_check_user_on_course(db_api_with_two_initialized_courses, session):
     assert db_api_with_two_initialized_courses.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
 
 
-def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, session):
+def test_update_or_create_user_existing(db_api_with_two_initialized_courses, session):
     user = User(
         id=2,
         username=TEST_USERNAME,
@@ -1148,15 +1189,15 @@ def test_create_user_if_not_exist_existing(db_api_with_two_initialized_courses, 
     session.commit()
 
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
 
 
-def test_create_user_if_not_exist_nonexisting(db_api_with_two_initialized_courses, session):
+def test_update_or_create_user_nonexisting(db_api_with_two_initialized_courses, session):
     assert session.query(User).filter_by(username=TEST_USERNAME).one_or_none() is None
-    db_api_with_two_initialized_courses.create_user_if_not_exist(
+    db_api_with_two_initialized_courses.update_or_create_user(
         TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
     )
     assert session.query(User).filter_by(username=TEST_USERNAME).one()
@@ -1375,7 +1416,7 @@ def test_zero_instance_admin_is_in_db_and_set_admin_status(db_api, session):
     db_api.set_instance_admin_status(session.query(User).one().username, False)
     assert session.query(User).one().is_instance_admin  # should not be possible to remove last admin
 
-    db_api.create_user_if_not_exist(
+    db_api.update_or_create_user(
         username=TEST_USERNAME,
         first_name=TEST_FIRST_NAME,
         last_name=TEST_LAST_NAME,
@@ -1390,7 +1431,7 @@ def test_zero_instance_admin_is_in_db_and_set_admin_status(db_api, session):
 
 
 def test_update_user_profile(db_api, session):
-    db_api.create_user_if_not_exist(
+    db_api.update_or_create_user(
         username=TEST_USERNAME,
         first_name=TEST_FIRST_NAME,
         last_name=TEST_LAST_NAME,
