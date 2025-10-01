@@ -364,7 +364,9 @@ class DataBaseApi(StorageApi):
 
         :return: saved score
         """
-        logger.debug("Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name)
+        logger.debug(
+            "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
+        )
 
         # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
         # flags = ''
@@ -608,7 +610,9 @@ class DataBaseApi(StorageApi):
             now = self.get_now_with_timezone(course_name)
 
         with self._session_create() as session:
-            logger.debug("Fetching groups for course '%s', enabled=%s, started=%s, now=%s", course_name, enabled, started, now)
+            logger.debug(
+                "Fetching groups for course '%s', enabled=%s, started=%s, now=%s", course_name, enabled, started, now
+            )
             course = self._get(session, models.Course, name=course_name)
 
             query = (
@@ -837,7 +841,7 @@ class DataBaseApi(StorageApi):
                     changes.append(f"last_name: {old_last_name} -> {new_last_name}")
 
                 if changes:
-                    logger.info("Updated user %s profile: %s", username, ', '.join(changes))
+                    logger.info("Updated user %s profile: %s", username, ", ".join(changes))
             except NoResultFound:
                 logger.error("User %s not found in the database", username)
 
@@ -902,7 +906,9 @@ class DataBaseApi(StorageApi):
                     .one()
                 )
                 existing_task.group = new_group
-                logger.info("Moved task '%s' to group '%s' in course '%s'", existing_task.name, new_group_name, course_name)
+                logger.info(
+                    "Moved task '%s' to group '%s' in course '%s'", existing_task.name, new_group_name, course_name
+                )
 
             session.commit()
             logger.info("Task groups updated from config for course '%s'", course_name)
@@ -990,7 +996,9 @@ class DataBaseApi(StorageApi):
                         name=task.name,
                         group_id=task_group.id,
                     )
-                    logger.debug("Updated/created task '%s' in group '%s' (course '%s')", task.name, group.name, course_name)
+                    logger.debug(
+                        "Updated/created task '%s' in group '%s' (course '%s')", task.name, group.name, course_name
+                    )
             session.commit()
         logger.info("Deadlines config synced for course '%s'", course_name)
 

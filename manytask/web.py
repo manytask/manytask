@@ -77,7 +77,7 @@ def login_finish() -> ResponseReturnValue:
 
     result = handle_oauth_callback(oauth, app)
     if "gitlab" in session:
-        logger.info("User %s successfully authenticated", session['gitlab']['username'])
+        logger.info("User %s successfully authenticated", session["gitlab"]["username"])
     return result
 
 
@@ -231,7 +231,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         return redirect_to_login_with_bad_session()
 
     if valid_client_profile_session(session):
-        logger.warning("User already has username=%s in session", session['profile']['username'])
+        logger.warning("User already has username=%s in session", session["profile"]["username"])
         return redirect(url_for("root.index"))
 
     stored_user_or_none = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])

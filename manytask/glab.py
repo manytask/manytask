@@ -331,5 +331,5 @@ class GitLabApi(RmsApi, AuthApi):
         response = self._make_auth_request(oauth_access_token)
         response.raise_for_status()
         user = response.json()
-        logger.info("Authenticated user retrieved id=%s username=%s", user['id'], user['username'])
+        logger.info("Authenticated user retrieved id=%s username=%s", user["id"], user["username"])
         return AuthenticatedUser(id=user["id"], username=user["username"])
