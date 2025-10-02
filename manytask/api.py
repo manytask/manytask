@@ -23,7 +23,7 @@ from .config import ManytaskGroupConfig, ManytaskTaskConfig, ManytaskUpdateDatab
 from .course import DEFAULT_TIMEZONE, Course, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
-from .utils.generic import sanitize_log_data
+from .utils.generic import sanitize_and_validate_comment, sanitize_log_data
 
 
 logger = logging.getLogger(__name__)
@@ -458,7 +458,13 @@ def update_comment(course_name: str) -> ResponseReturnValue:
         if not username:
             return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
 
-        storage_api.update_student_comment(course.course_name, username, data.get("comment"))
+        raw_comment = data.get("comment")
+        sanitized_comment, error = sanitize_and_validate_comment(raw_comment)
+
+        if error:
+            return jsonify({"success": False, "message": error}), HTTPStatus.BAD_REQUEST
+
+        storage_api.update_student_comment(course.course_name, username, sanitized_comment)
 
         logger.info("Successfully updated comment for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK

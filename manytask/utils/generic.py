@@ -1,3 +1,4 @@
+import html
 import re
 import secrets
 
@@ -21,3 +22,32 @@ def lerp(p1: tuple[float, float], p2: tuple[float, float], x: float) -> float:
 
 def validate_name(name: str) -> str | None:
     return name if (re.match(r"^[a-zA-Zа-яА-Я-]{1,50}$", name) is not None) else None
+
+
+def sanitize_and_validate_comment(comment: str | None, max_length: int = 1000) -> tuple[str | None, str | None]:
+    if comment is None:
+        return None, None
+
+    comment = comment.strip()
+
+    if not comment:
+        return None, None
+
+    if len(comment) > max_length:
+        return None, f"Comment is too long (maximum {max_length} characters)"
+
+    printable_chars_first_idx = 32
+    cleaned = "".join(
+        char for char in comment if char in "\n\t" or (ord(char) >= printable_chars_first_idx and char.isprintable())
+    )
+
+    sanitized = html.escape(cleaned)
+
+    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized)
+
+    sanitized = sanitized.strip()
+
+    if not sanitized:
+        return None, None
+
+    return sanitized, None
