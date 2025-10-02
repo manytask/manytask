@@ -28,14 +28,10 @@ items:
     hred: about.md
   - name: For students:
     items:
-      - name: Git
-        href: git.md
       - name: Manytask
         href: using_manytask.md
   - name: For teachers:
     items:
-      - name: How to start?
-        href: create_course.md
       - name: Deadline schedule
         href: deadline_schedule.md
       - name: Course grading
