@@ -25,7 +25,7 @@ def valid_gitlab_session(user_session: SessionMixin) -> bool:
         and "username" in user_session["gitlab"]
         and "user_id" in user_session["gitlab"]
     )
-    logger.debug(f"Gitlab_session_valid={result}")
+    logger.debug("Gitlab_session_valid=%s", result)
     return result
 
 
@@ -37,7 +37,7 @@ def valid_client_profile_session(user_session: SessionMixin) -> bool:
         and user_session["profile"]["version"] >= SESSION_VERSION
         and "username" in user_session["profile"]
     )
-    logger.debug(f"Client_profile_session_valid={result}")
+    logger.debug("Client_profile_session_valid=%s", result)
     return result
 
 
@@ -46,7 +46,7 @@ def set_oauth_session(
 ) -> dict[str, Any]:
     """Set oauth creds in session for student"""
 
-    logger.debug(f"Setting session for user={auth_user.username}, version={version}")
+    logger.debug("Setting session for user=%s, version=%s", auth_user.username, version)
     result: dict[str, Any] = {
         "username": auth_user.username,
         "user_id": auth_user.id,
@@ -73,13 +73,13 @@ def handle_course_membership(app: CustomFlask, course: Course, username: str) ->
 
     try:
         if app.storage_api.check_user_on_course(course.course_name, username):
-            logger.info(f"User {username} is on course {course.course_name}")
+            logger.info("User %s is on course %s", username, course.course_name)
             return True
         else:
-            logger.info(f"No user {username} on course {course.course_name}")
+            logger.info("No user %s on course %s", username, course.course_name)
             return False
     except NoResultFound:
-        logger.info(f"User: {username} not in the database")
+        logger.info("User: %s not in the database", username)
         return False
     except Exception:
         logger.error("Failed login while working with db", exc_info=True)
@@ -107,7 +107,7 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     session.pop("username", None)
     session.setdefault("gitlab", {}).update(set_oauth_session(auth_user, gitlab_oauth_token))
     session.permanent = True
-    logger.info(f"Session set for user={auth_user.username}")
+    logger.info("Session set for user=%s", auth_user.username)
 
     return __redirect_to_signup_finish()
 
@@ -117,7 +117,7 @@ def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
 
     # This is where the auth_api should be user instead of gitlab/rms
     auth_user = app.auth_api.get_authenticated_user(session["gitlab"]["access_token"])
-    logger.info(f"Authenticated user={auth_user.username}")
+    logger.info("Authenticated user=%s", auth_user.username)
     session["gitlab"].update(set_oauth_session(auth_user))
     return auth_user
 
@@ -197,7 +197,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
-        logger.info(f"User {auth_user.username} accessing course={course.course_name}")
+        logger.info("User %s accessing course=%s", auth_user.username, course.course_name)
 
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
         if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
@@ -209,7 +209,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
             project_name=auth_user.username, project_group=course.gitlab_course_students_group
         ):
-            logger.info(f"User {auth_user.username} missing membership or project")
+            logger.info("User %s missing membership or project", auth_user.username)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
@@ -218,7 +218,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             auth_user.username,
             app.storage_api.check_if_instance_admin(auth_user.username),
         )
-        logger.info(f"Synced user {auth_user.username} on course {course.course_name}")
+        logger.info("Synced user %s on course %s", auth_user.username, course.course_name)
 
         return f(*args, **kwargs)
 
