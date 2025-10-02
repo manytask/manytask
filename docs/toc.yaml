@@ -26,11 +26,11 @@ navigation:
 items:
   - name: About
     hred: about.md
-  - name: For students:
+  - name: For students
     items:
       - name: Manytask
         href: using_manytask.md
-  - name: For teachers:
+  - name: For teachers
     items:
       - name: Deadline schedule
         href: deadline_schedule.md
