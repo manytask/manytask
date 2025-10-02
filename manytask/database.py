@@ -200,16 +200,16 @@ class DataBaseApi(StorageApi):
 
         :return: if the user is an admin on any course
         """
-        logger.debug(f"Checking instance admin status for user '{username}'")
+        logger.debug("Checking instance admin status for user '%s'", username)
 
         with self._session_create() as session:
             try:
                 user = self._get(session, models.User, username=username)
                 is_admin = user.is_instance_admin
-                logger.info(f"User '{username}' instance admin status: {is_admin}")
+                logger.info("User '%s' instance admin status: %s", username, is_admin)
                 return is_admin
             except NoResultFound as e:
-                logger.info(f"No user found with username '{username}' when checking admin status: {e}")
+                logger.info("No user found with username '%s' when checking admin status: %s", username, e)
                 return False
 
     def check_if_course_admin(
@@ -236,7 +236,7 @@ class DataBaseApi(StorageApi):
                 user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
                 return user_on_course.is_course_admin
             except NoResultFound as e:
-                logger.info(f"No user found with username '{username}' when checking admin status: {e}")
+                logger.info("No user found with username '%s' when checking admin status: %s", username, e)
                 return False
 
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None:
@@ -364,7 +364,9 @@ class DataBaseApi(StorageApi):
 
         :return: saved score
         """
-        logger.debug(f"Attempting to store score for user '{username}' in course '{course_name}' task '{task_name}'")
+        logger.debug(
+            "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
+        )
 
         # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
         # flags = ''
@@ -378,7 +380,7 @@ class DataBaseApi(StorageApi):
                 try:
                     task = self._get_task_by_name_and_course_id(session, task_name, course.id)
                 except NoResultFound:
-                    logger.warning(f"Task '{task_name}' not found in course '{course_name}'")
+                    logger.warning("Task '%s' not found in course '%s'", task_name, course_name)
                     return 0
 
                 grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
@@ -398,7 +400,7 @@ class DataBaseApi(StorageApi):
 
             except Exception as e:
                 session.rollback()
-                logger.error(f"Failed to update score for '{username}' on '{task_name}': {str(e)}")
+                logger.error("Failed to update score for '%s' on '%s': %s", username, task_name, str(e))
                 raise
 
     def get_course(
@@ -427,15 +429,15 @@ class DataBaseApi(StorageApi):
 
         :return: is course created, false if course created before
         """
-        logger.info(f"Attempting to create course with name '{settings_config.course_name}'")
+        logger.info("Attempting to create course with name '%s'", settings_config.course_name)
 
         with self._session_create() as session:
             try:
                 self._get(session, models.Course, name=settings_config.course_name)
-                logger.info(f"Course '{settings_config.course_name}' already exists")
+                logger.info("Course '%s' already exists", settings_config.course_name)
                 return False
             except NoResultFound:
-                logger.debug(f"Creating new course '{settings_config.course_name}'")
+                logger.debug("Creating new course '%s'", settings_config.course_name)
                 self._create(
                     session,
                     models.Course,
@@ -452,7 +454,7 @@ class DataBaseApi(StorageApi):
                     links=settings_config.links,
                     deadlines_type=settings_config.deadlines_type,
                 )
-                logger.info(f"Successfully created course '{settings_config.course_name}'")
+                logger.info("Successfully created course '%s'", settings_config.course_name)
                 return True
 
     def edit_course(
@@ -466,7 +468,7 @@ class DataBaseApi(StorageApi):
 
         :return: True if course was updated, False if course not found
         """
-        logger.info(f"Attempting to edit course '{settings_config.course_name}'")
+        logger.info("Attempting to edit course '%s'", settings_config.course_name)
 
         with self._session_create() as session:
             try:
@@ -487,10 +489,10 @@ class DataBaseApi(StorageApi):
                     },
                     name=settings_config.course_name,
                 )
-                logger.info(f"Successfully updated course '{settings_config.course_name}'")
+                logger.info("Successfully updated course '%s'", settings_config.course_name)
                 return True
             except NoResultFound:
-                logger.error(f"Failed to update course: course '{settings_config.course_name}' not found")
+                logger.error("Failed to update course: course '%s' not found", settings_config.course_name)
                 return False
 
     def update_course(
@@ -503,7 +505,7 @@ class DataBaseApi(StorageApi):
         :param course_name: course name
         :param config: ManytaskConfig object
         """
-        logger.info(f"Updating course settings for course '{course_name}'")
+        logger.info("Updating course settings for course '%s'", course_name)
 
         with self._session_create() as session:
             self._update(
@@ -521,7 +523,7 @@ class DataBaseApi(StorageApi):
         self._sync_columns(course_name, config.deadlines, config.status)
         self._sync_grades_config(course_name, config.grades)
 
-        logger.info(f"Successfully updated course '{course_name}'")
+        logger.info("Successfully updated course '%s'", course_name)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[AppCourse, ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
@@ -535,12 +537,12 @@ class DataBaseApi(StorageApi):
         """
 
         with self._session_create() as session:
-            logger.debug(f"Looking for task '{task_name}' in course '{course_name}'")
+            logger.debug("Looking for task '%s' in course '%s'", task_name, course_name)
             course = self._get(session, models.Course, name=course_name)
             try:
                 task = self._get_task_by_name_and_course_id(session, task_name, course.id)
             except NoResultFound:
-                logger.error(f"Task '{task_name}' not found in course '{course_name}'")
+                logger.error("Task '%s' not found in course '%s'", task_name, course_name)
                 raise KeyError(f"Task {task_name} not found")
 
             if not task.enabled:
@@ -552,7 +554,7 @@ class DataBaseApi(StorageApi):
             group_tasks = group.tasks
             group_deadlines = group.deadline
 
-        logger.info(f"Successfully found task '{task_name}' in course '{course_name}'")
+        logger.info("Successfully found task '%s' in course '%s'", task_name, course_name)
 
         group_config = ManytaskGroupConfig(
             group=group.name,
@@ -608,7 +610,9 @@ class DataBaseApi(StorageApi):
             now = self.get_now_with_timezone(course_name)
 
         with self._session_create() as session:
-            logger.debug(f"Fetching groups for course '{course_name}', enabled={enabled}, started={started}, now={now}")
+            logger.debug(
+                "Fetching groups for course '%s', enabled=%s, started=%s, now=%s", course_name, enabled, started, now
+            )
             course = self._get(session, models.Course, name=course_name)
 
             query = (
@@ -631,7 +635,7 @@ class DataBaseApi(StorageApi):
                     query = query.filter(now < models.Deadline.start)
 
             groups = query.order_by(models.TaskGroup.position).all()
-            logger.info(f"Found {len(groups)} groups in course '{course_name}'")
+            logger.info("Found %s groups in course '%s'", len(groups), course_name)
 
             result_groups = []
             for group in groups:
@@ -694,7 +698,7 @@ class DataBaseApi(StorageApi):
             user = self._get(session, models.User, username=username)
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
             if course_admin != user_on_course.is_course_admin and course_admin:
-                logger.info(f"Granting course admin rights to '{username}' in course '{course_name}'")
+                logger.info("Granting course admin rights to '%s' in course '%s'", username, course_name)
                 user_on_course = self._update(
                     session=session,
                     model=models.UserOnCourse,
@@ -708,15 +712,15 @@ class DataBaseApi(StorageApi):
         """Checking that user has been enrolled on course"""
 
         with self._session_create() as session:
-            logger.debug(f"Checking if user '{username}' is enrolled in course '{course_name}'")
+            logger.debug("Checking if user '%s' is enrolled in course '%s'", username, course_name)
             course = self._get(session, models.Course, name=course_name)
             user = self._get(session, models.User, username=username)
             try:
                 self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-                logger.info(f"User '{username}' is enrolled in course '{course_name}'")
+                logger.info("User '%s' is enrolled in course '%s'", username, course_name)
                 return True
             except Exception:
-                logger.warning(f"User '{username}' isn't enrolled in course '{course_name}'")
+                logger.warning("User '%s' isn't enrolled in course '%s'", username, course_name)
                 return False
 
     def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int) -> None:
@@ -740,24 +744,24 @@ class DataBaseApi(StorageApi):
                 username=username,
             )
             session.commit()
-            logger.info(f"User '{username}' created or updated in database")
+            logger.info("User '%s' created or updated in database", username)
 
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]:
         """Get a list of courses names that the user participates in"""
 
         with self._session_create() as session:
-            logger.debug(f"Fetching courses with statuses for user '{username}'")
+            logger.debug("Fetching courses with statuses for user '%s'", username)
             try:
                 user = self._get(session, models.User, username=username)
             except NoResultFound:
-                logger.warning(f"User '{username}' not found in database")
+                logger.warning("User '%s' not found in database", username)
                 return []
 
             hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
             user_on_courses = user.users_on_courses.filter(models.Course.status.notin_(hidden_for_user)).all()
 
             result = [(user_on_course.course.name, user_on_course.course.status) for user_on_course in user_on_courses]
-            logger.info(f"User '{username}' participates in {len(result)} courses")
+            logger.info("User '%s' participates in %s courses", username, len(result))
             return result
 
     def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]:
@@ -765,7 +769,7 @@ class DataBaseApi(StorageApi):
 
         with self._session_create() as session:
             courses = session.query(models.Course).all()
-            logger.info(f"Fetched all courses: count={len(courses)}")
+            logger.info("Fetched all courses: count=%s", len(courses))
 
             result = [(course.name, course.status) for course in courses]
             return result
@@ -777,7 +781,7 @@ class DataBaseApi(StorageApi):
         """
         with self._session_create() as session:
             users = session.query(models.User).all()
-            logger.info(f"Fetched all users: count={len(users)}")
+            logger.info("Fetched all users: count=%s", len(users))
             return [
                 StoredUser(
                     username=user.username,
@@ -795,22 +799,22 @@ class DataBaseApi(StorageApi):
         :param username: user name
         :param is_admin: new admin status
         """
-        logger.info(f"Setting instance admin status to {is_admin} for user '{username}'")
+        logger.info("Setting instance admin status to %s for user '%s'", is_admin, username)
 
         with self._session_create() as session:
             try:
                 if not is_admin:
-                    logger.debug(f"Checking admin count before removing admin status from '{username}'")
+                    logger.debug("Checking admin count before removing admin status from '%s'", username)
                     admin_count = session.query(func.count()).filter(models.User.is_instance_admin.is_(True)).scalar()
                     if admin_count <= 1:
-                        logger.error(f"Cannot remove admin status from user '{username}': this is the last admin")
+                        logger.error("Cannot remove admin status from user '%s': this is the last admin", username)
                         return
 
                 self._update(session, models.User, defaults={"is_instance_admin": is_admin}, username=username)
-                logger.info(f"Successfully updated admin status for user '{username}' to {is_admin}")
+                logger.info("Successfully updated admin status for user '%s' to %s", username, is_admin)
 
             except NoResultFound:
-                logger.error(f"Failed to set admin status: user '{username}' not found in database")
+                logger.error("Failed to set admin status: user '%s' not found in database", username)
 
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
         """Update user profile information
@@ -837,9 +841,9 @@ class DataBaseApi(StorageApi):
                     changes.append(f"last_name: {old_last_name} -> {new_last_name}")
 
                 if changes:
-                    logger.info(f"Updated user {username} profile: {', '.join(changes)}")
+                    logger.info("Updated user %s profile: %s", username, ", ".join(changes))
             except NoResultFound:
-                logger.error(f"User {username} not found in the database")
+                logger.error("User %s not found in the database", username)
 
     def _update_task_groups_from_config(
         self,
@@ -856,7 +860,7 @@ class DataBaseApi(StorageApi):
         :param deadlines_config: ManytaskDeadlinesConfig object
         """
         with self._session_create() as session:
-            logger.debug(f"Updating task groups from config for course '{course_name}'")
+            logger.debug("Updating task groups from config for course '%s'", course_name)
             new_task_names = set()
             new_task_to_group = {}
             for group in deadlines_config.groups:
@@ -888,7 +892,7 @@ class DataBaseApi(StorageApi):
                 if group_name not in existing_group_names:
                     new_group = models.TaskGroup(name=group_name, course_id=course.id)
                     session.add(new_group)
-                    logger.info(f"Created new task group '{group_name}' for course '{course_name}'")
+                    logger.info("Created new task group '%s' for course '%s'", group_name, course_name)
 
             session.commit()
 
@@ -902,10 +906,12 @@ class DataBaseApi(StorageApi):
                     .one()
                 )
                 existing_task.group = new_group
-                logger.info(f"Moved task '{existing_task.name}' to group '{new_group_name}' in course '{course_name}'")
+                logger.info(
+                    "Moved task '%s' to group '%s' in course '%s'", existing_task.name, new_group_name, course_name
+                )
 
             session.commit()
-            logger.info(f"Task groups updated from config for course '{course_name}'")
+            logger.info("Task groups updated from config for course '%s'", course_name)
 
     def _sync_columns(
         self,
@@ -922,7 +928,7 @@ class DataBaseApi(StorageApi):
 
         groups = deadlines_config.groups
 
-        logger.info(f"Syncing deadlines config for course '{course_name}'")
+        logger.info("Syncing deadlines config for course '%s'", course_name)
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
 
@@ -971,7 +977,7 @@ class DataBaseApi(StorageApi):
                 DataBaseApi._update_deadline_for_task_group(
                     session, task_group, deadline_start, deadline_steps, deadline_end
                 )
-                logger.debug(f"Updated deadline for group '{group.name}' in course '{course_name}'")
+                logger.debug("Updated deadline for group '%s' in course '%s'", group.name, course_name)
 
                 for task_pos, task in enumerate(tasks, start=1):
                     self._update_or_create(
@@ -990,20 +996,22 @@ class DataBaseApi(StorageApi):
                         name=task.name,
                         group_id=task_group.id,
                     )
-                    logger.debug(f"Updated/created task '{task.name}' in group '{group.name}' (course '{course_name}')")
+                    logger.debug(
+                        "Updated/created task '%s' in group '%s' (course '%s')", task.name, group.name, course_name
+                    )
             session.commit()
-        logger.info(f"Deadlines config synced for course '{course_name}'")
+        logger.info("Deadlines config synced for course '%s'", course_name)
 
     def _sync_grades_config(self, course_name: str, grades_config: ManytaskFinalGradeConfig | None) -> None:
         if grades_config is None:
             # shortcut to remove existing grade formulas
-            logger.debug(f"No grades config provided for course={course_name}, skipping sync")
+            logger.debug("No grades config provided for course=%s, skipping sync", course_name)
             grades_config = ManytaskFinalGradeConfig(grades={}, grades_order=[])
             return
 
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
-            logger.debug(f"Syncing grades config for course={course.name} id={course.id}")
+            logger.debug("Syncing grades config for course=%s id=%s", course.name, course.id)
             existing_complex_formulas = session.query(models.ComplexFormula).filter_by(course_id=course.id).all()
 
             existing_complex_formulas_grades = set(
@@ -1013,14 +1021,14 @@ class DataBaseApi(StorageApi):
 
             # add new grades
             for grade in config_complex_formulas_grades - existing_complex_formulas_grades:
-                logger.info(f"Adding new grade={grade} to course_id={course.id}")
+                logger.info("Adding new grade=%s to course_id=%s", grade, course.id)
                 complex_formula = self._update_or_create(
                     session, models.ComplexFormula, grade=grade, course_id=course.id
                 )
 
                 for primary_formula in grades_config.grades[grade]:
                     primary_formula_dict = {str(k): v for k, v in primary_formula.items()}
-                    logger.debug(f"Creating primary formula={primary_formula_dict} for grade={grade}")
+                    logger.debug("Creating primary formula=%s for grade=%s", primary_formula_dict, grade)
                     self._create(
                         session,
                         models.PrimaryFormula,
@@ -1030,7 +1038,7 @@ class DataBaseApi(StorageApi):
 
             # remove deleted grades
             for grade in existing_complex_formulas_grades - config_complex_formulas_grades:
-                logger.info(f"Removing deleted grade={grade} from course_id={course.id}")
+                logger.info("Removing deleted grade=%s from course_id=%s", grade, course.id)
                 complex_formula = (
                     session.query(models.ComplexFormula)
                     .filter_by(
@@ -1051,7 +1059,7 @@ class DataBaseApi(StorageApi):
 
             # update existing grades
             for grade in existing_complex_formulas_grades & config_complex_formulas_grades:
-                logger.debug(f"Updating existing grade={grade} for course_id={course.id}")
+                logger.debug("Updating existing grade=%s for course_id=%s", grade, course.id)
                 complex_formula = (
                     session.query(models.ComplexFormula)
                     .filter_by(
@@ -1078,7 +1086,7 @@ class DataBaseApi(StorageApi):
                     formula_dict = dict()
                     for k, v in formula:
                         formula_dict[k] = v
-                    logger.debug(f"Removing primary formula={formula_dict} from grade={grade}")
+                    logger.debug("Removing primary formula=%s from grade=%s", formula_dict, grade)
                     session.query(models.PrimaryFormula).filter_by(
                         complex_id=complex_formula.id,
                         primary_formula=formula_dict,
@@ -1089,7 +1097,7 @@ class DataBaseApi(StorageApi):
                     formula_dict = dict()
                     for k, v in formula:
                         formula_dict[k] = v
-                    logger.debug(f"Adding new primary formula={formula_dict} to grade={grade}")
+                    logger.debug("Adding new primary formula=%s to grade=%s", formula_dict, grade)
                     self._create(
                         session,
                         models.PrimaryFormula,
@@ -1098,10 +1106,10 @@ class DataBaseApi(StorageApi):
                     )
 
             session.commit()
-            logger.info(f"Grades config sync completed for course={course.name} id={course.id}")
+            logger.info("Grades config sync completed for course=%s id=%s", course.name, course.id)
 
     def _check_pending_migrations(self, database_url: str) -> bool:
-        logger.debug(f"Checking pending migrations for database_url={database_url}")
+        logger.debug("Checking pending migrations for database_url=%s", database_url)
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
         with self.engine.begin() as connection:
@@ -1113,7 +1121,7 @@ class DataBaseApi(StorageApi):
             script = ScriptDirectory.from_config(alembic_cfg)
             head_rev = script.get_current_head()
 
-            logger.debug(f"Current revision={current_rev}, head revision={head_rev}")
+            logger.debug("Current revision=%s, head revision=%s", current_rev, head_rev)
             if current_rev == head_rev:
                 logger.info("No pending migrations found")
                 return False
@@ -1122,7 +1130,7 @@ class DataBaseApi(StorageApi):
             return True
 
     def _apply_migrations(self, database_url: str) -> None:
-        logger.info(f"Applying migrations for database_url={database_url}")
+        logger.info("Applying migrations for database_url=%s", database_url)
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
         try:
@@ -1187,10 +1195,10 @@ class DataBaseApi(StorageApi):
         **kwargs: Any,  # params for get
     ) -> ModelType:
         try:
-            logger.debug(f"Getting {model.__name__} with params: {kwargs}")
+            logger.debug("Getting %s with params: %s", model.__name__, kwargs)
             return session.query(model).filter_by(**kwargs).one()
         except NoResultFound:
-            logger.error(f"{model.__name__} not found with params: {kwargs}")
+            logger.error("%s not found with params: %s", model.__name__, kwargs)
             raise NoResultFound(f"{model.__name__} not found with params: {kwargs}")
 
     @staticmethod
@@ -1203,7 +1211,7 @@ class DataBaseApi(StorageApi):
         instance = DataBaseApi._get(session, model, **kwargs)
 
         if defaults:
-            logger.debug(f"Updating {model.__name__} {kwargs}")
+            logger.debug("Updating %s %s", model.__name__, kwargs)
             for key, value in defaults.items():
                 setattr(instance, key, value)
             session.commit()
@@ -1216,14 +1224,14 @@ class DataBaseApi(StorageApi):
         **kwargs: Any,  # params for create
     ) -> ModelType:
         try:
-            logger.debug(f"Creating {model.__name__} with params: {kwargs}")
+            logger.debug("Creating %s with params: %s", model.__name__, kwargs)
             instance = model(**kwargs)
             session.add(instance)
             session.commit()
             return instance
         except IntegrityError:
             session.rollback()
-            logger.warning(f"{model.__name__} with params {kwargs} already exists, fetching existing")
+            logger.warning("%s with params %s already exists, fetching existing", model.__name__, kwargs)
             return session.query(model).filter_by(**kwargs).one()
 
     @staticmethod
@@ -1262,7 +1270,7 @@ class DataBaseApi(StorageApi):
         :return: Created or updated instance
         """
         if instance:
-            logger.debug(f"Updating existing {model.__name__} with defaults: {defaults}")
+            logger.debug("Updating existing %s with defaults: %s", model.__name__, defaults)
             if defaults:
                 for key, value in defaults.items():
                     setattr(instance, key, value)
@@ -1275,14 +1283,14 @@ class DataBaseApi(StorageApi):
             kwargs.update(create_defaults)
 
         try:
-            logger.debug(f"Creating new {model.__name__} with params: {kwargs}")
+            logger.debug("Creating new %s with params: %s", model.__name__, kwargs)
             new_instance = model(**kwargs)
             session.add(new_instance)
             session.flush()
             return new_instance
         except IntegrityError:
             session.rollback()
-            logger.warning(f"{model.__name__} creation conflict, fetching existing")
+            logger.warning("%s creation conflict, fetching existing", model.__name__)
             existing_instance = cast(
                 ModelType, DataBaseApi._query_with_for_update(session, model, allow_none=False, **kwargs)
             )
@@ -1311,7 +1319,7 @@ class DataBaseApi(StorageApi):
             )
         except Exception:
             session.rollback()
-            logger.exception(f"Failed to get or create {model.__name__} with params {kwargs}")
+            logger.exception("Failed to get or create %s with params %s", model.__name__, kwargs)
             raise
 
     @staticmethod
@@ -1327,7 +1335,7 @@ class DataBaseApi(StorageApi):
             return DataBaseApi._create_or_update_instance(session, model, instance, defaults, create_defaults, **kwargs)
         except Exception:
             session.rollback()
-            logger.exception(f"Failed to update or create {model.__name__} with params {kwargs}")
+            logger.exception("Failed to update or create %s with params %s", model.__name__, kwargs)
             raise
 
     @staticmethod
@@ -1364,7 +1372,7 @@ class DataBaseApi(StorageApi):
 
     @staticmethod
     def _get_task_by_name_and_course_id(session: Session, name: str, course_id: int) -> models.Task:
-        logger.debug(f"Fetching task '{name}' for course_id={course_id}")
+        logger.debug("Fetching task '%s' for course_id=%s", name, course_id)
         return (
             session.query(models.Task).filter_by(name=name).join(models.TaskGroup).filter_by(course_id=course_id).one()
         )
@@ -1382,7 +1390,7 @@ class DataBaseApi(StorageApi):
                 session, models.Deadline, start=deadline_start, steps=deadline_steps, end=deadline_end
             )
             DataBaseApi._update(session, models.TaskGroup, defaults={"deadline_id": deadline.id}, id=task_group.id)
-            logger.info(f"Created new deadline for task group '{task_group.name}'")
+            logger.info("Created new deadline for task group '%s'", task_group.name)
         else:
             DataBaseApi._update(
                 session,
@@ -1390,7 +1398,7 @@ class DataBaseApi(StorageApi):
                 defaults={"start": deadline_start, "steps": deadline_steps, "end": deadline_end},
                 id=task_group.deadline.id,
             )
-            logger.debug(f"Updated deadline for task group '{task_group.name}'")
+            logger.debug("Updated deadline for task group '%s'", task_group.name)
 
     def _get_all_grades(
         self,
