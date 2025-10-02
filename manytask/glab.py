@@ -14,13 +14,9 @@ from authlib.integrations.flask_client import OAuth
 from flask import session
 from requests.exceptions import HTTPError
 
-from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsUser
+from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsApiException, RmsUser
 
 logger = logging.getLogger(__name__)
-
-
-class GitLabApiException(Exception):
-    pass
 
 
 @dataclass
