@@ -12,6 +12,7 @@ import requests
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import session
+from gitlab.exceptions import GitlabGetError
 from requests.exceptions import HTTPError
 
 from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsUser
@@ -141,20 +142,22 @@ class GitLabApi(RmsApi, AuthApi):
         gitlab_project_path = f"{project_group}/{project_name}"
         logger.info("Checking if project exists path=%s", gitlab_project_path)
 
-        projects = self._gitlab.projects.list(get_all=False, search=gitlab_project_path)
-
-        if len(projects) == 0:
+        try:
+            project = self._gitlab.projects.get(gitlab_project_path)
+        except GitlabGetError:
             logger.info("Project does not exist project_name=%s group=%s", project_name, project_group)
+            logger.debug("Gitlab error:", exc_info=True)
             return False
 
-        logger.debug("Found project candidate path=%s", projects[0].path_with_namespace)
-        if projects[0].path_with_namespace == gitlab_project_path:
+        project_path = project.path_with_namespace
+        logger.debug("Found project candidate path=%s", project_path)
+        if project_path == gitlab_project_path:
             logger.info("Project exists project_name=%s group=%s", project_name, project_group)
             return True
 
         logger.info(
             f"Project does not match the expected pattern:\n"
-            f"got project candidate path={projects[0].path_with_namespace}\n"
+            f"got project candidate path={project_path}\n"
             f"awaited project_name={project_name} group={project_group}"
         )
         return False
