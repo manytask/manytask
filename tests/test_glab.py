@@ -291,9 +291,7 @@ def test_check_project_exists(gitlab, mock_gitlab_student_project):
     exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert exists is True
-    mock_gitlab_instance.projects.get.assert_called_with(
-        f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}"
-    )
+    mock_gitlab_instance.projects.get.assert_called_with(f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
 
 
 def test_check_project_not_exists(gitlab):
