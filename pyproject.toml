@@ -39,6 +39,7 @@ pytest-cov = "7.0.0"
 pre-commit = "4.3.0"
 testcontainers = "4.13.0"
 bs4 = "^0.0.2"
+pytest-xdist = "^3.8.0"
 
 [tool.mypy]
 no_incremental = true
