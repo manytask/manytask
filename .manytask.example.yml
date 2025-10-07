@@ -2,7 +2,7 @@ version: 1
 #status: created # created | hidden | in_progress | all_tasks_issued | doreshka | finished
 
 ui:
-  task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$TASK_NAME
+  task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$USER_NAME/$TASK_NAME  # Available macros: $GROUP_NAME, $TASK_NAME, $USER_NAME
 
   # optional, any number of links
   links:

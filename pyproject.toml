@@ -30,11 +30,8 @@ alembic = "1.16.1"
 flask-wtf = "^1.2.2"
 
 [tool.poetry.group.dev.dependencies]
-flake8 = "7.3.0"
 ruff = "0.13.1"
 mypy = "1.18.2"
-isort = "6.0.1"
-black = "25.1.0"
 types-requests = "2.32.0.20240907"
 types-PyYAML = "6.0.12.12"
 pytest = "8.4.0"
@@ -84,10 +81,6 @@ testpaths = [
     "tests",
     ".tmp"
 ]
-
-[tool.black]
-line-length = 120
-target-version = ["py312"]
 
 
 [tool.ruff]
