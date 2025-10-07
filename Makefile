@@ -19,6 +19,7 @@ run-hooks:
 	poetry run pre-commit run --all-files
 
 dev:
+	docker-compose -f $(DOCKER_COMPOSE_DEV) down
 	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 clean-db:
@@ -29,7 +30,7 @@ reset-dev: clean-db
 	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: install-deps
-	poetry run pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
 
 test-colima: install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
