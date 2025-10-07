@@ -261,7 +261,7 @@ class GitLabApi(RmsApi, AuthApi):
         potential_rms_users = [rms_user for rms_user in potential_rms_users if rms_user.username == username]
         if len(potential_rms_users) == 0:
             logger.error("No users found username=%s", username)
-            raise GitLabApiException(f"No users found for username {username}")
+            raise RmsApiException(f"No users found for username {username}")
 
         rms_user = potential_rms_users[0]
         logger.info("User found username=%s", rms_user.username)
