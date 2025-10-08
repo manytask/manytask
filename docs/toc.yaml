@@ -28,6 +28,8 @@ items:
   - name: For students
   - name: For teachers
     items:
+      - name: Course as code
+        href: course_as_code.md
       - name: Deadline schedule
         href: deadline_schedule.md
       - name: Course grading
@@ -42,8 +44,6 @@ items:
         href: production.md
   - name: For developers
     items:
-      - name: Development strategy
-        href: strategy.md
       - name: Development setup
         href: dev_setup.md
       - name: Development
