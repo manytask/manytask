@@ -10,7 +10,7 @@ settings:  # required
 
 
 ui:
-  task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$TASK_NAME
+  task_url_template: https://gitlab.manytask.org/test/$GROUP_NAME/$USER_NAME/$TASK_NAME  # All macros are available
 
   # optional, any number of links
   links:

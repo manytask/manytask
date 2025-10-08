@@ -1506,3 +1506,27 @@ class DataBaseApi(StorageApi):
             .group_by(Task.id, Task.name)
             .all()
         )
+
+    def get_student_comment(self, course_name: str, username: str) -> str | None:
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                return user_on_course.comment
+            except NoResultFound:
+                logger.warning(f"User {username} not found in course {course_name}")
+                return None
+
+    def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None:
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+
+                user_on_course.comment = comment
+                session.commit()
+
+                logger.info(f"Updated comment for user {username} in course {course_name}: -> '{comment}'")
+            except NoResultFound:
+                logger.error(f"User {username} not found in course {course_name}")
+                raise
