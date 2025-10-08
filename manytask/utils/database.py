@@ -4,7 +4,7 @@ from manytask.course import Course
 from manytask.main import CustomFlask
 
 
-def get_database_table_data(app: CustomFlask, course: Course, include_repo_urls: bool = False) -> dict[str, Any]:
+def get_database_table_data(app: CustomFlask, course: Course, include_admin_data: bool = False) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints.
 
     Set include_repo_urls=True to include per-student repo URLs (for admins-only views).
@@ -44,10 +44,15 @@ def get_database_table_data(app: CustomFlask, course: Course, include_repo_urls:
             "large_count": large_count,
         }
 
-        if include_repo_urls:
-            row["repo_url"] = app.rms_api.get_url_for_repo(
-                username=username,
-                course_students_group=course.gitlab_course_students_group,
+        if include_admin_data:
+            row.update(
+                {
+                    "repo_url": app.rms_api.get_url_for_repo(
+                        username=username,
+                        course_students_group=course.gitlab_course_students_group,
+                    ),
+                    "comment": storage_api.get_student_comment(course_name, username),
+                }
             )
 
         try:
