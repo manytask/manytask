@@ -211,7 +211,7 @@ def mock_course():
             self.gitlab_course_public_repo = TEST_PUBLIC_REPO
             self.gitlab_course_students_group = TEST_STUDENTS_GROUP
             self.gitlab_default_branch = "main"
-            self.task_url_template = "test_task_url_template"
+            self.task_url_template = "https://gitlab.example.com/$GROUP_NAME/$USER_NAME/$TASK_NAME"
             self.links = {}
             self.deadlines_type = ManytaskDeadlinesType.HARD
 
