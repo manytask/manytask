@@ -13,9 +13,8 @@ from flask.typing import ResponseReturnValue
 from enum import Enum
 from pydantic import ValidationError
 
-from manytask.abstract import StorageApi
+from manytask.abstract import RmsApiException, StorageApi
 from manytask.database import TaskDisabledError
-from manytask.glab import GitLabApiException
 
 from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
@@ -152,13 +151,13 @@ def _validate_and_extract_params(
             logger.info("Found user by id=%s: %s", user_id, rms_user.username)
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
-        except GitLabApiException:
+        except RmsApiException:
             abort(HTTPStatus.NOT_FOUND, f"There is no student with user ID {user_id}")
     elif "username" in form_data:
         try:
             username = form_data["username"]
             rms_user = rms_api.get_rms_user_by_username(username)
-        except GitLabApiException:
+        except RmsApiException:
             abort(HTTPStatus.NOT_FOUND, f"There is no student with username {username}")
     else:
         abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
