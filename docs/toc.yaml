@@ -26,6 +26,9 @@ navigation:
 items:
   - name: About
   - name: For students
+    items:
+      - name: Manytask
+        href: using_manytask.md
   - name: For teachers
     items:
       - name: Deadline schedule
