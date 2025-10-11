@@ -55,7 +55,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
             logger.warning("Missing token for course=%s", course_name)
             abort(HTTPStatus.FORBIDDEN)
         token = token.split()[-1]
-        if not secrets.compare_digest(token, course_token):
+        if not secrets.compare_digest(token.encode(), course_token.encode()):
             logger.warning("Invalid token for course=%s", course_name)
             abort(HTTPStatus.FORBIDDEN)
 
