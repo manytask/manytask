@@ -78,7 +78,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     except FileNotFoundError:
         pass
 
-    app.storage_api = _database_storage_setup(app)
+    app.storage_api = _database_storage_setup(app, app.rms_api)
 
     # for https support
     _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
@@ -128,7 +128,7 @@ def _create_debug_course(app: CustomFlask) -> None:
     app.storage_api.create_course(course_config)
 
 
-def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
+def _database_storage_setup(app: CustomFlask, rms_api: abstract.RmsApi) -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)
     apply_migrations = os.environ.get("APPLY_MIGRATIONS", "false").lower() in (
         "true",
@@ -143,10 +143,16 @@ def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
     if instance_admin_username is None:
         raise EnvironmentError("Unable to find INITIAL_INSTANCE_ADMIN env")
 
+    if app.debug:
+        rms_user = abstract.RmsUser(id=-1, username="username", name="First Last")
+    else:
+        rms_user = rms_api.get_rms_user_by_username(instance_admin_username)
+
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
             instance_admin_username=instance_admin_username,
+            instance_admin_rms_id=rms_user.id,
             apply_migrations=apply_migrations,
         )
     )
