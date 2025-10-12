@@ -20,7 +20,7 @@ Fill-in the registration form at [app.manytask.org](app.manytask.org). Provide y
 
 **What will happen:** After you submit the form, a user will be created in Manytask and on GitLab and you will be redirected to GitLab for login. This is because Manytask uses GitLab as an authorization provider. Enter the same login/password on GitLab login page and you should be ready to register for a course.
 
-If you already had an account, you can click on sign-in button. In this case, you many be asked to provide first and last name on a separate form if we don't have them. This is needed for your profile: GitLab uses only one field for the name and there is no guarantee that it can be properly parsed to the first and last names.
+If you already have had an account, you can click on sign-in button. In this case, you many be asked to provide first and last name on a separate form if we don't have them. This is needed for your profile: GitLab uses only one field for the name and there is no guarantee that it can be properly parsed to the first and last names.
 
 ### 2. Register for a course
 
@@ -38,13 +38,15 @@ From the course page, navigate to the GitLab page and find a task to solve there
 
 ### 4. Set up local environment
 
-Although it is possible to submit simple tasks using GitLab web-interface, it will become harder as the tasks become more complex. Besides, did you see a developer who writes code in the web interface? Hence, you will need to set up local environment for writing code and submitting tasks. How to do so depends drastically on the programming language the course uses, but there are certain common steps.
+Although it is possible to submit simple tasks using GitLab web-interface, it will become harder as the tasks become more complex. Besides, did you see a developer who writes code in the web interface? Hence, you will need to set up local environment for writing code and submitting tasks. How to do so depends drastically on the programming language the course uses, but there are certain common steps related to the code itself.
 
 #### Create and export your public key to GitLab
 
-When you log into GitLab for the first time, you will be greeted with a message that you should add ssh key. To generate and add the key, you can follow instructions from this [GitLab tutorial](https://docs.gitlab.com/ce/user/ssh.html).
+First of all, you will need to interact with gitlab from your local environment. To identify yourself gitlab will rely on having your public key. In fact, when you log into GitLab for the first time, you will be greeted with a message that you should add ssh key. To generate and add the key, you can follow instructions from this [GitLab tutorial](https://docs.gitlab.com/ce/user/ssh.html).
 
 #### Install git
+
+Next, you need to install git on your local environment. This is usually quite simple, you can follow e.g. [following instructions](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git). Briefly:
 
 On Ubuntu/Debian (including WSL):
 ```
@@ -66,6 +68,8 @@ Clone you fork of a public repo to the local directory. You can find full link o
 ```
 git clone git@gitlab.manytask.org:<path to your fork of a public repo>
 ```
+
+This will make a local copy of your repository, including all the files and history of how they were changing. Fell free to navigate to the created folder and check the files that were downloaded. Be patient, we are almost done setting things up. Follow the instructions to the end so that everything is fully set up before you start solving. 
 
 Change path to your repo:
 ```
@@ -92,3 +96,7 @@ git push origin main
 ```
 
 The CI/CD should start and you will get points in case of success.
+
+### You are all set
+
+Congratulations! You are all set with the environment. While it may seem like a bit of a task to get here, especially if this is your first time with git, it will pay off. Submitting tasks to Manytask is like being involved in a big project - you will be using similar tools as if you are working in a team on a big project. The best thing is that you are not submitting to a live repo with many users - you have your own playground - that is your fork of a public repo. Do not be afraid to make mistakes and ask for help, this is part of a learning process. And git requires experience to learn.
