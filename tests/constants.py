@@ -6,15 +6,17 @@ TEST_USERNAME = "username"
 TEST_FIRST_NAME = "First"
 TEST_LAST_NAME = "Last"
 TEST_RMS_ID = 1
+TEST_EMAIL = "user@manytask.org"
+TEST_PASSWORD = "qwerty"
 
 TEST_USERNAME_1 = "user1"
-TEST_FIRST_NAME_1 = "First"
-TEST_LAST_NAME_1 = "Last1"
+TEST_FIRST_NAME_1 = "FirstOne"
+TEST_LAST_NAME_1 = "LastOne"
 TEST_RMS_ID_1 = 2
 
 TEST_USERNAME_2 = "user2"
-TEST_FIRST_NAME_2 = "First2"
-TEST_LAST_NAME_2 = "Last2"
+TEST_FIRST_NAME_2 = "FirstTwo"
+TEST_LAST_NAME_2 = "LastTwo"
 TEST_RMS_ID_2 = 3
 
 TEST_NAME = "Ivan Ivanov"

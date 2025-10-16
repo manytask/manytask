@@ -120,12 +120,7 @@ def app():  # noqa: C901
 
             return Course()
 
-    class MockGitLabApi:
-        def __init__(self):
-            pass
-
     app.storage_api = MockStorageApi()
-    app.rms_api = MockGitLabApi()
 
     return app
 
