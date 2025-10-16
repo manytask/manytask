@@ -6,7 +6,8 @@ from gitlab import GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 from requests import HTTPError
 
-from manytask.glab import GitLabApi, GitLabApiException, GitLabConfig, RmsUser
+from manytask.abstract import RmsApiException
+from manytask.glab import GitLabApi, GitLabConfig, RmsUser
 from tests.constants import (
     TEST_FORK_ID,
     TEST_GROUP_ID,
@@ -361,7 +362,7 @@ def test_get_student_by_username_not_found(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.users.list.return_value = []
 
-    with pytest.raises(GitLabApiException, match=f"No users found for username {TEST_USERNAME}"):
+    with pytest.raises(RmsApiException, match=f"No users found for username {TEST_USERNAME}"):
         gitlab_api.get_rms_user_by_username(TEST_USERNAME)
 
 

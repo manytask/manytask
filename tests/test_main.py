@@ -1,5 +1,4 @@
 import os
-from unittest.mock import MagicMock, patch
 
 import pytest
 from dotenv import load_dotenv
@@ -32,6 +31,8 @@ def mock_env(monkeypatch, postgres_container):
     set_if_missing("TESTING", "true")
     set_if_missing("MANYTASK_COURSE_TOKEN", "test_token")
 
+    set_if_missing("RMS", "mock")
+
     set_if_missing("GITLAB_URL", "https://gitlab.com")
     set_if_missing("GITLAB_ADMIN_TOKEN", "test_admin_token")
     set_if_missing("GITLAB_CLIENT_ID", "test_client_id")
@@ -54,61 +55,7 @@ def mock_env(monkeypatch, postgres_container):
     return mock_env
 
 
-@pytest.fixture
-def mock_gitlab():
-    with patch("gitlab.Gitlab") as mock:
-        gitlab_instance = MagicMock()
-        mock.return_value = gitlab_instance
-
-        # Mock GitLab groups
-        mock_course_group = MagicMock()
-        mock_course_group.name = TEST_COURSE_NAME
-        mock_course_group.full_name = TEST_COURSE_NAME
-
-        mock_students_group = MagicMock()
-        mock_students_group.name = TEST_STUDENTS_GROUP
-        mock_students_group.full_name = TEST_STUDENTS_GROUP
-
-        # Mock groups.list for search
-        def mock_group_list_search(**kwargs):
-            search = kwargs.get("search", "")
-            if search == TEST_COURSE_NAME:
-                return [mock_course_group]
-            elif search == TEST_STUDENTS_GROUP:
-                return [mock_students_group]
-            return []
-
-        gitlab_instance.groups.list.side_effect = mock_group_list_search
-
-        # Mock GitLab projects
-        mock_project_list = MagicMock()
-        mock_project_list.name = TEST_PUBLIC_REPO
-        mock_project_list.path = TEST_PUBLIC_REPO
-        mock_project_list.path_with_namespace = TEST_PUBLIC_REPO
-
-        # Mock projects.list for search
-        def mock_project_list_search(**kwargs):
-            search = kwargs.get("search", "")
-            if search in [TEST_PUBLIC_REPO, f"{TEST_COURSE_NAME}/{TEST_PUBLIC_REPO}"]:
-                return [mock_project_list]
-            return []
-
-        gitlab_instance.projects.list.side_effect = mock_project_list_search
-
-        mock_rms_user = MagicMock()
-        mock_rms_user._attrs = {"id": 12345, "username": "", "name": "Test User"}
-
-        def mock_get_rms_user(**kwargs):
-            username = kwargs.get("username", "")
-            mock_rms_user._attrs["username"] = username
-            return [mock_rms_user]
-
-        gitlab_instance.users.list.side_effect = mock_get_rms_user
-
-        yield mock
-
-
-def test_create_app_production_with_db(mock_env, mock_gitlab, monkeypatch):
+def test_create_app_production_with_db(mock_env, monkeypatch):
     app = create_app()
     assert isinstance(app, CustomFlask)
     assert app.debug is False
@@ -127,14 +74,14 @@ def test_create_app_production_with_db(mock_env, mock_gitlab, monkeypatch):
     assert hasattr(app, "auth_api")
 
 
-def test_create_app_debug(mock_env, mock_gitlab):
+def test_create_app_debug(mock_env):
     app = create_app(debug=True)
     assert isinstance(app, CustomFlask)
     assert app.debug is True
     assert app.testing == os.getenv("TESTING")
 
 
-def test_create_app_missing_secret_key(mock_env, mock_gitlab):
+def test_create_app_missing_secret_key(mock_env):
     os.environ.pop("FLASK_SECRET_KEY", None)
     with pytest.raises(EnvironmentError):
         create_app()
