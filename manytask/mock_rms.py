@@ -28,6 +28,7 @@ class MockRmsApi(RmsApi):
         self.groups: Dict[str, MockRmsGroup] = {}
         self.projects: Dict[str, MockRmsProject] = {}  # key: "group/project"
         self.last_user: int = -1
+        self.register_new_user("instance_admin", "Admin", "Adminov", "mail@spam.com", "qwerty")
 
     @property
     def base_url(self) -> str:
