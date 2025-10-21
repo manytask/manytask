@@ -1,3 +1,7 @@
+networks:
+  manytask-dev:
+    driver: bridge
+
 services:
 
     docs:
@@ -6,7 +10,8 @@ services:
             target: docs
         container_name: test-manytask-docs
         restart: always
-        network_mode: bridge
+        networks:
+            - manytask-dev
         expose:
             - "80"
         environment:
@@ -41,9 +46,8 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
-        links:
-            -   postgres:postgres
-        network_mode: bridge
+        networks:
+            - manytask-dev
 
     postgres:
         image: postgres:17
@@ -52,14 +56,16 @@ services:
             POSTGRES_USER: postgres
             POSTGRES_PASSWORD: postgres
             POSTGRES_DB: postgres
+            PGPORT: 6433
         ports:
-            - "5432:5432"
+            - "6433:6433"
         volumes:
             - postgres_data:/var/lib/postgresql/data
             - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-        network_mode: bridge
+        networks:
+            - manytask-dev
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U adminmanytask -d manytask"]
+            test: ["CMD-SHELL", "pg_isready -U postgres -d postgres -p 6433"]
             interval: 5s
             timeout: 5s
             retries: 5

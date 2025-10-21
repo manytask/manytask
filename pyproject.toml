@@ -3,15 +3,22 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "manytask"
+name = "manytask-monorepo"
 version = "0.1.0"
-description = "Manytask system"
+description = "Manytask system with integrated Checker"
 authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
-packages = [{include = "manytask"}]
+packages = [
+    {include = "manytask"},
+    {include = "checker", from = "checker"}
+]
+
+[tool.poetry.scripts]
+checker = "checker.__main__:cli"
 
 [tool.poetry.dependencies]
 python = "^3.12"
+# Manytask dependencies
 gunicorn = "23.0.0"
 flask = "3.1.1"
 cachelib = "0.13.0"
@@ -28,18 +35,28 @@ pydantic = "2.11.1"
 pytz = {version = ">=2022.0,<2023.4", python = "<3.9"}
 alembic = "1.16.1"
 flask-wtf = "^1.2.2"
+# Checker dependencies
+Jinja2 = ">=3.0.0,<4.0.0"
+click = ">=8.0,<9.0"
+rich = ">=13.0.0,<15.0.0"
+urllib3 = ">=2.0.0,<3.0.0"
+GitPython = ">=3.0.0,<4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "0.13.1"
 mypy = "1.18.2"
+isort = "6.0.1"
+black = "25.1.0"
 types-requests = "2.32.0.20240907"
 types-PyYAML = "6.0.12.12"
 pytest = "8.4.0"
 pytest-cov = "7.0.0"
+pytest-mock = ">=3.0.0,<4.0.0"
+pytest-xdist = "^3.8.0"
+requests-mock = ">=1.0.0,<2.0.0"
 pre-commit = "4.3.0"
 testcontainers = "4.13.0"
 bs4 = "^0.0.2"
-pytest-xdist = "^3.8.0"
 
 [tool.mypy]
 no_incremental = true
@@ -55,6 +72,7 @@ warn_unreachable = true
 allow_untyped_decorators = true
 exclude = [
     "tests/",
+    "checker/tests/",
     ".tmp/",
     ".venv/",
     "manytask/migrations/versions"
@@ -62,31 +80,35 @@ exclude = [
 
 
 [tool.pyright]
-include = ["manytask"]
+include = ["manytask", "checker"]
 exclude = [
     "**/node_modules",
     "**/__pycache__",
     ".venv",
     "venv",
     ".tmp",
-    "tests"
+    "tests",
+    "checker/tests"
 ]
 
 
 [tool.pytest.ini_options]
 minversion = "6.0"
 python_files = "test_*.py"
-addopts = "--cov=manytask/ --cov-report=term-missing tests/"
-testpaths = [
-    "tests",
-    ".tmp"
+addopts = "--cov=manytask/ --cov=checker/ --cov-report=term-missing --cov-report=xml"
+python_paths = ["."]
+markers = [
+    "firejail: tests that require firejail (Linux-only sandbox tool)",
+    "skip_integration: skip integration tests",
+    "skip_unit: skip unit tests",
+    "skip_doctest: skip doctests",
 ]
 
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-src = ["manytask", "tests"]
+src = ["manytask", "checker", "tests", "checker/tests"]
 
 # Exclude patterns
 exclude = [
@@ -131,7 +153,19 @@ max-complexity = 15
 
 [tool.ruff.lint.pylint]
 max-nested-blocks = 5
-max-args = 7
+max-args = 10
 
 [tool.ruff.lint.isort]
-known-first-party = ["manytask", "tests"]
+known-first-party = ["manytask", "checker", "tests"]
+
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+lines_after_imports = 2
+combine_as_imports = true
+default_section = "THIRDPARTY"
+known_first_party = ["manytask", "checker", "tests"]
