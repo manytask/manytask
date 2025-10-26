@@ -6,15 +6,17 @@ TEST_USERNAME = "username"
 TEST_FIRST_NAME = "First"
 TEST_LAST_NAME = "Last"
 TEST_RMS_ID = 1
+TEST_EMAIL = "user@manytask.org"
+TEST_PASSWORD = "qwerty"
 
 TEST_USERNAME_1 = "user1"
-TEST_FIRST_NAME_1 = "First"
-TEST_LAST_NAME_1 = "Last1"
+TEST_FIRST_NAME_1 = "FirstOne"
+TEST_LAST_NAME_1 = "LastOne"
 TEST_RMS_ID_1 = 2
 
 TEST_USERNAME_2 = "user2"
-TEST_FIRST_NAME_2 = "First2"
-TEST_LAST_NAME_2 = "Last2"
+TEST_FIRST_NAME_2 = "FirstTwo"
+TEST_LAST_NAME_2 = "LastTwo"
 TEST_RMS_ID_2 = 3
 
 TEST_NAME = "Ivan Ivanov"
@@ -36,7 +38,8 @@ TEST_INVALID_USERNAME = "invalid_user"
 TEST_SECRET = "test_secret"
 TEST_TOKEN = "test_token"
 GITLAB_BASE_URL = "https://gitlab.com"
-TEST_VERSION = 1.5
+TEST_GITLAB_SESSION_VERSION = 1.5
+TEST_CLIENT_PROFILE_SESSION_VERSION = 1.0
 
 
 # test_database_utils
@@ -115,7 +118,8 @@ SECOND_COURSE_EXPECTED_STATS_KEYS = {
 FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED = 250
 SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED = 540
 USER_EXPECTED = 2
-
+BONUS_GROUP = "Bonus group"
+BONUS_SCORE = "bonus_score"
 
 # test_glab
 TEST_USER_EMAIL = "test-email@test.ru"

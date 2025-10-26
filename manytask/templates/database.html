@@ -47,6 +47,29 @@
                     </div>
                 </div>
             </div>
+
+            <div class="modal fade" id="editCommentModal" tabindex="-1" aria-labelledby="editCommentModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editCommentModalLabel">Edit Comment</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="editCommentForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Comment for <span id="commentStudentName"></span></label>
+                                    <textarea class="form-control" id="commentInput" rows="3" placeholder="Enter comment..."></textarea>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" onclick="saveComment()">Save comment</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         {% endif %}
     </div>
 
@@ -58,9 +81,10 @@
 
 
     <script>
-        let maxScore = 0;
         let currentEditCell = null;
         let editModal = null;
+        let currentCommentCell = null;
+        let editCommentModal = null;
         const mincolwidth = 30;
 
         function editCell(cell) {
@@ -99,36 +123,25 @@
             const row = currentEditCell.getRow();
             const rowData = row.getData();
             const username = rowData.username;
-            const taskName = currentEditCell.getColumn().getDefinition().title;
+            const taskName = currentEditCell.getColumn().getDefinition().field.split(".")[1];
 
             // Update database
-            const scores = {};
-            scores[taskName] = newScore;
+            const newScores = {};
+            newScores[taskName] = newScore;
             fetch('{{ url_for("api.update_database", course_name=course_name) }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    username: username,
-                    scores: scores
+                    row_data: rowData,
+                    new_scores: newScores
                 })
             })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        currentEditCell.setValue(newScore);
-
-                        // Recalculate total score - update total score column
-                        let totalScore = 0;
-                        for (const key in rowData.scores) {
-                            if (rowData.scores[key]) {
-                                totalScore += rowData.scores[key];
-                            }
-                        }
-                        const newPercent = maxScore === 0 ? 0 : totalScore / maxScore * 100;
-                        row.update({total_score: totalScore});
-                        row.update({percent: newPercent});
+                        row.update(data.row_data)
                         editModal.hide();
                     } else {
                         alert('Failed to update: ' + data.message);
@@ -140,6 +153,59 @@
                 });
         }
 
+        function editComment(cell) {
+            const isAdmin = {{ is_course_admin|tojson }};
+            if (!isAdmin) {
+                return;
+            }
+
+            currentCommentCell = cell;
+            const row = cell.getRow();
+            const rowData = row.getData();
+            const username = rowData.username;
+            const currentComment = cell.getValue() || '';
+
+            document.getElementById('commentStudentName').textContent = username;
+            document.getElementById('commentInput').value = currentComment;
+            editCommentModal.show();
+
+            editCommentModal._element.addEventListener('shown.bs.modal', function () {
+                document.getElementById('commentInput').focus();
+            }, {once: true});
+        }
+
+        function saveComment() {
+            if (!currentCommentCell) return;
+
+            const newComment = document.getElementById('commentInput').value.trim();
+            const row = currentCommentCell.getRow();
+            const rowData = row.getData();
+            const username = rowData.username;
+
+            fetch('{{ url_for("api.update_comment", course_name=course_name) }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: username,
+                    comment: newComment || null
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        currentCommentCell.setValue(newComment || null);
+                        editCommentModal.hide();
+                    } else {
+                        alert('Failed to update comment: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating comment:', error);
+                    alert('Failed to update comment');
+                });
+        }
         function updateTheme() {
             const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
 
@@ -162,10 +228,16 @@
         document.addEventListener('DOMContentLoaded', function () {
             {% if is_course_admin %}
                 editModal = new bootstrap.Modal(document.getElementById('editModal'));
+                editCommentModal = new bootstrap.Modal(document.getElementById('editCommentModal'));
 
                 document.getElementById('editForm').addEventListener('submit', function (e) {
                     e.preventDefault();
                     saveChanges();
+                });
+
+                document.getElementById('editCommentForm').addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    saveComment();
                 });
             {% endif %}
 
@@ -222,7 +294,18 @@
                             frozen: true,
                             minWidth: 1,
                             width: 120,
-                            headerTooltip: "Username"
+                            headerTooltip: "Username",
+                            formatter: function(cell) {
+                                const value = cell.getValue();
+                                const rowData = cell.getRow().getData();
+                                {% if is_course_admin %}
+                                if (rowData && rowData.repo_url) {
+                                    const url = rowData.repo_url;
+                                    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+                                }
+                                {% endif %}
+                                return value;
+                            }
                         },
                         {
                             title: "First<br>Name",
@@ -265,7 +348,7 @@
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "% completed",
-                            formatter: function(cell, formatterParams, onRendered) {
+                            formatter: function (cell, formatterParams, onRendered) {
                                 return cell.getValue().toFixed(1);
                             }
                         },
@@ -277,15 +360,45 @@
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Number of Large Homeworks"
+                        },
+                        {
+                            title: "Bonus",
+                            field: "scores.bonus_score",
+                            frozen: true,
+                            sorter: "number",
+                            hozAlign: "center",
+                            minWidth: 1,
+                            headerTooltip: "Bonus scores",
+                            cellClick: function (e, cell) {
+                                editCell(cell);
+                            },
                         }
                     ];
+
+                    // Add comment column only for course admins
+                    {% if is_course_admin %}
+                    columns.push({
+                        title: "Comment",
+                        field: "comment",
+                        frozen: true,
+                        minWidth: 1,
+                        width: 200,
+                        headerTooltip: "Admin comment (click to edit)",
+                        cellClick: function (e, cell) {
+                            editComment(cell);
+                        },
+                        formatter: function(cell) {
+                            const value = cell.getValue();
+                            return value ? value : '<em style="color: #999;">No comment</em>';
+                        }
+                    });
+                    {% endif %}
 
                     if (window.innerWidth < 500) {
                         columns[1].width = 60;
                     }
 
                     const taskGroups = {};
-                    maxScore = data.max_score;
 
                     data.tasks.forEach(task => {
                         const groupName = task.group || 'ungrouped';

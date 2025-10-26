@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
-from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -10,16 +9,21 @@ import pytest
 from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
-from manytask.auth import requires_admin, requires_auth, requires_ready, set_oauth_session, valid_session
+from manytask.abstract import AuthenticatedUser, StoredUser
+from manytask.auth import (
+    requires_admin,
+    requires_auth,
+    requires_ready,
+    set_oauth_session,
+    valid_client_profile_session,
+    valid_gitlab_session,
+)
 from manytask.course import CourseStatus
 from manytask.web import course_bp, root_bp
 from tests.constants import (
-    GITLAB_BASE_URL,
     TEST_COURSE_NAME,
     TEST_FIRST_NAME,
     TEST_LAST_NAME,
-    TEST_NAME,
     TEST_RMS_ID,
     TEST_SECRET,
     TEST_TOKEN,
@@ -29,7 +33,7 @@ from tests.constants import (
 
 
 @pytest.fixture
-def app(mock_rms_api, mock_auth_api, mock_storage_api):
+def app(mock_auth_api, mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
@@ -37,46 +41,11 @@ def app(mock_rms_api, mock_auth_api, mock_storage_api):
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
-    app.rms_api = mock_rms_api
     app.auth_api = mock_auth_api
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
     return app
-
-
-@pytest.fixture
-def mock_rms_api():
-    class MockRmsApi:
-        def __init__(self):
-            self.course_admin = False
-            self.base_url = GITLAB_BASE_URL
-
-        @staticmethod
-        def get_url_for_repo(username: str, course_students_group: str):
-            return f"{GITLAB_BASE_URL}/{username}/repo"
-
-        @staticmethod
-        def get_url_for_task_base(course_public_repo: str, default_branch: str):
-            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
-
-        @staticmethod
-        def get_rms_user_by_id(user_id: int):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-        @staticmethod
-        def get_authenticated_rms_user(self, gitlab_access_token: str):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-        @staticmethod
-        def check_project_exists(_project_name: str, _project_group: str):
-            return True
-
-        @staticmethod
-        def _construct_rms_user(user: dict[str, Any]):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-
-    return MockRmsApi()
 
 
 @pytest.fixture
@@ -134,9 +103,6 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_course(_name):
             return mock_course
 
-        def get_stored_user(self, _username):
-            return self.stored_user
-
         def check_if_instance_admin(self, _username):
             return False
 
@@ -186,36 +152,60 @@ def mock_course():
     return MockCourse()
 
 
-def test_valid_session_with_valid_data(app):
+def test_valid_gitlab_session_with_valid_data(app):
     with app.test_request_context():
         session["gitlab"] = {
             "version": 1.5,
             "username": "test_user",
             "user_id": 123,
         }
-        assert valid_session(session) is True
+        assert valid_gitlab_session(session) is True
 
 
-def test_valid_session_with_invalid_version(app):
+def test_valid_gitlab_session_with_invalid_version(app):
     with app.test_request_context():
         session["gitlab"] = {
             "version": 1.0,
             "username": "test_user",
             "user_id": 123,
         }
-        assert valid_session(session) is False
+        assert valid_gitlab_session(session) is False
 
 
-def test_valid_session_with_missing_data(app):
+def test_valid_gitlab_session_with_missing_data(app):
     # missing user_id
     with app.test_request_context():
         session["gitlab"] = {"version": 1.5, "username": "test_user"}
-        assert valid_session(session) is False
+        assert valid_gitlab_session(session) is False
 
 
-def test_valid_session_with_empty_session(app):
+def test_valid_gitlab_session_with_empty_session(app):
     with app.test_request_context():
-        assert valid_session(session) is False
+        assert valid_gitlab_session(session) is False
+
+
+def test_valid_client_profile_session_with_valid_data(app):
+    with app.test_request_context():
+        session["profile"] = {
+            "version": 1.0,
+            "username": "test_user",
+        }
+        assert valid_client_profile_session(session) is True
+
+
+def test_valid_client_profile_session_with_invalid_version(app):
+    with app.test_request_context():
+        session["profile"] = {
+            "version": 0.5,
+            "username": "test_user",
+        }
+        assert valid_client_profile_session(session) is False
+
+
+def test_valid_client_profile_session_with_missing_data(app):
+    with app.test_request_context():
+        session["gitlab"] = {"username": "test_user"}
+        assert valid_client_profile_session(session) is False
 
 
 def test_requires_auth_in_debug_mode(app):
@@ -246,6 +236,10 @@ def test_requires_auth_with_valid_session(app, mock_gitlab_oauth):
             "user_id": 123,
             "access_token": TEST_TOKEN,
             "refresh_token": TEST_TOKEN,
+        }
+        session["profile"] = {
+            "version": 1.0,
+            "username": "test_user",
         }
         response = test_route(course_name=TEST_COURSE_NAME)
         assert response == "success"
@@ -361,6 +355,10 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
             "access_token": TEST_TOKEN,
             "refresh_token": TEST_TOKEN,
         }
+        session["profile"] = {
+            "version": 1.0,
+            "username": "test_user",
+        }
 
         response = test_route(course_name=TEST_COURSE_NAME)
         assert response == "success"
@@ -383,6 +381,10 @@ def test_requires_admin_with_no_admin_rules(app, mock_gitlab_oauth):
             "user_id": 123,
             "access_token": TEST_TOKEN,
             "refresh_token": TEST_TOKEN,
+        }
+        session["profile"] = {
+            "version": 1.0,
+            "username": "test_user",
         }
 
         with pytest.raises(HTTPException) as e:

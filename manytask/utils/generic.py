@@ -1,3 +1,5 @@
+import html
+import re
 import secrets
 
 
@@ -13,16 +15,30 @@ def generate_token_hex(bytes_count: int = 24) -> str:
     return secrets.token_hex(nbytes=bytes_count)
 
 
-def guess_first_last_name(name: str) -> tuple[str, str]:
-    PARTS_IN_NAME = 2
-
-    # TODO: implement better method for separating names
-    parts = name.split()
-    if len(parts) == PARTS_IN_NAME:
-        return tuple(parts)  # type: ignore
-    return name, ""
-
-
 def lerp(p1: tuple[float, float], p2: tuple[float, float], x: float) -> float:
     t = (x - p1[0]) / (p2[0] - p1[0])
     return p1[1] * (1 - t) + p2[1] * t
+
+
+def validate_name(name: str) -> str | None:
+    return name if (re.match(r"^[a-zA-Zа-яА-Я-]{1,50}$", name) is not None) else None
+
+
+def sanitize_and_validate_comment(comment: str | None, max_length: int = 1000) -> tuple[str | None, str | None]:
+    if not comment:
+        return None, None
+    comment = comment.strip()
+    if len(comment) > max_length:
+        return None, f"Comment is too long (maximum {max_length} characters)"
+
+    printable_chars_first_idx = 32
+    cleaned = "".join(
+        char for char in comment if char in "\n\t" or (ord(char) >= printable_chars_first_idx and char.isprintable())
+    )
+
+    sanitized = re.sub(r"\n{3,}", "\n\n", html.escape(cleaned)).strip()
+
+    if not sanitized:
+        return None, None
+
+    return sanitized, None

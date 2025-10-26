@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
-from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -12,31 +11,40 @@ from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
 
-from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
+from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import TaskDisabledError
+from manytask.mock_rms import MockRmsApi
 from manytask.web import admin_bp, course_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
     INVALID_TASK_NAME,
     TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
+    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
+    TEST_EMAIL,
     TEST_FIRST_NAME,
+    TEST_FIRST_NAME_1,
+    TEST_GITLAB_SESSION_VERSION,
+    TEST_GROUP_NAME,
     TEST_LAST_NAME,
-    TEST_NAME,
+    TEST_LAST_NAME_1,
+    TEST_PASSWORD,
+    TEST_PUBLIC_REPO,
     TEST_RMS_ID,
     TEST_SECRET,
     TEST_SECRET_KEY,
+    TEST_STUDENTS_GROUP,
     TEST_TOKEN,
     TEST_USER_ID,
     TEST_USERNAME,
-    TEST_VERSION,
+    TEST_USERNAME_1,
 )
 
 
 @pytest.fixture
-def app(mock_rms_api, mock_auth_api, mock_storage_api):
+def app(mock_auth_api, mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
@@ -47,60 +55,14 @@ def app(mock_rms_api, mock_auth_api, mock_storage_api):
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
-    app.rms_api = mock_rms_api
+    app.rms_api = MockRmsApi(GITLAB_BASE_URL)
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
     app.auth_api = mock_auth_api
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
     return app
-
-
-@pytest.fixture
-def mock_rms_api():
-    class MockRmsApi:
-        def __init__(self):
-            self.base_url = GITLAB_BASE_URL
-
-        @staticmethod
-        def get_url_for_repo(username: str, course_students_group: str):
-            return f"{GITLAB_BASE_URL}/{username}/repo"
-
-        @staticmethod
-        def get_url_for_task_base(course_public_repo: str, default_branch: str):
-            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
-
-        @staticmethod
-        def register_new_user(username: str, firstname: str, lastname: str, email: str, password: str) -> RmsUser:
-            if username == TEST_USERNAME:
-                return RmsUser(id=TEST_USER_ID, username=username, name=f"{firstname} {lastname}")
-            raise Exception("Registration failed")
-
-        @staticmethod
-        def get_rms_user_by_id(user_id: int):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-        def check_user_authenticated_in_rms(self, oauth, oauth_access_token, oauth_refresh_token):
-            return True
-
-        def get_rms_user_by_username(self, username: str) -> RmsUser:
-            return RmsUser(
-                id=1,
-                username=username,
-                name=TEST_NAME,
-            )
-
-        def get_authenticated_rms_user(self, gitlab_access_token: str, name=TEST_NAME):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-        @staticmethod
-        def check_project_exists(project_name: str, project_group: str):
-            return True
-
-        @staticmethod
-        def _construct_rms_user(user: dict[str, Any]):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-    return MockRmsApi()
 
 
 @pytest.fixture
@@ -204,7 +166,10 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_stored_user(self, _username):
+        def get_stored_user_by_username(self, _username):
+            return self.stored_user
+
+        def get_stored_user_by_rms_id(self, _rms_id):
             return self.stored_user
 
         def check_if_instance_admin(self, _username):
@@ -228,7 +193,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def max_score_started(self, _course_name):
             return 100
 
-        def create_user_if_not_exist(self, username: str, firstname: str, lastname: str, rms_id: int):
+        def update_or_create_user(self, username: str, firstname: str, lastname: str, rms_id: int):
             pass
 
     return MockStorageApi()
@@ -242,11 +207,11 @@ def mock_course():
             self.status = CourseStatus.IN_PROGRESS
             self.show_allscores = True
             self.registration_secret = TEST_SECRET
-            self.gitlab_course_group = "test_group"
-            self.gitlab_course_public_repo = "public_2025_spring"
-            self.gitlab_course_students_group = "students_2025_spring"
+            self.gitlab_course_group = TEST_GROUP_NAME
+            self.gitlab_course_public_repo = TEST_PUBLIC_REPO
+            self.gitlab_course_students_group = TEST_STUDENTS_GROUP
             self.gitlab_default_branch = "main"
-            self.task_url_template = "test_task_url_template"
+            self.task_url_template = "https://gitlab.example.com/$GROUP_NAME/$USER_NAME/$TASK_NAME"
             self.links = {}
             self.deadlines_type = ManytaskDeadlinesType.HARD
 
@@ -302,11 +267,15 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
         ):
             with client.session_transaction() as sess:
                 sess["gitlab"] = {
-                    "version": TEST_VERSION,
+                    "version": TEST_GITLAB_SESSION_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
                     "refresh_token": TEST_TOKEN,
+                }
+                sess["profile"] = {
+                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "username": TEST_USERNAME,
                 }
             app.oauth = mock_gitlab_oauth
             mock_check_user_on_course.return_value = False
@@ -350,7 +319,7 @@ def test_logout(app):
     with app.test_request_context():
         with app.test_client() as client:
             with client.session_transaction() as sess:
-                sess["gitlab"] = {"version": TEST_VERSION, "username": TEST_USERNAME}
+                sess["gitlab"] = {"version": TEST_GITLAB_SESSION_VERSION, "username": TEST_USERNAME}
             response = client.get("/logout")
             assert response.status_code == HTTPStatus.FOUND
             assert response.headers["Location"] == "/"
@@ -408,11 +377,15 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
         with app.test_client() as client:
             with client.session_transaction() as sess:
                 sess["gitlab"] = {
-                    "version": TEST_VERSION,
+                    "version": TEST_GITLAB_SESSION_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
                     "refresh_token": TEST_TOKEN,
+                }
+                sess["profile"] = {
+                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "username": TEST_USERNAME,
                 }
 
             app.oauth = mock_gitlab_oauth
@@ -429,7 +402,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
 
             with client.session_transaction() as sess:
                 sess["gitlab"] = {
-                    "version": TEST_VERSION,
+                    "version": TEST_GITLAB_SESSION_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
@@ -449,7 +422,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
 
             with client.session_transaction() as sess:
                 sess["gitlab"] = {
-                    "version": TEST_VERSION,
+                    "version": TEST_GITLAB_SESSION_VERSION,
                     "username": TEST_USERNAME,
                     "user_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
@@ -471,31 +444,24 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
 def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_course):
     CSRFProtect(app)
     data = {
-        "username": TEST_USERNAME,
-        "firstname": "Test",
-        "lastname": "User",
+        "username": TEST_USERNAME_1,
+        "firstname": TEST_FIRST_NAME_1,
+        "lastname": TEST_LAST_NAME_1,
         "email": "test@example.com",
         "password": "password",
         "password2": "password",
-        "secret": mock_course.registration_secret,
     }
 
     with (
-        patch.object(app.rms_api, "register_new_user") as mock_register_new_rms_user,
-        patch.object(app.rms_api, "get_authenticated_rms_user") as mock_get_authenticated_rms_user,
-        patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
-        patch.object(mock_storage_api, "create_user_if_not_exist") as mock_register_new_mt_user,
+        patch.object(mock_storage_api, "update_or_create_user") as mock_register_new_mt_user,
         # app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
-        mock_get_authenticated_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-        mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
             "refresh_token": "test_token",
         }
-        mock_register_new_rms_user.return_value = RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="Test User")
         with app.test_client() as client:
             response = client.get("/signup")
             soup = BeautifulSoup(response.data, "html.parser")
@@ -505,15 +471,11 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
             assert response.status_code == HTTPStatus.FOUND
             assert response.location == url_for("root.login")
 
-            mock_register_new_rms_user.assert_called_once_with(
-                TEST_USERNAME,
-                "Test",
-                "User",
-                "test@example.com",
-                "password",
-            )
+            rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME_1)
 
-            mock_register_new_mt_user.assert_called_once_with(TEST_USERNAME, "Test", "User", TEST_USER_ID)
+            mock_register_new_mt_user.assert_called_once_with(
+                TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, rms_user.id
+            )
 
 
 def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
@@ -533,14 +495,12 @@ def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
 def test_login_finish_get_with_code(app, mock_gitlab_oauth):
     with (
         patch.object(app.auth_api, "get_authenticated_user") as mock_get_authenticated_user,
-        patch.object(app.rms_api, "check_project_exists") as mock_check_project_exists,
         patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
         app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
 
         mock_get_authenticated_user.return_value = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
-        mock_check_project_exists.return_value = True
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
             "refresh_token": "test_token",
@@ -549,7 +509,7 @@ def test_login_finish_get_with_code(app, mock_gitlab_oauth):
         response = app.test_client().get(url_for("root.login_finish"), query_string={"code": "test_code"})
 
         assert response.status_code == HTTPStatus.FOUND
-        assert response.location == url_for("root.index")
+        assert response.location == url_for("root.signup_finish")
 
         mock_authorize_access_token.assert_called_once()
 
@@ -567,3 +527,92 @@ def test_login_oauth_error(app, mock_gitlab_oauth):
         response = app.test_client().get(url_for("root.login"), query_string={"code": "test_code"})
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == url_for("root.index")
+
+
+def test_signup_finish_with_valid_session(app, mock_gitlab_oauth):
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(app.storage_api, "get_stored_user_by_rms_id") as mock_get_stored_user_by_rms_id,
+        ):
+            with client.session_transaction() as sess:
+                sess["gitlab"] = {
+                    "version": TEST_GITLAB_SESSION_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_id": TEST_USER_ID,
+                    "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
+                }
+                sess["profile"] = {
+                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "username": TEST_USERNAME,
+                }
+            app.oauth = mock_gitlab_oauth
+            response = client.post(url_for("root.signup_finish"))
+            assert response.status_code == HTTPStatus.FOUND
+            assert response.location == url_for("root.index")
+            mock_get_stored_user_by_rms_id.assert_not_called()
+
+
+def test_signup_finish_with_existing_user_in_db(app, mock_gitlab_oauth):
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+        ):
+            with client.session_transaction() as sess:
+                sess["gitlab"] = {
+                    "version": TEST_GITLAB_SESSION_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_id": TEST_USER_ID,
+                    "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
+                }
+                # no profile
+            app.oauth = mock_gitlab_oauth
+            response = client.post(url_for("root.signup_finish"))
+            assert response.status_code == HTTPStatus.FOUND
+            assert response.location == url_for("root.index")
+
+            with client.session_transaction() as sess:
+                assert "version" in sess["profile"]
+                assert sess["profile"]["username"] == TEST_USERNAME
+
+
+def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    data = {
+        "firstname": "Test",
+        "lastname": "User",
+    }
+
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(app.storage_api, "get_stored_user_by_rms_id") as mock_get_stored_user_by_rms_id,
+            patch.object(app.storage_api, "update_or_create_user") as mock_update_or_create_user,
+        ):
+            with client.session_transaction() as sess:
+                sess["gitlab"] = {
+                    "version": TEST_GITLAB_SESSION_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_id": TEST_USER_ID,
+                    "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
+                }
+                # no profile
+            app.oauth = mock_gitlab_oauth
+            mock_get_stored_user_by_rms_id.return_value = None
+
+            response = client.get(url_for("root.signup_finish"))
+            soup = BeautifulSoup(response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+            data["csrf_token"] = csrf_token
+            response = client.post(url_for("root.signup_finish"), data=data)
+            assert response.status_code == HTTPStatus.FOUND
+            assert response.location == url_for("root.index")
+
+            with client.session_transaction() as sess:
+                assert "version" in sess["profile"]
+                assert sess["profile"]["username"] == TEST_USERNAME
+
+            mock_update_or_create_user.assert_called_once_with(TEST_USERNAME, "Test", "User", TEST_USER_ID)

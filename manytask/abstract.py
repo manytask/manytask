@@ -38,10 +38,16 @@ class StorageApi(ABC):
     ) -> int: ...
 
     @abstractmethod
-    def get_stored_user(
+    def get_stored_user_by_username(
         self,
         username: str,
     ) -> StoredUser: ...
+
+    @abstractmethod
+    def get_stored_user_by_rms_id(
+        self,
+        rms_id: int,
+    ) -> StoredUser | None: ...
 
     @abstractmethod
     def check_if_instance_admin(
@@ -61,6 +67,12 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
+
+    @abstractmethod
+    def get_student_comment(self, course_name: str, username: str) -> str | None: ...
+
+    @abstractmethod
+    def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
 
     @abstractmethod
     def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig: ...
@@ -130,7 +142,7 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def create_user_if_not_exist(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
+    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
 
     @abstractmethod
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]: ...
@@ -160,6 +172,10 @@ class RmsUser:
 
     def __repr__(self) -> str:
         return f"RmsUser(username={self.username})"
+
+
+class RmsApiException(Exception):
+    pass
 
 
 class RmsApi(ABC):
@@ -243,6 +259,14 @@ class AuthenticatedUser:
 
     def __repr__(self) -> str:
         return f"AuthenticatedUser(username={self.username})"
+
+
+@dataclass
+class ClientProfile:
+    username: str
+
+    def __repr__(self) -> str:
+        return f"ClientProfile(username={self.username})"
 
 
 class AuthApi(ABC):
