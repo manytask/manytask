@@ -74,9 +74,9 @@ class ManytaskStandingsConfig(BaseModel):
     reverse_hw_order: bool = False
 
     @model_validator(mode="after")
-    def validate(self):
+    def check_sticky_columns(self) -> ManytaskStandingsConfig:
         if self.sticky_columns < 0 or self.sticky_columns > len(self.columns):
-            raise ValueError(f"Sticky columns number {self.sticky_columns} is out of range [0, {len(self.sticky)}]")
+            raise ValueError(f"Sticky columns number {self.sticky_columns} is out of range [0, {len(self.columns)}]")
         return self
 
 
