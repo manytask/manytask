@@ -3,13 +3,24 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.engine import Dialect
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
-from .course import Course as AppCourse
-from .course import CourseConfig as AppCourseConfig
-from .course import CourseStatus, ManytaskDeadlinesType
+from .course import (
+    Course as AppCourse,
+)
+from .course import (
+    CourseConfig as AppCourseConfig,
+)
+from .course import (
+    CourseStatus,
+    ManytaskDeadlinesType,
+    ManytaskStandingsConfig,
+    StandingsColumn,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +190,18 @@ class Course(Base):
         back_populates="course", cascade="all, delete-orphan", order_by="ComplexFormula.grade"
     )
 
+    standings_columns: Mapped[list[StandingsColumn]] = mapped_column(
+        MutableList.as_mutable(ARRAY(Enum(StandingsColumn, name="standings_column", native_enum=False))),
+        insert_default=lambda: ManytaskStandingsConfig().columns,
+        nullable=False,
+    )
+    standings_sticky_columns: Mapped[int] = mapped_column(
+        server_default="9",
+        default=9,
+        nullable=False,
+    )
+    standings_reverse_hw_order: Mapped[bool] = mapped_column(server_default="false", default=False, nullable=False)
+
     def to_app_course(self) -> AppCourse:
         return AppCourse(
             AppCourseConfig(
@@ -194,6 +217,11 @@ class Course(Base):
                 task_url_template=self.task_url_template,
                 links=self.links,
                 deadlines_type=self.deadlines_type,
+                standings=ManytaskStandingsConfig(
+                    columns=self.standings_columns,
+                    sticky_columns=self.standings_sticky_columns,
+                    reverse_hw_order=self.standings_reverse_hw_order,
+                ),
             )
         )
 

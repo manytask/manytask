@@ -18,7 +18,10 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
     all_tasks = []
     large_tasks = []
     max_score: int = 0
-    for group in storage_api.get_groups(course_name, enabled=True, started=True):
+    task_groups = storage_api.get_groups(course_name, enabled=True, started=True)
+    if course.standings.reverse_hw_order:
+        task_groups.reverse()
+    for group in task_groups:
         for task in group.tasks:
             if task.enabled:
                 all_tasks.append({"name": task.name, "score": 0, "group": group.name})

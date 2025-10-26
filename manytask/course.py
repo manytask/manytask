@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from zoneinfo import ZoneInfo
+
+from pydantic import BaseModel, model_validator
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEZONE = ZoneInfo("Europe/Moscow")
@@ -42,6 +44,42 @@ def validate_submit_time(commit_time: datetime | None, current_time: datetime) -
     return current_time
 
 
+class StandingsColumn(Enum):
+    USERNAME = "username"
+    FIRST_NAME = "first_name"
+    LAST_NAME = "last_name"
+    GRADE = "grade"
+    TOTAL_SCORE = "total_score"
+    PERCENT = "percent"
+    LARGE_COUNT = "large_count"
+    BONUS = "bonus"
+    COMMENT = "comment"
+
+
+class ManytaskStandingsConfig(BaseModel):
+    """Manytask standings configuration."""
+
+    columns: list[StandingsColumn] = [
+        StandingsColumn.USERNAME,
+        StandingsColumn.FIRST_NAME,
+        StandingsColumn.LAST_NAME,
+        StandingsColumn.GRADE,
+        StandingsColumn.TOTAL_SCORE,
+        StandingsColumn.PERCENT,
+        StandingsColumn.LARGE_COUNT,
+        StandingsColumn.BONUS,
+        StandingsColumn.COMMENT,
+    ]
+    sticky_columns: int = 9
+    reverse_hw_order: bool = False
+
+    @model_validator(mode="after")
+    def check_sticky_columns(self) -> ManytaskStandingsConfig:
+        if self.sticky_columns < 0 or self.sticky_columns > len(self.columns):
+            raise ValueError(f"Sticky columns number {self.sticky_columns} is out of range [0, {len(self.columns)}]")
+        return self
+
+
 class ManytaskDeadlinesType(Enum):
     HARD = "hard"
     INTERPOLATE = "interpolate"
@@ -67,6 +105,7 @@ class CourseConfig:
     task_url_template: str
     links: dict[str, str]
     deadlines_type: ManytaskDeadlinesType
+    standings: ManytaskStandingsConfig = field(default_factory=ManytaskStandingsConfig)
 
 
 class Course:
@@ -90,6 +129,7 @@ class Course:
         self.token = config.token
         self.show_allscores = config.show_allscores
         self.deadlines_type = config.deadlines_type
+        self.standings = config.standings
 
         self.status = config.status
 

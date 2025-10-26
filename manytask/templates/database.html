@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% set active_page = "database" -%}
+{% set content_container_class = "container-fluid" -%}
 
 {% block content %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/database.css') }}">
@@ -206,6 +207,7 @@
                     alert('Failed to update comment');
                 });
         }
+
         function updateTheme() {
             const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
 
@@ -287,11 +289,10 @@
             fetch('{{ url_for("api.get_database", course_name=course_name) }}')
                 .then(response => response.json())
                 .then(data => {
-                    let columns = [
-                        {
+                    let available_columns = {
+                        "username": {
                             title: "Username",
                             field: "username",
-                            frozen: true,
                             minWidth: 1,
                             width: 120,
                             headerTooltip: "Username",
@@ -307,21 +308,19 @@
                                 return value;
                             }
                         },
-                        {
+                        "first_name": {
                             title: "First<br>Name",
                             field: "first_name",
-                            frozen: true,
                             minWidth: 1,
                             headerTooltip: "First Name"
                         },
-                        {
+                        "last_name": {
                             title: "Last<br>Name",
                             field: "last_name",
-                            frozen: true,
                             minWidth: 1,
                             headerTooltip: "Last Name"
                         },
-                        {
+                        "grade": {
                             title: "Grade",
                             field: "grade",
                             frozen: true,
@@ -331,19 +330,17 @@
                             with: 200,
                             headerTooltip: "Course grade"
                         },
-                        {
+                        "total_score": {
                             title: "Total<br>Score",
                             field: "total_score",
-                            frozen: true,
                             sorter: "number",
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Total Score"
                         },
-                        {
+                        "percent": {
                             title: "Per<br>cent",
                             field: "percent",
-                            frozen: true,
                             sorter: "number",
                             hozAlign: "center",
                             minWidth: 1,
@@ -352,19 +349,17 @@
                                 return cell.getValue().toFixed(1);
                             }
                         },
-                        {
+                        "large_count": {
                             title: "LHW",
                             field: "large_count",
-                            frozen: true,
                             sorter: "number",
                             hozAlign: "center",
                             minWidth: 1,
                             headerTooltip: "Number of Large Homeworks"
                         },
-                        {
+                        "bonus": {
                             title: "Bonus",
                             field: "scores.bonus_score",
-                            frozen: true,
                             sorter: "number",
                             hozAlign: "center",
                             minWidth: 1,
@@ -372,30 +367,41 @@
                             cellClick: function (e, cell) {
                                 editCell(cell);
                             },
-                        }
-                    ];
-
-                    // Add comment column only for course admins
-                    {% if is_course_admin %}
-                    columns.push({
-                        title: "Comment",
-                        field: "comment",
-                        frozen: true,
-                        minWidth: 1,
-                        width: 200,
-                        headerTooltip: "Admin comment (click to edit)",
-                        cellClick: function (e, cell) {
-                            editComment(cell);
                         },
-                        formatter: function(cell) {
-                            const value = cell.getValue();
-                            return value ? value : '<em style="color: #999;">No comment</em>';
-                        }
-                    });
-                    {% endif %}
+                        // Add comment column only for course admins
+                        {% if is_course_admin %}
+                        "comment": {
+                            title: "Comment",
+                            field: "comment",
+                            minWidth: 1,
+                            width: 200,
+                            headerTooltip: "Admin comment (click to edit)",
+                            cellClick: function (e, cell) {
+                                editComment(cell);
+                            },
+                            formatter: function(cell) {
+                                const value = cell.getValue();
+                                return value ? value : '<em style="color: #999;">No comment</em>';
+                            },
+                        },
+                        {% endif %}
+                    };
+
 
                     if (window.innerWidth < 500) {
-                        columns[1].width = 60;
+                        available_columns["first_name"].width = 60;
+                    }
+
+                    let columns = [];
+                    for (let [idx, column_name] of {{ standings.columns|tojson }}.entries()) {
+                        if (!(column_name in available_columns)) {
+                            continue;
+                        }
+                        let column = available_columns[column_name];
+                        if (idx < {{ standings.sticky_columns }}) {
+                            column['frozen'] = true;
+                        }
+                        columns.push(column);
                     }
 
                     const taskGroups = {};
