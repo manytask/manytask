@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
-from manytask.course import CourseStatus, ManytaskDeadlinesType
+from manytask.course import CourseStatus, ManytaskDeadlinesType, ManytaskStandingsConfig
 from manytask.utils.generic import lerp
 
 
@@ -304,6 +304,7 @@ class ManytaskConfig(BaseModel):
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
     grades: Optional[ManytaskFinalGradeConfig] = None
+    standings: ManytaskStandingsConfig = Field(default_factory=ManytaskStandingsConfig)
 
     @field_validator("version")
     @classmethod

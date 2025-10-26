@@ -438,6 +438,7 @@ class DataBaseApi(StorageApi):
                 return False
             except NoResultFound:
                 logger.debug("Creating new course '%s'", settings_config.course_name)
+                standings = settings_config.standings
                 self._create(
                     session,
                     models.Course,
@@ -453,6 +454,9 @@ class DataBaseApi(StorageApi):
                     task_url_template=settings_config.task_url_template,
                     links=settings_config.links,
                     deadlines_type=settings_config.deadlines_type,
+                    standings_columns=standings.columns,
+                    standings_sticky_columns=standings.sticky_columns,
+                    standings_reverse_hw_order=standings.reverse_hw_order,
                 )
                 logger.info("Successfully created course '%s'", settings_config.course_name)
                 return True
@@ -472,6 +476,7 @@ class DataBaseApi(StorageApi):
 
         with self._session_create() as session:
             try:
+                standings = settings_config.standings
                 self._update(
                     session,
                     models.Course,
@@ -486,6 +491,9 @@ class DataBaseApi(StorageApi):
                         "task_url_template": settings_config.task_url_template,
                         "links": settings_config.links,
                         "deadlines_type": settings_config.deadlines_type,
+                        "standings_columns": standings.columns,
+                        "standings_sticky_columns": standings.sticky_columns,
+                        "standings_reverse_hw_order": standings.reverse_hw_order,
                     },
                     name=settings_config.course_name,
                 )
@@ -508,6 +516,7 @@ class DataBaseApi(StorageApi):
         logger.info("Updating course settings for course '%s'", course_name)
 
         with self._session_create() as session:
+            standings = config.standings
             self._update(
                 session,
                 models.Course,
@@ -515,6 +524,9 @@ class DataBaseApi(StorageApi):
                     "task_url_template": config.ui.task_url_template,
                     "links": config.ui.links,
                     "deadlines_type": config.deadlines.deadlines,
+                    "standings_columns": standings.columns,
+                    "standings_sticky_columns": standings.sticky_columns,
+                    "standings_reverse_hw_order": standings.reverse_hw_order,
                 },
                 name=course_name,
             )
