@@ -187,9 +187,7 @@ class Course(Base):
     )
 
     standings_columns: Mapped[list[StandingsColumn]] = mapped_column(
-        MutableList.as_mutable(
-            ARRAY(Enum(StandingsColumn, name="standings_column", native_enum=False))
-        ),
+        MutableList.as_mutable(ARRAY(Enum(StandingsColumn, name="standings_column", native_enum=False))),
         insert_default=lambda: ManytaskStandingsConfig().columns,
         nullable=False,
     )
@@ -198,11 +196,7 @@ class Course(Base):
         default=9,
         nullable=False,
     )
-    standings_reverse_hw_order: Mapped[bool] = mapped_column(
-        server_default="false",
-        default=False,
-        nullable=False
-    )
+    standings_reverse_hw_order: Mapped[bool] = mapped_column(server_default="false", default=False, nullable=False)
 
     def to_app_course(self) -> AppCourse:
         return AppCourse(
