@@ -11,11 +11,15 @@ from sqlalchemy.types import TypeDecorator
 
 from .course import (
     Course as AppCourse,
+)
+from .course import (
     CourseConfig as AppCourseConfig,
+)
+from .course import (
     CourseStatus,
     ManytaskDeadlinesType,
-    StandingsColumn,
     ManytaskStandingsConfig,
+    StandingsColumn,
 )
 
 logger = logging.getLogger(__name__)

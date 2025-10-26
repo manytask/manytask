@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from zoneinfo import ZoneInfo
-from pydantic import model_validator, BaseModel
+
+from pydantic import BaseModel, model_validator
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEZONE = ZoneInfo("Europe/Moscow")
