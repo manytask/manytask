@@ -711,7 +711,7 @@ def test_namespace_constraints(session):
         session.commit()
 
 
-def test_cascade_delete_namespace(session):
+def test_cascade_delete_namespace(session):  # noqa: PLR0915
     instance_admin = User(
         username="instance_admin3", first_name="instance", last_name="admin", rms_id=121, is_instance_admin=True
     )
@@ -776,8 +776,70 @@ def test_cascade_delete_namespace(session):
     assert session.query(Namespace).filter_by(name="namespace_cascade").first() is not None
 
     session.delete(instance_admin)
+    # Namespace created_by_id cannot be null
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+    session.delete(namespace)
+    session.commit()
+    session.delete(instance_admin)
     session.commit()
 
     assert session.query(User).filter_by(username="instance_admin3").first() is None
     assert session.query(UserOnNamespace).filter_by(user=instance_admin).first() is None
     assert session.query(Namespace).filter_by(name="namespace_cascade").first() is None
+
+
+def test_namespace_slug_validation(session):
+    instance_admin = User(
+        username="slug_admin", first_name="instance", last_name="admin", rms_id=131, is_instance_admin=True
+    )
+    session.add(instance_admin)
+    session.commit()
+
+    valid_slugs = [
+        "valid-slug",
+        "valid_slug",
+        "valid.slug",
+        "ab",
+        "slug-with_dots.and-dashes",
+        "123start",
+        "end456",
+    ]
+
+    for slug in valid_slugs:
+        namespace = Namespace(name="namespace_slug", slug=slug, gitlab_group_id=200, created_by=instance_admin)
+        session.add(namespace)
+        session.commit()
+        assert session.query(Namespace).filter_by(slug=slug).first() is not None
+        session.delete(namespace)
+        session.commit()
+
+    invalid_slugs = [
+        "",
+        "-start",
+        "_start",
+        ".start",
+        "end-",
+        "end_",
+        "end.",
+        "has--double",
+        "has__double",
+        "has..double",
+        "has.-mix",
+        "qwe123.git",
+        "qwe123.atom",
+        "has space",
+        "has@special",
+        "слаг",
+    ]
+
+    for slug in invalid_slugs:
+        print(slug)
+        namespace = Namespace(name="namespace_slug", slug=slug, gitlab_group_id=200, created_by=instance_admin)
+        session.add(namespace)
+        with pytest.raises(StatementError) as exc_info:
+            session.commit()
+        assert isinstance(exc_info.value.orig, ValueError)
+        session.rollback()

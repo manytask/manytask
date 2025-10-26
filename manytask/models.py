@@ -1,9 +1,10 @@
 import enum
 import logging
+import re
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, String, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
@@ -122,6 +123,34 @@ class StrIntFloatDict(TypeDecorator[Optional[dict[str, int | float]]]):
         return value
 
 
+class GitLabSlug(TypeDecorator[Optional[str]]):
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[str], dialect: Dialect) -> Optional[str]:
+        if value is None:
+            return None
+
+        # https://docs.gitlab.com/user/reserved_names/#:~:text=project%20or%20group-,slugs,-%3A
+        if len(value) == 0:
+            raise ValueError("Slug cannot be empty")
+        if not value[0].isalnum() or not value[-1].isalnum():
+            raise ValueError(f"Slug must start and end with a letter (a-zA-Z) or digit (0-9). Got: {value}")
+        if re.search(r"[._-]{2,}", value):
+            raise ValueError(f"Slug must not contain consecutive special characters. Got: {value}")
+        if value.endswith(".git") or value.endswith(".atom"):
+            raise ValueError(f"Slug cannot end in .git or .atom. Got: {value}")
+        if not re.match(r"^[a-zA-Z0-9._-]*$", value):
+            raise ValueError(
+                f"Slug must contain only letters (a-zA-Z), digits (0-9), underscores (_), dots (.), or dashes (-). "
+                f"Got: {value}"
+            )
+        return value
+
+    def process_result_value(self, value: Optional[str], dialect: Dialect) -> Optional[str]:
+        return value
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -137,11 +166,9 @@ class User(Base):
     users_on_namespaces: DynamicMapped["UserOnNamespace"] = relationship(
         back_populates="user", foreign_keys="UserOnNamespace.user_id", cascade="all, delete-orphan"
     )
-    created_namespaces: DynamicMapped["Namespace"] = relationship(
-        back_populates="created_by", cascade="all, delete-orphan"
-    )
+    created_namespaces: DynamicMapped["Namespace"] = relationship(back_populates="created_by")
     assigned_users_on_namespaces: DynamicMapped["UserOnNamespace"] = relationship(
-        back_populates="assigned_by", foreign_keys="UserOnNamespace.assigned_by_id", cascade="all, delete-orphan"
+        back_populates="assigned_by", foreign_keys="UserOnNamespace.assigned_by_id"
     )
 
 
@@ -150,7 +177,7 @@ class Namespace(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
-    slug: Mapped[str] = mapped_column(unique=True)
+    slug: Mapped[str] = mapped_column(GitLabSlug, unique=True)
     gitlab_group_id: Mapped[int] = mapped_column(unique=True)
     created_by_id: Mapped[int] = mapped_column(ForeignKey(User.id))
 
@@ -224,7 +251,7 @@ class Course(Base):
     )
 
     # relationships
-    namespace: Mapped["Namespace"] = relationship(back_populates="courses")
+    namespace: Mapped[Optional["Namespace"]] = relationship(back_populates="courses")
     task_groups: DynamicMapped["TaskGroup"] = relationship(
         back_populates="course", cascade="all, delete-orphan", order_by="TaskGroup.position"
     )
