@@ -1,16 +1,14 @@
-FROM python:3.14-alpine AS app_builder
+FROM python:3.14-slim AS app_builder
 
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml uv.lock ./
 
-ENV POETRY_VERSION=2.1.3
-RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
+ENV UV_VERSION=0.9.5
+RUN pip install uv=${UV_VERSION}
 
-RUN python -m poetry config virtualenvs.create true \
-    && python -m poetry config virtualenvs.in-project true \
-    && python -m poetry install --only main --no-interaction --no-ansi --no-root
 
+RUN uv sync --locked
 
 
 FROM python:3.14-alpine AS app
