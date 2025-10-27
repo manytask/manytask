@@ -1,4 +1,4 @@
-FROM python:3.14-slim AS app_builder
+FROM python:3.14-alpine AS app_builder
 
 WORKDIR /app
 
@@ -7,6 +7,7 @@ COPY pyproject.toml uv.lock ./
 ENV UV_VERSION=0.9.5
 RUN pip install uv==${UV_VERSION}
 
+RUN apk add --no-cache build-base
 
 RUN uv sync --locked
 
