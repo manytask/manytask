@@ -25,7 +25,7 @@ jobs:
           version: 0.9.5
 
       - name: Install dependencies
-        run: poetry install --no-interaction --no-root
+        run: uv sync --locked --all-extras
         
       - name: Run ruff format
         run: uv run ruff format --check .
