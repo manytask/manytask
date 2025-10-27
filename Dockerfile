@@ -49,7 +49,7 @@ chmod 0600 /root/.postgresql/root.crt
 
 
 
-FROM node:24 AS docs_builder
+FROM node:25 AS docs_builder
 
 RUN npm i @diplodoc/cli -g
 COPY ./docs ./docs
