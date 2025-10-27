@@ -1,7 +1,7 @@
 """Add Namespace and UserOnNamespace models
 
 Revision ID: 837ef6b0265c
-Revises: 2226e9ac60f3
+Revises: 8a711d509af1
 Create Date: 2025-10-06 13:37:00.674144
 
 """
@@ -14,7 +14,7 @@ import manytask
 
 # revision identifiers, used by Alembic.
 revision: str = '837ef6b0265c'
-down_revision: Union[str, None] = '2226e9ac60f3'
+down_revision: Union[str, None] = '8a711d509af1'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
