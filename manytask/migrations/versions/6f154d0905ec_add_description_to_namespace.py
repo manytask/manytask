@@ -1,8 +1,8 @@
 """add_description_to_namespace
 
-Revision ID: da0f17b74267
+Revision ID: 6f154d0905ec
 Revises: 837ef6b0265c
-Create Date: 2025-10-27 17:25:05.979158
+Create Date: 2025-10-27 19:22:06.490556
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'da0f17b74267'
+revision: str = '6f154d0905ec'
 down_revision: Union[str, None] = '837ef6b0265c'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
