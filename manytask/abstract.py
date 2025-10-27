@@ -163,6 +163,37 @@ class StorageApi(ABC):
     @abstractmethod
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
 
+    @abstractmethod
+    def create_namespace(
+        self,
+        name: str,
+        slug: str,
+        description: str | None,
+        gitlab_group_id: int,
+        created_by_username: str,
+    ) -> Any: ...
+
+    @abstractmethod
+    def get_all_namespaces(self) -> list[Any]: ...
+
+    @abstractmethod
+    def get_user_namespaces(self, username: str) -> list[tuple[Any, str]]: ...
+
+    @abstractmethod
+    def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
+
+    @abstractmethod
+    def add_user_to_namespace(
+        self,
+        namespace_id: int,
+        user_id: int,
+        role: str,
+        assigned_by_username: str,
+    ) -> Any: ...
+
+    @abstractmethod
+    def get_namespace_users(self, namespace_id: int) -> list[tuple[int, str]]: ...
+
 
 @dataclass
 class RmsUser:
@@ -206,6 +237,28 @@ class RmsApi(ABC):
     def create_students_group(
         self,
         course_students_group: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def create_namespace_group(
+        self,
+        name: str,
+        path: str,
+        description: str | None = None,
+    ) -> int: ...
+
+    @abstractmethod
+    def add_user_to_namespace_group(
+        self,
+        gitlab_group_id: int,
+        user_id: int,
+    ) -> None: ...
+
+    @abstractmethod
+    def remove_user_from_namespace_group(
+        self,
+        gitlab_group_id: int,
+        user_id: int,
     ) -> None: ...
 
     @abstractmethod
