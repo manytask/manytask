@@ -4,9 +4,9 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, String, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
-from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship, validates
 from sqlalchemy.types import TypeDecorator
 
 from .course import Course as AppCourse
@@ -22,6 +22,24 @@ convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+
+
+def _validate_gitlab_slug(slug: str) -> str:
+    # https://docs.gitlab.com/user/reserved_names/#:~:text=project%20or%20group-,slugs,-%3A
+    if len(slug) == 0:
+        raise ValueError("Slug cannot be empty")
+    if not slug[0].isalnum() or not slug[-1].isalnum():
+        raise ValueError(f"Slug must start and end with a letter (a-zA-Z) or digit (0-9). Got: {slug}")
+    if re.search(r"[._-]{2,}", slug):
+        raise ValueError(f"Slug must not contain consecutive special characters. Got: {slug}")
+    if slug.endswith(".git") or slug.endswith(".atom"):
+        raise ValueError(f"Slug cannot end in .git or .atom. Got: {slug}")
+    if not re.match(r"^[a-zA-Z0-9._-]*$", slug):
+        raise ValueError(
+            f"Slug must contain only letters (a-zA-Z), digits (0-9), underscores (_), dots (.), or dashes (-). "
+            f"Got: {slug}"
+        )
+    return slug
 
 
 class UserOnNamespaceRole(enum.Enum):
@@ -122,34 +140,6 @@ class StrIntFloatDict(TypeDecorator[Optional[dict[str, int | float]]]):
         return value
 
 
-class GitLabSlug(TypeDecorator[Optional[str]]):
-    impl = String
-    cache_ok = True
-
-    def process_bind_param(self, value: Optional[str], dialect: Dialect) -> Optional[str]:
-        if value is None:
-            return None
-
-        # https://docs.gitlab.com/user/reserved_names/#:~:text=project%20or%20group-,slugs,-%3A
-        if len(value) == 0:
-            raise ValueError("Slug cannot be empty")
-        if not value[0].isalnum() or not value[-1].isalnum():
-            raise ValueError(f"Slug must start and end with a letter (a-zA-Z) or digit (0-9). Got: {value}")
-        if re.search(r"[._-]{2,}", value):
-            raise ValueError(f"Slug must not contain consecutive special characters. Got: {value}")
-        if value.endswith(".git") or value.endswith(".atom"):
-            raise ValueError(f"Slug cannot end in .git or .atom. Got: {value}")
-        if not re.match(r"^[a-zA-Z0-9._-]*$", value):
-            raise ValueError(
-                f"Slug must contain only letters (a-zA-Z), digits (0-9), underscores (_), dots (.), or dashes (-). "
-                f"Got: {value}"
-            )
-        return value
-
-    def process_result_value(self, value: Optional[str], dialect: Dialect) -> Optional[str]:
-        return value
-
-
 class User(Base):
     __tablename__ = "users"
 
@@ -176,7 +166,7 @@ class Namespace(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
-    slug: Mapped[str] = mapped_column(GitLabSlug, unique=True)
+    slug: Mapped[str] = mapped_column(unique=True)
     gitlab_group_id: Mapped[int] = mapped_column(unique=True)
     created_by_id: Mapped[int] = mapped_column(ForeignKey(User.id))
 
@@ -186,6 +176,12 @@ class Namespace(Base):
         back_populates="namespace", cascade="all, delete-orphan"
     )
     courses: DynamicMapped["Course"] = relationship(back_populates="namespace", cascade="all, delete-orphan")
+
+    @validates("slug")
+    def validate_slug(self, key: str, slug: Optional[str]) -> Optional[str]:
+        if slug is None:
+            return None
+        return _validate_gitlab_slug(slug)
 
 
 class UserOnNamespace(Base):

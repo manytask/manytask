@@ -9,7 +9,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-import manytask
 
 
 # revision identifiers, used by Alembic.
@@ -24,7 +23,7 @@ def upgrade() -> None:
     op.create_table('namespaces',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
-    sa.Column('slug', manytask.models.GitLabSlug(), nullable=False),
+    sa.Column('slug', sa.String(), nullable=False),
     sa.Column('gitlab_group_id', sa.Integer(), nullable=False),
     sa.Column('created_by_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['created_by_id'], ['users.id'], name=op.f('fk_namespaces_created_by_id_users')),

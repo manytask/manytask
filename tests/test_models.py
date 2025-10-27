@@ -827,10 +827,5 @@ def test_namespace_slug_validation(session):
     ]
 
     for slug in invalid_slugs:
-        print(slug)
-        namespace = Namespace(name="namespace_slug", slug=slug, gitlab_group_id=200, created_by=instance_admin)
-        session.add(namespace)
-        with pytest.raises(StatementError) as exc_info:
-            session.commit()
-        assert isinstance(exc_info.value.orig, ValueError)
-        session.rollback()
+        with pytest.raises(ValueError):
+            namespace = Namespace(name="namespace_slug", slug=slug, gitlab_group_id=200, created_by=instance_admin)
