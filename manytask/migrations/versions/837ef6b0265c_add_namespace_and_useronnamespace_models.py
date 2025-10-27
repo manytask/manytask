@@ -36,7 +36,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('namespace_id', sa.Integer(), nullable=False),
-    sa.Column('role', sa.Enum('NAMESPACE_ADMIN', 'TEACHER', 'PROGRAM_MANAGER', name='user_on_namespace_role', native_enum=False), nullable=False),
+    sa.Column('role', sa.Enum('NAMESPACE_ADMIN', 'PROGRAM_MANAGER', name='user_on_namespace_role', native_enum=False), nullable=False),
     sa.Column('assigned_by_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['assigned_by_id'], ['users.id'], name=op.f('fk_users_on_namespaces_assigned_by_id_users')),
     sa.ForeignKeyConstraint(['namespace_id'], ['namespaces.id'], name=op.f('fk_users_on_namespaces_namespace_id_namespaces')),

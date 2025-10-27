@@ -600,10 +600,9 @@ def test_namespace(session):
     )
     student = User(username="student", first_name="student", last_name="student", rms_id=102)
     namespace_admin = User(username="namespace_admin", first_name="namespace", last_name="admin", rms_id=103)
-    teacher = User(username="teacher", first_name="teacher", last_name="teacher", rms_id=104)
-    program_manager = User(username="program_manager", first_name="program", last_name="manager", rms_id=105)
+    program_manager = User(username="program_manager", first_name="program", last_name="manager", rms_id=104)
 
-    session.add_all([instance_admin, namespace_admin, teacher, program_manager, student])
+    session.add_all([instance_admin, namespace_admin, program_manager, student])
     session.commit()
 
     # Create namespace
@@ -617,14 +616,11 @@ def test_namespace(session):
     user_on_namespace_admin = UserOnNamespace(
         user=namespace_admin, namespace=namespace, role=UserOnNamespaceRole.NAMESPACE_ADMIN, assigned_by=instance_admin
     )
-    user_on_namespace_teacher = UserOnNamespace(
-        user=teacher, namespace=namespace, role=UserOnNamespaceRole.TEACHER, assigned_by=instance_admin
-    )
     user_on_namespace_pm = UserOnNamespace(
         user=program_manager, namespace=namespace, role=UserOnNamespaceRole.PROGRAM_MANAGER, assigned_by=namespace_admin
     )
 
-    session.add_all([user_on_namespace_admin, user_on_namespace_teacher, user_on_namespace_pm])
+    session.add_all([user_on_namespace_admin, user_on_namespace_pm])
     session.commit()
 
     # Create course
@@ -649,15 +645,10 @@ def test_namespace(session):
     assert retrieved_user_on_namespace1.role == UserOnNamespaceRole.NAMESPACE_ADMIN
     assert retrieved_user_on_namespace1.assigned_by == instance_admin
 
-    retrieved_user_on_namespace2 = session.query(UserOnNamespace).filter_by(user=teacher).first()
+    retrieved_user_on_namespace2 = session.query(UserOnNamespace).filter_by(user=program_manager).first()
     assert retrieved_user_on_namespace2.namespace == namespace
-    assert retrieved_user_on_namespace2.role == UserOnNamespaceRole.TEACHER
-    assert retrieved_user_on_namespace2.assigned_by == instance_admin
-
-    retrieved_user_on_namespace3 = session.query(UserOnNamespace).filter_by(user=program_manager).first()
-    assert retrieved_user_on_namespace3.namespace == namespace
-    assert retrieved_user_on_namespace3.role == UserOnNamespaceRole.PROGRAM_MANAGER
-    assert retrieved_user_on_namespace3.assigned_by == namespace_admin
+    assert retrieved_user_on_namespace2.role == UserOnNamespaceRole.PROGRAM_MANAGER
+    assert retrieved_user_on_namespace2.assigned_by == namespace_admin
 
     # Check course
     retrieved_course = session.query(Course).filter_by(name="test_course_namespace").first()
@@ -704,7 +695,7 @@ def test_namespace_constraints(session):
     session.add_all([student, namespace_admin, user_on_namespace])
 
     user_on_namespace_same_user_id_and_namespace_id = UserOnNamespace(
-        user=namespace_admin, namespace=namespace, role=UserOnNamespaceRole.TEACHER, assigned_by=instance_admin
+        user=namespace_admin, namespace=namespace, role=UserOnNamespaceRole.PROGRAM_MANAGER, assigned_by=instance_admin
     )
     session.add(user_on_namespace_same_user_id_and_namespace_id)
     with pytest.raises(IntegrityError):

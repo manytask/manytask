@@ -26,7 +26,6 @@ convention = {
 
 class UserOnNamespaceRole(enum.Enum):
     NAMESPACE_ADMIN = "namespace_admin"
-    TEACHER = "teacher"
     PROGRAM_MANAGER = "program_manager"
 
 
