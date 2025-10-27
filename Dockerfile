@@ -5,7 +5,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 ENV UV_VERSION=0.9.5
-RUN pip install uv=${UV_VERSION}
+RUN pip install uv==${UV_VERSION}
 
 
 RUN uv sync --locked
