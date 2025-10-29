@@ -42,9 +42,15 @@ def _validate_gitlab_slug(slug: str) -> str:
     return slug
 
 
+ROLE_NAMESPACE_ADMIN = "namespace_admin"
+ROLE_PROGRAM_MANAGER = "program_manager"
+
+
 class UserOnNamespaceRole(enum.Enum):
-    NAMESPACE_ADMIN = "namespace_admin"
-    PROGRAM_MANAGER = "program_manager"
+    NAMESPACE_ADMIN = ROLE_NAMESPACE_ADMIN
+    PROGRAM_MANAGER = ROLE_PROGRAM_MANAGER
+
+
 
 
 class Base(DeclarativeBase):
@@ -167,6 +173,7 @@ class Namespace(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
     slug: Mapped[str] = mapped_column(unique=True)
+    description: Mapped[Optional[str]]
     gitlab_group_id: Mapped[int] = mapped_column(unique=True)
     created_by_id: Mapped[int] = mapped_column(ForeignKey(User.id))
 
@@ -261,6 +268,7 @@ class Course(Base):
         return AppCourse(
             AppCourseConfig(
                 course_name=self.name,
+                namespace_id=self.namespace_id,
                 gitlab_course_group=self.gitlab_course_group,
                 gitlab_course_public_repo=self.gitlab_course_public_repo,
                 gitlab_course_students_group=self.gitlab_course_students_group,
