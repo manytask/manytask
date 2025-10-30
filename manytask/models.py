@@ -353,6 +353,7 @@ class Grade(Base):
     user_on_course_id: Mapped[int] = mapped_column(ForeignKey(UserOnCourse.id))
     task_id: Mapped[int] = mapped_column(ForeignKey(Task.id))
     score: Mapped[int] = mapped_column(default=0)
+    is_solved: Mapped[bool] = mapped_column(default=False)
     last_submit_date: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (UniqueConstraint("user_on_course_id", "task_id", name="_user_on_course_task_uc"),)

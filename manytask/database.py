@@ -255,7 +255,9 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
+    def get_all_scores_with_names(
+        self, course_name: str
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]:
         """Get all users' scores with names for the given course."""
 
         with self._session_create() as session:
@@ -266,6 +268,7 @@ class DataBaseApi(StorageApi):
                     User.last_name,
                     Task.name,
                     coalesce(Grade.score, 0),
+                    coalesce(Grade.is_solved, False),
                 )
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
                 .join(Course, Course.id == UserOnCourse.course_id)
@@ -279,13 +282,13 @@ class DataBaseApi(StorageApi):
 
             rows = session.execute(statement).all()
 
-            scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
+            scores_and_names: dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]] = {}
 
-            for username, first_name, last_name, task_name, score in rows:
+            for username, first_name, last_name, task_name, score, is_solved in rows:
                 if username not in scores_and_names:
                     scores_and_names[username] = ({}, (first_name, last_name))
                 if task_name is not None:
-                    scores_and_names[username][0][task_name] = score
+                    scores_and_names[username][0][task_name] = (score, is_solved)
 
             return scores_and_names
 
@@ -387,6 +390,9 @@ class DataBaseApi(StorageApi):
                 new_score = update_fn("", grade.score)
                 grade.score = new_score
                 grade.last_submit_date = datetime.now(timezone.utc)
+
+                if task.is_large and new_score >= task.min_score:
+                    grade.is_solved = True
 
                 session.commit()
                 logger.info(
