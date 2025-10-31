@@ -41,7 +41,7 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
 
         first_name, last_name = name
 
-        scores = {name: score[0]  for name, score in student_scores.items()}
+        scores = {name: score[0] for name, score in student_scores.items()}
 
         row = {
             "username": username,
