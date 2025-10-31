@@ -644,7 +644,9 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
     all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
     scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
 
-    assert all_scores == {TEST_USERNAME: ({"bonus_score": (1, False), "task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME))}
+    assert all_scores == {
+        TEST_USERNAME: ({"bonus_score": (1, False), "task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME))
+    }
     assert scores == {"bonus_score": 1, "task_0_0": 1}
 
 
