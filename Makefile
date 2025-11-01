@@ -9,6 +9,7 @@ check: format lint test
 
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
+	uv sync --active --all-extras
 
 install-hooks:
 	uv install
