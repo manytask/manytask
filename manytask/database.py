@@ -1695,3 +1695,462 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
+
+    def create_namespace(
+        self,
+        name: str,
+        slug: str,
+        description: str | None,
+        gitlab_group_id: int,
+        created_by_username: str,
+    ) -> models.Namespace:
+        """Create a new namespace and assign creator as namespace_admin.
+        
+        :param name: Display name of the namespace
+        :param slug: URL slug for the namespace
+        :param description: Optional description
+        :param gitlab_group_id: GitLab group ID
+        :param created_by_username: Username of the creator
+        :return: Created Namespace object
+        :raises IntegrityError: If slug or gitlab_group_id already exists
+        """
+        with self._session_create() as session:
+            try:
+                logger.info("Creating namespace name=%s slug=%s for user=%s", name, slug, created_by_username)
+                
+                creator = self._get(session, models.User, username=created_by_username)
+                
+                namespace = self._create(
+                    session,
+                    models.Namespace,
+                    name=name,
+                    slug=slug,
+                    description=description,
+                    gitlab_group_id=gitlab_group_id,
+                    created_by_id=creator.id,
+                )
+                
+                self._create(
+                    session,
+                    models.UserOnNamespace,
+                    user_id=creator.id,
+                    namespace_id=namespace.id,
+                    role=models.UserOnNamespaceRole.NAMESPACE_ADMIN,
+                    assigned_by_id=creator.id,
+                )
+                
+                logger.info(
+                    "Namespace created successfully id=%s slug=%s, creator %s assigned as namespace_admin",
+                    namespace.id,
+                    slug,
+                    created_by_username,
+                )
+                
+                return namespace
+                
+            except IntegrityError as e:
+                session.rollback()
+                logger.error("Failed to create namespace slug=%s: %s", slug, str(e))
+                raise
+
+    def get_all_namespaces(self) -> list[models.Namespace]:
+        """Get all namespaces (for Instance Admin).
+        
+        :return: List of all Namespace objects
+        """
+        with self._session_create() as session:
+            logger.debug("Fetching all namespaces")
+            namespaces = session.query(models.Namespace).all()
+            logger.info("Fetched %d namespaces", len(namespaces))
+            session.expunge_all()
+            return namespaces
+
+    def get_user_namespaces(self, username: str) -> list[tuple[models.Namespace, str]]:
+        """Get namespaces where user has a role.
+        
+        :param username: Username to filter by
+        :return: List of tuples (Namespace, role_name)
+        """
+        with self._session_create() as session:
+            logger.debug("Fetching namespaces for user=%s", username)
+            
+            try:
+                user = self._get(session, models.User, username=username)
+            except NoResultFound:
+                logger.warning("User %s not found", username)
+                return []
+            
+            results = (
+                session.query(models.Namespace, models.UserOnNamespace.role)
+                .join(models.UserOnNamespace, models.UserOnNamespace.namespace_id == models.Namespace.id)
+                .filter(models.UserOnNamespace.user_id == user.id)
+                .all()
+            )
+            
+            logger.info("User %s has access to %d namespaces", username, len(results))
+            
+            namespace_role_pairs = [(ns, role.value) for ns, role in results]
+            session.expunge_all()
+            
+            return namespace_role_pairs
+
+    def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[models.Namespace, str | None]:
+        """Get namespace by ID with access control.
+        
+        Instance Admin can access any namespace (role=None).
+        Regular users can only access namespaces where they have a role.
+        
+        :param namespace_id: ID of the namespace
+        :param username: Username to check access
+        :return: (Namespace, role) where role=None for Instance Admin
+        :raises NoResultFound: if namespace doesn't exist
+        :raises PermissionError: if user doesn't have access
+        """
+        with self._session_create() as session:
+            logger.debug("Fetching namespace id=%s for user=%s", namespace_id, username)
+            
+            try:
+                namespace = self._get(session, models.Namespace, id=namespace_id)
+            except NoResultFound:
+                logger.warning("Namespace id=%s not found", namespace_id)
+                raise PermissionError(f"Access denied to namespace {namespace_id}")
+            
+            try:
+                user = self._get(session, models.User, username=username)
+            except NoResultFound:
+                logger.warning("User %s not found", username)
+                raise PermissionError(f"Access denied to namespace {namespace_id}")
+            
+            if user.is_instance_admin:
+                logger.info("Instance Admin %s accessing namespace id=%s", username, namespace_id)
+                session.expunge(namespace)
+                return (namespace, None)
+            
+            try:
+                user_on_namespace = self._get(
+                    session,
+                    models.UserOnNamespace,
+                    user_id=user.id,
+                    namespace_id=namespace_id,
+                )
+                role = user_on_namespace.role.value
+                logger.info("User %s has role %s in namespace id=%s", username, role, namespace_id)
+                session.expunge(namespace)
+                return (namespace, role)
+            except NoResultFound:
+                logger.warning("User %s has no access to namespace id=%s", username, namespace_id)
+                raise PermissionError(f"Access denied to namespace {namespace_id}")
+
+    def add_user_to_namespace(
+        self,
+        namespace_id: int,
+        user_id: int,
+        role: str,
+        assigned_by_username: str,
+    ) -> models.UserOnNamespace:
+        """Add a user to a namespace with a specific role.
+        
+        :param namespace_id: ID of the namespace
+        :param user_id: RMS ID (GitLab ID) of the user to add
+        :param role: Role to assign ("namespace_admin" or "program_manager")
+        :param assigned_by_username: Username of the user assigning the role
+        :return: Created UserOnNamespace object
+        :raises NoResultFound: If user or namespace not found
+        :raises ValueError: If role is invalid
+        :raises IntegrityError: If user already has a role in this namespace
+        """
+        with self._session_create() as session:
+            logger.info(
+                "Adding user with rms_id=%s to namespace_id=%s with role=%s by user=%s",
+                user_id,
+                namespace_id,
+                role,
+                assigned_by_username,
+            )
+            
+            try:
+                user = self._get(session, models.User, rms_id=user_id)
+            except NoResultFound:
+                logger.error("User with rms_id=%s not found", user_id)
+                raise NoResultFound(f"User with rms_id={user_id} not found")
+            
+            try:
+                namespace = self._get(session, models.Namespace, id=namespace_id)
+            except NoResultFound:
+                logger.error("Namespace with id=%s not found", namespace_id)
+                raise NoResultFound(f"Namespace with id={namespace_id} not found")
+            
+            try:
+                assigned_by = self._get(session, models.User, username=assigned_by_username)
+            except NoResultFound:
+                logger.error("Assigning user %s not found", assigned_by_username)
+                raise NoResultFound(f"User {assigned_by_username} not found")
+            
+            if role == ROLE_NAMESPACE_ADMIN:
+                role_enum = models.UserOnNamespaceRole.NAMESPACE_ADMIN
+            elif role == ROLE_PROGRAM_MANAGER:
+                role_enum = models.UserOnNamespaceRole.PROGRAM_MANAGER
+            else:
+                logger.error("Invalid role: %s", role)
+                raise ValueError(f"Invalid role: {role}. Must be '{ROLE_NAMESPACE_ADMIN}' or '{ROLE_PROGRAM_MANAGER}'")
+            
+            user_db_id = user.id
+            user_username = user.username
+            namespace_slug = namespace.slug
+            
+            user_on_namespace = models.UserOnNamespace(
+                user_id=user.id,
+                namespace_id=namespace.id,
+                role=role_enum,
+                assigned_by_id=assigned_by.id,
+            )
+            session.add(user_on_namespace)
+            
+            try:
+                session.commit()
+                
+                session.refresh(user_on_namespace)
+                
+                logger.info(
+                    "User %s (id=%s) added to namespace %s (id=%s) with role %s",
+                    user_username,
+                    user_db_id,
+                    namespace_slug,
+                    namespace_id,
+                    role,
+                )
+                
+                _ = user_on_namespace.id
+                _ = user_on_namespace.user_id
+                _ = user_on_namespace.namespace_id
+                
+                session.expunge(user_on_namespace)
+                session.expunge(user)
+                session.expunge(namespace)
+                return user_on_namespace
+                
+            except IntegrityError as e:
+                session.rollback()
+                logger.warning(
+                    "User id=%s (rms_id=%s) already has a role in namespace id=%s",
+                    user_db_id,
+                    user_id,
+                    namespace_id,
+                )
+                raise
+
+    def get_namespace_users(self, namespace_id: int) -> list[tuple[int, str]]:
+        """Get list of users with their roles in a namespace.
+        
+        :param namespace_id: ID of the namespace
+        :return: List of tuples (user_id, role_string) where user_id is the database User.id
+        """
+        with self._session_create() as session:
+            logger.debug("Fetching users for namespace_id=%s", namespace_id)
+            
+            results = (
+                session.query(models.User.id, models.UserOnNamespace.role)
+                .join(models.UserOnNamespace, models.UserOnNamespace.user_id == models.User.id)
+                .filter(models.UserOnNamespace.namespace_id == namespace_id)
+                .all()
+            )
+            
+            logger.info("Found %d users in namespace_id=%s", len(results), namespace_id)
+            
+            user_role_pairs = [(user_id, role.value) for user_id, role in results]
+            
+            return user_role_pairs
+
+    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, int]:
+        """Remove a user from a namespace.
+        
+        :param namespace_id: ID of the namespace
+        :param user_id: Database User.id (not rms_id)
+        :return: Tuple of (role_string, rms_id) of the removed user
+        :raises NoResultFound: If the user is not in the namespace
+        """
+        with self._session_create() as session:
+            logger.info("Removing user_id=%s from namespace_id=%s", user_id, namespace_id)
+            
+            try:
+                user_on_namespace = self._get(
+                    session,
+                    models.UserOnNamespace,
+                    user_id=user_id,
+                    namespace_id=namespace_id,
+                )
+                
+                role = user_on_namespace.role.value
+                user = self._get(session, models.User, id=user_id)
+                rms_id = user.rms_id
+                username = user.username
+                
+                session.delete(user_on_namespace)
+                session.commit()
+                
+                logger.info(
+                    "Successfully removed user %s (id=%s, rms_id=%s) with role %s from namespace_id=%s",
+                    username,
+                    user_id,
+                    rms_id,
+                    role,
+                    namespace_id,
+                )
+                
+                return (role, rms_id)
+                
+            except NoResultFound:
+                logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
+                raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
+    
+    def get_namespace_courses(self, namespace_id: int) -> list[dict[str, Any]]:
+        """Get list of courses in a namespace with information about owners.
+        
+        :param namespace_id: ID of the namespace
+        :return: List of dictionaries with course information:
+            - id: Course database ID
+            - name: Course name
+            - status: Course status (value string)
+            - gitlab_course_group: GitLab group path
+            - owners: List of owner usernames
+        """
+        with self._session_create() as session:
+            logger.info("Fetching courses for namespace_id=%s", namespace_id)
+            
+            courses = session.query(models.Course).filter_by(namespace_id=namespace_id).all()
+            
+            result = []
+            for course in courses:
+                course_admins = (
+                    session.query(models.User.username)
+                    .join(models.UserOnCourse)
+                    .filter(
+                        models.UserOnCourse.course_id == course.id,
+                        models.UserOnCourse.is_course_admin == True,
+                    )
+                    .all()
+                )
+                
+                owner_usernames = [admin[0] for admin in course_admins]
+                
+                result.append({
+                    "id": course.id,
+                    "name": course.name,
+                    "status": course.status.value,
+                    "gitlab_course_group": course.gitlab_course_group,
+                    "owners": owner_usernames,
+                })
+            
+            logger.info("Found %d courses for namespace_id=%s", len(result), namespace_id)
+            return result
+    
+    def add_course_owners(
+        self,
+        course_id: int,
+        owner_rms_ids: list[int],
+        namespace_id: int,
+    ) -> list[int]:
+        """Add owners to a course.
+        
+        Validates that each owner has namespace_admin role in the course's namespace,
+        then adds them as course admins.
+        
+        :param course_id: ID of the course
+        :param owner_rms_ids: List of RMS IDs (GitLab user IDs) to add as owners
+        :param namespace_id: ID of the namespace (for validation)
+        :return: List of successfully added user RMS IDs
+        :raises ValueError: If any owner doesn't have namespace_admin role in the namespace
+        :raises NoResultFound: If course or users not found
+        """
+        with self._session_create() as session:
+            logger.info(
+                "Adding owners to course_id=%s: rms_ids=%s (validating against namespace_id=%s)",
+                course_id,
+                owner_rms_ids,
+                namespace_id,
+            )
+            
+            if not owner_rms_ids:
+                logger.info("No owners to add")
+                return []
+            
+            try:
+                course = self._get(session, models.Course, id=course_id)
+            except NoResultFound:
+                logger.error("Course id=%s not found", course_id)
+                raise NoResultFound(f"Course {course_id} not found")
+            
+            if course.namespace_id != namespace_id:
+                logger.error(
+                    "Course id=%s belongs to namespace_id=%s, not %s",
+                    course_id,
+                    course.namespace_id,
+                    namespace_id,
+                )
+                raise ValueError(f"Course {course_id} does not belong to namespace {namespace_id}")
+            
+            added_owners = []
+            
+            for rms_id in owner_rms_ids:
+                try:
+                    user = self._get(session, models.User, rms_id=rms_id)
+                    
+                    try:
+                        user_on_namespace = self._get(
+                            session,
+                            models.UserOnNamespace,
+                            user_id=user.id,
+                            namespace_id=namespace_id,
+                        )
+                        
+                        if user_on_namespace.role != models.UserOnNamespaceRole.NAMESPACE_ADMIN:
+                            logger.error(
+                                "User %s (rms_id=%s) has role %s in namespace_id=%s, not namespace_admin",
+                                user.username,
+                                rms_id,
+                                user_on_namespace.role.value,
+                                namespace_id,
+                            )
+                            raise ValueError(
+                                f"User with rms_id={rms_id} must have namespace_admin role in namespace {namespace_id}"
+                            )
+                    except NoResultFound:
+                        logger.error(
+                            "User %s (rms_id=%s) is not in namespace_id=%s",
+                            user.username,
+                            rms_id,
+                            namespace_id,
+                        )
+                        raise ValueError(f"User with rms_id={rms_id} is not in namespace {namespace_id}")
+                    
+                    user_on_course = self._update_or_create(
+                        session,
+                        models.UserOnCourse,
+                        defaults={"is_course_admin": True},
+                        user_id=user.id,
+                        course_id=course_id,
+                    )
+                    
+                    logger.info(
+                        "Added user %s (rms_id=%s, id=%s) as owner of course_id=%s",
+                        user.username,
+                        rms_id,
+                        user.id,
+                        course_id,
+                    )
+                    
+                    added_owners.append(rms_id)
+                    
+                except NoResultFound:
+                    logger.error("User with rms_id=%s not found in database", rms_id)
+                    raise ValueError(f"User with rms_id={rms_id} not found")
+            
+            session.commit()
+            
+            logger.info(
+                "Successfully added %d owners to course_id=%s",
+                len(added_owners),
+                course_id,
+            )
+            
+            return added_owners
