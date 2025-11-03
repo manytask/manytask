@@ -30,15 +30,19 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
     for username, (student_scores, name) in scores_and_names.items():
-        total_score = sum(student_scores.values())
-        large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
+        total_score = sum(score_solved[0] for score_solved in student_scores.values())
+
+        large_count = sum(1 for large_task in large_tasks if student_scores.get(large_task[0], (0, None))[1])
+
         first_name, last_name = name
+
+        scores = {name: score[0] for name, score in student_scores.items()}
 
         row = {
             "username": username,
             "first_name": first_name,
             "last_name": last_name,
-            "scores": student_scores,
+            "scores": scores,
             "total_score": total_score,
             "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
             "large_count": large_count,
