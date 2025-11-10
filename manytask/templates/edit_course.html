@@ -11,7 +11,7 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="{{ url_for('admin.edit_course', course_name=course.course_name) }}" class="needs-validation" novalidate>
+    <form method="POST" action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}" class="needs-validation" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row">
             <div class="col-md-6 mb-4">
