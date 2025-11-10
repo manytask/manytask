@@ -1,0 +1,211 @@
+/* Namespace Panel Styles */
+
+.namespace-container {
+    max-width: 1400px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.namespace-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid var(--bs-border-color);
+    padding-bottom: 1rem;
+}
+
+.namespace-header h1 {
+    color: var(--bs-heading-color);
+    margin-bottom: 0.5rem;
+}
+
+.namespace-header .text-muted {
+    font-size: 0.9rem;
+}
+
+.back-btn {
+    white-space: nowrap;
+}
+
+.action-group {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.action-group h3 {
+    color: var(--bs-heading-color);
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.admin-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.admin-btn i {
+    font-size: 1.1rem;
+}
+
+.admin-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Table Styles */
+
+.namespaces-table tbody tr,
+.clickable-row {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.namespaces-table tbody tr:hover,
+.clickable-row:hover {
+    background-color: var(--bs-table-hover-bg) !important;
+}
+
+.table {
+    background: var(--bs-body-bg);
+}
+
+.table thead {
+    background-color: var(--bs-secondary-bg);
+    border-bottom: 2px solid var(--bs-border-color);
+}
+
+.table thead th {
+    font-weight: 600;
+    color: var(--bs-heading-color);
+    padding: 0.75rem;
+}
+
+.table tbody td {
+    padding: 0.75rem;
+    vertical-align: middle;
+}
+
+.table code {
+    background-color: var(--bs-secondary-bg);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+}
+
+/* Badge Styles */
+
+.badge {
+    font-weight: 500;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.badge.bg-warning {
+    color: #000;
+}
+
+/* Modal Improvements */
+
+.modal-content {
+    border: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--bs-border-color);
+    background-color: var(--bs-secondary-bg);
+}
+
+.modal-footer {
+    border-top: 1px solid var(--bs-border-color);
+    background-color: var(--bs-secondary-bg);
+}
+
+/* Alert Improvements */
+
+.alert {
+    border-radius: 0.375rem;
+    border: none;
+}
+
+.alert-info {
+    background-color: var(--bs-info-bg-subtle);
+    color: var(--bs-info-text-emphasis);
+}
+
+.alert-danger {
+    background-color: var(--bs-danger-bg-subtle);
+    color: var(--bs-danger-text-emphasis);
+}
+
+.alert-success {
+    background-color: var(--bs-success-bg-subtle);
+    color: var(--bs-success-text-emphasis);
+}
+
+/* Button Improvements */
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* Responsive Design */
+
+@media (max-width: 768px) {
+    .namespace-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .admin-actions {
+        flex-direction: column;
+    }
+
+    .admin-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+
+    .namespace-container {
+        padding: 0 0.5rem;
+    }
+}
+
+/* Dark Mode Support */
+
+[data-bs-theme="dark"] .action-group {
+    background: var(--bs-dark);
+    border-color: var(--bs-border-color-translucent);
+}
+
+[data-bs-theme="dark"] .table {
+    --bs-table-bg: var(--bs-dark);
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.05);
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.075);
+}
+
+[data-bs-theme="dark"] .table code {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
