@@ -11,7 +11,7 @@ from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.auth import (
-    requires_admin,
+    requires_instance_admin,
     requires_auth,
     requires_ready,
     set_oauth_session,
@@ -325,7 +325,7 @@ def test_set_oauth_session_only_student():
 
 
 def test_requires_admin_in_debug_mode(app):
-    @requires_admin
+    @requires_instance_admin
     def test_route(course_name: str):
         return "success"
 
@@ -336,7 +336,7 @@ def test_requires_admin_in_debug_mode(app):
 
 
 def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
-    @requires_admin
+    @requires_instance_admin
     def test_route(course_name: str):
         return "success"
 
@@ -365,7 +365,7 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
 
 
 def test_requires_admin_with_no_admin_rules(app, mock_gitlab_oauth):
-    @requires_admin
+    @requires_instance_admin
     def test_route(course_name: str):
         return "success"
 

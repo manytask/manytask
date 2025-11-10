@@ -130,6 +130,7 @@ def second_course_grade_config_with_additional_grade():
 def first_course_config():
     return CourseConfig(
         course_name=FIRST_COURSE_NAME,
+        namespace_id=None,
         gitlab_course_group="test_course_group",
         gitlab_course_public_repo="test_course_public_repo",
         gitlab_course_students_group="test_course_students_group",
@@ -171,6 +172,7 @@ def first_course_updated_ui_config():
 def second_course_config():
     return CourseConfig(
         course_name=SECOND_COURSE_NAME,
+        namespace_id=None,
         gitlab_course_group="test_course_group",
         gitlab_course_public_repo="test_course_public_repo",
         gitlab_course_students_group="test_course_students_group",

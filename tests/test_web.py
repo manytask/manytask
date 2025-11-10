@@ -16,7 +16,7 @@ from manytask.api import bp as api_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import TaskDisabledError
 from manytask.mock_rms import MockRmsApi
-from manytask.web import admin_bp, course_bp, root_bp
+from manytask.web import instance_admin_bp, course_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
     INVALID_TASK_NAME,
@@ -54,7 +54,7 @@ def app(mock_auth_api, mock_storage_api):
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
-    app.register_blueprint(admin_bp)
+    app.register_blueprint(instance_admin_bp)
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
