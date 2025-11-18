@@ -151,6 +151,15 @@ class StorageApi(ABC):
     def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
+    def get_namespace_admin_namespaces(self, username: str) -> list[int]: ...
+
+    @abstractmethod
+    def get_courses_by_namespace_ids(self, namespace_ids: list[int]) -> list[tuple[str, CourseStatus]]: ...
+
+    @abstractmethod
+    def get_courses_where_course_admin(self, username: str) -> list[tuple[str, CourseStatus]]: ...
+
+    @abstractmethod
     def get_all_users(self) -> list[StoredUser]: ...
 
     @abstractmethod
@@ -162,6 +171,49 @@ class StorageApi(ABC):
 
     @abstractmethod
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
+
+    @abstractmethod
+    def create_namespace(
+        self,
+        name: str,
+        slug: str,
+        description: str | None,
+        gitlab_group_id: int,
+        created_by_username: str,
+    ) -> Any: ...
+
+    @abstractmethod
+    def get_all_namespaces(self) -> list[Any]: ...
+
+    @abstractmethod
+    def get_user_namespaces(self, username: str) -> list[tuple[Any, str]]: ...
+
+    @abstractmethod
+    def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
+
+    @abstractmethod
+    def add_user_to_namespace(
+        self,
+        namespace_id: int,
+        user_id: int,
+        role: str,
+        assigned_by_username: str,
+    ) -> Any: ...
+
+    @abstractmethod
+    def get_namespace_users(self, namespace_id: int) -> list[tuple[int, str]]: ...
+    
+    @abstractmethod
+    def add_course_owners(
+        self,
+        course_id: int,
+        owner_rms_ids: list[int],
+        namespace_id: int,
+    ) -> list[int]:
+        """
+        :returns: list of successfully added user_ids
+        """
+        ...
 
 
 @dataclass
@@ -206,6 +258,33 @@ class RmsApi(ABC):
     def create_students_group(
         self,
         course_students_group: str,
+        parent_group_id: int | None = None,
+    ) -> Any:
+        """
+        :returns: Group object or None
+        """
+        ...
+
+    @abstractmethod
+    def create_namespace_group(
+        self,
+        name: str,
+        path: str,
+        description: str | None = None,
+    ) -> int: ...
+
+    @abstractmethod
+    def add_user_to_namespace_group(
+        self,
+        gitlab_group_id: int,
+        user_id: int,
+    ) -> None: ...
+
+    @abstractmethod
+    def remove_user_from_namespace_group(
+        self,
+        gitlab_group_id: int,
+        user_id: int,
     ) -> None: ...
 
     @abstractmethod
@@ -250,6 +329,27 @@ class RmsApi(ABC):
         self,
         oauth_access_token: str,
     ) -> RmsUser: ...
+    
+    @abstractmethod
+    def create_course_group(
+        self,
+        parent_group_id: int,
+        course_name: str,
+        course_slug: str,
+    ) -> int:
+        """
+        :returns: course_group_id
+        """
+        ...
+    
+    @abstractmethod
+    def delete_group(self, group_id: int) -> None: ...
+    
+    @abstractmethod
+    def delete_project(self, project_id: int) -> None: ...
+    
+    @abstractmethod
+    def get_group_path_by_id(self, group_id: int) -> str | None: ...
 
 
 @dataclass
