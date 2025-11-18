@@ -345,11 +345,13 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     if auth_method == AuthMethod.SESSION:
         rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
         is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        is_program_manager = storage_api.check_if_program_manager(course.course_name, rms_user.username)
     else:
         is_course_admin = True
+        is_program_manager = True
 
     logger.info("Fetching database snapshot for course=%s", course_name)
-    table_data = get_database_table_data(app, course, include_admin_data=is_course_admin)
+    table_data = get_database_table_data(app, course, include_admin_data=is_course_admin, is_program_manager=is_program_manager)
     return jsonify(table_data)
 
 
