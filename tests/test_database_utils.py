@@ -94,17 +94,17 @@ def app():  # noqa: C901
             return {
                 STUDENT_1: (
                     {
-                        TASK_1: SCORES[STUDENT_1][TASK_1],
-                        TASK_2: SCORES[STUDENT_1][TASK_2],
-                        TASK_LARGE: SCORES[STUDENT_1][TASK_LARGE],
+                        TASK_1: (SCORES[STUDENT_1][TASK_1], False),
+                        TASK_2: (SCORES[STUDENT_1][TASK_2], False),
+                        TASK_LARGE: (SCORES[STUDENT_1][TASK_LARGE], True),
                     },
                     (STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]),
                 ),
                 STUDENT_2: (
                     {
-                        TASK_1: SCORES[STUDENT_2][TASK_1],
-                        TASK_2: SCORES[STUDENT_2][TASK_2],
-                        TASK_LARGE: SCORES[STUDENT_2][TASK_LARGE],
+                        TASK_1: (SCORES[STUDENT_2][TASK_1], False),
+                        TASK_2: (SCORES[STUDENT_2][TASK_2], False),
+                        TASK_LARGE: (SCORES[STUDENT_2][TASK_LARGE], False),
                     },
                     (STUDENT_DATA[STUDENT_2][0], STUDENT_DATA[STUDENT_2][1]),
                 ),
