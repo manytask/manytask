@@ -138,3 +138,17 @@ dmypy.json
 
 # tmp
 .tmp
+scripts/setup_test_admin.py
+scripts/check_admin_panel_access.py
+.gitignore
+.github-main/CODE_OF_CONDUCT.md
+.github-main/CONTRIBUTING.md
+.github-main/LICENSE
+.github-main/README.md
+.github-main/.github/dependabot.yml
+.github-main/.github/release-drafter.yml
+.github-main/.github/ISSUE_TEMPLATE/bug_report.yml
+.github-main/.github/ISSUE_TEMPLATE/feature_request.yml
+.github-main/.github/workflows/reusable-update-changelog-version.yml
+.github-main/.github/workflows/reusable-validate-pr.yml
+.github-main/profile/README.md
