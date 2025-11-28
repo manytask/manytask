@@ -110,6 +110,7 @@ def _update_score(
     old_score: int,
     submit_time: datetime,
     check_deadline: bool = True,
+    allow_reduction: bool = False,
 ) -> int:
     logger.debug(
         f"Update score: task={task.name}, old_score={old_score}, new_score={score}, "
@@ -128,7 +129,7 @@ def _update_score(
         score = int(score * multiplier)
         logger.debug("Applied multiplier=%s, adjusted_score=%s", multiplier, score)
 
-    return max(old_score, score)
+    return score if allow_reduction else max(old_score, score)
 
 
 @bp.get("/healthcheck")
@@ -237,6 +238,10 @@ def report_score(course_name: str) -> ResponseReturnValue:
     if "check_deadline" in request.form:
         check_deadline = request.form["check_deadline"] is True or request.form["check_deadline"] == "True"
 
+    allow_reduction = False
+    if "allow_reduction" in request.form:
+        allow_reduction = request.form["allow_reduction"] is True or request.form["allow_reduction"] == "True"
+
     submit_time_str = request.form.get("submit_time")
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone(course.course_name))
 
@@ -255,6 +260,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
         reported_score,
         submit_time=submit_time,
         check_deadline=check_deadline,
+        allow_reduction=allow_reduction,
     )
     final_score = app.storage_api.store_score(course.course_name, rms_user.username, task.name, update_function)
 
