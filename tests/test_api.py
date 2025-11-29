@@ -141,6 +141,10 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def update_cached_scores(self, _course_name):
             pass
 
+        @staticmethod
+        def get_scores_update_timestamp(_course_name):
+            return "2025-01-01T00:00:00+00:00"
+
         def sync_columns(self, _course_name, _deadlines):
             pass
 
@@ -616,6 +620,23 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
             }
         response = client.get(f"/api/{TEST_COURSE_NAME}/database")
         assert response.status_code == HTTPStatus.FOUND  # Redirects to not ready page
+
+
+def test_database_updates_sse_headers_and_init_event(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    # buffered=False to avoid consuming an infinite generator
+    response = client.get(f"/api/{TEST_COURSE_NAME}/database/updates", headers=headers, buffered=False)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.headers["Content-Type"].startswith("text/event-stream")
+
+    first_chunk = next(response.response).decode("utf-8")
+    assert "event: init" in first_chunk
+    assert "data: 2025-01-01T00:00:00+00:00" in first_chunk
+
+    response.close()
 
 
 def test_update_database_invalid_json(app, authenticated_client, mock_gitlab_oauth):

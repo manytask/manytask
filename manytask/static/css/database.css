@@ -34,6 +34,17 @@
     color: white;
 }
 
+.db-stale-indicator {
+    color: #dc3545;
+    cursor: help;
+    font-size: 0.95em;
+    line-height: 1;
+}
+
+[data-bs-theme="dark"] .db-stale-indicator {
+    color: #ff6b6b;
+}
+
 [data-bs-theme="dark"] .tabulator-footer .tabulator-paginator .tabulator-page:not(.active) {
     color: #666666 !important;
     background-color: #333333 !important;

@@ -8,8 +8,17 @@
     </div>
     <div class="container-fluid position-relative">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="mb-0">Course Database</h2>
-            
+            <h2 class="mb-0 d-flex align-items-center gap-2">
+                Course Database
+                <span id="db-stale-indicator"
+                      class="db-stale-indicator d-none"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="left"
+                      title="Data is outdated. Waiting to refresh…">
+                    <i class="fas fa-triangle-exclamation"></i>
+                </span>
+            </h2>
+
             {% if is_course_admin %}
             <button id="toggle-personal-info" class="btn btn-outline-secondary btn-sm" title="Toggle personal info columns">
                 <i class="fas fa-eye"></i> Toggle Personal Info
@@ -96,6 +105,187 @@
         let editCommentModal = null;
         const mincolwidth = 30;
 
+        class ScoresUpdater {
+            constructor({table, snapshotUrl, updatesUrl, staleEl, debounceMs = 500}) {
+                this.table = table;
+                this.snapshotUrl = snapshotUrl;
+                this.updatesUrl = updatesUrl;
+                this.staleEl = staleEl;
+
+                this.debounceMs = debounceMs;
+
+                this.eventSource = null;
+                this.dirty = false;
+
+                this.pending = false;
+                this.latestTimestamp = null;
+
+                this.refreshTimer = null;
+                this.refreshInFlight = false;
+            }
+
+            start() {
+                if (!this.updatesUrl) return;
+                if (this.eventSource) return;
+
+                this.eventSource = new EventSource(this.updatesUrl);
+
+                this.eventSource.addEventListener("init", (event) => {
+                    this.latestTimestamp = event.data;
+                });
+
+                this.eventSource.addEventListener("update", (event) => {
+                    this.latestTimestamp = event.data;
+                    this.onRemoteUpdate();
+                });
+
+                this.eventSource.onerror = (e) => {
+                    console.warn("SSE error:", e);
+                    // Browser will auto-reconnect; keep stale indicator if we have pending updates.
+                };
+            }
+
+            stop() {
+                if (this.refreshTimer) {
+                    clearTimeout(this.refreshTimer);
+                    this.refreshTimer = null;
+                }
+                if (this.eventSource) {
+                    this.eventSource.close();
+                    this.eventSource = null;
+                }
+            }
+
+            setDirty(value) {
+                this.dirty = Boolean(value);
+
+                if (!this.dirty && this.pending) {
+                    // Apply queued update once editing finished.
+                    this.scheduleRefresh();
+                }
+            }
+
+            markStale(isStale) {
+                if (!this.staleEl) return;
+                if (isStale) {
+                    this.staleEl.classList.remove("d-none");
+                } else {
+                    this.staleEl.classList.add("d-none");
+                }
+            }
+
+            onRemoteUpdate() {
+                if (this.dirty) {
+                    this.pending = true;
+                    this.markStale(true);
+                    return;
+                }
+                this.scheduleRefresh();
+            }
+
+            scheduleRefresh() {
+                if (this.refreshTimer) {
+                    clearTimeout(this.refreshTimer);
+                }
+                this.refreshTimer = setTimeout(() => this.refreshNow(), this.debounceMs);
+            }
+
+            _captureState() {
+                const tableHolder = document.querySelector("#database-table .tabulator-tableholder");
+                const scrollTop = tableHolder ? tableHolder.scrollTop : 0;
+                const scrollLeft = tableHolder ? tableHolder.scrollLeft : 0;
+
+                const sorters = (this.table && typeof this.table.getSorters === "function")
+                    ? this.table.getSorters().map(s => ({column: s.field, dir: s.dir}))
+                    : [];
+
+                const page = (this.table && typeof this.table.getPage === "function")
+                    ? this.table.getPage()
+                    : null;
+
+                const pageSize = (this.table && typeof this.table.getPageSize === "function")
+                    ? this.table.getPageSize()
+                    : null;
+
+                return {scrollTop, scrollLeft, sorters, page, pageSize};
+            }
+
+            _restoreState(state) {
+                if (!state || !this.table) return;
+
+                try {
+                    if (state.pageSize && typeof this.table.setPageSize === "function") {
+                        this.table.setPageSize(state.pageSize);
+                    }
+                    if (state.sorters && state.sorters.length && typeof this.table.setSort === "function") {
+                        this.table.setSort(state.sorters);
+                    }
+                    if (state.page && typeof this.table.setPage === "function") {
+                        this.table.setPage(state.page);
+                    }
+                } catch (e) {
+                    console.warn("Failed to restore Tabulator state:", e);
+                }
+
+                // Restore scroll after DOM has a chance to render rows.
+                setTimeout(() => {
+                    const tableHolder = document.querySelector("#database-table .tabulator-tableholder");
+                    if (tableHolder) {
+                        tableHolder.scrollTop = state.scrollTop || 0;
+                        tableHolder.scrollLeft = state.scrollLeft || 0;
+                    }
+                }, 0);
+            }
+
+            async refreshNow() {
+                if (this.refreshInFlight) {
+                    this.pending = true;
+                    this.markStale(true);
+                    return;
+                }
+
+                if (!this.table) return;
+
+                if (this.dirty) {
+                    this.pending = true;
+                    this.markStale(true);
+                    return;
+                }
+
+                this.refreshInFlight = true;
+
+                const state = this._captureState();
+
+                try {
+                    const response = await fetch(this.snapshotUrl, {headers: {"Accept": "application/json"}});
+                    if (!response.ok) {
+                        throw new Error(`Snapshot fetch failed: ${response.status}`);
+                    }
+                    const data = await response.json();
+
+                    // Keep columns/layout; only replace row data.
+                    await this.table.replaceData(data.students);
+
+                    this._restoreState(state);
+
+                    this.pending = false;
+                    this.markStale(false);
+                } catch (e) {
+                    console.error("Failed to refresh database table:", e);
+                    this.pending = true;
+                    this.markStale(true);
+                } finally {
+                    this.refreshInFlight = false;
+
+                    if (this.pending && !this.dirty) {
+                        this.scheduleRefresh();
+                    }
+                }
+            }
+        }
+
+        window.scoresUpdater = null;
+
         function editCell(cell) {
             const readonlyFields = {{ readonly_fields|tojson }};
             if (readonlyFields.includes(cell.getField())) {
@@ -105,6 +295,10 @@
             const isAdmin = {{ is_course_admin|tojson }};
             if (!isAdmin) {
                 return;
+            }
+
+            if (window.scoresUpdater) {
+                window.scoresUpdater.setDirty(true);
             }
 
             currentEditCell = cell;
@@ -166,6 +360,10 @@
             const isAdmin = {{ is_course_admin|tojson }};
             if (!isAdmin) {
                 return;
+            }
+
+            if (window.scoresUpdater) {
+                window.scoresUpdater.setDirty(true);
             }
 
             currentCommentCell = cell;
@@ -236,8 +434,26 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             {% if is_course_admin %}
-                editModal = new bootstrap.Modal(document.getElementById('editModal'));
-                editCommentModal = new bootstrap.Modal(document.getElementById('editCommentModal'));
+                const editModalEl = document.getElementById('editModal');
+                const editCommentModalEl = document.getElementById('editCommentModal');
+
+                editModal = new bootstrap.Modal(editModalEl);
+                editCommentModal = new bootstrap.Modal(editCommentModalEl);
+
+                // Dirty flag: prevent live refresh from overwriting admin edits.
+                editModalEl.addEventListener('shown.bs.modal', function () {
+                    if (window.scoresUpdater) window.scoresUpdater.setDirty(true);
+                });
+                editModalEl.addEventListener('hidden.bs.modal', function () {
+                    if (window.scoresUpdater) window.scoresUpdater.setDirty(false);
+                });
+
+                editCommentModalEl.addEventListener('shown.bs.modal', function () {
+                    if (window.scoresUpdater) window.scoresUpdater.setDirty(true);
+                });
+                editCommentModalEl.addEventListener('hidden.bs.modal', function () {
+                    if (window.scoresUpdater) window.scoresUpdater.setDirty(false);
+                });
 
                 document.getElementById('editForm').addEventListener('submit', function (e) {
                     e.preventDefault();
@@ -605,7 +821,34 @@
                     });
 
                     window.tabulatorTable.on("tableBuilt", function () {
-                        document.getElementById("loader").style.display = "none"
+                        document.getElementById("loader").style.display = "none";
+
+                        // Tooltip for stale-indicator.
+                        const staleEl = document.getElementById("db-stale-indicator");
+                        if (staleEl) {
+                            try {
+                                new bootstrap.Tooltip(staleEl);
+                            } catch (e) {
+                                console.warn("Failed to init tooltip:", e);
+                            }
+                        }
+
+                        // Live updates via SSE.
+                        const updatesUrl = '{{ url_for("api.database_updates", course_name=course_name) }}';
+                        const snapshotUrl = '{{ url_for("api.get_database", course_name=course_name) }}';
+
+                        window.scoresUpdater = new ScoresUpdater({
+                            table: window.tabulatorTable,
+                            snapshotUrl,
+                            updatesUrl,
+                            staleEl,
+                            debounceMs: 500,
+                        });
+                        window.scoresUpdater.start();
+
+                        window.addEventListener("beforeunload", () => {
+                            if (window.scoresUpdater) window.scoresUpdater.stop();
+                        });
                     });
 
                     // Wait for a short delay to ensure table is rendered

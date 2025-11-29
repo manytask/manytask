@@ -3,12 +3,13 @@ from __future__ import annotations
 import functools
 import logging
 import secrets
+import time
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any, Callable, TypeVar
 
 import yaml
-from flask import Blueprint, abort, current_app, jsonify, request, session
+from flask import Blueprint, Response, abort, current_app, jsonify, request, session, stream_with_context
 from flask.typing import ResponseReturnValue
 from enum import Enum
 from pydantic import ValidationError
@@ -487,6 +488,59 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     logger.info("Fetching database snapshot for course=%s", course_name)
     table_data = get_database_table_data(app, course, include_admin_data=is_course_admin)
     return jsonify(table_data)
+
+
+@bp.get("/database/updates")
+@requires_auth_or_token
+@requires_ready
+def database_updates(course_name: str, auth_method: AuthMethod) -> ResponseReturnValue:
+    """Server-Sent Events endpoint for database table updates.
+
+    Streams `event: update` with ISO timestamp in `data:` whenever
+    [StorageApi.get_scores_update_timestamp()](manytask/abstract.py:92) changes.
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+    course = __get_course_or_not_found(storage_api, course_name)
+
+    poll_interval_seconds = 1.0
+    keepalive_interval_seconds = 15.0
+
+    def event_payload(event: str, data: str) -> str:
+        # SSE format: https://html.spec.whatwg.org/multipage/server-sent-events.html
+        return f"event: {event}\ndata: {data}\n\n"
+
+    def keepalive_payload() -> str:
+        # comment line; browsers ignore it but it keeps the connection alive
+        return ": keepalive\n\n"
+
+    def stream() -> Any:
+        last_seen = str(storage_api.get_scores_update_timestamp(course.course_name))
+        logger.info("SSE connected for course=%s ts=%s auth_method=%s", course.course_name, last_seen, auth_method.value)
+
+        last_keepalive = time.monotonic()
+        yield event_payload("init", last_seen)
+
+        try:
+            while True:
+                time.sleep(poll_interval_seconds)
+
+                now = time.monotonic()
+                if now - last_keepalive >= keepalive_interval_seconds:
+                    last_keepalive = now
+                    yield keepalive_payload()
+
+                current = str(storage_api.get_scores_update_timestamp(course.course_name))
+                if current != last_seen:
+                    last_seen = current
+                    yield event_payload("update", current)
+        except GeneratorExit:
+            logger.info("SSE disconnected for course=%s", course.course_name)
+
+    response = Response(stream_with_context(stream()), mimetype="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
 
 
 @bp.post("/database/update")

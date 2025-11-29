@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import update as sa_update
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
 from zoneinfo import ZoneInfo
@@ -442,14 +443,16 @@ class DataBaseApi(StorageApi):
             # fmt: on
 
     def get_scores_update_timestamp(self, course_name: str) -> str:
-        """Method(deprecated) for getting last cached scores update timestamp
+        """Get last database update timestamp for course.
 
-        :param course_name: course name
-
-        :return: last update timestamp
+        This timestamp is bumped on any score/comment update and is used by:
+        - legacy cache checks in [manytask/web.py](manytask/web.py:128)
+        - SSE endpoint /api/<course>/database/updates
         """
-
-        return datetime.now(timezone.utc).isoformat()
+        with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+            # Ensure ISO string for existing call sites.
+            return course.database_updated_at.astimezone(timezone.utc).isoformat()
 
     def update_cached_scores(self, course_name: str) -> None:
         """Method(deprecated) for updating cached scores"""
@@ -489,6 +492,13 @@ class DataBaseApi(StorageApi):
                 new_score = update_fn("", grade.score)
                 grade.score = new_score
                 grade.last_submit_date = datetime.now(timezone.utc)
+
+                # bump update marker for SSE-driven UI refresh
+                session.execute(
+                    sa_update(models.Course)
+                    .where(models.Course.id == course.id)
+                    .values(database_updated_at=func.now())
+                )
 
                 session.commit()
                 logger.info(
@@ -1724,6 +1734,14 @@ class DataBaseApi(StorageApi):
                 user_on_course = self._get_or_create_user_on_course(session, username, course)
 
                 user_on_course.comment = comment
+
+                # bump update marker for SSE-driven UI refresh
+                session.execute(
+                    sa_update(models.Course)
+                    .where(models.Course.id == course.id)
+                    .values(database_updated_at=func.now())
+                )
+
                 session.commit()
 
                 logger.info(f"Updated comment for user {username} in course {course_name}: -> '{comment}'")

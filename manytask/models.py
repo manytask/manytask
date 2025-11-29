@@ -245,6 +245,13 @@ class Course(Base):
         server_default="HARD",
     )
 
+    # Bumped on any score/comment update. Used for SSE-driven refreshes in the UI.
+    database_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
     __table_args__ = (
         UniqueConstraint("name", name="uq_courses_name"),
         UniqueConstraint("token", name="uq_courses_token"),
