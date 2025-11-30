@@ -272,8 +272,11 @@
                 if (data.username.toLowerCase().includes(searchTerm)) {
                     return true;
                 }
-                const full_name = `${data.first_name} ${data.last_name}`.toLowerCase();
-                return full_name.includes(searchTerm);
+                if (data.first_name && data.last_name) {
+                    const full_name = `${data.first_name} ${data.last_name}`.toLowerCase();
+                    return full_name.includes(searchTerm);
+                }
+                return false;
             }
 
             document.getElementById("filter-value")

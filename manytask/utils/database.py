@@ -7,7 +7,8 @@ from manytask.main import CustomFlask
 def get_database_table_data(app: CustomFlask, course: Course, include_admin_data: bool = False) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints.
 
-    Set include_repo_urls=True to include per-student repo URLs (for admins-only views).
+    Set include_admin_data=True to include personal information (first_name, last_name,
+    repo URLs, and comments) for admins-only views.
     """
 
     course_name = course.course_name
@@ -40,8 +41,6 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
 
         row = {
             "username": username,
-            "first_name": first_name,
-            "last_name": last_name,
             "scores": scores,
             "total_score": total_score,
             "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
@@ -51,6 +50,8 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
         if include_admin_data:
             row.update(
                 {
+                    "first_name": first_name,
+                    "last_name": last_name,
                     "repo_url": app.rms_api.get_url_for_repo(
                         username=username,
                         course_students_group=course.gitlab_course_students_group,
