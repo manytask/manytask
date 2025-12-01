@@ -103,7 +103,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app.register_blueprint(web.course_bp)
     app.register_blueprint(web.admin_bp)
 
-
     # debug updates
     if app.debug:
         _create_debug_course(app)

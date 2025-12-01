@@ -351,7 +351,11 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     if auth_method == AuthMethod.SESSION:
         rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
         is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
-        logger.info("[DEBUG] API /database auth_method=SESSION, username=%s, is_course_admin=%s", rms_user.username, is_course_admin)
+        logger.info(
+            "[DEBUG] API /database auth_method=SESSION, username=%s, is_course_admin=%s",
+            rms_user.username,
+            is_course_admin,
+        )
     else:
         is_course_admin = True
         logger.info("[DEBUG] API /database auth_method=COURSE_TOKEN, is_course_admin=True (by default)")

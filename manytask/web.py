@@ -237,8 +237,11 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
             return redirect(url_for("root.index"))
         else:
             # Profile mismatch - user switched accounts, clear old profile
-            logger.warning("Profile mismatch: session profile=%s, gitlab=%s - clearing old profile",
-                         session["profile"]["username"], session["gitlab"]["username"])
+            logger.warning(
+                "Profile mismatch: session profile=%s, gitlab=%s - clearing old profile",
+                session["profile"]["username"],
+                session["gitlab"]["username"],
+            )
             session.pop("profile", None)
 
     stored_user_or_none = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])
