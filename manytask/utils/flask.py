@@ -7,10 +7,11 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     if app.debug:
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
 
-    if app.storage_api.check_if_instance_admin(session["profile"]["username"]):
+    username = session["gitlab"]["username"]
+    if app.storage_api.check_if_instance_admin(username):
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
     else:
-        courses_names = app.storage_api.get_user_courses_names_with_statuses(session["profile"]["username"])
+        courses_names = app.storage_api.get_user_courses_names_with_statuses(username)
 
     return [
         {

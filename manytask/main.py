@@ -47,6 +47,10 @@ class CustomFlask(Flask):
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app = CustomFlask(__name__)
 
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"[DEBUG] debug parameter passed to create_app: {debug}")
+
     if debug:
         app.debug = debug
 
@@ -99,7 +103,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app.register_blueprint(web.course_bp)
     app.register_blueprint(web.admin_bp)
 
-    logger = logging.getLogger(__name__)
 
     # debug updates
     if app.debug:
