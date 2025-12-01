@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
+from manytask.mock_rms import MockRmsApi
 from manytask.utils.database import get_database_table_data
 from tests.constants import MAX_SCORE, SCORES, STUDENT_1, STUDENT_2, STUDENT_DATA, TASK_1, TASK_2, TASK_3, TASK_LARGE
 
@@ -124,13 +125,8 @@ def app():  # noqa: C901
         def get_student_comment(_course_name, _username):
             return None
 
-    class MockRmsApi:
-        @staticmethod
-        def get_url_for_repo(username, course_students_group):
-            return f"https://gitlab.com/{course_students_group}/{username}"
-
     app.storage_api = MockStorageApi()
-    app.rms_api = MockRmsApi()
+    app.rms_api = MockRmsApi(base_url="https://gitlab.com")
 
     return app
 
