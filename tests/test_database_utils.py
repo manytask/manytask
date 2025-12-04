@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
+from manytask.mock_rms import MockRmsApi
 from manytask.utils.database import get_database_table_data
 from tests.constants import MAX_SCORE, SCORES, STUDENT_1, STUDENT_2, STUDENT_DATA, TASK_1, TASK_2, TASK_3, TASK_LARGE
 
@@ -120,18 +121,24 @@ def app():  # noqa: C901
 
             return Course()
 
+        @staticmethod
+        def get_student_comment(_course_name, _username):
+            return None
+
     app.storage_api = MockStorageApi()
+    app.rms_api = MockRmsApi(base_url="https://gitlab.com")
 
     return app
 
 
 def test_get_database_table_data(app):
+    """Test database table data without admin data (non-admin view)"""
     expected_tasks_count = 3
     expected_students_count = 2
 
     with app.test_request_context():
         test_course = app.storage_api.get_course("test_course")
-        result = get_database_table_data(app, test_course)
+        result = get_database_table_data(app, test_course, include_admin_data=False)
 
         assert result["max_score"] == MAX_SCORE
         assert "tasks" in result
@@ -150,8 +157,51 @@ def test_get_database_table_data(app):
 
         for student_id in [STUDENT_1, STUDENT_2]:
             student = next(s for s in students if s["username"] == student_id)
+            # Personal data should NOT be included for non-admins
+            assert "first_name" not in student
+            assert "last_name" not in student
+            assert "repo_url" not in student
+            assert "comment" not in student
+            assert student["total_score"] == SCORES[student_id]["total"]
+            assert student["large_count"] == SCORES[student_id]["large_count"]
+            assert student["scores"] == {
+                TASK_1: SCORES[student_id][TASK_1],
+                TASK_2: SCORES[student_id][TASK_2],
+                TASK_LARGE: SCORES[student_id][TASK_LARGE],
+            }
+
+
+def test_get_database_table_data_with_admin_data(app):
+    """Test database table data with admin data (admin view)"""
+    expected_tasks_count = 3
+    expected_students_count = 2
+
+    with app.test_request_context():
+        test_course = app.storage_api.get_course("test_course")
+        result = get_database_table_data(app, test_course, include_admin_data=True)
+
+        assert result["max_score"] == MAX_SCORE
+        assert "tasks" in result
+        assert "students" in result
+
+        tasks = result["tasks"]
+        # Only enabled tasks
+        assert len(tasks) == expected_tasks_count
+        assert tasks[0]["name"] == TASK_1
+        assert tasks[1]["name"] == TASK_2
+        assert tasks[2]["name"] == TASK_LARGE
+        assert all(task["score"] == 0 for task in tasks)
+
+        students = result["students"]
+        assert len(students) == expected_students_count
+
+        for student_id in [STUDENT_1, STUDENT_2]:
+            student = next(s for s in students if s["username"] == student_id)
+            # Personal data SHOULD be included for admins
             assert student["first_name"] == STUDENT_DATA[student_id][0]
             assert student["last_name"] == STUDENT_DATA[student_id][1]
+            assert "repo_url" in student
+            assert "comment" in student
             assert student["total_score"] == SCORES[student_id]["total"]
             assert student["large_count"] == SCORES[student_id]["large_count"]
             assert student["scores"] == {
