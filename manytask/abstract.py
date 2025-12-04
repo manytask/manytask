@@ -63,6 +63,13 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
+    def check_if_program_manager(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool: ...
+
+    @abstractmethod
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
