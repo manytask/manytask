@@ -19,6 +19,7 @@ from sqlalchemy.sql.functions import coalesce, func
 from . import models
 from .abstract import StorageApi, StoredUser
 from .models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER, ROLE_STUDENT
+
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -326,7 +327,7 @@ class DataBaseApi(StorageApi):
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
         """Get all users' scores with names for the given course.
         
-        Only includes users with STUDENT role in the course's namespace.
+        Excludes users with PROGRAM_MANAGER role in the course's namespace.
         """
 
         with self._session_create() as session:
