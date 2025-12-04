@@ -182,7 +182,7 @@
         <div class="adm-badge">ADMIN</div>
     {% endif %}
 
-    <div class="px-3 container-lg">
+    <div class="{% if active_page == 'database' %}px-0 w-100{% else %}px-3 container-lg{% endif %}">
         {# Add bootstrap empty space for header #}
         <div class="container-fluid" style="height: 80px;"></div>
 
