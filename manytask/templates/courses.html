@@ -55,8 +55,18 @@
             </div>
         </form>
 
-        {% if is_admin %}
-            <a class="btn btn-primary mt-3" href="{{ url_for('admin.admin_panel') }}">Admin panel</a>
+        {% if is_instance_admin or is_namespace_admin %}
+            <a class="btn btn-success mt-3" href="{{ url_for('instance_admin.create_course') }}">Create course</a>
+        {% endif %}
+
+        {% if is_instance_admin or is_namespace_admin %}
+            <a class="btn btn-info mt-3" href="{{ url_for('instance_admin.namespaces_list') }}">
+                <i class="fas fa-folder me-1"></i>Namespaces
+            </a>
+        {% endif %}
+
+        {% if is_instance_admin %}
+            <a class="btn btn-primary mt-3" href="{{ url_for('instance_admin.instance_admin_panel') }}">Instance Admin panel</a>
         {% endif %}
     </div>
 
