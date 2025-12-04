@@ -11,13 +11,14 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UniqueViolation
 from pydantic import AnyUrl
-from sqlalchemy import Row, and_, create_engine, or_, select
+from sqlalchemy import Row, Select, and_, create_engine, or_, select
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
 
 from . import models
 from .abstract import StorageApi, StoredUser
+from .models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -167,7 +168,7 @@ class DataBaseApi(StorageApi):
         rms_id: int,
     ) -> StoredUser | None:
         """Method for getting user's stored data
-        :param rms_id:
+        :param rms_id: gitlab user id
         :return: StoredUser object if exist else None
         """
 
@@ -177,6 +178,34 @@ class DataBaseApi(StorageApi):
                     session,
                     models.User,
                     rms_id=rms_id,
+                )
+
+                return StoredUser(
+                    username=user.username,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    rms_id=user.rms_id,
+                    instance_admin=user.is_instance_admin,
+                )
+
+            except NoResultFound:
+                return None
+
+    def get_stored_user_by_id(
+        self,
+        user_id: int,
+    ) -> StoredUser | None:
+        """Method for getting user's stored data by database ID
+        :param user_id: Database user ID
+        :return: StoredUser object if exist else None
+        """
+
+        with self._session_create() as session:
+            try:
+                user = self._get(
+                    session,
+                    models.User,
+                    id=user_id,
                 )
 
                 return StoredUser(
@@ -227,12 +256,15 @@ class DataBaseApi(StorageApi):
 
         with self._session_create() as session:
             try:
-                course = self._get(session, models.Course, name=course_name)
                 user = self._get(
                     session,
                     models.User,
                     username=username,
                 )
+                if user.is_instance_admin:
+                    return True
+                
+                course = self._get(session, models.Course, name=course_name)
                 user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
                 return user_on_course.is_course_admin
             except NoResultFound as e:
@@ -256,9 +288,25 @@ class DataBaseApi(StorageApi):
             session.commit()
 
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
-        """Get all users' scores with names for the given course."""
+        """Get all users' scores with names for the given course.
+        
+        Excludes users with PROGRAM_MANAGER role in the course's namespace.
+        """
 
         with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+            namespace_id = course.namespace_id
+            
+            program_managers_subquery = None
+            if namespace_id is not None:
+                program_managers_subquery = (
+                    select(models.UserOnNamespace.user_id)
+                    .where(
+                        models.UserOnNamespace.namespace_id == namespace_id,
+                        models.UserOnNamespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER,
+                    )
+                )
+            
             statement = (
                 select(
                     User.username,
@@ -266,6 +314,7 @@ class DataBaseApi(StorageApi):
                     User.last_name,
                     Task.name,
                     coalesce(Grade.score, 0),
+                    User.id,
                 )
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
                 .join(Course, Course.id == UserOnCourse.course_id)
@@ -276,12 +325,15 @@ class DataBaseApi(StorageApi):
                     Course.name == course_name,
                 )
             )
-
+            
+            if program_managers_subquery is not None:
+                statement = statement.where(~User.id.in_(program_managers_subquery))
+            
             rows = session.execute(statement).all()
 
             scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
 
-            for username, first_name, last_name, task_name, score in rows:
+            for username, first_name, last_name, task_name, score, _ in rows:
                 if username not in scores_and_names:
                     scores_and_names[username] = ({}, (first_name, last_name))
                 if task_name is not None:
@@ -314,6 +366,8 @@ class DataBaseApi(StorageApi):
 
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks
+        
+        Excludes users with PROGRAM_MANAGER role from statistics.
 
         :param course_name: course name
 
@@ -321,12 +375,29 @@ class DataBaseApi(StorageApi):
         """
 
         with self._session_create() as session:
-            users_on_courses_count = (
+            course = self._get(session, models.Course, name=course_name)
+            namespace_id = course.namespace_id
+            
+            program_managers_subquery = None
+            if namespace_id is not None:
+                program_managers_subquery = (
+                    select(models.UserOnNamespace.user_id)
+                    .where(
+                        models.UserOnNamespace.namespace_id == namespace_id,
+                        models.UserOnNamespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER,
+                    )
+                )
+            
+            users_count_query = (
                 session.query(func.count(UserOnCourse.id))
                 .join(Course, Course.id == UserOnCourse.course_id)
                 .filter(Course.name == course_name)
-                .scalar()
             )
+            if program_managers_subquery is not None:
+                users_count_query = users_count_query.filter(
+                    ~UserOnCourse.user_id.in_(program_managers_subquery)
+                )
+            users_on_courses_count = users_count_query.scalar()
 
             # fmt: off
             return {
@@ -335,7 +406,7 @@ class DataBaseApi(StorageApi):
                     if users_on_courses_count > 0
                     else 0
                 )
-                for task_id, task_name, submits_count in self._get_tasks_submits_count(session, course_name)
+                for task_id, task_name, submits_count in self._get_tasks_submits_count(session, course_name, program_managers_subquery)
             }
             # fmt: on
 
@@ -442,6 +513,7 @@ class DataBaseApi(StorageApi):
                     session,
                     models.Course,
                     name=settings_config.course_name,
+                    namespace_id=settings_config.namespace_id,
                     registration_secret=settings_config.registration_secret,
                     token=settings_config.token,
                     show_allscores=settings_config.show_allscores,
@@ -772,6 +844,83 @@ class DataBaseApi(StorageApi):
             logger.info("Fetched all courses: count=%s", len(courses))
 
             result = [(course.name, course.status) for course in courses]
+            return result
+
+    def get_namespace_admin_namespaces(self, username: str) -> list[int]:
+        """Get list of namespace IDs where user is Namespace Admin or Owner
+        
+        :param username: username to check
+        :return: list of namespace IDs
+        """
+        with self._session_create() as session:
+            logger.debug("Fetching namespace admin namespaces for user '%s'", username)
+            try:
+                user = self._get(session, models.User, username=username)
+            except NoResultFound:
+                logger.warning("User '%s' not found when fetching namespace admin namespaces", username)
+                return []
+
+            namespace_ids = set()
+            
+            owned_namespaces = session.query(models.Namespace).filter(
+                models.Namespace.created_by_id == user.id
+            ).all()
+            namespace_ids.update(ns.id for ns in owned_namespaces)
+            
+            admin_namespaces = session.query(models.UserOnNamespace).filter(
+                and_(
+                    models.UserOnNamespace.user_id == user.id,
+                    models.UserOnNamespace.role == models.UserOnNamespaceRole.NAMESPACE_ADMIN,
+                )
+            ).all()
+            namespace_ids.update(un.namespace_id for un in admin_namespaces)
+            
+            result = list(namespace_ids)
+            logger.info("User '%s' is namespace admin in %d namespaces", username, len(result))
+            return result
+
+    def get_courses_by_namespace_ids(self, namespace_ids: list[int]) -> list[tuple[str, CourseStatus]]:
+        """Get courses from specified namespaces
+        
+        :param namespace_ids: list of namespace IDs
+        :return: list of tuples (course_name, course_status)
+        """
+        if not namespace_ids:
+            return []
+            
+        with self._session_create() as session:
+            logger.debug("Fetching courses from %d namespaces", len(namespace_ids))
+            courses = session.query(models.Course).filter(
+                models.Course.namespace_id.in_(namespace_ids)
+            ).all()
+            
+            result = [(course.name, course.status) for course in courses]
+            logger.info("Found %d courses in specified namespaces", len(result))
+            return result
+
+    def get_courses_where_course_admin(self, username: str) -> list[tuple[str, CourseStatus]]:
+        """Get courses where user is Course Admin
+        
+        :param username: username to check
+        :return: list of tuples (course_name, course_status)
+        """
+        with self._session_create() as session:
+            logger.debug("Fetching courses where user '%s' is course admin", username)
+            try:
+                user = self._get(session, models.User, username=username)
+            except NoResultFound:
+                logger.warning("User '%s' not found when fetching course admin courses", username)
+                return []
+
+            user_on_courses = session.query(models.UserOnCourse).filter(
+                and_(
+                    models.UserOnCourse.user_id == user.id,
+                    models.UserOnCourse.is_course_admin.is_(True),
+                )
+            ).all()
+            
+            result = [(uoc.course.name, uoc.course.status) for uoc in user_on_courses]
+            logger.info("User '%s' is course admin in %d courses", username, len(result))
             return result
 
     def get_all_users(self) -> list[StoredUser]:
@@ -1478,8 +1627,29 @@ class DataBaseApi(StorageApi):
         self,
         session: Session,
         course_name: str,
+        program_managers_subquery: Select[tuple[int]] | None = None,
     ) -> list[Row[tuple[int, str, int]]]:
-        return (
+        """Get count of task submits, optionally excluding program managers.
+        
+        :param session: Database session
+        :param course_name: Name of the course
+        :param program_managers_subquery: Subquery to select user IDs to exclude (program managers)
+        :return: List of (task_id, task_name, submits_count) tuples
+        """
+        join_conditions = [Grade.task_id == Task.id]
+        if program_managers_subquery is not None:
+            join_conditions.append(
+                Grade.user_on_course_id.in_(
+                    select(UserOnCourse.id).where(
+                        and_(
+                            UserOnCourse.course_id == Course.id,
+                            ~UserOnCourse.user_id.in_(program_managers_subquery),
+                        )
+                    )
+                )
+            )
+        
+        query = (
             session.query(
                 Task.id,
                 Task.name,
@@ -1488,11 +1658,11 @@ class DataBaseApi(StorageApi):
             .join(TaskGroup, Task.group_id == TaskGroup.id)
             .join(Course, Course.id == TaskGroup.course_id)
             .join(Deadline, TaskGroup.deadline_id == Deadline.id)
-            .outerjoin(
-                Grade,
-                and_(Grade.task_id == Task.id),
-            )
-            .filter(
+            .outerjoin(Grade, and_(*join_conditions))
+        )
+        
+        return (
+            query.filter(
                 Course.name == course_name,
                 Task.enabled.is_(True),
                 TaskGroup.enabled.is_(True),
