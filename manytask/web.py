@@ -113,7 +113,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
 
     # update cache if more than 1h passed or in debug mode
     try:
@@ -230,9 +230,19 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     if not valid_gitlab_session(session):
         return redirect_to_login_with_bad_session()
 
+    # Check if profile matches the current GitLab user
     if valid_client_profile_session(session):
-        logger.warning("User already has username=%s in session", session["profile"]["username"])
-        return redirect(url_for("root.index"))
+        if session["profile"]["username"] == session["gitlab"]["username"]:
+            logger.warning("User already has username=%s in session", session["profile"]["username"])
+            return redirect(url_for("root.index"))
+        else:
+            # Profile mismatch - user switched accounts, clear old profile
+            logger.warning(
+                "Profile mismatch: session profile=%s, gitlab=%s - clearing old profile",
+                session["profile"]["username"],
+                session["gitlab"]["username"],
+            )
+            session.pop("profile", None)
 
     stored_user_or_none = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])
     if stored_user_or_none is not None:
@@ -308,7 +318,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    app.storage_api.sync_user_on_course(course.course_name, session["profile"]["username"], is_course_admin)
+    app.storage_api.sync_user_on_course(course.course_name, rms_user.username, is_course_admin)
 
     # Create use if needed
     try:
@@ -366,10 +376,13 @@ def show_database(course_name: str) -> ResponseReturnValue:
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
+        logger.info("[DEBUG] WEB /database username=%s, is_course_admin=%s", student_username, student_course_admin)
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
+
+    logger.info("[DEBUG] WEB /database rendering template with is_course_admin=%s", student_course_admin)
 
     return render_template(
         "database.html",

@@ -351,8 +351,14 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     if auth_method == AuthMethod.SESSION:
         rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
         is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        logger.info(
+            "[DEBUG] API /database auth_method=SESSION, username=%s, is_course_admin=%s",
+            rms_user.username,
+            is_course_admin,
+        )
     else:
         is_course_admin = True
+        logger.info("[DEBUG] API /database auth_method=COURSE_TOKEN, is_course_admin=True (by default)")
 
     logger.info("Fetching database snapshot for course=%s", course_name)
     table_data = get_database_table_data(app, course, include_admin_data=is_course_admin)
@@ -372,7 +378,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     storage_api = app.storage_api
 
     if auth_method == AuthMethod.SESSION:
-        username = session["profile"]["username"]
+        username = session["gitlab"]["username"]
         logger.info("Request by admin=%s for course=%s", username, course_name)
         student_course_admin = storage_api.check_if_course_admin(course_name, username)
 
@@ -445,10 +451,10 @@ def update_comment(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username_ = session["profile"]["username"]
-    logger.info("Comment update request by user=%s for course=%s", profile_username_, course_name)
+    username = session["gitlab"]["username"]
+    logger.info("Comment update request by user=%s for course=%s", username, course_name)
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username_)
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, username)
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update comments"}), HTTPStatus.FORBIDDEN
