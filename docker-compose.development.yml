@@ -1,5 +1,4 @@
 services:
-
     docs:
         build:
             context: .
@@ -19,12 +18,12 @@ services:
             timeout: 15s
             retries: 3
             start_period: 30s
-
     manytask:
         build:
             context: .
             target: app
         container_name: test-manytask
+        network_mode: bridge
         env_file: .env
         environment:
             VIRTUAL_HOST: ${APP_HOST}
@@ -38,16 +37,12 @@ services:
         dns:
             - 8.8.8.8
             - 8.8.4.4
-        depends_on:
-            postgres:
-                condition: service_healthy
         links:
-            -   postgres:postgres
-        network_mode: bridge
-
+            - postgres:postgres
     postgres:
         image: postgres:17
         container_name: manytask_postgres
+        network_mode: bridge
         environment:
             POSTGRES_USER: postgres
             POSTGRES_PASSWORD: postgres
@@ -57,14 +52,11 @@ services:
         volumes:
             - postgres_data:/var/lib/postgresql/data
             - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-        network_mode: bridge
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U adminmanytask -d manytask"]
             interval: 5s
             timeout: 5s
             retries: 5
-
-
 volumes:
     postgres_data:
         name: manytask_postgres_data

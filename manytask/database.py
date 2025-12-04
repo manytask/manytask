@@ -18,8 +18,6 @@ from sqlalchemy.sql.functions import coalesce, func
 
 from . import models
 from .abstract import StorageApi, StoredUser
-from .models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER, ROLE_STUDENT
-
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -30,7 +28,17 @@ from .config import (
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
 from .course import CourseStatus
-from .models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
+from .models import (
+    ROLE_NAMESPACE_ADMIN,
+    ROLE_PROGRAM_MANAGER,
+    Course,
+    Deadline,
+    Grade,
+    Task,
+    TaskGroup,
+    User,
+    UserOnCourse,
+)
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -67,7 +75,12 @@ class DataBaseApi(StorageApi):
         self.database_url = config.database_url
         self.apply_migrations = config.apply_migrations
 
-        self.engine = create_engine(self.database_url, echo=False)
+        self.engine = create_engine(
+            self.database_url,
+            echo=False,
+            pool_pre_ping=True,  # Check connection validity before using it from the pool
+            pool_recycle=1800,  # Recycle connections after 30 minutes
+        )
 
         if config.session_factory is None:
             self._session_create: Callable[[], Session] = sessionmaker(bind=self.engine)
@@ -264,48 +277,12 @@ class DataBaseApi(StorageApi):
                 )
                 if user.is_instance_admin:
                     return True
-                
+
                 course = self._get(session, models.Course, name=course_name)
                 user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
                 return user_on_course.is_course_admin
             except NoResultFound as e:
                 logger.info("No user found with username '%s' when checking admin status: %s", username, e)
-                return False
-
-    def check_if_program_manager(
-        self,
-        course_name: str,
-        username: str,
-    ) -> bool:
-        """Check if user is a program manager for the course's namespace.
-
-        :param course_name: course name
-        :param username: user name
-
-        :return: True if the user is a program manager in the course's namespace
-        """
-
-        with self._session_create() as session:
-            try:
-                user = self._get(
-                    session,
-                    models.User,
-                    username=username,
-                )
-                course = self._get(session, models.Course, name=course_name)
-                
-                if course.namespace_id is None:
-                    return False
-                
-                user_on_namespace = self._get(
-                    session,
-                    models.UserOnNamespace,
-                    user_id=user.id,
-                    namespace_id=course.namespace_id,
-                )
-                return user_on_namespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER
-            except NoResultFound as e:
-                logger.info("No program manager role found for user '%s' in course '%s': %s", username, course_name, e)
                 return False
 
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None:
@@ -326,24 +303,21 @@ class DataBaseApi(StorageApi):
 
     def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
         """Get all users' scores with names for the given course.
-        
+
         Excludes users with PROGRAM_MANAGER role in the course's namespace.
         """
 
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             namespace_id = course.namespace_id
-            
-            students_subquery = None
+
+            program_managers_subquery = None
             if namespace_id is not None:
-                students_subquery = (
-                    select(models.UserOnNamespace.user_id)
-                    .where(
-                        models.UserOnNamespace.namespace_id == namespace_id,
-                        models.UserOnNamespace.role == models.UserOnNamespaceRole.STUDENT,
-                    )
+                program_managers_subquery = select(models.UserOnNamespace.user_id).where(
+                    models.UserOnNamespace.namespace_id == namespace_id,
+                    models.UserOnNamespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER,
                 )
-            
+
             statement = (
                 select(
                     User.username,
@@ -362,10 +336,10 @@ class DataBaseApi(StorageApi):
                     Course.name == course_name,
                 )
             )
-            
-            if students_subquery is not None:
-                statement = statement.where(User.id.in_(students_subquery))
-            
+
+            if program_managers_subquery is not None:
+                statement = statement.where(~User.id.in_(program_managers_subquery))
+
             rows = session.execute(statement).all()
 
             scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
@@ -403,7 +377,7 @@ class DataBaseApi(StorageApi):
 
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks
-        
+
         Excludes users with PROGRAM_MANAGER role from statistics.
 
         :param course_name: course name
@@ -414,26 +388,21 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             namespace_id = course.namespace_id
-            
+
             program_managers_subquery = None
             if namespace_id is not None:
-                program_managers_subquery = (
-                    select(models.UserOnNamespace.user_id)
-                    .where(
-                        models.UserOnNamespace.namespace_id == namespace_id,
-                        models.UserOnNamespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER,
-                    )
+                program_managers_subquery = select(models.UserOnNamespace.user_id).where(
+                    models.UserOnNamespace.namespace_id == namespace_id,
+                    models.UserOnNamespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER,
                 )
-            
+
             users_count_query = (
                 session.query(func.count(UserOnCourse.id))
                 .join(Course, Course.id == UserOnCourse.course_id)
                 .filter(Course.name == course_name)
             )
             if program_managers_subquery is not None:
-                users_count_query = users_count_query.filter(
-                    ~UserOnCourse.user_id.in_(program_managers_subquery)
-                )
+                users_count_query = users_count_query.filter(~UserOnCourse.user_id.in_(program_managers_subquery))
             users_on_courses_count = users_count_query.scalar()
 
             # fmt: off
@@ -885,7 +854,7 @@ class DataBaseApi(StorageApi):
 
     def get_namespace_admin_namespaces(self, username: str) -> list[int]:
         """Get list of namespace IDs where user is Namespace Admin or Owner
-        
+
         :param username: username to check
         :return: list of namespace IDs
         """
@@ -898,46 +867,46 @@ class DataBaseApi(StorageApi):
                 return []
 
             namespace_ids = set()
-            
-            owned_namespaces = session.query(models.Namespace).filter(
-                models.Namespace.created_by_id == user.id
-            ).all()
+
+            owned_namespaces = session.query(models.Namespace).filter(models.Namespace.created_by_id == user.id).all()
             namespace_ids.update(ns.id for ns in owned_namespaces)
-            
-            admin_namespaces = session.query(models.UserOnNamespace).filter(
-                and_(
-                    models.UserOnNamespace.user_id == user.id,
-                    models.UserOnNamespace.role == models.UserOnNamespaceRole.NAMESPACE_ADMIN,
+
+            admin_namespaces = (
+                session.query(models.UserOnNamespace)
+                .filter(
+                    and_(
+                        models.UserOnNamespace.user_id == user.id,
+                        models.UserOnNamespace.role == models.UserOnNamespaceRole.NAMESPACE_ADMIN,
+                    )
                 )
-            ).all()
+                .all()
+            )
             namespace_ids.update(un.namespace_id for un in admin_namespaces)
-            
+
             result = list(namespace_ids)
             logger.info("User '%s' is namespace admin in %d namespaces", username, len(result))
             return result
 
     def get_courses_by_namespace_ids(self, namespace_ids: list[int]) -> list[tuple[str, CourseStatus]]:
         """Get courses from specified namespaces
-        
+
         :param namespace_ids: list of namespace IDs
         :return: list of tuples (course_name, course_status)
         """
         if not namespace_ids:
             return []
-            
+
         with self._session_create() as session:
             logger.debug("Fetching courses from %d namespaces", len(namespace_ids))
-            courses = session.query(models.Course).filter(
-                models.Course.namespace_id.in_(namespace_ids)
-            ).all()
-            
+            courses = session.query(models.Course).filter(models.Course.namespace_id.in_(namespace_ids)).all()
+
             result = [(course.name, course.status) for course in courses]
             logger.info("Found %d courses in specified namespaces", len(result))
             return result
 
     def get_courses_where_course_admin(self, username: str) -> list[tuple[str, CourseStatus]]:
         """Get courses where user is Course Admin
-        
+
         :param username: username to check
         :return: list of tuples (course_name, course_status)
         """
@@ -949,13 +918,17 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' not found when fetching course admin courses", username)
                 return []
 
-            user_on_courses = session.query(models.UserOnCourse).filter(
-                and_(
-                    models.UserOnCourse.user_id == user.id,
-                    models.UserOnCourse.is_course_admin.is_(True),
+            user_on_courses = (
+                session.query(models.UserOnCourse)
+                .filter(
+                    and_(
+                        models.UserOnCourse.user_id == user.id,
+                        models.UserOnCourse.is_course_admin.is_(True),
+                    )
                 )
-            ).all()
-            
+                .all()
+            )
+
             result = [(uoc.course.name, uoc.course.status) for uoc in user_on_courses]
             logger.info("User '%s' is course admin in %d courses", username, len(result))
             return result
@@ -1667,7 +1640,7 @@ class DataBaseApi(StorageApi):
         program_managers_subquery: Select[tuple[int]] | None = None,
     ) -> list[Row[tuple[int, str, int]]]:
         """Get count of task submits, optionally excluding program managers.
-        
+
         :param session: Database session
         :param course_name: Name of the course
         :param program_managers_subquery: Subquery to select user IDs to exclude (program managers)
@@ -1685,7 +1658,7 @@ class DataBaseApi(StorageApi):
                     )
                 )
             )
-        
+
         query = (
             session.query(
                 Task.id,
@@ -1697,7 +1670,7 @@ class DataBaseApi(StorageApi):
             .join(Deadline, TaskGroup.deadline_id == Deadline.id)
             .outerjoin(Grade, and_(*join_conditions))
         )
-        
+
         return (
             query.filter(
                 Course.name == course_name,
@@ -1742,7 +1715,7 @@ class DataBaseApi(StorageApi):
         created_by_username: str,
     ) -> models.Namespace:
         """Create a new namespace and assign creator as namespace_admin.
-        
+
         :param name: Display name of the namespace
         :param slug: URL slug for the namespace
         :param description: Optional description
@@ -1754,9 +1727,9 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 logger.info("Creating namespace name=%s slug=%s for user=%s", name, slug, created_by_username)
-                
+
                 creator = self._get(session, models.User, username=created_by_username)
-                
+
                 namespace = self._create(
                     session,
                     models.Namespace,
@@ -1766,7 +1739,7 @@ class DataBaseApi(StorageApi):
                     gitlab_group_id=gitlab_group_id,
                     created_by_id=creator.id,
                 )
-                
+
                 self._create(
                     session,
                     models.UserOnNamespace,
@@ -1775,16 +1748,16 @@ class DataBaseApi(StorageApi):
                     role=models.UserOnNamespaceRole.NAMESPACE_ADMIN,
                     assigned_by_id=creator.id,
                 )
-                
+
                 logger.info(
                     "Namespace created successfully id=%s slug=%s, creator %s assigned as namespace_admin",
                     namespace.id,
                     slug,
                     created_by_username,
                 )
-                
+
                 return namespace
-                
+
             except IntegrityError as e:
                 session.rollback()
                 logger.error("Failed to create namespace slug=%s: %s", slug, str(e))
@@ -1792,7 +1765,7 @@ class DataBaseApi(StorageApi):
 
     def get_all_namespaces(self) -> list[models.Namespace]:
         """Get all namespaces (for Instance Admin).
-        
+
         :return: List of all Namespace objects
         """
         with self._session_create() as session:
@@ -1804,39 +1777,39 @@ class DataBaseApi(StorageApi):
 
     def get_user_namespaces(self, username: str) -> list[tuple[models.Namespace, str]]:
         """Get namespaces where user has a role.
-        
+
         :param username: Username to filter by
         :return: List of tuples (Namespace, role_name)
         """
         with self._session_create() as session:
             logger.debug("Fetching namespaces for user=%s", username)
-            
+
             try:
                 user = self._get(session, models.User, username=username)
             except NoResultFound:
                 logger.warning("User %s not found", username)
                 return []
-            
+
             results = (
                 session.query(models.Namespace, models.UserOnNamespace.role)
                 .join(models.UserOnNamespace, models.UserOnNamespace.namespace_id == models.Namespace.id)
                 .filter(models.UserOnNamespace.user_id == user.id)
                 .all()
             )
-            
+
             logger.info("User %s has access to %d namespaces", username, len(results))
-            
+
             namespace_role_pairs = [(ns, role.value) for ns, role in results]
             session.expunge_all()
-            
+
             return namespace_role_pairs
 
     def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[models.Namespace, str | None]:
         """Get namespace by ID with access control.
-        
+
         Instance Admin can access any namespace (role=None).
         Regular users can only access namespaces where they have a role.
-        
+
         :param namespace_id: ID of the namespace
         :param username: Username to check access
         :return: (Namespace, role) where role=None for Instance Admin
@@ -1845,24 +1818,24 @@ class DataBaseApi(StorageApi):
         """
         with self._session_create() as session:
             logger.debug("Fetching namespace id=%s for user=%s", namespace_id, username)
-            
+
             try:
                 namespace = self._get(session, models.Namespace, id=namespace_id)
             except NoResultFound:
                 logger.warning("Namespace id=%s not found", namespace_id)
                 raise PermissionError(f"Access denied to namespace {namespace_id}")
-            
+
             try:
                 user = self._get(session, models.User, username=username)
             except NoResultFound:
                 logger.warning("User %s not found", username)
                 raise PermissionError(f"Access denied to namespace {namespace_id}")
-            
+
             if user.is_instance_admin:
                 logger.info("Instance Admin %s accessing namespace id=%s", username, namespace_id)
                 session.expunge(namespace)
                 return (namespace, None)
-            
+
             try:
                 user_on_namespace = self._get(
                     session,
@@ -1886,10 +1859,10 @@ class DataBaseApi(StorageApi):
         assigned_by_username: str,
     ) -> models.UserOnNamespace:
         """Add a user to a namespace with a specific role.
-        
+
         :param namespace_id: ID of the namespace
         :param user_id: RMS ID (GitLab ID) of the user to add
-        :param role: Role to assign ("namespace_admin", "program_manager", or "student")
+        :param role: Role to assign ("namespace_admin" or "program_manager")
         :param assigned_by_username: Username of the user assigning the role
         :return: Created UserOnNamespace object
         :raises NoResultFound: If user or namespace not found
@@ -1904,39 +1877,37 @@ class DataBaseApi(StorageApi):
                 role,
                 assigned_by_username,
             )
-            
+
             try:
                 user = self._get(session, models.User, rms_id=user_id)
             except NoResultFound:
                 logger.error("User with rms_id=%s not found", user_id)
                 raise NoResultFound(f"User with rms_id={user_id} not found")
-            
+
             try:
                 namespace = self._get(session, models.Namespace, id=namespace_id)
             except NoResultFound:
                 logger.error("Namespace with id=%s not found", namespace_id)
                 raise NoResultFound(f"Namespace with id={namespace_id} not found")
-            
+
             try:
                 assigned_by = self._get(session, models.User, username=assigned_by_username)
             except NoResultFound:
                 logger.error("Assigning user %s not found", assigned_by_username)
                 raise NoResultFound(f"User {assigned_by_username} not found")
-            
+
             if role == ROLE_NAMESPACE_ADMIN:
                 role_enum = models.UserOnNamespaceRole.NAMESPACE_ADMIN
             elif role == ROLE_PROGRAM_MANAGER:
                 role_enum = models.UserOnNamespaceRole.PROGRAM_MANAGER
-            elif role == ROLE_STUDENT:
-                role_enum = models.UserOnNamespaceRole.STUDENT
             else:
                 logger.error("Invalid role: %s", role)
-                raise ValueError(f"Invalid role: {role}. Must be '{ROLE_NAMESPACE_ADMIN}', '{ROLE_PROGRAM_MANAGER}', or '{ROLE_STUDENT}'")
-            
+                raise ValueError(f"Invalid role: {role}. Must be '{ROLE_NAMESPACE_ADMIN}' or '{ROLE_PROGRAM_MANAGER}'")
+
             user_db_id = user.id
             user_username = user.username
             namespace_slug = namespace.slug
-            
+
             user_on_namespace = models.UserOnNamespace(
                 user_id=user.id,
                 namespace_id=namespace.id,
@@ -1944,12 +1915,12 @@ class DataBaseApi(StorageApi):
                 assigned_by_id=assigned_by.id,
             )
             session.add(user_on_namespace)
-            
+
             try:
                 session.commit()
-                
+
                 session.refresh(user_on_namespace)
-                
+
                 logger.info(
                     "User %s (id=%s) added to namespace %s (id=%s) with role %s",
                     user_username,
@@ -1958,17 +1929,17 @@ class DataBaseApi(StorageApi):
                     namespace_id,
                     role,
                 )
-                
+
                 _ = user_on_namespace.id
                 _ = user_on_namespace.user_id
                 _ = user_on_namespace.namespace_id
-                
+
                 session.expunge(user_on_namespace)
                 session.expunge(user)
                 session.expunge(namespace)
                 return user_on_namespace
-                
-            except IntegrityError as e:
+
+            except IntegrityError:
                 session.rollback()
                 logger.warning(
                     "User id=%s (rms_id=%s) already has a role in namespace id=%s",
@@ -1980,29 +1951,29 @@ class DataBaseApi(StorageApi):
 
     def get_namespace_users(self, namespace_id: int) -> list[tuple[int, str]]:
         """Get list of users with their roles in a namespace.
-        
+
         :param namespace_id: ID of the namespace
         :return: List of tuples (user_id, role_string) where user_id is the database User.id
         """
         with self._session_create() as session:
             logger.debug("Fetching users for namespace_id=%s", namespace_id)
-            
+
             results = (
                 session.query(models.User.id, models.UserOnNamespace.role)
                 .join(models.UserOnNamespace, models.UserOnNamespace.user_id == models.User.id)
                 .filter(models.UserOnNamespace.namespace_id == namespace_id)
                 .all()
             )
-            
+
             logger.info("Found %d users in namespace_id=%s", len(results), namespace_id)
-            
+
             user_role_pairs = [(user_id, role.value) for user_id, role in results]
-            
+
             return user_role_pairs
 
     def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, int]:
         """Remove a user from a namespace.
-        
+
         :param namespace_id: ID of the namespace
         :param user_id: Database User.id (not rms_id)
         :return: Tuple of (role_string, rms_id) of the removed user
@@ -2010,7 +1981,7 @@ class DataBaseApi(StorageApi):
         """
         with self._session_create() as session:
             logger.info("Removing user_id=%s from namespace_id=%s", user_id, namespace_id)
-            
+
             try:
                 user_on_namespace = self._get(
                     session,
@@ -2018,15 +1989,15 @@ class DataBaseApi(StorageApi):
                     user_id=user_id,
                     namespace_id=namespace_id,
                 )
-                
+
                 role = user_on_namespace.role.value
                 user = self._get(session, models.User, id=user_id)
                 rms_id = user.rms_id
                 username = user.username
-                
+
                 session.delete(user_on_namespace)
                 session.commit()
-                
+
                 logger.info(
                     "Successfully removed user %s (id=%s, rms_id=%s) with role %s from namespace_id=%s",
                     username,
@@ -2035,16 +2006,16 @@ class DataBaseApi(StorageApi):
                     role,
                     namespace_id,
                 )
-                
+
                 return (role, rms_id)
-                
+
             except NoResultFound:
                 logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
                 raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
-    
+
     def get_namespace_courses(self, namespace_id: int) -> list[dict[str, Any]]:
         """Get list of courses in a namespace with information about owners.
-        
+
         :param namespace_id: ID of the namespace
         :return: List of dictionaries with course information:
             - id: Course database ID
@@ -2055,9 +2026,9 @@ class DataBaseApi(StorageApi):
         """
         with self._session_create() as session:
             logger.info("Fetching courses for namespace_id=%s", namespace_id)
-            
+
             courses = session.query(models.Course).filter_by(namespace_id=namespace_id).all()
-            
+
             result = []
             for course in courses:
                 course_admins = (
@@ -2069,20 +2040,22 @@ class DataBaseApi(StorageApi):
                     )
                     .all()
                 )
-                
+
                 owner_usernames = [admin[0] for admin in course_admins]
-                
-                result.append({
-                    "id": course.id,
-                    "name": course.name,
-                    "status": course.status.value,
-                    "gitlab_course_group": course.gitlab_course_group,
-                    "owners": owner_usernames,
-                })
-            
+
+                result.append(
+                    {
+                        "id": course.id,
+                        "name": course.name,
+                        "status": course.status.value,
+                        "gitlab_course_group": course.gitlab_course_group,
+                        "owners": owner_usernames,
+                    }
+                )
+
             logger.info("Found %d courses for namespace_id=%s", len(result), namespace_id)
             return result
-    
+
     def add_course_owners(
         self,
         course_id: int,
@@ -2090,10 +2063,10 @@ class DataBaseApi(StorageApi):
         namespace_id: int,
     ) -> list[int]:
         """Add owners to a course.
-        
+
         Validates that each owner has namespace_admin role in the course's namespace,
         then adds them as course admins.
-        
+
         :param course_id: ID of the course
         :param owner_rms_ids: List of RMS IDs (GitLab user IDs) to add as owners
         :param namespace_id: ID of the namespace (for validation)
@@ -2108,17 +2081,17 @@ class DataBaseApi(StorageApi):
                 owner_rms_ids,
                 namespace_id,
             )
-            
+
             if not owner_rms_ids:
                 logger.info("No owners to add")
                 return []
-            
+
             try:
                 course = self._get(session, models.Course, id=course_id)
             except NoResultFound:
                 logger.error("Course id=%s not found", course_id)
                 raise NoResultFound(f"Course {course_id} not found")
-            
+
             if course.namespace_id != namespace_id:
                 logger.error(
                     "Course id=%s belongs to namespace_id=%s, not %s",
@@ -2127,13 +2100,13 @@ class DataBaseApi(StorageApi):
                     namespace_id,
                 )
                 raise ValueError(f"Course {course_id} does not belong to namespace {namespace_id}")
-            
+
             added_owners = []
-            
+
             for rms_id in owner_rms_ids:
                 try:
                     user = self._get(session, models.User, rms_id=rms_id)
-                    
+
                     try:
                         user_on_namespace = self._get(
                             session,
@@ -2141,7 +2114,7 @@ class DataBaseApi(StorageApi):
                             user_id=user.id,
                             namespace_id=namespace_id,
                         )
-                        
+
                         if user_on_namespace.role != models.UserOnNamespaceRole.NAMESPACE_ADMIN:
                             logger.error(
                                 "User %s (rms_id=%s) has role %s in namespace_id=%s, not namespace_admin",
@@ -2161,7 +2134,7 @@ class DataBaseApi(StorageApi):
                             namespace_id,
                         )
                         raise ValueError(f"User with rms_id={rms_id} is not in namespace {namespace_id}")
-                    
+
                     user_on_course = self._update_or_create(
                         session,
                         models.UserOnCourse,
@@ -2169,7 +2142,7 @@ class DataBaseApi(StorageApi):
                         user_id=user.id,
                         course_id=course_id,
                     )
-                    
+
                     logger.info(
                         "Added user %s (rms_id=%s, id=%s) as owner of course_id=%s",
                         user.username,
@@ -2177,19 +2150,19 @@ class DataBaseApi(StorageApi):
                         user.id,
                         course_id,
                     )
-                    
+
                     added_owners.append(rms_id)
-                    
+
                 except NoResultFound:
                     logger.error("User with rms_id=%s not found in database", rms_id)
                     raise ValueError(f"User with rms_id={rms_id} not found")
-            
+
             session.commit()
-            
+
             logger.info(
                 "Successfully added %d owners to course_id=%s",
                 len(added_owners),
                 course_id,
             )
-            
+
             return added_owners

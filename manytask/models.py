@@ -44,13 +44,11 @@ def _validate_gitlab_slug(slug: str) -> str:
 
 ROLE_NAMESPACE_ADMIN = "namespace_admin"
 ROLE_PROGRAM_MANAGER = "program_manager"
-ROLE_STUDENT = "student"
 
 
 class UserOnNamespaceRole(enum.Enum):
     NAMESPACE_ADMIN = ROLE_NAMESPACE_ADMIN
     PROGRAM_MANAGER = ROLE_PROGRAM_MANAGER
-    STUDENT = ROLE_STUDENT
 
 
 
