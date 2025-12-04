@@ -1,0 +1,20 @@
+# Example: Create/Update Course Configuration
+#
+# This command uploads course configuration to Manytask
+#
+# Prerequisites:
+# 1. Course must be created in the web interface (admin panel)
+# 2. You need the course token (set during course creation)
+# 3. You need a valid .manytask.yml file (You can use .manytask.example.yml)
+#
+# Replace the following placeholders:
+# - <COURSE_TOKEN>  : Your course token (from course creation)
+# - <COURSE_NAME>   : Your course name (e.g., test_course_2024)
+#
+# Usage:
+# 1. For local development:
+curl --fail -X POST \
+  -H "Authorization: Bearer <COURSE_TOKEN>" \
+  -H "Content-type: application/x-yaml" \
+  --data-binary "@.manytask.example.yml" \
+  "http://localhost:8081/api/<COURSE_NAME>/update_config"

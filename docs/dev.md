@@ -1,5 +1,12 @@
 # Development guide
 
+## Quick Links
+
+- 🐳 **[Local Development with Docker](./local_development.md)** - Complete guide for running Manytask locally
+- 🛠️ **[Development Setup](./dev_setup.md)** - Environment setup for development
+- 📚 **[API Documentation](./api.md)** - API endpoints reference
+
+---
 
 ## How to get started developing
 ### 1. Prerequisites and Access
