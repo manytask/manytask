@@ -18,7 +18,8 @@ from sqlalchemy.sql.functions import coalesce, func
 
 from . import models
 from .abstract import StorageApi, StoredUser
-from .models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER
+from .models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER, ROLE_STUDENT
+
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -271,6 +272,42 @@ class DataBaseApi(StorageApi):
                 logger.info("No user found with username '%s' when checking admin status: %s", username, e)
                 return False
 
+    def check_if_program_manager(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool:
+        """Check if user is a program manager for the course's namespace.
+
+        :param course_name: course name
+        :param username: user name
+
+        :return: True if the user is a program manager in the course's namespace
+        """
+
+        with self._session_create() as session:
+            try:
+                user = self._get(
+                    session,
+                    models.User,
+                    username=username,
+                )
+                course = self._get(session, models.Course, name=course_name)
+                
+                if course.namespace_id is None:
+                    return False
+                
+                user_on_namespace = self._get(
+                    session,
+                    models.UserOnNamespace,
+                    user_id=user.id,
+                    namespace_id=course.namespace_id,
+                )
+                return user_on_namespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER
+            except NoResultFound as e:
+                logger.info("No program manager role found for user '%s' in course '%s': %s", username, course_name, e)
+                return False
+
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None:
         """Method for sync user's gitlab and stored data
 
@@ -297,13 +334,13 @@ class DataBaseApi(StorageApi):
             course = self._get(session, models.Course, name=course_name)
             namespace_id = course.namespace_id
             
-            program_managers_subquery = None
+            students_subquery = None
             if namespace_id is not None:
-                program_managers_subquery = (
+                students_subquery = (
                     select(models.UserOnNamespace.user_id)
                     .where(
                         models.UserOnNamespace.namespace_id == namespace_id,
-                        models.UserOnNamespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER,
+                        models.UserOnNamespace.role == models.UserOnNamespaceRole.STUDENT,
                     )
                 )
             
@@ -326,8 +363,8 @@ class DataBaseApi(StorageApi):
                 )
             )
             
-            if program_managers_subquery is not None:
-                statement = statement.where(~User.id.in_(program_managers_subquery))
+            if students_subquery is not None:
+                statement = statement.where(User.id.in_(students_subquery))
             
             rows = session.execute(statement).all()
 
@@ -1852,7 +1889,7 @@ class DataBaseApi(StorageApi):
         
         :param namespace_id: ID of the namespace
         :param user_id: RMS ID (GitLab ID) of the user to add
-        :param role: Role to assign ("namespace_admin" or "program_manager")
+        :param role: Role to assign ("namespace_admin", "program_manager", or "student")
         :param assigned_by_username: Username of the user assigning the role
         :return: Created UserOnNamespace object
         :raises NoResultFound: If user or namespace not found
@@ -1890,9 +1927,11 @@ class DataBaseApi(StorageApi):
                 role_enum = models.UserOnNamespaceRole.NAMESPACE_ADMIN
             elif role == ROLE_PROGRAM_MANAGER:
                 role_enum = models.UserOnNamespaceRole.PROGRAM_MANAGER
+            elif role == ROLE_STUDENT:
+                role_enum = models.UserOnNamespaceRole.STUDENT
             else:
                 logger.error("Invalid role: %s", role)
-                raise ValueError(f"Invalid role: {role}. Must be '{ROLE_NAMESPACE_ADMIN}' or '{ROLE_PROGRAM_MANAGER}'")
+                raise ValueError(f"Invalid role: {role}. Must be '{ROLE_NAMESPACE_ADMIN}', '{ROLE_PROGRAM_MANAGER}', or '{ROLE_STUDENT}'")
             
             user_db_id = user.id
             user_username = user.username
