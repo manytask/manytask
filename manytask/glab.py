@@ -27,7 +27,6 @@ class GitLabConfig:
     base_url: str
     admin_token: str
     dry_run: bool = False
-    verify_ssl: bool = True
 
 
 class GitLabApi(RmsApi, AuthApi):
@@ -41,8 +40,7 @@ class GitLabApi(RmsApi, AuthApi):
         """
         self.dry_run = config.dry_run
         self._base_url = config.base_url
-        self._verify_ssl = config.verify_ssl
-        self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token, ssl_verify=config.verify_ssl)
+        self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token)
 
     def register_new_user(
         self,
@@ -76,10 +74,10 @@ class GitLabApi(RmsApi, AuthApi):
             return self._gitlab.groups.get(group_name)
         except (GitlabGetError, AttributeError):
             logger.debug("Direct group access failed, trying search method")
-
+        
         short_group_name = group_name.split("/")[-1]
         group_name_with_spaces = " / ".join(group_name.split("/"))
-
+        
         try:
             return next(
                 group
@@ -103,16 +101,16 @@ class GitLabApi(RmsApi, AuthApi):
 
     def get_group_path_by_id(self, group_id: int) -> Optional[str]:
         """Get the full path of a GitLab group by its ID.
-
+        
         Args:
             group_id: GitLab group ID
-
+            
         Returns:
             Full path of the group (e.g., 'hse-namespace/test-course') or None if not found
         """
         try:
             group = self._gitlab.groups.get(group_id)
-            return getattr(group, "full_path", None)
+            return getattr(group, 'full_path', None)
         except GitlabGetError:
             logger.warning("Group with ID %s not found", group_id)
             return None
@@ -127,7 +125,7 @@ class GitLabApi(RmsApi, AuthApi):
                 return
 
         project_name = course_public_repo.split("/")[-1]
-
+        
         self._gitlab.projects.create(
             {
                 "name": project_name,
@@ -141,11 +139,9 @@ class GitLabApi(RmsApi, AuthApi):
         )
         logger.info("Public repo %s created successfully", course_public_repo)
 
-    def create_students_group(
-        self, course_students_group: str, parent_group_id: int | None = None
-    ) -> gitlab.v4.objects.Group | None:
+    def create_students_group(self, course_students_group: str, parent_group_id: int | None = None) -> gitlab.v4.objects.Group | None:
         """Create a students group for a course.
-
+        
         :param course_students_group: Full path to the students group (e.g., "namespace/course/students-2025-fall")
         :param parent_group_id: Optional parent group ID. If provided, creates as subgroup. If None, creates top-level group.
         :return: The created group object, or None if group already exists
@@ -154,7 +150,7 @@ class GitLabApi(RmsApi, AuthApi):
             return self._get_group_by_name(course_students_group)
         except RuntimeError:
             pass
-
+        
         short_name = course_students_group.split("/")[-1]
 
         group_data = {
@@ -164,51 +160,40 @@ class GitLabApi(RmsApi, AuthApi):
             "lfs_enabled": True,
             "shared_runners_enabled": True,
         }
-
+        
         if parent_group_id:
             group_data["parent_id"] = parent_group_id
-
+        
         try:
             created_group = self._gitlab.groups.create(group_data)
             return self._gitlab.groups.get(created_group.id)
         except GitlabCreateError as e:
             if "already been taken" in str(e) or "already exists" in str(e).lower():
-                logger.warning(
-                    "Group %s already exists (detected during creation). Trying to find it...", course_students_group
-                )
-
+                logger.warning("Group %s already exists (detected during creation). Trying to find it...", course_students_group)
+                
                 if parent_group_id:
                     try:
                         parent_group = self._gitlab.groups.get(parent_group_id)
                         subgroups = parent_group.subgroups.list(get_all=True)
                         short_name = course_students_group.split("/")[-1]
-
+                        
                         for subgroup in subgroups:
                             if subgroup.name == short_name or subgroup.path == short_name:
-                                logger.info(
-                                    "Found existing students group %s through parent subgroups with id=%s",
-                                    course_students_group,
-                                    subgroup.id,
-                                )
+                                logger.info("Found existing students group %s through parent subgroups with id=%s", course_students_group, subgroup.id)
                                 return self._gitlab.groups.get(subgroup.id)
                     except Exception as subgroup_error:
                         logger.debug("Failed to find group through parent subgroups: %s", str(subgroup_error))
-
+                
                 try:
                     return self._get_group_by_name(course_students_group)
                 except RuntimeError:
-                    logger.error(
-                        "Group %s should exist but cannot be found. This may indicate a GitLab indexing delay.",
-                        course_students_group,
-                    )
-                    raise RuntimeError(
-                        f"Group {course_students_group} creation failed: group already exists but cannot be retrieved. Please try again in a moment."
-                    )
+                    logger.error("Group %s should exist but cannot be found. This may indicate a GitLab indexing delay.", course_students_group)
+                    raise RuntimeError(f"Group {course_students_group} creation failed: group already exists but cannot be retrieved. Please try again in a moment.")
             raise
 
     def create_namespace_group(self, name: str, path: str, description: str | None = None) -> int:
         """Create a top-level GitLab group for a namespace.
-
+        
         :param name: Display name of the group
         :param path: URL path/slug for the group
         :param description: Optional description for the group
@@ -216,12 +201,12 @@ class GitLabApi(RmsApi, AuthApi):
         :raises: RuntimeError if group with this path already exists
         """
         logger.info("Creating namespace group name=%s path=%s", name, path)
-
+        
         for group in self._gitlab.groups.list(get_all=True, search=path):
             if group.path == path:
                 logger.error("Group with path %s already exists", path)
                 raise RuntimeError(f"Group with path {path} already exists")
-
+        
         group_data = {
             "name": name,
             "path": path,
@@ -229,26 +214,26 @@ class GitLabApi(RmsApi, AuthApi):
             "lfs_enabled": True,
             "shared_runners_enabled": True,
         }
-
+        
         if description:
             group_data["description"] = description
-
+        
         created_group = self._gitlab.groups.create(group_data)
         logger.info("Namespace group %s created successfully with id=%s", path, created_group.id)
-
+        
         return created_group.id
 
     def add_user_to_namespace_group(self, gitlab_group_id: int, user_id: int) -> None:
         """Add a user to a GitLab namespace group with Maintainer access.
-
+        
         :param gitlab_group_id: GitLab group ID
         :param user_id: GitLab user ID
         """
         logger.info("Adding user_id=%s to GitLab group id=%s as Maintainer", user_id, gitlab_group_id)
-
+        
         try:
             group = self._gitlab.groups.get(gitlab_group_id)
-
+            
             try:
                 existing_member = group.members.get(user_id)
                 logger.info(
@@ -269,22 +254,22 @@ class GitLabApi(RmsApi, AuthApi):
                     }
                 )
                 logger.info("User id=%s added to GitLab group id=%s as Maintainer", user_id, gitlab_group_id)
-
+                
         except GitlabGetError as e:
             logger.error("Failed to get GitLab group id=%s: %s", gitlab_group_id, str(e))
             raise RuntimeError(f"Failed to get GitLab group {gitlab_group_id}: {str(e)}")
 
     def remove_user_from_namespace_group(self, gitlab_group_id: int, user_id: int) -> None:
         """Remove a user from a GitLab namespace group.
-
+        
         :param gitlab_group_id: GitLab group ID
         :param user_id: GitLab user ID (rms_id)
         """
         logger.info("Removing user_id=%s from GitLab group id=%s", user_id, gitlab_group_id)
-
+        
         try:
             group = self._gitlab.groups.get(gitlab_group_id)
-
+            
             try:
                 group.members.get(user_id)
                 group.members.delete(user_id)
@@ -295,14 +280,14 @@ class GitLabApi(RmsApi, AuthApi):
                     user_id,
                     gitlab_group_id,
                 )
-
+                
         except GitlabGetError as e:
             logger.error("Failed to get GitLab group id=%s: %s", gitlab_group_id, str(e))
             raise RuntimeError(f"Failed to get GitLab group {gitlab_group_id}: {str(e)}")
-
+    
     def create_course_group(self, parent_group_id: int, course_name: str, course_slug: str) -> int:
         """Create a GitLab subgroup for a course inside a namespace group.
-
+        
         :param parent_group_id: GitLab ID of the parent namespace group
         :param course_name: Display name for the course
         :param course_slug: URL slug for the course (validated)
@@ -315,7 +300,7 @@ class GitLabApi(RmsApi, AuthApi):
             course_slug,
             parent_group_id,
         )
-
+        
         try:
             group_data = {
                 "name": course_slug,
@@ -325,7 +310,7 @@ class GitLabApi(RmsApi, AuthApi):
                 "lfs_enabled": True,
                 "shared_runners_enabled": True,
             }
-
+            
             created_group = self._gitlab.groups.create(group_data)
             logger.info(
                 "Course group %s created successfully with id=%s under parent_id=%s",
@@ -333,9 +318,9 @@ class GitLabApi(RmsApi, AuthApi):
                 created_group.id,
                 parent_group_id,
             )
-
+            
             return created_group.id
-
+            
         except Exception as e:
             logger.error(
                 "Failed to create course group slug=%s under parent_id=%s: %s",
@@ -344,14 +329,14 @@ class GitLabApi(RmsApi, AuthApi):
                 str(e),
             )
             raise RuntimeError(f"Failed to create course group {course_slug}: {str(e)}")
-
+    
     def delete_group(self, group_id: int) -> None:
         """Delete a GitLab group.
-
+        
         :param group_id: GitLab group ID to delete
         """
         logger.info("Deleting GitLab group id=%s", group_id)
-
+        
         try:
             group = self._gitlab.groups.get(group_id)
             group.delete()
@@ -363,11 +348,11 @@ class GitLabApi(RmsApi, AuthApi):
 
     def delete_project(self, project_id: int) -> None:
         """Delete a GitLab project.
-
+        
         :param project_id: GitLab project ID to delete
         """
         logger.info("Deleting GitLab project id=%s", project_id)
-
+        
         try:
             project = self._gitlab.projects.get(project_id)
             project.delete()
@@ -392,7 +377,7 @@ class GitLabApi(RmsApi, AuthApi):
                 "GitLab authentication error while checking project existence: %s. "
                 "Please check GITLAB_ADMIN_TOKEN in .env file.",
                 str(e),
-                exc_info=True,
+                exc_info=True
             )
             raise RmsApiException(f"GitLab authentication failed: {str(e)}") from e
 
@@ -411,17 +396,15 @@ class GitLabApi(RmsApi, AuthApi):
 
     def create_project(self, rms_user: RmsUser, course_students_group: str, course_public_repo: str) -> None:
         logger.info("Creating project for user=%s in group=%s", rms_user.username, course_students_group)
-
+        
         course_group_path = "/".join(course_students_group.split("/")[:-1])
-
+        
         try:
             course_group = self._get_group_by_name(course_group_path)
         except RuntimeError:
             logger.error("Course group %s not found. Cannot create student project.", course_group_path)
-            raise RuntimeError(
-                f"Course group {course_group_path} not found. Please ensure the course is properly set up."
-            )
-
+            raise RuntimeError(f"Course group {course_group_path} not found. Please ensure the course is properly set up.")
+        
         students_group = None
         try:
             students_group = self._get_group_by_name(course_students_group)
@@ -433,10 +416,8 @@ class GitLabApi(RmsApi, AuthApi):
                     students_group = self._get_group_by_name(course_students_group)
                 except RuntimeError:
                     logger.error("Failed to retrieve students group %s after creation", course_students_group)
-                    raise RuntimeError(
-                        f"Failed to create or retrieve students group {course_students_group}. Please try again."
-                    )
-
+                    raise RuntimeError(f"Failed to create or retrieve students group {course_students_group}. Please try again.")
+        
         gitlab_project_path = f"{course_students_group}/{rms_user.username}"
         logger.info("Gitlab project path: %s", gitlab_project_path)
 

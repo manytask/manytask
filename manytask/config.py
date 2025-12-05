@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
 from manytask.course import CourseStatus, ManytaskDeadlinesType
-from manytask.models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER
 from manytask.utils.generic import lerp
+from models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER
 
 
 class RowData(BaseModel):
@@ -35,7 +35,6 @@ class CreateNamespaceRequest(BaseModel):
     @classmethod
     def validate_slug(cls, slug: str) -> str:
         from manytask.models import _validate_gitlab_slug
-
         return _validate_gitlab_slug(slug)
 
 
@@ -86,14 +85,13 @@ class CreateCourseRequest(BaseModel):
     course_name: str
     slug: str
     owners: Optional[list[int]] = None  # gitlab user_ids
-
+    
     @field_validator("slug")
     @classmethod
     def validate_slug(cls, slug: str) -> str:
         from manytask.models import _validate_gitlab_slug
-
         return _validate_gitlab_slug(slug)
-
+    
     @field_validator("course_name")
     @classmethod
     def validate_course_name(cls, course_name: str) -> str:
