@@ -21,7 +21,7 @@ class LocalConfig:
             # gitlab
             gitlab_url=os.environ.get("GITLAB_URL", "https://gitlab.manytask2.org"),
             gitlab_admin_token=os.environ["GITLAB_ADMIN_TOKEN"],
-            gitlab_verify_ssl=os.environ.get("GITLAB_VERIFY_SSL", "true").lower() == "true",
+            gitlab_verify_ssl=os.environ.get("GITLAB_VERIFY_SSL", "true").lower() in ("true", "1", "yes"),
             # gitlab oauth2
             gitlab_client_id=os.environ["GITLAB_CLIENT_ID"],
             gitlab_client_secret=os.environ["GITLAB_CLIENT_SECRET"],
