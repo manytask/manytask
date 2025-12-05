@@ -42,9 +42,9 @@ CMD ["gunicorn", "--bind", "0.0.0.0:5050", \
 
 # Set up Yandex.Cloud certificate
 RUN mkdir -p /root/.postgresql && \
-wget "https://storage.yandexcloud.net/cloud-certs/CA.pem" \
-    --output-document /root/.postgresql/root.crt && \
-chmod 0600 /root/.postgresql/root.crt
+    curl -o /root/.postgresql/root.crt https://storage.yandexcloud.net/cloud-certs/CA.pem \
+        --retry 3 --retry-delay 2 --connect-timeout 10 && \
+    chmod 0600 /root/.postgresql/root.crt
 
 
 

@@ -10,10 +10,10 @@ check: format lint test
 
 install-deps:
 	curl -sSL https://install.python-poetry.org | python3 -
-	poetry install
+	poetry install -E dev
 
 install-hooks:
-	poetry install
+	poetry install -E dev
 	poetry run pre-commit install --install-hooks
 
 run-hooks:
@@ -49,7 +49,6 @@ format:
 	poetry run ruff check $(ROOT_DIR) $(TESTS_DIR) --fix
 
 setup: install-deps install-hooks
-	poetry run mypy --install-types --non-interactive $(ROOT_DIR) $(TESTS_DIR)
 
 makemigrations:
 	@command -v poetry >/dev/null 2>&1 || { echo "\033[0;31mError: poetry is not installed.\033[0m"; exit 1; }
