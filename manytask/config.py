@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.utils.generic import lerp
+
+from .models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER
 
 
 class RowData(BaseModel):
@@ -23,6 +25,96 @@ class RowData(BaseModel):
 class ManytaskUpdateDatabasePayload(BaseModel):
     new_scores: Dict[str, Union[Any]] = Field(...)
     row_data: RowData
+
+
+class CreateNamespaceRequest(BaseModel):
+    name: str
+    slug: str
+    description: Optional[str] = None
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, slug: str) -> str:
+        from manytask.models import _validate_gitlab_slug
+
+        return _validate_gitlab_slug(slug)
+
+
+class AddUserToNamespaceRequest(BaseModel):
+    user_id: int
+    role: Literal[ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER]
+
+
+class ErrorResponse(BaseModel):
+    error: str
+
+
+class NamespaceResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    description: Optional[str]
+    gitlab_group_id: int
+    gitlab_group_path: Optional[str] = None
+
+
+class NamespaceWithRoleResponse(NamespaceResponse):
+    role: str
+
+
+class NamespaceListResponse(BaseModel):
+    namespaces: list[Union[NamespaceResponse, NamespaceWithRoleResponse]]
+
+
+class UserOnNamespaceResponse(BaseModel):
+    id: int
+    user_id: int
+    namespace_id: int
+    role: str
+
+
+class NamespaceUserItem(BaseModel):
+    user_id: int
+    role: str
+
+
+class NamespaceUsersListResponse(BaseModel):
+    users: list[NamespaceUserItem]
+
+
+class CreateCourseRequest(BaseModel):
+    namespace_id: int
+    course_name: str
+    slug: str
+    owners: Optional[list[int]] = None  # gitlab user_ids
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, slug: str) -> str:
+        from manytask.models import _validate_gitlab_slug
+
+        return _validate_gitlab_slug(slug)
+
+    @field_validator("course_name")
+    @classmethod
+    def validate_course_name(cls, course_name: str) -> str:
+        if not course_name or len(course_name.strip()) == 0:
+            raise ValueError("course_name cannot be empty")
+        if len(course_name) > 100:
+            raise ValueError("course_name must be at most 100 characters")
+        return course_name.strip()
+
+
+class CourseResponse(BaseModel):
+    id: int
+    course_name: str
+    slug: str
+    namespace_id: int
+    gitlab_course_group: str
+    gitlab_course_public_repo: str
+    gitlab_course_students_group: str
+    status: str
+    owners: list[int]  # gitlab user_ids
 
 
 class ManytaskUiConfig(BaseModel):
