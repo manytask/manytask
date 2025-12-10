@@ -260,6 +260,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 namespaceSelect.disabled = true;
                 namespaceSelect.style.cursor = 'not-allowed';
                 namespaceSelect.style.backgroundColor = 'var(--bs-secondary-bg)';
+                
+                // Add hidden input since disabled selects are not submitted with form
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'namespace_id';
+                hiddenInput.value = preselectedNamespaceId;
+                namespaceSelect.parentElement.appendChild(hiddenInput);
+                
                 // Add a note below the select
                 const note = document.createElement('small');
                 note.className = 'form-text text-info';
