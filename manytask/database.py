@@ -98,7 +98,7 @@ class DataBaseApi(StorageApi):
                 defaults={
                     "is_instance_admin": True,
                     "rms_id": config.instance_admin_rms_id,
-                          },
+                },
                 create_defaults={
                     "first_name": "Instance",
                     "last_name": "Admin",
