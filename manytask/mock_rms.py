@@ -87,17 +87,17 @@ class MockRmsApi(RmsApi):
     ) -> int:
         if path in self.namespace_groups:
             raise RuntimeError(f"Group with path {path} already exists")
-        
+
         self.last_group_id += 1
         group_id = self.last_group_id
         self.namespace_groups[path] = group_id
         self.groups[path] = MockRmsGroup(name=name)
-        
+
         return group_id
 
     def add_user_to_namespace_group(self, gitlab_group_id: int, user_id: int) -> None:
         """Add a user to a namespace group (mock implementation).
-        
+
         :param gitlab_group_id: GitLab group ID
         :param user_id: User ID to add
         """
@@ -106,16 +106,16 @@ class MockRmsApi(RmsApi):
             if gid == gitlab_group_id:
                 group_path = path
                 break
-        
+
         if group_path is None:
             raise RuntimeError(f"Group with id {gitlab_group_id} not found")
-        
+
         if user_id not in self.groups[group_path].members:
             self.groups[group_path].members.append(user_id)
 
     def remove_user_from_namespace_group(self, gitlab_group_id: int, user_id: int) -> None:
         """Remove a user from a namespace group (mock implementation).
-        
+
         :param gitlab_group_id: GitLab group ID
         :param user_id: User ID to remove
         """
@@ -124,10 +124,10 @@ class MockRmsApi(RmsApi):
             if gid == gitlab_group_id:
                 group_path = path
                 break
-        
+
         if group_path is None:
             raise RuntimeError(f"Group with id {gitlab_group_id} not found")
-        
+
         if user_id in self.groups[group_path].members:
             self.groups[group_path].members.remove(user_id)
 
@@ -203,7 +203,7 @@ class MockRmsApi(RmsApi):
     ) -> RmsUser:
         # For testing, return last registered user
         return self.users[self.last_user]
-    
+
     def create_course_group(
         self,
         parent_group_id: int,
@@ -211,7 +211,7 @@ class MockRmsApi(RmsApi):
         course_slug: str,
     ) -> int:
         """Create a course subgroup under a namespace group (mock implementation).
-        
+
         :param parent_group_id: ID of parent namespace group
         :param course_name: Display name for the course
         :param course_slug: URL slug for the course
@@ -222,25 +222,25 @@ class MockRmsApi(RmsApi):
             if gid == parent_group_id:
                 parent_path = path
                 break
-        
+
         if parent_path is None:
             raise RuntimeError(f"Parent group with id {parent_group_id} not found")
-        
+
         course_group_path = f"{parent_path}/{course_slug}"
-        
+
         if course_group_path in self.namespace_groups:
             raise RuntimeError(f"Course group with path {course_group_path} already exists")
-        
+
         self.last_group_id += 1
         group_id = self.last_group_id
         self.namespace_groups[course_group_path] = group_id
         self.groups[course_group_path] = MockRmsGroup(name=course_slug)
-        
+
         return group_id
-    
+
     def delete_group(self, group_id: int) -> None:
         """Delete a group (mock implementation).
-        
+
         :param group_id: Group ID to delete
         """
         group_path = None
@@ -248,25 +248,25 @@ class MockRmsApi(RmsApi):
             if gid == group_id:
                 group_path = path
                 break
-        
+
         if group_path:
             del self.namespace_groups[group_path]
             if group_path in self.groups:
                 del self.groups[group_path]
-    
+
     def delete_project(self, project_id: int) -> None:
         """Delete a project (mock implementation).
-        
+
         In the mock, we use project paths as keys, so we'll need to track
         project IDs separately. For simplicity, we'll just not raise an error.
-        
+
         :param project_id: Project ID to delete
         """
         pass
-    
+
     def get_group_path_by_id(self, group_id: int) -> str | None:
         """Get the full path of a GitLab group by its ID (mock implementation).
-        
+
         :param group_id: GitLab group ID
         :return: Full path of the group or None if not found
         """

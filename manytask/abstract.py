@@ -73,9 +73,7 @@ class StorageApi(ABC):
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
-    def get_all_scores_with_names(
-        self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]: ...
+    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]: ...
 
     @abstractmethod
     def get_student_comment(self, course_name: str, username: str) -> str | None: ...
@@ -223,6 +221,24 @@ class StorageApi(ABC):
         :returns: list of successfully added user_ids
         """
         ...
+
+    @abstractmethod
+    def get_stored_user_by_id(
+        self,
+        user_id: int,
+    ) -> StoredUser | None: ...
+
+    @abstractmethod
+    def get_namespace_courses(self, namespace_id: int) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, int]: ...
+
+    @abstractmethod
+    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, int]: ...
+
+    @abstractmethod
+    def get_course_id_by_name(self, course_name: str) -> int | None: ...
 
 
 @dataclass

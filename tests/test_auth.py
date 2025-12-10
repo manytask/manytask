@@ -11,8 +11,8 @@ from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.auth import (
-    requires_instance_admin,
     requires_auth,
+    requires_instance_admin,
     requires_ready,
     set_oauth_session,
     valid_client_profile_session,

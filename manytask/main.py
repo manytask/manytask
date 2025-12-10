@@ -103,8 +103,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app.register_blueprint(web.instance_admin_bp)
 
     from .utils.flask import get_user_roles, has_role
-    app.jinja_env.globals['get_user_roles'] = get_user_roles
-    app.jinja_env.globals['has_role'] = has_role
+
+    app.jinja_env.globals["get_user_roles"] = get_user_roles
+    app.jinja_env.globals["has_role"] = has_role
 
     logger = logging.getLogger(__name__)
 

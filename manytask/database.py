@@ -430,7 +430,8 @@ class DataBaseApi(StorageApi):
                     if users_on_courses_count > 0
                     else 0
                 )
-                for task_id, task_name, submits_count in self._get_tasks_submits_count(session, course_name, program_managers_subquery)
+                for task_id, task_name, submits_count in
+                self._get_tasks_submits_count(session, course_name, program_managers_subquery)
             }
             # fmt: on
 
@@ -884,7 +885,7 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' not found when fetching namespace admin namespaces", username)
                 return []
 
-            namespace_ids = set()
+            namespace_ids: set[int] = set()
 
             owned_namespaces = session.query(models.Namespace).filter(models.Namespace.created_by_id == user.id).all()
             namespace_ids.update(ns.id for ns in owned_namespaces)
@@ -2127,7 +2128,7 @@ class DataBaseApi(StorageApi):
                     .join(models.UserOnCourse)
                     .filter(
                         models.UserOnCourse.course_id == course.id,
-                        models.UserOnCourse.is_course_admin == True,
+                        models.UserOnCourse.is_course_admin,
                     )
                     .all()
                 )
@@ -2226,7 +2227,7 @@ class DataBaseApi(StorageApi):
                         )
                         raise ValueError(f"User with rms_id={rms_id} is not in namespace {namespace_id}")
 
-                    user_on_course = self._update_or_create(
+                    self._update_or_create(
                         session,
                         models.UserOnCourse,
                         defaults={"is_course_admin": True},
@@ -2257,3 +2258,16 @@ class DataBaseApi(StorageApi):
             )
 
             return added_owners
+
+    def get_course_id_by_name(self, course_name: str) -> int | None:
+        """Get course database ID by course name.
+
+        :param course_name: Name of the course
+        :return: Course ID if found, None otherwise
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                return course.id
+            except NoResultFound:
+                return None

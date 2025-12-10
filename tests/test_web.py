@@ -16,7 +16,7 @@ from manytask.api import bp as api_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import TaskDisabledError
 from manytask.mock_rms import MockRmsApi
-from manytask.web import instance_admin_bp, course_bp, root_bp
+from manytask.web import course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
     INVALID_TASK_NAME,

@@ -189,7 +189,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         from .utils.flask import can_access_course
-        
+
         app: CustomFlask = current_app  # type: ignore
 
         if app.debug:
@@ -262,7 +262,7 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         from .utils.flask import is_namespace_admin
-        
+
         app: CustomFlask = current_app  # type: ignore
 
         if app.debug:
@@ -271,7 +271,7 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
         username = session["profile"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
         is_namespace_admin_user = is_namespace_admin(app, username)
-        
+
         if not is_instance_admin and not is_namespace_admin_user:
             logger.warning(
                 "User %s attempted to access %s without instance admin or namespace admin privileges",
@@ -287,21 +287,22 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
 
 def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to check if user has at least one of the required roles.
-    
+
     Usage:
         @role_required(['instance_admin', 'namespace_admin'])
         def some_route():
             ...
-    
+
     :param required_roles: Single role string or list of role strings
         Possible roles: 'instance_admin', 'namespace_admin', 'program_manager', 'student'
     """
+
     def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
         @requires_auth
         @wraps(f)
         def decorated(*args: Any, **kwargs: Any) -> Any:
             from .utils.flask import has_role
-            
+
             app: CustomFlask = current_app  # type: ignore
 
             if app.debug:
@@ -309,7 +310,7 @@ def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., An
 
             username = session["profile"]["username"]
             course_name = kwargs.get("course_name", None)
-            
+
             if not has_role(username, required_roles, app, course_name):
                 logger.warning(
                     "User %s attempted to access %s without required role(s): %s",
@@ -322,4 +323,5 @@ def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., An
             return f(*args, **kwargs)
 
         return decorated
+
     return decorator

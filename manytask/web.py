@@ -409,7 +409,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
 @instance_admin_bp.route("/courses/new", methods=["GET", "POST"])
 @requires_instance_or_namespace_admin
-def create_course() -> ResponseReturnValue:
+def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     app: CustomFlask = current_app  # type: ignore
 
     if request.method == "POST":
