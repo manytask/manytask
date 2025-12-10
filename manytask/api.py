@@ -655,6 +655,10 @@ def create_namespace() -> ResponseReturnValue:
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
         logger.info("GitLab group created with id=%s", gitlab_group_id)
 
+        creator_rms_id = session["gitlab"]["user_id"]
+        rms_api.add_user_to_namespace_group(gitlab_group_id, creator_rms_id)
+        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", creator_rms_id, gitlab_group_id)
+
         namespace = storage_api.create_namespace(
             name=name,
             slug=slug,
