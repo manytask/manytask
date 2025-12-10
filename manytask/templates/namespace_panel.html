@@ -53,25 +53,30 @@
                                 <th>User ID</th>
                                 <th>Username</th>
                                 <th>RMS ID (GitLab)</th>
-                                <th>Role</th>
-                                <th>Actions</th>
+                                <th>Current Role</th>
+                                <th>Change Role</th>
                             </tr>
                         </thead>
                         <tbody id="usersTableBody">
                             {% for user in users %}
-                                <tr data-user-id="{{ user.id }}">
+                                <tr data-user-id="{{ user.id }}" data-username="{{ user.username }}" data-current-role="{{ user.role }}">
                                     <td>{{ user.id }}</td>
                                     <td><strong>{{ user.username }}</strong></td>
                                     <td>{{ user.rms_id }}</td>
                                     <td>
-                                        <span class="badge bg-{% if user.role == 'namespace_admin' %}warning{% else %}secondary{% endif %}">
+                                        <span class="badge bg-{% if user.role == 'namespace_admin' %}warning{% else %}secondary{% endif %}" id="role-badge-{{ user.id }}">
                                             {{ user.role | replace('_', ' ') | title }}
                                         </span>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-danger" onclick="removeUser({{ user.id }}, '{{ user.username }}')">
-                                            <i class="fas fa-trash-alt"></i> Remove
-                                        </button>
+                                        <select class="form-select form-select-sm role-select" 
+                                                data-user-id="{{ user.id }}" 
+                                                data-username="{{ user.username }}"
+                                                onchange="changeRole(this)">
+                                            <option value="namespace_admin" {% if user.role == 'namespace_admin' %}selected{% endif %}>Namespace Admin</option>
+                                            <option value="program_manager" {% if user.role == 'program_manager' %}selected{% endif %}>Program Manager</option>
+                                            <option value="student">Demote to Student</option>
+                                        </select>
                                     </td>
                                 </tr>
                             {% endfor %}
@@ -227,37 +232,92 @@
             }
         }
 
-        async function removeUser(userId, username) {
-            if (!confirm(`Are you sure you want to remove user "${username}" from this namespace?`)) {
+        async function changeRole(selectElement) {
+            const userId = selectElement.dataset.userId;
+            const username = selectElement.dataset.username;
+            const newRole = selectElement.value;
+            const row = selectElement.closest('tr');
+            const currentRole = row.dataset.currentRole;
+            
+            // Confirm if demoting to student
+            if (newRole === 'student') {
+                if (!confirm(`Are you sure you want to demote "${username}" to student?\n\nThis will remove their admin privileges and access to the GitLab namespace group.`)) {
+                    // Reset to previous value
+                    selectElement.value = currentRole;
+                    return;
+                }
+            } else if (currentRole === newRole) {
+                // No change needed
                 return;
             }
 
+            // Disable the select while processing
+            selectElement.disabled = true;
+
             try {
                 const response = await fetch(`/api/namespaces/${namespaceId}/users/${userId}`, {
-                    method: 'DELETE',
+                    method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
-                    }
+                    },
+                    body: JSON.stringify({ role: newRole })
                 });
 
-                if (response.ok || response.status === 204) {
-                    const row = document.querySelector(`tr[data-user-id="${userId}"]`);
-                    if (row) {
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (newRole === 'student') {
+                        // Remove the row since user is no longer in namespace
                         row.remove();
+                        showNotification(`User "${username}" has been demoted to student.`, 'success');
+                    } else {
+                        // Update the badge
+                        const badge = document.getElementById(`role-badge-${userId}`);
+                        if (badge) {
+                            badge.textContent = newRole.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                            badge.className = `badge bg-${newRole === 'namespace_admin' ? 'warning' : 'secondary'}`;
+                        }
+                        row.dataset.currentRole = newRole;
+                        showNotification(`Role for "${username}" changed to ${newRole.replace('_', ' ')}.`, 'success');
                     }
-                    
-                    alert(`User "${username}" removed successfully!`);
-                    
-                    setTimeout(() => {
-                        location.reload();
-                    }, 500);
                 } else {
-                    const data = await response.json();
-                    alert('Failed to remove user: ' + (data.error || 'Unknown error'));
+                    // Revert the select to the original value
+                    selectElement.value = currentRole;
+                    showNotification(data.error || 'Failed to change role', 'error');
                 }
             } catch (error) {
-                alert('Network error: ' + error.message);
+                // Revert the select to the original value
+                selectElement.value = currentRole;
+                showNotification('Network error: ' + error.message, 'error');
+            } finally {
+                selectElement.disabled = false;
             }
+        }
+
+        function showNotification(message, type) {
+            // Remove any existing notification
+            const existing = document.querySelector('.role-notification');
+            if (existing) {
+                existing.remove();
+            }
+
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type === 'error' ? 'danger' : 'success'} alert-dismissible fade show role-notification`;
+            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            document.body.appendChild(notification);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
         }
     </script>
 {% endblock %}
