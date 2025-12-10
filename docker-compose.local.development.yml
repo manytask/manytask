@@ -1,3 +1,6 @@
+# Для локальной разработки (make dev)
+# Контейнеры общаются через внутреннюю сеть Docker Compose
+
 services:
 
     docs:
@@ -6,7 +9,6 @@ services:
             target: docs
         container_name: test-manytask-docs
         restart: always
-        network_mode: bridge
         expose:
             - "80"
         environment:
@@ -25,7 +27,6 @@ services:
             context: .
             target: app
         container_name: test-manytask
-        network_mode: bridge
         env_file: .env
         environment:
             VIRTUAL_HOST: ${APP_HOST}
@@ -39,13 +40,13 @@ services:
         dns:
             - 8.8.8.8
             - 8.8.4.4
-        links:
-            - postgres:postgres
+        depends_on:
+            postgres:
+                condition: service_healthy
 
     postgres:
         image: postgres:17
         container_name: manytask_postgres
-        network_mode: bridge
         environment:
             POSTGRES_USER: postgres
             POSTGRES_PASSWORD: postgres
@@ -65,3 +66,4 @@ services:
 volumes:
     postgres_data:
         name: manytask_postgres_data
+

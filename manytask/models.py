@@ -1,10 +1,12 @@
+import enum
 import logging
+import re
 from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
-from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship, validates
 from sqlalchemy.types import TypeDecorator
 
 from .course import Course as AppCourse
@@ -20,6 +22,33 @@ convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+
+
+def _validate_gitlab_slug(slug: str) -> str:
+    # https://docs.gitlab.com/user/reserved_names/#:~:text=project%20or%20group-,slugs,-%3A
+    if len(slug) == 0:
+        raise ValueError("Slug cannot be empty")
+    if not slug[0].isalnum() or not slug[-1].isalnum():
+        raise ValueError(f"Slug must start and end with a letter (a-zA-Z) or digit (0-9). Got: {slug}")
+    if re.search(r"[._-]{2,}", slug):
+        raise ValueError(f"Slug must not contain consecutive special characters. Got: {slug}")
+    if slug.endswith(".git") or slug.endswith(".atom"):
+        raise ValueError(f"Slug cannot end in .git or .atom. Got: {slug}")
+    if not re.match(r"^[a-zA-Z0-9._-]*$", slug):
+        raise ValueError(
+            f"Slug must contain only letters (a-zA-Z), digits (0-9), underscores (_), dots (.), or dashes (-). "
+            f"Got: {slug}"
+        )
+    return slug
+
+
+ROLE_NAMESPACE_ADMIN = "namespace_admin"
+ROLE_PROGRAM_MANAGER = "program_manager"
+
+
+class UserOnNamespaceRole(enum.Enum):
+    NAMESPACE_ADMIN = ROLE_NAMESPACE_ADMIN
+    PROGRAM_MANAGER = ROLE_PROGRAM_MANAGER
 
 
 class Base(DeclarativeBase):
@@ -127,12 +156,65 @@ class User(Base):
 
     # relationships
     users_on_courses: DynamicMapped["UserOnCourse"] = relationship(back_populates="user", cascade="all, delete-orphan")
+    users_on_namespaces: DynamicMapped["UserOnNamespace"] = relationship(
+        back_populates="user", foreign_keys="UserOnNamespace.user_id", cascade="all, delete-orphan"
+    )
+    created_namespaces: DynamicMapped["Namespace"] = relationship(back_populates="created_by")
+    assigned_users_on_namespaces: DynamicMapped["UserOnNamespace"] = relationship(
+        back_populates="assigned_by", foreign_keys="UserOnNamespace.assigned_by_id"
+    )
+
+
+class Namespace(Base):
+    __tablename__ = "namespaces"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    slug: Mapped[str] = mapped_column(unique=True)
+    description: Mapped[Optional[str]]
+    gitlab_group_id: Mapped[int] = mapped_column(unique=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey(User.id))
+
+    # relationships
+    created_by: Mapped["User"] = relationship(back_populates="created_namespaces")
+    users_on_namespaces: DynamicMapped["UserOnNamespace"] = relationship(
+        back_populates="namespace", cascade="all, delete-orphan"
+    )
+    courses: DynamicMapped["Course"] = relationship(back_populates="namespace", cascade="all, delete-orphan")
+
+    @validates("slug")
+    def validate_slug(self, key: str, slug: Optional[str]) -> Optional[str]:
+        if slug is None:
+            return None
+        return _validate_gitlab_slug(slug)
+
+
+class UserOnNamespace(Base):
+    __tablename__ = "users_on_namespaces"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey(User.id))
+    namespace_id: Mapped[int] = mapped_column(ForeignKey(Namespace.id))
+    role: Mapped[UserOnNamespaceRole] = mapped_column(
+        Enum(UserOnNamespaceRole, name="user_on_namespace_role", native_enum=False),
+    )
+    assigned_by_id: Mapped[int] = mapped_column(ForeignKey(User.id))
+
+    __table_args__ = (UniqueConstraint("user_id", "namespace_id", name="_user_namespace_uc"),)
+
+    # relationships
+    user: Mapped["User"] = relationship(back_populates="users_on_namespaces", foreign_keys=[user_id])
+    namespace: Mapped["Namespace"] = relationship(back_populates="users_on_namespaces")
+    assigned_by: Mapped["User"] = relationship(
+        back_populates="assigned_users_on_namespaces", foreign_keys=[assigned_by_id]
+    )
 
 
 class Course(Base):
     __tablename__ = "courses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    namespace_id: Mapped[Optional[int]] = mapped_column(ForeignKey(Namespace.id))
     name: Mapped[str] = mapped_column(unique=True)
     registration_secret: Mapped[str]
     token: Mapped[str] = mapped_column(unique=True)
@@ -169,6 +251,7 @@ class Course(Base):
     )
 
     # relationships
+    namespace: Mapped[Optional["Namespace"]] = relationship(back_populates="courses")
     task_groups: DynamicMapped["TaskGroup"] = relationship(
         back_populates="course", cascade="all, delete-orphan", order_by="TaskGroup.position"
     )
@@ -183,6 +266,7 @@ class Course(Base):
         return AppCourse(
             AppCourseConfig(
                 course_name=self.name,
+                namespace_id=self.namespace_id,
                 gitlab_course_group=self.gitlab_course_group,
                 gitlab_course_public_repo=self.gitlab_course_public_repo,
                 gitlab_course_students_group=self.gitlab_course_students_group,
@@ -275,6 +359,7 @@ class Grade(Base):
     user_on_course_id: Mapped[int] = mapped_column(ForeignKey(UserOnCourse.id))
     task_id: Mapped[int] = mapped_column(ForeignKey(Task.id))
     score: Mapped[int] = mapped_column(default=0)
+    is_solved: Mapped[bool] = mapped_column(default=False, server_default="false")
     last_submit_date: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (UniqueConstraint("user_on_course_id", "task_id", name="_user_on_course_task_uc"),)

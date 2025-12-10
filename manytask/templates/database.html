@@ -7,9 +7,18 @@
         <div class="spinner-border text-secondary" style="width: 3rem; height: 3rem;"></div>
     </div>
     <div class="container-fluid position-relative">
-        <h2>Course Database</h2>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0">Course Database</h2>
+            
+            {% if is_course_admin %}
+            <button id="toggle-personal-info" class="btn btn-outline-secondary btn-sm" title="Toggle personal info columns">
+                <i class="fas fa-eye"></i> Toggle Personal Info
+            </button>
+            {% endif %}
+        </div>
 
         <div class="db-search-controls mb-3 mt-4">
+
             <div class="db-search-group">
                 <div class="db-search-input">
                     <input id="filter-value" type="text" class="form-control pr-1" placeholder="Search...">
@@ -263,8 +272,11 @@
                 if (data.username.toLowerCase().includes(searchTerm)) {
                     return true;
                 }
-                const full_name = `${data.first_name} ${data.last_name}`.toLowerCase();
-                return full_name.includes(searchTerm);
+                if (data.first_name && data.last_name) {
+                    const full_name = `${data.first_name} ${data.last_name}`.toLowerCase();
+                    return full_name.includes(searchTerm);
+                }
+                return false;
             }
 
             document.getElementById("filter-value")
@@ -307,6 +319,7 @@
                                 return value;
                             }
                         },
+                        {% if is_course_admin %}
                         {
                             title: "First<br>Name",
                             field: "first_name",
@@ -321,6 +334,7 @@
                             minWidth: 1,
                             headerTooltip: "Last Name"
                         },
+                        {% endif %}
                         {
                             title: "Grade",
                             field: "grade",
@@ -692,6 +706,42 @@
                             footer.insertBefore(exportButton, footer.firstChild);
                         }
                     }, 100);
+                    // Toggle personal info columns (admins only)
+                    {% if is_course_admin %}
+                    const toggleButton = document.getElementById('toggle-personal-info');
+                    if (toggleButton) {
+                        const personalColumns = ['first_name', 'last_name', 'comment'];
+
+                        toggleButton.addEventListener('click', function() {
+                            const firstCol = window.tabulatorTable.getColumn('first_name');
+                            const isVisible = firstCol ? firstCol.isVisible() : false;
+                            
+                            personalColumns.forEach(field => {
+                                const col = window.tabulatorTable.getColumn(field);
+                                if (col) {
+                                    if (isVisible) {
+                                        col.hide();
+                                    } else {
+                                        col.show();
+                                    }
+                                }
+                            });
+                            
+                            const icon = toggleButton.querySelector('i');
+                            if (icon) {
+                                if (isVisible) {
+                                    icon.classList.remove('fa-eye');
+                                    icon.classList.add('fa-eye-slash');
+                                } else {
+                                    icon.classList.remove('fa-eye-slash');
+                                    icon.classList.add('fa-eye');
+                                }
+                            }
+                            
+                            window.tabulatorTable.redraw(true);
+                        });
+                    }
+                    {% endif %}
                 })
                 .catch(error => {
                     console.error('Error creating table:', error);

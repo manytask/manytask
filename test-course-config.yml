@@ -1,0 +1,48 @@
+version: 1
+status: in_progress
+
+ui:
+  task_url_template: https://gitlab.manytask2.org/test-uni/test-rust-course/$GROUP_NAME/$USER_NAME/$TASK_NAME
+  links:
+    "GitLab": https://gitlab.manytask2.org
+
+deadlines:
+  timezone: Europe/Moscow
+  deadlines: hard
+  max_submissions: 10
+  submission_penalty: 0.1
+
+  schedule:
+    - group: week_1
+      start: 2025-01-01 10:00
+      steps:
+        0.5: 2025-01-08 23:59
+      end: 2025-01-15 23:59
+      enabled: true
+      tasks:
+        - task: task_1_1
+          score: 10
+        - task: task_1_2
+          score: 10
+        - task: task_1_3
+          score: 10
+
+    - group: week_2
+      start: 2025-01-08 10:00
+      steps:
+        0.5: 2025-01-15 23:59
+      end: 2025-01-22 23:59
+      enabled: true
+      tasks:
+        - task: task_2_1
+          score: 15
+        - task: task_2_2
+          score: 15
+
+grades:
+  grades:
+    5: [{"percent": 90}]
+    4: [{"percent": 75}]
+    3: [{"percent": 60}]
+    2: [{"": 0}]
+

@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class CourseConfig:
     """Configuration for Course settings."""
 
     course_name: str
+    namespace_id: Optional[int]
 
     gitlab_course_group: str
     gitlab_course_public_repo: str
@@ -80,6 +82,7 @@ class Course:
         """
 
         self.course_name = config.course_name
+        self.namespace_id = config.namespace_id
 
         self.__gitlab_course_group = config.gitlab_course_group
         self.__gitlab_course_public_repo = config.gitlab_course_public_repo

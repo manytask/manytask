@@ -66,9 +66,13 @@ Below is a brief description of each main file in the project:
 
 #### Step 3 — Start the Application
 
+На сервере используется `docker-compose.development.yml` с `network_mode: bridge` для работы с nginx-proxy:
+
 ```bash
-docker compose up --build -d
+docker compose -f docker-compose.development.yml up --build -d
 ```
+
+> **Примечание:** Для локальной разработки используйте `docker-compose.local.development.yml` или команду `make dev`.
 
 ### 4. Adding a Course
 #### Step 1 — Create the Course in the Admin Panel
@@ -99,7 +103,34 @@ Once done, your first course will be available in Manytask.
 
 
 ## How to deploy manytask locally
+
+### Option 1: Using Docker (recommended)
+
+1. Copy `.env.example` to `.env` and configure it:
+   - Set `FLASK_SECRET_KEY` to a random string
+   - Set `INITIAL_INSTANCE_ADMIN` to your GitLab username
+
+2. Run with make:
+   ```bash
+   make dev
+   ```
+   
+   Or directly with docker-compose:
+   ```bash
+   docker-compose -f docker-compose.local.development.yml up --build
+   ```
+
+3. Manytask will be available on [http://127.0.0.1:8081/](http://127.0.0.1:8081/)
+
+> **Docker Compose files:**
+> - `docker-compose.local.development.yml` — для локальной разработки (используется в `make dev`)
+> - `docker-compose.development.yml` — для деплоя на сервер с nginx-proxy
+
+
+### Option 2: Without Docker
+
 Use `WSL 2`, if you are using Windows
+
 1. Install `postgresql`: 
     ```bash
      sudo apt install postgresql postgresql-contrib

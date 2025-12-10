@@ -4,10 +4,16 @@ from manytask.course import Course
 from manytask.main import CustomFlask
 
 
-def get_database_table_data(app: CustomFlask, course: Course, include_admin_data: bool = False) -> dict[str, Any]:
+def get_database_table_data(
+    app: CustomFlask,
+    course: Course,
+    include_admin_data: bool = False,
+    is_program_manager: bool = False,
+) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints.
 
-    Set include_repo_urls=True to include per-student repo URLs (for admins-only views).
+    Set include_admin_data=True to include per-student repo URLs (for admins-only views).
+    Set is_program_manager=True to include student full names (for program managers).
     """
 
     course_name = course.course_name
@@ -36,8 +42,8 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
 
         row = {
             "username": username,
-            "first_name": first_name,
-            "last_name": last_name,
+            "first_name": first_name if is_program_manager else "",
+            "last_name": last_name if is_program_manager else "",
             "scores": student_scores,
             "total_score": total_score,
             "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
