@@ -1,70 +1,70 @@
-# Public Export — Автоматический экспорт задач
+# Public Export — Automatic Task Export
 
-## Обзор
+## Overview
 
-**Public Export** — механизм автоматического экспорта задач из приватного репозитория преподавателей (`private`) в публичный репозиторий (`public`), доступный студентам.
+**Public Export** — a mechanism for automatic export of tasks from the instructors' private repository (`private`) to the public repository (`public`) accessible to students.
 
-### Как это работает
+### How It Works
 
 ```
 ┌─────────────────┐      CI Pipeline      ┌─────────────────┐
 │     private     │ ──────────────────▶   │     public      │
-│  (преподаватели)│   checker export      │   (студенты)    │
+│  (instructors)  │   checker export      │   (students)    │
 │                 │      --commit         │                 │
-│  - решения      │                       │  - шаблоны      │
-│  - тесты        │                       │  - публичные    │
-│  - конфиги      │                       │    тесты        │
+│  - solutions    │                       │  - templates    │
+│  - tests        │                       │  - public       │
+│  - configs      │                       │    tests        │
 └─────────────────┘                       └─────────────────┘
 ```
 
-При пуше в `main` ветку `private` репозитория:
-1. Запускается CI pipeline
-2. Job `deploy-public` копирует публичные файлы
-3. Решения заменяются на шаблоны (`.template` файлы)
-4. Изменения коммитятся и пушатся в `public`
+On push to the `main` branch of the `private` repository:
+1. CI pipeline starts
+2. Job `deploy-public` copies public files
+3. Solutions are replaced with templates (`.template` files)
+4. Changes are committed and pushed to `public`
 
 ---
 
-## Структура репозиториев
+## Repository Structure
 
-### Private репозиторий (преподаватели)
+### Private Repository (Instructors)
 
 ```
 private/
-├── .checker.yml          # Конфигурация checker (приватный)
-├── .manytask.yml         # Конфигурация курса (приватный)
-├── .releaser-ci.yml      # CI для преподавателей (приватный)
-├── .gitlab-ci.yml        # CI для студентов (публичный)
-├── base.docker           # Dockerfile базового образа
-├── testenv.docker        # Dockerfile тестового окружения
-├── pyproject.toml        # Зависимости Python
-├── tools/                # Инструменты тестирования (публичный)
+├── .checker.yml          # Checker configuration (private)
+├── .manytask.yml         # Course configuration (private)
+├── .releaser-ci.yml      # CI for instructors (private)
+├── .gitlab-ci.yml        # CI for students (public)
+├── base.docker           # Dockerfile for base image
+├── testenv.docker        # Dockerfile for test environment
+├── pyproject.toml        # Python dependencies
+├── tools/                # Testing tools (public)
 │   ├── plugins/
 │   └── testlib/
-└── Python/               # Группа задач
+└── Python/               # Task group
     ├── .group.yml
-    ├── add/              # Задача
+    ├── add/              # Task
     │   ├── .task.yml
-    │   ├── add.py            # Решение (НЕ экспортируется)
-    │   ├── add.py.template   # Шаблон (экспортируется как add.py)
-    │   ├── test_public.py    # Публичные тесты
-    │   └── test_private.py   # Приватные тесты (НЕ экспортируется)
+    │   ├── add.py            # Solution (NOT exported)
+    │   ├── add.py.template   # Template (exported as add.py)
+    │   ├── test_public.py    # Public tests
+    │   └── test_private.py   # Private tests (NOT exported)
     └── subtract/
         └── ...
 ```
 
-### Public репозиторий (студенты)
+### Public Repository (Students)
 
 ```
 public/
-├── .gitlab-ci.yml        # CI для проверки
+├── .gitlab-ci.yml        # CI for testing
 ├── pyproject.toml
 ├── tools/
 └── Python/
     ├── .group.yml
     ├── add/
     │   ├── .task.yml
-    │   ├── add.py            # Шаблон (из add.py.template)
+    │   ├── add.py            # Template (from add.py.template)
     │   └── test_public.py
     └── subtract/
         └── ...
@@ -72,22 +72,22 @@ public/
 
 ---
 
-## Конфигурация
+## Configuration
 
-### 1. `.checker.yml` — структура и экспорт
+### 1. `.checker.yml` — Structure and Export
 
 ```yaml
 version: 1
 
 structure:
-  # Игнорируемые файлы/папки
+  # Ignored files/folders
   ignore_patterns:
     - ".git"
     - "__pycache__"
     - ".venv"
     - "*.pyc"
   
-  # Публичные файлы — экспортируются, перезаписываются при тестировании
+  # Public files — exported, overwritten during testing
   public_patterns:
     - ".gitlab-ci.yml"
     - ".task.yml"
@@ -97,9 +97,9 @@ structure:
     - "tools"
     - ".gitignore"
   
-  # Приватные файлы — НЕ экспортируются
+  # Private files — NOT exported
   private_patterns:
-    - ".*"              # Все dot-файлы
+    - ".*"              # All dot-files
     - "test_private.py"
 
 export:
@@ -109,7 +109,7 @@ export:
   templates: search_or_create  # search, create, search_or_create
 ```
 
-### 2. `.manytask.yml` — расписание задач
+### 2. `.manytask.yml` — Task Schedule
 
 ```yaml
 version: 1
@@ -136,7 +136,7 @@ deadlines:
           score: 100
 ```
 
-### 3. `.releaser-ci.yml` — CI для экспорта
+### 3. `.releaser-ci.yml` — CI for Export
 
 ```yaml
 variables:
@@ -154,61 +154,61 @@ deploy-public:
       when: on_success
     - when: never
   script:
-    # Клонируем публичный репозиторий
+    # Clone the public repository
     - git clone https://oauth2:$GITLAB_API_TOKEN@gitlab.manytask.org/sandbox/public ./export
     - cd ./export && git config user.email "ci@manytask.org" && git config user.name "CI Bot" && cd ..
-    # Экспортируем и пушим
+    # Export and push
     - python3 -m checker export --commit
 ```
 
 ---
 
-## Настройка CI/CD Variables
+## CI/CD Variables Setup
 
-### Обязательные переменные
+### Required Variables
 
-| Переменная | Описание | Где создать |
-|------------|----------|-------------|
-| `GITLAB_API_TOKEN` | Токен для push в public репо | Project Settings → CI/CD → Variables |
-| `DOCKER_AUTH_CONFIG` | Аутентификация в Docker Registry | Group Settings → CI/CD → Variables |
-| `TESTER_TOKEN` | Токен Manytask API | Group Settings → CI/CD → Variables |
+| Variable | Description | Where to Create |
+|----------|-------------|-----------------|
+| `GITLAB_API_TOKEN` | Token for push to public repo | Project Settings → CI/CD → Variables |
+| `DOCKER_AUTH_CONFIG` | Docker Registry authentication | Group Settings → CI/CD → Variables |
+| `TESTER_TOKEN` | Manytask API token | Group Settings → CI/CD → Variables |
 
-### Создание GITLAB_API_TOKEN
+### Creating GITLAB_API_TOKEN
 
-1. Перейдите в GitLab → **Group Settings → Access Tokens**
-2. Создайте токен:
+1. Go to GitLab → **Group Settings → Access Tokens**
+2. Create a token:
    - **Name:** `ci-deploy-public`
    - **Role:** **Maintainer**
    - **Scopes:** `write_repository`
-3. Добавьте в **CI/CD Variables** репозитория `private`:
+3. Add to **CI/CD Variables** in the `private` repository:
    - **Key:** `GITLAB_API_TOKEN`
-   - **Value:** созданный токен
+   - **Value:** the created token
 
 ---
 
-## Шаблоны задач
+## Task Templates
 
-### Вариант 1: `.template` файлы (рекомендуется)
+### Option 1: `.template` Files (Recommended)
 
-Создайте файл `solution.py.template` рядом с `solution.py`:
+Create a `solution.py.template` file next to `solution.py`:
 
-**solution.py** (решение):
+**solution.py** (solution):
 ```python
 def add(a, b):
     return a + b
 ```
 
-**solution.py.template** (шаблон для студентов):
+**solution.py.template** (template for students):
 ```python
 def add(a, b):
     # Implement me
 ```
 
-При экспорте `solution.py.template` заменит `solution.py`.
+During export, `solution.py.template` will replace `solution.py`.
 
-### Вариант 2: Template comments
+### Option 2: Template Comments
 
-Используйте комментарии в коде:
+Use comments in the code:
 
 ```python
 def add(a, b):
@@ -217,19 +217,19 @@ def add(a, b):
     # SOLUTION END
 ```
 
-При экспорте код между комментариями заменится на `# TODO: Your solution`.
+During export, code between the comments will be replaced with `# TODO: Your solution`.
 
 ---
 
-## Добавление новой задачи
+## Adding a New Task
 
-### 1. Создайте структуру
+### 1. Create the Structure
 
 ```bash
 mkdir -p Python/new_task
 ```
 
-### 2. Создайте файлы
+### 2. Create the Files
 
 **Python/new_task/.task.yml:**
 ```yaml
@@ -256,7 +256,7 @@ def test_solve():
     assert solve() == 42
 ```
 
-### 3. Добавьте в `.manytask.yml`
+### 3. Add to `.manytask.yml`
 
 ```yaml
 tasks:
@@ -264,7 +264,7 @@ tasks:
     score: 100
 ```
 
-### 4. Закоммитьте и запушьте
+### 4. Commit and Push
 
 ```bash
 git add .
@@ -272,4 +272,4 @@ git commit -m "Add new_task"
 git push origin main
 ```
 
-Pipeline автоматически экспортирует задачу в `public`.
+The pipeline will automatically export the task to `public`.
