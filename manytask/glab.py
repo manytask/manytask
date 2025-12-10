@@ -41,6 +41,7 @@ class GitLabApi(RmsApi, AuthApi):
         """
         self.dry_run = config.dry_run
         self._base_url = config.base_url
+        self._verify_ssl = config.verify_ssl
         self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token, ssl_verify=config.verify_ssl)
 
     def register_new_user(

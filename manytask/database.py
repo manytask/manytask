@@ -280,6 +280,29 @@ class DataBaseApi(StorageApi):
                 logger.info("No user found with username '%s' when checking admin status: %s", username, e)
                 return False
 
+    def check_if_program_manager(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool:
+        with self._session_create() as session:
+            try:
+                user = self._get(session, models.User, username=username)
+                course = self._get(session, models.Course, name=course_name)
+
+                if course.namespace_id is None:
+                    return False
+
+                user_on_namespace = self._get(
+                    session,
+                    models.UserOnNamespace,
+                    user_id=user.id,
+                    namespace_id=course.namespace_id,
+                )
+                return user_on_namespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER
+            except NoResultFound:
+                return False
+
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None:
         """Method for sync user's gitlab and stored data
 
