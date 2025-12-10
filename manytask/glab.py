@@ -147,7 +147,8 @@ class GitLabApi(RmsApi, AuthApi):
         """Create a students group for a course.
 
         :param course_students_group: Full path to the students group (e.g., "namespace/course/students-2025-fall")
-        :param parent_group_id: Optional parent group ID. If provided, creates as subgroup. If None, creates top-level group.
+        :param parent_group_id: Optional parent group ID. If provided, creates as subgroup.
+        If None, creates top-level group.
         :return: The created group object, or None if group already exists
         """
         try:
@@ -184,7 +185,7 @@ class GitLabApi(RmsApi, AuthApi):
                         short_name = course_students_group.split("/")[-1]
 
                         for subgroup in subgroups:
-                            if subgroup.name == short_name or subgroup.path == short_name:
+                            if short_name in {subgroup.name, subgroup.path}:
                                 logger.info(
                                     "Found existing students group %s through parent subgroups with id=%s",
                                     course_students_group,
@@ -202,7 +203,8 @@ class GitLabApi(RmsApi, AuthApi):
                         course_students_group,
                     )
                     raise RuntimeError(
-                        f"Group {course_students_group} creation failed: group already exists but cannot be retrieved. Please try again in a moment."
+                        f"Group {course_students_group} creation failed: "
+                        f"group already exists but cannot be retrieved. Please try again in a moment."
                     )
             raise
 

@@ -11,8 +11,8 @@ from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.auth import (
-    requires_instance_admin,
     requires_auth,
+    requires_instance_admin,
     requires_ready,
     set_oauth_session,
     valid_client_profile_session,
@@ -132,6 +132,22 @@ def mock_storage_api(mock_course):  # noqa: C901
         def max_score_started(self):
             return 100  # Mock value for testing
 
+        @staticmethod
+        def get_namespace_admin_namespaces(_username):
+            return []
+
+        @staticmethod
+        def get_courses_by_namespace_ids(_namespace_ids):
+            return []
+
+        @staticmethod
+        def get_courses_where_course_admin(_username):
+            return []
+
+        @staticmethod
+        def get_namespace_by_id(_namespace_id, _username):
+            raise PermissionError("No access to namespace")
+
     return MockStorageApi()
 
 
@@ -148,6 +164,7 @@ def mock_course():
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"
             self.gitlab_default_branch = "main"
+            self.namespace_id = None
 
     return MockCourse()
 

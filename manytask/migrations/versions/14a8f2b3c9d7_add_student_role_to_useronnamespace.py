@@ -19,8 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add 'STUDENT' value to user_on_namespace_role enum
-    op.execute("ALTER TYPE user_on_namespace_role ADD VALUE IF NOT EXISTS 'STUDENT'")
+    pass
 
 
 def downgrade() -> None:

@@ -324,8 +324,13 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
+    def get_all_scores_with_names(
+        self, course_name: str
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]:
         """Get all users' scores with names for the given course.
+
+        Returns a dict mapping username to (scores_dict, (first_name, last_name)).
+        scores_dict maps task_name to (score, is_solved) tuple.
 
         Excludes users with PROGRAM_MANAGER role in the course's namespace.
         """
@@ -348,6 +353,7 @@ class DataBaseApi(StorageApi):
                     User.last_name,
                     Task.name,
                     coalesce(Grade.score, 0),
+                    coalesce(Grade.is_solved, False),
                     User.id,
                 )
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
@@ -365,13 +371,13 @@ class DataBaseApi(StorageApi):
 
             rows = session.execute(statement).all()
 
-            scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
+            scores_and_names: dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]] = {}
 
-            for username, first_name, last_name, task_name, score, _ in rows:
+            for username, first_name, last_name, task_name, score, is_solved, _ in rows:
                 if username not in scores_and_names:
                     scores_and_names[username] = ({}, (first_name, last_name))
                 if task_name is not None:
-                    scores_and_names[username][0][task_name] = score
+                    scores_and_names[username][0][task_name] = (score, is_solved)
 
             return scores_and_names
 
@@ -435,7 +441,8 @@ class DataBaseApi(StorageApi):
                     if users_on_courses_count > 0
                     else 0
                 )
-                for task_id, task_name, submits_count in self._get_tasks_submits_count(session, course_name, program_managers_subquery)
+                for task_id, task_name, submits_count in
+                self._get_tasks_submits_count(session, course_name, program_managers_subquery)
             }
             # fmt: on
 
@@ -889,7 +896,7 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' not found when fetching namespace admin namespaces", username)
                 return []
 
-            namespace_ids = set()
+            namespace_ids: set[int] = set()
 
             owned_namespaces = session.query(models.Namespace).filter(models.Namespace.created_by_id == user.id).all()
             namespace_ids.update(ns.id for ns in owned_namespaces)
@@ -2036,6 +2043,79 @@ class DataBaseApi(StorageApi):
                 logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
                 raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
 
+    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, int]:
+        """Update a user's role in a namespace.
+
+        If new_role is 'student', removes the user from the namespace entirely.
+        Otherwise, updates the role to namespace_admin or program_manager.
+
+        :param namespace_id: ID of the namespace
+        :param user_id: Database User.id (not rms_id)
+        :param new_role: New role ('namespace_admin', 'program_manager', or 'student')
+        :return: Tuple of (old_role, new_role, rms_id)
+        :raises NoResultFound: If the user is not in the namespace
+        :raises ValueError: If the role is invalid
+        """
+        with self._session_create() as session:
+            logger.info(
+                "Updating role for user_id=%s in namespace_id=%s to %s",
+                user_id,
+                namespace_id,
+                new_role,
+            )
+
+            try:
+                user_on_namespace = self._get(
+                    session,
+                    models.UserOnNamespace,
+                    user_id=user_id,
+                    namespace_id=namespace_id,
+                )
+
+                old_role = user_on_namespace.role.value
+                user = self._get(session, models.User, id=user_id)
+                rms_id = user.rms_id
+                username = user.username
+
+                if new_role == "student":
+                    # Remove from namespace entirely
+                    session.delete(user_on_namespace)
+                    session.commit()
+                    logger.info(
+                        "Demoted user %s (id=%s, rms_id=%s) from %s to student in namespace_id=%s",
+                        username,
+                        user_id,
+                        rms_id,
+                        old_role,
+                        namespace_id,
+                    )
+                    return (old_role, "student", rms_id)
+
+                elif new_role == ROLE_NAMESPACE_ADMIN:
+                    user_on_namespace.role = models.UserOnNamespaceRole.NAMESPACE_ADMIN
+                elif new_role == ROLE_PROGRAM_MANAGER:
+                    user_on_namespace.role = models.UserOnNamespaceRole.PROGRAM_MANAGER
+                else:
+                    raise ValueError(
+                        f"Invalid role: {new_role}. Must be 'namespace_admin', 'program_manager', or 'student'"
+                    )
+
+                session.commit()
+                logger.info(
+                    "Updated role for user %s (id=%s, rms_id=%s) from %s to %s in namespace_id=%s",
+                    username,
+                    user_id,
+                    rms_id,
+                    old_role,
+                    new_role,
+                    namespace_id,
+                )
+                return (old_role, new_role, rms_id)
+
+            except NoResultFound:
+                logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
+                raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
+
     def get_namespace_courses(self, namespace_id: int) -> list[dict[str, Any]]:
         """Get list of courses in a namespace with information about owners.
 
@@ -2059,7 +2139,7 @@ class DataBaseApi(StorageApi):
                     .join(models.UserOnCourse)
                     .filter(
                         models.UserOnCourse.course_id == course.id,
-                        models.UserOnCourse.is_course_admin == True,
+                        models.UserOnCourse.is_course_admin,
                     )
                     .all()
                 )
@@ -2158,7 +2238,7 @@ class DataBaseApi(StorageApi):
                         )
                         raise ValueError(f"User with rms_id={rms_id} is not in namespace {namespace_id}")
 
-                    user_on_course = self._update_or_create(
+                    self._update_or_create(
                         session,
                         models.UserOnCourse,
                         defaults={"is_course_admin": True},
@@ -2189,3 +2269,16 @@ class DataBaseApi(StorageApi):
             )
 
             return added_owners
+
+    def get_course_id_by_name(self, course_name: str) -> int | None:
+        """Get course database ID by course name.
+
+        :param course_name: Name of the course
+        :return: Course ID if found, None otherwise
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                return course.id
+            except NoResultFound:
+                return None

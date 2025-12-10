@@ -224,6 +224,24 @@ class StorageApi(ABC):
         """
         ...
 
+    @abstractmethod
+    def get_stored_user_by_id(
+        self,
+        user_id: int,
+    ) -> StoredUser | None: ...
+
+    @abstractmethod
+    def get_namespace_courses(self, namespace_id: int) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, int]: ...
+
+    @abstractmethod
+    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, int]: ...
+
+    @abstractmethod
+    def get_course_id_by_name(self, course_name: str) -> int | None: ...
+
 
 @dataclass
 class RmsUser:

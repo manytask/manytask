@@ -5,7 +5,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 
 import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
@@ -33,6 +33,7 @@ from .config import (
     NamespaceUserItem,
     NamespaceUsersListResponse,
     NamespaceWithRoleResponse,
+    UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
 from pydantic import BaseModel
@@ -55,7 +56,10 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
     return course
 
 
-def validate_json_request(model_class: type[BaseModel]) -> tuple[BaseModel | None, ResponseReturnValue | None]:
+T = TypeVar("T", bound=BaseModel)
+
+
+def validate_json_request(model_class: type[T]) -> tuple[T | None, ResponseReturnValue | None]:
     """Validate JSON request with Pydantic model (helper function).
 
     Returns:
@@ -643,6 +647,7 @@ def create_namespace() -> ResponseReturnValue:
     request_data, error = validate_json_request(CreateNamespaceRequest)
     if error:
         return error
+    assert request_data is not None
 
     name = request_data.name
     slug = request_data.slug
@@ -654,6 +659,10 @@ def create_namespace() -> ResponseReturnValue:
         logger.info("Creating GitLab group for namespace name=%s slug=%s", name, slug)
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
         logger.info("GitLab group created with id=%s", gitlab_group_id)
+
+        creator_rms_id = session["gitlab"]["user_id"]
+        rms_api.add_user_to_namespace_group(gitlab_group_id, creator_rms_id)
+        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", creator_rms_id, gitlab_group_id)
 
         namespace = storage_api.create_namespace(
             name=name,
@@ -788,6 +797,7 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
     try:
         namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
 
+        result: NamespaceResponse | NamespaceWithRoleResponse
         if role is not None:
             result = NamespaceWithRoleResponse(
                 id=namespace.id,
@@ -1040,6 +1050,113 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+@namespace_bp.patch("/namespaces/<int:namespace_id>/users/<int:user_id>")
+@requires_auth
+@requires_json_validation(UpdateUserRoleRequest)
+@requires_namespace_admin()
+def update_user_role_in_namespace(
+    namespace_id: int, user_id: int, namespace: Any, validated_data: UpdateUserRoleRequest
+) -> ResponseReturnValue:
+    """Update a user's role in a namespace.
+
+    Only Instance Admin or Namespace Admin can update roles.
+    Setting role to 'student' removes the user from the namespace and GitLab group.
+
+    Request JSON:
+    {
+        "role": "namespace_admin" | "program_manager" | "student"
+    }
+
+    Args:
+        namespace_id: ID of the namespace
+        user_id: Database User.id (not rms_id)
+
+    Returns:
+        200: Role updated successfully
+        400: Bad request (invalid role)
+        403: Forbidden (not Instance Admin or Namespace Admin)
+        404: Not found (user is not in the namespace)
+        500: Internal server error (including GitLab errors)
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+    rms_api = app.rms_api
+
+    username = session["gitlab"]["username"]
+    new_role = validated_data.role
+
+    try:
+        # First, get the user's rms_id before making any changes
+        try:
+            stored_user = storage_api.get_stored_user_by_id(user_id)
+            if stored_user is None:
+                return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
+            rms_id = stored_user.rms_id
+        except Exception as e:
+            logger.error("Failed to get user info for user_id=%s: %s", user_id, str(e))
+            return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
+
+        # If demoting to student, we need to remove from GitLab first
+        # If GitLab fails, we don't want to change the database
+        if new_role == "student":
+            try:
+                rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, rms_id)
+                logger.info(
+                    "User %s removed user rms_id=%s from GitLab group id=%s (role change to student)",
+                    username,
+                    rms_id,
+                    namespace.gitlab_group_id,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
+                    rms_id,
+                    namespace.gitlab_group_id,
+                    str(e),
+                )
+                return jsonify(
+                    ErrorResponse(error=f"Failed to remove user from GitLab group: {str(e)}").model_dump()
+                ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+        # Now update the database
+        try:
+            old_role, actual_new_role, _ = storage_api.update_user_role_in_namespace(namespace_id, user_id, new_role)
+            logger.info(
+                "User %s updated role for user_id=%s in namespace id=%s: %s -> %s",
+                username,
+                user_id,
+                namespace_id,
+                old_role,
+                actual_new_role,
+            )
+        except NoResultFound:
+            logger.warning("User id=%s not found in namespace id=%s", user_id, namespace_id)
+            return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
+        except ValueError as e:
+            logger.warning("Invalid role %s: %s", new_role, str(e))
+            return jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST
+
+        return jsonify(
+            {
+                "success": True,
+                "old_role": old_role,
+                "new_role": actual_new_role,
+                "user_id": user_id,
+            }
+        ), HTTPStatus.OK
+
+    except Exception as e:
+        logger.error(
+            "Unexpected error updating role for user_id=%s in namespace id=%s by user=%s: %s",
+            user_id,
+            namespace_id,
+            username,
+            str(e),
+            exc_info=True,
+        )
+        return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 @namespace_bp.post("/admin/courses")
 @requires_auth
 @requires_json_validation(CreateCourseRequest)
@@ -1238,15 +1355,9 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         added_owners = []
         if owner_rms_ids:
             try:
-                created_course = storage_api.get_course(course_name)
-                if created_course is None:
+                course_id = storage_api.get_course_id_by_name(course_name)
+                if course_id is None:
                     raise RuntimeError(f"Course {course_name} not found after creation")
-
-                from manytask import models
-
-                with storage_api._session_create() as db_sess:
-                    course_db = db_sess.query(models.Course).filter_by(name=course_name).one()
-                    course_id = course_db.id
 
                 added_owners = storage_api.add_course_owners(
                     course_id=course_id,
@@ -1274,14 +1385,12 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             len(added_owners),
         )
 
-        from manytask import models
-
-        with storage_api._session_create() as db_sess:
-            course_db = db_sess.query(models.Course).filter_by(name=course_name).one()
-            course_id = course_db.id
+        response_course_id = storage_api.get_course_id_by_name(course_name)
+        if response_course_id is None:
+            raise RuntimeError(f"Course {course_name} not found after creation")
 
         response = CourseResponse(
-            id=course_id,
+            id=response_course_id,
             course_name=course_name,
             slug=course_slug,
             namespace_id=namespace_id,
