@@ -2031,9 +2031,7 @@ class DataBaseApi(StorageApi):
                 logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
                 raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
 
-    def update_user_role_in_namespace(
-        self, namespace_id: int, user_id: int, new_role: str
-    ) -> tuple[str, str, int]:
+    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, int]:
         """Update a user's role in a namespace.
 
         If new_role is 'student', removes the user from the namespace entirely.

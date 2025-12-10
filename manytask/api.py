@@ -1115,9 +1115,7 @@ def update_user_role_in_namespace(
 
         # Now update the database
         try:
-            old_role, actual_new_role, _ = storage_api.update_user_role_in_namespace(
-                namespace_id, user_id, new_role
-            )
+            old_role, actual_new_role, _ = storage_api.update_user_role_in_namespace(namespace_id, user_id, new_role)
             logger.info(
                 "User %s updated role for user_id=%s in namespace id=%s: %s -> %s",
                 username,
@@ -1133,12 +1131,14 @@ def update_user_role_in_namespace(
             logger.warning("Invalid role %s: %s", new_role, str(e))
             return jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST
 
-        return jsonify({
-            "success": True,
-            "old_role": old_role,
-            "new_role": actual_new_role,
-            "user_id": user_id,
-        }), HTTPStatus.OK
+        return jsonify(
+            {
+                "success": True,
+                "old_role": old_role,
+                "new_role": actual_new_role,
+                "user_id": user_id,
+            }
+        ), HTTPStatus.OK
 
     except Exception as e:
         logger.error(
