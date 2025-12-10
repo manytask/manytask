@@ -39,6 +39,8 @@ items:
         href: grading.md
       - name: Course statuses
         href: course_statuses.md
+      - name: Public export
+        href: checker.md
   - name: For system administrators
     items:
       - name: Production setup
