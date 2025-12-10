@@ -27,9 +27,23 @@ sudo chown $USER:$USER /srv/manytask/app_deploy_new
 
 ---
 
-## 3. Copy Project to Server
+## 3. Get Project Code
 
-### From Local Machine:
+### Variant 1: Clone from GitHub (recommended)
+
+```bash
+cd /srv/manytask
+git clone https://github.com/manytask/manytask app_deploy_new
+```
+
+To update to a specific version or branch:
+
+```bash
+cd /srv/manytask/app_deploy_new
+git checkout <tag-or-branch>
+```
+
+### Variant 2: Copy from Local Machine via rsync
 
 ```bash
 rsync -avz --progress \
@@ -125,7 +139,7 @@ sudo docker exec -it manytask_postgres psql -U adminmanytask -d manytask
 ```
 
 ```sql
-UPDATE users SET is_instance_admin = true WHERE username = 'your_username';
+UPDATE users SET is_instance_admin = true, rms_id = <YOUR_GITLAB_ID> WHERE username = 'your_username';
 ```
 
 ---
