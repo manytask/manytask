@@ -10,7 +10,7 @@ from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.utils.generic import lerp
 
-from .models import ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER
+MAX_COURSE_NAME_LENGTH = 100
 
 
 class RowData(BaseModel):
@@ -42,7 +42,7 @@ class CreateNamespaceRequest(BaseModel):
 
 class AddUserToNamespaceRequest(BaseModel):
     user_id: int
-    role: Literal[ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER]
+    role: Literal["namespace_admin", "program_manager"]
 
 
 ROLE_STUDENT = "student"
@@ -55,7 +55,7 @@ class UpdateUserRoleRequest(BaseModel):
     Setting role to 'student' will remove the user from the namespace entirely.
     """
 
-    role: Literal[ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER, ROLE_STUDENT]
+    role: Literal["namespace_admin", "program_manager", "student"]
 
 
 class ErrorResponse(BaseModel):
@@ -113,8 +113,8 @@ class CreateCourseRequest(BaseModel):
     def validate_course_name(cls, course_name: str) -> str:
         if not course_name or len(course_name.strip()) == 0:
             raise ValueError("course_name cannot be empty")
-        if len(course_name) > 100:
-            raise ValueError("course_name must be at most 100 characters")
+        if len(course_name) > MAX_COURSE_NAME_LENGTH:
+            raise ValueError(f"course_name must be at most {MAX_COURSE_NAME_LENGTH} characters")
         return course_name.strip()
 
 

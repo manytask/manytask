@@ -5,7 +5,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 
 import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
@@ -56,7 +56,10 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
     return course
 
 
-def validate_json_request(model_class: type[BaseModel]) -> tuple[BaseModel | None, ResponseReturnValue | None]:
+T = TypeVar("T", bound=BaseModel)
+
+
+def validate_json_request(model_class: type[T]) -> tuple[T | None, ResponseReturnValue | None]:
     """Validate JSON request with Pydantic model (helper function).
 
     Returns:
@@ -644,6 +647,7 @@ def create_namespace() -> ResponseReturnValue:
     request_data, error = validate_json_request(CreateNamespaceRequest)
     if error:
         return error
+    assert request_data is not None
 
     name = request_data.name
     slug = request_data.slug
@@ -793,6 +797,7 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
     try:
         namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
 
+        result: NamespaceResponse | NamespaceWithRoleResponse
         if role is not None:
             result = NamespaceWithRoleResponse(
                 id=namespace.id,
@@ -1350,15 +1355,9 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         added_owners = []
         if owner_rms_ids:
             try:
-                created_course = storage_api.get_course(course_name)
-                if created_course is None:
+                course_id = storage_api.get_course_id_by_name(course_name)
+                if course_id is None:
                     raise RuntimeError(f"Course {course_name} not found after creation")
-
-                from manytask import models
-
-                with storage_api._session_create() as db_sess:
-                    course_db = db_sess.query(models.Course).filter_by(name=course_name).one()
-                    course_id = course_db.id
 
                 added_owners = storage_api.add_course_owners(
                     course_id=course_id,
@@ -1386,14 +1385,12 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             len(added_owners),
         )
 
-        from manytask import models
-
-        with storage_api._session_create() as db_sess:
-            course_db = db_sess.query(models.Course).filter_by(name=course_name).one()
-            course_id = course_db.id
+        response_course_id = storage_api.get_course_id_by_name(course_name)
+        if response_course_id is None:
+            raise RuntimeError(f"Course {course_name} not found after creation")
 
         response = CourseResponse(
-            id=course_id,
+            id=response_course_id,
             course_name=course_name,
             slug=course_slug,
             namespace_id=namespace_id,

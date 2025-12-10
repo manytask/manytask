@@ -12,7 +12,7 @@ def get_database_table_data(
 ) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints.
 
-    Set include_admin_data=True to include per-student repo URLs (for admins-only views).
+    Set include_admin_data=True to include per-student repo URLs, comments, and full names (for admins-only views).
     Set is_program_manager=True to include student full names (for program managers).
     """
 
@@ -35,20 +35,24 @@ def get_database_table_data(
 
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
-    for username, (student_scores, name) in scores_and_names.items():
+    for username, (student_scores_with_solved, name) in scores_and_names.items():
+        # student_scores_with_solved = {task_name: (score, is_solved)}
+        student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
         total_score = sum(student_scores.values())
         large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
         first_name, last_name = name
 
-        row = {
+        row: dict[str, Any] = {
             "username": username,
-            "first_name": first_name if is_program_manager else "",
-            "last_name": last_name if is_program_manager else "",
             "scores": student_scores,
             "total_score": total_score,
             "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
             "large_count": large_count,
         }
+
+        if include_admin_data or is_program_manager:
+            row["first_name"] = first_name
+            row["last_name"] = last_name
 
         if include_admin_data:
             row.update(

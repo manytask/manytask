@@ -319,8 +319,13 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
+    def get_all_scores_with_names(
+        self, course_name: str
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]:
         """Get all users' scores with names for the given course.
+
+        Returns a dict mapping username to (scores_dict, (first_name, last_name)).
+        scores_dict maps task_name to (score, is_solved) tuple.
 
         Excludes users with PROGRAM_MANAGER role in the course's namespace.
         """
@@ -343,6 +348,7 @@ class DataBaseApi(StorageApi):
                     User.last_name,
                     Task.name,
                     coalesce(Grade.score, 0),
+                    coalesce(Grade.is_solved, False),
                     User.id,
                 )
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
@@ -360,13 +366,13 @@ class DataBaseApi(StorageApi):
 
             rows = session.execute(statement).all()
 
-            scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
+            scores_and_names: dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]] = {}
 
-            for username, first_name, last_name, task_name, score, _ in rows:
+            for username, first_name, last_name, task_name, score, is_solved, _ in rows:
                 if username not in scores_and_names:
                     scores_and_names[username] = ({}, (first_name, last_name))
                 if task_name is not None:
-                    scores_and_names[username][0][task_name] = score
+                    scores_and_names[username][0][task_name] = (score, is_solved)
 
             return scores_and_names
 
@@ -430,7 +436,8 @@ class DataBaseApi(StorageApi):
                     if users_on_courses_count > 0
                     else 0
                 )
-                for task_id, task_name, submits_count in self._get_tasks_submits_count(session, course_name, program_managers_subquery)
+                for task_id, task_name, submits_count in
+                self._get_tasks_submits_count(session, course_name, program_managers_subquery)
             }
             # fmt: on
 
@@ -884,7 +891,7 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' not found when fetching namespace admin namespaces", username)
                 return []
 
-            namespace_ids = set()
+            namespace_ids: set[int] = set()
 
             owned_namespaces = session.query(models.Namespace).filter(models.Namespace.created_by_id == user.id).all()
             namespace_ids.update(ns.id for ns in owned_namespaces)
@@ -2127,7 +2134,7 @@ class DataBaseApi(StorageApi):
                     .join(models.UserOnCourse)
                     .filter(
                         models.UserOnCourse.course_id == course.id,
-                        models.UserOnCourse.is_course_admin == True,
+                        models.UserOnCourse.is_course_admin,
                     )
                     .all()
                 )
@@ -2226,7 +2233,7 @@ class DataBaseApi(StorageApi):
                         )
                         raise ValueError(f"User with rms_id={rms_id} is not in namespace {namespace_id}")
 
-                    user_on_course = self._update_or_create(
+                    self._update_or_create(
                         session,
                         models.UserOnCourse,
                         defaults={"is_course_admin": True},
@@ -2257,3 +2264,16 @@ class DataBaseApi(StorageApi):
             )
 
             return added_owners
+
+    def get_course_id_by_name(self, course_name: str) -> int | None:
+        """Get course database ID by course name.
+
+        :param course_name: Name of the course
+        :return: Course ID if found, None otherwise
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                return course.id
+            except NoResultFound:
+                return None
