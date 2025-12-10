@@ -319,8 +319,13 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, tuple[dict[str, int], tuple[str, str]]]:
+    def get_all_scores_with_names(
+        self, course_name: str
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]:
         """Get all users' scores with names for the given course.
+
+        Returns a dict mapping username to (scores_dict, (first_name, last_name)).
+        scores_dict maps task_name to (score, is_solved) tuple.
 
         Excludes users with PROGRAM_MANAGER role in the course's namespace.
         """
@@ -343,6 +348,7 @@ class DataBaseApi(StorageApi):
                     User.last_name,
                     Task.name,
                     coalesce(Grade.score, 0),
+                    coalesce(Grade.is_solved, False),
                     User.id,
                 )
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
@@ -360,13 +366,13 @@ class DataBaseApi(StorageApi):
 
             rows = session.execute(statement).all()
 
-            scores_and_names: dict[str, tuple[dict[str, int], tuple[str, str]]] = {}
+            scores_and_names: dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]] = {}
 
-            for username, first_name, last_name, task_name, score, _ in rows:
+            for username, first_name, last_name, task_name, score, is_solved, _ in rows:
                 if username not in scores_and_names:
                     scores_and_names[username] = ({}, (first_name, last_name))
                 if task_name is not None:
-                    scores_and_names[username][0][task_name] = score
+                    scores_and_names[username][0][task_name] = (score, is_solved)
 
             return scores_and_names
 

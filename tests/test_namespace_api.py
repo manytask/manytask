@@ -1491,7 +1491,7 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     # Add user to namespace
     response = client_with_db.post(
         f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": "admin"},
+        json={"user_id": new_user.rms_id, "role": "namespace_admin"},
         content_type="application/json",
     )
     assert response.status_code == HTTPStatus.CREATED

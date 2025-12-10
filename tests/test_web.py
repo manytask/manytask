@@ -196,6 +196,22 @@ def mock_storage_api(mock_course):  # noqa: C901
         def update_or_create_user(self, username: str, firstname: str, lastname: str, rms_id: int):
             pass
 
+        @staticmethod
+        def get_namespace_admin_namespaces(_username):
+            return []
+
+        @staticmethod
+        def get_courses_by_namespace_ids(_namespace_ids):
+            return []
+
+        @staticmethod
+        def get_courses_where_course_admin(_username):
+            return []
+
+        @staticmethod
+        def get_namespace_by_id(_namespace_id, _username):
+            raise PermissionError("No access to namespace")
+
     return MockStorageApi()
 
 
@@ -214,6 +230,7 @@ def mock_course():
             self.task_url_template = "https://gitlab.example.com/$GROUP_NAME/$USER_NAME/$TASK_NAME"
             self.links = {}
             self.deadlines_type = ManytaskDeadlinesType.HARD
+            self.namespace_id = None
 
     return MockCourse()
 
