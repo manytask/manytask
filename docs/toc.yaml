@@ -45,6 +45,8 @@ items:
         href: system_setup.md
       - name: Production
         href: production.md
+      - name: Deploy guide
+        href: deploy_guide.md
   - name: For developers
     items:
       - name: Development setup

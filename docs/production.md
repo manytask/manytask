@@ -17,7 +17,9 @@ For example: `py.manytask.org` - domain for python course
 
 ## Deploy 
 
-Then you need to set up manytask docker itself 
+Then you need to set up manytask docker itself  
+
+> 📘 **See also:** [Deploy guide](./deploy_guide.md) — пошаговая инструкция по деплою на удалённый сервер с настройкой базы данных и Instance Admin. 
 
 
 ### Manually (recommended) 
