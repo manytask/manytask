@@ -45,6 +45,19 @@ class AddUserToNamespaceRequest(BaseModel):
     role: Literal[ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER]
 
 
+ROLE_STUDENT = "student"
+
+
+class UpdateUserRoleRequest(BaseModel):
+    """Request to update a user's role in a namespace.
+
+    role can be 'namespace_admin', 'program_manager', or 'student'.
+    Setting role to 'student' will remove the user from the namespace entirely.
+    """
+
+    role: Literal[ROLE_NAMESPACE_ADMIN, ROLE_PROGRAM_MANAGER, ROLE_STUDENT]
+
+
 class ErrorResponse(BaseModel):
     error: str
 

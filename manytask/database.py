@@ -2031,6 +2031,81 @@ class DataBaseApi(StorageApi):
                 logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
                 raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
 
+    def update_user_role_in_namespace(
+        self, namespace_id: int, user_id: int, new_role: str
+    ) -> tuple[str, str, int]:
+        """Update a user's role in a namespace.
+
+        If new_role is 'student', removes the user from the namespace entirely.
+        Otherwise, updates the role to namespace_admin or program_manager.
+
+        :param namespace_id: ID of the namespace
+        :param user_id: Database User.id (not rms_id)
+        :param new_role: New role ('namespace_admin', 'program_manager', or 'student')
+        :return: Tuple of (old_role, new_role, rms_id)
+        :raises NoResultFound: If the user is not in the namespace
+        :raises ValueError: If the role is invalid
+        """
+        with self._session_create() as session:
+            logger.info(
+                "Updating role for user_id=%s in namespace_id=%s to %s",
+                user_id,
+                namespace_id,
+                new_role,
+            )
+
+            try:
+                user_on_namespace = self._get(
+                    session,
+                    models.UserOnNamespace,
+                    user_id=user_id,
+                    namespace_id=namespace_id,
+                )
+
+                old_role = user_on_namespace.role.value
+                user = self._get(session, models.User, id=user_id)
+                rms_id = user.rms_id
+                username = user.username
+
+                if new_role == "student":
+                    # Remove from namespace entirely
+                    session.delete(user_on_namespace)
+                    session.commit()
+                    logger.info(
+                        "Demoted user %s (id=%s, rms_id=%s) from %s to student in namespace_id=%s",
+                        username,
+                        user_id,
+                        rms_id,
+                        old_role,
+                        namespace_id,
+                    )
+                    return (old_role, "student", rms_id)
+
+                elif new_role == ROLE_NAMESPACE_ADMIN:
+                    user_on_namespace.role = models.UserOnNamespaceRole.NAMESPACE_ADMIN
+                elif new_role == ROLE_PROGRAM_MANAGER:
+                    user_on_namespace.role = models.UserOnNamespaceRole.PROGRAM_MANAGER
+                else:
+                    raise ValueError(
+                        f"Invalid role: {new_role}. Must be 'namespace_admin', 'program_manager', or 'student'"
+                    )
+
+                session.commit()
+                logger.info(
+                    "Updated role for user %s (id=%s, rms_id=%s) from %s to %s in namespace_id=%s",
+                    username,
+                    user_id,
+                    rms_id,
+                    old_role,
+                    new_role,
+                    namespace_id,
+                )
+                return (old_role, new_role, rms_id)
+
+            except NoResultFound:
+                logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
+                raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
+
     def get_namespace_courses(self, namespace_id: int) -> list[dict[str, Any]]:
         """Get list of courses in a namespace with information about owners.
 
