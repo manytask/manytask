@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
-from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -10,10 +9,10 @@ import pytest
 from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import AuthenticatedUser, RmsUser, StoredUser
+from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.auth import (
-    requires_admin,
     requires_auth,
+    requires_instance_admin,
     requires_ready,
     set_oauth_session,
     valid_client_profile_session,
@@ -22,11 +21,9 @@ from manytask.auth import (
 from manytask.course import CourseStatus
 from manytask.web import course_bp, root_bp
 from tests.constants import (
-    GITLAB_BASE_URL,
     TEST_COURSE_NAME,
     TEST_FIRST_NAME,
     TEST_LAST_NAME,
-    TEST_NAME,
     TEST_RMS_ID,
     TEST_SECRET,
     TEST_TOKEN,
@@ -36,7 +33,7 @@ from tests.constants import (
 
 
 @pytest.fixture
-def app(mock_rms_api, mock_auth_api, mock_storage_api):
+def app(mock_auth_api, mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
@@ -44,46 +41,11 @@ def app(mock_rms_api, mock_auth_api, mock_storage_api):
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
-    app.rms_api = mock_rms_api
     app.auth_api = mock_auth_api
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
     return app
-
-
-@pytest.fixture
-def mock_rms_api():
-    class MockRmsApi:
-        def __init__(self):
-            self.course_admin = False
-            self.base_url = GITLAB_BASE_URL
-
-        @staticmethod
-        def get_url_for_repo(username: str, course_students_group: str):
-            return f"{GITLAB_BASE_URL}/{username}/repo"
-
-        @staticmethod
-        def get_url_for_task_base(course_public_repo: str, default_branch: str):
-            return f"{GITLAB_BASE_URL}/{course_public_repo}/blob/{default_branch}"
-
-        @staticmethod
-        def get_rms_user_by_id(user_id: int):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-        @staticmethod
-        def get_authenticated_rms_user(self, gitlab_access_token: str):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name=TEST_NAME)
-
-        @staticmethod
-        def check_project_exists(_project_name: str, _project_group: str):
-            return True
-
-        @staticmethod
-        def _construct_rms_user(user: dict[str, Any]):
-            return RmsUser(id=TEST_USER_ID, username=TEST_USERNAME, name="")
-
-    return MockRmsApi()
 
 
 @pytest.fixture
@@ -170,6 +132,22 @@ def mock_storage_api(mock_course):  # noqa: C901
         def max_score_started(self):
             return 100  # Mock value for testing
 
+        @staticmethod
+        def get_namespace_admin_namespaces(_username):
+            return []
+
+        @staticmethod
+        def get_courses_by_namespace_ids(_namespace_ids):
+            return []
+
+        @staticmethod
+        def get_courses_where_course_admin(_username):
+            return []
+
+        @staticmethod
+        def get_namespace_by_id(_namespace_id, _username):
+            raise PermissionError("No access to namespace")
+
     return MockStorageApi()
 
 
@@ -186,6 +164,7 @@ def mock_course():
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"
             self.gitlab_default_branch = "main"
+            self.namespace_id = None
 
     return MockCourse()
 
@@ -363,7 +342,7 @@ def test_set_oauth_session_only_student():
 
 
 def test_requires_admin_in_debug_mode(app):
-    @requires_admin
+    @requires_instance_admin
     def test_route(course_name: str):
         return "success"
 
@@ -374,7 +353,7 @@ def test_requires_admin_in_debug_mode(app):
 
 
 def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
-    @requires_admin
+    @requires_instance_admin
     def test_route(course_name: str):
         return "success"
 
@@ -403,7 +382,7 @@ def test_requires_admin_with_admin_rules(app, mock_gitlab_oauth):
 
 
 def test_requires_admin_with_no_admin_rules(app, mock_gitlab_oauth):
-    @requires_admin
+    @requires_instance_admin
     def test_route(course_name: str):
         return "success"
 

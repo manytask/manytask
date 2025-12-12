@@ -44,13 +44,23 @@
                             <i class="fas fa-rocket me-1"></i>My&nbsp;Submits
                         </a>
                     </li>
-                    {% if show_allscores %}
+                    {% if show_allscores or has_role(username, ['instance_admin', 'namespace_admin'], app, course_name) %}
                         <li class="nav-item">
                             <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'database' %}active fw-semibold{% endif %}"
                                aria-current="{% if active_page == 'database' %}page{% endif %}"
                                href="{{ url_for('course.show_database', course_name=course_name) }}">
                                 <i class="fas fa-table me-1"></i>All&nbsp;Scores
                                 {% if active_page == 'database' %}<span class="nav-active-indicator"></span>{% endif %}
+                            </a>
+                        </li>
+                    {% endif %}
+                    {% if has_role(username, ['instance_admin', 'namespace_admin'], app, course_name) %}
+                        <li class="nav-item">
+                            <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'edit_course' %}active fw-semibold{% endif %}"
+                               aria-current="{% if active_page == 'edit_course' %}page{% endif %}"
+                               href="{{ url_for('instance_admin.edit_course', course_name=course_name) }}">
+                                <i class="fas fa-edit me-1"></i>Edit&nbsp;Course
+                                {% if active_page == 'edit_course' %}<span class="nav-active-indicator"></span>{% endif %}
                             </a>
                         </li>
                     {% endif %}
@@ -172,7 +182,7 @@
         <div class="adm-badge">ADMIN</div>
     {% endif %}
 
-    <div class="px-3 container-lg">
+    <div class="{% if active_page == 'database' %}px-0 w-100{% else %}px-3 container-lg{% endif %}">
         {# Add bootstrap empty space for header #}
         <div class="container-fluid" style="height: 80px;"></div>
 

@@ -1,45 +1,39 @@
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
+[project]
 name = "manytask"
-version = "0.1.0"
+version = "25.2"
 description = "Manytask system"
-authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
-packages = [{include = "manytask"}]
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "alembic==1.17.0",
+    "authlib==1.6.5",
+    "gunicorn==23.0.0",
+    "flask==3.1.1",
+    "flask-wtf>=1.2.2",
+    "psycopg2-binary>=2.9.11",
+    "pydantic>=2.12",
+    "python-dotenv==1.1.0",
+    "python-gitlab==6.4.0",
+    "pyyaml==6.0.1",
+    "requests==2.32.4",
+    "sqlalchemy>=2.0.44,<3.0.0",
+    "werkzeug==3.1.3",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-gunicorn = "23.0.0"
-flask = "3.1.1"
-cachelib = "0.13.0"
-werkzeug = "3.1.3"
-flask-sqlalchemy = "3.1.1"
-psycopg2-binary = "2.9.10"
-gspread = ">=5.0.0,!=6.0.0,<7.0.0"
-python-gitlab = "6.4.0"
-authlib = "1.6.4"
-python-dotenv = "1.1.0"
-pyyaml = "6.0.1"
-requests = "2.32.4"
-pydantic = "2.11.1"
-pytz = {version = ">=2022.0,<2023.4", python = "<3.9"}
-alembic = "1.16.1"
-flask-wtf = "^1.2.2"
 
-[tool.poetry.group.dev.dependencies]
-ruff = "0.13.1"
-mypy = "1.18.2"
-types-requests = "2.32.0.20240907"
-types-PyYAML = "6.0.12.12"
-pytest = "8.4.0"
-pytest-cov = "7.0.0"
-pre-commit = "4.3.0"
-testcontainers = "4.13.0"
-bs4 = "^0.0.2"
-pytest-xdist = "^3.8.0"
+[project.optional-dependencies]
+dev = [
+    "ruff==0.14.0",
+    "mypy==1.18.2",
+    "types-requests==2.32.0.20240907",
+    "types-PyYAML==6.0.12.12",
+    "pytest==8.4.0",
+    "pytest-cov==7.0.0",
+    "pre-commit==4.3.0",
+    "testcontainers==4.13.0",
+    "bs4>=0.0.2",
+    "pytest-xdist>=3.8.0",
+]
 
 [tool.mypy]
 no_incremental = true

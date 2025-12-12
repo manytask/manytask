@@ -1,4 +1,5 @@
 ROOT_DIR := manytask
+DOCKER_COMPOSE_LOCAL := docker-compose.local.development.yml
 DOCKER_COMPOSE_DEV := docker-compose.development.yml
 TESTS_DIR := tests
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
@@ -9,25 +10,25 @@ check: format lint test
 
 install-deps:
 	curl -sSL https://install.python-poetry.org | python3 -
-	poetry install
+	poetry install -E dev
 
 install-hooks:
-	poetry install
+	poetry install -E dev
 	poetry run pre-commit install --install-hooks
 
 run-hooks:
 	poetry run pre-commit run --all-files
 
 dev:
-	docker-compose -f $(DOCKER_COMPOSE_DEV) down
-	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
+	docker-compose -f $(DOCKER_COMPOSE_LOCAL) down
+	docker-compose -f $(DOCKER_COMPOSE_LOCAL) up --build
 
 clean-db:
-	docker-compose -f $(DOCKER_COMPOSE_DEV) down -v
+	docker-compose -f $(DOCKER_COMPOSE_LOCAL) down -v
 	docker volume prune -f
 
 reset-dev: clean-db
-	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
+	docker-compose -f $(DOCKER_COMPOSE_LOCAL) up --build
 
 test: install-deps
 	poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
@@ -48,7 +49,6 @@ format:
 	poetry run ruff check $(ROOT_DIR) $(TESTS_DIR) --fix
 
 setup: install-deps install-hooks
-	poetry run mypy --install-types --non-interactive $(ROOT_DIR) $(TESTS_DIR)
 
 makemigrations:
 	@command -v poetry >/dev/null 2>&1 || { echo "\033[0;31mError: poetry is not installed.\033[0m"; exit 1; }

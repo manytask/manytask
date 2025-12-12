@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}{{ namespace.name }} - Namespace Panel{% endblock %}
+
+{% block additional_styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/namespace_panel.css') }}">
+{% endblock %}
+
+{% block body %}
+    <div class="namespace-container">
+        <div class="namespace-header mb-4">
+            <div>
+                <h1><i class="fas fa-folder me-2"></i>{{ namespace.name }}</h1>
+                <p class="text-muted mb-0">
+                    <strong>Slug:</strong> <code>{{ namespace.slug }}</code> | 
+                    <strong>ID:</strong> {{ namespace.id }} | 
+                    <strong>GitLab Group ID:</strong> {{ namespace.gitlab_group_id }}
+                </p>
+                {% if namespace.description %}
+                    <p class="mt-2">{{ namespace.description }}</p>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('instance_admin.namespaces_list') }}" class="btn btn-outline-secondary back-btn">
+                <i class="fas fa-arrow-left me-1"></i> Back to list
+            </a>
+        </div>
+
+        <div class="action-group mb-4">
+            <h3><i class="fas fa-book me-2"></i>Courses Management</h3>
+            <div class="admin-actions">
+                <a href="{{ url_for('instance_admin.create_course', namespace_id=namespace.id) }}" class="btn btn-primary admin-btn">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Create Course</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="action-group mb-4">
+            <h3><i class="fas fa-users me-2"></i>Namespace Users</h3>
+            <div class="admin-actions mb-3">
+                <button type="button" class="btn btn-success admin-btn" data-bs-toggle="modal"
+                        data-bs-target="#addUserModal">
+                    <i class="fas fa-user-plus"></i>
+                    <span>Add User</span>
+                </button>
+            </div>
+
+            {% if users %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Username</th>
+                                <th>RMS ID (GitLab)</th>
+                                <th>Current Role</th>
+                                <th>Change Role</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            {% for user in users %}
+                                <tr data-user-id="{{ user.id }}" data-username="{{ user.username }}" data-current-role="{{ user.role }}">
+                                    <td>{{ user.id }}</td>
+                                    <td><strong>{{ user.username }}</strong></td>
+                                    <td>{{ user.rms_id }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if user.role == 'namespace_admin' %}warning{% else %}secondary{% endif %}" id="role-badge-{{ user.id }}">
+                                            {{ user.role | replace('_', ' ') | title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm role-select" 
+                                                data-user-id="{{ user.id }}" 
+                                                data-username="{{ user.username }}"
+                                                onchange="changeRole(this)">
+                                            <option value="namespace_admin" {% if user.role == 'namespace_admin' %}selected{% endif %}>Namespace Admin</option>
+                                            <option value="program_manager" {% if user.role == 'program_manager' %}selected{% endif %}>Program Manager</option>
+                                            <option value="student">Demote to Student</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>No users in this namespace yet.
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="action-group">
+            <h3><i class="fas fa-graduation-cap me-2"></i>Namespace Courses</h3>
+
+            {% if courses %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Course Name</th>
+                                <th>Status</th>
+                                <th>GitLab Group</th>
+                                <th>Owners</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for course in courses %}
+                                <tr>
+                                    <td>{{ course.id }}</td>
+                                    <td>
+                                        <a href="{{ course.url }}" class="fw-bold text-decoration-none">
+                                            {{ course.name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if course.status == 'running' %}success{% elif course.status == 'created' %}warning{% elif course.status == 'hidden' %}secondary{% else %}info{% endif %}">
+                                            {{ course.status | replace('_', ' ') | title }}
+                                        </span>
+                                    </td>
+                                    <td><code>{{ course.gitlab_course_group }}</code></td>
+                                    <td>{{ course.owners_string }}</td>
+                                    <td>
+                                        <a href="{{ url_for('instance_admin.edit_course', course_name=course.name) }}" 
+                                           class="btn btn-sm btn-outline-primary"
+                                           title="Edit course settings">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>No courses in this namespace yet.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addUserModalLabel">Add User to Namespace</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addUserForm">
+                        <div class="mb-3">
+                            <label for="userRmsId" class="form-label">User ID GitLab (int) *</label>
+                            <input type="number" class="form-control" id="userRmsId" name="user_id" required
+                                   placeholder="123">
+                            <small class="form-text text-muted">GitLab user ID of the user to add</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="userRole" class="form-label">Role *</label>
+                            <select class="form-select" id="userRole" name="role" required>
+                                <option value="">Select role</option>
+                                <option value="namespace_admin">Namespace Admin</option>
+                                <option value="program_manager">Program Manager</option>
+                            </select>
+                        </div>
+                        <div id="addUserError" class="alert alert-danger d-none" role="alert"></div>
+                        <div id="addUserSuccess" class="alert alert-success d-none" role="alert"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="addUser()">Add User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const namespaceId = {{ namespace.id }};
+
+        async function addUser() {
+            const form = document.getElementById('addUserForm');
+            const errorDiv = document.getElementById('addUserError');
+            const successDiv = document.getElementById('addUserSuccess');
+            
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+
+            const userId = form.querySelector('[name="user_id"]').value;
+            const role = form.querySelector('[name="role"]').value;
+
+            if (!userId || !role) {
+                errorDiv.textContent = 'All fields are required';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+
+            const formData = {
+                user_id: parseInt(userId),
+                role: role
+            };
+
+            try {
+                const response = await fetch(`/api/namespaces/${namespaceId}/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    successDiv.textContent = `User with ID ${userId} added successfully!`;
+                    successDiv.classList.remove('d-none');
+                    form.reset();
+                    
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to add user';
+                    errorDiv.classList.remove('d-none');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Network error: ' + error.message;
+                errorDiv.classList.remove('d-none');
+            }
+        }
+
+        async function changeRole(selectElement) {
+            const userId = selectElement.dataset.userId;
+            const username = selectElement.dataset.username;
+            const newRole = selectElement.value;
+            const row = selectElement.closest('tr');
+            const currentRole = row.dataset.currentRole;
+            
+            // Confirm if demoting to student
+            if (newRole === 'student') {
+                if (!confirm(`Are you sure you want to demote "${username}" to student?\n\nThis will remove their admin privileges and access to the GitLab namespace group.`)) {
+                    // Reset to previous value
+                    selectElement.value = currentRole;
+                    return;
+                }
+            } else if (currentRole === newRole) {
+                // No change needed
+                return;
+            }
+
+            // Disable the select while processing
+            selectElement.disabled = true;
+
+            try {
+                const response = await fetch(`/api/namespaces/${namespaceId}/users/${userId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ role: newRole })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (newRole === 'student') {
+                        // Remove the row since user is no longer in namespace
+                        row.remove();
+                        showNotification(`User "${username}" has been demoted to student.`, 'success');
+                    } else {
+                        // Update the badge
+                        const badge = document.getElementById(`role-badge-${userId}`);
+                        if (badge) {
+                            badge.textContent = newRole.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                            badge.className = `badge bg-${newRole === 'namespace_admin' ? 'warning' : 'secondary'}`;
+                        }
+                        row.dataset.currentRole = newRole;
+                        showNotification(`Role for "${username}" changed to ${newRole.replace('_', ' ')}.`, 'success');
+                    }
+                } else {
+                    // Revert the select to the original value
+                    selectElement.value = currentRole;
+                    showNotification(data.error || 'Failed to change role', 'error');
+                }
+            } catch (error) {
+                // Revert the select to the original value
+                selectElement.value = currentRole;
+                showNotification('Network error: ' + error.message, 'error');
+            } finally {
+                selectElement.disabled = false;
+            }
+        }
+
+        function showNotification(message, type) {
+            // Remove any existing notification
+            const existing = document.querySelector('.role-notification');
+            if (existing) {
+                existing.remove();
+            }
+
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type === 'error' ? 'danger' : 'success'} alert-dismissible fade show role-notification`;
+            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            document.body.appendChild(notification);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+    </script>
+{% endblock %}
+
