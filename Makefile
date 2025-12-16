@@ -39,14 +39,14 @@ test-colima: install-deps
 
 lint:
 	@command -v poetry >/dev/null 2>&1 || { echo "\033[0;31mError: poetry is not installed.\033[0m"; exit 1; }
-	poetry run ruff format --check $(ROOT_DIR) $(TESTS_DIR)
-	poetry run ruff check $(ROOT_DIR) $(TESTS_DIR)
-	poetry run mypy $(ROOT_DIR)
+	poetry run ruff format --check $(ROOT_DIR) $(TESTS_DIR) checker/checker
+	poetry run ruff check $(ROOT_DIR) $(TESTS_DIR) checker/checker
+	poetry run mypy $(ROOT_DIR) checker/checker
 
 format:
 	@command -v poetry >/dev/null 2>&1 || { echo "\033[0;31mError: poetry is not installed.\033[0m"; exit 1; }
-	poetry run ruff format $(ROOT_DIR) $(TESTS_DIR)
-	poetry run ruff check $(ROOT_DIR) $(TESTS_DIR) --fix
+	poetry run ruff format $(ROOT_DIR) $(TESTS_DIR) checker/checker
+	poetry run ruff check $(ROOT_DIR) $(TESTS_DIR) checker/checker --fix
 
 setup: install-deps install-hooks
 
