@@ -165,6 +165,23 @@ class StorageApi(ABC):
     @abstractmethod
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
 
+    @abstractmethod
+    def calculate_and_save_grade(
+        self,
+        course_name: str,
+        username: str,
+        student_scores_data: dict[str, Any],
+    ) -> int: ...
+
+    @abstractmethod
+    def get_effective_grade(self, course_name: str, username: str) -> int: ...
+
+    @abstractmethod
+    def override_grade(self, course_name: str, username: str, new_grade: int) -> None: ...
+
+    @abstractmethod
+    def clear_grade_override(self, course_name: str, username: str) -> None: ...
+
 
 @dataclass
 class RmsUser:

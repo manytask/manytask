@@ -266,6 +266,39 @@ def report_score(course_name: str) -> ResponseReturnValue:
 
     logger.info("Stored final_score=%s for user=%s, task=%s", final_score, rms_user.username, task.name)
 
+    # Recalculate and save student's final grade after score update
+    try:
+        # Get all student scores to recalculate grade
+        student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
+        bonus_score = app.storage_api.get_bonus_score(course.course_name, rms_user.username)
+        max_score = app.storage_api.max_score_started(course.course_name)
+
+        total_score = sum(student_scores.values()) + bonus_score
+        percent = total_score * 100 / max_score if max_score > 0 else 0
+
+        # Count large tasks solved
+        large_count = 0
+        for group_config in app.storage_api.get_groups(course.course_name, enabled=True, started=True):
+            for task_config in group_config.tasks:
+                if task_config.is_large and task_config.enabled:
+                    task_score = student_scores.get(task_config.name, 0)
+                    if task_score >= task_config.min_score:
+                        large_count += 1
+
+        student_data = {
+            "username": rms_user.username,
+            "scores": student_scores,
+            "total_score": total_score,
+            "percent": percent,
+            "large_count": large_count,
+        }
+
+        app.storage_api.calculate_and_save_grade(course.course_name, rms_user.username, student_data)
+        logger.info("Recalculated and saved grade for user=%s after score update", rms_user.username)
+    except Exception as e:
+        logger.error("Failed to recalculate grade for user=%s: %s", rms_user.username, str(e))
+        # Don't fail the request if grade calculation fails
+
     return {
         "user_id": rms_user.id,
         "username": rms_user.username,
@@ -418,8 +451,10 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
         row_data.total_score = total_score
         max_score = app.storage_api.max_score_started(course.course_name)
         row_data.percent = total_score * 100 / max_score if max_score > 0 else 0
-        new_grade = storage_api.get_grades(course.course_name).evaluate(row_data.model_dump())
-        row_data.grade = 0 if new_grade is None else new_grade
+
+        # Calculate and save grade (applies DORESHKA logic if needed)
+        new_grade = storage_api.calculate_and_save_grade(course.course_name, username, row_data.model_dump())
+        row_data.grade = new_grade
 
         logger.info("Successfully updated scores for user=%s", sanitize_log_data(username))
         return jsonify(
@@ -478,4 +513,103 @@ def update_comment(course_name: str) -> ResponseReturnValue:
         logger.error("Error updating comment: %s", str(e))
         return jsonify(
             {"success": False, "message": "Internal error when updating comment"}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.post("/grade/override")
+@requires_auth
+@requires_ready
+def override_grade(course_name: str) -> ResponseReturnValue:
+    """Set manual grade override for a student."""
+    app: CustomFlask = current_app  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
+
+    storage_api = app.storage_api
+
+    profile_username = session["profile"]["username"]
+    logger.info("Grade override request by admin=%s for course=%s", profile_username, course_name)
+
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
+
+    if not student_course_admin:
+        return jsonify({"success": False, "message": "Only course admins can override grades"}), HTTPStatus.FORBIDDEN
+
+    if not request.is_json:
+        return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
+
+    try:
+        data = request.get_json()
+        username = data.get("username")
+        new_grade = data.get("grade")
+
+        if not username:
+            return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
+
+        if new_grade is None:
+            return jsonify({"success": False, "message": "Grade is required"}), HTTPStatus.BAD_REQUEST
+
+        try:
+            new_grade = int(new_grade)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "Grade must be an integer"}), HTTPStatus.BAD_REQUEST
+
+        # Validate grade value (Russian grading system: 2-5)
+        # TODO: Future improvement - validate against grades defined in course config
+        #       to support different grading systems dynamically
+        if new_grade < 2 or new_grade > 5:
+            return jsonify(
+                {"success": False, "message": "Grade must be between 2 and 5"}
+            ), HTTPStatus.BAD_REQUEST
+
+        storage_api.override_grade(course.course_name, username, new_grade)
+
+        logger.info("Successfully set grade override for user=%s to %d", sanitize_log_data(username), new_grade)
+        return jsonify({"success": True}), HTTPStatus.OK
+
+    except Exception as e:
+        logger.error("Error overriding grade: %s", str(e))
+        return jsonify(
+            {"success": False, "message": "Internal error when overriding grade"}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.post("/grade/clear_override")
+@requires_auth
+@requires_ready
+def clear_grade_override(course_name: str) -> ResponseReturnValue:
+    """Clear manual grade override for a student."""
+    app: CustomFlask = current_app  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
+
+    storage_api = app.storage_api
+
+    profile_username = session["profile"]["username"]
+    logger.info("Clear grade override request by admin=%s for course=%s", profile_username, course_name)
+
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
+
+    if not student_course_admin:
+        return jsonify(
+            {"success": False, "message": "Only course admins can clear grade overrides"}
+        ), HTTPStatus.FORBIDDEN
+
+    if not request.is_json:
+        return jsonify({"success": False, "message": "Request must be JSON"}), HTTPStatus.BAD_REQUEST
+
+    try:
+        data = request.get_json()
+        username = data.get("username")
+
+        if not username:
+            return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
+
+        storage_api.clear_grade_override(course.course_name, username)
+
+        logger.info("Successfully cleared grade override for user=%s", sanitize_log_data(username))
+        return jsonify({"success": True}), HTTPStatus.OK
+
+    except Exception as e:
+        logger.error("Error clearing grade override: %s", str(e))
+        return jsonify(
+            {"success": False, "message": "Internal error when clearing grade override"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
