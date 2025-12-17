@@ -1,0 +1,58 @@
+# Terraform Variables Configuration Example
+# Copy this file to terraform.tfvars and fill in your values
+
+# ========================================
+# Required Variables
+# ========================================
+
+# Yandex Cloud Configuration
+yandex_cloud_id  = "your-cloud-id"
+yandex_folder_id = "your-folder-id"
+yandex_zone      = "ru-central1-a"
+
+# Domain Configuration
+domain = "example.com"  # Your domain (e.g., manytask.org, mycompany.com)
+
+# SSH Public Key for server access
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... your-key-here"
+
+manytask_version = "25.2.0"  # Specify version like "1.2.3" or use "latest"
+
+# ========================================
+# Optional Variables (with defaults)
+# ========================================
+
+# Project Configuration
+# project_name = "manytask"
+
+# Network Configuration
+# vpc_cidr            = "10.0.0.0/16"
+# public_subnet_cidr  = "10.0.1.0/24"
+# private_subnet_cidr = "10.0.2.0/24"
+
+# GitLab Server Configuration
+# gitlab_cores      = 4
+# gitlab_memory     = 8
+# gitlab_disk_size  = 100
+# gitlab_root_password = ""  # Leave empty to auto-generate
+
+# Manytask Server Configuration
+# manytask_cores     = 2
+# manytask_memory    = 8
+# manytask_disk_size = 50
+
+# PostgreSQL Server Configuration
+# postgresql_cores      = 2
+# postgresql_memory     = 4
+# postgresql_disk_size  = 50
+# postgresql_version    = "15"
+# postgres_password     = ""  # Leave empty to auto-generate
+
+# DNS Configuration
+# create_dns_zone = true  # Set to false if managing DNS externally
+
+# Tags
+# tags = {
+#   Team        = "DevOps"
+#   CostCenter  = "Education"
+# }
