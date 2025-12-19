@@ -1088,15 +1088,13 @@ class DataBaseApi(StorageApi):
                 )
 
                 # remove deleted primary formulas
-                for formula in existing_primary_formulas_set - new_primary_formulas_set:
-                    formula_dict = dict()
-                    for k, v in formula:
-                        formula_dict[k] = v
-                    logger.debug("Removing primary formula=%s from grade=%s", formula_dict, grade)
-                    session.query(models.PrimaryFormula).filter_by(
-                        complex_id=complex_formula.id,
-                        primary_formula=formula_dict,
-                    ).delete()
+                # Get all existing formula objects to delete by ID (not by JSON comparison)
+                for formula_obj in existing_primary_formulas:
+                    formula_frozen = frozenset(formula_obj.primary_formula.items())
+                    if formula_frozen in (existing_primary_formulas_set - new_primary_formulas_set):
+                        formula_dict = dict(formula_obj.primary_formula)
+                        logger.debug("Removing primary formula=%s from grade=%s", formula_dict, grade)
+                        session.delete(formula_obj)
 
                 # add new primary formulas
                 for formula in new_primary_formulas_set - existing_primary_formulas_set:
