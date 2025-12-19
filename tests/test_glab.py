@@ -212,7 +212,7 @@ def test_get_project_by_name_success(gitlab, mock_gitlab_project):
 
 def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
     mock_gitlab_instance.projects.list.return_value = []
     mock_gitlab_instance.projects.create.return_value = mock_gitlab_project
 
@@ -220,8 +220,8 @@ def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
 
     mock_gitlab_instance.projects.create.assert_called_once_with(
         {
-            "name": TEST_GROUP_PUBLIC_NAME,
-            "path": TEST_GROUP_PUBLIC_NAME,
+            "name": TEST_GROUP_PUBLIC_NAME_SHORT,
+            "path": TEST_GROUP_PUBLIC_NAME_SHORT,
             "namespace_id": mock_gitlab_group.id,
             "visibility": "public",
             "shared_runners_enabled": True,
@@ -243,15 +243,20 @@ def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab
 
 def test_create_students_group(gitlab, mock_gitlab_group):
     gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.side_effect = [
+        GitlabGetError("Not found"),  # First call: checking if group exists
+        mock_gitlab_group,  # Second call: fetching created group by id
+    ]
     mock_gitlab_instance.groups.list.return_value = []
     mock_gitlab_instance.groups.create.return_value = mock_gitlab_group
 
+    short_name = TEST_GROUP_NAME.split("/")[-1]
     gitlab_api.create_students_group(TEST_GROUP_NAME)
 
     mock_gitlab_instance.groups.create.assert_called_once_with(
         {
-            "name": TEST_GROUP_NAME,
-            "path": TEST_GROUP_NAME,
+            "name": short_name,
+            "path": short_name,
             "visibility": "private",
             "lfs_enabled": True,
             "shared_runners_enabled": True,
@@ -261,7 +266,7 @@ def test_create_students_group(gitlab, mock_gitlab_group):
 
 def test_get_group_by_name_success(gitlab, mock_gitlab_group):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
 
     result = gitlab_api._get_group_by_name(TEST_GROUP_NAME)
 
@@ -279,6 +284,9 @@ def test_get_project_by_name_not_found(gitlab):
 
 def test_get_group_by_name_not_found(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
+    # first try groups.get() which should fail
+    mock_gitlab_instance.groups.get.side_effect = GitlabGetError("Not found")
+    # then uses groups.list()
     mock_gitlab_instance.groups.list.return_value = []
 
     with pytest.raises(RuntimeError, match=f"Unable to find group {TEST_GROUP_NAME}"):
@@ -417,7 +425,7 @@ def test_get_authenticated_student_success(mock_get, gitlab, mock_rms_user):
     rms_user = rms_api.get_authenticated_rms_user(oauth_token)
 
     assert rms_user == mock_rms_user
-    mock_get.assert_called_once_with(f"{rms_api.base_url}/api/v4/user", headers=headers)
+    mock_get.assert_called_once_with(f"{rms_api.base_url}/api/v4/user", headers=headers, verify=True)
     rms_api._construct_rms_user.assert_called_once_with(user_data)
 
 
@@ -435,7 +443,7 @@ def test_get_authenticated_student_failure(mock_get, gitlab):
     with pytest.raises(HTTPError, match="401 Unauthorized"):
         gitlab_api.get_authenticated_rms_user(oauth_token)
 
-    mock_get.assert_called_once_with(f"{gitlab_api.base_url}/api/v4/user", headers=headers)
+    mock_get.assert_called_once_with(f"{gitlab_api.base_url}/api/v4/user", headers=headers, verify=True)
 
 
 def test_get_url_for_task_base(gitlab):

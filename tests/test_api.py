@@ -179,6 +179,22 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_groups(self, _course_name):
             return [mock_group]
 
+        @staticmethod
+        def get_namespace_admin_namespaces(_username):
+            return []
+
+        @staticmethod
+        def get_courses_by_namespace_ids(_namespace_ids):
+            return []
+
+        @staticmethod
+        def get_courses_where_course_admin(_username):
+            return []
+
+        @staticmethod
+        def get_namespace_by_id(_namespace_id, _username):
+            raise PermissionError("No access to namespace")
+
     return MockStorageApi()
 
 
@@ -213,6 +229,7 @@ def mock_course():
             self.gitlab_course_students_group = "students_2025_spring"
             self.gitlab_default_branch = "main"
             self.deadlines_type = ManytaskDeadlinesType.HARD
+            self.namespace_id = None
 
     return MockCourse()
 

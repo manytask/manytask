@@ -11,7 +11,7 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="{{ url_for('admin.create_course') }}" class="needs-validation" novalidate>
+    <form method="POST" action="{{ url_for('instance_admin.create_course') }}" class="needs-validation" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row">
             <div class="col-md-6 mb-4">
@@ -21,6 +21,14 @@
                     <input type="text" class="form-control" id="unique_course_name" name="unique_course_name"
                            pattern="[a-zA-Z0-9\-]+" required>
                     <div class="form-text">Used to separate data when multiple courses share a database</div>
+                </div>
+                <div class="mb-3">
+                    <label for="namespace_id" class="form-label">Namespace <span class="text-danger">*</span></label>
+                    <select class="form-select" id="namespace_id" name="namespace_id" required disabled>
+                        <option value="">Loading namespaces...</option>
+                    </select>
+                    <div class="invalid-feedback">Please select a namespace</div>
+                    <div id="namespace-error" class="alert alert-danger mt-2" style="display: none;"></div>
                 </div>
                 <div class="mb-3">
                     <label for="registration_secret" class="form-label">Registration Secret</label>
@@ -100,12 +108,18 @@
 })();
 
 document.addEventListener('DOMContentLoaded', function () {
+    // Declare all DOM elements and variables first
     const gitlabGroupField = document.getElementById('gitlab_course_group');
     const publicRepoField = document.getElementById('gitlab_course_public_repo');
     const studentsGroupField = document.getElementById('gitlab_course_students_group');
-
+    const namespaceSelect = document.getElementById('namespace_id');
+    const namespaceError = document.getElementById('namespace-error');
+    const form = document.querySelector('.needs-validation');
+    
     let publicRepoChanged = false;
     let studentsGroupChanged = false;
+    let namespacesLoaded = false;
+    let namespacesData = [];
 
     function validatePrefix(field, prefix, feedbackId) {
         if (field.value.startsWith(prefix.value + '/')) {
@@ -129,22 +143,174 @@ document.addEventListener('DOMContentLoaded', function () {
         validatePrefix(studentsGroupField, gitlabGroupField, "students-group-feedback")
     });
 
+    // Function to get namespace path from selected namespace
+    function getSelectedNamespacePath() {
+        const selectedNamespaceId = parseInt(namespaceSelect.value);
+        const selectedNamespace = namespacesData.find(ns => ns.id === selectedNamespaceId);
+        return selectedNamespace?.gitlab_group_path || null;
+    }
+    
+    // Update fields when namespace changes
+    namespaceSelect.addEventListener('change', function () {
+        if (!gitlabGroupField.value) {
+            return;
+        }
+        updateGitLabFields();
+    });
+
     gitlabGroupField.addEventListener('input', function () {
+        updateGitLabFields();
+    });
+    
+    function updateGitLabFields() {
         const groupName = gitlabGroupField.value;
+        const namespacePath = getSelectedNamespacePath();
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth();
         const semester = month >= 0 && month <= 5 ? 'spring' : 'fall';
-
-        if (!publicRepoChanged) {
-            publicRepoField.value = `${groupName}/public-${year}-${semester}`;
+        
+        // Determine the full group path
+        let fullGroupPath = groupName;
+        if (namespacePath && groupName && !groupName.includes('/')) {
+            // If group name doesn't contain '/', prepend namespace path
+            fullGroupPath = `${namespacePath}/${groupName}`;
+        } else if (!groupName && namespacePath) {
+            // If only namespace is selected, use it as base
+            fullGroupPath = namespacePath;
         }
 
-        if (!studentsGroupChanged) {
-            studentsGroupField.value = `${groupName}/students-${year}-${semester}`;
+        if (!publicRepoChanged && fullGroupPath) {
+            publicRepoField.value = `${fullGroupPath}/public-${year}-${semester}`;
         }
 
+        if (!studentsGroupChanged && fullGroupPath) {
+            studentsGroupField.value = `${fullGroupPath}/students-${year}-${semester}`;
+        }
+    }
+
+    // Check if namespace_id is provided in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const preselectedNamespaceId = urlParams.get('namespace_id');
+
+    function showNamespaceError(message) {
+        namespaceError.textContent = message;
+        namespaceError.style.display = 'block';
+        namespaceSelect.disabled = true;
+        namespacesLoaded = false;
+    }
+
+    function hideNamespaceError() {
+        namespaceError.style.display = 'none';
+    }
+    
+    // Fetch namespaces from API
+    fetch('/api/namespaces', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        console.log('Namespaces API response status:', response.status);
+        if (response.status === 302 || response.redirected) {
+            throw new Error('Not authenticated. Please refresh the page and log in.');
+        }
+        if (!response.ok) {
+            throw new Error(`Failed to fetch namespaces: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        const namespaces = data.namespaces || [];
+        namespacesData = namespaces;
+        
+        // Clear loading option
+        namespaceSelect.innerHTML = '';
+        
+        if (namespaces.length === 0) {
+            showNamespaceError('No namespaces available. Please contact your administrator.');
+            namespaceSelect.innerHTML = '<option value="">No namespaces available</option>';
+            return;
+        }
+        
+        // Add namespaces to dropdown
+        let namespaceFound = false;
+        namespaces.forEach((ns, index) => {
+            const option = document.createElement('option');
+            option.value = ns.id;
+            option.textContent = `${ns.name} (${ns.slug})`;
+            
+            // Check if this is the preselected namespace
+            if (preselectedNamespaceId && ns.id == preselectedNamespaceId) {
+                option.selected = true;
+                namespaceFound = true;
+            } else if (!preselectedNamespaceId && (namespaces.length === 1 || index === 0)) {
+                // Auto-select if only one namespace or first one (and no preselection)
+                option.selected = true;
+            }
+            
+            namespaceSelect.appendChild(option);
+        });
+        
+        // If namespace was preselected, disable the select (lock it)
+        if (preselectedNamespaceId) {
+            if (namespaceFound) {
+                namespaceSelect.disabled = true;
+                namespaceSelect.style.cursor = 'not-allowed';
+                namespaceSelect.style.backgroundColor = 'var(--bs-secondary-bg)';
+                
+                // Add hidden input since disabled selects are not submitted with form
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'namespace_id';
+                hiddenInput.value = preselectedNamespaceId;
+                namespaceSelect.parentElement.appendChild(hiddenInput);
+                
+                // Add a note below the select
+                const note = document.createElement('small');
+                note.className = 'form-text text-info';
+                note.textContent = 'Namespace is fixed for this course creation.';
+                namespaceSelect.parentElement.appendChild(note);
+            } else {
+                showNamespaceError(`Namespace with ID ${preselectedNamespaceId} not found or you don't have access.`);
+                return;
+            }
+        } else {
+            // Enable the select normally
+            namespaceSelect.disabled = false;
+        }
+        
+        namespacesLoaded = true;
+        hideNamespaceError();
+        
+        // Initialize GitLab group field with namespace path if available
+        const selectedNamespace = namespacesData.find(ns => ns.id == namespaceSelect.value);
+        if (selectedNamespace && selectedNamespace.gitlab_group_path) {
+            // Optionally pre-fill the course group with a suggestion
+            // gitlabGroupField.placeholder = `e.g., ${selectedNamespace.gitlab_group_path}/your-course`;
+        }
+    })
+    .catch(error => {
+        console.error('Error loading namespaces:', error);
+        showNamespaceError('Failed to load namespaces. Please refresh the page or contact your administrator.');
+        namespaceSelect.innerHTML = '<option value="">Error loading namespaces</option>';
     });
+
+    // Add validation check before form submission
+    form.addEventListener('submit', function(event) {
+        if (!namespacesLoaded || !namespaceSelect.value) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            if (!namespacesLoaded) {
+                showNamespaceError('Namespaces are not loaded. Please wait or refresh the page.');
+            } else if (!namespaceSelect.value) {
+                namespaceSelect.classList.add('is-invalid');
+            }
+        }
+    }, false);
 });
 </script>
 {% endblock %}
