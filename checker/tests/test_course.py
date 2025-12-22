@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import git
 import pytest
@@ -11,7 +13,7 @@ from checker.configs.manytask import ManytaskConfig
 from checker.course import Course, FileSystemGroup, FileSystemTask
 from checker.exceptions import BadConfig, CheckerException
 
-from .conftest import T_GENERATE_FILE_STRUCTURE
+T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
 
 TEST_TIMEZONE = "Europe/Berlin"
 TEST_FILE_STRUCTURE = {

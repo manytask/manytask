@@ -14,6 +14,8 @@ from checker.exceptions import PluginExecutionFailed
 
 from .base import PluginABC, PluginOutput
 
+HTTP_ERROR_STATUS_CODE = 400
+
 
 class ManytaskPlugin(PluginABC):
     """Given score report it to the manytask.
@@ -42,7 +44,7 @@ class ManytaskPlugin(PluginABC):
         try:
             send_time_formatted = args.send_time.strftime(self.DEFAULT_TIME_FORMAT)
         except ValueError as e:
-            raise PluginExecutionFailed(e)
+            raise PluginExecutionFailed(str(e))
 
         # Do not expose token in logs.
         data = {
@@ -86,7 +88,7 @@ class ManytaskPlugin(PluginABC):
         session.mount("http://", adapter)
         response = session.post(url=f"{report_url}", data=data, files=files)
 
-        if response.status_code >= 400:
+        if response.status_code >= HTTP_ERROR_STATUS_CODE:
             raise PluginExecutionFailed(f"{response.status_code}: {response.text}")
 
         return response

@@ -1,4 +1,10 @@
-from .conftest import T_GENERATE_FILE_STRUCTURE
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
 
 
 class TestGenerateFileStructure:

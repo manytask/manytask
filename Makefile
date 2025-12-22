@@ -4,6 +4,11 @@ DOCKER_COMPOSE_DEV := docker-compose.development.yml
 TESTS_DIR := tests
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 
+# testcontainers may fail on some macOS Docker setups due to Ryuk connectivity issues.
+# Allow overriding: `make test TESTCONTAINERS_RYUK_DISABLED=false`
+TESTCONTAINERS_RYUK_DISABLED ?= true
+export TESTCONTAINERS_RYUK_DISABLED
+
 .PHONY: dev test reset-dev clean-db lint lint-fix setup install-deps check format install-hooks run-hooks makemigrations migrate downgrade history
 
 check: format lint test
@@ -31,7 +36,10 @@ reset-dev: clean-db
 	docker-compose -f $(DOCKER_COMPOSE_LOCAL) up --build
 
 test: install-deps
-	poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	# Run checker test suite from inside ./checker so `import checker.*` resolves correctly.
+	# Use `-c /dev/null` to avoid inheriting repo-level pytest config, but force rootdir back to ./checker.
+	cd checker && TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. poetry run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail tests
 
 test-colima: install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \

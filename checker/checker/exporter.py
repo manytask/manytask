@@ -213,9 +213,9 @@ class Exporter:
         """Search for files/folder should be ignored due to templating in the current directory only"""
         exclude_paths = []
 
-        if (
-            self.export_config.templates == CheckerExportConfig.TemplateType.SEARCH
-            or self.export_config.templates == CheckerExportConfig.TemplateType.SEARCH_OR_CREATE
+        if self.export_config.templates in (
+            CheckerExportConfig.TemplateType.SEARCH,
+            CheckerExportConfig.TemplateType.SEARCH_OR_CREATE,
         ):
             for template_file_or_folder in root.glob(f"*{self.TEMPLATE_SUFFIX}"):
                 if ignore_templates:
@@ -223,9 +223,9 @@ class Exporter:
                 else:
                     exclude_paths.append(template_file_or_folder.stem)
 
-        if (
-            self.export_config.templates == CheckerExportConfig.TemplateType.CREATE
-            or self.export_config.templates == CheckerExportConfig.TemplateType.SEARCH_OR_CREATE
+        if self.export_config.templates in (
+            CheckerExportConfig.TemplateType.CREATE,
+            CheckerExportConfig.TemplateType.SEARCH_OR_CREATE,
         ):
             # if got empty file after template comments deletion - exclude it
             for potential_comments_file in root.glob("*"):
@@ -397,7 +397,7 @@ class Exporter:
         content = path.read_text()
         return self.TEMPLATE_START_COMMENT in content and self.TEMPLATE_END_COMMENT in content
 
-    def _should_skip_path(
+    def _should_skip_path(  # noqa: C901, PLR0911, PLR0912, PLR0913
         self,
         path: Path,
         config: CheckerStructureConfig,
@@ -511,7 +511,7 @@ class Exporter:
             ),
         )
 
-    def _copy_directory(
+    def _copy_directory(  # noqa: PLR0913
         self,
         path: Path,
         path_destination: Path,

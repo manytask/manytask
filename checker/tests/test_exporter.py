@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from checker.course import Course
 from checker.exceptions import BadStructure
 from checker.exporter import Exporter
 
-from .conftest import T_GENERATE_FILE_STRUCTURE
+T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
 
 
 def assert_files_in_folder(folder: Path, expected_files: list[str]) -> None:
