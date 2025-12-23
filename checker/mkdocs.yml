@@ -1,0 +1,102 @@
+site_name: Checker
+site_description: Python CLI script to run build and run tests against students solutions
+site_url: https://manytask.github.io/checker/
+
+docs_dir: ./docs
+site_dir: ./site
+
+theme:
+  name: material
+
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: default
+      toggle:
+        icon: material/lightbulb
+        name: Switch to dark mode
+      primary: pink
+      accent: purple
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: slate
+      toggle:
+        icon: material/lightbulb
+        name: Switch to light mode
+      primary: pink
+      accent: lime
+
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.copy
+    - content.code.annotation
+
+  language: en
+
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+  icon:
+    repo: fontawesome/brands/github
+
+  favicon: images/favicon.ico
+  logo: images/manytask-avatar-1024px.png
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: info
+
+extra:
+  version:
+    provider: mike
+
+repo_name: manytask/checker
+repo_url: https://github.com/manytask/checker
+
+nav:
+  - Overview: index.md
+  - Concepts: 0_concepts.md
+  - Setup and Usage:
+    - Getting Started: 1_getting_started.md
+    - Configuration: 2_configuration.md
+    - Plugins: 3_plugins.md
+    - Pipelines: 4_pipelines.md
+    - Usage: 5_usage.md
+  - Development: 6_development.md
+  - Changelog: 7_changelog.md
+
+markdown_extensions:
+  - def_list
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      pygments_lang_class: true
+  - pymdownx.extra
+  - pymdownx.tabbed:
+      alternate_style: true
+  - mkdocs_click
+
+plugins:
+  - mike:
+      alias_type: symlink
+      canonical_version: latest
+  - search
+  - include-markdown
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            heading_level: 4
+#            show_source: false
+#            exclude_private: true
+  - mermaid2

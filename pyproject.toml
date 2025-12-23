@@ -29,8 +29,11 @@ dev = [
     "types-PyYAML==6.0.12.12",
     "pytest==8.4.0",
     "pytest-cov==7.0.0",
+    "pytest-mock>=3.0.0,<4.0.0",
+    "requests-mock>=1.0.0,<2.0.0",
     "pre-commit==4.3.0",
     "testcontainers==4.13.0",
+    "GitPython>=3.0.0,<4.0.0",
     "bs4>=0.0.2",
     "pytest-xdist>=3.8.0",
 ]
@@ -51,19 +54,23 @@ exclude = [
     "tests/",
     ".tmp/",
     ".venv/",
-    "manytask/migrations/versions"
+    "manytask/migrations/versions",
+    "checker/tests/",
+    "checker/.tmp/"
 ]
 
 
 [tool.pyright]
-include = ["manytask"]
+include = ["manytask", "checker/checker"]
 exclude = [
     "**/node_modules",
     "**/__pycache__",
     ".venv",
     "venv",
     ".tmp",
-    "tests"
+    "tests",
+    "checker/tests",
+    "checker/.tmp"
 ]
 
 
@@ -80,7 +87,7 @@ testpaths = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-src = ["manytask", "tests"]
+src = ["manytask", "tests", "checker/checker"]
 
 # Exclude patterns
 exclude = [
@@ -107,7 +114,8 @@ exclude = [
     "node_modules",
     "venv",
     ".tmp",
-    "manytask/migrations/versions"
+    "manytask/migrations/versions",
+    "checker/tests"
 ]
 
 [tool.ruff.lint]
@@ -128,4 +136,4 @@ max-nested-blocks = 5
 max-args = 7
 
 [tool.ruff.lint.isort]
-known-first-party = ["manytask", "tests"]
+known-first-party = ["manytask", "tests", "checker"]
