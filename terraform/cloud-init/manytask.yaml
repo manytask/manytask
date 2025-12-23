@@ -1,0 +1,216 @@
+#cloud-config
+
+# Manytask Server Cloud-Init Configuration
+# This script sets up Manytask application with nginx-proxy and SSL
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - git
+  - vim
+  - htop
+  - python3-pip
+
+write_files:
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+    permissions: '0644'
+
+  - path: /opt/manytask/.env
+    content: |
+      # Flask Configuration
+      FLASK_SECRET_KEY=${flask_secret_key}
+      
+      # GitLab Configuration
+      GITLAB_URL=https://${gitlab_hostname}
+      GITLAB_ADMIN_TOKEN=
+      GITLAB_CLIENT_ID=
+      GITLAB_CLIENT_SECRET=
+      
+      # Database Configuration
+      DATABASE_URL=postgresql://manytask:${postgres_password}@${postgresql_ip}:5432/manytask
+      DATABASE_URL_EXTERNAL=postgresql://manytask:${postgres_password}@${postgresql_ip}:5432/manytask
+      
+      # Automatically apply migrations on startup
+      APPLY_MIGRATIONS=true
+      INITIAL_INSTANCE_ADMIN=admin
+      REGISTRATION_SECRET=${registration_secret}
+      
+      # Docker Configuration
+      DOCS_HOST=docs.${domain}
+      APP_HOST=${manytask_hostname}
+    permissions: '0600'
+
+  - path: /opt/manytask/docker-compose.yml
+    content: |
+      networks:
+        manytask-net:
+          name: nginx-manytask-net
+          driver: bridge
+      
+      volumes:
+        cache:
+        acme:
+          name: acme
+        certs:
+          name: certs
+        vhost:
+          name: vhost
+        html:
+          name: html
+        conf:
+          name: conf
+      
+      services:
+        nginx-proxy:
+          image: nginxproxy/nginx-proxy:1.7.0
+          container_name: nginx-proxy
+          restart: always
+          ports:
+            - "80:80"
+            - "443:443"
+          environment:
+            DHPARAM_SKIP: "true"
+          volumes:
+            - certs:/etc/nginx/certs:ro
+            - vhost:/etc/nginx/vhost.d
+            - html:/usr/share/nginx/html
+            - /var/run/docker.sock:/tmp/docker.sock:ro
+            - conf:/etc/nginx/conf.d
+          networks:
+            - manytask-net
+      
+        acme-companion:
+          image: nginxproxy/acme-companion:2.5.2
+          container_name: nginx-proxy-acme
+          restart: always
+          environment:
+            DEFAULT_EMAIL: admin@${domain}
+            NGINX_PROXY_CONTAINER: nginx-proxy
+          volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - acme:/etc/acme.sh
+            - certs:/etc/nginx/certs:rw
+            - vhost:/etc/nginx/vhost.d:rw
+            - html:/usr/share/nginx/html:rw
+          networks:
+            - manytask-net
+      
+        manytask:
+          image: manytask/manytask:${manytask_version}
+          container_name: manytask
+          restart: always
+          expose:
+            - "5050"
+          env_file: .env
+          environment:
+            VIRTUAL_HOST: $${APP_HOST}
+            VIRTUAL_PORT: 5050
+            LETSENCRYPT_HOST: $${APP_HOST}
+            LETSENCRYPT_EMAIL: admin@${domain}
+          volumes:
+            - cache:/cache
+          networks:
+            - manytask-net
+          depends_on:
+            - nginx-proxy
+            - acme-companion
+    permissions: '0644'
+
+  - path: /opt/manytask/start.sh
+    content: |
+      #!/bin/bash
+      set -e
+      
+      cd /opt/manytask
+      
+      # Pull latest images
+      docker-compose pull
+      
+      # Start services
+      docker-compose up -d
+      
+      echo "Waiting for services to start..."
+      sleep 30
+      
+      echo "Manytask is starting up."
+      echo "Check status with: docker-compose logs -f"
+    permissions: '0755'
+
+  - path: /opt/manytask/update.sh
+    content: |
+      #!/bin/bash
+      set -e
+      
+      cd /opt/manytask
+      
+      echo "Updating Manytask..."
+      docker-compose pull manytask
+      docker-compose up -d manytask
+      
+      echo "Update complete!"
+    permissions: '0755'
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  
+  # Install Docker Compose standalone
+  - curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+  
+  # Install Poetry for local development
+  - curl -sSL https://install.python-poetry.org | python3 -
+  - echo 'export PATH="/root/.local/bin:$PATH"' >> /root/.bashrc
+  
+  # Start Docker service
+  - systemctl enable docker
+  - systemctl start docker
+  
+  # Start Manytask
+  - /opt/manytask/start.sh
+  
+  # Setup firewall
+  - ufw --force enable
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+
+final_message: |
+  Manytask server setup complete!
+  
+  Manytask is starting up. This may take 2-3 minutes.
+  
+  Access Manytask at: https://${manytask_hostname}
+  
+  IMPORTANT: You need to configure GitLab OAuth credentials in /opt/manytask/.env:
+    - GITLAB_ADMIN_TOKEN
+    - GITLAB_CLIENT_ID
+    - GITLAB_CLIENT_SECRET
+  
+  After updating .env, restart Manytask:
+    cd /opt/manytask && docker-compose restart manytask
+  
+  Check Manytask status:
+    sudo docker-compose -f /opt/manytask/docker-compose.yml logs -f
+  
+  Update Manytask:
+    /opt/manytask/update.sh
+  
+  The system has been configured and is ready to use.
