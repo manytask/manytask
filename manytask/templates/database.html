@@ -79,6 +79,41 @@
                     </div>
                 </div>
             </div>
+
+            <div class="modal fade" id="editGradeModal" tabindex="-1" aria-labelledby="editGradeModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editGradeModalLabel">Редактировать оценку</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="editGradeForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Студент: <strong><span id="gradeStudentName"></span></strong></label>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Текущая оценка: <span id="currentGradeValue"></span> <span id="gradeOverrideBadge" class="badge bg-warning" style="display: none;">Установлено вручную</span></label>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="gradeInput" class="form-label">Новая оценка (2-5)</label>
+                                    <input type="number" class="form-control" id="gradeInput" min="2" max="5" step="1" required>
+                                    <div class="form-text">Введите оценку от 2 до 5</div>
+                                </div>
+                                <div class="mb-3" id="clearOverrideContainer" style="display: none;">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="clearOverrideBtn">
+                                        Сбросить переопределение (вернуть автоматический расчет)
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="button" class="btn btn-primary" onclick="saveGrade()">Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         {% endif %}
     </div>
 
@@ -94,6 +129,8 @@
         let editModal = null;
         let currentCommentCell = null;
         let editCommentModal = null;
+        let currentGradeCell = null;
+        let editGradeModal = null;
         const mincolwidth = 30;
 
         function editCell(cell) {
@@ -215,6 +252,124 @@
                     alert('Failed to update comment');
                 });
         }
+
+        // Helper function to reload table data from server
+        function reloadTableData() {
+            return fetch('{{ url_for("api.get_database", course_name=course_name) }}')
+                .then(response => response.json())
+                .then(data => {
+                    window.tabulatorTable.setData(data.students);
+                });
+        }
+
+        function editGrade(cell) {
+            const isAdmin = {{ is_course_admin|tojson }};
+            if (!isAdmin) {
+                return;
+            }
+
+            currentGradeCell = cell;
+            const row = cell.getRow();
+            const rowData = row.getData();
+            const username = rowData.username;
+            const currentGrade = cell.getValue() || 0;
+            const isOverride = rowData.grade_is_override || false;
+
+            document.getElementById('gradeStudentName').textContent = username;
+            document.getElementById('currentGradeValue').textContent = currentGrade;
+            document.getElementById('gradeInput').value = currentGrade;
+
+            // Show/hide override badge
+            const badge = document.getElementById('gradeOverrideBadge');
+            const clearContainer = document.getElementById('clearOverrideContainer');
+            if (isOverride) {
+                badge.style.display = 'inline';
+                clearContainer.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+                clearContainer.style.display = 'none';
+            }
+
+            editGradeModal.show();
+
+            // Focus on input after modal is shown
+            editGradeModal._element.addEventListener('shown.bs.modal', function () {
+                document.getElementById('gradeInput').select();
+            }, {once: true});
+
+            // Setup clear override button handler
+            document.getElementById('clearOverrideBtn').onclick = function() {
+                if (!confirm('Сбросить ручное переопределение оценки? Оценка будет автоматически пересчитана.')) {
+                    return;
+                }
+
+                fetch('{{ url_for("api.clear_grade_override", course_name=course_name) }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Reload table to show recalculated grade without override
+                            reloadTableData().then(() => {
+                                editGradeModal.hide();
+                            });
+                        } else {
+                            alert('Не удалось сбросить переопределение: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error clearing grade override:', error);
+                        alert('Не удалось сбросить переопределение');
+                    });
+            };
+        }
+
+        function saveGrade() {
+            if (!currentGradeCell) return;
+
+            const newGrade = parseInt(document.getElementById('gradeInput').value);
+            if (isNaN(newGrade) || newGrade < 2 || newGrade > 5) {
+                alert('Пожалуйста, введите корректную оценку от 2 до 5');
+                return;
+            }
+
+            const row = currentGradeCell.getRow();
+            const rowData = row.getData();
+            const username = rowData.username;
+
+            fetch('{{ url_for("api.override_grade", course_name=course_name) }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: username,
+                    grade: newGrade
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Reload table to show updated grade with override indicator (yellow background + asterisk)
+                        reloadTableData().then(() => {
+                            editGradeModal.hide();
+                        });
+                    } else {
+                        alert('Не удалось обновить оценку: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating grade:', error);
+                    alert('Не удалось обновить оценку');
+                });
+        }
+
         function updateTheme() {
             const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
 
@@ -238,6 +393,7 @@
             {% if is_course_admin %}
                 editModal = new bootstrap.Modal(document.getElementById('editModal'));
                 editCommentModal = new bootstrap.Modal(document.getElementById('editCommentModal'));
+                editGradeModal = new bootstrap.Modal(document.getElementById('editGradeModal'));
 
                 document.getElementById('editForm').addEventListener('submit', function (e) {
                     e.preventDefault();
@@ -247,6 +403,11 @@
                 document.getElementById('editCommentForm').addEventListener('submit', function (e) {
                     e.preventDefault();
                     saveComment();
+                });
+
+                document.getElementById('editGradeForm').addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    saveGrade();
                 });
             {% endif %}
 
@@ -343,7 +504,33 @@
                             hozAlign: "center",
                             minWidth: 1,
                             with: 200,
-                            headerTooltip: "Course grade"
+                            headerTooltip: "Course grade",
+                            formatter: function (cell, formatterParams, onRendered) {
+                                const row = cell.getRow().getData();
+                                const grade = cell.getValue();
+                                const isOverride = row.grade_is_override || false;
+
+                                // Apply visual styling for override grades
+                                if (isOverride) {
+                                    const cellElement = cell.getElement();
+                                    cellElement.classList.add('grade-override-cell');
+                                    cellElement.title = "Оценка установлена вручную администратором";
+                                    {% if is_course_admin %}
+                                    cellElement.classList.add('grade-cell-clickable');
+                                    {% endif %}
+                                    return grade + " *";
+                                } else {
+                                    {% if is_course_admin %}
+                                    cell.getElement().classList.add('grade-cell-clickable');
+                                    {% endif %}
+                                    return grade;
+                                }
+                            },
+                            {% if is_course_admin %}
+                            cellClick: function (e, cell) {
+                                editGrade(cell);
+                            },
+                            {% endif %}
                         },
                         {
                             title: "Total<br>Score",
