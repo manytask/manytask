@@ -72,6 +72,10 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
 
         row["grade"] = effective_grade
 
+        # Add override indicator (for admins only or for frontend to know)
+        # This allows frontend to visually indicate overridden grades
+        row["grade_is_override"] = storage_api.is_grade_overridden(course_name, username)
+
         table_data["students"].append(row)
         table_data["max_score"] = max_score
 

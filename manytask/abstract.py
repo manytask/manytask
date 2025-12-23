@@ -182,6 +182,9 @@ class StorageApi(ABC):
     @abstractmethod
     def clear_grade_override(self, course_name: str, username: str) -> None: ...
 
+    @abstractmethod
+    def is_grade_overridden(self, course_name: str, username: str) -> bool: ...
+
 
 @dataclass
 class RmsUser:

@@ -1672,3 +1672,21 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
+
+    def is_grade_overridden(self, course_name: str, username: str) -> bool:
+        """Check if student's grade is manually overridden.
+
+        :param course_name: course name
+        :param username: student username
+        :return: True if grade is overridden, False otherwise
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+
+                return user_on_course.final_grade_override is not None
+
+            except NoResultFound:
+                logger.warning(f"User {username} not found in course {course_name}")
+                return False

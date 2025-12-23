@@ -453,8 +453,15 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
         row_data.percent = total_score * 100 / max_score if max_score > 0 else 0
 
         # Calculate and save grade (applies DORESHKA logic if needed)
-        new_grade = storage_api.calculate_and_save_grade(course.course_name, username, row_data.model_dump())
-        row_data.grade = new_grade
+        # This updates final_grade but does NOT touch final_grade_override
+        storage_api.calculate_and_save_grade(course.course_name, username, row_data.model_dump())
+
+        # Get effective grade (override if exists, otherwise final_grade)
+        effective_grade = storage_api.get_effective_grade(course.course_name, username)
+        row_data.grade = effective_grade
+
+        # Add override indicator for frontend
+        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, username)
 
         logger.info("Successfully updated scores for user=%s", sanitize_log_data(username))
         return jsonify(
@@ -557,9 +564,7 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         # TODO: Future improvement - validate against grades defined in course config
         #       to support different grading systems dynamically
         if new_grade < 2 or new_grade > 5:
-            return jsonify(
-                {"success": False, "message": "Grade must be between 2 and 5"}
-            ), HTTPStatus.BAD_REQUEST
+            return jsonify({"success": False, "message": "Grade must be between 2 and 5"}), HTTPStatus.BAD_REQUEST
 
         storage_api.override_grade(course.course_name, username, new_grade)
 
