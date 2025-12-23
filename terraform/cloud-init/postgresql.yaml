@@ -1,0 +1,84 @@
+#cloud-config
+
+# PostgreSQL Server Cloud-Init Configuration
+# This script sets up a PostgreSQL server in a private subnet
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - vim
+  - htop
+  - wget
+  - gnupg
+  - lsb-release
+
+write_files:
+  - path: /opt/postgresql/backup.sh
+    content: |
+      #!/bin/bash
+      # Simple backup script for PostgreSQL
+      
+      BACKUP_DIR="/var/backups/postgresql"
+      DATE=$(date +%Y%m%d_%H%M%S)
+      
+      mkdir -p $BACKUP_DIR
+      
+      sudo -u postgres pg_dump manytask | gzip > $BACKUP_DIR/manytask_$DATE.sql.gz
+      
+      # Keep only last 7 days of backups
+      find $BACKUP_DIR -name "manytask_*.sql.gz" -mtime +7 -delete
+      
+      echo "Backup completed: manytask_$DATE.sql.gz"
+    permissions: '0755'
+
+runcmd:
+  # Setup firewall first
+  - ufw allow 22/tcp
+  - ufw allow from ${public_subnet_cidr} to any port 5432 proto tcp
+  - ufw --force enable
+  
+  # Add PostgreSQL official repository
+  - sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+  - wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+  
+  # Update package lists and install PostgreSQL
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-${postgresql_version} postgresql-contrib-${postgresql_version}
+  
+  # Configure PostgreSQL to listen on all interfaces
+  - sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /etc/postgresql/${postgresql_version}/main/postgresql.conf
+  
+  # Allow connections from public subnet
+  - echo "host    all             all             ${public_subnet_cidr}            scram-sha-256" >> /etc/postgresql/${postgresql_version}/main/pg_hba.conf
+  
+  # Restart PostgreSQL with new configuration
+  - systemctl restart postgresql
+  - systemctl enable postgresql
+  
+  # Wait for PostgreSQL to be ready
+  - sleep 10
+  
+  # Create database and user (|| true to ignore errors if already exists)
+  - sudo -u postgres psql -c "CREATE DATABASE manytask;" || true
+  - sudo -u postgres psql -c "CREATE USER manytask WITH ENCRYPTED PASSWORD '${postgres_password}';" || true
+  - sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE manytask TO manytask;" || true
+  - sudo -u postgres psql -c "ALTER DATABASE manytask OWNER TO manytask;" || true
+  
+  # Setup daily backups
+  - echo "0 2 * * * root /opt/postgresql/backup.sh >> /var/log/postgresql-backup.log 2>&1" > /etc/cron.d/postgresql-backup
+
+final_message: |
+  PostgreSQL server setup complete!
+  
+  Database: manytask
+  User: manytask
+  Password: ${postgres_password}
+  
+  Connection string from public subnet:
+    postgresql://manytask:${postgres_password}@<POSTGRESQL_IP>:5432/manytask
+  
+  Daily backups are configured at 02:00 UTC
+  Backup location: /var/backups/postgresql/
+  
+  The system has been configured and is ready to use.
