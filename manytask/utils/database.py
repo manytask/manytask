@@ -13,7 +13,6 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
 
     course_name = course.course_name
     storage_api = app.storage_api
-    grades_config = storage_api.get_grades(course_name)
     scores_and_names = storage_api.get_all_scores_with_names(course_name)
 
     all_tasks = []
@@ -60,10 +59,22 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
                 }
             )
 
-        try:
-            row["grade"] = grades_config.evaluate(row)
-        except ValueError:
-            row["grade"] = 0
+        # Get effective grade (override if exists, otherwise final_grade)
+        # If no grade exists yet, calculate and save it
+        effective_grade = storage_api.get_effective_grade(course_name, username)
+
+        if effective_grade == 0:
+            # No grade saved yet, calculate and save it
+            try:
+                effective_grade = storage_api.calculate_and_save_grade(course_name, username, row)
+            except Exception:
+                effective_grade = 0
+
+        row["grade"] = effective_grade
+
+        # Add override indicator (for admins only or for frontend to know)
+        # This allows frontend to visually indicate overridden grades
+        row["grade_is_override"] = storage_api.is_grade_overridden(course_name, username)
 
         table_data["students"].append(row)
         table_data["max_score"] = max_score
