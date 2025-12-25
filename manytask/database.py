@@ -257,8 +257,12 @@ class DataBaseApi(StorageApi):
 
     def get_all_scores_with_names(
         self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]:
-        """Get all users' scores with names for the given course."""
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]]:
+        """Get all users' scores with names and grade data for the given course.
+
+        Returns:
+            dict mapping username to (scores_dict, (first_name, last_name), final_grade, final_grade_override)
+        """
 
         with self._session_create() as session:
             statement = (
@@ -269,6 +273,8 @@ class DataBaseApi(StorageApi):
                     Task.name,
                     coalesce(Grade.score, 0),
                     coalesce(Grade.is_solved, False),
+                    UserOnCourse.final_grade,
+                    UserOnCourse.final_grade_override,
                 )
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
                 .join(Course, Course.id == UserOnCourse.course_id)
@@ -282,11 +288,11 @@ class DataBaseApi(StorageApi):
 
             rows = session.execute(statement).all()
 
-            scores_and_names: dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]] = {}
+            scores_and_names: dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]] = {}
 
-            for username, first_name, last_name, task_name, score, is_solved in rows:
+            for username, first_name, last_name, task_name, score, is_solved, final_grade, final_grade_override in rows:
                 if username not in scores_and_names:
-                    scores_and_names[username] = ({}, (first_name, last_name))
+                    scores_and_names[username] = ({}, (first_name, last_name), final_grade, final_grade_override)
                 if task_name is not None:
                     scores_and_names[username][0][task_name] = (score, is_solved)
 

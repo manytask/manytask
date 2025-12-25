@@ -84,32 +84,32 @@
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title" id="editGradeModalLabel">Редактировать оценку</h5>
+                            <h5 class="modal-title" id="editGradeModalLabel">Edit Grade</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
                             <form id="editGradeForm">
                                 <div class="mb-3">
-                                    <label class="form-label">Студент: <strong><span id="gradeStudentName"></span></strong></label>
+                                    <label class="form-label">Student: <strong><span id="gradeStudentName"></span></strong></label>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Текущая оценка: <span id="currentGradeValue"></span> <span id="gradeOverrideBadge" class="badge bg-warning" style="display: none;">Установлено вручную</span></label>
+                                    <label class="form-label">Current grade: <span id="currentGradeValue"></span> <span id="gradeOverrideBadge" class="badge bg-warning" style="display: none;">Manually set</span></label>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="gradeInput" class="form-label">Новая оценка (2-5)</label>
+                                    <label for="gradeInput" class="form-label">New grade (2-5)</label>
                                     <input type="number" class="form-control" id="gradeInput" min="2" max="5" step="1" required>
-                                    <div class="form-text">Введите оценку от 2 до 5</div>
+                                    <div class="form-text">Enter grade from 2 to 5</div>
                                 </div>
                                 <div class="mb-3" id="clearOverrideContainer" style="display: none;">
                                     <button type="button" class="btn btn-sm btn-outline-secondary" id="clearOverrideBtn">
-                                        Сбросить переопределение (вернуть автоматический расчет)
+                                        Clear override (restore automatic calculation)
                                     </button>
                                 </div>
                             </form>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                            <button type="button" class="btn btn-primary" onclick="saveGrade()">Сохранить</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="saveGrade()">Save</button>
                         </div>
                     </div>
                 </div>
@@ -299,7 +299,7 @@
 
             // Setup clear override button handler
             document.getElementById('clearOverrideBtn').onclick = function() {
-                if (!confirm('Сбросить ручное переопределение оценки? Оценка будет автоматически пересчитана.')) {
+                if (!confirm('Clear manual grade override? The grade will be automatically recalculated.')) {
                     return;
                 }
 
@@ -320,12 +320,12 @@
                                 editGradeModal.hide();
                             });
                         } else {
-                            alert('Не удалось сбросить переопределение: ' + data.message);
+                            alert('Failed to clear override: ' + data.message);
                         }
                     })
                     .catch(error => {
                         console.error('Error clearing grade override:', error);
-                        alert('Не удалось сбросить переопределение');
+                        alert('Failed to clear override');
                     });
             };
         }
@@ -335,7 +335,7 @@
 
             const newGrade = parseInt(document.getElementById('gradeInput').value);
             if (isNaN(newGrade) || newGrade < 2 || newGrade > 5) {
-                alert('Пожалуйста, введите корректную оценку от 2 до 5');
+                alert('Please enter a valid grade from 2 to 5');
                 return;
             }
 
@@ -361,12 +361,12 @@
                             editGradeModal.hide();
                         });
                     } else {
-                        alert('Не удалось обновить оценку: ' + data.message);
+                        alert('Failed to update grade: ' + data.message);
                     }
                 })
                 .catch(error => {
                     console.error('Error updating grade:', error);
-                    alert('Не удалось обновить оценку');
+                    alert('Failed to update grade');
                 });
         }
 
@@ -514,7 +514,7 @@
                                 if (isOverride) {
                                     const cellElement = cell.getElement();
                                     cellElement.classList.add('grade-override-cell');
-                                    cellElement.title = "Оценка установлена вручную администратором";
+                                    cellElement.title = "Grade manually set by administrator";
                                     {% if is_course_admin %}
                                     cellElement.classList.add('grade-cell-clickable');
                                     {% endif %}

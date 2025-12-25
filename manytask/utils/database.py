@@ -29,7 +29,7 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
 
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
-    for username, (student_scores, name) in scores_and_names.items():
+    for username, (student_scores, name, final_grade, final_grade_override) in scores_and_names.items():
         total_score = sum(score_solved[0] for score_solved in student_scores.values())
 
         large_count = sum(1 for large_task in large_tasks if student_scores.get(large_task[0], (0, None))[1])
@@ -59,11 +59,15 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
                 }
             )
 
-        # Get effective grade (override if exists, otherwise final_grade)
+        # Get effective grade from already loaded data (final_grade_override or final_grade)
         # If no grade exists yet, calculate and save it
-        effective_grade = storage_api.get_effective_grade(course_name, username)
-
-        if effective_grade == 0:
+        if final_grade_override is not None:
+            # Override exists, use it
+            effective_grade = final_grade_override
+        elif final_grade is not None:
+            # Use saved final_grade
+            effective_grade = final_grade
+        else:
             # No grade saved yet, calculate and save it
             try:
                 effective_grade = storage_api.calculate_and_save_grade(course_name, username, row)
@@ -72,9 +76,8 @@ def get_database_table_data(app: CustomFlask, course: Course, include_admin_data
 
         row["grade"] = effective_grade
 
-        # Add override indicator (for admins only or for frontend to know)
-        # This allows frontend to visually indicate overridden grades
-        row["grade_is_override"] = storage_api.is_grade_overridden(course_name, username)
+        # Add override indicator using already loaded data
+        row["grade_is_override"] = final_grade_override is not None
 
         table_data["students"].append(row)
         table_data["max_score"] = max_score
