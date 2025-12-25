@@ -96,9 +96,9 @@
                                     <label class="form-label">Current grade: <span id="currentGradeValue"></span> <span id="gradeOverrideBadge" class="badge bg-warning" style="display: none;">Manually set</span></label>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="gradeInput" class="form-label">New grade (2-5)</label>
-                                    <input type="number" class="form-control" id="gradeInput" min="2" max="5" step="1" required>
-                                    <div class="form-text">Enter grade from 2 to 5</div>
+                                    <label for="gradeInput" class="form-label">New grade</label>
+                                    <input type="number" class="form-control" id="gradeInput" step="1" required>
+                                    <div class="form-text">Enter an integer grade value</div>
                                 </div>
                                 <div class="mb-3" id="clearOverrideContainer" style="display: none;">
                                     <button type="button" class="btn btn-sm btn-outline-secondary" id="clearOverrideBtn">
@@ -334,8 +334,8 @@
             if (!currentGradeCell) return;
 
             const newGrade = parseInt(document.getElementById('gradeInput').value);
-            if (isNaN(newGrade) || newGrade < 2 || newGrade > 5) {
-                alert('Please enter a valid grade from 2 to 5');
+            if (isNaN(newGrade)) {
+                alert('Please enter a valid integer grade');
                 return;
             }
 

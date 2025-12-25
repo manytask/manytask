@@ -560,12 +560,6 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         except (TypeError, ValueError):
             return jsonify({"success": False, "message": "Grade must be an integer"}), HTTPStatus.BAD_REQUEST
 
-        # Validate grade value (Russian grading system: 2-5)
-        # TODO: Future improvement - validate against grades defined in course config
-        #       to support different grading systems dynamically
-        if new_grade < 2 or new_grade > 5:
-            return jsonify({"success": False, "message": "Grade must be between 2 and 5"}), HTTPStatus.BAD_REQUEST
-
         storage_api.override_grade(course.course_name, username, new_grade)
 
         logger.info("Successfully set grade override for user=%s to %d", sanitize_log_data(username), new_grade)
