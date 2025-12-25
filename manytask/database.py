@@ -288,7 +288,9 @@ class DataBaseApi(StorageApi):
 
             rows = session.execute(statement).all()
 
-            scores_and_names: dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]] = {}
+            scores_and_names: dict[
+                str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]
+            ] = {}
 
             for username, first_name, last_name, task_name, score, is_solved, final_grade, final_grade_override in rows:
                 if username not in scores_and_names:
