@@ -1,0 +1,169 @@
+name: Lint and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name || github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  package-lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip' # caching pip dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install -e .[test]
+      - name: Run linters
+        run: make lint
+
+  package-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip' # caching pip dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install -e .[test]
+      - name: Run all tests
+        run: make test OPTIONS=--skip-firejail # firejail doesn't work in docker
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}  # required
+          files: coverage.xml
+          flags: unittests  # optional
+          fail_ci_if_error: true  # optional (default = false)
+          verbose: true  # optional (default = false)
+
+  package-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip' # caching pip dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install wheel
+      - name: Build wheel
+        run: |
+          # TODO: replace with make build
+          python -m pip wheel . --no-deps --wheel-dir dist
+
+  docker-build:
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+      fail-fast: false
+    uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
+    with:
+      platforms: linux/amd64,linux/arm64
+      tags: manytask/checker:${{ matrix.python-version }}-${{ github.sha }}
+      artifact: true
+      artifact_name: manytask-checker-${{ matrix.python-version }}.tar
+
+  docker-test:
+    needs: [docker-build]
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Download Docker Image Artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: manytask-checker-${{ matrix.python-version }}.tar
+          path: /tmp/
+      - name: List tmp folder
+        run: |
+          ls -la /tmp/
+      - name: Load Docker Image
+        run: |
+          docker load --input /tmp/manytask-checker-${{ matrix.python-version }}.tar
+      - name: Check docker image operatable
+        run: |
+          # RUN: python -m /opt/checker --help
+          docker run \
+            --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            manytask/checker:${{ matrix.python-version }}-${{ github.sha }} \
+            --help
+  
+  docs-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+          cache: 'pip' # caching pip dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install -e .[docs]
+      - name: Build docs
+        run: |
+          make docs-build
+
+  docs-preview:
+    permissions:
+      deployments: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+          cache: 'pip' # caching pip dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install -e .[docs]
+      - name: Docs preview
+        run: |
+          make docs-build
+      - name: Publish to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: manytask-checker
+          directory: ./site
+          # Optional: Enable this if you want to have GitHub Deployments triggered
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: Switch what branch you are publishing to.
+          # By default this will be the branch which triggered this workflow
+          branch: ${{ ( github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main' && 'main' ) || ( github.event.workflow_run.head_sha ) }}

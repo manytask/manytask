@@ -26,18 +26,23 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --locked --all-extras
-        
+
       - name: Run ruff format
         run: uv run ruff format --check .
-        
+         
       - name: Run ruff check
         run: uv run ruff check .
-        
+         
       - name: Run mypy
         run: uv run mypy manytask
-        
-      - name: Run tests
+         
+      - name: Run manytask tests
         run: uv run pytest
+
+      - name: Run checker tests (skip firejail like upstream checker CI)
+        run: |
+          cd checker
+          PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib --skip-firejail tests
 
   build-docker:
     needs: test
