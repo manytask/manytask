@@ -11,13 +11,13 @@ repos:
     hooks:
       - id: ruff
         name: ruff
-        entry: ruff check --fix
+        entry: ruff check --fix --force-exclude
         language: system
         types: [python]
         pass_filenames: true
       - id: ruff-format
         name: ruff format
-        entry: ruff format
+        entry: ruff format --force-exclude
         language: system
         types: [python]
         pass_filenames: true
