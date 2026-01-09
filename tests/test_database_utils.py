@@ -100,6 +100,8 @@ def app():  # noqa: C901
                         TASK_LARGE: (SCORES[STUDENT_1][TASK_LARGE], True),
                     },
                     (STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]),
+                    None,  # final_grade
+                    None,  # final_grade_override
                 ),
                 STUDENT_2: (
                     {
@@ -108,6 +110,8 @@ def app():  # noqa: C901
                         TASK_LARGE: (SCORES[STUDENT_2][TASK_LARGE], False),
                     },
                     (STUDENT_DATA[STUDENT_2][0], STUDENT_DATA[STUDENT_2][1]),
+                    None,  # final_grade
+                    None,  # final_grade_override
                 ),
             }
 
