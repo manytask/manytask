@@ -1463,6 +1463,8 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             logger.error("Error during rollback: %s", str(rollback_error))
 
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 @bp.post("/grade/override")
 @requires_auth
 @requires_ready
