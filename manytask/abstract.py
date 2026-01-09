@@ -241,6 +241,8 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_course_id_by_name(self, course_name: str) -> int | None: ...
+    
+    @abstractmethod
     def calculate_and_save_grade(
         self,
         course_name: str,
