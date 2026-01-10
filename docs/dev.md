@@ -11,10 +11,6 @@ Before starting development, ensure you have the necessary access:
 
 You can request these from **[@artemzhmurov](https://t.me/artemzhmurov)**.
 
-Additionally, you need to set up the virtual environment as described in [Development setup](./dev_setup.md).
-
-
-
 ### 2. Project Structure Overview
 
 Below is a brief description of each main file in the project:
