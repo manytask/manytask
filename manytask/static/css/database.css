@@ -88,3 +88,23 @@
     overflow: hidden !important;
     text-overflow: ellipsis !important;
 }
+
+/* Grade override indicator styles */
+.grade-override-cell {
+    background-color: #fff3cd !important;
+    font-weight: 500;
+    border-left: 3px solid #ffc107 !important;
+    transition: background-color 0.2s ease;
+}
+
+[data-bs-theme="dark"] .grade-override-cell {
+    background-color: #3d3416 !important;
+    border-left: 3px solid #ffc107 !important;
+}
+
+/* Hover effect for clickable grade cells (admin only) */
+.grade-cell-clickable:hover {
+    cursor: pointer;
+    opacity: 0.85;
+    filter: brightness(0.95);
+}
