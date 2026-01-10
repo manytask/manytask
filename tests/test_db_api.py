@@ -615,7 +615,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert stats["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_0_0")
 
-    assert all_scores == {TEST_USERNAME: ({"task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)}
+    assert all_scores == {TEST_USERNAME: ({"task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), 2, None)}
     assert bonus_score == 0
     assert scores == {"task_0_0": 1}
 
@@ -650,7 +650,7 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
         TEST_USERNAME: (
             {"bonus_score": (1, False), "task_0_0": (1, False)},
             (TEST_FIRST_NAME, TEST_LAST_NAME),
-            None,
+            2,
             None,
         )
     }
@@ -689,7 +689,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     assert all(v == 0.0 for k, v in stats.items() if k != "task_1_3")
 
     assert all_scores == {
-        TEST_USERNAME: ({"task_1_3": (expected_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)
+        TEST_USERNAME: ({"task_1_3": (expected_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), 2, None)
     }
     assert bonus_score == expected_score
     assert scores == {"task_1_3": expected_score}
@@ -723,7 +723,7 @@ def test_store_score_with_changed_task_name(
     assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
     assert all(v == 0.0 for k, v in stats.items())
 
-    assert all_scores == {TEST_USERNAME: ({"task_0_0": (10, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)}
+    assert all_scores == {TEST_USERNAME: ({"task_0_0": (10, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), 2, None)}
     assert bonus_score == 0
     assert scores == {}
 
@@ -817,13 +817,13 @@ def test_many_users(db_api_with_initialized_first_course, session):
         TEST_USERNAME_1: (
             {"task_0_0": (1, False), "task_1_3": (expected_score_1, False)},
             (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
-            None,
+            2,
             None,
         ),
         TEST_USERNAME_2: (
             {"task_0_0": (expected_score_2, False)},
             (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
-            None,
+            2,
             None,
         ),
     }
