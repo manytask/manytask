@@ -952,8 +952,8 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     assert all(v == 0.0 for k, v in stats2.items() if k not in ["task_1_0", "task_1_1"])
 
     assert all_scores2 == {
-        TEST_USERNAME_1: ({"task_1_0": (99, False)}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1), None, None),
-        TEST_USERNAME_2: ({"task_1_1": (7, False)}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2), None, None),
+        TEST_USERNAME_1: ({"task_1_0": (99, False)}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1), 2, None),
+        TEST_USERNAME_2: ({"task_1_1": (7, False)}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2), 3, None),
     }
     assert bonus_score2_user1 == 0
     assert scores2_user1 == {"task_1_0": 99}
