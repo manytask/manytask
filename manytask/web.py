@@ -17,17 +17,18 @@ from .abstract import ClientProfile
 from .auth import (
     handle_oauth_callback,
     redirect_to_login_with_bad_session,
-    requires_admin,
     requires_auth,
     requires_course_access,
+    requires_instance_or_namespace_admin,
     requires_ready,
+    role_required,
     set_client_profile_session,
     valid_client_profile_session,
     valid_gitlab_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import check_admin, get_courses
+from .utils.flask import check_instance_admin, get_courses, has_role
 from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
 
 SESSION_VERSION = 1.5
@@ -36,7 +37,7 @@ CACHE_TIMEOUT_SECONDS = 3600
 logger = logging.getLogger(__name__)
 root_bp = Blueprint("root", __name__)
 course_bp = Blueprint("course", __name__, url_prefix="/<course_name>")
-admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+instance_admin_bp = Blueprint("instance_admin", __name__, url_prefix="/instance_admin")
 
 
 @root_bp.get("/healthcheck")
@@ -50,14 +51,23 @@ def index() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     courses = get_courses(app)
-    is_admin = check_admin(app)
+    is_instance_admin = check_instance_admin(app)
+
+    # Check if user is a namespace admin
+    if app.debug:
+        is_namespace_admin_flag = True
+    else:
+        from .utils.flask import is_namespace_admin
+
+        is_namespace_admin_flag = is_namespace_admin(app, session["profile"]["username"])
 
     return render_template(
         "courses.html",
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
         courses=courses,
-        is_admin=is_admin,
+        is_instance_admin=is_instance_admin,
+        is_namespace_admin=is_namespace_admin_flag,
     )
 
 
@@ -156,6 +166,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         cache_time=cache_delta,
         courses=courses,
         deadlines_type=course.deadlines_type,
+        has_role=has_role,
     )
 
 
@@ -326,7 +337,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     course = app.storage_api.get_course(course_name)
-    is_admin = check_admin(app)
+    is_instance_admin = check_instance_admin(app)
 
     if course is None:
         return redirect(url_for("root.index"))
@@ -335,7 +346,10 @@ def not_ready(course_name: str) -> ResponseReturnValue:
         return redirect(url_for("course.course_page", course_name=course_name))
 
     return render_template(
-        "not_ready.html", course_name=course.course_name, manytask_version=app.manytask_version, is_admin=is_admin
+        "not_ready.html",
+        course_name=course.course_name,
+        manytask_version=app.manytask_version,
+        is_instance_admin=is_instance_admin,
     )
 
 
@@ -374,6 +388,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
     return render_template(
         "database.html",
         course_name=course.course_name,
+        course_status=course.status,
         scores=scores,
         bonus_score=bonus_score,
         username=student_username,
@@ -388,12 +403,13 @@ def show_database(course_name: str) -> ResponseReturnValue:
         student_ci_url=f"{student_repo}/pipelines",
         manytask_version=app.manytask_version,
         courses=courses,
+        has_role=has_role,
     )
 
 
-@admin_bp.route("/courses/new", methods=["GET", "POST"])
-@requires_admin
-def create_course() -> ResponseReturnValue:
+@instance_admin_bp.route("/courses/new", methods=["GET", "POST"])
+@requires_instance_or_namespace_admin
+def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     app: CustomFlask = current_app  # type: ignore
 
     if request.method == "POST":
@@ -405,11 +421,100 @@ def create_course() -> ResponseReturnValue:
                 "create_course.html", generated_token=generate_token_hex(24), error_message="CSRF Error"
             )
 
+        namespace_id_str = request.form.get("namespace_id", "").strip()
+        if not namespace_id_str:
+            return render_template(
+                "create_course.html",
+                generated_token=generate_token_hex(24),
+                error_message="Namespace is required",
+            )
+
+        try:
+            namespace_id = int(namespace_id_str)
+        except ValueError:
+            return render_template(
+                "create_course.html",
+                generated_token=generate_token_hex(24),
+                error_message="Invalid namespace ID",
+            )
+
+        username = session["gitlab"]["username"]
+        is_instance_admin = app.storage_api.check_if_instance_admin(username)
+
+        try:
+            namespace, role = app.storage_api.get_namespace_by_id(namespace_id, username)
+        except PermissionError:
+            logger.warning(
+                "User %s attempted to create course with namespace id=%s without access", username, namespace_id
+            )
+            return render_template(
+                "create_course.html",
+                generated_token=generate_token_hex(24),
+                error_message="Access denied to selected namespace",
+            )
+        except Exception as e:
+            logger.error("Error fetching namespace id=%s: %s", namespace_id, str(e))
+            return render_template(
+                "create_course.html",
+                generated_token=generate_token_hex(24),
+                error_message="Selected namespace not found",
+            )
+
+        if not is_instance_admin and role != "namespace_admin":
+            logger.warning(
+                "User %s with role %s attempted to create course in namespace id=%s",
+                username,
+                role,
+                namespace_id,
+            )
+            return render_template(
+                "create_course.html",
+                generated_token=generate_token_hex(24),
+                error_message="Only Instance Admin or Namespace Admin can create courses",
+            )
+
+        course_name = request.form["unique_course_name"].strip()
+        gitlab_course_group = request.form["gitlab_course_group"].strip()
+        gitlab_course_public_repo = request.form["gitlab_course_public_repo"].strip()
+        gitlab_course_students_group = request.form["gitlab_course_students_group"].strip()
+
+        # Compute full path for course group from public repo path
+        # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
+        gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
+
+        try:
+            logger.info(
+                "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
+            )
+            course_group_id = app.rms_api.create_course_group(
+                parent_group_id=namespace.gitlab_group_id,
+                course_name=course_name,
+                course_slug=gitlab_course_group.split("/")[-1] if "/" in gitlab_course_group else gitlab_course_group,
+            )
+            logger.info("Created course group with id=%s", course_group_id)
+
+            logger.info("Creating public repo: %s", gitlab_course_public_repo)
+            app.rms_api.create_public_repo(gitlab_course_group_full_path, gitlab_course_public_repo)
+            logger.info("Created public repo")
+
+            logger.info("Creating students group: %s", gitlab_course_students_group)
+            app.rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
+            logger.info("Created students group")
+
+        except Exception as e:
+            logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
+            return render_template(
+                "create_course.html",
+                generated_token=generate_token_hex(24),
+                error_message=f"Failed to create GitLab resources: {str(e)}",
+            )
+
         settings = CourseConfig(
-            course_name=request.form["unique_course_name"],
-            gitlab_course_group=request.form["gitlab_course_group"],
-            gitlab_course_public_repo=request.form["gitlab_course_public_repo"],
-            gitlab_course_students_group=request.form["gitlab_course_students_group"],
+            course_name=course_name,
+            namespace_id=namespace_id,
+            gitlab_course_group=gitlab_course_group_full_path,
+            gitlab_course_public_repo=gitlab_course_public_repo,
+            gitlab_course_students_group=gitlab_course_students_group,
             gitlab_default_branch=request.form["gitlab_default_branch"],
             registration_secret=request.form["registration_secret"],
             token=request.form["token"],
@@ -436,8 +541,8 @@ def create_course() -> ResponseReturnValue:
     )
 
 
-@admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
-@requires_admin
+@instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
+@requires_instance_or_namespace_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course = app.storage_api.get_course(course_name)
@@ -445,6 +550,35 @@ def edit_course(course_name: str) -> ResponseReturnValue:
     if not course:
         flash("course not found!", category="course_not_found")
         return redirect(url_for("root.index"))
+
+    if not app.debug:
+        username = session["profile"]["username"]
+        is_instance_admin = app.storage_api.check_if_instance_admin(username)
+
+        if not is_instance_admin:
+            if course.namespace_id:
+                try:
+                    namespace, role = app.storage_api.get_namespace_by_id(course.namespace_id, username)
+                    if role != "namespace_admin":
+                        logger.warning(
+                            "User %s with role %s attempted to edit course %s in namespace %d",
+                            username,
+                            role,
+                            course_name,
+                            course.namespace_id,
+                        )
+                        abort(HTTPStatus.FORBIDDEN)
+                except PermissionError:
+                    logger.warning(
+                        "User %s attempted to edit course %s without access to namespace %d",
+                        username,
+                        course_name,
+                        course.namespace_id,
+                    )
+                    abort(HTTPStatus.FORBIDDEN)
+            else:
+                logger.warning("User %s attempted to edit course %s without namespace", username, course_name)
+                abort(HTTPStatus.FORBIDDEN)
 
     if request.method == "POST":
         try:
@@ -454,6 +588,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             return render_template("edit_course.html", error_message="CSRF Error")
         updated_settings = CourseConfig(
             course_name=course_name,
+            namespace_id=course.namespace_id,
             gitlab_course_group=request.form["gitlab_course_group"],
             gitlab_course_public_repo=request.form["gitlab_course_public_repo"],
             gitlab_course_students_group=request.form["gitlab_course_students_group"],
@@ -476,9 +611,41 @@ def edit_course(course_name: str) -> ResponseReturnValue:
     return render_template("edit_course.html", course=course)
 
 
-@admin_bp.route("/panel", methods=["GET", "POST"])
-@requires_admin
-def admin_panel() -> ResponseReturnValue:
+@instance_admin_bp.route("/", methods=["GET"])
+@requires_auth
+def instance_admin_index() -> ResponseReturnValue:
+    """Root instance admin page that redirects based on user role.
+
+    Instance Admin -> /instance_admin/panel
+    Namespace Admin -> /instance_admin/namespaces
+    """
+    app: CustomFlask = current_app  # type: ignore
+
+    if app.debug:
+        return redirect(url_for("instance_admin.instance_admin_panel"))
+
+    username = session["profile"]["username"]
+    is_instance_admin = app.storage_api.check_if_instance_admin(username)
+
+    if is_instance_admin:
+        logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
+        return redirect(url_for("instance_admin.instance_admin_panel"))
+
+    from .utils.flask import is_namespace_admin
+
+    is_namespace_admin_flag = is_namespace_admin(app, username)
+
+    if is_namespace_admin_flag:
+        logger.info("Namespace Admin %s accessing instance admin root, redirecting to namespaces", username)
+        return redirect(url_for("instance_admin.namespaces_list"))
+
+    logger.warning("User %s attempted to access instance admin without privileges", username)
+    abort(HTTPStatus.FORBIDDEN)
+
+
+@instance_admin_bp.route("/panel", methods=["GET", "POST"])
+@role_required(["instance_admin"])
+def instance_admin_panel() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     if request.method == "POST":
@@ -486,25 +653,47 @@ def admin_panel() -> ResponseReturnValue:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
-            return render_template("admin_panel.html", error_message="CSRF Error")
+            return render_template("instance_admin_panel.html", error_message="CSRF Error")
 
         action = request.form.get("action", "")
         username = request.form.get("username", "")
-        current_admin = session["gitlab"]["username"]
+        current_instance_admin = session["gitlab"]["username"]
 
         if action == "grant":
             app.storage_api.set_instance_admin_status(username, True)
-            app.logger.warning("Admin %s granted admin status to %s", current_admin, username)
+            app.logger.warning(
+                "Instance Admin %s granted instance admin status to %s", current_instance_admin, username
+            )
         elif action == "revoke":
             app.storage_api.set_instance_admin_status(username, False)
-            app.logger.warning("Admin %s revoked admin status from %s", current_admin, username)
+            app.logger.warning(
+                "Instance Admin %s revoked instance admin status from %s", current_instance_admin, username
+            )
         else:
             app.logger.error("Unknown action: %s", action)
 
-        return redirect(url_for("admin.admin_panel"))
+        return redirect(url_for("instance_admin.instance_admin_panel"))
 
     users = app.storage_api.get_all_users()
-    return render_template("admin_panel.html", courses=get_courses(app), users=users)
+
+    namespaces = app.storage_api.get_all_namespaces()
+    namespaces_data = []
+    for namespace in namespaces:
+        users_count = len(app.storage_api.get_namespace_users(namespace.id))
+        namespaces_data.append(
+            {
+                "id": namespace.id,
+                "name": namespace.name,
+                "slug": namespace.slug,
+                "description": namespace.description or "",
+                "gitlab_group_id": namespace.gitlab_group_id,
+                "users_count": users_count,
+            }
+        )
+
+    return render_template(
+        "instance_admin_panel.html", courses=get_courses(app), users=users, namespaces=namespaces_data
+    )
 
 
 @root_bp.route("/update_profile", methods=["POST"])
@@ -545,3 +734,133 @@ def update_profile() -> ResponseReturnValue:
             return redirect(referrer)
 
     return redirect(url_for("root.index"))
+
+
+@instance_admin_bp.route("/namespaces", methods=["GET"])
+@role_required(["namespace_admin", "instance_admin"])
+def namespaces_list() -> ResponseReturnValue:
+    """Display list of namespaces accessible to the user.
+
+    Instance Admin sees all namespaces.
+    Namespace Admin sees only their namespaces.
+    """
+    app: CustomFlask = current_app  # type: ignore
+
+    username = session["gitlab"]["username"]
+    is_instance_admin = app.storage_api.check_if_instance_admin(username)
+
+    if is_instance_admin:
+        logger.info("Instance Admin %s accessing all namespaces", username)
+        namespaces = app.storage_api.get_all_namespaces()
+        namespace_data = []
+
+        for ns in namespaces:
+            users_count = len(app.storage_api.get_namespace_users(ns.id))
+            courses = app.storage_api.get_namespace_courses(ns.id)
+            courses_count = len(courses)
+
+            namespace_data.append(
+                {
+                    "id": ns.id,
+                    "name": ns.name,
+                    "slug": ns.slug,
+                    "description": ns.description or "",
+                    "gitlab_group_id": ns.gitlab_group_id,
+                    "users_count": users_count,
+                    "courses_count": courses_count,
+                }
+            )
+    else:
+        logger.info("Namespace Admin %s accessing their namespaces", username)
+        user_namespaces = app.storage_api.get_user_namespaces(username)
+        namespace_data = []
+
+        for ns, role in user_namespaces:
+            if role == "namespace_admin":
+                users_count = len(app.storage_api.get_namespace_users(ns.id))
+                courses = app.storage_api.get_namespace_courses(ns.id)
+                courses_count = len(courses)
+
+                namespace_data.append(
+                    {
+                        "id": ns.id,
+                        "name": ns.name,
+                        "slug": ns.slug,
+                        "description": ns.description or "",
+                        "gitlab_group_id": ns.gitlab_group_id,
+                        "users_count": users_count,
+                        "courses_count": courses_count,
+                    }
+                )
+
+    return render_template(
+        "namespaces_list.html",
+        namespaces=namespace_data,
+        is_instance_admin=is_instance_admin,
+        manytask_version=app.manytask_version,
+    )
+
+
+@instance_admin_bp.route("/namespaces/<int:namespace_id>", methods=["GET"])
+@role_required(["namespace_admin", "instance_admin"])
+def namespace_panel(namespace_id: int) -> ResponseReturnValue:
+    """Display detailed panel for a specific namespace.
+
+    Instance Admin can access any namespace.
+    Namespace Admin can only access their own namespaces.
+    """
+    app: CustomFlask = current_app  # type: ignore
+
+    username = session["gitlab"]["username"]
+    is_instance_admin = app.storage_api.check_if_instance_admin(username)
+
+    try:
+        namespace, user_role = app.storage_api.get_namespace_by_id(namespace_id, username)
+    except PermissionError:
+        logger.warning("User %s attempted to access namespace %d without permission", username, namespace_id)
+        abort(HTTPStatus.FORBIDDEN)
+    except Exception as e:
+        logger.error("Error accessing namespace %d: %s", namespace_id, str(e))
+        abort(HTTPStatus.NOT_FOUND)
+
+    if not is_instance_admin and user_role != "namespace_admin":
+        logger.warning(
+            "User %s with role %s attempted to access namespace %d",
+            username,
+            user_role,
+            namespace_id,
+        )
+        abort(HTTPStatus.FORBIDDEN)
+
+    namespace_users = app.storage_api.get_namespace_users(namespace_id)
+
+    users_data = []
+    for user_id, role in namespace_users:
+        try:
+            user = app.storage_api.get_stored_user_by_id(user_id)
+            if user:
+                users_data.append(
+                    {
+                        "id": user_id,
+                        "username": user.username,
+                        "rms_id": user.rms_id,
+                        "role": role,
+                    }
+                )
+        except Exception as e:
+            logger.warning("Could not get user info for user_id=%s: %s", user_id, str(e))
+
+    courses = app.storage_api.get_namespace_courses(namespace_id)
+
+    for course in courses:
+        course["url"] = url_for("course.course_page", course_name=course["name"])
+        course["owners_string"] = ", ".join(course["owners"]) if course["owners"] else "No owners"
+
+    return render_template(
+        "namespace_panel.html",
+        namespace=namespace,
+        users=users_data,
+        courses=courses,
+        is_instance_admin=is_instance_admin,
+        manytask_version=app.manytask_version,
+    )

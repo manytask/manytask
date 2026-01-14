@@ -13,6 +13,7 @@ from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from manytask.course import ManytaskDeadlinesType
+from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config
 from .course import CourseStatus
@@ -63,10 +64,16 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         glab.GitLabConfig(
             base_url=app.app_config.gitlab_url,
             admin_token=app.app_config.gitlab_admin_token,
+            verify_ssl=app.app_config.gitlab_verify_ssl,
         )
     )
 
-    app.rms_api = gitlab_api
+    rms: str = os.environ.get("RMS", "GitLab").lower()
+
+    if rms == "gitlab":
+        app.rms_api = gitlab_api
+    elif rms == "mock":
+        app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
     app.auth_api = gitlab_api
     app.csrf = CSRFProtect(app)
 
@@ -89,9 +96,16 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     app.register_blueprint(api.bp)
     app.csrf.exempt(api.bp)
+    app.register_blueprint(api.namespace_bp)
+    app.csrf.exempt(api.namespace_bp)
     app.register_blueprint(web.root_bp)
     app.register_blueprint(web.course_bp)
-    app.register_blueprint(web.admin_bp)
+    app.register_blueprint(web.instance_admin_bp)
+
+    from .utils.flask import get_user_roles, has_role
+
+    app.jinja_env.globals["get_user_roles"] = get_user_roles
+    app.jinja_env.globals["has_role"] = has_role
 
     logger = logging.getLogger(__name__)
 
@@ -113,6 +127,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 def _create_debug_course(app: CustomFlask) -> None:
     course_config = course.CourseConfig(
         course_name="python2025",
+        namespace_id=None,
         gitlab_course_group="",
         gitlab_course_public_repo="",
         gitlab_course_students_group="",
@@ -232,6 +247,11 @@ def _create_app_config(app: CustomFlask, debug: bool | None, test: bool) -> None
 
 
 def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: str) -> OAuth:
+    client_kwargs = {
+        "scope": "openid email profile read_user",
+        "code_challenge_method": "S256",
+    }
+
     oauth.register(
         name="gitlab",
         client_id=client_id,
@@ -240,9 +260,6 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
         access_token_url=f"{base_url}/oauth/token",
         userinfo_endpoint=f"{base_url}/oauth/userinfo",
         jwks_uri=f"{base_url}/oauth/discovery/keys",
-        client_kwargs={
-            "scope": "openid email profile read_user",
-            "code_challenge_method": "S256",
-        },
+        client_kwargs=client_kwargs,
     )
     return oauth

@@ -4,7 +4,7 @@ from typing import Optional
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, StatementError
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, make_transient, mapped_column
 
 from manytask.models import (
     Base,
@@ -12,10 +12,13 @@ from manytask.models import (
     Deadline,
     FloatDatetimeDict,
     Grade,
+    Namespace,
     Task,
     TaskGroup,
     User,
     UserOnCourse,
+    UserOnNamespace,
+    UserOnNamespaceRole,
 )
 from tests.constants import (
     SQLALCHEMY_DATABASE_URL,
@@ -588,3 +591,241 @@ def test_custom_dict_type_empty(engine):
         assert retrieved_model.data is None
 
     TestBase.metadata.drop_all(engine)
+
+
+def test_namespace(session):
+    # Create different users
+    instance_admin = User(
+        username="instance_admin", first_name="instance", last_name="admin", rms_id=101, is_instance_admin=True
+    )
+    student = User(username="student", first_name="student", last_name="student", rms_id=102)
+    namespace_admin = User(username="namespace_admin", first_name="namespace", last_name="admin", rms_id=103)
+    program_manager = User(username="program_manager", first_name="program", last_name="manager", rms_id=104)
+
+    session.add_all([instance_admin, namespace_admin, program_manager, student])
+    session.commit()
+
+    # Create namespace
+    namespace = Namespace(
+        name="Test namespace", slug="test-namespace", gitlab_group_id=12345, created_by=instance_admin
+    )
+    session.add(namespace)
+    session.commit()
+
+    # Assign namespace roles
+    user_on_namespace_admin = UserOnNamespace(
+        user=namespace_admin, namespace=namespace, role=UserOnNamespaceRole.NAMESPACE_ADMIN, assigned_by=instance_admin
+    )
+    user_on_namespace_pm = UserOnNamespace(
+        user=program_manager, namespace=namespace, role=UserOnNamespaceRole.PROGRAM_MANAGER, assigned_by=namespace_admin
+    )
+
+    session.add_all([user_on_namespace_admin, user_on_namespace_pm])
+    session.commit()
+
+    # Create course
+    course = make_course("namespace", namespace_id=namespace.id)
+    session.add(course)
+    session.commit()
+
+    # Create user on course
+    user_on_course = UserOnCourse(user=student, course=course)
+    session.add(user_on_course)
+    session.commit()
+
+    # Check namespaces
+    retrieved_namespace = session.query(Namespace).filter_by(gitlab_group_id=12345).first()
+    assert retrieved_namespace.name == "Test namespace"
+    assert retrieved_namespace.slug == "test-namespace"
+    assert retrieved_namespace.created_by.username == "instance_admin"
+
+    # Check namespace roles
+    retrieved_user_on_namespace1 = session.query(UserOnNamespace).filter_by(user=namespace_admin).first()
+    assert retrieved_user_on_namespace1.namespace == namespace
+    assert retrieved_user_on_namespace1.role == UserOnNamespaceRole.NAMESPACE_ADMIN
+    assert retrieved_user_on_namespace1.assigned_by == instance_admin
+
+    retrieved_user_on_namespace2 = session.query(UserOnNamespace).filter_by(user=program_manager).first()
+    assert retrieved_user_on_namespace2.namespace == namespace
+    assert retrieved_user_on_namespace2.role == UserOnNamespaceRole.PROGRAM_MANAGER
+    assert retrieved_user_on_namespace2.assigned_by == namespace_admin
+
+    # Check course
+    retrieved_course = session.query(Course).filter_by(name="test_course_namespace").first()
+    assert retrieved_course.namespace == namespace
+
+    # Check student
+    retrieved_user_on_course = session.query(UserOnCourse).filter_by(course=course).first()
+    assert retrieved_user_on_course.user.username == "student"
+    assert not retrieved_user_on_course.is_course_admin
+
+
+def test_namespace_constraints(session):
+    instance_admin = User(
+        username="instance_admin2", first_name="instance", last_name="admin", rms_id=111, is_instance_admin=True
+    )
+    session.add(instance_admin)
+    session.commit()
+
+    namespace = Namespace(name="namespace1", slug="unique-slug", gitlab_group_id=123, created_by=instance_admin)
+    session.add(namespace)
+    session.commit()
+
+    namespace_same_slug = Namespace(
+        name="namespace2", slug="unique-slug", gitlab_group_id=456, created_by=instance_admin
+    )
+    session.add(namespace_same_slug)
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+    namespace_same_gitlab_group_id = Namespace(
+        name="namespace3", slug="another-slug", gitlab_group_id=123, created_by=instance_admin
+    )
+    session.add(namespace_same_gitlab_group_id)
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+    student = User(username="student2", first_name="student", last_name="student", rms_id=112)
+    namespace_admin = User(username="namespace_admin2", first_name="namespace", last_name="admin", rms_id=113)
+    user_on_namespace = UserOnNamespace(
+        user=namespace_admin, namespace=namespace, role=UserOnNamespaceRole.NAMESPACE_ADMIN, assigned_by=instance_admin
+    )
+    session.add_all([student, namespace_admin, user_on_namespace])
+
+    user_on_namespace_same_user_id_and_namespace_id = UserOnNamespace(
+        user=namespace_admin, namespace=namespace, role=UserOnNamespaceRole.PROGRAM_MANAGER, assigned_by=instance_admin
+    )
+    session.add(user_on_namespace_same_user_id_and_namespace_id)
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+def test_cascade_delete_namespace(session):  # noqa: PLR0915
+    instance_admin = User(
+        username="instance_admin3", first_name="instance", last_name="admin", rms_id=121, is_instance_admin=True
+    )
+    session.add(instance_admin)
+    session.commit()
+
+    namespace = Namespace(
+        name="namespace_cascade", slug="cascade-test", gitlab_group_id=1234, created_by=instance_admin
+    )
+    session.add(namespace)
+    session.commit()
+
+    user_on_namespace = UserOnNamespace(
+        user=instance_admin, namespace=namespace, role=UserOnNamespaceRole.NAMESPACE_ADMIN, assigned_by=instance_admin
+    )
+    session.add(user_on_namespace)
+    session.commit()
+
+    assert session.query(User).filter_by(username="instance_admin3").first() is not None
+    assert session.query(UserOnNamespace).filter_by(user=instance_admin).first() is not None
+    assert session.query(Namespace).filter_by(name="namespace_cascade").first() is not None
+
+    session.delete(user_on_namespace)
+    session.commit()
+
+    assert session.query(User).filter_by(username="instance_admin3").first() is not None
+    assert session.query(UserOnNamespace).filter_by(user=instance_admin).first() is None
+    assert session.query(Namespace).filter_by(name="namespace_cascade").first() is not None
+
+    session.delete(namespace)
+    session.commit()
+
+    assert session.query(User).filter_by(username="instance_admin3").first() is not None
+    assert session.query(UserOnNamespace).filter_by(user=instance_admin).first() is None
+    assert session.query(Namespace).filter_by(name="namespace_cascade").first() is None
+
+    # reset
+    make_transient(namespace)
+    make_transient(user_on_namespace)
+    session.add_all([namespace, user_on_namespace])
+    session.commit()
+
+    assert session.query(User).filter_by(username="instance_admin3").first() is not None
+    assert session.query(UserOnNamespace).filter_by(user=instance_admin).first() is not None
+    assert session.query(Namespace).filter_by(name="namespace_cascade").first() is not None
+
+    session.delete(namespace)
+    session.commit()
+
+    assert session.query(User).filter_by(username="instance_admin3").first() is not None
+    assert session.query(UserOnNamespace).filter_by(user=instance_admin).first() is None
+    assert session.query(Namespace).filter_by(name="namespace_cascade").first() is None
+
+    # reset
+    make_transient(namespace)
+    make_transient(user_on_namespace)
+    session.add_all([namespace, user_on_namespace])
+    session.commit()
+
+    assert session.query(User).filter_by(username="instance_admin3").first() is not None
+    assert session.query(UserOnNamespace).filter_by(user=instance_admin).first() is not None
+    assert session.query(Namespace).filter_by(name="namespace_cascade").first() is not None
+
+    session.delete(instance_admin)
+    # Namespace created_by_id cannot be null
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+    session.delete(namespace)
+    session.commit()
+    session.delete(instance_admin)
+    session.commit()
+
+    assert session.query(User).filter_by(username="instance_admin3").first() is None
+    assert session.query(UserOnNamespace).filter_by(user=instance_admin).first() is None
+    assert session.query(Namespace).filter_by(name="namespace_cascade").first() is None
+
+
+def test_namespace_slug_validation(session):
+    instance_admin = User(
+        username="slug_admin", first_name="instance", last_name="admin", rms_id=131, is_instance_admin=True
+    )
+    session.add(instance_admin)
+    session.commit()
+
+    valid_slugs = [
+        "valid-slug",
+        "valid_slug",
+        "valid.slug",
+        "ab",
+        "slug-with_dots.and-dashes",
+        "123start",
+        "end456",
+    ]
+
+    for slug in valid_slugs:
+        namespace = Namespace(name="namespace_slug", slug=slug, gitlab_group_id=200, created_by=instance_admin)
+        session.add(namespace)
+        session.commit()
+        assert session.query(Namespace).filter_by(slug=slug).first() is not None
+        session.delete(namespace)
+        session.commit()
+
+    invalid_slugs = [
+        "",
+        "-start",
+        "_start",
+        ".start",
+        "end-",
+        "end_",
+        "end.",
+        "has--double",
+        "has__double",
+        "has..double",
+        "has.-mix",
+        "qwe123.git",
+        "qwe123.atom",
+        "has space",
+        "has@special",
+        "слаг",
+    ]
+
+    for slug in invalid_slugs:
+        with pytest.raises(ValueError):
+            namespace = Namespace(name="namespace_slug", slug=slug, gitlab_group_id=200, created_by=instance_admin)
