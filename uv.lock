@@ -616,7 +616,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
     { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "python-dotenv", specifier = "==1.1.0" },
-    { name = "python-gitlab", specifier = "==6.4.0" },
+    { name = "python-gitlab", specifier = "==7.1.0" },
     { name = "pyyaml", specifier = "==6.0.1" },
     { name = "requests", specifier = "==2.32.4" },
     { name = "requests-mock", marker = "extra == 'dev'", specifier = ">=1.0.0,<2.0.0" },
@@ -1001,15 +1001,15 @@ wheels = [
 
 [[package]]
 name = "python-gitlab"
-version = "6.4.0"
+version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
     { name = "requests-toolbelt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/46/5c/0075364e3d7e64171dafc62fc09a940c136f82e4407d1625eae8c8bddf8f/python_gitlab-6.4.0.tar.gz", hash = "sha256:55ed94fb47932124b7f9df8e72b29352d3d0ee01ecf44f081dd070f4bad8700d", size = 397816, upload-time = "2025-09-28T01:15:45.394Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/98/0b5d0a0367b90aec818298390b60ae65e6a08989cf5140271d0ee0206882/python_gitlab-7.1.0.tar.gz", hash = "sha256:1c34da3de40ad21675d788136f73d20a60649513e692f52c5a9720434db97c46", size = 401058, upload-time = "2025-12-28T01:27:01.369Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b8/e8/2b93f465d4056464f8f5aae5e1dc583636f49eb31921655913afcd9eb80b/python_gitlab-6.4.0-py3-none-any.whl", hash = "sha256:2f264162b552463885871295ec4754441c4aa936746f333faa362de422aad4c8", size = 144394, upload-time = "2025-09-28T01:15:43.503Z" },
+    { url = "https://files.pythonhosted.org/packages/14/44/70fa1e395731b6a4b1f249d5f7326f3bb6281e2cf94d6535f679239f4b93/python_gitlab-7.1.0-py3-none-any.whl", hash = "sha256:8e42030cf27674e7ec9ea1f6d2fedcaaef0a6210f5fa22c80721abaa3a4fec90", size = 144441, upload-time = "2025-12-28T01:26:59.726Z" },
 ]
 
 [[package]]
