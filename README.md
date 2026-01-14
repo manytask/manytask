@@ -11,6 +11,19 @@ Small web application for managing courses: store students' grades, maintain [de
 
 ---
 
+## Documentation
+
+### Getting Started
+- ⚡ **[Quick Start](QUICKSTART.md)** - Get Manytask running locally in 9 steps
+- 🚀 **[Local Development Guide](docs/local_development.md)** - Detailed guide for local development with Docker
+
+### For Developers
+- 🛠️ **[Development Guide](docs/dev.md)** - Overview for developers and server deployment
+- 📚 **[API Documentation](docs/api.md)** - API endpoints reference
+- 📖 **[Using Manytask](docs/using_manytask.md)** - Guide for teachers and students
+
+---
+
 ## How it works
 
 For the students, `Manytask` is an app that stores scores and shows progress though courses. For the teacher, `Manytask` provides flexible interfaces to interact with Repository Management System, reveal tasks while the course progresses, set deadlines.
