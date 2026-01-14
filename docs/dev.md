@@ -93,7 +93,9 @@ Once done, your first course will be available in Manytask.
 
 ## Running tests
 
-
+```bash
+pytest . -vvv
+```
 
 ## Project Structure Overview
 
