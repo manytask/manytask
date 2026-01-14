@@ -25,6 +25,7 @@ navigation:
       - type: controls
 items:
   - name: About
+    href: about.md
   - name: For students
     items:
       - name: Manytask
