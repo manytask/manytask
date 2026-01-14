@@ -16,7 +16,7 @@ from manytask.api import bp as api_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import TaskDisabledError
 from manytask.mock_rms import MockRmsApi
-from manytask.web import admin_bp, course_bp, root_bp
+from manytask.web import course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
     INVALID_TASK_NAME,
@@ -54,7 +54,7 @@ def app(mock_auth_api, mock_storage_api):
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
-    app.register_blueprint(admin_bp)
+    app.register_blueprint(instance_admin_bp)
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
@@ -196,6 +196,22 @@ def mock_storage_api(mock_course):  # noqa: C901
         def update_or_create_user(self, username: str, firstname: str, lastname: str, rms_id: int):
             pass
 
+        @staticmethod
+        def get_namespace_admin_namespaces(_username):
+            return []
+
+        @staticmethod
+        def get_courses_by_namespace_ids(_namespace_ids):
+            return []
+
+        @staticmethod
+        def get_courses_where_course_admin(_username):
+            return []
+
+        @staticmethod
+        def get_namespace_by_id(_namespace_id, _username):
+            raise PermissionError("No access to namespace")
+
     return MockStorageApi()
 
 
@@ -214,6 +230,7 @@ def mock_course():
             self.task_url_template = "https://gitlab.example.com/$GROUP_NAME/$USER_NAME/$TASK_NAME"
             self.links = {}
             self.deadlines_type = ManytaskDeadlinesType.HARD
+            self.namespace_id = None
 
     return MockCourse()
 

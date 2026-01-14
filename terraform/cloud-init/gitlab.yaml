@@ -1,0 +1,133 @@
+#cloud-config
+
+# GitLab Server Cloud-Init Configuration
+# This script sets up a GitLab CE server with Docker support
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - git
+  - vim
+  - htop
+
+write_files:
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+    permissions: '0644'
+
+  - path: /opt/gitlab/docker-compose.yml
+    content: |
+      version: '3.8'
+      
+      services:
+        gitlab:
+          image: gitlab/gitlab-ce:latest
+          container_name: gitlab
+          restart: always
+          hostname: '${gitlab_hostname}'
+          environment:
+            GITLAB_OMNIBUS_CONFIG: |
+              external_url 'https://${gitlab_hostname}'
+              
+              # GitLab configuration
+              gitlab_rails['initial_root_password'] = '${gitlab_root_password}'
+              gitlab_rails['gitlab_shell_ssh_port'] = 22
+              
+              # Disable sign-up
+              gitlab_rails['gitlab_signup_enabled'] = false
+              
+              # Email configuration (optional, configure later)
+              # gitlab_rails['smtp_enable'] = true
+              # gitlab_rails['smtp_address'] = "smtp.gmail.com"
+              # gitlab_rails['smtp_port'] = 587
+              
+              # Let's Encrypt SSL
+              letsencrypt['enable'] = true
+              letsencrypt['contact_emails'] = ['admin@${domain}']
+              letsencrypt['auto_renew'] = true
+              
+              # Performance tuning
+              postgresql['shared_buffers'] = "256MB"
+              postgresql['max_connections'] = 200
+              
+              # Disable unused services
+              prometheus_monitoring['enable'] = false
+          ports:
+            - '80:80'
+            - '443:443'
+          volumes:
+            - gitlab-config:/etc/gitlab
+            - gitlab-logs:/var/log/gitlab
+            - gitlab-data:/var/opt/gitlab
+          shm_size: '256m'
+      
+      volumes:
+        gitlab-config:
+        gitlab-logs:
+        gitlab-data:
+    permissions: '0644'
+
+  - path: /opt/gitlab/start.sh
+    content: |
+      #!/bin/bash
+      set -e
+      
+      cd /opt/gitlab
+      docker-compose up -d
+      
+      echo "Waiting for GitLab to start..."
+      sleep 30
+      
+      echo "GitLab is starting. It may take 5-10 minutes to fully initialize."
+      echo "Check status with: docker-compose logs -f"
+    permissions: '0755'
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  
+  # Install Docker Compose standalone
+  - curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+  
+  # Start Docker service
+  - systemctl enable docker
+  - systemctl start docker
+  
+  # Start GitLab
+  - /opt/gitlab/start.sh
+  
+  # Setup firewall
+  - ufw --force enable
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+
+final_message: |
+  GitLab server setup complete!
+  
+  GitLab is starting up. This may take 5-10 minutes.
+  
+  Access GitLab at: https://${gitlab_hostname}
+  Root password: ${gitlab_root_password}
+  
+  Check GitLab status:
+    sudo docker-compose -f /opt/gitlab/docker-compose.yml logs -f
+  
+  The system has been configured and is ready to use.

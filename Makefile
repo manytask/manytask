@@ -1,7 +1,13 @@
 ROOT_DIR := manytask
+DOCKER_COMPOSE_LOCAL := docker-compose.local.development.yml
 DOCKER_COMPOSE_DEV := docker-compose.development.yml
 TESTS_DIR := tests
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
+
+# testcontainers may fail on some macOS Docker setups due to Ryuk connectivity issues.
+# Allow overriding: `make test TESTCONTAINERS_RYUK_DISABLED=false`
+TESTCONTAINERS_RYUK_DISABLED ?= true
+export TESTCONTAINERS_RYUK_DISABLED
 
 .PHONY: dev test reset-dev clean-db lint lint-fix setup install-deps check format install-hooks run-hooks makemigrations migrate downgrade history
 
@@ -19,18 +25,21 @@ run-hooks:
 	uv run pre-commit run --all-files
 
 dev:
-	docker-compose -f $(DOCKER_COMPOSE_DEV) down
-	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
+	docker-compose -f $(DOCKER_COMPOSE_LOCAL) down
+	docker-compose -f $(DOCKER_COMPOSE_LOCAL) up --build
 
 clean-db:
-	docker-compose -f $(DOCKER_COMPOSE_DEV) down -v
+	docker-compose -f $(DOCKER_COMPOSE_LOCAL) down -v
 	docker volume prune -f
 
 reset-dev: clean-db
-	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
+	docker-compose -f $(DOCKER_COMPOSE_LOCAL) up --build
 
 test: install-deps
-	uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	# Run checker test suite from inside ./checker so `import checker.*` resolves correctly.
+	# Use `-c /dev/null` to avoid inheriting repo-level pytest config, but force rootdir back to ./checker.
+	cd checker && TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail tests
 
 test-colima: install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
@@ -38,17 +47,16 @@ test-colima: install-deps
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format --check $(ROOT_DIR) $(TESTS_DIR)
-	uv run ruff check $(ROOT_DIR) $(TESTS_DIR)
-	uv run mypy $(ROOT_DIR)
+	uv run ruff format --check $(ROOT_DIR) $(TESTS_DIR) checker/checker
+	uv run ruff check $(ROOT_DIR) $(TESTS_DIR) checker/checker
+	uv run mypy $(ROOT_DIR) checker/checker
 
 format:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format $(ROOT_DIR) $(TESTS_DIR)
-	uv run ruff check $(ROOT_DIR) $(TESTS_DIR) --fix
+	uv run ruff format $(ROOT_DIR) $(TESTS_DIR) checker/checker
+	uv run ruff check $(ROOT_DIR) $(TESTS_DIR) checker/checker --fix
 
 setup: install-deps install-hooks
-	uv run mypy --install-types --non-interactive $(ROOT_DIR) $(TESTS_DIR)
 
 makemigrations:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
