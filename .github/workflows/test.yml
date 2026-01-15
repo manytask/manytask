@@ -34,7 +34,7 @@ jobs:
         run: uv run ruff check .
          
       - name: Run mypy
-        run: uv run mypy manytask
+        run: uv run mypy manytask checker/checker
          
       - name: Run manytask tests
         run: uv run pytest
