@@ -54,7 +54,7 @@ Copy `.env.example` to `.env` and follow the instructions in the file to fill it
 To start the app, run:
 
 ```bash
-docker compose -f docker-compose.development.yml up --build -d
+docker-compose -f docker-compose.development.yml up --build -d
 ```
 
 This should expose Manytask app on port 8081 [http://localhost:8081/](http://localhost:8081/) and docs on port 8080 [http://localhost:8080/](http://localhost:8080/).
