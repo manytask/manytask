@@ -127,7 +127,7 @@ class RunPytestPlugin(RunScriptPlugin):
             raise PluginExecutionFailed(f"Failed to read report from pipe: {error}")
         if not report_data:
             raise PluginExecutionFailed("No report data received from pytest plugin")
-        if not isinstance(report_data, dict):  # type: ignore[unreachable]
+        if not isinstance(report_data, dict):
             raise PluginExecutionFailed(f"Invalid report data type: expected dict, got {type(report_data).__name__}")
 
         summary = report_data.get("summary", {})
