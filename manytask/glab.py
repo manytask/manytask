@@ -207,6 +207,7 @@ class GitLabApi(RmsApi, AuthApi):
             }
         )
         project = self._gitlab.projects.get(fork.id)
+        project.ci_config_path = f".gitlab-ci.yml@{course_public_project.path_with_namespace}"
         # TODO: think .evn config value
         # Unprotect all branches
         for protected_branch in project.protectedbranches.list(get_all=True):
