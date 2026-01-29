@@ -16,7 +16,7 @@ From the student's point of view, the Manytask consists of the following parts:
 
 ### 1. Register on app.manytask.org or sign-in
 
-Fill-in the registration form at [app.manytask.org](app.manytask.org). Provide your first and last name so that we can identify you when time comes to transfer grades to LMS of your institution.
+Fill-in the registration form at [app.manytask.org](https://app.manytask.org). Provide your first and last name so that we can identify you when time comes to transfer grades to LMS of your institution.
 
 **What will happen:** After you submit the form, a user will be created in Manytask and on GitLab and you will be redirected to GitLab for login. This is because Manytask uses GitLab as an authorization provider. Enter the same login/password on GitLab login page and you should be ready to register for a course.
 
