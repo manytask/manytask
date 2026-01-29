@@ -51,8 +51,6 @@ items:
         href: deploy_guide.md
   - name: For developers
     items:
-      - name: Development setup
-        href: dev_setup.md
       - name: Development
         href: dev.md
       - name: REST API
