@@ -159,10 +159,39 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
         def get_grades(self, _):
             class MockManytaskFinalGradeConfig:
-                def evaluate(self, _):
+                # Grade thresholds for mock testing
+                GRADE_5_THRESHOLD = 90
+                GRADE_4_THRESHOLD = 80
+                GRADE_3_THRESHOLD = 70
+                GRADE_2_THRESHOLD = 60
+
+                def evaluate(self, row):
+                    # Simple grading logic for tests
+                    percent = row.get("percent", 0)
+                    if percent >= self.GRADE_5_THRESHOLD:
+                        return 5
+                    elif percent >= self.GRADE_4_THRESHOLD:
+                        return 4
+                    elif percent >= self.GRADE_3_THRESHOLD:
+                        return 3
+                    elif percent >= self.GRADE_2_THRESHOLD:
+                        return 2
                     return 0
 
             return MockManytaskFinalGradeConfig()
+
+        def calculate_and_save_grade(self, _course_name, _username, row):
+            """Calculate and save grade for a student. For tests, just calculate without saving."""
+            grade_config = self.get_grades(_course_name)
+            return grade_config.evaluate(row)
+
+        def get_effective_grade(self, _course_name, _username):
+            """Get effective grade for a student. For tests, just return 0."""
+            return 0
+
+        def is_grade_overridden(self, _course_name, _username):
+            """Check if grade is overridden. For tests, return False."""
+            return False
 
         @staticmethod
         def find_task(_course_name, task_name):

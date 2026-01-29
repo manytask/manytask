@@ -75,7 +75,7 @@ class StorageApi(ABC):
     @abstractmethod
     def get_all_scores_with_names(
         self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]: ...
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]]: ...
 
     @abstractmethod
     def get_student_comment(self, course_name: str, username: str) -> str | None: ...
@@ -241,6 +241,26 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_course_id_by_name(self, course_name: str) -> int | None: ...
+
+    @abstractmethod
+    def calculate_and_save_grade(
+        self,
+        course_name: str,
+        username: str,
+        student_scores_data: dict[str, Any],
+    ) -> int: ...
+
+    @abstractmethod
+    def get_effective_grade(self, course_name: str, username: str) -> int: ...
+
+    @abstractmethod
+    def override_grade(self, course_name: str, username: str, new_grade: int) -> None: ...
+
+    @abstractmethod
+    def clear_grade_override(self, course_name: str, username: str) -> None: ...
+
+    @abstractmethod
+    def is_grade_overridden(self, course_name: str, username: str) -> bool: ...
 
 
 @dataclass
