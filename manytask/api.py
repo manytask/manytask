@@ -37,7 +37,7 @@ from .config import (
     UserOnNamespaceResponse,
 )
 from pydantic import BaseModel
-from .course import DEFAULT_TIMEZONE, Course, get_current_time
+from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
 from .utils.generic import sanitize_and_validate_comment, sanitize_log_data
@@ -355,6 +355,9 @@ def report_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
+    if course.status == CourseStatus.FINISHED:
+        abort(HTTPStatus.CONFLICT, f"Cannot update score the course '{course_name}' is already finished.")
+
     rms_user, course, task, group = _validate_and_extract_params(
         request.form, app.rms_api, app.storage_api, course.course_name
     )
@@ -470,6 +473,10 @@ def get_score(course_name: str) -> ResponseReturnValue:
 @requires_token
 def update_config(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
+
+    if course.status == CourseStatus.FINISHED:
+        abort(HTTPStatus.CONFLICT, f"Cannot update config for the course '{course_name}' that is already finished.")
 
     logger.info("Running update_config for course=%s", course_name)
 
