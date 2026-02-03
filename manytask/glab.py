@@ -221,8 +221,8 @@ class GitLabApi(RmsApi, AuthApi):
 
         for group in self._gitlab.groups.list(get_all=True, search=path):
             if group.path == path:
-                logger.error("Group with path %s already exists", path)
-                raise RuntimeError(f"Group with path {path} already exists")
+                logger.warning("Group with path %s already exists", path)
+                return group.id
 
         group_data = {
             "name": name,
