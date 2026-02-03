@@ -10,6 +10,16 @@ from .course import Course, CourseConfig, CourseStatus
 
 
 @dataclass
+class RmsUser:
+    id: int
+    username: str
+    name: str
+
+    def __repr__(self) -> str:
+        return f"RmsUser(username={self.username})"
+
+
+@dataclass
 class StoredUser:
     username: str
     first_name: str
@@ -20,6 +30,10 @@ class StoredUser:
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
+
+    @property
+    def rms_identity(self) -> RmsUser:
+        return RmsUser(id=self.rms_id, username=self.username, name=f"{self.first_name} {self.last_name}")
 
 
 class StorageApi(ABC):
@@ -261,16 +275,6 @@ class StorageApi(ABC):
 
     @abstractmethod
     def is_grade_overridden(self, course_name: str, username: str) -> bool: ...
-
-
-@dataclass
-class RmsUser:
-    id: int
-    username: str
-    name: str
-
-    def __repr__(self) -> str:
-        return f"RmsUser(username={self.username})"
 
 
 class RmsApiException(Exception):
