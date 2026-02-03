@@ -356,7 +356,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     if course.status == CourseStatus.FINISHED:
-        abort(HTTPStatus.BAD_REQUEST, f"Cannot update score the course '{course_name}' is already finished.")
+        abort(HTTPStatus.CONFLICT, f"Cannot update score the course '{course_name}' is already finished.")
 
     rms_user, course, task, group = _validate_and_extract_params(
         request.form, app.rms_api, app.storage_api, course.course_name
@@ -476,7 +476,7 @@ def update_config(course_name: str) -> ResponseReturnValue:
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     if course.status == CourseStatus.FINISHED:
-        abort(HTTPStatus.BAD_REQUEST, f"Cannot update config for the course '{course_name}' that is already finished.")
+        abort(HTTPStatus.CONFLICT, f"Cannot update config for the course '{course_name}' that is already finished.")
 
     logger.info("Running update_config for course=%s", course_name)
 
