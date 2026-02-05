@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
 
@@ -40,12 +41,38 @@ class SourceCraftApi(RmsApi):
         self._api_url = config.api_url
         self._admin_token = config.admin_token
         self._org_slug = config.org_slug
+
+        self._iam_token: str | None = None
+        self._iam_token_last_issued: datetime | None = None
+
         logger.info(f"Initializing SourcecraftApi with base_url: {self.base_url}")
+
+    @property
+    def iam_token(self) -> str:
+        if (
+            self._iam_token is None
+            or self._iam_token_last_issued is None
+            or self._iam_token_last_issued < datetime.now() - timedelta(hours=1)
+        ):
+            self._iam_token = self._get_iam_token()
+            self._iam_token_last_issued = datetime.now()
+        return self._iam_token
+
+    def _get_iam_token(self) -> str:
+        response = requests.post(
+            "https://iam.api.cloud.yandex.net/iam/v1/tokens",
+            data={
+                "yandexPassportOauthToken": self._admin_token,
+            },
+        )
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get IAM token: {response.json()}")
+        return response.json()["iamToken"]
 
     @property
     def _request_headers(self) -> dict[str, str]:
         return {
-            "Authorization": f"Bearer {self._admin_token}",
+            "Authorization": f"Bearer {self.iam_token}",
             "Content-Type": "application/json",
         }
 
