@@ -335,7 +335,7 @@ class SourceCraftApi(RmsApi):
 
     def create_course_group(
         self,
-        parent_group_id: int,
+        parent_group_id: int | None,
         course_name: str,
         course_slug: str,
     ) -> int:
