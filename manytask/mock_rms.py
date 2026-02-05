@@ -206,27 +206,30 @@ class MockRmsApi(RmsApi):
 
     def create_course_group(
         self,
-        parent_group_id: int,
+        parent_group_id: int | None,
         course_name: str,
         course_slug: str,
     ) -> int:
         """Create a course subgroup under a namespace group (mock implementation).
 
-        :param parent_group_id: ID of parent namespace group
+        :param parent_group_id: ID of parent namespace group (None for top-level)
         :param course_name: Display name for the course
         :param course_slug: URL slug for the course
         :return: Created group ID
         """
-        parent_path = None
-        for path, gid in self.namespace_groups.items():
-            if gid == parent_group_id:
-                parent_path = path
-                break
+        if parent_group_id is None:
+            course_group_path = course_slug
+        else:
+            parent_path = None
+            for path, gid in self.namespace_groups.items():
+                if gid == parent_group_id:
+                    parent_path = path
+                    break
 
-        if parent_path is None:
-            raise RuntimeError(f"Parent group with id {parent_group_id} not found")
+            if parent_path is None:
+                raise RuntimeError(f"Parent group with id {parent_group_id} not found")
 
-        course_group_path = f"{parent_path}/{course_slug}"
+            course_group_path = f"{parent_path}/{course_slug}"
 
         if course_group_path in self.namespace_groups:
             raise RuntimeError(f"Course group with path {course_group_path} already exists")
