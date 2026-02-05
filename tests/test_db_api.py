@@ -1513,6 +1513,74 @@ def test_grade_config_estimation_with_adding_grade(
         assert grade_config_data.evaluate(score) == mock_grades_updated[i]
 
 
+def test_calculate_and_save_grade_allows_downgrade_in_progress(
+    db_api_with_initialized_first_course,
+    session,
+):
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    course.status = CourseStatus.IN_PROGRESS
+    session.commit()
+
+    db_api_with_initialized_first_course.update_or_create_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
+    )
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    user_on_course = (
+        session.query(UserOnCourse)
+        .join(User)
+        .filter(User.username == TEST_USERNAME, UserOnCourse.course_id == course.id)
+        .one()
+    )
+    user_on_course.final_grade = 5
+    session.commit()
+
+    row = {"percent": 0, "large_count": 0}
+    new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(
+        FIRST_COURSE_NAME, TEST_USERNAME, row
+    )
+
+    assert new_grade == 2
+    session.expire_all()
+    assert session.query(UserOnCourse).filter_by(id=user_on_course.id).one().final_grade == 2
+
+
+def test_calculate_and_save_grade_no_downgrade_in_doreshka_and_all_tasks_issued(
+    db_api_with_initialized_first_course,
+    session,
+):
+    db_api_with_initialized_first_course.update_or_create_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
+    )
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    user_on_course = (
+        session.query(UserOnCourse)
+        .join(User)
+        .filter(User.username == TEST_USERNAME, UserOnCourse.course_id == course.id)
+        .one()
+    )
+
+    row = {"percent": 0, "large_count": 0}
+
+    course.status = CourseStatus.DORESHKA
+    user_on_course.final_grade = 4
+    session.commit()
+    new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(
+        FIRST_COURSE_NAME, TEST_USERNAME, row
+    )
+    assert new_grade == 4
+
+    course.status = CourseStatus.ALL_TASKS_ISSUED
+    user_on_course.final_grade = 4
+    session.commit()
+    new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(
+        FIRST_COURSE_NAME, TEST_USERNAME, row
+    )
+    assert new_grade == 4
+
+
 def test_grade_config_estimation_with_removing_grade(
     db_api_with_two_initialized_courses,
     first_course_updated_ui_config,
