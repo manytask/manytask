@@ -347,9 +347,9 @@ class DataBaseApi(StorageApi):
                     User.username,
                     User.first_name,
                     User.last_name,
-                    Task.name.label('task_name'),
-                    coalesce(Grade.score, 0).label('score'),
-                    coalesce(Grade.is_solved, False).label('is_solved'),
+                    Task.name.label("task_name"),
+                    coalesce(Grade.score, 0).label("score"),
+                    coalesce(Grade.is_solved, False).label("is_solved"),
                     UserOnCourse.final_grade,
                     UserOnCourse.final_grade_override,
                 )
