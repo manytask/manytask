@@ -20,6 +20,7 @@ class RowData(BaseModel):
     large_count: int
     grade: int
     scores: Dict[str, int]
+    grade_is_override: bool = False  # Indicates if grade is manually overridden by admin
 
 
 class ManytaskUpdateDatabasePayload(BaseModel):
