@@ -347,9 +347,9 @@ class DataBaseApi(StorageApi):
                     User.username,
                     User.first_name,
                     User.last_name,
-                    Task.name,
-                    coalesce(Grade.score, 0),
-                    coalesce(Grade.is_solved, False),
+                    Task.name.label('task_name'),
+                    coalesce(Grade.score, 0).label('score'),
+                    coalesce(Grade.is_solved, False).label('is_solved'),
                     UserOnCourse.final_grade,
                     UserOnCourse.final_grade_override,
                 )
@@ -372,7 +372,15 @@ class DataBaseApi(StorageApi):
                 str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]
             ] = {}
 
-            for username, first_name, last_name, task_name, score, is_solved, final_grade, final_grade_override in rows:
+            for row in rows:
+                username = row.username
+                first_name = row.first_name
+                last_name = row.last_name
+                task_name = row.task_name
+                score = row.score
+                is_solved = row.is_solved
+                final_grade = row.final_grade
+                final_grade_override = row.final_grade_override
                 if username not in scores_and_names:
                     scores_and_names[username] = ({}, (first_name, last_name), final_grade, final_grade_override)
                 if task_name is not None:
