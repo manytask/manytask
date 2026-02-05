@@ -350,7 +350,6 @@ class DataBaseApi(StorageApi):
                     Task.name,
                     coalesce(Grade.score, 0),
                     coalesce(Grade.is_solved, False),
-                    User.id,
                     UserOnCourse.final_grade,
                     UserOnCourse.final_grade_override,
                 )
@@ -373,17 +372,7 @@ class DataBaseApi(StorageApi):
                 str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]
             ] = {}
 
-            for (
-                username,
-                first_name,
-                last_name,
-                task_name,
-                score,
-                is_solved,
-                final_grade,
-                final_grade_override,
-                _,
-            ) in rows:
+            for username, first_name, last_name, task_name, score, is_solved, final_grade, final_grade_override in rows:
                 if username not in scores_and_names:
                     scores_and_names[username] = ({}, (first_name, last_name), final_grade, final_grade_override)
                 if task_name is not None:
