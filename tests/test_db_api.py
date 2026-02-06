@@ -32,7 +32,10 @@ from tests.constants import (
     FIRST_COURSE_EXPECTED_STATS_KEYS,
     FIRST_COURSE_NAME,
     FIXED_CURRENT_TIME,
+    GRADE_AFTER_DOWNGRADE_IN_PROGRESS,
+    GRADE_BEFORE_DOWNGRADE,
     GRADE_CONFIG_FILES,
+    GRADE_FROZEN_VALUE,
     SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED,
     SECOND_COURSE_EXPECTED_STATS_KEYS,
     SECOND_COURSE_NAME,
@@ -1532,15 +1535,18 @@ def test_calculate_and_save_grade_allows_downgrade_in_progress(
         .filter(User.username == TEST_USERNAME, UserOnCourse.course_id == course.id)
         .one()
     )
-    user_on_course.final_grade = 5
+    user_on_course.final_grade = GRADE_BEFORE_DOWNGRADE
     session.commit()
 
     row = {"percent": 0, "large_count": 0}
     new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(FIRST_COURSE_NAME, TEST_USERNAME, row)
 
-    assert new_grade == 2
+    assert new_grade == GRADE_AFTER_DOWNGRADE_IN_PROGRESS
     session.expire_all()
-    assert session.query(UserOnCourse).filter_by(id=user_on_course.id).one().final_grade == 2
+    assert (
+        session.query(UserOnCourse).filter_by(id=user_on_course.id).one().final_grade
+        == GRADE_AFTER_DOWNGRADE_IN_PROGRESS
+    )
 
 
 def test_calculate_and_save_grade_no_downgrade_in_doreshka_and_all_tasks_issued(
@@ -1563,16 +1569,16 @@ def test_calculate_and_save_grade_no_downgrade_in_doreshka_and_all_tasks_issued(
     row = {"percent": 0, "large_count": 0}
 
     course.status = CourseStatus.DORESHKA
-    user_on_course.final_grade = 4
+    user_on_course.final_grade = GRADE_FROZEN_VALUE
     session.commit()
     new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(FIRST_COURSE_NAME, TEST_USERNAME, row)
-    assert new_grade == 4
+    assert new_grade == GRADE_FROZEN_VALUE
 
     course.status = CourseStatus.ALL_TASKS_ISSUED
-    user_on_course.final_grade = 4
+    user_on_course.final_grade = GRADE_FROZEN_VALUE
     session.commit()
     new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(FIRST_COURSE_NAME, TEST_USERNAME, row)
-    assert new_grade == 4
+    assert new_grade == GRADE_FROZEN_VALUE
 
 
 def test_grade_config_estimation_with_removing_grade(
