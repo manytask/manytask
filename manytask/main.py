@@ -15,7 +15,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from manytask.course import ManytaskDeadlinesType
 from manytask.mock_rms import MockRmsApi
 
-from . import abstract, config, course, database, glab, local_config
+from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
 from .course import CourseStatus
 
 MAX_AGE_IN_SECONDS = 86400
@@ -52,29 +52,48 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     _create_app_config(app, debug, test)
 
-    app.oauth = _authenticate(
-        OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
-    )
-
     # logging
     logging.config.dictConfig(_logging_config(app))
 
     # api objects
-    gitlab_api: glab.GitLabApi = glab.GitLabApi(
-        glab.GitLabConfig(
-            base_url=app.app_config.gitlab_url,
-            admin_token=app.app_config.gitlab_admin_token,
-            verify_ssl=app.app_config.gitlab_verify_ssl,
+    app.storage_api = _database_storage_setup()
+
+    rms = app.app_config.rms
+    if rms == "sourcecraft":
+        app.oauth = _create_yandex_id_oauth(
+            OAuth(app),
+            app.app_config.yandex_id_client_id,
+            app.app_config.yandex_id_client_secret,
         )
-    )
+        app.auth_api = yandex_id.YandexIDApi(yandex_id.YandexIDConfig())
+        app.rms_api = sourcecraft.SourceCraftApi(
+            sourcecraft.SourceCraftConfig(
+                base_url=app.app_config.sourcecraft_url,
+                api_url=app.app_config.sourcecraft_api_url,
+                admin_token=app.app_config.sourcecraft_admin_token,
+                org_slug=app.app_config.sourcecraft_org_slug,
+            ),
+            app.storage_api,
+        )
+    else:
+        app.oauth = _authenticate(
+            OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
+        )
+        gitlab_api: glab.GitLabApi = glab.GitLabApi(
+            glab.GitLabConfig(
+                base_url=app.app_config.gitlab_url,
+                admin_token=app.app_config.gitlab_admin_token,
+                verify_ssl=app.app_config.gitlab_verify_ssl,
+            )
+        )
+        app.auth_api = gitlab_api
 
-    rms: str = os.environ.get("RMS", "GitLab").lower()
+        if rms == "gitlab":
+            app.rms_api = gitlab_api
 
-    if rms == "gitlab":
-        app.rms_api = gitlab_api
-    elif rms == "mock":
-        app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
-    app.auth_api = gitlab_api
+        elif rms == "mock":
+            app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
+
     app.csrf = CSRFProtect(app)
 
     # read VERSION file to get a version
@@ -84,8 +103,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             app.manytask_version = f.read().strip()
     except FileNotFoundError:
         pass
-
-    app.storage_api = _database_storage_setup(app)
 
     # for https support
     _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
@@ -143,7 +160,7 @@ def _create_debug_course(app: CustomFlask) -> None:
     app.storage_api.create_course(course_config)
 
 
-def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
+def _database_storage_setup() -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)
     apply_migrations = os.environ.get("APPLY_MIGRATIONS", "false").lower() in (
         "true",
@@ -261,5 +278,18 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
         userinfo_endpoint=f"{base_url}/oauth/userinfo",
         jwks_uri=f"{base_url}/oauth/discovery/keys",
         client_kwargs=client_kwargs,
+    )
+    return oauth
+
+
+def _create_yandex_id_oauth(oauth: OAuth, client_id: str, client_secret: str) -> OAuth:
+    oauth.register(
+        name="gitlab",  # TODO: rename to yandex_id and switch based on config OR register as "remote_app"
+        client_id=client_id,
+        client_secret=client_secret,
+        access_token_url="https://oauth.yandex.com/token",
+        authorize_url="https://oauth.yandex.com/authorize",
+        api_base_url="https://login.yandex.ru/info",
+        client_kwargs={"scope": "login:info"},
     )
     return oauth
