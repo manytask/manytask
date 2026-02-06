@@ -485,7 +485,6 @@ class DataBaseApi(StorageApi):
             "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
         )
 
-
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
