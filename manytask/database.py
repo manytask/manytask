@@ -482,9 +482,6 @@ class DataBaseApi(StorageApi):
             "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
         )
 
-        # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
-        # flags = ''
-
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
