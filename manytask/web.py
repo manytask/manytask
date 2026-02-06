@@ -441,37 +441,48 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         username = session["gitlab"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
-        try:
-            namespace, role = app.storage_api.get_namespace_by_id(namespace_id, username)
-        except PermissionError:
-            logger.warning(
-                "User %s attempted to create course with namespace id=%s without access", username, namespace_id
-            )
-            return render_template(
-                "create_course.html",
-                generated_token=generate_token_hex(24),
-                error_message="Access denied to selected namespace",
-            )
-        except Exception as e:
-            logger.error("Error fetching namespace id=%s: %s", namespace_id, str(e))
-            return render_template(
-                "create_course.html",
-                generated_token=generate_token_hex(24),
-                error_message="Selected namespace not found",
-            )
+        namespace = None
+        role = None
+        if namespace_id == 0:
+            if not is_instance_admin:
+                logger.warning("User %s attempted to create course without namespace", username)
+                return render_template(
+                    "create_course.html",
+                    generated_token=generate_token_hex(24),
+                    error_message="Only Instance Admin can create courses without namespace",
+                )
+        else:
+            try:
+                namespace, role = app.storage_api.get_namespace_by_id(namespace_id, username)
+            except PermissionError:
+                logger.warning(
+                    "User %s attempted to create course with namespace id=%s without access", username, namespace_id
+                )
+                return render_template(
+                    "create_course.html",
+                    generated_token=generate_token_hex(24),
+                    error_message="Access denied to selected namespace",
+                )
+            except Exception as e:
+                logger.error("Error fetching namespace id=%s: %s", namespace_id, str(e))
+                return render_template(
+                    "create_course.html",
+                    generated_token=generate_token_hex(24),
+                    error_message="Selected namespace not found",
+                )
 
-        if not is_instance_admin and role != "namespace_admin":
-            logger.warning(
-                "User %s with role %s attempted to create course in namespace id=%s",
-                username,
-                role,
-                namespace_id,
-            )
-            return render_template(
-                "create_course.html",
-                generated_token=generate_token_hex(24),
-                error_message="Only Instance Admin or Namespace Admin can create courses",
-            )
+            if not is_instance_admin and role != "namespace_admin":
+                logger.warning(
+                    "User %s with role %s attempted to create course in namespace id=%s",
+                    username,
+                    role,
+                    namespace_id,
+                )
+                return render_template(
+                    "create_course.html",
+                    generated_token=generate_token_hex(24),
+                    error_message="Only Instance Admin or Namespace Admin can create courses",
+                )
 
         course_name = request.form["unique_course_name"].strip()
         gitlab_course_group = request.form["gitlab_course_group"].strip()
@@ -487,7 +498,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
             )
             course_group_id = app.rms_api.create_course_group(
-                parent_group_id=namespace.gitlab_group_id,
+                parent_group_id=namespace.gitlab_group_id if namespace else None,
                 course_name=course_name,
                 course_slug=gitlab_course_group.split("/")[-1] if "/" in gitlab_course_group else gitlab_course_group,
             )
@@ -511,7 +522,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
 
         settings = CourseConfig(
             course_name=course_name,
-            namespace_id=namespace_id,
+            namespace_id=None if namespace_id == 0 else namespace_id,
             gitlab_course_group=gitlab_course_group_full_path,
             gitlab_course_public_repo=gitlab_course_public_repo,
             gitlab_course_students_group=gitlab_course_students_group,

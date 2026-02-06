@@ -1,0 +1,16 @@
+{
+	"mcpServers": {
+		"filesystem": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@modelcontextprotocol/server-filesystem",
+				"/Users/seliverstow/Documents/yandex/manytask copy"
+			],
+			"alwaysAllow": [
+				"edit_file",
+				"read_text_file"
+			]
+		}
+	}
+}
