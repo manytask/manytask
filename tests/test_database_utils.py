@@ -90,6 +90,9 @@ def app():  # noqa: C901
         def get_now_with_timezone(self, course_name):
             return datetime.datetime.now() + datetime.timedelta(hours=1)
 
+        def calculate_and_save_grade(self, _course_name, _username, row):
+            return self.grades_config.evaluate(row)
+
         @staticmethod
         def get_all_scores_with_names(_course_name):
             return {

@@ -347,10 +347,9 @@ class DataBaseApi(StorageApi):
                     User.username,
                     User.first_name,
                     User.last_name,
-                    Task.name,
-                    coalesce(Grade.score, 0),
-                    coalesce(Grade.is_solved, False),
-                    User.id,
+                    Task.name.label("task_name"),
+                    coalesce(Grade.score, 0).label("score"),
+                    coalesce(Grade.is_solved, False).label("is_solved"),
                     UserOnCourse.final_grade,
                     UserOnCourse.final_grade_override,
                 )
@@ -373,23 +372,35 @@ class DataBaseApi(StorageApi):
                 str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]
             ] = {}
 
-            for (
-                username,
-                first_name,
-                last_name,
-                task_name,
-                score,
-                is_solved,
-                final_grade,
-                final_grade_override,
-                _,
-            ) in rows:
+            for row in rows:
+                username = row.username
+                first_name = row.first_name
+                last_name = row.last_name
+                task_name = row.task_name
+                score = row.score
+                is_solved = row.is_solved
+                final_grade = row.final_grade
+                final_grade_override = row.final_grade_override
                 if username not in scores_and_names:
                     scores_and_names[username] = ({}, (first_name, last_name), final_grade, final_grade_override)
                 if task_name is not None:
                     scores_and_names[username][0][task_name] = (score, is_solved)
 
             return scores_and_names
+
+    @staticmethod
+    def _build_grades_config(course: models.Course) -> ManytaskFinalGradeConfig:
+        grades: dict[int, list[dict[Path, int | float]]] = {}
+        for grade in course.course_grades:
+            formulas = []
+            for f in grade.primary_formulas.all():
+                f.primary_formula
+                formulas.append({Path(k): v for k, v in f.primary_formula.items()})
+
+            grades[grade.grade] = formulas
+
+        grades_order = sorted(list(grades.keys()), reverse=True)
+        return ManytaskFinalGradeConfig(grades=grades, grades_order=grades_order)
 
     def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig:
         """Method for getting config with grades for the course
@@ -401,18 +412,7 @@ class DataBaseApi(StorageApi):
 
         with self._session_create() as session:
             course = DataBaseApi._get(session, models.Course, name=course_name)
-
-            grades: dict[int, list[dict[Path, int | float]]] = {}
-            for grade in course.course_grades:
-                formulas = []
-                for f in grade.primary_formulas.all():
-                    f.primary_formula
-                    formulas.append({Path(k): v for k, v in f.primary_formula.items()})
-
-                grades[grade.grade] = formulas
-
-            grades_order = sorted(list(grades.keys()), reverse=True)
-            return ManytaskFinalGradeConfig(grades=grades, grades_order=grades_order)
+            return DataBaseApi._build_grades_config(course)
 
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks
@@ -484,9 +484,6 @@ class DataBaseApi(StorageApi):
         logger.debug(
             "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
         )
-
-        # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
-        # flags = ''
 
         with self._session_create() as session:
             try:
@@ -2317,8 +2314,8 @@ class DataBaseApi(StorageApi):
                 course = self._get(session, models.Course, name=course_name)
                 user_on_course = self._get_or_create_user_on_course(session, username, course)
 
-                # Get grade configuration
-                grades_config = self.get_grades(course_name)
+                # Get grade configuration from the same session to avoid nested session closes
+                grades_config = DataBaseApi._build_grades_config(course)
 
                 # Calculate grade from scores
                 try:
@@ -2329,26 +2326,27 @@ class DataBaseApi(StorageApi):
                     logger.warning(f"Failed to calculate grade for {username} in {course_name}")
                     calculated_grade = 0
 
-                # Apply DORESHKA logic
-                if course.status == CourseStatus.DORESHKA:
-                    logger.debug(f"Course {course_name} is in DORESHKA mode")
-                    max_grade_in_doreshka = 3
+                freeze_statuses = {CourseStatus.DORESHKA, CourseStatus.ALL_TASKS_ISSUED}
 
-                    # Cap new grade at 3
-                    capped_grade = min(calculated_grade, max_grade_in_doreshka)
+                # Apply non-downgrade logic for DORESHKA / ALL_TASKS_ISSUED
+                if course.status in freeze_statuses:
+                    capped_grade = calculated_grade
+                    if course.status == CourseStatus.DORESHKA:
+                        logger.debug(f"Course {course_name} is in DORESHKA mode")
+                        capped_grade = min(calculated_grade, 3)
 
                     # If student already has a saved grade, don't downgrade
                     if user_on_course.final_grade is not None:
                         final_grade = max(user_on_course.final_grade, capped_grade)
                         logger.debug(
-                            f"DORESHKA: kept higher grade for {username}: "
+                            f"{course.status.value.upper()}: kept higher grade for {username}: "
                             f"saved={user_on_course.final_grade}, new={capped_grade}, result={final_grade}"
                         )
                     else:
                         final_grade = capped_grade
-                        logger.debug(f"DORESHKA: first grade for {username}: {final_grade}")
+                        logger.debug(f"{course.status.value.upper()}: first grade for {username}: {final_grade}")
                 else:
-                    # Normal mode - just save calculated grade
+                    # Normal mode - just save calculated grade (downgrade allowed)
                     final_grade = calculated_grade
 
                 # Save final_grade (do NOT touch final_grade_override)
