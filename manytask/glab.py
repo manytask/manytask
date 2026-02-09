@@ -319,6 +319,18 @@ class GitLabApi(RmsApi, AuthApi):
         )
 
         try:
+            if parent_group_id:
+                parent_group = self._gitlab.groups.get(parent_group_id)
+                subgroups = parent_group.subgroups.list(get_all=True, search=course_slug)
+                groups = [self._gitlab.groups.get(sg.id) for sg in subgroups]
+            else:
+                groups = self._gitlab.groups.list(get_all=True, search=course_slug)
+
+            for group in groups:
+                if course_slug in {group.name, group.path}:
+                    logger.warning("The course group already exists for %s", course_slug)
+                    return group.id
+
             group_data = {
                 "name": course_slug,
                 "path": course_slug,
