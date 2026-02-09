@@ -82,6 +82,9 @@ def mock_task():
         def __init__(self):
             self.name = TEST_TASK_NAME
             self.score = 100
+            self.enabled = True
+            self.is_large = False
+            self.min_score = 0
 
     return MockTask()
 
@@ -127,6 +130,21 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         @staticmethod
         def get_scores(_course_name, _username):
             return {"task1": 100, "task2": 90, "test_task": 80}
+
+        @staticmethod
+        def get_bonus_score(_course_name, _username):
+            return 0
+
+        @staticmethod
+        def get_all_scores_with_names(_course_name):
+            return {
+                TEST_USERNAME: (
+                    {},
+                    (TEST_FIRST_NAME, TEST_LAST_NAME),
+                    None,
+                    None,
+                )
+            }
 
         @staticmethod
         def get_course(_name):

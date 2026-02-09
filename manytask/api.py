@@ -492,6 +492,53 @@ def update_config(course_name: str) -> ResponseReturnValue:
         logger.exception("Error while updating config for course=%s", course_name, exc_info=True)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
+    # Recalculate grades after config update (best-effort)
+    try:
+        scores_and_names = app.storage_api.get_all_scores_with_names(course_name)
+        if scores_and_names:
+            max_score = app.storage_api.max_score_started(course_name)
+
+            try:
+                groups = app.storage_api.get_groups(course_name, enabled=True, started=True)
+            except TypeError:
+                groups = app.storage_api.get_groups(course_name)
+
+            large_tasks: list[tuple[str, int]] = []
+            for group_config in groups:
+                for task_config in group_config.tasks:
+                    if task_config.is_large and task_config.enabled:
+                        large_tasks.append((task_config.name, task_config.min_score))
+
+            for username in scores_and_names.keys():
+                student_scores = app.storage_api.get_scores(course_name, username)
+                bonus_score = app.storage_api.get_bonus_score(course_name, username)
+                total_score = sum(student_scores.values()) + bonus_score
+                percent = total_score * 100 / max_score if max_score > 0 else 0
+                large_count = sum(
+                    1 for task_name, min_score in large_tasks if student_scores.get(task_name, 0) >= min_score
+                )
+
+                row = {
+                    "username": username,
+                    "scores": student_scores,
+                    "total_score": total_score,
+                    "percent": percent,
+                    "large_count": large_count,
+                }
+
+                try:
+                    app.storage_api.calculate_and_save_grade(course_name, username, row)
+                except Exception:
+                    logger.exception(
+                        "Failed to recalculate grade for user=%s after update_config for course=%s",
+                        username,
+                        course_name,
+                    )
+
+            logger.info("Recalculated grades for course=%s after config update", course_name)
+    except Exception:
+        logger.exception("Failed to recalculate grades after update_config for course=%s", course_name)
+
     return "", HTTPStatus.OK
 
 
