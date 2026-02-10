@@ -268,7 +268,7 @@ class SourceCraftApi(RmsApi):
         if response.status_code != HTTPStatus.CREATED:
             raise RmsApiException(f"Failed to create repo: {response.json()}")
 
-        response = self._add_repo_role(student_repo_slug, "developer", rms_user.id)
+        response = self._add_repo_role(student_repo_slug, "developer", rms_user.username)
         if response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to add repo role: {response.json()}")
 
