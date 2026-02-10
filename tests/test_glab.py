@@ -403,49 +403,6 @@ def test_get_student_not_found(gitlab):
 
     mock_gitlab_instance.users.get.assert_called_once_with(int(TEST_USER_ID))
 
-
-@patch("requests.get")
-def test_get_authenticated_student_success(mock_get, gitlab, mock_rms_user):
-    rms_api, _ = gitlab
-    oauth_token = "valid_oauth_token"
-    headers = {"Authorization": f"Bearer {oauth_token}"}
-
-    user_data = {
-        "id": TEST_USER_ID,
-        "username": TEST_USERNAME,
-        "name": TEST_USERNAME,
-    }
-    mock_response = MagicMock()
-    mock_response.json.return_value = user_data
-    mock_response.raise_for_status = MagicMock()
-
-    mock_get.return_value = mock_response
-    rms_api._construct_rms_user = MagicMock(return_value=mock_rms_user)
-
-    rms_user = rms_api.get_authenticated_rms_user(oauth_token)
-
-    assert rms_user == mock_rms_user
-    mock_get.assert_called_once_with(f"{rms_api.base_url}/api/v4/user", headers=headers, verify=True)
-    rms_api._construct_rms_user.assert_called_once_with(user_data)
-
-
-@patch("requests.get")
-def test_get_authenticated_student_failure(mock_get, gitlab):
-    gitlab_api, _ = gitlab
-    oauth_token = "invalid_oauth_token"
-    headers = {"Authorization": f"Bearer {oauth_token}"}
-
-    mock_response = MagicMock()
-    mock_response.raise_for_status.side_effect = HTTPError("401 Unauthorized")
-
-    mock_get.return_value = mock_response
-
-    with pytest.raises(HTTPError, match="401 Unauthorized"):
-        gitlab_api.get_authenticated_rms_user(oauth_token)
-
-    mock_get.assert_called_once_with(f"{gitlab_api.base_url}/api/v4/user", headers=headers, verify=True)
-
-
 def test_get_url_for_task_base(gitlab):
     gitlab_api, _ = gitlab
     url = gitlab_api.get_url_for_task_base(TEST_GROUP_PUBLIC_NAME, TEST_GROUP_PUBLIC_DEFAULT_BRANCH)

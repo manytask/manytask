@@ -9,7 +9,7 @@ from typing import Any
 
 import requests
 
-from .abstract import RmsApi, RmsApiException, RmsUser, StorageApi, StoredUser
+from .abstract import RmsApi, RmsApiException, RmsUser
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ class SourceCraftConfig:
     api_url: str
     admin_token: str
     org_slug: str
+    iam_api_url: str = "https://iam.api.cloud.yandex.net/iam/v1"
     dry_run: bool = False
 
 
@@ -29,16 +30,15 @@ class SourceCraftApi(RmsApi):
     def __init__(
         self,
         config: SourceCraftConfig,
-        storage_api: StorageApi,
     ):
         """Initialize Sourcecraft API client with configuration.
 
         :param config: SourcecraftConfig instance containing all necessary settings
         """
-        self._storage_api: StorageApi = storage_api
         self.dry_run = config.dry_run
         self._base_url = config.base_url
         self._api_url = config.api_url
+        self._iam_api_url = config.iam_api_url
         self._admin_token = config.admin_token
         self._org_slug = config.org_slug
 
@@ -60,7 +60,7 @@ class SourceCraftApi(RmsApi):
 
     def _get_iam_token(self) -> str:
         response = requests.post(
-            "https://iam.api.cloud.yandex.net/iam/v1/tokens",
+            f"{self._iam_api_url}/tokens",
             data={
                 "yandexPassportOauthToken": self._admin_token,
             },
@@ -309,29 +309,43 @@ class SourceCraftApi(RmsApi):
         self,
         user_id: str,
     ) -> RmsUser:
-        stored_user: StoredUser | None = self._storage_api.get_stored_user_by_rms_id(user_id)
-        if stored_user is None:
-            raise RmsApiException(f"User with id {user_id} not found")
-        return stored_user.rms_identity
+        return self._get_user_profile(f"id:{user_id}")
 
     def get_rms_user_by_username(
         self,
         username: str,
     ) -> RmsUser:
-        stored_user: StoredUser = self._storage_api.get_stored_user_by_username(username)
-        return stored_user.rms_identity
+        # NOTE: yandex login is expected as username for now
+        return self._get_user_by_yandex_login(username)
 
-    def get_authenticated_rms_user(
-        self,
-        oauth_access_token: str,
-    ) -> RmsUser:
-        """Get authenticated user information using OAuth access token.
+    def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:
+        cloud_id = self._get_cloud_id_by_yandex_login(auth_username)
+        return self._get_user_profile(f"cloud-id:{cloud_id}")
 
-        :param oauth_access_token: OAuth access token
-        :return: RmsUser object with user information
-        """
-        logger.info("Getting authenticated user from OAuth token")
-        raise NotImplementedError("get_authenticated_rms_user method not implemented yet")
+    def _get_cloud_id_by_yandex_login(self, yandex_login: str) -> str:
+        response = requests.get(
+            f"{self._iam_api_url}/yandexPassportUserAccounts:byLogin?login={yandex_login}",
+            headers=self._request_headers,
+        )
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.json()}")
+        return response.json()["id"]
+
+    def _get_user_profile(self, identity: str) -> RmsUser:
+        response = requests.get(
+            f"{self._iam_api_url}/users/{identity}",
+            headers=self._request_headers,
+        )
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get user profile: {response.json()}")
+        return self._unmarshal_user_profile(response.json())
+
+    def _unmarshal_user_profile(self, user_profile: dict[str, Any]) -> RmsUser:
+        return RmsUser(
+            id=user_profile["id"],
+            username=user_profile["username"],
+            name=user_profile["display_name"],
+        )
 
     def create_namespace_group(
         self,
