@@ -94,6 +94,7 @@ def login_finish() -> ResponseReturnValue:
 @root_bp.route("/logout")
 def logout() -> ResponseReturnValue:
     session.pop("gitlab", None)
+    session.pop("profile", None)
     return redirect(url_for("root.index"))
 
 
@@ -177,7 +178,7 @@ def signup() -> ResponseReturnValue:
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
-            "signup.html",
+            app.signup_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -189,7 +190,10 @@ def signup() -> ResponseReturnValue:
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            app.signup_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
         )
 
     try:
@@ -225,7 +229,7 @@ def signup() -> ResponseReturnValue:
     except Exception as e:
         logger.warning("User registration failed: %s", e)
         return render_template(
-            "signup.html",
+            app.signup_template,
             error_message=str(e),
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
@@ -254,7 +258,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
 
     if request.method == "GET":
         return render_template(
-            "signup_finish.html",
+            app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -264,20 +268,23 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            app.signup_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
         )
 
     firstname = validate_name(request.form.get("firstname", "").strip())
     lastname = validate_name(request.form.get("lastname", "").strip())
     if firstname is None or lastname is None:
         return render_template(
-            "signup_finish.html",
+            app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
             error_message="Firstname and lastname must be 1-50 characters and contain only letters or hyphens.",
         )
 
-    app.storage_api.update_or_create_user(
+    app.storage_api.update_or_create_user(  # TODO: split oauth and rms creds in DB
         session["gitlab"]["username"], firstname, lastname, session["gitlab"]["user_id"]
     )
     session.setdefault("profile", {}).update(set_client_profile_session(ClientProfile(session["gitlab"]["username"])))
@@ -305,8 +312,10 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template("create_project.html", error_message="CSRF Error")
 
-    gitlab_access_token: str = session["gitlab"]["access_token"]
-    rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
+    stored_user = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])
+    if stored_user is None:
+        raise RuntimeError(f"User with id {session['gitlab']['user_id']} not found")
+    rms_user = stored_user.rms_identity
 
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
@@ -327,7 +336,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
         logger.error("Project creation failed: %s", ex.error_message)
-        return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
+        return render_template(app.signup_template, error_message=ex.error_message, course_name=course.course_name)
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
