@@ -390,12 +390,6 @@ class RmsApi(ABC):
     ) -> RmsUser: ...
 
     @abstractmethod
-    def get_authenticated_rms_user(
-        self,
-        oauth_access_token: str,
-    ) -> RmsUser: ...
-
-    @abstractmethod
     def create_course_group(
         self,
         parent_group_id: int | None,

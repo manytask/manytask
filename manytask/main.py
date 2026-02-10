@@ -38,6 +38,14 @@ class CustomFlask(Flask):
     def favicon(self) -> str:
         return "favicon.ico"
 
+    @property
+    def signup_template(self) -> str:
+        return "signup_yandex_id.html" if self.app_config.rms == "sourcecraft" else "signup.html"
+
+    @property
+    def signup_finish_template(self) -> str:
+        return "signup_finish.html"
+
     def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
 

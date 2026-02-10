@@ -549,11 +549,11 @@ class GitLabApi(RmsApi, AuthApi):
 
     def get_rms_user_by_id(
         self,
-        user_rms_id: str,
+        user_id: str,
     ) -> RmsUser:
-        logger.info("Searching for user by id=%s", user_rms_id)
-        user_id = _validate_and_convert_user_id(user_rms_id)
-        user = self._gitlab.users.get(user_id)
+        logger.info("Searching for user by id=%s", user_id)
+        glab_id = _validate_and_convert_user_id(user_id)
+        user = self._gitlab.users.get(glab_id)
         logger.info("User found id=%s username=%s", user.id, user.username)
         return self._construct_rms_user(user._attrs)
 
@@ -571,12 +571,6 @@ class GitLabApi(RmsApi, AuthApi):
         rms_user = potential_rms_users[0]
         logger.info("User found username=%s", rms_user.username)
         return rms_user
-
-    def get_authenticated_rms_user(self, oauth_access_token: str) -> RmsUser:
-        logger.debug("Fetching authenticated RMS user via token")
-        response = self._make_auth_request(oauth_access_token)
-        response.raise_for_status()
-        return self._construct_rms_user(response.json())
 
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"

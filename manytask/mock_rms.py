@@ -197,13 +197,6 @@ class MockRmsApi(RmsApi):
         # Mock implementation always returns True
         return True
 
-    def get_authenticated_rms_user(
-        self,
-        oauth_access_token: str,
-    ) -> RmsUser:
-        # For testing, return last registered user
-        return self.users[str(self.last_user)]
-
     def create_course_group(
         self,
         parent_group_id: int | None,

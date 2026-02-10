@@ -15,6 +15,7 @@ from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import TaskDisabledError
+from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, instance_admin_bp, root_bp
@@ -65,6 +66,9 @@ def app(mock_storage_api):
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
+    app.signup_template = "signup.html"
+    app.signup_finish_template = "signup_finish.html"
+    app.app_config = LocalConfig.from_env()  # TODO: init with test data instead of env
     return app
 
 
