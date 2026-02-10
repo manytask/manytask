@@ -259,7 +259,7 @@ class GitLabApi(RmsApi, AuthApi):
                     gitlab_group_id,
                     existing_member.access_level,
                 )
-                if existing_member.access_level != gitlab.const.AccessLevel.MAINTAINER:
+                if existing_member.access_level < gitlab.const.AccessLevel.MAINTAINER:
                     existing_member.access_level = gitlab.const.AccessLevel.MAINTAINER
                     existing_member.save()
                     logger.info("Updated user id=%s access level to Maintainer", user_id)
