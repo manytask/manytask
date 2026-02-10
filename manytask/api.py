@@ -39,7 +39,7 @@ from .config import (
 from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.database import get_database_table_data
+from .utils.database import build_grade_row, get_database_table_data
 from .utils.generic import sanitize_and_validate_comment, sanitize_log_data
 
 
@@ -407,24 +407,20 @@ def report_score(course_name: str) -> ResponseReturnValue:
         max_score = app.storage_api.max_score_started(course.course_name)
 
         total_score = sum(student_scores.values()) + bonus_score
-        percent = total_score * 100 / max_score if max_score > 0 else 0
 
-        # Count large tasks solved
-        large_count = 0
+        large_tasks: list[tuple[str, int]] = []
         for group_config in app.storage_api.get_groups(course.course_name, enabled=True, started=True):
             for task_config in group_config.tasks:
                 if task_config.is_large and task_config.enabled:
-                    task_score = student_scores.get(task_config.name, 0)
-                    if task_score >= task_config.min_score:
-                        large_count += 1
+                    large_tasks.append((task_config.name, task_config.min_score))
 
-        student_data = {
-            "username": rms_user.username,
-            "scores": student_scores,
-            "total_score": total_score,
-            "percent": percent,
-            "large_count": large_count,
-        }
+        student_data = build_grade_row(
+            username=rms_user.username,
+            student_scores=student_scores,
+            max_score=max_score,
+            large_tasks=large_tasks,
+            total_score=total_score,
+        )
 
         app.storage_api.calculate_and_save_grade(course.course_name, rms_user.username, student_data)
         logger.info("Recalculated and saved grade for user=%s after score update", rms_user.username)
@@ -513,18 +509,13 @@ def update_config(course_name: str) -> ResponseReturnValue:
                 student_scores = app.storage_api.get_scores(course_name, username)
                 bonus_score = app.storage_api.get_bonus_score(course_name, username)
                 total_score = sum(student_scores.values()) + bonus_score
-                percent = total_score * 100 / max_score if max_score > 0 else 0
-                large_count = sum(
-                    1 for task_name, min_score in large_tasks if student_scores.get(task_name, 0) >= min_score
+                row = build_grade_row(
+                    username=username,
+                    student_scores=student_scores,
+                    max_score=max_score,
+                    large_tasks=large_tasks,
+                    total_score=total_score,
                 )
-
-                row = {
-                    "username": username,
-                    "scores": student_scores,
-                    "total_score": total_score,
-                    "percent": percent,
-                    "large_count": large_count,
-                }
 
                 try:
                     app.storage_api.calculate_and_save_grade(course_name, username, row)

@@ -4,6 +4,29 @@ from manytask.course import Course
 from manytask.main import CustomFlask
 
 
+def build_grade_row(
+    username: str,
+    student_scores: dict[str, int],
+    max_score: int,
+    large_tasks: list[tuple[str, int]],
+    total_score: int | None = None,
+) -> dict[str, Any]:
+    """Build a grade calculation row used by grade evaluation logic."""
+
+    if total_score is None:
+        total_score = sum(student_scores.values())
+
+    large_count = sum(1 for task_name, min_score in large_tasks if student_scores.get(task_name, 0) >= min_score)
+
+    return {
+        "username": username,
+        "scores": student_scores,
+        "total_score": total_score,
+        "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
+        "large_count": large_count,
+    }
+
+
 def get_database_table_data(
     app: CustomFlask,
     course: Course,
@@ -37,18 +60,15 @@ def get_database_table_data(
     for username, (student_scores_with_solved, name, final_grade, final_grade_override) in scores_and_names.items():
         # student_scores_with_solved = {task_name: (score, is_solved)}
         student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
-        total_score = sum(student_scores.values())
-        large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
 
         first_name, last_name = name
 
-        row: dict[str, Any] = {
-            "username": username,
-            "scores": student_scores,
-            "total_score": total_score,
-            "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
-            "large_count": large_count,
-        }
+        row = build_grade_row(
+            username=username,
+            student_scores=student_scores,
+            max_score=max_score,
+            large_tasks=large_tasks,
+        )
 
         if include_admin_data or is_program_manager:
             row["first_name"] = first_name
@@ -70,11 +90,11 @@ def get_database_table_data(
         # - Otherwise, recalculate and save (allows downgrade in IN_PROGRESS, but not in DORESHKA/ALL_TASKS_ISSUED)
         if final_grade_override is not None:
             effective_grade = final_grade_override
+        elif final_grade is not None:
+            effective_grade = final_grade
         else:
-            try:
-                effective_grade = storage_api.calculate_and_save_grade(course_name, username, row)
-            except Exception:
-                effective_grade = final_grade if final_grade is not None else 0
+            effective_grade = storage_api.calculate_and_save_grade(course_name, username, row)
+
 
         row["grade"] = effective_grade
 
