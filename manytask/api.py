@@ -77,13 +77,9 @@ def _update_score(
     task: ManytaskTaskConfig,
     score: int,
     flags: str,
-    old_score: int,
     submit_time: datetime,
     check_deadline: bool = True,
 ) -> int:
-    if old_score < 0:
-        return old_score
-
     if not check_deadline:
         return int(score)
 
@@ -92,7 +88,7 @@ def _update_score(
     multiplier = group.get_current_percent_multiplier(now=submit_time - extra_time)
     new_score = int(score * multiplier)
 
-    return max(old_score, new_score)
+    return new_score
 
     # if check_deadline and task.is_overdue_second(extra_time, submit_time=submit_time):
     #     return old_score

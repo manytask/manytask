@@ -364,7 +364,7 @@ class RatingTable:
         old_reviewer: str | None = reviewer_cell.value if reviewer_cell.value else None
 
         if not TaskReviewStatus.is_review_status(review) and old_score is None:
-            new_score = update_fn("", old_score)
+            new_score = update_fn("")
             new_review = old_review
             score_cell.value = new_score
             logger.info(f"Setting score = {new_score}")
