@@ -93,7 +93,7 @@ Once done, your first course will be available in Manytask.
 
 ## Running tests
 
-For the convinience, the code ships with `Makefile` with shortcuts to commands you need to run linter, typechecker, format and test the code. You can consult the contents of this file for details. To run all the checks, type
+For the convenience, the code ships with `Makefile` with shortcuts to commands you need to run linter, typechecker, as well as to format and test the code. You can consult the contents of this file for details of see commands to run one stage or the other. To run all the checks, type
 
 ```bash
 make check
