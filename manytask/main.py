@@ -59,7 +59,22 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app.storage_api = _database_storage_setup()
 
     rms = app.app_config.rms
-    if rms == "sourcecraft":
+
+    if rms == "gitlab":
+        app.oauth = _authenticate(
+            OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
+        )
+        gitlab_api: glab.GitLabApi = glab.GitLabApi(
+            glab.GitLabConfig(
+                base_url=app.app_config.gitlab_url,
+                admin_token=app.app_config.gitlab_admin_token,
+                verify_ssl=app.app_config.gitlab_verify_ssl,
+            )
+        )
+        app.auth_api = gitlab_api
+        app.rms_api = gitlab_api
+
+    elif rms == "sourcecraft":
         app.oauth = _create_yandex_id_oauth(
             OAuth(app),
             app.app_config.yandex_id_client_id,
@@ -75,24 +90,19 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             ),
             app.storage_api,
         )
-    else:
+
+    elif rms == "mock":
         app.oauth = _authenticate(
             OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
         )
-        gitlab_api: glab.GitLabApi = glab.GitLabApi(
+        app.auth_api = glab.GitLabApi(  # TODO: mock auth api
             glab.GitLabConfig(
                 base_url=app.app_config.gitlab_url,
                 admin_token=app.app_config.gitlab_admin_token,
                 verify_ssl=app.app_config.gitlab_verify_ssl,
             )
         )
-        app.auth_api = gitlab_api
-
-        if rms == "gitlab":
-            app.rms_api = gitlab_api
-
-        elif rms == "mock":
-            app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
+        app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
 
     app.csrf = CSRFProtect(app)
 
