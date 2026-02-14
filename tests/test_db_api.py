@@ -32,7 +32,10 @@ from tests.constants import (
     FIRST_COURSE_EXPECTED_STATS_KEYS,
     FIRST_COURSE_NAME,
     FIXED_CURRENT_TIME,
+    GRADE_AFTER_DOWNGRADE_IN_PROGRESS,
+    GRADE_BEFORE_DOWNGRADE,
     GRADE_CONFIG_FILES,
+    GRADE_FROZEN_VALUE,
     SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED,
     SECOND_COURSE_EXPECTED_STATS_KEYS,
     SECOND_COURSE_NAME,
@@ -616,7 +619,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert stats["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_0_0")
 
-    assert all_scores == {TEST_USERNAME: ({"task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), 2, None)}
+    assert all_scores == {TEST_USERNAME: ({"task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)}
     assert bonus_score == 0
     assert scores == {"task_0_0": 1}
 
@@ -651,7 +654,7 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
         TEST_USERNAME: (
             {"bonus_score": (1, False), "task_0_0": (1, False)},
             (TEST_FIRST_NAME, TEST_LAST_NAME),
-            2,
+            None,
             None,
         )
     }
@@ -690,7 +693,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     assert all(v == 0.0 for k, v in stats.items() if k != "task_1_3")
 
     assert all_scores == {
-        TEST_USERNAME: ({"task_1_3": (expected_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), 2, None)
+        TEST_USERNAME: ({"task_1_3": (expected_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)
     }
     assert bonus_score == expected_score
     assert scores == {"task_1_3": expected_score}
@@ -724,7 +727,7 @@ def test_store_score_with_changed_task_name(
     assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
     assert all(v == 0.0 for k, v in stats.items())
 
-    assert all_scores == {TEST_USERNAME: ({"task_0_0": (10, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), 2, None)}
+    assert all_scores == {TEST_USERNAME: ({"task_0_0": (10, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)}
     assert bonus_score == 0
     assert scores == {}
 
@@ -818,13 +821,13 @@ def test_many_users(db_api_with_initialized_first_course, session):
         TEST_USERNAME_1: (
             {"task_0_0": (1, False), "task_1_3": (expected_score_1, False)},
             (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
-            2,
+            None,
             None,
         ),
         TEST_USERNAME_2: (
             {"task_0_0": (expected_score_2, False)},
             (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
-            3,
+            None,
             None,
         ),
     }
@@ -858,7 +861,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     assert stats1["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats1.items() if k != "task_0_0")
 
-    assert all_scores1 == {TEST_USERNAME: ({"task_0_0": (30, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), 2, None)}
+    assert all_scores1 == {TEST_USERNAME: ({"task_0_0": (30, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)}
     assert bonus_score_user1 == 0
     assert scores_user1 == {"task_0_0": 30}
 
@@ -873,7 +876,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
 
     user2_score = 40
     assert all_scores2 == {
-        TEST_USERNAME: ({"task_1_3": (user2_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), 2, None)
+        TEST_USERNAME: ({"task_1_3": (user2_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)
     }
     assert bonus_score_user2 == user2_score
     assert scores_user2 == {"task_1_3": user2_score}
@@ -925,13 +928,13 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
         TEST_USERNAME_1: (
             {"task_0_0": (1, False), "task_1_3": (expected_score_1, False)},
             (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
-            2,
+            None,
             None,
         ),
         TEST_USERNAME_2: (
             {"task_0_0": (expected_score_2, False)},
             (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
-            3,
+            None,
             None,
         ),
     }
@@ -953,8 +956,8 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     assert all(v == 0.0 for k, v in stats2.items() if k not in ["task_1_0", "task_1_1"])
 
     assert all_scores2 == {
-        TEST_USERNAME_1: ({"task_1_0": (99, False)}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1), 2, None),
-        TEST_USERNAME_2: ({"task_1_1": (7, False)}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2), 3, None),
+        TEST_USERNAME_1: ({"task_1_0": (99, False)}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1), None, None),
+        TEST_USERNAME_2: ({"task_1_1": (7, False)}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2), None, None),
     }
     assert bonus_score2_user1 == 0
     assert scores2_user1 == {"task_1_0": 99}
@@ -1513,6 +1516,71 @@ def test_grade_config_estimation_with_adding_grade(
 
     for i, score in enumerate(mock_scores):
         assert grade_config_data.evaluate(score) == mock_grades_updated[i]
+
+
+def test_calculate_and_save_grade_allows_downgrade_in_progress(
+    db_api_with_initialized_first_course,
+    session,
+):
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    course.status = CourseStatus.IN_PROGRESS
+    session.commit()
+
+    db_api_with_initialized_first_course.update_or_create_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
+    )
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    user_on_course = (
+        session.query(UserOnCourse)
+        .join(User)
+        .filter(User.username == TEST_USERNAME, UserOnCourse.course_id == course.id)
+        .one()
+    )
+    user_on_course.final_grade = GRADE_BEFORE_DOWNGRADE
+    session.commit()
+
+    row = {"percent": 0, "large_count": 0}
+    new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(FIRST_COURSE_NAME, TEST_USERNAME, row)
+
+    assert new_grade == GRADE_AFTER_DOWNGRADE_IN_PROGRESS
+    session.expire_all()
+    assert (
+        session.query(UserOnCourse).filter_by(id=user_on_course.id).one().final_grade
+        == GRADE_AFTER_DOWNGRADE_IN_PROGRESS
+    )
+
+
+def test_calculate_and_save_grade_no_downgrade_in_doreshka_and_all_tasks_issued(
+    db_api_with_initialized_first_course,
+    session,
+):
+    db_api_with_initialized_first_course.update_or_create_user(
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
+    )
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    user_on_course = (
+        session.query(UserOnCourse)
+        .join(User)
+        .filter(User.username == TEST_USERNAME, UserOnCourse.course_id == course.id)
+        .one()
+    )
+
+    row = {"percent": 0, "large_count": 0}
+
+    course.status = CourseStatus.DORESHKA
+    user_on_course.final_grade = GRADE_FROZEN_VALUE
+    session.commit()
+    new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(FIRST_COURSE_NAME, TEST_USERNAME, row)
+    assert new_grade == GRADE_FROZEN_VALUE
+
+    course.status = CourseStatus.ALL_TASKS_ISSUED
+    user_on_course.final_grade = GRADE_FROZEN_VALUE
+    session.commit()
+    new_grade = db_api_with_initialized_first_course.calculate_and_save_grade(FIRST_COURSE_NAME, TEST_USERNAME, row)
+    assert new_grade == GRADE_FROZEN_VALUE
 
 
 def test_grade_config_estimation_with_removing_grade(

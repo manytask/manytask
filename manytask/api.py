@@ -37,7 +37,7 @@ from .config import (
     UserOnNamespaceResponse,
 )
 from pydantic import BaseModel
-from .course import DEFAULT_TIMEZONE, Course, get_current_time
+from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
 from .utils.generic import sanitize_and_validate_comment, sanitize_log_data
@@ -355,6 +355,9 @@ def report_score(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
+    if course.status == CourseStatus.FINISHED:
+        abort(HTTPStatus.CONFLICT, f"Cannot update score the course '{course_name}' is already finished.")
+
     rms_user, course, task, group = _validate_and_extract_params(
         request.form, app.rms_api, app.storage_api, course.course_name
     )
@@ -470,6 +473,10 @@ def get_score(course_name: str) -> ResponseReturnValue:
 @requires_token
 def update_config(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
+
+    if course.status == CourseStatus.FINISHED:
+        abort(HTTPStatus.CONFLICT, f"Cannot update config for the course '{course_name}' that is already finished.")
 
     logger.info("Running update_config for course=%s", course_name)
 
@@ -1217,6 +1224,8 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         "owners": [45, 46]  // Optional: list of user rms_ids
     }
 
+    For courses without namespace, pass namespace_id = 0.
+
     Returns:
         201: Course created successfully
         400: Bad request (invalid data)
@@ -1251,24 +1260,40 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     try:
         is_instance_admin = storage_api.check_if_instance_admin(username)
 
-        try:
-            namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
-        except (PermissionError, NoResultFound):
-            logger.warning("User %s attempted to create course in inaccessible namespace id=%s", username, namespace_id)
-            return jsonify(
-                ErrorResponse(error="Namespace not found or access denied").model_dump()
-            ), HTTPStatus.NOT_FOUND
+        namespace = None
+        role = None
+        if namespace_id == 0:
+            if not is_instance_admin:
+                logger.warning("User %s attempted to create course without namespace", username)
+                return jsonify(
+                    ErrorResponse(error="Only Instance Admin can create courses without namespace").model_dump()
+                ), HTTPStatus.FORBIDDEN
+        else:
+            try:
+                namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
+            except (PermissionError, NoResultFound):
+                logger.warning(
+                    "User %s attempted to create course in inaccessible namespace id=%s", username, namespace_id
+                )
+                return jsonify(
+                    ErrorResponse(error="Namespace not found or access denied").model_dump()
+                ), HTTPStatus.NOT_FOUND
 
-        if not is_instance_admin and role != "namespace_admin":
-            logger.warning(
-                "User %s with role %s attempted to create course in namespace id=%s",
-                username,
-                role,
-                namespace_id,
-            )
+            if not is_instance_admin and role != "namespace_admin":
+                logger.warning(
+                    "User %s with role %s attempted to create course in namespace id=%s",
+                    username,
+                    role,
+                    namespace_id,
+                )
+                return jsonify(
+                    ErrorResponse(error="Only Instance Admin or Namespace Admin can create courses").model_dump()
+                ), HTTPStatus.FORBIDDEN
+
+        if namespace_id == 0 and owner_rms_ids:
             return jsonify(
-                ErrorResponse(error="Only Instance Admin or Namespace Admin can create courses").model_dump()
-            ), HTTPStatus.FORBIDDEN
+                ErrorResponse(error="Owners are not supported for courses without namespace").model_dump()
+            ), HTTPStatus.BAD_REQUEST
 
         if owner_rms_ids:
             try:
@@ -1287,8 +1312,8 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                 logger.error("Error validating owners: %s", str(e))
                 return jsonify(ErrorResponse(error=f"Invalid owners: {str(e)}").model_dump()), HTTPStatus.BAD_REQUEST
 
-        namespace_slug = namespace.slug
-        gitlab_course_group = f"{namespace_slug}/{course_slug}"
+        namespace_slug = namespace.slug if namespace is not None else ""
+        gitlab_course_group = f"{namespace_slug}/{course_slug}" if namespace_slug else course_slug
 
         from datetime import datetime as dt
 
@@ -1301,9 +1326,12 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         gitlab_default_branch = "main"
 
         try:
-            logger.info("Creating GitLab course group under namespace group_id=%s", namespace.gitlab_group_id)
+            logger.info(
+                "Creating GitLab course group under namespace group_id=%s",
+                namespace.gitlab_group_id if namespace else None,
+            )
             course_group_id = rms_api.create_course_group(
-                parent_group_id=namespace.gitlab_group_id,
+                parent_group_id=namespace.gitlab_group_id if namespace else None,
                 course_name=course_name,
                 course_slug=course_slug,
             )
@@ -1352,7 +1380,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
 
             course_config = CourseConfig(
                 course_name=course_name,
-                namespace_id=namespace_id,
+                namespace_id=None if namespace_id == 0 else namespace_id,
                 gitlab_course_group=gitlab_course_group,
                 gitlab_course_public_repo=gitlab_course_public_repo,
                 gitlab_course_students_group=gitlab_course_students_group,
@@ -1423,7 +1451,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             "Successfully created course %s (slug=%s) in namespace %s with %d owners",
             course_name,
             course_slug,
-            namespace.name,
+            namespace.name if namespace else "(no namespace)",
             len(added_owners),
         )
 

@@ -65,20 +65,16 @@ def get_database_table_data(
                 }
             )
 
-        # Get effective grade from already loaded data (final_grade_override or final_grade)
-        # If no grade exists yet, calculate and save it
+        # Determine effective grade:
+        # - If override exists, use it
+        # - Otherwise, recalculate and save (allows downgrade in IN_PROGRESS, but not in DORESHKA/ALL_TASKS_ISSUED)
         if final_grade_override is not None:
-            # Override exists, use it
             effective_grade = final_grade_override
-        elif final_grade is not None:
-            # Use saved final_grade
-            effective_grade = final_grade
         else:
-            # No grade saved yet, calculate and save it
             try:
                 effective_grade = storage_api.calculate_and_save_grade(course_name, username, row)
             except Exception:
-                effective_grade = 0
+                effective_grade = final_grade if final_grade is not None else 0
 
         row["grade"] = effective_grade
 
