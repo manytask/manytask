@@ -94,6 +94,7 @@ def login_finish() -> ResponseReturnValue:
 @root_bp.route("/logout")
 def logout() -> ResponseReturnValue:
     session.pop("gitlab", None)
+    session.pop("profile", None)
     return redirect(url_for("root.index"))
 
 
@@ -177,7 +178,7 @@ def signup() -> ResponseReturnValue:
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
-            "signup.html",
+            app.signup_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -189,7 +190,10 @@ def signup() -> ResponseReturnValue:
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            app.signup_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
         )
 
     try:
@@ -225,7 +229,7 @@ def signup() -> ResponseReturnValue:
     except Exception as e:
         logger.warning("User registration failed: %s", e)
         return render_template(
-            "signup.html",
+            app.signup_template,
             error_message=str(e),
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
@@ -238,6 +242,8 @@ def signup() -> ResponseReturnValue:
 def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     app: CustomFlask = current_app  # type: ignore
 
+    oauth_username = session["gitlab"]["username"]
+
     if not valid_gitlab_session(session):
         return redirect_to_login_with_bad_session()
 
@@ -247,14 +253,12 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
 
     stored_user_or_none = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])
     if stored_user_or_none is not None:
-        session.setdefault("profile", {}).update(
-            set_client_profile_session(ClientProfile(session["gitlab"]["username"]))
-        )
+        session.setdefault("profile", {}).update(set_client_profile_session(ClientProfile(oauth_username)))
         return redirect(url_for("root.index"))
 
     if request.method == "GET":
         return render_template(
-            "signup_finish.html",
+            app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -264,23 +268,38 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            app.signup_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
         )
 
     firstname = validate_name(request.form.get("firstname", "").strip())
     lastname = validate_name(request.form.get("lastname", "").strip())
     if firstname is None or lastname is None:
         return render_template(
-            "signup_finish.html",
+            app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
             error_message="Firstname and lastname must be 1-50 characters and contain only letters or hyphens.",
         )
 
-    app.storage_api.update_or_create_user(
-        session["gitlab"]["username"], firstname, lastname, session["gitlab"]["user_id"]
+    if app.app_config.rms == "sourcecraft":
+        username = request.form.get("username", "").strip()
+        if not username:
+            return render_template(
+                app.signup_finish_template,
+                course_favicon=app.favicon,
+                manytask_version=app.manytask_version,
+                error_message="Username is required",
+            )
+    else:
+        username = oauth_username
+
+    app.storage_api.update_or_create_user(  # TODO: split oauth username and rms username in DB
+        username, firstname, lastname, session["gitlab"]["user_id"]
     )
-    session.setdefault("profile", {}).update(set_client_profile_session(ClientProfile(session["gitlab"]["username"])))
+    session.setdefault("profile", {}).update(set_client_profile_session(ClientProfile(oauth_username)))
     return redirect(url_for("root.index"))
 
 
@@ -327,7 +346,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
         logger.error("Project creation failed: %s", ex.error_message)
-        return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
+        return render_template(app.signup_template, error_message=ex.error_message, course_name=course.course_name)
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
