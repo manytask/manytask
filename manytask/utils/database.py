@@ -95,7 +95,6 @@ def get_database_table_data(
         else:
             effective_grade = storage_api.calculate_and_save_grade(course_name, username, row)
 
-
         row["grade"] = effective_grade
 
         # Add override indicator using already loaded data
