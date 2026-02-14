@@ -490,43 +490,7 @@ def update_config(course_name: str) -> ResponseReturnValue:
 
     # Recalculate grades after config update (best-effort)
     try:
-        scores_and_names = app.storage_api.get_all_scores_with_names(course_name)
-        if scores_and_names:
-            max_score = app.storage_api.max_score_started(course_name)
-
-            try:
-                groups = app.storage_api.get_groups(course_name, enabled=True, started=True)
-            except TypeError:
-                groups = app.storage_api.get_groups(course_name)
-
-            large_tasks: list[tuple[str, int]] = []
-            for group_config in groups:
-                for task_config in group_config.tasks:
-                    if task_config.is_large and task_config.enabled:
-                        large_tasks.append((task_config.name, task_config.min_score))
-
-            for username in scores_and_names.keys():
-                student_scores = app.storage_api.get_scores(course_name, username)
-                bonus_score = app.storage_api.get_bonus_score(course_name, username)
-                total_score = sum(student_scores.values()) + bonus_score
-                row = build_grade_row(
-                    username=username,
-                    student_scores=student_scores,
-                    max_score=max_score,
-                    large_tasks=large_tasks,
-                    total_score=total_score,
-                )
-
-                try:
-                    app.storage_api.calculate_and_save_grade(course_name, username, row)
-                except Exception:
-                    logger.exception(
-                        "Failed to recalculate grade for user=%s after update_config for course=%s",
-                        username,
-                        course_name,
-                    )
-
-            logger.info("Recalculated grades for course=%s after config update", course_name)
+        get_database_table_data(app, course, include_admin_data=False, is_program_manager=False)
     except Exception:
         logger.exception("Failed to recalculate grades after update_config for course=%s", course_name)
 
