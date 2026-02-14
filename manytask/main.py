@@ -53,7 +53,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     _create_app_config(app, debug, test)
 
     app.oauth = _authenticate(
-        OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
+        OAuth(app),
+        app.app_config.gitlab_url,  # Internal URL for API calls
+        app.app_config.gitlab_oauth_url,  # External URL for browser redirects
+        app.app_config.gitlab_client_id,
+        app.app_config.gitlab_client_secret
     )
 
     # logging
@@ -246,7 +250,7 @@ def _create_app_config(app: CustomFlask, debug: bool | None, test: bool) -> None
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex())
 
 
-def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: str) -> OAuth:
+def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id: str, client_secret: str) -> OAuth:
     client_kwargs = {
         "scope": "openid email profile read_user",
         "code_challenge_method": "S256",
@@ -256,10 +260,10 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
         name="gitlab",
         client_id=client_id,
         client_secret=client_secret,
-        authorize_url=f"{base_url}/oauth/authorize",
-        access_token_url=f"{base_url}/oauth/token",
-        userinfo_endpoint=f"{base_url}/oauth/userinfo",
-        jwks_uri=f"{base_url}/oauth/discovery/keys",
+        authorize_url=f"{external_url}/oauth/authorize",  # Browser-accessible URL
+        access_token_url=f"{internal_url}/oauth/token",  # Container-to-container API call
+        userinfo_endpoint=f"{internal_url}/oauth/userinfo",  # Container-to-container API call
+        jwks_uri=f"{internal_url}/oauth/discovery/keys",  # Container-to-container API call
         client_kwargs=client_kwargs,
     )
     return oauth

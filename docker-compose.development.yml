@@ -55,7 +55,43 @@ services:
             timeout: 5s
             retries: 5
 
+    gitlab:
+        image: gitlab/gitlab-ce:latest
+        container_name: manytask_gitlab
+        restart: always
+        hostname: gitlab
+        environment:
+            GITLAB_ROOT_PASSWORD: "changeme123!"
+            GITLAB_OMNIBUS_CONFIG: |
+                external_url 'http://localhost:8929'
+                gitlab_rails['gitlab_shell_ssh_port'] = 8222
+        ports:
+            - "8929:8929"    # HTTP web UI
+            - "8222:22"      # SSH (optional)
+        volumes:
+            - gitlab_config:/etc/gitlab
+            - gitlab_logs:/var/log/gitlab
+            - gitlab_data:/var/opt/gitlab
+
+    gitlab-runner:
+        image: gitlab/gitlab-runner:alpine
+        container_name: manytask_gitlab_runner
+        restart: always
+        volumes:
+            - gitlab_runner_config:/etc/gitlab-runner
+            - /var/run/docker.sock:/var/run/docker.sock
+        depends_on:
+            - gitlab
+
 
 volumes:
     postgres_data:
         name: manytask_postgres_data
+    gitlab_config:
+        name: manytask_gitlab_config
+    gitlab_logs:
+        name: manytask_gitlab_logs
+    gitlab_data:
+        name: manytask_gitlab_data
+    gitlab_runner_config:
+        name: manytask_gitlab_runner_config
