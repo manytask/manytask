@@ -10,6 +10,16 @@ from .course import Course, CourseConfig, CourseStatus
 
 
 @dataclass
+class RmsUser:
+    id: int
+    username: str
+    name: str
+
+    def __repr__(self) -> str:
+        return f"RmsUser(username={self.username})"
+
+
+@dataclass
 class StoredUser:
     username: str
     first_name: str
@@ -20,6 +30,10 @@ class StoredUser:
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
+
+    @property
+    def rms_identity(self) -> RmsUser:
+        return RmsUser(id=self.rms_id, username=self.username, name=f"{self.first_name} {self.last_name}")
 
 
 class StorageApi(ABC):
@@ -75,7 +89,7 @@ class StorageApi(ABC):
     @abstractmethod
     def get_all_scores_with_names(
         self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]: ...
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]]: ...
 
     @abstractmethod
     def get_student_comment(self, course_name: str, username: str) -> str | None: ...
@@ -242,15 +256,25 @@ class StorageApi(ABC):
     @abstractmethod
     def get_course_id_by_name(self, course_name: str) -> int | None: ...
 
+    @abstractmethod
+    def calculate_and_save_grade(
+        self,
+        course_name: str,
+        username: str,
+        student_scores_data: dict[str, Any],
+    ) -> int: ...
 
-@dataclass
-class RmsUser:
-    id: int
-    username: str
-    name: str
+    @abstractmethod
+    def get_effective_grade(self, course_name: str, username: str) -> int: ...
 
-    def __repr__(self) -> str:
-        return f"RmsUser(username={self.username})"
+    @abstractmethod
+    def override_grade(self, course_name: str, username: str, new_grade: int) -> None: ...
+
+    @abstractmethod
+    def clear_grade_override(self, course_name: str, username: str) -> None: ...
+
+    @abstractmethod
+    def is_grade_overridden(self, course_name: str, username: str) -> bool: ...
 
 
 class RmsApiException(Exception):
@@ -360,7 +384,7 @@ class RmsApi(ABC):
     @abstractmethod
     def create_course_group(
         self,
-        parent_group_id: int,
+        parent_group_id: int | None,
         course_name: str,
         course_slug: str,
     ) -> int:

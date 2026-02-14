@@ -1,5 +1,4 @@
 ROOT_DIR := manytask
-DOCKER_COMPOSE_LOCAL := docker-compose.local.development.yml
 DOCKER_COMPOSE_DEV := docker-compose.development.yml
 TESTS_DIR := tests
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
@@ -13,6 +12,8 @@ export TESTCONTAINERS_RYUK_DISABLED
 
 check: format lint test
 
+check-colima: format lint test-colima
+
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	uv sync --active --all-extras
@@ -25,15 +26,15 @@ run-hooks:
 	uv run pre-commit run --all-files
 
 dev:
-	docker-compose -f $(DOCKER_COMPOSE_LOCAL) down
-	docker-compose -f $(DOCKER_COMPOSE_LOCAL) up --build
+	docker-compose -f $(DOCKER_COMPOSE_DEV) down
+	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 clean-db:
-	docker-compose -f $(DOCKER_COMPOSE_LOCAL) down -v
+	docker-compose -f $(DOCKER_COMPOSE_DEV) down -v
 	docker volume prune -f
 
 reset-dev: clean-db
-	docker-compose -f $(DOCKER_COMPOSE_LOCAL) up --build
+	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: install-deps
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/

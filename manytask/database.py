@@ -321,10 +321,11 @@ class DataBaseApi(StorageApi):
 
     def get_all_scores_with_names(
         self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]]:
-        """Get all users' scores with names for the given course.
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]]:
+        """Get all users' scores with names and grade data for the given course.
 
-        Returns a dict mapping username to (scores_dict, (first_name, last_name)).
+        Returns:
+            dict mapping username to (scores_dict, (first_name, last_name), final_grade, final_grade_override).
         scores_dict maps task_name to (score, is_solved) tuple.
 
         Excludes users with PROGRAM_MANAGER role in the course's namespace.
@@ -346,10 +347,11 @@ class DataBaseApi(StorageApi):
                     User.username,
                     User.first_name,
                     User.last_name,
-                    Task.name,
-                    coalesce(Grade.score, 0),
-                    coalesce(Grade.is_solved, False),
-                    User.id,
+                    Task.name.label("task_name"),
+                    coalesce(Grade.score, 0).label("score"),
+                    coalesce(Grade.is_solved, False).label("is_solved"),
+                    UserOnCourse.final_grade,
+                    UserOnCourse.final_grade_override,
                 )
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
                 .join(Course, Course.id == UserOnCourse.course_id)
@@ -366,15 +368,39 @@ class DataBaseApi(StorageApi):
 
             rows = session.execute(statement).all()
 
-            scores_and_names: dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str]]] = {}
+            scores_and_names: dict[
+                str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]
+            ] = {}
 
-            for username, first_name, last_name, task_name, score, is_solved, _ in rows:
+            for row in rows:
+                username = row.username
+                first_name = row.first_name
+                last_name = row.last_name
+                task_name = row.task_name
+                score = row.score
+                is_solved = row.is_solved
+                final_grade = row.final_grade
+                final_grade_override = row.final_grade_override
                 if username not in scores_and_names:
-                    scores_and_names[username] = ({}, (first_name, last_name))
+                    scores_and_names[username] = ({}, (first_name, last_name), final_grade, final_grade_override)
                 if task_name is not None:
                     scores_and_names[username][0][task_name] = (score, is_solved)
 
             return scores_and_names
+
+    @staticmethod
+    def _build_grades_config(course: models.Course) -> ManytaskFinalGradeConfig:
+        grades: dict[int, list[dict[Path, int | float]]] = {}
+        for grade in course.course_grades:
+            formulas = []
+            for f in grade.primary_formulas.all():
+                f.primary_formula
+                formulas.append({Path(k): v for k, v in f.primary_formula.items()})
+
+            grades[grade.grade] = formulas
+
+        grades_order = sorted(list(grades.keys()), reverse=True)
+        return ManytaskFinalGradeConfig(grades=grades, grades_order=grades_order)
 
     def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig:
         """Method for getting config with grades for the course
@@ -386,18 +412,7 @@ class DataBaseApi(StorageApi):
 
         with self._session_create() as session:
             course = DataBaseApi._get(session, models.Course, name=course_name)
-
-            grades: dict[int, list[dict[Path, int | float]]] = {}
-            for grade in course.course_grades:
-                formulas = []
-                for f in grade.primary_formulas.all():
-                    f.primary_formula
-                    formulas.append({Path(k): v for k, v in f.primary_formula.items()})
-
-                grades[grade.grade] = formulas
-
-            grades_order = sorted(list(grades.keys()), reverse=True)
-            return ManytaskFinalGradeConfig(grades=grades, grades_order=grades_order)
+            return DataBaseApi._build_grades_config(course)
 
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks
@@ -469,9 +484,6 @@ class DataBaseApi(StorageApi):
         logger.debug(
             "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
         )
-
-        # TODO: in GoogleDocApi imported from google table, they used to increase the deadline for the user
-        # flags = ''
 
         with self._session_create() as session:
             try:
@@ -2275,3 +2287,163 @@ class DataBaseApi(StorageApi):
                 return course.id
             except NoResultFound:
                 return None
+
+    def calculate_and_save_grade(
+        self,
+        course_name: str,
+        username: str,
+        student_scores_data: dict[str, Any],
+    ) -> int:
+        """Calculate and save final grade for a student.
+
+        Logic:
+        1. Calculate grade from scores using grade config
+        2. If course is in DORESHKA status:
+           - Cap new grade at 3 (satisfactory)
+           - Take max of (saved grade, capped grade) to avoid downgrade
+        3. Otherwise, save calculated grade as is
+        4. Override is NOT touched by this method
+
+        :param course_name: course name
+        :param username: student username
+        :param student_scores_data: dict with student scores, percent, large_count, etc.
+        :return: calculated final grade
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+
+                # Get grade configuration from the same session to avoid nested session closes
+                grades_config = DataBaseApi._build_grades_config(course)
+
+                # Calculate grade from scores
+                try:
+                    calculated_grade = grades_config.evaluate(student_scores_data)
+                    if calculated_grade is None:
+                        calculated_grade = 0
+                except ValueError:
+                    logger.warning(f"Failed to calculate grade for {username} in {course_name}")
+                    calculated_grade = 0
+
+                freeze_statuses = {CourseStatus.DORESHKA, CourseStatus.ALL_TASKS_ISSUED}
+
+                # Apply non-downgrade logic for DORESHKA / ALL_TASKS_ISSUED
+                if course.status in freeze_statuses:
+                    capped_grade = calculated_grade
+                    if course.status == CourseStatus.DORESHKA:
+                        logger.debug(f"Course {course_name} is in DORESHKA mode")
+                        capped_grade = min(calculated_grade, 3)
+
+                    # If student already has a saved grade, don't downgrade
+                    if user_on_course.final_grade is not None:
+                        final_grade = max(user_on_course.final_grade, capped_grade)
+                        logger.debug(
+                            f"{course.status.value.upper()}: kept higher grade for {username}: "
+                            f"saved={user_on_course.final_grade}, new={capped_grade}, result={final_grade}"
+                        )
+                    else:
+                        final_grade = capped_grade
+                        logger.debug(f"{course.status.value.upper()}: first grade for {username}: {final_grade}")
+                else:
+                    # Normal mode - just save calculated grade (downgrade allowed)
+                    final_grade = calculated_grade
+
+                # Save final_grade (do NOT touch final_grade_override)
+                user_on_course.final_grade = final_grade
+                session.commit()
+
+                logger.info(
+                    f"Calculated and saved grade for {username} in {course_name}: "
+                    f"final_grade={final_grade} (calculated={calculated_grade}, status={course.status.value})"
+                )
+
+                return final_grade
+
+            except NoResultFound:
+                logger.error(f"User {username} not found in course {course_name}")
+                raise
+
+    def get_effective_grade(self, course_name: str, username: str) -> int:
+        """Get effective grade for student (override if exists, otherwise final_grade).
+
+        :param course_name: course name
+        :param username: student username
+        :return: effective grade (0 if no grade exists)
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+
+                # If override exists, use it
+                if user_on_course.final_grade_override is not None:
+                    logger.debug(f"Using override grade for {username}: {user_on_course.final_grade_override}")
+                    return user_on_course.final_grade_override
+
+                # Otherwise use final_grade
+                if user_on_course.final_grade is not None:
+                    return user_on_course.final_grade
+
+                return 0
+
+            except NoResultFound:
+                logger.warning(f"User {username} not found in course {course_name}")
+                return 0
+
+    def override_grade(self, course_name: str, username: str, new_grade: int) -> None:
+        """Set manual grade override for a student.
+
+        :param course_name: course name
+        :param username: student username
+        :param new_grade: new grade value to set manually
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+
+                user_on_course.final_grade_override = new_grade
+                session.commit()
+
+                logger.info(f"Set grade override for {username} in {course_name}: {new_grade}")
+            except NoResultFound:
+                logger.error(f"User {username} not found in course {course_name}")
+                raise
+
+    def clear_grade_override(self, course_name: str, username: str) -> None:
+        """Clear manual grade override for a student.
+
+        :param course_name: course name
+        :param username: student username
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+
+                user_on_course.final_grade_override = None
+                session.commit()
+
+                logger.info(f"Cleared grade override for {username} in {course_name}")
+            except NoResultFound:
+                logger.error(f"User {username} not found in course {course_name}")
+                raise
+
+    def is_grade_overridden(self, course_name: str, username: str) -> bool:
+        """Check if student's grade is manually overridden.
+
+        :param course_name: course name
+        :param username: student username
+        :return: True if grade is overridden, False otherwise
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+
+                return user_on_course.final_grade_override is not None
+
+            except NoResultFound:
+                logger.warning(f"User {username} not found in course {course_name}")
+                return False

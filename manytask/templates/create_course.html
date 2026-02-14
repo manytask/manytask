@@ -122,6 +122,12 @@ document.addEventListener('DOMContentLoaded', function () {
     let namespacesData = [];
 
     function validatePrefix(field, prefix, feedbackId) {
+        if (prefix.value === '0') {
+            field.classList.remove('is-invalid');
+            field.classList.add('is-valid');
+            document.getElementById(feedbackId).style.display = 'none';
+            return;
+        }
         if (field.value.startsWith(prefix.value + '/')) {
             field.classList.remove('is-invalid');
             field.classList.add('is-valid');
@@ -135,12 +141,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     publicRepoField.addEventListener('input', function () {
         publicRepoChanged = true;
-        validatePrefix(publicRepoField, gitlabGroupField, "public-repo-feedback")
+        validatePrefix(publicRepoField, namespaceSelect, "public-repo-feedback")
     });
 
     studentsGroupField.addEventListener('input', function () {
         studentsGroupChanged = true;
-        validatePrefix(studentsGroupField, gitlabGroupField, "students-group-feedback")
+        validatePrefix(studentsGroupField, namespaceSelect, "students-group-feedback")
     });
 
     // Function to get namespace path from selected namespace
@@ -161,10 +167,12 @@ document.addEventListener('DOMContentLoaded', function () {
     gitlabGroupField.addEventListener('input', function () {
         updateGitLabFields();
     });
+
     
     function updateGitLabFields() {
         const groupName = gitlabGroupField.value;
         const namespacePath = getSelectedNamespacePath();
+        const isNoNamespace = namespaceSelect.value === '0';
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth();
@@ -172,7 +180,9 @@ document.addEventListener('DOMContentLoaded', function () {
         
         // Determine the full group path
         let fullGroupPath = groupName;
-        if (namespacePath && groupName && !groupName.includes('/')) {
+        if (isNoNamespace) {
+            fullGroupPath = groupName;
+        } else if (namespacePath && groupName && !groupName.includes('/')) {
             // If group name doesn't contain '/', prepend namespace path
             fullGroupPath = `${namespacePath}/${groupName}`;
         } else if (!groupName && namespacePath) {
@@ -228,10 +238,28 @@ document.addEventListener('DOMContentLoaded', function () {
         
         // Clear loading option
         namespaceSelect.innerHTML = '';
+
+        // Add "No namespace" option
+        const noNamespaceOption = document.createElement('option');
+        noNamespaceOption.value = '0';
+        noNamespaceOption.textContent = 'No namespace';
+        namespaceSelect.appendChild(noNamespaceOption);
         
         if (namespaces.length === 0) {
-            showNamespaceError('No namespaces available. Please contact your administrator.');
-            namespaceSelect.innerHTML = '<option value="">No namespaces available</option>';
+            // Allow creating course without namespace
+            noNamespaceOption.selected = true;
+            namespaceSelect.disabled = true;
+            namespaceSelect.style.cursor = 'not-allowed';
+            namespaceSelect.style.backgroundColor = 'var(--bs-secondary-bg)';
+
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'namespace_id';
+            hiddenInput.value = '0';
+            namespaceSelect.parentElement.appendChild(hiddenInput);
+
+            namespacesLoaded = true;
+            hideNamespaceError();
             return;
         }
         
@@ -246,8 +274,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (preselectedNamespaceId && ns.id == preselectedNamespaceId) {
                 option.selected = true;
                 namespaceFound = true;
-            } else if (!preselectedNamespaceId && (namespaces.length === 1 || index === 0)) {
-                // Auto-select if only one namespace or first one (and no preselection)
+            } else if (!preselectedNamespaceId && index === 0) {
+                // Auto-select first namespace when no preselection
                 option.selected = true;
             }
             
@@ -269,6 +297,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 namespaceSelect.parentElement.appendChild(hiddenInput);
                 
                 // Add a note below the select
+                const note = document.createElement('small');
+                note.className = 'form-text text-info';
+                note.textContent = 'Namespace is fixed for this course creation.';
+                namespaceSelect.parentElement.appendChild(note);
+            } else if (preselectedNamespaceId === '0') {
+                namespaceSelect.value = '0';
+                namespaceSelect.disabled = true;
+                namespaceSelect.style.cursor = 'not-allowed';
+                namespaceSelect.style.backgroundColor = 'var(--bs-secondary-bg)';
+
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'namespace_id';
+                hiddenInput.value = '0';
+                namespaceSelect.parentElement.appendChild(hiddenInput);
+
                 const note = document.createElement('small');
                 note.className = 'form-text text-info';
                 note.textContent = 'Namespace is fixed for this course creation.';
@@ -309,6 +353,14 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (!namespaceSelect.value) {
                 namespaceSelect.classList.add('is-invalid');
             }
+        }
+
+        validatePrefix(publicRepoField, namespaceSelect, "public-repo-feedback");
+        validatePrefix(studentsGroupField, namespaceSelect, "students-group-feedback");
+
+        if (form.querySelectorAll(".is-invalid").length > 0) {
+            event.preventDefault();
+            event.stopPropagation();
         }
     }, false);
 });

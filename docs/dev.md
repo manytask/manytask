@@ -1,17 +1,111 @@
 # Development guide
 
-
 ## How to get started developing
+
 ### 1. Prerequisites and Access
 
 Before starting development, ensure you have the necessary access:
 
-- **Server access** where you can run an instance of Manytask.
-- **Admin access** to our GitLab: [https://gitlab.manytask2.org/](https://gitlab.manytask2.org/)  
+- A computer with **Docker** installed.
+- A GitLab server with **Admin access**. If you need access to [https://gitlab.manytask2.org/](https://gitlab.manytask2.org/), you can request these from **[@artemzhmurov](https://t.me/artemzhmurov)**.
 
-You can request these from **[@artemzhmurov](https://t.me/artemzhmurov)**.
+### 1. Setting up and running the Manytask application
 
-### 2. Project Structure Overview
+#### Step 1 — Create Personal Access Token in GitLab
+
+1. In gitlab web-interface, click to your user icon, go to Preferences -> Access Tokens.
+
+2. Create admin token, set following scopes: api, read_api, read_user, read_repository, write_repository, read_registry, write_registry, sudo, admin_mode.
+
+3. Copy token to `GITLAB_ADMIN_TOKEN` environment variable:
+
+#### Step 2 - Register the Application in GitLab
+
+1. In GitLab web-interface, go to the Admin Area -> Applications.
+
+2. Create an application:
+   - **Permissions**: api, read_user, sudo, openid, profile, email.
+   - Mark as **Trusted**.
+   - **Callback URL**: `set the redirect url to http://localhost:8081/login_finish`  
+3. Copy the **Application ID** and **Secret** to `GITLAB_CLIENT_ID` and `GITLAB_CLIENT_SECRET` in `.env` file respectively.
+
+#### Step 3 - prepare the .env file
+
+Copy `.env.example` to `.env` and follow the instructions in the file to fill it in. You need to set the following environment variables:
+
+| Variable                 | Description                                                 |
+|--------------------------|-------------------------------------------------------------|
+| `FLASK_SECRET_KEY`       | Random string                                               |
+| `GITLAB_ADMIN_TOKEN`     | Personal Access Token from Step 1                           |
+| `GITLAB_CLIENT_ID`       | Application ID from Step 2                                  |
+| `GITLAB_CLIENT_SECRET`   | Application Secret from Step 2                              |
+| `APPLY_MIGRATIONS`       | Update the database structure if needed (True by default)   |
+| `INITIAL_INSTANCE_ADMIN` | Your GitLab username                                        |
+| `POSTGRES_USER`          | Username to create in Postgres (e.g. manytaskadmin)         |
+| `POSTGRES_PASSWORD`      | Password for this user (e.g. localdevdbpass)                |
+| `POSTGRES_DB`            | Database name on the Postgres server (e.g. manytask)        |
+| `DATABASE_URL`           | Database connection string (default `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}`) |
+| `DATABASE_URL_EXTERNAL`  | Database connection string (default `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}`) |
+| `DOCS_HOST`              | Host name for docs (not used in development, can be left blank)             |
+| `APP_HOST`               | Host name for the Manytask app (not used in development, can be left blank) |
+
+#### Step 4 — Start the Application
+
+To start the app, run:
+
+```bash
+docker-compose -f docker-compose.development.yml up --build -d
+```
+
+This should expose Manytask app on port 8081 [http://localhost:8081/](http://localhost:8081/) and docs on port 8080 [http://localhost:8080/](http://localhost:8080/).
+
+You can run `make dev` as a shortcut for this command.
+
+### 4. Adding a Course
+
+#### Step 1 — Create the Course in the Admin Panel
+
+1. Go to `admin/panel` → create_course.
+2. Fill in all fields and remember (copy) the course token.
+3. Create the course.
+
+#### Step 2 — Create GitLab Groups and Projects
+
+1. Go to the Gitlab web-interface.
+2. Create an empty public group with the course name.
+3. Create a **private** subgroup (for student repositories).
+4. Create a **public** or **internal** project inside the group — this will be the shared assignment's repository.
+
+#### Step 3 — Send the course config to Manytask
+On the server:
+```bash
+export TESTER_TOKEN=<course_token>
+```
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $TESTER_TOKEN" \
+  -H "Content-type: application/x-yaml" \
+  --data-binary "@.manytask.example.yml" \
+  "http://localhost:8081/api/<course_name>/update_config"
+```
+Replace `<course_name>` with your actual course name.
+Once done, your first course will be available in Manytask.
+
+## Running tests
+
+For the convenience, the code ships with `Makefile` with shortcuts to commands you need to run linter, typechecker, as well as to format and test the code. You can consult the contents of this file for details of see commands to run one stage or the other. To run all the checks, type
+
+```bash
+make check
+```
+
+Or, if you are using Colima:
+
+```bash
+make check-colima
+```
+
+## Project Structure Overview
 
 Below is a brief description of each main file in the project:
 
@@ -25,155 +119,3 @@ Below is a brief description of each main file in the project:
 - **`models.py`** – Database model definitions.
 - **`web.py`** – Endpoint definitions.
 
-
-
-### 3. Deploying the Service on the Server
-
-#### Step 1 — Register the Application in GitLab
-
-1. Go to: [https://gitlab.manytask2.org/admin/applications](https://gitlab.manytask2.org/admin/applications)
-2. Create a new application:
-   - **Permissions**: grant all scopes.
-   - Mark as **Trusted**.
-   - **Callback URL**: `https://*.manytask2.org`  
-     Replace `*` with your desired name (avoid existing names!).
-3. Copy the **Application ID** and **Secret**.
-
-
-
-#### Step 2 — Clone the Project on the Server
-
-1. Connect to the server and go to `/srv/`.
-2. Create your own directory inside `/srv/`.
-3. Clone your Manytask branch into it.
-4. Copy `.env.example` to `.env`.
-5. Fill in `.env`:
-
-| Variable                 | Description                                                 |
-|--------------------------|-------------------------------------------------------------|
-| `FLASK_SECRET_KEY`       | Random string                                               |
-| `GITLAB_ADMIN_TOKEN`     | From `/srv/app/.env.common`                                 |
-| `GITLAB_CLIENT_ID`       | Application ID from Step 1                                  |
-| `GITLAB_CLIENT_SECRET`   | Application Secret from Step 1                              |
-| `INITIAL_INSTANCE_ADMIN` | Your GitLab username                                        |
-| `DATABASE_URL`           | Database connection string (can be taken from `init-db.sh`) |
-
-
-
-#### Step 3 — Start the Application
-
-На сервере используется `docker-compose.development.yml` с `network_mode: bridge` для работы с nginx-proxy:
-
-```bash
-docker compose -f docker-compose.development.yml up --build -d
-```
-
-> **Примечание:** Для локальной разработки используйте `docker-compose.local.development.yml` или команду `make dev`.
-
-### 4. Adding a Course
-#### Step 1 — Create the Course in the Admin Panel
-1. Go to `admin/panel` → create_course.
-2. Fill in all fields and remember the course token.
-3. Create the course.
-
-#### Step 2 — Create GitLab Groups and Projects
-1. In GitLab: [https://gitlab.manytask2.org/groups/new](https://gitlab.manytask2.org/groups/new)
-2. Create an empty public group with the course name.
-3. Create a private subgroup (for student repositories).
-4. Create a public project inside the group — this will be the shared assignment's repository.
-
-#### Step 3 — Link the Course in Manytask
-On the server:
-```bash
-export TESTER_TOKEN=<course_token>
-```
-```bash
-curl -X POST \
-  -H "Authorization: Bearer $TESTER_TOKEN" \
-  -H "Content-type: application/x-yaml" \
-  --data-binary "@.manytask.example.yml" \
-  "https://test.manytask2.org/api/<course_name>/update_config"
-```
-Replace `<course_name>` with your actual course name.
-Once done, your first course will be available in Manytask.
-
-
-## How to deploy manytask locally
-
-### Option 1: Using Docker (recommended)
-
-1. Copy `.env.example` to `.env` and configure it:
-   - Set `FLASK_SECRET_KEY` to a random string
-   - Set `INITIAL_INSTANCE_ADMIN` to your GitLab username
-
-2. Run with make:
-   ```bash
-   make dev
-   ```
-   
-   Or directly with docker-compose:
-   ```bash
-   docker-compose -f docker-compose.local.development.yml up --build
-   ```
-
-3. Manytask will be available on [http://127.0.0.1:8081/](http://127.0.0.1:8081/)
-
-> **Docker Compose files:**
-> - `docker-compose.local.development.yml` — для локальной разработки (используется в `make dev`)
-> - `docker-compose.development.yml` — для деплоя на сервер с nginx-proxy
-
-
-### Option 2: Without Docker
-
-Use `WSL 2`, if you are using Windows
-
-1. Install `postgresql`: 
-    ```bash
-     sudo apt install postgresql postgresql-contrib
-     sudo systemctl start postgresql
-     sudo systemctl enable postgresql
-    ```
-   
-2. Create `postgres` user and database:
-   ```bash
-   sudo -u postgres psql
-   CREATE USER <username> WITH PASSWORD '<password>' CREATEDB;
-   CREATE DATABASE <database name> WITH OWNER <username>;
-   \q
-    ```
-   
-3. Now you can connect to the database using `psql`:
-   ```bash
-   psql postgresql://<username>:<password>@localhost:5432/<database name>
-   ```
-
-4. Copy `.env.example` to `.env` in your working folder. In this file:
-- Set `FLASK_SECRET_KEY` to a random string
-- Set `DATABASE_URL` to `psql` URL above
-- Set the username for the first instance admin with 'INITIAL_INSTANCE_ADMIN'
-
-5. Try to start `Manytask`:
-   ```bash
-   poetry run flask --app "manytask:create_app()" run --host=0.0.0.0 --port=5050 --reload --debug
-   ```
-   
-6. Manytask will be available on [http://127.0.0.1:5050/](http://127.0.0.1:5050/)
-
-## How to run tests
-### On Windows:
-
-1. Use `WSL 2` with your favourite distro
-2. Download [Docker Desktop](https://www.docker.com/products/docker-desktop/) 
-3. On `WSL integration` in settings: Settings -> Resources -> Enable Integration
-4. Now, you can run tests from the project root:
-   ```bash
-   pytest . -vvv
-   ```
-   
-### On Linux:
-
-1. Download docker
-2. Now, you can run tests from the project root:
-   ```bash
-   pytest . -vvv
-   ```
