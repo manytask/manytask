@@ -12,6 +12,8 @@ export TESTCONTAINERS_RYUK_DISABLED
 
 check: format lint test
 
+check-colima: format lint test-colima
+
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	uv sync --active --all-extras
