@@ -13,6 +13,7 @@ from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from manytask.course import ManytaskDeadlinesType
+from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
@@ -95,13 +96,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         app.oauth = _authenticate(
             OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
         )
-        app.auth_api = glab.GitLabApi(  # TODO: mock auth api
-            glab.GitLabConfig(
-                base_url=app.app_config.gitlab_url,
-                admin_token=app.app_config.gitlab_admin_token,
-                verify_ssl=app.app_config.gitlab_verify_ssl,
-            )
-        )
+        app.auth_api = MockAuthApi()
         app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
 
     app.csrf = CSRFProtect(app)
