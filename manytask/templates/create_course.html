@@ -125,15 +125,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const isNoNamespace = namespaceSelect.value === '0';
         
         let isValid = true;
-        const validPrefixes = [];
+        let validPrefix = "";
         const namespacePath = getSelectedNamespacePath();
         if (namespacePath) {
-            validPrefixes.push(namespacePath + '/');
+            validPrefix = validPrefix + namespacePath + '/';
         }
         if (groupName) {
-            validPrefixes.push(groupName + '/');
+            validPrefix = validPrefix + groupName + '/';
         }
-        isValid = validPrefixes.length === 0 || validPrefixes.some(prefix => field.value.startsWith(prefix));
+        isValid = validPrefix === '' || field.value.startsWith(validPrefix);
         
         if (isValid) {
             field.classList.remove('is-invalid');
