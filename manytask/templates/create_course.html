@@ -124,18 +124,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const groupName = gitlabGroupField.value;
         const isNoNamespace = namespaceSelect.value === '0';
         
-        let isValid = true;
         let validPrefix = "";
-        const namespacePath = getSelectedNamespacePath();
-        if (namespacePath) {
+        if (!isNoNamespace) {
+            const namespacePath = getSelectedNamespacePath();
             validPrefix = validPrefix + namespacePath + '/';
         }
         if (groupName) {
             validPrefix = validPrefix + groupName + '/';
         }
-        isValid = validPrefix === '' || field.value.startsWith(validPrefix);
         
-        if (isValid) {
+        if (validPrefix === '' || field.value.startsWith(validPrefix)) {
             field.classList.remove('is-invalid');
             field.classList.add('is-valid');
             document.getElementById(feedbackId).style.display = 'none';
