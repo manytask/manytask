@@ -14,7 +14,7 @@ navigation:
         url: https://app.manytask.org/
       - type: link
         text: Documentation
-        url: ./production.html
+        url: ./about.html
       - type: link
         text: GitHub
         url: https://github.com/manytask
