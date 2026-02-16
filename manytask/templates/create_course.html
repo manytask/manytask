@@ -125,25 +125,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const isNoNamespace = namespaceSelect.value === '0';
         
         let isValid = true;
-        // If no namespace selected, validate against course group name
-        if (isNoNamespace) {
-            if (!groupName || field.value.startsWith(groupName + '/')) {
-                isValid = true
-            } else {
-                isValid = false
-            }
-        } else {
-            // If namespace exists, validate against either namespace path or course group name
-            const validPrefixes = [];
-            const namespacePath = getSelectedNamespacePath();
-            if (namespacePath) {
-                validPrefixes.push(namespacePath + '/');
-            }
-            if (groupName) {
-                validPrefixes.push(groupName + '/');
-            }
-            isValid = validPrefixes.length === 0 || validPrefixes.some(prefix => field.value.startsWith(prefix));
+        const validPrefixes = [];
+        const namespacePath = getSelectedNamespacePath();
+        if (namespacePath) {
+            validPrefixes.push(namespacePath + '/');
         }
+        if (groupName) {
+            validPrefixes.push(groupName + '/');
+        }
+        isValid = validPrefixes.length === 0 || validPrefixes.some(prefix => field.value.startsWith(prefix));
         
         if (isValid) {
             field.classList.remove('is-invalid');
