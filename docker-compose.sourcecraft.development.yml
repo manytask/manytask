@@ -1,0 +1,61 @@
+services:
+
+    docs:
+        build:
+            context: .
+            target: docs
+        container_name: test-manytask-docs
+        restart: always
+        network_mode: bridge
+        environment:
+            VIRTUAL_HOST: localhost
+            VIRTUAL_PORT: 80
+            LETSENCRYPT_HOST: localhost
+        ports:
+            - "8080:80"
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
+            interval: 1m
+            timeout: 15s
+            retries: 3
+            start_period: 30s
+
+    manytask:
+        build:
+            context: .
+            target: app
+        container_name: test-manytask
+        network_mode: bridge
+        env_file: .env.sourcecraft
+        environment:
+            VIRTUAL_HOST: localhost
+            VIRTUAL_PORT: 5050
+            LETSENCRYPT_HOST: localhost
+        ports:
+            - "8081:5050"
+        volumes:
+            - ./manytask/:/app/manytask
+            - .tmp/cache/:/cache
+        links:
+            - postgres:postgres
+
+    postgres:
+        image: postgres:17
+        container_name: manytask_postgres
+        network_mode: bridge
+        env_file: .env.sourcecraft
+        expose:
+            - "5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
+
+volumes:
+    postgres_data:
+        name: manytask_postgres_data

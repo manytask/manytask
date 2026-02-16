@@ -15,6 +15,7 @@ from manytask.abstract import AuthenticatedUser, StoredUser
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import TaskDisabledError
+from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, instance_admin_bp, root_bp
 from tests.constants import (
@@ -44,7 +45,7 @@ from tests.constants import (
 
 
 @pytest.fixture
-def app(mock_auth_api, mock_storage_api):
+def app(mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
@@ -58,28 +59,12 @@ def app(mock_auth_api, mock_storage_api):
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
-    app.auth_api = mock_auth_api
+    app.auth_api = MockAuthApi()
+    app.auth_api.user = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
     return app
-
-
-@pytest.fixture
-def mock_auth_api():
-    class MockAuthApi:
-        def check_user_is_authenticated(
-            self,
-            oauth,
-            oauth_access_token: str,
-            oauth_refresh_token: str,
-        ) -> bool:
-            return True
-
-        def get_authenticated_user(self, access_token):
-            return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
-
-    return MockAuthApi()
 
 
 @pytest.fixture
