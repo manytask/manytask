@@ -122,11 +122,10 @@ document.addEventListener('DOMContentLoaded', function () {
     function validatePrefix(field, feedbackId) {
 
         const groupName = gitlabGroupField.value;
-        const isNoNamespace = namespaceSelect.value === '0';
+        const namespacePath = getSelectedNamespacePath();
         
         let validPrefix = "";
-        if (!isNoNamespace) {
-            const namespacePath = getSelectedNamespacePath();
+        if (namespacePath) {
             validPrefix = validPrefix + namespacePath + '/';
         }
         if (groupName) {
