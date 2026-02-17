@@ -2314,6 +2314,9 @@ class DataBaseApi(StorageApi):
                 course = self._get(session, models.Course, name=course_name)
                 user_on_course = self._get_or_create_user_on_course(session, username, course)
 
+                if course.status == CourseStatus.FINISHED:
+                    return user_on_course.final_grade if user_on_course.final_grade is not None else 0
+
                 # Get grade configuration from the same session to avoid nested session closes
                 grades_config = DataBaseApi._build_grades_config(course)
 
