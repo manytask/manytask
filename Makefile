@@ -19,7 +19,6 @@ install-deps:
 	uv sync --active --all-extras
 
 install-hooks:
-	uv install
 	uv run pre-commit install --install-hooks
 
 run-hooks:
