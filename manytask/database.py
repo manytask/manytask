@@ -2419,10 +2419,10 @@ class DataBaseApi(StorageApi):
                 final_grade,
             )
 
-        self.batch_update_grades(course_name, grades_to_save)
+        self._batch_update_grades(course_name, grades_to_save)
         logger.info(f"Recalculated all grades for {course_name} ({len(grades_to_save)} students)")
 
-    def batch_update_grades(self, course_name: str, grades: dict[str, int]) -> None:
+    def _batch_update_grades(self, course_name: str, grades: dict[str, int]) -> None:
         """Batch update final_grade for multiple students in a single transaction.
 
         Does NOT touch final_grade_override.
