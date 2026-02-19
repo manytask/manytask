@@ -2348,7 +2348,10 @@ class DataBaseApi(StorageApi):
                 grades_config = DataBaseApi._build_grades_config(course)
 
                 final_grade = calculate_effective_grade(
-                    course.status, grades_config, student_scores_data, user_on_course.final_grade,
+                    course.status,
+                    grades_config,
+                    student_scores_data,
+                    user_on_course.final_grade,
                 )
 
                 user_on_course.final_grade = final_grade
@@ -2374,6 +2377,8 @@ class DataBaseApi(StorageApi):
         scores_and_names = self.get_all_scores_with_names(course_name)
         grades_config = self.get_grades(course_name)
         course = self.get_course(course_name)
+        if course is None:
+            raise ValueError(f"Course {course_name} not found")
 
         large_tasks = []
         max_score: int = 0
@@ -2388,7 +2393,11 @@ class DataBaseApi(StorageApi):
         grades_to_save: dict[str, int] = {}
 
         for username, (
-            student_scores_with_solved, _name, final_grade, final_grade_override, _comment,
+            student_scores_with_solved,
+            _name,
+            final_grade,
+            final_grade_override,
+            _comment,
         ) in scores_and_names.items():
             if final_grade_override is not None:
                 continue
@@ -2404,7 +2413,10 @@ class DataBaseApi(StorageApi):
             }
 
             grades_to_save[username] = calculate_effective_grade(
-                course.status, grades_config, row, final_grade,
+                course.status,
+                grades_config,
+                row,
+                final_grade,
             )
 
         self.batch_update_grades(course_name, grades_to_save)

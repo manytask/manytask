@@ -131,7 +131,10 @@ def get_database_table_data(
             grade_is_override = True
         else:
             effective_grade = calculate_effective_grade(
-                course.status, grades_config, row, final_grade,
+                course.status,
+                grades_config,
+                row,
+                final_grade,
             )
             grade_is_override = False
 
