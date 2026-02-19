@@ -105,6 +105,7 @@ def app():  # noqa: C901
                     (STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]),
                     None,  # final_grade
                     None,  # final_grade_override
+                    None,  # comment
                 ),
                 STUDENT_2: (
                     {
@@ -115,6 +116,7 @@ def app():  # noqa: C901
                     (STUDENT_DATA[STUDENT_2][0], STUDENT_DATA[STUDENT_2][1]),
                     None,  # final_grade
                     None,  # final_grade_override
+                    None,  # comment
                 ),
             }
 
@@ -127,10 +129,6 @@ def app():  # noqa: C901
                 gitlab_course_students_group: str = "test_course_students_group"
 
             return Course()
-
-        @staticmethod
-        def get_student_comment(_course_name, _username):
-            return None
 
     app.storage_api = MockStorageApi()
     app.rms_api = MockRmsApi(base_url="https://gitlab.com")

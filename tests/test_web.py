@@ -107,6 +107,9 @@ def mock_storage_api(mock_course):  # noqa: C901
                 TEST_USERNAME: (
                     {"task1": 100, "task2": 90},
                     (TEST_FIRST_NAME, TEST_LAST_NAME),
+                    None,  # final_grade
+                    None,  # final_grade_override
+                    None,  # comment
                 )
             }
 
