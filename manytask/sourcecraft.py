@@ -322,6 +322,14 @@ class SourceCraftApi(RmsApi):
         # NOTE: yandex login is expected as username for now
         return self._get_user_by_yandex_login(username)
 
+    def check_user_exists(self, username: str) -> bool:
+        try:
+            self._get_user_by_yandex_login(username)
+            return True
+        except RmsApiException as e:
+            logger.error(f"Failed to check if user exists: {e}")
+            return False
+
     def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:
         cloud_id = self._get_cloud_id_by_yandex_login(auth_username)
         return self._get_user_profile(f"cloud-id:{cloud_id}")
