@@ -39,7 +39,7 @@ from .config import (
 from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.database import get_database_table_data
+from .utils.database import get_database_table_data, recalculate_all_grades
 from .utils.generic import sanitize_and_validate_comment, sanitize_log_data
 
 
@@ -491,6 +491,14 @@ def update_config(course_name: str) -> ResponseReturnValue:
     except Exception:
         logger.exception("Error while updating config for course=%s", course_name, exc_info=True)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
+
+    # Recalculate grades for all students using the new config
+    try:
+        # Re-fetch course to get the updated config/status
+        course = app.storage_api.get_course(course_name)  # type: ignore
+        recalculate_all_grades(app, course)
+    except Exception:
+        logger.exception("Failed to recalculate grades after config update for course=%s", course_name)
 
     return "", HTTPStatus.OK
 

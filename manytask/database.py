@@ -2365,6 +2365,42 @@ class DataBaseApi(StorageApi):
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
 
+    def batch_update_grades(self, course_name: str, grades: dict[str, int]) -> None:
+        """Batch update final_grade for multiple students in a single transaction.
+
+        Does NOT touch final_grade_override.
+
+        :param course_name: course name
+        :param grades: dict mapping username to new final_grade
+        """
+        if not grades:
+            return
+
+        with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+
+            user_on_courses = (
+                session.query(UserOnCourse)
+                .join(User, User.id == UserOnCourse.user_id)
+                .filter(
+                    UserOnCourse.course_id == course.id,
+                    User.username.in_(grades.keys()),
+                )
+                .all()
+            )
+
+            username_to_uoc = {}
+            for uoc in user_on_courses:
+                username_to_uoc[uoc.user.username] = uoc
+
+            for username, grade in grades.items():
+                matched_uoc = username_to_uoc.get(username)
+                if matched_uoc is not None:
+                    matched_uoc.final_grade = grade
+
+            session.commit()
+            logger.info(f"Batch updated grades for {len(grades)} students in {course_name}")
+
     def get_effective_grade(self, course_name: str, username: str) -> int:
         """Get effective grade for student (override if exists, otherwise final_grade).
 

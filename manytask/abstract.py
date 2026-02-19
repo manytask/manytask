@@ -254,6 +254,9 @@ class StorageApi(ABC):
     def get_course_id_by_name(self, course_name: str) -> int | None: ...
 
     @abstractmethod
+    def batch_update_grades(self, course_name: str, grades: dict[str, int]) -> None: ...
+
+    @abstractmethod
     def calculate_and_save_grade(
         self,
         course_name: str,

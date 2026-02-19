@@ -1,7 +1,109 @@
+import logging
 from typing import Any
 
-from manytask.course import Course
+from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
+
+logger = logging.getLogger(__name__)
+
+
+def _calculate_effective_grade(
+    course_status: CourseStatus,
+    grades_config: Any,
+    row: dict[str, Any],
+    final_grade: int | None,
+    final_grade_override: int | None,
+) -> tuple[int, bool]:
+    """Calculate effective grade for a student without DB access.
+
+    Reproduces the logic of DataBaseApi.calculate_and_save_grade but as a pure function.
+
+    Returns (effective_grade, grade_is_override).
+    """
+    if final_grade_override is not None:
+        return final_grade_override, True
+
+    if course_status == CourseStatus.FINISHED:
+        return (final_grade if final_grade is not None else 0), False
+
+    try:
+        calculated_grade = grades_config.evaluate(row)
+        if calculated_grade is None:
+            calculated_grade = 0
+    except ValueError:
+        calculated_grade = 0
+
+    freeze_statuses = {CourseStatus.DORESHKA, CourseStatus.ALL_TASKS_ISSUED}
+
+    if course_status in freeze_statuses:
+        capped_grade = calculated_grade
+        if course_status == CourseStatus.DORESHKA:
+            capped_grade = min(calculated_grade, 3)
+
+        if final_grade is not None:
+            effective_grade = max(final_grade, capped_grade)
+        else:
+            effective_grade = capped_grade
+    else:
+        effective_grade = calculated_grade
+
+    return effective_grade, False
+
+
+def recalculate_all_grades(app: CustomFlask, course: Course) -> None:
+    """Recalculate and batch-save grades for all students on the course.
+
+    Call this after changing grade configuration to keep saved grades in sync.
+    """
+    course_name = course.course_name
+    storage_api = app.storage_api
+
+    scores_and_names = storage_api.get_all_scores_with_names(course_name)
+    grades_config = storage_api.get_grades(course_name)
+
+    large_tasks = []
+    max_score: int = 0
+    for group in storage_api.get_groups(course_name, enabled=True, started=True):
+        for task in group.tasks:
+            if task.enabled:
+                if not task.is_bonus:
+                    max_score += task.score
+                if task.is_large:
+                    large_tasks.append((task.name, task.min_score))
+
+    grades_to_save: dict[str, int] = {}
+
+    for username, (
+        student_scores_with_solved,
+        _name,
+        final_grade,
+        final_grade_override,
+        _comment,
+    ) in scores_and_names.items():
+        if final_grade_override is not None:
+            continue
+
+        student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
+        total_score = sum(student_scores.values())
+        large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
+
+        row: dict[str, Any] = {
+            "total_score": total_score,
+            "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
+            "large_count": large_count,
+        }
+
+        effective_grade, _ = _calculate_effective_grade(
+            course.status,
+            grades_config,
+            row,
+            final_grade,
+            final_grade_override,
+        )
+        grades_to_save[username] = effective_grade
+
+    storage_api.batch_update_grades(course_name, grades_to_save)
+    logger.info("Recalculated all grades for course=%s (%d students)", course_name, len(grades_to_save))
 
 
 def get_database_table_data(
@@ -19,6 +121,7 @@ def get_database_table_data(
     course_name = course.course_name
     storage_api = app.storage_api
     scores_and_names = storage_api.get_all_scores_with_names(course_name)
+    grades_config = storage_api.get_grades(course_name)
 
     all_tasks = []
     large_tasks = []
@@ -34,7 +137,13 @@ def get_database_table_data(
 
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
-    for username, (student_scores_with_solved, name, final_grade, final_grade_override, comment) in scores_and_names.items():
+    for username, (
+        student_scores_with_solved,
+        name,
+        final_grade,
+        final_grade_override,
+        comment,
+    ) in scores_and_names.items():
         # student_scores_with_solved = {task_name: (score, is_solved)}
         student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
         total_score = sum(student_scores.values())
@@ -65,21 +174,15 @@ def get_database_table_data(
                 }
             )
 
-        # Determine effective grade:
-        # - If override exists, use it
-        # - Otherwise, recalculate and save (allows downgrade in IN_PROGRESS, but not in DORESHKA/ALL_TASKS_ISSUED)
-        if final_grade_override is not None:
-            effective_grade = final_grade_override
-        else:
-            try:
-                effective_grade = storage_api.calculate_and_save_grade(course_name, username, row)
-            except Exception:
-                effective_grade = final_grade if final_grade is not None else 0
-
+        effective_grade, grade_is_override = _calculate_effective_grade(
+            course.status,
+            grades_config,
+            row,
+            final_grade,
+            final_grade_override,
+        )
         row["grade"] = effective_grade
-
-        # Add override indicator using already loaded data
-        row["grade_is_override"] = final_grade_override is not None
+        row["grade_is_override"] = grade_is_override
 
         table_data["students"].append(row)
         table_data["max_score"] = max_score
