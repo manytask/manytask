@@ -92,9 +92,6 @@ class StorageApi(ABC):
     ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None, str | None]]: ...
 
     @abstractmethod
-    def get_student_comment(self, course_name: str, username: str) -> str | None: ...
-
-    @abstractmethod
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
 
     @abstractmethod
