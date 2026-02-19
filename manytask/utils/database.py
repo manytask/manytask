@@ -34,7 +34,13 @@ def get_database_table_data(
 
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
-    for username, (student_scores_with_solved, name, final_grade, final_grade_override, comment) in scores_and_names.items():
+    for username, (
+        student_scores_with_solved,
+        name,
+        final_grade,
+        final_grade_override,
+        comment,
+    ) in scores_and_names.items():
         # student_scores_with_solved = {task_name: (score, is_solved)}
         student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
         total_score = sum(student_scores.values())
