@@ -1,61 +1,8 @@
-import logging
 from typing import Any
 
 from manytask.course import Course
 from manytask.database import calculate_effective_grade
 from manytask.main import CustomFlask
-
-logger = logging.getLogger(__name__)
-
-
-def recalculate_all_grades(app: CustomFlask, course: Course) -> None:
-    """Recalculate and batch-save grades for all students on the course.
-
-    Call this after changing grade configuration to keep saved grades in sync.
-    """
-    course_name = course.course_name
-    storage_api = app.storage_api
-
-    scores_and_names = storage_api.get_all_scores_with_names(course_name)
-    grades_config = storage_api.get_grades(course_name)
-
-    large_tasks = []
-    max_score: int = 0
-    for group in storage_api.get_groups(course_name, enabled=True, started=True):
-        for task in group.tasks:
-            if task.enabled:
-                if not task.is_bonus:
-                    max_score += task.score
-                if task.is_large:
-                    large_tasks.append((task.name, task.min_score))
-
-    grades_to_save: dict[str, int] = {}
-
-    for username, (
-        student_scores_with_solved,
-        _name,
-        final_grade,
-        final_grade_override,
-        _comment,
-    ) in scores_and_names.items():
-        if final_grade_override is not None:
-            continue
-
-        student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
-        total_score = sum(student_scores.values())
-        large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
-
-        row: dict[str, Any] = {
-            "total_score": total_score,
-            "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
-            "large_count": large_count,
-        }
-
-        effective_grade = calculate_effective_grade(course.status, grades_config, row, final_grade)
-        grades_to_save[username] = effective_grade
-
-    storage_api.batch_update_grades(course_name, grades_to_save)
-    logger.info("Recalculated all grades for course=%s (%d students)", course_name, len(grades_to_save))
 
 
 def get_database_table_data(
