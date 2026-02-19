@@ -1,53 +1,11 @@
 import logging
 from typing import Any
 
-from manytask.course import Course, CourseStatus
+from manytask.course import Course
+from manytask.database import calculate_effective_grade
 from manytask.main import CustomFlask
 
 logger = logging.getLogger(__name__)
-
-
-def _calculate_effective_grade(
-    course_status: CourseStatus,
-    grades_config: Any,
-    row: dict[str, Any],
-    final_grade: int | None,
-    final_grade_override: int | None,
-) -> tuple[int, bool]:
-    """Calculate effective grade for a student without DB access.
-
-    Reproduces the logic of DataBaseApi.calculate_and_save_grade but as a pure function.
-
-    Returns (effective_grade, grade_is_override).
-    """
-    if final_grade_override is not None:
-        return final_grade_override, True
-
-    if course_status == CourseStatus.FINISHED:
-        return (final_grade if final_grade is not None else 0), False
-
-    try:
-        calculated_grade = grades_config.evaluate(row)
-        if calculated_grade is None:
-            calculated_grade = 0
-    except ValueError:
-        calculated_grade = 0
-
-    freeze_statuses = {CourseStatus.DORESHKA, CourseStatus.ALL_TASKS_ISSUED}
-
-    if course_status in freeze_statuses:
-        capped_grade = calculated_grade
-        if course_status == CourseStatus.DORESHKA:
-            capped_grade = min(calculated_grade, 3)
-
-        if final_grade is not None:
-            effective_grade = max(final_grade, capped_grade)
-        else:
-            effective_grade = capped_grade
-    else:
-        effective_grade = calculated_grade
-
-    return effective_grade, False
 
 
 def recalculate_all_grades(app: CustomFlask, course: Course) -> None:
@@ -93,13 +51,7 @@ def recalculate_all_grades(app: CustomFlask, course: Course) -> None:
             "large_count": large_count,
         }
 
-        effective_grade, _ = _calculate_effective_grade(
-            course.status,
-            grades_config,
-            row,
-            final_grade,
-            final_grade_override,
-        )
+        effective_grade = calculate_effective_grade(course.status, grades_config, row, final_grade)
         grades_to_save[username] = effective_grade
 
     storage_api.batch_update_grades(course_name, grades_to_save)
@@ -174,13 +126,15 @@ def get_database_table_data(
                 }
             )
 
-        effective_grade, grade_is_override = _calculate_effective_grade(
-            course.status,
-            grades_config,
-            row,
-            final_grade,
-            final_grade_override,
-        )
+        if final_grade_override is not None:
+            effective_grade = final_grade_override
+            grade_is_override = True
+        else:
+            effective_grade = calculate_effective_grade(
+                course.status, grades_config, row, final_grade,
+            )
+            grade_is_override = False
+
         row["grade"] = effective_grade
         row["grade_is_override"] = grade_is_override
 
