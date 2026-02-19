@@ -283,6 +283,14 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
             manytask_version=app.manytask_version,
             error_message="Firstname and lastname must be 1-50 characters and contain only letters or hyphens.",
         )
+    # TODO: First, try to hide it better. Second, replace with getting rms user and save rms creds to DB.
+    if app.app_config.rms == "sourcecraft" and (app.rms_api.check_user_exists(session["gitlab"]["username"]) is False):
+        return render_template(
+            app.signup_finish_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message=f"Please fill your profile in SourceCraft: {app.app_config.sourcecraft_url}",
+        )
 
     app.storage_api.update_or_create_user(  # TODO: split oauth and rms creds in DB
         session["gitlab"]["username"], firstname, lastname, session["gitlab"]["user_id"]

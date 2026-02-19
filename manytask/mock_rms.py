@@ -204,6 +204,13 @@ class MockRmsApi(RmsApi):
         # For testing, return last registered user
         return self.users[self.last_user]
 
+    def check_user_exists(self, username: str) -> bool:
+        try:
+            self.get_rms_user_by_username(username)
+            return True
+        except RmsApiException:
+            return False
+
     def create_course_group(
         self,
         parent_group_id: int | None,

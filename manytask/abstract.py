@@ -379,6 +379,9 @@ class RmsApi(ABC):
     ) -> RmsUser: ...
 
     @abstractmethod
+    def check_user_exists(self, username: str) -> bool: ...
+
+    @abstractmethod
     def create_course_group(
         self,
         parent_group_id: int | None,

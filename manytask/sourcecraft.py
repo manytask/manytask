@@ -63,12 +63,12 @@ class SourceCraftApi(RmsApi):
     def _get_iam_token(self) -> str:
         response = requests.post(
             f"{self._iam_api_url}/tokens",
-            data={
+            json={
                 "yandexPassportOauthToken": self._admin_token,
             },
         )
         if response.status_code != HTTPStatus.OK:
-            raise RmsApiException(f"Failed to get IAM token: {response.json()}")
+            raise RmsApiException(f"Failed to get IAM token: {response.text}")
         return response.json()["iamToken"]
 
     @property
@@ -341,11 +341,20 @@ class SourceCraftApi(RmsApi):
         logger.info("Getting authenticated user from OAuth token")
         raise NotImplementedError("get_authenticated_rms_user method not implemented yet")
 
+    def check_user_exists(self, username: str) -> bool:
+        try:
+            self._get_user_by_yandex_login(username)
+            return True
+        except RmsApiException as e:
+            logger.error(f"Failed to check if user exists: {e}")
+            return False
+
     def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:
         cloud_id = self._get_cloud_id_by_yandex_login(auth_username)
         response = self._get_user_profile(f"cloud-id:{cloud_id}")
         if response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to get user profile: {response.json()}")
+
         return self._unmarshal_user_profile(response.json())
 
     def _get_cloud_id_by_yandex_login(self, yandex_login: str) -> str:
@@ -359,7 +368,7 @@ class SourceCraftApi(RmsApi):
 
     def _get_user_profile(self, identity: str) -> requests.Response:
         return requests.get(
-            f"{self._iam_api_url}/users/{identity}",
+            f"{self._api_url}/users/{identity}",
             headers=self._request_headers,
         )
 
