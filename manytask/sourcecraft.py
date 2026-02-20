@@ -22,6 +22,7 @@ class SourceCraftConfig:
     api_url: str
     admin_token: str
     org_slug: str
+    iam_api_url: str = "https://iam.api.cloud.yandex.net/iam/v1"
     dry_run: bool = False
 
 
@@ -39,6 +40,7 @@ class SourceCraftApi(RmsApi):
         self.dry_run = config.dry_run
         self._base_url = config.base_url
         self._api_url = config.api_url
+        self._iam_api_url = config.iam_api_url
         self._admin_token = config.admin_token
         self._org_slug = config.org_slug
 
@@ -60,13 +62,13 @@ class SourceCraftApi(RmsApi):
 
     def _get_iam_token(self) -> str:
         response = requests.post(
-            "https://iam.api.cloud.yandex.net/iam/v1/tokens",
-            data={
+            f"{self._iam_api_url}/tokens",
+            json={
                 "yandexPassportOauthToken": self._admin_token,
             },
         )
         if response.status_code != HTTPStatus.OK:
-            raise RmsApiException(f"Failed to get IAM token: {response.json()}")
+            raise RmsApiException(f"Failed to get IAM token: {response.text}")
         return response.json()["iamToken"]
 
     @property
@@ -109,8 +111,14 @@ class SourceCraftApi(RmsApi):
         self,
         repo_slug: str,
         role: str,
-        user_id: int,
+        username: str,
     ) -> requests.Response:
+        # user_id = self._get_user_by_yandex_login(username).id
+        cloud_id = self._get_cloud_id_by_yandex_login(username)
+        response = self._get_user_profile(f"cloud-id:{cloud_id}")
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get user profile: {response.json()}")
+        user_id = response.json()["id"]
         url = f"{self._api_url}/{self._org_slug}/{repo_slug}/roles"
         data: dict[str, Any] = {
             "subject_roles": [
@@ -264,7 +272,7 @@ class SourceCraftApi(RmsApi):
         if response.status_code != HTTPStatus.CREATED:
             raise RmsApiException(f"Failed to create repo: {response.json()}")
 
-        response = self._add_repo_role(student_repo_slug, "developer", rms_user.id)
+        response = self._add_repo_role(student_repo_slug, "developer", rms_user.username)
         if response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to add repo role: {response.json()}")
 
@@ -309,7 +317,7 @@ class SourceCraftApi(RmsApi):
         self,
         user_id: int,
     ) -> RmsUser:
-        stored_user: StoredUser | None = self._storage_api.get_stored_user_by_id(user_id)
+        stored_user: StoredUser | None = self._storage_api.get_stored_user_by_rms_id(user_id)
         if stored_user is None:
             raise RmsApiException(f"User with id {user_id} not found")
         return stored_user.rms_identity
@@ -332,6 +340,45 @@ class SourceCraftApi(RmsApi):
         """
         logger.info("Getting authenticated user from OAuth token")
         raise NotImplementedError("get_authenticated_rms_user method not implemented yet")
+
+    def check_user_exists(self, username: str) -> bool:
+        try:
+            self._get_user_by_yandex_login(username)
+            return True
+        except RmsApiException as e:
+            logger.error(f"Failed to check if user exists: {e}")
+            return False
+
+    def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:
+        cloud_id = self._get_cloud_id_by_yandex_login(auth_username)
+        response = self._get_user_profile(f"cloud-id:{cloud_id}")
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get user profile: {response.json()}")
+
+        return self._unmarshal_user_profile(response.json())
+
+    def _get_cloud_id_by_yandex_login(self, yandex_login: str) -> str:
+        response = requests.get(
+            f"{self._iam_api_url}/yandexPassportUserAccounts:byLogin?login={yandex_login}",
+            headers=self._request_headers,
+        )
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.json()}")
+        return response.json()["id"]
+
+    def _get_user_profile(self, identity: str) -> requests.Response:
+        return requests.get(
+            f"{self._api_url}/users/{identity}",
+            headers=self._request_headers,
+        )
+
+    def _unmarshal_user_profile(self, user_profile: dict[str, Any]) -> RmsUser:
+        return RmsUser(
+            # id=user_profile["id"],
+            id=123,  # TODO: sourcecraft has UUID as public user ID, can't fit it into int
+            username=user_profile["username"],
+            name=user_profile["display_name"],
+        )
 
     def create_namespace_group(
         self,

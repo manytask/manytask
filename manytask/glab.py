@@ -564,6 +564,13 @@ class GitLabApi(RmsApi, AuthApi):
         response.raise_for_status()
         return self._construct_rms_user(response.json())
 
+    def check_user_exists(self, username: str) -> bool:
+        try:
+            self.get_rms_user_by_username(username)
+            return True
+        except RmsApiException:
+            return False
+
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"
 
