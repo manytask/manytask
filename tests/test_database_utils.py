@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import pytest
 from flask import Flask
 
+from manytask.course import CourseStatus
 from manytask.mock_rms import MockRmsApi
 from manytask.utils.database import get_database_table_data
 from tests.constants import MAX_SCORE, SCORES, STUDENT_1, STUDENT_2, STUDENT_DATA, TASK_1, TASK_2, TASK_3, TASK_LARGE
@@ -90,9 +91,6 @@ def app():  # noqa: C901
         def get_now_with_timezone(self, course_name):
             return datetime.datetime.now() + datetime.timedelta(hours=1)
 
-        def calculate_and_save_grade(self, _course_name, _username, row):
-            return self.grades_config.evaluate(row)
-
         @staticmethod
         def get_all_scores_with_names(_course_name):
             return {
@@ -127,6 +125,7 @@ def app():  # noqa: C901
                 course_name: str = "test_course"
                 gitlab_course_group: str = "test_course_group"
                 gitlab_course_students_group: str = "test_course_students_group"
+                status: CourseStatus = CourseStatus.IN_PROGRESS
 
             return Course()
 

@@ -49,6 +49,45 @@ class TaskDisabledError(Exception):
     pass
 
 
+def calculate_effective_grade(
+    course_status: CourseStatus,
+    grades_config: ManytaskFinalGradeConfig,
+    student_scores_data: dict[str, Any],
+    saved_grade: int | None,
+) -> int:
+    """Calculate effective grade for a student. Pure function, no DB access.
+
+    Logic:
+    1. If course is FINISHED, return saved grade (frozen).
+    2. Calculate grade from scores using grades_config.evaluate().
+    3. In DORESHKA: cap at 3, then take max(saved, capped) to prevent downgrade.
+    4. In ALL_TASKS_ISSUED: take max(saved, calculated) to prevent downgrade.
+    5. Otherwise (IN_PROGRESS): return calculated grade as-is (downgrade allowed).
+    """
+    if course_status == CourseStatus.FINISHED:
+        return saved_grade if saved_grade is not None else 0
+
+    try:
+        calculated_grade = grades_config.evaluate(student_scores_data)
+        if calculated_grade is None:
+            calculated_grade = 0
+    except ValueError:
+        calculated_grade = 0
+
+    freeze_statuses = {CourseStatus.DORESHKA, CourseStatus.ALL_TASKS_ISSUED}
+
+    if course_status in freeze_statuses:
+        capped_grade = calculated_grade
+        if course_status == CourseStatus.DORESHKA:
+            capped_grade = min(calculated_grade, 3)
+
+        if saved_grade is not None:
+            return max(saved_grade, capped_grade)
+        return capped_grade
+
+    return calculated_grade
+
+
 @dataclass
 class DatabaseConfig:
     """Configuration for Database connection and settings."""
@@ -2294,13 +2333,8 @@ class DataBaseApi(StorageApi):
     ) -> int:
         """Calculate and save final grade for a student.
 
-        Logic:
-        1. Calculate grade from scores using grade config
-        2. If course is in DORESHKA status:
-           - Cap new grade at 3 (satisfactory)
-           - Take max of (saved grade, capped grade) to avoid downgrade
-        3. Otherwise, save calculated grade as is
-        4. Override is NOT touched by this method
+        Delegates calculation to calculate_effective_grade() and persists the result.
+        Override is NOT touched by this method.
 
         :param course_name: course name
         :param username: student username
@@ -2311,52 +2345,21 @@ class DataBaseApi(StorageApi):
             try:
                 course = self._get(session, models.Course, name=course_name)
                 user_on_course = self._get_or_create_user_on_course(session, username, course)
-
-                if course.status == CourseStatus.FINISHED:
-                    return user_on_course.final_grade if user_on_course.final_grade is not None else 0
-
-                # Get grade configuration from the same session to avoid nested session closes
                 grades_config = DataBaseApi._build_grades_config(course)
 
-                # Calculate grade from scores
-                try:
-                    calculated_grade = grades_config.evaluate(student_scores_data)
-                    if calculated_grade is None:
-                        calculated_grade = 0
-                except ValueError:
-                    logger.warning(f"Failed to calculate grade for {username} in {course_name}")
-                    calculated_grade = 0
+                final_grade = calculate_effective_grade(
+                    course.status,
+                    grades_config,
+                    student_scores_data,
+                    user_on_course.final_grade,
+                )
 
-                freeze_statuses = {CourseStatus.DORESHKA, CourseStatus.ALL_TASKS_ISSUED}
-
-                # Apply non-downgrade logic for DORESHKA / ALL_TASKS_ISSUED
-                if course.status in freeze_statuses:
-                    capped_grade = calculated_grade
-                    if course.status == CourseStatus.DORESHKA:
-                        logger.debug(f"Course {course_name} is in DORESHKA mode")
-                        capped_grade = min(calculated_grade, 3)
-
-                    # If student already has a saved grade, don't downgrade
-                    if user_on_course.final_grade is not None:
-                        final_grade = max(user_on_course.final_grade, capped_grade)
-                        logger.debug(
-                            f"{course.status.value.upper()}: kept higher grade for {username}: "
-                            f"saved={user_on_course.final_grade}, new={capped_grade}, result={final_grade}"
-                        )
-                    else:
-                        final_grade = capped_grade
-                        logger.debug(f"{course.status.value.upper()}: first grade for {username}: {final_grade}")
-                else:
-                    # Normal mode - just save calculated grade (downgrade allowed)
-                    final_grade = calculated_grade
-
-                # Save final_grade (do NOT touch final_grade_override)
                 user_on_course.final_grade = final_grade
                 session.commit()
 
                 logger.info(
                     f"Calculated and saved grade for {username} in {course_name}: "
-                    f"final_grade={final_grade} (calculated={calculated_grade}, status={course.status.value})"
+                    f"final_grade={final_grade} (status={course.status.value})"
                 )
 
                 return final_grade
@@ -2364,6 +2367,96 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
+
+    def recalculate_all_grades(self, course_name: str) -> None:
+        """Recalculate and save grades for all students on the course.
+
+        Call after changing grade configuration to keep saved grades in sync.
+        Skips students with final_grade_override.
+        """
+        scores_and_names = self.get_all_scores_with_names(course_name)
+        grades_config = self.get_grades(course_name)
+        course = self.get_course(course_name)
+        if course is None:
+            raise ValueError(f"Course {course_name} not found")
+
+        large_tasks = []
+        max_score: int = 0
+        for group in self.get_groups(course_name, enabled=True, started=True):
+            for task in group.tasks:
+                if task.enabled:
+                    if not task.is_bonus:
+                        max_score += task.score
+                    if task.is_large:
+                        large_tasks.append((task.name, task.min_score))
+
+        grades_to_save: dict[str, int] = {}
+
+        for username, (
+            student_scores_with_solved,
+            _name,
+            final_grade,
+            final_grade_override,
+            _comment,
+        ) in scores_and_names.items():
+            if final_grade_override is not None:
+                continue
+
+            student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
+            total_score = sum(student_scores.values())
+            large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
+
+            row: dict[str, Any] = {
+                "total_score": total_score,
+                "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
+                "large_count": large_count,
+            }
+
+            grades_to_save[username] = calculate_effective_grade(
+                course.status,
+                grades_config,
+                row,
+                final_grade,
+            )
+
+        self._batch_update_grades(course_name, grades_to_save)
+        logger.info(f"Recalculated all grades for {course_name} ({len(grades_to_save)} students)")
+
+    def _batch_update_grades(self, course_name: str, grades: dict[str, int]) -> None:
+        """Batch update final_grade for multiple students in a single transaction.
+
+        Does NOT touch final_grade_override.
+
+        :param course_name: course name
+        :param grades: dict mapping username to new final_grade
+        """
+        if not grades:
+            return
+
+        with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+
+            user_on_courses = (
+                session.query(UserOnCourse)
+                .join(User, User.id == UserOnCourse.user_id)
+                .filter(
+                    UserOnCourse.course_id == course.id,
+                    User.username.in_(grades.keys()),
+                )
+                .all()
+            )
+
+            username_to_uoc = {}
+            for uoc in user_on_courses:
+                username_to_uoc[uoc.user.username] = uoc
+
+            for username, grade in grades.items():
+                matched_uoc = username_to_uoc.get(username)
+                if matched_uoc is not None:
+                    matched_uoc.final_grade = grade
+
+            session.commit()
+            logger.info(f"Batch updated grades for {len(grades)} students in {course_name}")
 
     def get_effective_grade(self, course_name: str, username: str) -> int:
         """Get effective grade for student (override if exists, otherwise final_grade).
