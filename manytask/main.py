@@ -180,10 +180,16 @@ def _database_storage_setup() -> abstract.StorageApi:
     if instance_admin_username is None:
         raise EnvironmentError("Unable to find INITIAL_INSTANCE_ADMIN env")
 
+    if app.debug:
+        rms_user = abstract.RmsUser(id=-1, username="username", name="First Last")
+    else:
+        rms_user = app.rms_api.get_rms_user_by_username(instance_admin_username)
+
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
             instance_admin_username=instance_admin_username,
+            instance_admin_rms_id=rms_user.id,
             apply_migrations=apply_migrations,
         )
     )
