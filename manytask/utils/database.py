@@ -1,6 +1,7 @@
 from typing import Any
 
 from manytask.course import Course
+from manytask.database import calculate_effective_grade
 from manytask.main import CustomFlask
 
 
@@ -19,6 +20,7 @@ def get_database_table_data(
     course_name = course.course_name
     storage_api = app.storage_api
     scores_and_names = storage_api.get_all_scores_with_names(course_name)
+    grades_config = storage_api.get_grades(course_name)
 
     all_tasks = []
     large_tasks = []
@@ -71,21 +73,20 @@ def get_database_table_data(
                 }
             )
 
-        # Determine effective grade:
-        # - If override exists, use it
-        # - Otherwise, recalculate and save (allows downgrade in IN_PROGRESS, but not in DORESHKA/ALL_TASKS_ISSUED)
         if final_grade_override is not None:
             effective_grade = final_grade_override
+            grade_is_override = True
         else:
-            try:
-                effective_grade = storage_api.calculate_and_save_grade(course_name, username, row)
-            except Exception:
-                effective_grade = final_grade if final_grade is not None else 0
+            effective_grade = calculate_effective_grade(
+                course.status,
+                grades_config,
+                row,
+                final_grade,
+            )
+            grade_is_override = False
 
         row["grade"] = effective_grade
-
-        # Add override indicator using already loaded data
-        row["grade_is_override"] = final_grade_override is not None
+        row["grade_is_override"] = grade_is_override
 
         table_data["students"].append(row)
         table_data["max_score"] = max_score
