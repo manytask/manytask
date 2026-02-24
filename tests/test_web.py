@@ -68,6 +68,7 @@ def app(mock_storage_api):
     app.favicon = "test_favicon"
     app.signup_template = "signup.html"
     app.signup_finish_template = "signup_finish.html"
+    app.create_course_template = "create_course.html"
     app.app_config = LocalConfig.from_env()  # TODO: init with test data instead of env
     return app
 
