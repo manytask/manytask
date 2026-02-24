@@ -2439,6 +2439,7 @@ class DataBaseApi(StorageApi):
             user_on_courses = (
                 session.query(UserOnCourse)
                 .join(User, User.id == UserOnCourse.user_id)
+                .options(joinedload(UserOnCourse.user))
                 .filter(
                     UserOnCourse.course_id == course.id,
                     User.username.in_(grades.keys()),
