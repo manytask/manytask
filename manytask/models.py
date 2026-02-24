@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
+from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship, validates
 from sqlalchemy.types import TypeDecorator
@@ -152,7 +152,7 @@ class User(Base):
     first_name: Mapped[str]
     last_name: Mapped[str]
     rms_id: Mapped[int] = mapped_column(unique=True)
-    auth_id: Mapped[int] = mapped_column(unique=True)
+    auth_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     is_instance_admin: Mapped[bool] = mapped_column(default=False, server_default="false")
 
     # relationships

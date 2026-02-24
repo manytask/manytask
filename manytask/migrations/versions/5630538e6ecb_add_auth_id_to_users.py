@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("users", sa.Column("auth_id", sa.Integer(), nullable=True))
+    op.add_column("users", sa.Column("auth_id", sa.BigInteger(), nullable=True))
     op.execute("UPDATE users SET auth_id = rms_id")
     op.alter_column("users", "auth_id", nullable=False)
     op.create_unique_constraint(op.f("uq_users_auth_id"), "users", ["auth_id"])
