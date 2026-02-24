@@ -23,7 +23,7 @@ def valid_gitlab_session(user_session: SessionMixin) -> bool:
         and "version" in user_session["gitlab"]
         and user_session["gitlab"]["version"] >= SESSION_VERSION
         and "username" in user_session["gitlab"]
-        and "user_id" in user_session["gitlab"]
+        and "user_auth_id" in user_session["gitlab"]
     )
     logger.debug("Gitlab_session_valid=%s", result)
     return result
@@ -49,7 +49,7 @@ def set_oauth_session(
     logger.debug("Setting session for user=%s, version=%s", auth_user.username, version)
     result: dict[str, Any] = {
         "username": auth_user.username,
-        "user_id": auth_user.id,
+        "user_auth_id": auth_user.id,
         "version": version,
     }
     if oauth_tokens:
@@ -94,14 +94,13 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     """Process oauth2 callback with code for auth, if success set auth session and sync user's data to database"""
 
     try:
-        # This is where the oath_api should be used
         gitlab_oauth_token = oauth.gitlab.authorize_access_token()
         token = gitlab_oauth_token["access_token"]
         logger.info("OAuth token received")
 
         auth_user = app.auth_api.get_authenticated_user(token)
     except Exception:
-        logger.error("Gitlab authorization failed", exc_info=True)
+        logger.error("OAuth authorization failed", exc_info=True)
         return redirect(url_for("root.index"))
 
     session.pop("username", None)
@@ -114,8 +113,6 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
 
 def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     """Getting student and update session"""
-
-    # This is where the auth_api should be user instead of gitlab/rms
     auth_user = app.auth_api.get_authenticated_user(session["gitlab"]["access_token"])
     logger.info("Authenticated user=%s", auth_user.username)
     session["gitlab"].update(set_oauth_session(auth_user))

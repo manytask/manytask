@@ -25,8 +25,8 @@ class StoredUser:
     first_name: str
     last_name: str
     rms_id: int
+    auth_id: int
     instance_admin: bool = False
-    # we can add more fields that we store
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
@@ -61,6 +61,12 @@ class StorageApi(ABC):
     def get_stored_user_by_rms_id(
         self,
         rms_id: int,
+    ) -> StoredUser | None: ...
+
+    @abstractmethod
+    def get_stored_user_by_auth_id(
+        self,
+        auth_id: int,
     ) -> StoredUser | None: ...
 
     @abstractmethod

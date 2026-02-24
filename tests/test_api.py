@@ -26,6 +26,7 @@ from tests.constants import (
     GITLAB_BASE_URL,
     INVALID_TASK_NAME,
     TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
+    TEST_AUTH_ID,
     TEST_COURSE_NAME,
     TEST_EMAIL,
     TEST_FIRST_NAME,
@@ -114,6 +115,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 first_name=TEST_FIRST_NAME,
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
+                auth_id=TEST_AUTH_ID,
                 instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
@@ -271,7 +273,7 @@ def authenticated_client(app, mock_gitlab_oauth):
             session["gitlab"] = {
                 "version": 1.5,
                 "username": TEST_USERNAME,
-                "user_id": TEST_USER_ID,
+                "user_auth_id": TEST_USER_ID,
                 "access_token": "",
                 "refresh_token": "",
             }

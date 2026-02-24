@@ -13,6 +13,9 @@ from tests.constants import (
     TEST_LAST_NAME,
     TEST_LAST_NAME_1,
     TEST_LAST_NAME_2,
+    TEST_AUTH_ID,
+    TEST_AUTH_ID_1,
+    TEST_AUTH_ID_2,
     TEST_RMS_ID,
     TEST_RMS_ID_1,
     TEST_RMS_ID_2,
@@ -197,13 +200,13 @@ def test_get_courses_names_with_courses(
     db_api_with_two_initialized_courses, edited_first_course_config, edited_second_course_config
 ):
     db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID
+        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
     )
     db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1
+        TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1, TEST_AUTH_ID_1
     )
     db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2
+        TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2, TEST_AUTH_ID_2
     )
 
     assert db_api_with_two_initialized_courses.get_user_courses_names_with_statuses(TEST_USERNAME) == []

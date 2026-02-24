@@ -55,6 +55,7 @@ def app_with_db(engine, session, postgres_container):
         first_name="Regular",
         last_name="User",
         rms_id=2,
+        auth_id=2,
         is_instance_admin=False,
     )
     session.add(regular_user)
@@ -65,6 +66,7 @@ def app_with_db(engine, session, postgres_container):
         first_name="Namespace",
         last_name="Admin",
         rms_id=3,
+        auth_id=3,
         is_instance_admin=False,
     )
     session.add(namespace_admin_user)
@@ -75,6 +77,7 @@ def app_with_db(engine, session, postgres_container):
         first_name="PM",
         last_name="User",
         rms_id=4,
+        auth_id=4,
         is_instance_admin=False,
     )
     session.add(pm_user)
@@ -98,7 +101,7 @@ def mock_session_admin(session):
     return {
         "gitlab": {
             "username": "admin",
-            "user_id": admin.rms_id,
+            "user_auth_id": admin.auth_id,
             "version": 1.5,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
@@ -117,7 +120,7 @@ def mock_session_namespace_admin(session):
     return {
         "gitlab": {
             "username": "namespace_admin_user",
-            "user_id": user.rms_id,
+            "user_auth_id": user.auth_id,
             "version": 1.5,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
@@ -136,7 +139,7 @@ def mock_session_pm(session):
     return {
         "gitlab": {
             "username": "pm_user",
-            "user_id": user.rms_id,
+            "user_auth_id": user.auth_id,
             "version": 1.5,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
@@ -155,7 +158,7 @@ def mock_session_regular(session):
     return {
         "gitlab": {
             "username": "regular_user",
-            "user_id": user.rms_id,
+            "user_auth_id": user.auth_id,
             "version": 1.5,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",

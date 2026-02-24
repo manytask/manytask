@@ -525,8 +525,8 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     course = __get_course_or_not_found(storage_api, course_name)
 
     if auth_method == AuthMethod.SESSION:
-        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-        is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        username = session["gitlab"]["username"]
+        is_course_admin = storage_api.check_if_course_admin(course.course_name, username)
     else:
         is_course_admin = True
 
@@ -715,9 +715,9 @@ def create_namespace() -> ResponseReturnValue:
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
         logger.info("GitLab group created with id=%s", gitlab_group_id)
 
-        creator_rms_id = session["gitlab"]["user_id"]
-        rms_api.add_user_to_namespace_group(gitlab_group_id, creator_rms_id)
-        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", creator_rms_id, gitlab_group_id)
+        stored_user = storage_api.get_stored_user_by_username(username)
+        rms_api.add_user_to_namespace_group(gitlab_group_id, stored_user.rms_id)
+        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", stored_user.rms_id, gitlab_group_id)
 
         namespace = storage_api.create_namespace(
             name=name,

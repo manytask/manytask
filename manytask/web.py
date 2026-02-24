@@ -215,10 +215,11 @@ def signup() -> ResponseReturnValue:
         )
 
         app.storage_api.update_or_create_user(
-            username,
-            validated_firstname,
-            validated_lastname,
-            rms_user.id,
+            username=username,
+            first_name=validated_firstname,
+            last_name=validated_lastname,
+            rms_id=rms_user.id,
+            auth_id=rms_user.id,
         )
 
     # render template with error... if error
@@ -245,7 +246,9 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         logger.warning("User already has username=%s in session", session["profile"]["username"])
         return redirect(url_for("root.index"))
 
-    stored_user_or_none = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])
+    stored_user_or_none = app.storage_api.get_stored_user_by_auth_id(
+        auth_id=session["gitlab"]["user_auth_id"],
+    )
     if stored_user_or_none is not None:
         session.setdefault("profile", {}).update(
             set_client_profile_session(ClientProfile(session["gitlab"]["username"]))
@@ -278,7 +281,11 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         )
 
     app.storage_api.update_or_create_user(
-        session["gitlab"]["username"], firstname, lastname, session["gitlab"]["user_id"]
+        username=session["gitlab"]["username"],
+        first_name=firstname,
+        last_name=lastname,
+        rms_id=session["gitlab"]["user_auth_id"],
+        auth_id=session["gitlab"]["user_auth_id"],
     )
     session.setdefault("profile", {}).update(set_client_profile_session(ClientProfile(session["gitlab"]["username"])))
     return redirect(url_for("root.index"))
