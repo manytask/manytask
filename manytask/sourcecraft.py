@@ -148,16 +148,10 @@ class SourceCraftApi(RmsApi):
         :param course_group: strig in form of "namespace/course_group"
         :param course_public_repo: string in form of "namespace/course_group/public_repo"
         """
-
-        course_public_repo = course_public_repo.split("/")[-1]
-        course_group = course_group.split("/")[-1]
-
-        repo_slug = f"{course_group}-{course_public_repo}"
-
-        logger.info(f"Creating public repo: {repo_slug}")
+        logger.info(f"Creating public repo: {course_public_repo}")
 
         response = self._create_repo(
-            repo_slug=repo_slug,
+            repo_slug=course_public_repo,
             visibility="public",
             template_id=None,
         )
@@ -165,7 +159,7 @@ class SourceCraftApi(RmsApi):
             raise RmsApiException(f"Failed to create repo: {response.json()}")
 
         data: dict[str, Any] = {"template_type": "organizational"}
-        response = self._update_repo(repo_slug, data)
+        response = self._update_repo(course_public_repo, data)
         if response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to create repo: {response.json()}")
 
@@ -180,8 +174,6 @@ class SourceCraftApi(RmsApi):
         """
         logger.info("Will skip students group creation, SourceCraft doesn't have user groups yet")
 
-    # WARN: it is expected that project_group is smth like "namespace/course_group/students_group"
-    # because that is the only way this method is used right now.
     def check_project_exists(
         self,
         project_name: str,
@@ -189,17 +181,16 @@ class SourceCraftApi(RmsApi):
     ) -> bool:
         """Check if a project exists in the given group.
 
-        :param project_name: repo slug
-        :param project_group: string in form of "namespace/course_group/students_group"
+        :param project_name: string
+        :param project_group: string
         :return: True if repo exists, False otherwise
         """
-        group = project_group.split("/")[-2]
-        response = self._get_repo(f"{group}-{project_name}")
+        response = self._get_repo(f"{project_group}-{project_name}")
 
         if response.status_code == HTTPStatus.OK:
             return True
         elif response.status_code == HTTPStatus.NOT_FOUND:
-            logger.info(f"Project {group}-{project_name} not found")
+            logger.info(f"Project {project_group}-{project_name} not found")
             return False
         else:
             raise RmsApiException(f"Failed to check if project exists: {response.json()}")
@@ -249,14 +240,11 @@ class SourceCraftApi(RmsApi):
         """
         logger.info(f"Creating repo for user {rms_user.username}")
 
-        course_public_repo = course_public_repo.split("/")[-1]
-        group = course_students_group.split("/")[-2]
-        public_repo_slug = f"{group}-{course_public_repo}"
-        student_repo_slug = f"{group}-{rms_user.username}"
+        student_repo_slug = f"{course_students_group}-{self._normalize_string(rms_user.username)}"
 
-        response = self._get_repo(public_repo_slug)
+        response = self._get_repo(course_public_repo)
         if response.status_code == HTTPStatus.NOT_FOUND:
-            raise RmsApiException(f"Project {public_repo_slug} not found")
+            raise RmsApiException(f"Project {course_public_repo} not found")
         elif response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to get project: {response.json()}")
 
@@ -279,11 +267,7 @@ class SourceCraftApi(RmsApi):
         :param default_branch: Default branch name
         :return: URL to the task base directory
         """
-        # course_public_repo will be in format "group/repo", we need "group-repo" as a repo slug
-        parts = course_public_repo.split("/")
-        group = parts[-2]
-        repo_slug = parts[-1]
-        return f"{self._base_url}/{self._org_slug}/{group}-{repo_slug}?ref={default_branch}"
+        return f"{self._base_url}/{self._org_slug}/{course_public_repo}?ref={default_branch}"
 
     def get_url_for_repo(
         self,
@@ -293,11 +277,10 @@ class SourceCraftApi(RmsApi):
         """Get URL for a student's repository.
 
         :param username: Student's username
-        :param course_students_group: string in form of "namespace/course_group/students_group"
+        :param course_students_group: string
         :return: URL to the student's repository
         """
-        group = course_students_group.split("/")[-2]
-        return f"{self._base_url}/{self._org_slug}/{group}-{username}"
+        return f"{self._base_url}/{self._org_slug}/{course_students_group}-{self._normalize_string(username)}"
 
     def register_new_user(
         self,
@@ -322,26 +305,18 @@ class SourceCraftApi(RmsApi):
         # NOTE: yandex login is expected as username for now
         return self._get_user_by_yandex_login(username)
 
-    def check_user_exists(self, username: str) -> bool:
-        try:
-            self._get_user_by_yandex_login(username)
-            return True
-        except RmsApiException as e:
-            logger.error(f"Failed to check if user exists: {e}")
-            return False
-
     def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:
         cloud_id = self._get_cloud_id_by_yandex_login(auth_username)
         return self._get_user_profile(f"cloud-id:{cloud_id}")
 
     def _get_cloud_id_by_yandex_login(self, yandex_login: str) -> str:
         response = self._iam_client.get(
-            "yandexPassportUserAccounts:byLogin",
+            "./yandexPassportUserAccounts:byLogin",
             params={"login": yandex_login},
             headers=self._request_headers,
         )
         if response.status_code != HTTPStatus.OK:
-            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.json()}")
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.text}")
         return response.json()["id"]
 
     def _get_user_profile(self, identity: str) -> RmsUser:
