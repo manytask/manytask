@@ -101,8 +101,8 @@ def app():  # noqa: C901
                         TASK_LARGE: (SCORES[STUDENT_1][TASK_LARGE], True),
                     },
                     (STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]),
-                    None,  # final_grade
-                    None,  # final_grade_override
+                    5,  # final_grade
+                    3,  # final_grade_override — calculated would be 5
                     None,  # comment
                 ),
                 STUDENT_2: (
@@ -114,7 +114,7 @@ def app():  # noqa: C901
                     (STUDENT_DATA[STUDENT_2][0], STUDENT_DATA[STUDENT_2][1]),
                     None,  # final_grade
                     None,  # final_grade_override
-                    None,  # comment
+                    "needs review",  # comment
                 ),
             }
 
@@ -139,6 +139,8 @@ def test_get_database_table_data(app):
     """Test database table data without admin data (non-admin view)"""
     expected_tasks_count = 3
     expected_students_count = 2
+    expected_grades = {STUDENT_1: 3, STUDENT_2: 2}
+    expected_overrides = {STUDENT_1: True, STUDENT_2: False}
 
     with app.test_request_context():
         test_course = app.storage_api.get_course("test_course")
@@ -173,12 +175,17 @@ def test_get_database_table_data(app):
                 TASK_2: SCORES[student_id][TASK_2],
                 TASK_LARGE: SCORES[student_id][TASK_LARGE],
             }
+            assert student["grade"] == expected_grades[student_id]
+            assert student["grade_is_override"] is expected_overrides[student_id]
 
 
 def test_get_database_table_data_with_admin_data(app):
     """Test database table data with admin data (admin view)"""
     expected_tasks_count = 3
     expected_students_count = 2
+    expected_grades = {STUDENT_1: 3, STUDENT_2: 2}
+    expected_overrides = {STUDENT_1: True, STUDENT_2: False}
+    expected_comments = {STUDENT_1: None, STUDENT_2: "needs review"}
 
     with app.test_request_context():
         test_course = app.storage_api.get_course("test_course")
@@ -205,7 +212,7 @@ def test_get_database_table_data_with_admin_data(app):
             assert student["first_name"] == STUDENT_DATA[student_id][0]
             assert student["last_name"] == STUDENT_DATA[student_id][1]
             assert "repo_url" in student
-            assert "comment" in student
+            assert student["comment"] == expected_comments[student_id]
             assert student["total_score"] == SCORES[student_id]["total"]
             assert student["large_count"] == SCORES[student_id]["large_count"]
             assert student["scores"] == {
@@ -213,6 +220,8 @@ def test_get_database_table_data_with_admin_data(app):
                 TASK_2: SCORES[student_id][TASK_2],
                 TASK_LARGE: SCORES[student_id][TASK_LARGE],
             }
+            assert student["grade"] == expected_grades[student_id]
+            assert student["grade_is_override"] is expected_overrides[student_id]
 
 
 def test_get_database_table_data_no_scores(app):
