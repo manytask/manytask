@@ -1064,6 +1064,7 @@ class DataBaseApi(StorageApi):
                     first_name=user.first_name,
                     last_name=user.last_name,
                     rms_id=user.rms_id,
+                    auth_id=user.auth_id,
                     instance_admin=user.is_instance_admin,
                 )
                 for user in users

@@ -20,16 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Add column as nullable first (existing rows have no value)
     op.add_column("users", sa.Column("auth_id", sa.Integer(), nullable=True))
-
-    # 2. Backfill: for existing users, auth_id = rms_id (they were the same before this migration)
     op.execute("UPDATE users SET auth_id = rms_id")
-
-    # 3. Now set NOT NULL constraint
     op.alter_column("users", "auth_id", nullable=False)
-
-    # 4. Add unique constraint
     op.create_unique_constraint(op.f("uq_users_auth_id"), "users", ["auth_id"])
 
 
