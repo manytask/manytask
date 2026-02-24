@@ -162,7 +162,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_stored_user_by_rms_id(self, _rms_id):
             return self.stored_user
 
-        def get_stored_user_by_auth_id(self, _auth_id):
+        def get_stored_user_by_auth_id(self, auth_id):
             return self.stored_user
 
         def check_if_instance_admin(self, _username):
