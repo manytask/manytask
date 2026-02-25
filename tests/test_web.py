@@ -285,6 +285,7 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
                 }
                 sess["profile"] = {
                     "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "rms_id": TEST_RMS_ID,
                     "username": TEST_USERNAME,
                 }
             app.oauth = mock_gitlab_oauth
@@ -345,6 +346,15 @@ def test_not_ready(app):
         ):
             with client.session_transaction() as sess:
                 sess["gitlab"] = {
+                    "version": TEST_GITLAB_SESSION_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_auth_id": TEST_USER_ID,
+                    "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
+                }
+                sess["profile"] = {
+                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "rms_id": TEST_RMS_ID,
                     "username": TEST_USERNAME,
                 }
             mock_check_if_instance_admin.return_value = True
@@ -395,6 +405,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                 }
                 sess["profile"] = {
                     "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "rms_id": TEST_RMS_ID,
                     "username": TEST_USERNAME,
                 }
 
@@ -418,6 +429,11 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "access_token": TEST_TOKEN,
                     "refresh_token": TEST_TOKEN,
                 }
+                sess["profile"] = {
+                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "rms_id": TEST_RMS_ID,
+                    "username": TEST_USERNAME,
+                }
 
             app.storage_api.course_admin = True
 
@@ -437,6 +453,11 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
                     "user_auth_id": TEST_USER_ID,
                     "access_token": TEST_TOKEN,
                     "refresh_token": TEST_TOKEN,
+                }
+                sess["profile"] = {
+                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "rms_id": TEST_RMS_ID,
+                    "username": TEST_USERNAME,
                 }
             app.storage_api.course_admin = False
             app.storage_api.stored_user.instance_admin = True
@@ -559,6 +580,7 @@ def test_signup_finish_with_valid_session(app, mock_gitlab_oauth):
                 }
                 sess["profile"] = {
                     "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "rms_id": TEST_RMS_ID,
                     "username": TEST_USERNAME,
                 }
             app.oauth = mock_gitlab_oauth
@@ -633,6 +655,6 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
                 username=TEST_USERNAME,
                 first_name="Test",
                 last_name="User",
-                rms_id=TEST_USER_ID,
+                rms_id=TEST_RMS_ID,
                 auth_id=TEST_USER_ID,
             )

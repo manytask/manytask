@@ -121,10 +121,10 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             self.course_name = TEST_COURSE_NAME
             self.course_admin = False
 
-        def store_score(self, _course_name, username, task_name, update_fn):
-            old_score = self.scores.get(f"{username}_{task_name}", 0)
+        def store_score(self, _course_name, rms_id, task_name, update_fn):
+            old_score = self.scores.get(f"{rms_id}_{task_name}", 0)
             new_score = update_fn("", old_score)
-            self.scores[f"{username}_{task_name}"] = new_score
+            self.scores[f"{rms_id}_{task_name}"] = new_score
             return new_score
 
         @staticmethod
@@ -137,6 +137,11 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
         def get_all_scores(course_name, self):
             return {"test_user": self.get_scores(course_name, "test_user")}
+
+        def get_stored_user_by_username(self, username):
+            if username == self.stored_user.username:
+                return self.stored_user
+            return None
 
         def check_if_course_admin(self, _course_name, _username):
             return True
@@ -271,14 +276,15 @@ def authenticated_client(app, mock_gitlab_oauth):
         }
         with client.session_transaction() as session:
             session["gitlab"] = {
-                "version": 1.5,
+                "version": 1.6,
                 "username": TEST_USERNAME,
                 "user_auth_id": TEST_USER_ID,
                 "access_token": "",
                 "refresh_token": "",
             }
             session["profile"] = {
-                "version": 1.0,
+                "version": 1.1,
+                "rms_id": TEST_RMS_ID,
                 "username": TEST_USERNAME,
             }
         yield client
@@ -623,11 +629,16 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
         )
         with client.session_transaction() as session:
             session["gitlab"] = {
-                "version": 1.5,
+                "version": 1.6,
                 "username": rms_user.username,
-                "user_id": rms_user.id,
+                "user_auth_id": rms_user.id,
                 "access_token": "123",
                 "refresh_token": "123",
+            }
+            session["profile"] = {
+                "version": 1.1,
+                "rms_id": rms_user.id,
+                "username": rms_user.username,
             }
         response = client.get(f"/api/{TEST_COURSE_NAME}/database")
         assert response.status_code == HTTPStatus.FOUND  # Redirects to not ready page
@@ -639,9 +650,16 @@ def test_update_database_invalid_json(app, authenticated_client, mock_gitlab_oau
     rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
         session["gitlab"] = {
-            "version": 1.5,
+            "version": 1.6,
             "username": rms_user.username,
-            "user_id": rms_user.id,
+            "user_auth_id": rms_user.id,
+            "access_token": "",
+            "refresh_token": "",
+        }
+        session["profile"] = {
+            "version": 1.1,
+            "rms_id": rms_user.id,
+            "username": rms_user.username,
         }
     response = authenticated_client.post(
         f"/api/{TEST_COURSE_NAME}/database/update", data="invalid json", content_type="application/json"
@@ -655,9 +673,16 @@ def test_update_database_missing_student(app, authenticated_client, mock_gitlab_
     rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
         session["gitlab"] = {
-            "version": 1.5,
+            "version": 1.6,
             "username": rms_user.username,
-            "user_id": rms_user.id,
+            "user_auth_id": rms_user.id,
+            "access_token": "",
+            "refresh_token": "",
+        }
+        session["profile"] = {
+            "version": 1.1,
+            "rms_id": rms_user.id,
+            "username": rms_user.username,
         }
     data = {"scores": {TEST_TASK_NAME: 100}}
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=data)
@@ -715,9 +740,16 @@ def test_update_database_invalid_task(app, authenticated_client, mock_gitlab_oau
     rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
         session["gitlab"] = {
-            "version": 1.5,
+            "version": 1.6,
             "username": rms_user.username,
-            "user_id": rms_user.id,
+            "user_auth_id": rms_user.id,
+            "access_token": "",
+            "refresh_token": "",
+        }
+        session["profile"] = {
+            "version": 1.1,
+            "rms_id": rms_user.id,
+            "username": rms_user.username,
         }
     data = {
         "row_data": {
@@ -741,9 +773,16 @@ def test_update_database_invalid_score_value(app, authenticated_client, mock_git
     rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
         session["gitlab"] = {
-            "version": 1.5,
+            "version": 1.6,
             "username": rms_user.username,
-            "user_id": rms_user.id,
+            "user_auth_id": rms_user.id,
+            "access_token": "",
+            "refresh_token": "",
+        }
+        session["profile"] = {
+            "version": 1.1,
+            "rms_id": rms_user.id,
+            "username": rms_user.username,
         }
     data = {
         "row_data": {

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def valid_gitlab_session(user_session: SessionMixin) -> bool:
-    SESSION_VERSION = 1.5
+    SESSION_VERSION = 1.6
     result = (
         "gitlab" in user_session
         and "version" in user_session["gitlab"]
@@ -30,11 +30,12 @@ def valid_gitlab_session(user_session: SessionMixin) -> bool:
 
 
 def valid_client_profile_session(user_session: SessionMixin) -> bool:
-    SESSION_VERSION = 1.0
+    SESSION_VERSION = 1.1
     result = (
         "profile" in user_session
         and "version" in user_session["profile"]
         and user_session["profile"]["version"] >= SESSION_VERSION
+        and "rms_id" in user_session["profile"]
         and "username" in user_session["profile"]
     )
     logger.debug("Client_profile_session_valid=%s", result)
@@ -42,7 +43,7 @@ def valid_client_profile_session(user_session: SessionMixin) -> bool:
 
 
 def set_oauth_session(
-    auth_user: AuthenticatedUser, oauth_tokens: dict[str, str] | None = None, version: float = 1.5
+    auth_user: AuthenticatedUser, oauth_tokens: dict[str, str] | None = None, version: float = 1.6
 ) -> dict[str, Any]:
     """Set oauth creds in session for student"""
 
@@ -60,26 +61,27 @@ def set_oauth_session(
     return result
 
 
-def set_client_profile_session(client_profile: ClientProfile, version: float = 1.0) -> dict[str, Any]:
+def set_client_profile_session(client_profile: ClientProfile, version: float = 1.1) -> dict[str, Any]:
     result: dict[str, Any] = {
+        "rms_id": client_profile.rms_id,
         "username": client_profile.username,
         "version": version,
     }
     return result
 
 
-def handle_course_membership(app: CustomFlask, course: Course, username: str) -> bool | str | Response:
+def handle_course_membership(app: CustomFlask, course: Course, rms_id: int) -> bool | str | Response:
     """Checking user on course"""
 
     try:
-        if app.storage_api.check_user_on_course(course.course_name, username):
-            logger.info("User %s is on course %s", username, course.course_name)
+        if app.storage_api.check_user_on_course(course.course_name, rms_id):
+            logger.info("User rms_id=%s is on course %s", rms_id, course.course_name)
             return True
         else:
-            logger.info("No user %s on course %s", username, course.course_name)
+            logger.info("No user rms_id=%s on course %s", rms_id, course.course_name)
             return False
     except NoResultFound:
-        logger.info("User: %s not in the database", username)
+        logger.info("User rms_id=%s not in the database", rms_id)
         return False
     except Exception:
         logger.error("Failed login while working with db", exc_info=True)
@@ -196,36 +198,36 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
-        logger.info("User %s accessing course=%s", auth_user.username, course.course_name)
+        rms_id = session["profile"]["rms_id"]
+        logger.info("User %s (rms_id=%s) accessing course=%s", auth_user.username, rms_id, course.course_name)
 
-        if not can_access_course(app, auth_user.username, course.course_name):
+        if not can_access_course(app, rms_id, course.course_name):
             logger.warning(
-                "User %s attempted to access course %s without permission",
+                "User %s (rms_id=%s) attempted to access course %s without permission",
                 auth_user.username,
+                rms_id,
                 course.course_name,
             )
             abort(HTTPStatus.FORBIDDEN)
 
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
-        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
-            course.course_name, auth_user.username
-        ):
+        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(course.course_name, rms_id):
             flash("course is hidden!", "course_hidden")
             abort(redirect(url_for("root.index")))
 
-        if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
+        if not handle_course_membership(app, course, rms_id) or not app.rms_api.check_project_exists(
             project_name=auth_user.username, project_group=course.gitlab_course_students_group
         ):
-            logger.info("User %s missing membership or project", auth_user.username)
+            logger.info("User %s (rms_id=%s) missing membership or project", auth_user.username, rms_id)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_user_on_course(
             course.course_name,
-            auth_user.username,
-            app.storage_api.check_if_instance_admin(auth_user.username),
+            rms_id,
+            app.storage_api.check_if_instance_admin(rms_id),
         )
-        logger.info("Synced user %s on course %s", auth_user.username, course.course_name)
+        logger.info("Synced user rms_id=%s on course %s", rms_id, course.course_name)
 
         return f(*args, **kwargs)
 
@@ -243,8 +245,8 @@ def requires_instance_admin(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        username = session["gitlab"]["username"]
-        if not app.storage_api.check_if_instance_admin(username):
+        rms_id = session["profile"]["rms_id"]
+        if not app.storage_api.check_if_instance_admin(rms_id):
             abort(HTTPStatus.FORBIDDEN)
 
         return f(*args, **kwargs)
@@ -265,14 +267,14 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
         if app.debug:
             return f(*args, **kwargs)
 
-        username = session["profile"]["username"]
-        is_instance_admin = app.storage_api.check_if_instance_admin(username)
-        is_namespace_admin_user = is_namespace_admin(app, username)
+        rms_id = session["profile"]["rms_id"]
+        is_instance_admin = app.storage_api.check_if_instance_admin(rms_id)
+        is_namespace_admin_user = is_namespace_admin(app, rms_id)
 
         if not is_instance_admin and not is_namespace_admin_user:
             logger.warning(
-                "User %s attempted to access %s without instance admin or namespace admin privileges",
-                username,
+                "User rms_id=%s attempted to access %s without instance admin or namespace admin privileges",
+                rms_id,
                 f.__name__,
             )
             abort(HTTPStatus.FORBIDDEN)
@@ -305,13 +307,13 @@ def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., An
             if app.debug:
                 return f(*args, **kwargs)
 
-            username = session["profile"]["username"]
+            rms_id = session["profile"]["rms_id"]
             course_name = kwargs.get("course_name", None)
 
-            if not has_role(username, required_roles, app, course_name):
+            if not has_role(rms_id, required_roles, app, course_name):
                 logger.warning(
-                    "User %s attempted to access %s without required role(s): %s",
-                    username,
+                    "User rms_id=%s attempted to access %s without required role(s): %s",
+                    rms_id,
                     f.__name__,
                     required_roles,
                 )

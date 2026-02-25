@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, session
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -128,6 +128,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     app.jinja_env.globals["get_user_roles"] = get_user_roles
     app.jinja_env.globals["has_role"] = has_role
+
+    @app.context_processor
+    def inject_rms_id() -> dict[str, int | None]:
+        rms_id = session.get("profile", {}).get("rms_id")
+        return {"rms_id": rms_id}
 
     logger = logging.getLogger(__name__)
 
