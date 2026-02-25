@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from gitlab import GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
-from requests import HTTPError
 
 from manytask.abstract import RmsApiException
 from manytask.glab import GitLabApi, GitLabConfig, RmsUser
@@ -402,6 +401,7 @@ def test_get_student_not_found(gitlab):
         gitlab_api.get_rms_user_by_id(TEST_USER_ID)
 
     mock_gitlab_instance.users.get.assert_called_once_with(int(TEST_USER_ID))
+
 
 def test_get_url_for_task_base(gitlab):
     gitlab_api, _ = gitlab

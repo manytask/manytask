@@ -97,7 +97,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
                 admin_token=app.app_config.sourcecraft_admin_token,
                 org_slug=app.app_config.sourcecraft_org_slug,
             ),
-            app.storage_api,
         )
 
     elif rms == "mock":

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
 
-import requests
+import httpx
 
 from .abstract import RmsApi, RmsApiException, RmsUser
 
@@ -37,15 +37,24 @@ class SourceCraftApi(RmsApi):
         """
         self.dry_run = config.dry_run
         self._base_url = config.base_url
-        self._api_url = config.api_url
-        self._iam_api_url = config.iam_api_url
         self._admin_token = config.admin_token
         self._org_slug = config.org_slug
+
+        self._client = httpx.Client(
+            base_url=config.api_url,
+        )
+        self._iam_client = httpx.Client(
+            base_url=config.iam_api_url,
+        )
 
         self._iam_token: str | None = None
         self._iam_token_last_issued: datetime | None = None
 
         logger.info(f"Initializing SourcecraftApi with base_url: {self.base_url}")
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        kwargs.setdefault("headers", {}).update(self._request_headers)
+        return self._client.request(method, path, **kwargs)
 
     @property
     def iam_token(self) -> str:
@@ -59,8 +68,8 @@ class SourceCraftApi(RmsApi):
         return self._iam_token
 
     def _get_iam_token(self) -> str:
-        response = requests.post(
-            f"{self._iam_api_url}/tokens",
+        response = self._iam_client.post(
+            "tokens",
             json={
                 "yandexPassportOauthToken": self._admin_token,
             },
@@ -79,40 +88,35 @@ class SourceCraftApi(RmsApi):
     def _get_repo(
         self,
         repo_slug: str,
-    ) -> requests.Response:
-        url = f"{self._api_url}/{self._org_slug}/{repo_slug}"
-        return requests.get(url, headers=self._request_headers)
+    ) -> httpx.Response:
+        return self._request("GET", f"{self._org_slug}/{repo_slug}")
 
-    def _create_repo(self, repo_slug: str, visibility: str, template_id: int | None = None) -> requests.Response:
-        url = f"{self._api_url}/orgs/{self._org_slug}/repos"
-        data: dict[str, Any] = {
+    def _create_repo(self, repo_slug: str, visibility: str, template_id: int | None = None) -> httpx.Response:
+        payload: dict[str, Any] = {
             "name": repo_slug,
             "slug": repo_slug,
             "visibility": visibility,
         }
         if template_id is not None:
-            data["templating_options"] = {
+            payload["templating_options"] = {
                 "template_id": template_id,
             }
-
-        return requests.post(url, json=data, headers=self._request_headers)
+        return self._request("POST", f"orgs/{self._org_slug}/repos", json=payload)
 
     def _update_repo(
         self,
         repo_slug: str,
         data: dict[str, Any],
-    ) -> requests.Response:
-        url = f"{self._api_url}/{self._org_slug}/{repo_slug}"
-        return requests.put(url, json=data, headers=self._request_headers)
+    ) -> httpx.Response:
+        return self._request("PATCH", f"{self._org_slug}/{repo_slug}", json=data)
 
     def _add_repo_role(
         self,
         repo_slug: str,
         role: str,
         user_id: str,
-    ) -> requests.Response:
-        url = f"{self._api_url}/{self._org_slug}/{repo_slug}/roles"
-        data: dict[str, Any] = {
+    ) -> httpx.Response:
+        payload: dict[str, Any] = {
             "subject_roles": [
                 {
                     "role": role,
@@ -123,7 +127,7 @@ class SourceCraftApi(RmsApi):
                 }
             ]
         }
-        return requests.post(url, json=data, headers=self._request_headers)
+        return self._request("POST", f"{self._org_slug}/{repo_slug}/roles", json=payload)
 
     # Comment for this and all further methods with "course_group", "course_public_repo" and
     # "course_students_group" parameters:
@@ -318,21 +322,14 @@ class SourceCraftApi(RmsApi):
         # NOTE: yandex login is expected as username for now
         return self._get_user_by_yandex_login(username)
 
-    def check_user_exists(self, username: str) -> bool:
-        try:
-            self._get_user_by_yandex_login(username)
-            return True
-        except RmsApiException as e:
-            logger.error(f"Failed to check if user exists: {e}")
-            return False
-
     def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:
         cloud_id = self._get_cloud_id_by_yandex_login(auth_username)
         return self._get_user_profile(f"cloud-id:{cloud_id}")
 
     def _get_cloud_id_by_yandex_login(self, yandex_login: str) -> str:
-        response = requests.get(
-            f"{self._iam_api_url}/yandexPassportUserAccounts:byLogin?login={yandex_login}",
+        response = self._iam_client.get(
+            "yandexPassportUserAccounts:byLogin",
+            params={"login": yandex_login},
             headers=self._request_headers,
         )
         if response.status_code != HTTPStatus.OK:
@@ -340,19 +337,16 @@ class SourceCraftApi(RmsApi):
         return response.json()["id"]
 
     def _get_user_profile(self, identity: str) -> RmsUser:
-        response = requests.get(
-            f"{self._iam_api_url}/users/{identity}",
-            headers=self._request_headers,
-        )
+        response = self._request("GET", f"users/{identity}")
         if response.status_code != HTTPStatus.OK:
-            raise RmsApiException(f"Failed to get user profile: {response.json()}")
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.json()}")
         return self._unmarshal_user_profile(response.json())
 
-    def _unmarshal_user_profile(self, user_profile: dict[str, Any]) -> RmsUser:
+    def _unmarshal_user_profile(self, data: dict[str, Any]) -> RmsUser:
         return RmsUser(
-            id=user_profile["id"],
-            username=user_profile["username"],
-            name=user_profile["display_name"],
+            id=data["id"],
+            username=data["username"],
+            name=data["display_name"],
         )
 
     def create_namespace_group(
