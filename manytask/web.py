@@ -10,7 +10,7 @@ from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
-from manytask.abstract import RmsUser, StoredUser
+from manytask.abstract import RmsApiException, RmsUser, StoredUser
 from manytask.course import ManytaskDeadlinesType
 
 from .abstract import ClientProfile
@@ -273,23 +273,33 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
             manytask_version=app.manytask_version,
             error_message="Firstname and lastname must be 1-50 characters and contain only letters or hyphens.",
         )
-    # TODO: First, try to hide it better. Second, replace with getting rms user and save rms creds to DB.
-    if app.app_config.rms == "sourcecraft" and (app.rms_api.check_user_exists(session["gitlab"]["username"]) is False):
-        return render_template(
-            app.signup_finish_template,
-            course_favicon=app.favicon,
-            manytask_version=app.manytask_version,
-            error_message=f"Please fill your profile in SourceCraft: {app.app_config.sourcecraft_url}",
-        )
 
-    # TODO: we still expect that username is same in auth and rms, need to fing a way to untangle them
-    authenticated_rms_user: RmsUser = app.rms_api.get_rms_user_by_username(session["auth"]["username"])
-    authenticated_rms_user_id = authenticated_rms_user.id
+    try:
+        # TODO: we still expect that username is same in auth and rms, need to fing a way to untangle them
+        rms_user: RmsUser = app.rms_api.get_rms_user_by_username(session["auth"]["username"])
+    except RmsApiException as e:
+        logger.error(f"Failed to get RMS user: {e}")
+        if app.app_config.rms == "sourcecraft":
+            # TODO: button "Onboard on SourceCraft" instead of error message
+            return render_template(
+                app.signup_finish_template,
+                course_favicon=app.favicon,
+                manytask_version=app.manytask_version,
+                error_message=f"Please fill your profile in SourceCraft: {app.app_config.sourcecraft_url}",
+            )
+        else:
+            return render_template(
+                app.signup_finish_template,
+                course_favicon=app.favicon,
+                manytask_version=app.manytask_version,
+                error_message=f"Failed to get RMS user: {e}",
+            )
+
     app.storage_api.update_or_create_user(
         username=session["auth"]["username"],
         first_name=firstname,
         last_name=lastname,
-        rms_id=authenticated_rms_user_id,
+        rms_id=rms_user.id,
         auth_id=session["auth"]["user_auth_id"],
     )
     session.setdefault("rms", {}).update(
