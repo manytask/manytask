@@ -128,12 +128,13 @@ def requires_namespace_admin(
                     ErrorResponse(error="Internal server error").model_dump()
                 ), HTTPStatus.INTERNAL_SERVER_ERROR
 
-            username = session["gitlab"]["username"]
-            is_instance_admin = storage_api.check_if_instance_admin(username)
+            rms_id = session["rms"]["rms_id"]
+            username = session["auth"]["username"]
+            is_instance_admin = storage_api.check_if_instance_admin(rms_id)
 
             if not is_instance_admin:
                 try:
-                    namespace, user_role = storage_api.get_namespace_by_id(namespace_id, username)
+                    namespace, user_role = storage_api.get_namespace_by_id(namespace_id, rms_id)
                     if user_role != "namespace_admin":
                         logger.warning(
                             "User %s (role=%s) attempted to access namespace id=%s without admin privileges",
@@ -151,7 +152,7 @@ def requires_namespace_admin(
                     return jsonify(ErrorResponse(error="Access denied").model_dump()), HTTPStatus.FORBIDDEN
             else:
                 try:
-                    namespace, _ = storage_api.get_namespace_by_id(namespace_id, username)
+                    namespace, _ = storage_api.get_namespace_by_id(namespace_id, rms_id)
                 except (PermissionError, NoResultFound):
                     logger.warning("Namespace id=%s not found", namespace_id)
                     if return_404_if_not_found:
@@ -395,15 +396,15 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
         allow_reduction=allow_reduction,
     )
-    final_score = app.storage_api.store_score(course.course_name, rms_user.username, task.name, update_function)
+    final_score = app.storage_api.store_score(course.course_name, rms_user.id, task.name, update_function)
 
     logger.info("Stored final_score=%s for user=%s, task=%s", final_score, rms_user.username, task.name)
 
     # Recalculate and save student's final grade after score update
     try:
         # Get all student scores to recalculate grade
-        student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
-        bonus_score = app.storage_api.get_bonus_score(course.course_name, rms_user.username)
+        student_scores = app.storage_api.get_scores(course.course_name, rms_user.id)
+        bonus_score = app.storage_api.get_bonus_score(course.course_name, rms_user.id)
         max_score = app.storage_api.max_score_started(course.course_name)
 
         total_score = sum(student_scores.values()) + bonus_score
@@ -426,7 +427,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
             "large_count": large_count,
         }
 
-        app.storage_api.calculate_and_save_grade(course.course_name, rms_user.username, student_data)
+        app.storage_api.calculate_and_save_grade(course.course_name, rms_user.id, student_data)
         logger.info("Recalculated and saved grade for user=%s after score update", rms_user.username)
     except Exception as e:
         logger.error("Failed to recalculate grade for user=%s: %s", rms_user.username, str(e))
@@ -453,7 +454,7 @@ def get_score(course_name: str) -> ResponseReturnValue:
         request.form, app.rms_api, app.storage_api, course.course_name
     )
 
-    student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
+    student_scores = app.storage_api.get_scores(course.course_name, rms_user.id)
 
     try:
         student_task_score = student_scores[task.name]
@@ -525,8 +526,8 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     course = __get_course_or_not_found(storage_api, course_name)
 
     if auth_method == AuthMethod.SESSION:
-        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-        is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        rms_id = session["rms"]["rms_id"]
+        is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_id)
     else:
         is_course_admin = True
 
@@ -548,9 +549,10 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     storage_api = app.storage_api
 
     if auth_method == AuthMethod.SESSION:
-        username = session["profile"]["username"]
+        rms_id = session["rms"]["rms_id"]
+        username = session["rms"]["username"]
         logger.info("Request by admin=%s for course=%s", username, course_name)
-        student_course_admin = storage_api.check_if_course_admin(course_name, username)
+        student_course_admin = storage_api.check_if_course_admin(course_name, rms_id)
 
         if not student_course_admin:
             return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
@@ -569,16 +571,18 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     new_scores = payload.new_scores
     row_data = payload.row_data
 
-    username = row_data.username
+    student_username = row_data.username
+    stored_user = storage_api.get_stored_user_by_username(student_username)
+    student_rms_id = stored_user.rms_id
     total_score = row_data.total_score
-    logger.info("Updating scores for user=%s: %s", sanitize_log_data(username), new_scores)
+    logger.info("Updating scores for user=%s: %s", sanitize_log_data(student_username), new_scores)
 
     try:
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
                 new_score = storage_api.store_score(
                     course.course_name,
-                    username=username,
+                    rms_id=student_rms_id,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )
@@ -597,16 +601,16 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
 
         # Calculate and save grade (applies DORESHKA logic if needed)
         # This updates final_grade but does NOT touch final_grade_override
-        storage_api.calculate_and_save_grade(course.course_name, username, row_data.model_dump())
+        storage_api.calculate_and_save_grade(course.course_name, student_rms_id, row_data.model_dump())
 
         # Get effective grade (override if exists, otherwise final_grade)
-        effective_grade = storage_api.get_effective_grade(course.course_name, username)
+        effective_grade = storage_api.get_effective_grade(course.course_name, student_rms_id)
         row_data.grade = effective_grade
 
         # Add override indicator for frontend
-        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, username)
+        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, student_rms_id)
 
-        logger.info("Successfully updated scores for user=%s", sanitize_log_data(username))
+        logger.info("Successfully updated scores for user=%s", sanitize_log_data(student_username))
         return jsonify(
             {
                 "success": True,
@@ -630,10 +634,11 @@ def update_comment(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username_ = session["profile"]["username"]
+    admin_rms_id = session["rms"]["rms_id"]
+    profile_username_ = session["rms"]["username"]
     logger.info("Comment update request by user=%s for course=%s", profile_username_, course_name)
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username_)
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, admin_rms_id)
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update comments"}), HTTPStatus.FORBIDDEN
@@ -648,13 +653,16 @@ def update_comment(course_name: str) -> ResponseReturnValue:
         if not username:
             return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
 
+        stored_user = storage_api.get_stored_user_by_username(username)
+        student_rms_id = stored_user.rms_id
+
         raw_comment = data.get("comment")
         sanitized_comment, error = sanitize_and_validate_comment(raw_comment)
 
         if error:
             return jsonify({"success": False, "message": error}), HTTPStatus.BAD_REQUEST
 
-        storage_api.update_student_comment(course.course_name, username, sanitized_comment)
+        storage_api.update_student_comment(course.course_name, student_rms_id, sanitized_comment)
 
         logger.info("Successfully updated comment for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK
@@ -693,8 +701,9 @@ def create_namespace() -> ResponseReturnValue:
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
-    if not storage_api.check_if_instance_admin(username):
+    rms_id = session["rms"]["rms_id"]
+    username = session["auth"]["username"]
+    if not storage_api.check_if_instance_admin(rms_id):
         return jsonify(
             ErrorResponse(error="Only Instance Admin can create namespaces").model_dump()
         ), HTTPStatus.FORBIDDEN
@@ -715,16 +724,15 @@ def create_namespace() -> ResponseReturnValue:
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
         logger.info("GitLab group created with id=%s", gitlab_group_id)
 
-        creator_rms_id = session["gitlab"]["user_id"]
-        rms_api.add_user_to_namespace_group(gitlab_group_id, creator_rms_id)
-        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", creator_rms_id, gitlab_group_id)
+        rms_api.add_user_to_namespace_group(gitlab_group_id, rms_id)
+        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", rms_id, gitlab_group_id)
 
         namespace = storage_api.create_namespace(
             name=name,
             slug=slug,
             description=description,
             gitlab_group_id=gitlab_group_id,
-            created_by_username=username,
+            created_by_rms_id=rms_id,
         )
 
         logger.info(
@@ -783,8 +791,9 @@ def get_namespaces() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
-    is_instance_admin = storage_api.check_if_instance_admin(username)
+    rms_id = session["rms"]["rms_id"]
+    username = session["auth"]["username"]
+    is_instance_admin = storage_api.check_if_instance_admin(rms_id)
 
     try:
         if is_instance_admin:
@@ -804,7 +813,7 @@ def get_namespaces() -> ResponseReturnValue:
             ]
         else:
             logger.info("Fetching namespaces with roles for user=%s", username)
-            namespace_role_pairs = storage_api.get_user_namespaces(username)
+            namespace_role_pairs = storage_api.get_user_namespaces(rms_id)
 
             namespace_list = [
                 NamespaceWithRoleResponse(
@@ -847,10 +856,11 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
+    rms_id = session["rms"]["rms_id"]
+    username = session["auth"]["username"]
 
     try:
-        namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
+        namespace, role = storage_api.get_namespace_by_id(namespace_id, rms_id)
 
         result: NamespaceResponse | NamespaceWithRoleResponse
         if role is not None:
@@ -915,7 +925,8 @@ def add_user_to_namespace(
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    rms_id = session["rms"]["rms_id"]
+    username = session["auth"]["username"]
 
     user_id = validated_data.user_id
     role = validated_data.role
@@ -934,7 +945,7 @@ def add_user_to_namespace(
                 namespace_id=namespace_id,
                 user_id=user_id,
                 role=role,
-                assigned_by_username=username,
+                assigned_by_rms_id=rms_id,
             )
         except NoResultFound as e:
             logger.warning("User id=%s not registered in manytask: %s", user_id, str(e))
@@ -1010,7 +1021,8 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
+    rms_id = session["rms"]["rms_id"]
+    username = session["auth"]["username"]
 
     try:
         users_list = storage_api.get_namespace_users(namespace_id)
@@ -1019,7 +1031,9 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
 
         result = NamespaceUsersListResponse(users=users)
 
-        logger.info("Returning %d users for namespace id=%s to user=%s", len(users), namespace_id, username)
+        logger.info(
+            "Returning %d users for namespace id=%s to user=%s (rms_id=%s)", len(users), namespace_id, username, rms_id
+        )
         return jsonify(result.model_dump()), HTTPStatus.OK
 
     except Exception as e:
@@ -1052,16 +1066,18 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    admin_rms_id = session["rms"]["rms_id"]
+    username = session["auth"]["username"]
 
     try:
         try:
-            role, rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
+            role, removed_rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
             logger.info(
-                "User %s removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
+                "User %s (rms_id=%s) removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
                 username,
+                admin_rms_id,
                 user_id,
-                rms_id,
+                removed_rms_id,
                 role,
                 namespace_id,
             )
@@ -1070,17 +1086,17 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
             return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
 
         try:
-            rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, rms_id)
+            rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, removed_rms_id)
             logger.info(
                 "User %s removed user rms_id=%s from GitLab group id=%s",
                 username,
-                rms_id,
+                removed_rms_id,
                 namespace.gitlab_group_id,
             )
         except Exception as e:
             logger.error(
                 "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
-                rms_id,
+                removed_rms_id,
                 namespace.gitlab_group_id,
                 str(e),
             )
@@ -1137,13 +1153,14 @@ def update_user_role_in_namespace(
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    admin_rms_id = session["rms"]["rms_id"]
+    username = session["auth"]["username"]
     new_role = validated_data.role
 
     try:
         # First, get the user's rms_id before making any changes
         try:
-            stored_user = storage_api.get_stored_user_by_id(user_id)
+            stored_user = storage_api.get_stored_user_by_user_id(user_id)
             if stored_user is None:
                 return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
             rms_id = stored_user.rms_id
@@ -1244,7 +1261,8 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    rms_id = session["rms"]["rms_id"]
+    username = session["auth"]["username"]
     namespace_id = validated_data.namespace_id
     course_name = validated_data.course_name
     course_slug = validated_data.slug
@@ -1264,7 +1282,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     students_group_id = None
 
     try:
-        is_instance_admin = storage_api.check_if_instance_admin(username)
+        is_instance_admin = storage_api.check_if_instance_admin(rms_id)
 
         namespace = None
         role = None
@@ -1276,7 +1294,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                 ), HTTPStatus.FORBIDDEN
         else:
             try:
-                namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
+                namespace, role = storage_api.get_namespace_by_id(namespace_id, rms_id)
             except (PermissionError, NoResultFound):
                 logger.warning(
                     "User %s attempted to create course in inaccessible namespace id=%s", username, namespace_id
@@ -1509,10 +1527,11 @@ def override_grade(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username = session["profile"]["username"]
+    admin_rms_id = session["rms"]["rms_id"]
+    profile_username = session["rms"]["username"]
     logger.info("Grade override request by admin=%s for course=%s", profile_username, course_name)
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, admin_rms_id)
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can override grades"}), HTTPStatus.FORBIDDEN
@@ -1536,7 +1555,9 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         except (TypeError, ValueError):
             return jsonify({"success": False, "message": "Grade must be an integer"}), HTTPStatus.BAD_REQUEST
 
-        storage_api.override_grade(course.course_name, username, new_grade)
+        stored_user = storage_api.get_stored_user_by_username(username)
+        student_rms_id = stored_user.rms_id
+        storage_api.override_grade(course.course_name, student_rms_id, new_grade)
 
         logger.info("Successfully set grade override for user=%s to %d", sanitize_log_data(username), new_grade)
         return jsonify({"success": True}), HTTPStatus.OK
@@ -1558,10 +1579,11 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username = session["profile"]["username"]
+    admin_rms_id = session["rms"]["rms_id"]
+    profile_username = session["rms"]["username"]
     logger.info("Clear grade override request by admin=%s for course=%s", profile_username, course_name)
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, admin_rms_id)
 
     if not student_course_admin:
         return jsonify(
@@ -1578,7 +1600,9 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
         if not username:
             return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
 
-        storage_api.clear_grade_override(course.course_name, username)
+        stored_user = storage_api.get_stored_user_by_username(username)
+        student_rms_id = stored_user.rms_id
+        storage_api.clear_grade_override(course.course_name, student_rms_id)
 
         logger.info("Successfully cleared grade override for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK

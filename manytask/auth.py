@@ -16,40 +16,41 @@ from manytask.main import CustomFlask
 logger = logging.getLogger(__name__)
 
 
-def valid_gitlab_session(user_session: SessionMixin) -> bool:
-    SESSION_VERSION = 1.5
+def valid_auth_session(user_session: SessionMixin) -> bool:
+    SESSION_VERSION = 1.6
     result = (
-        "gitlab" in user_session
-        and "version" in user_session["gitlab"]
-        and user_session["gitlab"]["version"] >= SESSION_VERSION
-        and "username" in user_session["gitlab"]
-        and "user_id" in user_session["gitlab"]
+        "auth" in user_session
+        and "version" in user_session["auth"]
+        and user_session["auth"]["version"] >= SESSION_VERSION
+        and "username" in user_session["auth"]
+        and "user_auth_id" in user_session["auth"]
     )
-    logger.debug("Gitlab_session_valid=%s", result)
+    logger.debug("Auth_session_valid=%s", result)
     return result
 
 
-def valid_client_profile_session(user_session: SessionMixin) -> bool:
-    SESSION_VERSION = 1.0
+def valid_rms_session(user_session: SessionMixin) -> bool:
+    SESSION_VERSION = 1.1
     result = (
-        "profile" in user_session
-        and "version" in user_session["profile"]
-        and user_session["profile"]["version"] >= SESSION_VERSION
-        and "username" in user_session["profile"]
+        "rms" in user_session
+        and "version" in user_session["rms"]
+        and user_session["rms"]["version"] >= SESSION_VERSION
+        and "rms_id" in user_session["rms"]
+        and "username" in user_session["rms"]
     )
-    logger.debug("Client_profile_session_valid=%s", result)
+    logger.debug("Rms_session_valid=%s", result)
     return result
 
 
 def set_oauth_session(
-    auth_user: AuthenticatedUser, oauth_tokens: dict[str, str] | None = None, version: float = 1.5
+    auth_user: AuthenticatedUser, oauth_tokens: dict[str, str] | None = None, version: float = 1.6
 ) -> dict[str, Any]:
     """Set oauth creds in session for student"""
 
     logger.debug("Setting session for user=%s, version=%s", auth_user.username, version)
     result: dict[str, Any] = {
         "username": auth_user.username,
-        "user_id": auth_user.id,
+        "user_auth_id": auth_user.id,
         "version": version,
     }
     if oauth_tokens:
@@ -60,26 +61,27 @@ def set_oauth_session(
     return result
 
 
-def set_client_profile_session(client_profile: ClientProfile, version: float = 1.0) -> dict[str, Any]:
+def set_rms_session(client_profile: ClientProfile, version: float = 1.1) -> dict[str, Any]:
     result: dict[str, Any] = {
+        "rms_id": client_profile.rms_id,
         "username": client_profile.username,
         "version": version,
     }
     return result
 
 
-def handle_course_membership(app: CustomFlask, course: Course, username: str) -> bool | str | Response:
+def handle_course_membership(app: CustomFlask, course: Course, rms_id: int) -> bool | str | Response:
     """Checking user on course"""
 
     try:
-        if app.storage_api.check_user_on_course(course.course_name, username):
-            logger.info("User %s is on course %s", username, course.course_name)
+        if app.storage_api.check_user_on_course(course.course_name, rms_id):
+            logger.info("User rms_id=%s is on course %s", rms_id, course.course_name)
             return True
         else:
-            logger.info("No user %s on course %s", username, course.course_name)
+            logger.info("No user rms_id=%s on course %s", rms_id, course.course_name)
             return False
     except NoResultFound:
-        logger.info("User: %s not in the database", username)
+        logger.info("User rms_id=%s not in the database", rms_id)
         return False
     except Exception:
         logger.error("Failed login while working with db", exc_info=True)
@@ -94,18 +96,17 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     """Process oauth2 callback with code for auth, if success set auth session and sync user's data to database"""
 
     try:
-        # This is where the oath_api should be used
-        gitlab_oauth_token = oauth.gitlab.authorize_access_token()
-        token = gitlab_oauth_token["access_token"]
+        oauth_token = oauth.auth_provider.authorize_access_token()
+        token = oauth_token["access_token"]
         logger.info("OAuth token received")
 
         auth_user = app.auth_api.get_authenticated_user(token)
     except Exception:
-        logger.error("Gitlab authorization failed", exc_info=True)
+        logger.error("OAuth authorization failed", exc_info=True)
         return redirect(url_for("root.index"))
 
     session.pop("username", None)
-    session.setdefault("gitlab", {}).update(set_oauth_session(auth_user, gitlab_oauth_token))
+    session.setdefault("auth", {}).update(set_oauth_session(auth_user, oauth_token))
     session.permanent = True
     logger.info("Session set for user=%s", auth_user.username)
 
@@ -114,17 +115,15 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
 
 def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     """Getting student and update session"""
-
-    # This is where the auth_api should be user instead of gitlab/rms
-    auth_user = app.auth_api.get_authenticated_user(session["gitlab"]["access_token"])
+    auth_user = app.auth_api.get_authenticated_user(session["auth"]["access_token"])
     logger.info("Authenticated user=%s", auth_user.username)
-    session["gitlab"].update(set_oauth_session(auth_user))
+    session["auth"].update(set_oauth_session(auth_user))
     return auth_user
 
 
 def redirect_to_login_with_bad_session() -> Response:
     logger.debug("Clearing session and redirecting to signup")
-    session.pop("gitlab", None)
+    session.pop("auth", None)
     return redirect(url_for("root.signup"))
 
 
@@ -138,19 +137,19 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        if not valid_gitlab_session(session):
-            logger.error("Failed to verify gitlab session.", exc_info=True)
+        if not valid_auth_session(session):
+            logger.error("Failed to verify auth session.", exc_info=True)
             return redirect_to_login_with_bad_session()
 
         if not app.auth_api.check_user_is_authenticated(
             app.oauth,
-            session["gitlab"]["access_token"],
-            session["gitlab"]["refresh_token"],
+            session["auth"]["access_token"],
+            session["auth"]["refresh_token"],
         ):
             logger.warning("Session not authenticated, redirecting to login")
             return redirect_to_login_with_bad_session()
 
-        if not valid_client_profile_session(session):
+        if not valid_rms_session(session):
             return __redirect_to_signup_finish()
 
         logger.debug("Auth check passed")
@@ -199,36 +198,36 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
-        logger.info("User %s accessing course=%s", auth_user.username, course.course_name)
+        rms_id = session["rms"]["rms_id"]
+        logger.info("User %s (rms_id=%s) accessing course=%s", auth_user.username, rms_id, course.course_name)
 
-        if not can_access_course(app, auth_user.username, course.course_name):
+        if not can_access_course(app, rms_id, course.course_name):
             logger.warning(
-                "User %s attempted to access course %s without permission",
+                "User %s (rms_id=%s) attempted to access course %s without permission",
                 auth_user.username,
+                rms_id,
                 course.course_name,
             )
             abort(HTTPStatus.FORBIDDEN)
 
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
-        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
-            course.course_name, auth_user.username
-        ):
+        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(course.course_name, rms_id):
             flash("course is hidden!", "course_hidden")
             abort(redirect(url_for("root.index")))
 
-        if not handle_course_membership(app, course, auth_user.username) or not app.rms_api.check_project_exists(
+        if not handle_course_membership(app, course, rms_id) or not app.rms_api.check_project_exists(
             project_name=auth_user.username, project_group=course.gitlab_course_students_group
         ):
-            logger.info("User %s missing membership or project", auth_user.username)
+            logger.info("User %s (rms_id=%s) missing membership or project", auth_user.username, rms_id)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_user_on_course(
             course.course_name,
-            auth_user.username,
-            app.storage_api.check_if_instance_admin(auth_user.username),
+            rms_id,
+            app.storage_api.check_if_instance_admin(rms_id),
         )
-        logger.info("Synced user %s on course %s", auth_user.username, course.course_name)
+        logger.info("Synced user rms_id=%s on course %s", rms_id, course.course_name)
 
         return f(*args, **kwargs)
 
@@ -246,8 +245,8 @@ def requires_instance_admin(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        username = session["gitlab"]["username"]
-        if not app.storage_api.check_if_instance_admin(username):
+        rms_id = session["rms"]["rms_id"]
+        if not app.storage_api.check_if_instance_admin(rms_id):
             abort(HTTPStatus.FORBIDDEN)
 
         return f(*args, **kwargs)
@@ -268,14 +267,14 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
         if app.debug:
             return f(*args, **kwargs)
 
-        username = session["profile"]["username"]
-        is_instance_admin = app.storage_api.check_if_instance_admin(username)
-        is_namespace_admin_user = is_namespace_admin(app, username)
+        rms_id = session["rms"]["rms_id"]
+        is_instance_admin = app.storage_api.check_if_instance_admin(rms_id)
+        is_namespace_admin_user = is_namespace_admin(app, rms_id)
 
         if not is_instance_admin and not is_namespace_admin_user:
             logger.warning(
-                "User %s attempted to access %s without instance admin or namespace admin privileges",
-                username,
+                "User rms_id=%s attempted to access %s without instance admin or namespace admin privileges",
+                rms_id,
                 f.__name__,
             )
             abort(HTTPStatus.FORBIDDEN)
@@ -308,13 +307,13 @@ def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., An
             if app.debug:
                 return f(*args, **kwargs)
 
-            username = session["profile"]["username"]
+            rms_id = session["rms"]["rms_id"]
             course_name = kwargs.get("course_name", None)
 
-            if not has_role(username, required_roles, app, course_name):
+            if not has_role(rms_id, required_roles, app, course_name):
                 logger.warning(
-                    "User %s attempted to access %s without required role(s): %s",
-                    username,
+                    "User rms_id=%s attempted to access %s without required role(s): %s",
+                    rms_id,
                     f.__name__,
                     required_roles,
                 )

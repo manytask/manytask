@@ -44,7 +44,7 @@
                             <i class="fas fa-rocket me-1"></i>My&nbsp;Submits
                         </a>
                     </li>
-                    {% if show_allscores or has_role(username, ['instance_admin', 'namespace_admin'], app, course_name) %}
+                    {% if show_allscores or has_role(rms_id, ['instance_admin', 'namespace_admin'], app, course_name) %}
                         <li class="nav-item">
                             <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'database' %}active fw-semibold{% endif %}"
                                aria-current="{% if active_page == 'database' %}page{% endif %}"
@@ -54,7 +54,7 @@
                             </a>
                         </li>
                     {% endif %}
-                    {% if has_role(username, ['instance_admin', 'namespace_admin'], app, course_name) %}
+                    {% if has_role(rms_id, ['instance_admin', 'namespace_admin'], app, course_name) %}
                         <li class="nav-item">
                             <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'edit_course' %}active fw-semibold{% endif %}"
                                aria-current="{% if active_page == 'edit_course' %}page{% endif %}"

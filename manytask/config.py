@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
@@ -19,19 +19,19 @@ class RowData(BaseModel):
     percent: float
     large_count: int
     grade: int
-    scores: Dict[str, int]
+    scores: dict[str, int]
     grade_is_override: bool = False  # Indicates if grade is manually overridden by admin
 
 
 class ManytaskUpdateDatabasePayload(BaseModel):
-    new_scores: Dict[str, Union[Any]] = Field(...)
+    new_scores: dict[str, Any] = Field(...)
     row_data: RowData
 
 
 class CreateNamespaceRequest(BaseModel):
     name: str
     slug: str
-    description: Optional[str] = None
+    description: str | None = None
 
     @field_validator("slug")
     @classmethod
