@@ -131,7 +131,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     @app.context_processor
     def inject_rms_id() -> dict[str, int | None]:
-        rms_id = session.get("profile", {}).get("rms_id")
+        rms_id = session.get("rms", {}).get("rms_id")
         return {"rms_id": rms_id}
 
     logger = logging.getLogger(__name__)
@@ -280,7 +280,7 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
     }
 
     oauth.register(
-        name="gitlab",
+        name="auth_provider",
         client_id=client_id,
         client_secret=client_secret,
         authorize_url=f"{base_url}/oauth/authorize",
@@ -294,7 +294,7 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
 
 def _create_yandex_id_oauth(oauth: OAuth, client_id: str, client_secret: str) -> OAuth:
     oauth.register(
-        name="gitlab",  # TODO: rename to yandex_id and switch based on config OR register as "remote_app"
+        name="auth_provider",
         client_id=client_id,
         client_secret=client_secret,
         access_token_url="https://oauth.yandex.com/token",

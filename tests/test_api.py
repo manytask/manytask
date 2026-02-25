@@ -261,7 +261,7 @@ def authenticated_client(app, mock_gitlab_oauth):
     """
     with (
         app.test_client() as client,
-        patch.object(mock_gitlab_oauth.gitlab, "authorize_access_token") as mock_authorize_access_token,
+        patch.object(mock_gitlab_oauth.auth_provider, "authorize_access_token") as mock_authorize_access_token,
     ):
         app.oauth = mock_gitlab_oauth
 
@@ -275,14 +275,14 @@ def authenticated_client(app, mock_gitlab_oauth):
             "refresh_token": "test_token",
         }
         with client.session_transaction() as session:
-            session["gitlab"] = {
+            session["auth"] = {
                 "version": 1.6,
                 "username": TEST_USERNAME,
                 "user_auth_id": TEST_USER_ID,
                 "access_token": "",
                 "refresh_token": "",
             }
-            session["profile"] = {
+            session["rms"] = {
                 "version": 1.1,
                 "rms_id": TEST_RMS_ID,
                 "username": TEST_USERNAME,
@@ -628,14 +628,14 @@ def test_get_database_not_ready(app, mock_gitlab_oauth):
             TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
         )
         with client.session_transaction() as session:
-            session["gitlab"] = {
+            session["auth"] = {
                 "version": 1.6,
                 "username": rms_user.username,
                 "user_auth_id": rms_user.id,
                 "access_token": "123",
                 "refresh_token": "123",
             }
-            session["profile"] = {
+            session["rms"] = {
                 "version": 1.1,
                 "rms_id": rms_user.id,
                 "username": rms_user.username,
@@ -649,14 +649,14 @@ def test_update_database_invalid_json(app, authenticated_client, mock_gitlab_oau
     client = app.test_client()
     rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.6,
             "username": rms_user.username,
             "user_auth_id": rms_user.id,
             "access_token": "",
             "refresh_token": "",
         }
-        session["profile"] = {
+        session["rms"] = {
             "version": 1.1,
             "rms_id": rms_user.id,
             "username": rms_user.username,
@@ -672,14 +672,14 @@ def test_update_database_missing_student(app, authenticated_client, mock_gitlab_
     client = app.test_client()
     rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.6,
             "username": rms_user.username,
             "user_auth_id": rms_user.id,
             "access_token": "",
             "refresh_token": "",
         }
-        session["profile"] = {
+        session["rms"] = {
             "version": 1.1,
             "rms_id": rms_user.id,
             "username": rms_user.username,
@@ -739,14 +739,14 @@ def test_update_database_invalid_task(app, authenticated_client, mock_gitlab_oau
     client = app.test_client()
     rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.6,
             "username": rms_user.username,
             "user_auth_id": rms_user.id,
             "access_token": "",
             "refresh_token": "",
         }
-        session["profile"] = {
+        session["rms"] = {
             "version": 1.1,
             "rms_id": rms_user.id,
             "username": rms_user.username,
@@ -772,14 +772,14 @@ def test_update_database_invalid_score_value(app, authenticated_client, mock_git
     client = app.test_client()
     rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
     with client.session_transaction() as session:
-        session["gitlab"] = {
+        session["auth"] = {
             "version": 1.6,
             "username": rms_user.username,
             "user_auth_id": rms_user.id,
             "access_token": "",
             "refresh_token": "",
         }
-        session["profile"] = {
+        session["rms"] = {
             "version": 1.1,
             "rms_id": rms_user.id,
             "username": rms_user.username,

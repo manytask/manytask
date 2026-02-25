@@ -107,14 +107,14 @@ def mock_session_admin(session):
     # Get the actual admin user created by DataBaseApi
     admin = session.query(User).filter_by(username="admin").first()
     return {
-        "gitlab": {
+        "auth": {
             "username": "admin",
             "user_auth_id": admin.id,
             "version": 1.6,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
-        "profile": {
+        "rms": {
             "username": "admin",
             "rms_id": admin.rms_id,
             "version": 1.1,
@@ -128,14 +128,14 @@ def mock_session_regular(session):
     # Get the regular user we created
     regular = session.query(User).filter_by(username="regular_user").first()
     return {
-        "gitlab": {
+        "auth": {
             "username": "regular_user",
             "user_auth_id": regular.id,
             "version": 1.6,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
-        "profile": {
+        "rms": {
             "username": "regular_user",
             "rms_id": regular.rms_id,
             "version": 1.1,

@@ -7,11 +7,11 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     if app.debug:
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
         rms_id = -1
-    elif app.storage_api.check_if_instance_admin(session["profile"]["rms_id"]):
+    elif app.storage_api.check_if_instance_admin(session["rms"]["rms_id"]):
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
-        rms_id = session["profile"]["rms_id"]
-    elif is_namespace_admin(app, session["profile"]["rms_id"]):
-        rms_id = session["profile"]["rms_id"]
+        rms_id = session["rms"]["rms_id"]
+    elif is_namespace_admin(app, session["rms"]["rms_id"]):
+        rms_id = session["rms"]["rms_id"]
         namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(rms_id)
         namespace_courses = app.storage_api.get_courses_by_namespace_ids(namespace_admin_namespaces)
         course_admin_courses = app.storage_api.get_courses_where_course_admin(rms_id)
@@ -23,7 +23,7 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
 
         courses_names = list(courses_dict.items())
     else:
-        rms_id = session["profile"]["rms_id"]
+        rms_id = session["rms"]["rms_id"]
         courses_names = app.storage_api.get_user_courses_names_with_statuses(rms_id)
 
     courses_list = []
@@ -53,7 +53,7 @@ def check_instance_admin(app: CustomFlask) -> bool:
     if app.debug:
         return True
     else:
-        rms_id = session["profile"]["rms_id"]
+        rms_id = session["rms"]["rms_id"]
         return app.storage_api.check_if_instance_admin(rms_id)
 
 
