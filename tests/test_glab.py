@@ -324,7 +324,7 @@ def test_create_project_existing_project(gitlab, mock_rms_user, mock_gitlab_stud
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
     mock_gitlab_instance.projects.get.assert_called_with(mock_gitlab_student_project.id)
     mock_gitlab_student_project.members.create.assert_called_once_with(
-        {"user_id": mock_rms_user.id, "access_level": const.AccessLevel.DEVELOPER}
+        {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.DEVELOPER}
     )
 
 
@@ -390,7 +390,7 @@ def test_get_student_found(gitlab, mock_gitlab_user, mock_rms_user):
     rms_user = rms_api.get_rms_user_by_id(TEST_USER_ID)
 
     assert rms_user == mock_rms_user
-    mock_gitlab_instance.users.get.assert_called_once_with(TEST_USER_ID)
+    mock_gitlab_instance.users.get.assert_called_once_with(int(TEST_USER_ID))
     rms_api._construct_rms_user.assert_called_once_with(user_attrs)
 
 
@@ -401,7 +401,7 @@ def test_get_student_not_found(gitlab):
     with pytest.raises(GitlabGetError, match="User not found"):
         gitlab_api.get_rms_user_by_id(TEST_USER_ID)
 
-    mock_gitlab_instance.users.get.assert_called_once_with(TEST_USER_ID)
+    mock_gitlab_instance.users.get.assert_called_once_with(int(TEST_USER_ID))
 
 
 @patch("requests.get")

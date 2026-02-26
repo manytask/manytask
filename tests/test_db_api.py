@@ -355,8 +355,8 @@ def test_not_initialized_course(session, db_api, first_course_config):
 
     stats = db_api.get_stats(course_name)
     all_scores = db_api.get_all_scores_with_names(course_name)
-    bonus_score = db_api.get_bonus_score(course_name, 999)
-    scores = db_api.get_scores(course_name, 999)
+    bonus_score = db_api.get_bonus_score(course_name, "999")
+    scores = db_api.get_scores(course_name, "999")
     max_score_started = db_api.max_score_started(course_name)
 
     assert stats == {}
@@ -1005,8 +1005,8 @@ def test_deadlines(db_api_with_two_initialized_courses, session):
 
 
 def test_bad_requests(db_api_with_two_initialized_courses, session):
-    bonus_score = db_api_with_two_initialized_courses.get_bonus_score(FIRST_COURSE_NAME, 999)
-    scores = db_api_with_two_initialized_courses.get_scores(FIRST_COURSE_NAME, 999)
+    bonus_score = db_api_with_two_initialized_courses.get_bonus_score(FIRST_COURSE_NAME, "999")
+    scores = db_api_with_two_initialized_courses.get_scores(FIRST_COURSE_NAME, "999")
 
     assert bonus_score == 0
     assert scores == {}

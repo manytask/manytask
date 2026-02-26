@@ -126,7 +126,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         )
         student_course_admin = storage_api.check_if_course_admin(course.course_name, session["rms"]["rms_id"])
 
-    student_rms_id = -1 if app.debug else session["rms"]["rms_id"]
+    student_rms_id = "-1" if app.debug else session["rms"]["rms_id"]
     tasks_scores = storage_api.get_scores(course.course_name, student_rms_id)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
@@ -207,7 +207,7 @@ def signup() -> ResponseReturnValue:
             first_name=validated_firstname,
             last_name=validated_lastname,
             rms_id=rms_user.id,
-            auth_id=rms_user.id,
+            auth_id=int(rms_user.id),
         )
 
     # render template with error... if error
@@ -382,7 +382,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
         student_course_admin = storage_api.check_if_course_admin(course.course_name, session["rms"]["rms_id"])
 
-    student_rms_id = -1 if app.debug else session["rms"]["rms_id"]
+    student_rms_id = "-1" if app.debug else session["rms"]["rms_id"]
     scores = storage_api.get_scores(course.course_name, student_rms_id)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_rms_id)
 
@@ -736,7 +736,7 @@ def update_profile() -> ResponseReturnValue:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template("courses.html", error_message="CSRF Error")
 
-    current_rms_id = -1 if app.debug else session["rms"]["rms_id"]
+    current_rms_id = "-1" if app.debug else session["rms"]["rms_id"]
     if request_username != current_username and not app.storage_api.check_if_instance_admin(current_rms_id):
         abort(HTTPStatus.FORBIDDEN)
 
@@ -860,13 +860,14 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     users_data = []
     for user_id, role in namespace_users:
         try:
-            user = app.storage_api.get_stored_user_by_user_id(user_id)
-            if user:
+            # Get user by database ID to get their RMS ID
+            user_by_db_id = app.storage_api.get_stored_user_by_user_id(str(user_id))
+            if user_by_db_id:
                 users_data.append(
                     {
                         "id": user_id,
-                        "username": user.username,
-                        "rms_id": user.rms_id,
+                        "username": user_by_db_id.username,
+                        "rms_id": user_by_db_id.rms_id,
                         "role": role,
                     }
                 )

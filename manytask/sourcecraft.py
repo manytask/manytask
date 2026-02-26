@@ -109,7 +109,7 @@ class SourceCraftApi(RmsApi):
         self,
         repo_slug: str,
         role: str,
-        user_id: int,
+        user_id: str,
     ) -> requests.Response:
         url = f"{self._api_url}/{self._org_slug}/{repo_slug}/roles"
         data: dict[str, Any] = {
@@ -307,9 +307,9 @@ class SourceCraftApi(RmsApi):
 
     def get_rms_user_by_id(
         self,
-        user_id: int,
+        user_id: str,
     ) -> RmsUser:
-        stored_user: StoredUser | None = self._storage_api.get_stored_user_by_user_id(user_id)
+        stored_user: StoredUser | None = self._storage_api.get_stored_user_by_rms_id(user_id)
         if stored_user is None:
             raise RmsApiException(f"User with id {user_id} not found")
         return stored_user.rms_identity
@@ -348,7 +348,7 @@ class SourceCraftApi(RmsApi):
     def add_user_to_namespace_group(
         self,
         gitlab_group_id: int,
-        user_id: int,
+        user_rms_id: str,
     ) -> None:
         # TODO: invite user to org?
         return None
@@ -356,7 +356,7 @@ class SourceCraftApi(RmsApi):
     def remove_user_from_namespace_group(
         self,
         gitlab_group_id: int,
-        user_id: int,
+        user_rms_id: str,
     ) -> None:
         raise NotImplementedError("remove_user_from_namespace_group method not implemented yet")
 

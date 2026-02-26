@@ -192,7 +192,7 @@ def test_multiple_task_moves(db_api_with_two_initialized_courses, session):
 
 
 def test_get_courses_names_with_no_courses(db_api):
-    assert db_api.get_user_courses_names_with_statuses(999) == []
+    assert db_api.get_user_courses_names_with_statuses("999") == []
     assert db_api.get_all_courses_names_with_statuses() == []
 
 

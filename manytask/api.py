@@ -278,11 +278,9 @@ def _validate_and_extract_params(
         abort(HTTPStatus.BAD_REQUEST, "Both `user_id` or `username` were provided, use only one")
     elif "user_id" in form_data:
         try:
-            user_id = int(form_data["user_id"])
+            user_id = form_data["user_id"]
             rms_user = rms_api.get_rms_user_by_id(user_id)
             logger.info("Found user by id=%s: %s", user_id, rms_user.username)
-        except ValueError:
-            abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
         except RmsApiException:
             abort(HTTPStatus.NOT_FOUND, f"There is no student with user ID {user_id}")
     elif "username" in form_data:
@@ -933,7 +931,7 @@ def add_user_to_namespace(
 
     try:
         try:
-            rms_user = rms_api.get_rms_user_by_id(user_id)
+            rms_user = rms_api.get_rms_user_by_id(str(user_id))
         except Exception as e:
             logger.error("User with id=%s not found in RMS: %s", user_id, str(e))
             return jsonify(ErrorResponse(error=f"User with id={user_id} not found").model_dump()), HTTPStatus.NOT_FOUND
@@ -943,7 +941,7 @@ def add_user_to_namespace(
         try:
             user_on_namespace = storage_api.add_user_to_namespace(
                 namespace_id=namespace_id,
-                user_id=user_id,
+                user_rms_id=str(user_id),
                 role=role,
                 assigned_by_rms_id=rms_id,
             )
@@ -965,7 +963,7 @@ def add_user_to_namespace(
 
         # Добавляем в GitLab группу только после успешного добавления в БД
         try:
-            rms_api.add_user_to_namespace_group(namespace.gitlab_group_id, user_id)
+            rms_api.add_user_to_namespace_group(gitlab_group_id=namespace.gitlab_group_id, user_rms_id=str(user_id))
             logger.info("Added user id=%s to GitLab group id=%s", user_id, namespace.gitlab_group_id)
         except Exception as e:
             # TODO: откатить добавление в локальную БД
@@ -1086,7 +1084,9 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
             return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
 
         try:
-            rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, removed_rms_id)
+            rms_api.remove_user_from_namespace_group(
+                gitlab_group_id=namespace.gitlab_group_id, user_rms_id=removed_rms_id
+            )
             logger.info(
                 "User %s removed user rms_id=%s from GitLab group id=%s",
                 username,
@@ -1160,7 +1160,7 @@ def update_user_role_in_namespace(
     try:
         # First, get the user's rms_id before making any changes
         try:
-            stored_user = storage_api.get_stored_user_by_user_id(user_id)
+            stored_user = storage_api.get_stored_user_by_db_id(user_id)
             if stored_user is None:
                 return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
             rms_id = stored_user.rms_id
@@ -1172,7 +1172,7 @@ def update_user_role_in_namespace(
         # If GitLab fails, we don't want to change the database
         if new_role == "student":
             try:
-                rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, rms_id)
+                rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, user_rms_id=rms_id)
                 logger.info(
                     "User %s removed user rms_id=%s from GitLab group id=%s (role change to student)",
                     username,

@@ -151,7 +151,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(unique=True)
     first_name: Mapped[str]
     last_name: Mapped[str]
-    rms_id: Mapped[int] = mapped_column(unique=True)
+    rms_id: Mapped[str] = mapped_column(unique=True, nullable=False)
     auth_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     is_instance_admin: Mapped[bool] = mapped_column(default=False, server_default="false")
 
