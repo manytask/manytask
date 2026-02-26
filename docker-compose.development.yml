@@ -1,3 +1,7 @@
+networks:
+  manytask-dev-net:
+    driver: bridge
+
 services:
 
     docs:
@@ -6,7 +10,6 @@ services:
             target: docs
         container_name: test-manytask-docs
         restart: always
-        network_mode: bridge
         environment:
             VIRTUAL_HOST: localhost
             VIRTUAL_PORT: 80
@@ -19,13 +22,14 @@ services:
             timeout: 15s
             retries: 3
             start_period: 30s
+        networks:
+            - manytask-dev-net
 
     manytask:
         build:
             context: .
             target: app
         container_name: test-manytask
-        network_mode: bridge
         env_file: .env
         environment:
             VIRTUAL_HOST: localhost
@@ -36,13 +40,12 @@ services:
         volumes:
             - ./manytask/:/app/manytask
             - .tmp/cache/:/cache
-        links:
-            - postgres:postgres
+        networks:
+            - manytask-dev-net
 
     postgres:
         image: postgres:17
         container_name: manytask_postgres
-        network_mode: bridge
         env_file: .env
         expose:
             - "5432"
@@ -54,6 +57,8 @@ services:
             interval: 5s
             timeout: 5s
             retries: 5
+        networks:
+            - manytask-dev-net
 
 
 volumes:
