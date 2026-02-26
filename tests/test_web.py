@@ -509,7 +509,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
                 first_name=TEST_FIRST_NAME_1,
                 last_name=TEST_LAST_NAME_1,
                 rms_id=rms_user.id,
-                auth_id=rms_user.id,
+                auth_id=int(rms_user.id),
             )
 
 

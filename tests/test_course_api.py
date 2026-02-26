@@ -40,7 +40,7 @@ def app_with_db(engine, session, postgres_container):
     db_config = DatabaseConfig(
         database_url=postgres_container.get_connection_url(),
         instance_admin_username="admin",
-        apply_migrations=False,
+        apply_migrations=True,
         session_factory=session_factory,
     )
 
@@ -54,7 +54,7 @@ def app_with_db(engine, session, postgres_container):
         username="regular_user",
         first_name="Regular",
         last_name="User",
-        rms_id=2,
+        rms_id="2",
         auth_id=2,
         is_instance_admin=False,
     )
@@ -65,7 +65,7 @@ def app_with_db(engine, session, postgres_container):
         username="namespace_admin_user",
         first_name="Namespace",
         last_name="Admin",
-        rms_id=3,
+        rms_id="3",
         auth_id=3,
         is_instance_admin=False,
     )
@@ -76,7 +76,7 @@ def app_with_db(engine, session, postgres_container):
         username="pm_user",
         first_name="PM",
         last_name="User",
-        rms_id=4,
+        rms_id="4",
         auth_id=4,
         is_instance_admin=False,
     )

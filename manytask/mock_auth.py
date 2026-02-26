@@ -2,7 +2,7 @@ from authlib.integrations.flask_client import OAuth
 
 from .abstract import AuthApi, AuthenticatedUser
 
-MOCK_AUTH_USER_ID = 123
+MOCK_AUTH_USER_ID = "123"
 MOCK_AUTH_USER_USERNAME = "mock_user"
 
 

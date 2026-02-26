@@ -412,7 +412,7 @@ def test_hard_scores(mock_task):
 def test_report_score_missing_task(app):
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     with app.test_request_context():
-        data = {"user_id": str(rms_user.id)}
+        data = {"user_id": rms_user.id}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
 
         response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
@@ -435,7 +435,7 @@ def test_report_score_success(app):
     with app.test_request_context():
         data = {
             "task": TEST_TASK_NAME,
-            "user_id": str(rms_user.id),
+            "user_id": rms_user.id,
             "score": "90",
             "check_deadline": "True",
         }
@@ -695,7 +695,7 @@ def test_report_score_with_flags(app):
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     data = {
-        "user_id": str(rms_user.id),
+        "user_id": rms_user.id,
         "task": TEST_TASK_NAME,
         "score": "100",  # API expects string
         "flags": "flag:2024-03-20T15:30:00",
@@ -942,7 +942,7 @@ def test_validate_and_extract_params_user_id_not_an_int(app):
     with pytest.raises(HTTPException) as exc_info:
         _validate_and_extract_params(form_data, app.rms_api, app.storage_api, course_name)
 
-    assert exc_info.value.code == HTTPStatus.BAD_REQUEST
+    assert exc_info.value.code == HTTPStatus.NOT_FOUND
 
 
 def test_validate_and_extract_params_no_task_name(app):

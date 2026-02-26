@@ -70,7 +70,7 @@ def set_rms_session(client_profile: ClientProfile, version: float = 1.1) -> dict
     return result
 
 
-def handle_course_membership(app: CustomFlask, course: Course, rms_id: int) -> bool | str | Response:
+def handle_course_membership(app: CustomFlask, course: Course, rms_id: str) -> bool | str | Response:
     """Checking user on course"""
 
     try:

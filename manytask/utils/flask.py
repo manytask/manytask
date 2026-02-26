@@ -6,7 +6,7 @@ from manytask.main import CustomFlask
 def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     if app.debug:
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
-        rms_id = -1
+        rms_id = "-1"
     elif app.storage_api.check_if_instance_admin(session["rms"]["rms_id"]):
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
         rms_id = session["rms"]["rms_id"]
@@ -57,7 +57,7 @@ def check_instance_admin(app: CustomFlask) -> bool:
         return app.storage_api.check_if_instance_admin(rms_id)
 
 
-def is_namespace_admin(app: CustomFlask, rms_id: int) -> bool:
+def is_namespace_admin(app: CustomFlask, rms_id: str) -> bool:
     """Check if user is a Namespace Admin (Owner of any namespace or has Namespace Admin role).
 
     :param app: Flask application instance
@@ -68,7 +68,7 @@ def is_namespace_admin(app: CustomFlask, rms_id: int) -> bool:
     return len(namespace_admin_namespaces) > 0
 
 
-def get_user_roles(app: CustomFlask, rms_id: int, course_name: str | None = None) -> list[str]:
+def get_user_roles(app: CustomFlask, rms_id: str, course_name: str | None = None) -> list[str]:
     """Get list of roles for the user.
 
     Possible roles:
@@ -100,7 +100,7 @@ def get_user_roles(app: CustomFlask, rms_id: int, course_name: str | None = None
     return roles
 
 
-def has_role(rms_id: int, required_roles: list[str] | str, app: CustomFlask, course_name: str | None = None) -> bool:
+def has_role(rms_id: str, required_roles: list[str] | str, app: CustomFlask, course_name: str | None = None) -> bool:
     """Check if user has at least one of the required roles.
 
     :param rms_id: user's RMS ID
@@ -116,7 +116,7 @@ def has_role(rms_id: int, required_roles: list[str] | str, app: CustomFlask, cou
     return any(role in user_roles for role in required_roles)
 
 
-def can_access_course(app: CustomFlask, rms_id: int, course_name: str) -> bool:
+def can_access_course(app: CustomFlask, rms_id: str, course_name: str) -> bool:
     """Check if user can access a specific course.
 
     For Instance Admins: access to all courses
