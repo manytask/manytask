@@ -1,13 +1,34 @@
 from manytask.abstract import StoredUser
+from tests.constants import (
+    TEST_AUTH_ID_1,
+    TEST_AUTH_ID_2,
+    TEST_FIRST_NAME_1,
+    TEST_FIRST_NAME_2,
+    TEST_LAST_NAME_1,
+    TEST_LAST_NAME_2,
+    TEST_RMS_ID_1,
+    TEST_RMS_ID_2,
+    TEST_USERNAME_1,
+    TEST_USERNAME_2,
+)
 
 
 def test_stored_user():
-    stored_user1 = StoredUser("user1", "Ivan", "Ivanov", 123)
+    stored_user1 = StoredUser(
+        TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, rms_id=TEST_RMS_ID_1, auth_id=TEST_AUTH_ID_1
+    )
 
     assert not stored_user1.instance_admin
-    assert repr(stored_user1) == "StoredUser(username=user1)"
+    assert repr(stored_user1) == f"StoredUser(rms_id={TEST_RMS_ID_1}, username={TEST_USERNAME_1})"
 
-    stored_user2 = StoredUser("user2", "Ivan", "Ivanov", 456, True)
+    stored_user2 = StoredUser(
+        TEST_USERNAME_2,
+        TEST_FIRST_NAME_2,
+        TEST_LAST_NAME_2,
+        rms_id=TEST_RMS_ID_2,
+        auth_id=TEST_AUTH_ID_2,
+        instance_admin=True,
+    )
 
     assert stored_user2.instance_admin
-    assert repr(stored_user2) == "StoredUser(username=user2)"
+    assert repr(stored_user2) == f"StoredUser(rms_id={TEST_RMS_ID_2}, username={TEST_USERNAME_2})"

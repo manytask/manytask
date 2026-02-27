@@ -80,7 +80,7 @@ def fixed_current_time():
 
 
 def test_user_simple(session):
-    user = User(username="test_user", first_name="Ivan", last_name="Ivanov", rms_id=1)
+    user = User(username="test_user", first_name="Ivan", last_name="Ivanov", rms_id="1", auth_id=1)
     session.add(user)
     session.commit()
 
@@ -90,11 +90,11 @@ def test_user_simple(session):
 
 
 def test_user_unique_username(session):
-    user1 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov", rms_id=11)
-    user2 = User(username="unique_user2", first_name="Oleg", last_name="Ivanov", rms_id=12)
-    user3 = User(username="unique_user3", first_name="Ivan", last_name="Olegov", rms_id=13)
-    user4 = User(username="unique_user4", first_name="Ivan", last_name="Olegov", rms_id=14)
-    user5 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov", rms_id=11)
+    user1 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov", rms_id="11", auth_id=11)
+    user2 = User(username="unique_user2", first_name="Oleg", last_name="Ivanov", rms_id="12", auth_id=12)
+    user3 = User(username="unique_user3", first_name="Ivan", last_name="Olegov", rms_id="13", auth_id=13)
+    user4 = User(username="unique_user4", first_name="Ivan", last_name="Olegov", rms_id="14", auth_id=14)
+    user5 = User(username="unique_user1", first_name="Ivan", last_name="Ivanov", rms_id="11", auth_id=11)
     session.add_all([user1, user2, user3, user4])
     session.commit()
     session.add(user5)
@@ -152,7 +152,7 @@ def test_course_unique_name(session):
 
 
 def test_user_on_course(session):
-    user = User(username="user1", first_name="Ivan", last_name="Ivanov", rms_id=21)
+    user = User(username="user1", first_name="Ivan", last_name="Ivanov", rms_id="21", auth_id=21)
     course = make_course("1")
     session.add_all([user, course])
     session.commit()
@@ -180,9 +180,9 @@ def test_user_on_course(session):
 
 
 def test_user_on_course_unique_ids(session):
-    user1 = User(username="user001", first_name="Ivan", last_name="Ivanov", rms_id=31)
+    user1 = User(username="user001", first_name="Ivan", last_name="Ivanov", rms_id="31", auth_id=31)
     course1 = make_course("001")
-    user2 = User(username="user002", first_name="Ivan", last_name="Olegov", rms_id=32)
+    user2 = User(username="user002", first_name="Ivan", last_name="Olegov", rms_id="32", auth_id=32)
     course2 = make_course("002")
 
     user_on_course1 = UserOnCourse(user=user1, course=course1)
@@ -358,7 +358,7 @@ def test_task(session):
 
 
 def test_grade(session, fixed_current_time):
-    user = User(username="user2", first_name="Ivan", last_name="Ivanov", rms_id=41)
+    user = User(username="user2", first_name="Ivan", last_name="Ivanov", rms_id="41", auth_id=41)
     course = make_course("4")
     user_on_course = UserOnCourse(user=user, course=course)
     task_group = TaskGroup(name="group4", course=course)
@@ -379,8 +379,8 @@ def test_grade(session, fixed_current_time):
 def test_grade_unique_ids(session, fixed_current_time):
     course = make_course("101")
     task_group = TaskGroup(name="group101", course=course)
-    user1 = User(username="user101", first_name="Ivan", last_name="Ivanov", rms_id=51)
-    user2 = User(username="user102", first_name="Ivan", last_name="Olegov", rms_id=52)
+    user1 = User(username="user101", first_name="Ivan", last_name="Ivanov", rms_id="51", auth_id=51)
+    user2 = User(username="user102", first_name="Ivan", last_name="Olegov", rms_id="52", auth_id=52)
     user_on_course1 = UserOnCourse(user=user1, course=course)
     user_on_course2 = UserOnCourse(user=user2, course=course)
     task1 = Task(name="task101", group=task_group)
@@ -438,8 +438,8 @@ def test_cascade_delete_course(session):
     course = make_course("cascade")
     task_group1 = TaskGroup(name="cascade_group1", course=course)
     task_group2 = TaskGroup(name="cascade_group2", course=course)
-    user1 = User(username="cascade_user1", first_name="Ivan", last_name="Ivanov", rms_id=61)
-    user2 = User(username="cascade_user2", first_name="Ivan", last_name="Olegov", rms_id=62)
+    user1 = User(username="cascade_user1", first_name="Ivan", last_name="Ivanov", rms_id="61", auth_id=61)
+    user2 = User(username="cascade_user2", first_name="Ivan", last_name="Olegov", rms_id="62", auth_id=62)
     user_on_course1 = UserOnCourse(user=user1, course=course)
     user_on_course2 = UserOnCourse(user=user2, course=course)
     session.add_all([course, task_group1, task_group2, user1, user2, user_on_course1, user_on_course2])
@@ -489,7 +489,7 @@ def test_cascade_delete_task_group(session):
     session.add_all([course, deadline, task_group, task1, task2])
     session.commit()
 
-    user = User(username="cascade_user3", first_name="Ivan", last_name="Ivanov", rms_id=71)
+    user = User(username="cascade_user3", first_name="Ivan", last_name="Ivanov", rms_id="71", auth_id=71)
     user_on_course = UserOnCourse(user=user, course=course)
     grade1 = Grade(user_on_course=user_on_course, task=task1, score=TEST_GRADE_SCORE_2)
     grade2 = Grade(user_on_course=user_on_course, task=task2, score=TEST_GRADE_SCORE_2)
@@ -519,7 +519,7 @@ def test_cascade_delete_task_group(session):
 
 
 def test_cascade_delete_user(session):
-    user = User(username="cascade_user4", first_name="Ivan", last_name="Ivanov", rms_id=81)
+    user = User(username="cascade_user4", first_name="Ivan", last_name="Ivanov", rms_id="81", auth_id=81)
     course = make_course("cascade3")
     user_on_course = UserOnCourse(user=user, course=course)
     task_group = TaskGroup(name="cascade_group4", course=course)
@@ -544,7 +544,7 @@ def test_cascade_delete_user(session):
 
 
 def test_cascade_delete_user_on_course(session):
-    user = User(username="cascade_user5", first_name="Ivan", last_name="Ivanov", rms_id=91)
+    user = User(username="cascade_user5", first_name="Ivan", last_name="Ivanov", rms_id="91", auth_id=91)
     course = make_course("cascade4")
     user_on_course = UserOnCourse(user=user, course=course)
     task_group = TaskGroup(name="cascade_group5", course=course)
@@ -596,11 +596,20 @@ def test_custom_dict_type_empty(engine):
 def test_namespace(session):
     # Create different users
     instance_admin = User(
-        username="instance_admin", first_name="instance", last_name="admin", rms_id=101, is_instance_admin=True
+        username="instance_admin",
+        first_name="instance",
+        last_name="admin",
+        rms_id="101",
+        auth_id=101,
+        is_instance_admin=True,
     )
-    student = User(username="student", first_name="student", last_name="student", rms_id=102)
-    namespace_admin = User(username="namespace_admin", first_name="namespace", last_name="admin", rms_id=103)
-    program_manager = User(username="program_manager", first_name="program", last_name="manager", rms_id=104)
+    student = User(username="student", first_name="student", last_name="student", rms_id="102", auth_id=102)
+    namespace_admin = User(
+        username="namespace_admin", first_name="namespace", last_name="admin", rms_id="103", auth_id=103
+    )
+    program_manager = User(
+        username="program_manager", first_name="program", last_name="manager", rms_id="104", auth_id=104
+    )
 
     session.add_all([instance_admin, namespace_admin, program_manager, student])
     session.commit()
@@ -662,7 +671,12 @@ def test_namespace(session):
 
 def test_namespace_constraints(session):
     instance_admin = User(
-        username="instance_admin2", first_name="instance", last_name="admin", rms_id=111, is_instance_admin=True
+        username="instance_admin2",
+        first_name="instance",
+        last_name="admin",
+        rms_id="111",
+        auth_id=111,
+        is_instance_admin=True,
     )
     session.add(instance_admin)
     session.commit()
@@ -687,8 +701,10 @@ def test_namespace_constraints(session):
         session.commit()
     session.rollback()
 
-    student = User(username="student2", first_name="student", last_name="student", rms_id=112)
-    namespace_admin = User(username="namespace_admin2", first_name="namespace", last_name="admin", rms_id=113)
+    student = User(username="student2", first_name="student", last_name="student", rms_id="112", auth_id=112)
+    namespace_admin = User(
+        username="namespace_admin2", first_name="namespace", last_name="admin", rms_id="113", auth_id=113
+    )
     user_on_namespace = UserOnNamespace(
         user=namespace_admin, namespace=namespace, role=UserOnNamespaceRole.NAMESPACE_ADMIN, assigned_by=instance_admin
     )
@@ -704,7 +720,12 @@ def test_namespace_constraints(session):
 
 def test_cascade_delete_namespace(session):  # noqa: PLR0915
     instance_admin = User(
-        username="instance_admin3", first_name="instance", last_name="admin", rms_id=121, is_instance_admin=True
+        username="instance_admin3",
+        first_name="instance",
+        last_name="admin",
+        rms_id="121",
+        auth_id=121,
+        is_instance_admin=True,
     )
     session.add(instance_admin)
     session.commit()
@@ -784,7 +805,12 @@ def test_cascade_delete_namespace(session):  # noqa: PLR0915
 
 def test_namespace_slug_validation(session):
     instance_admin = User(
-        username="slug_admin", first_name="instance", last_name="admin", rms_id=131, is_instance_admin=True
+        username="slug_admin",
+        first_name="instance",
+        last_name="admin",
+        rms_id="131",
+        auth_id=131,
+        is_instance_admin=True,
     )
     session.add(instance_admin)
     session.commit()

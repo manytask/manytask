@@ -57,10 +57,3 @@ def test_create_project():
         api.get_url_for_repo(TEST_USERNAME, TEST_STUDENTS_GROUP)
         == f"{GITLAB_BASE_URL}/{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"
     )
-
-
-def test_authenticated_user():
-    api = MockRmsApi(GITLAB_BASE_URL)
-    api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
-    user = api.get_authenticated_rms_user("dummy-token")
-    assert user.username == TEST_USERNAME

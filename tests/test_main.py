@@ -67,7 +67,7 @@ def test_create_app_production_with_db(mock_env, monkeypatch):
     assert "api" in app.blueprints
 
     assert hasattr(app, "oauth")
-    assert "gitlab" in app.oauth._clients
+    assert "auth_provider" in app.oauth._clients
 
     assert hasattr(app, "storage_api")
     assert hasattr(app, "rms_api")

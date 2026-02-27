@@ -40,7 +40,7 @@ def app_with_db(engine, session, postgres_container):
     db_config = DatabaseConfig(
         database_url=postgres_container.get_connection_url(),
         instance_admin_username="admin",
-        apply_migrations=False,
+        apply_migrations=True,
         session_factory=session_factory,
     )
 
@@ -54,7 +54,8 @@ def app_with_db(engine, session, postgres_container):
         username="regular_user",
         first_name="Regular",
         last_name="User",
-        rms_id=2,
+        rms_id="2",
+        auth_id=2,
         is_instance_admin=False,
     )
     session.add(regular_user)
@@ -64,7 +65,8 @@ def app_with_db(engine, session, postgres_container):
         username="namespace_admin_user",
         first_name="Namespace",
         last_name="Admin",
-        rms_id=3,
+        rms_id="3",
+        auth_id=3,
         is_instance_admin=False,
     )
     session.add(namespace_admin_user)
@@ -74,7 +76,8 @@ def app_with_db(engine, session, postgres_container):
         username="pm_user",
         first_name="PM",
         last_name="User",
-        rms_id=4,
+        rms_id="4",
+        auth_id=4,
         is_instance_admin=False,
     )
     session.add(pm_user)
@@ -96,16 +99,17 @@ def mock_session_admin(session):
     """Mock session for admin user."""
     admin = session.query(User).filter_by(username="admin").first()
     return {
-        "gitlab": {
+        "auth": {
             "username": "admin",
-            "user_id": admin.rms_id,
-            "version": 1.5,
+            "user_auth_id": admin.auth_id,
+            "version": 1.6,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
-        "profile": {
+        "rms": {
             "username": "admin",
-            "version": 1.0,
+            "rms_id": admin.rms_id,
+            "version": 1.1,
         },
     }
 
@@ -115,16 +119,17 @@ def mock_session_namespace_admin(session):
     """Mock session for namespace admin user."""
     user = session.query(User).filter_by(username="namespace_admin_user").first()
     return {
-        "gitlab": {
+        "auth": {
             "username": "namespace_admin_user",
-            "user_id": user.rms_id,
-            "version": 1.5,
+            "user_auth_id": user.auth_id,
+            "version": 1.6,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
-        "profile": {
+        "rms": {
             "username": "namespace_admin_user",
-            "version": 1.0,
+            "rms_id": user.rms_id,
+            "version": 1.1,
         },
     }
 
@@ -134,16 +139,17 @@ def mock_session_pm(session):
     """Mock session for program manager user."""
     user = session.query(User).filter_by(username="pm_user").first()
     return {
-        "gitlab": {
+        "auth": {
             "username": "pm_user",
-            "user_id": user.rms_id,
-            "version": 1.5,
+            "user_auth_id": user.auth_id,
+            "version": 1.6,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
-        "profile": {
+        "rms": {
             "username": "pm_user",
-            "version": 1.0,
+            "rms_id": user.rms_id,
+            "version": 1.1,
         },
     }
 
@@ -153,16 +159,17 @@ def mock_session_regular(session):
     """Mock session for regular user."""
     user = session.query(User).filter_by(username="regular_user").first()
     return {
-        "gitlab": {
+        "auth": {
             "username": "regular_user",
-            "user_id": user.rms_id,
-            "version": 1.5,
+            "user_auth_id": user.auth_id,
+            "version": 1.6,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
-        "profile": {
+        "rms": {
             "username": "regular_user",
-            "version": 1.0,
+            "rms_id": user.rms_id,
+            "version": 1.1,
         },
     }
 

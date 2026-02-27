@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
 
-import requests
+import httpx
 
-from .abstract import RmsApi, RmsApiException, RmsUser, StorageApi, StoredUser
+from .abstract import RmsApi, RmsApiException, RmsUser
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ class SourceCraftConfig:
     api_url: str
     admin_token: str
     org_slug: str
+    iam_api_url: str = "https://iam.api.cloud.yandex.net/iam/v1"
     dry_run: bool = False
 
 
@@ -29,23 +30,31 @@ class SourceCraftApi(RmsApi):
     def __init__(
         self,
         config: SourceCraftConfig,
-        storage_api: StorageApi,
     ):
         """Initialize Sourcecraft API client with configuration.
 
         :param config: SourcecraftConfig instance containing all necessary settings
         """
-        self._storage_api: StorageApi = storage_api
         self.dry_run = config.dry_run
         self._base_url = config.base_url
-        self._api_url = config.api_url
         self._admin_token = config.admin_token
         self._org_slug = config.org_slug
+
+        self._client = httpx.Client(
+            base_url=config.api_url,
+        )
+        self._iam_client = httpx.Client(
+            base_url=config.iam_api_url,
+        )
 
         self._iam_token: str | None = None
         self._iam_token_last_issued: datetime | None = None
 
         logger.info(f"Initializing SourcecraftApi with base_url: {self.base_url}")
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        kwargs.setdefault("headers", {}).update(self._request_headers)
+        return self._client.request(method, path, **kwargs)
 
     @property
     def iam_token(self) -> str:
@@ -59,14 +68,14 @@ class SourceCraftApi(RmsApi):
         return self._iam_token
 
     def _get_iam_token(self) -> str:
-        response = requests.post(
-            "https://iam.api.cloud.yandex.net/iam/v1/tokens",
-            data={
+        response = self._iam_client.post(
+            "tokens",
+            json={
                 "yandexPassportOauthToken": self._admin_token,
             },
         )
         if response.status_code != HTTPStatus.OK:
-            raise RmsApiException(f"Failed to get IAM token: {response.json()}")
+            raise RmsApiException(f"Failed to get IAM token: {response.text}")
         return response.json()["iamToken"]
 
     @property
@@ -79,40 +88,35 @@ class SourceCraftApi(RmsApi):
     def _get_repo(
         self,
         repo_slug: str,
-    ) -> requests.Response:
-        url = f"{self._api_url}/{self._org_slug}/{repo_slug}"
-        return requests.get(url, headers=self._request_headers)
+    ) -> httpx.Response:
+        return self._request("GET", f"{self._org_slug}/{repo_slug}")
 
-    def _create_repo(self, repo_slug: str, visibility: str, template_id: int | None = None) -> requests.Response:
-        url = f"{self._api_url}/orgs/{self._org_slug}/repos"
-        data: dict[str, Any] = {
+    def _create_repo(self, repo_slug: str, visibility: str, template_id: int | None = None) -> httpx.Response:
+        payload: dict[str, Any] = {
             "name": repo_slug,
             "slug": repo_slug,
             "visibility": visibility,
         }
         if template_id is not None:
-            data["templating_options"] = {
+            payload["templating_options"] = {
                 "template_id": template_id,
             }
-
-        return requests.post(url, json=data, headers=self._request_headers)
+        return self._request("POST", f"orgs/{self._org_slug}/repos", json=payload)
 
     def _update_repo(
         self,
         repo_slug: str,
         data: dict[str, Any],
-    ) -> requests.Response:
-        url = f"{self._api_url}/{self._org_slug}/{repo_slug}"
-        return requests.put(url, json=data, headers=self._request_headers)
+    ) -> httpx.Response:
+        return self._request("PATCH", f"{self._org_slug}/{repo_slug}", json=data)
 
     def _add_repo_role(
         self,
         repo_slug: str,
         role: str,
-        user_id: int,
-    ) -> requests.Response:
-        url = f"{self._api_url}/{self._org_slug}/{repo_slug}/roles"
-        data: dict[str, Any] = {
+        user_id: str,
+    ) -> httpx.Response:
+        payload: dict[str, Any] = {
             "subject_roles": [
                 {
                     "role": role,
@@ -123,7 +127,7 @@ class SourceCraftApi(RmsApi):
                 }
             ]
         }
-        return requests.post(url, json=data, headers=self._request_headers)
+        return self._request("POST", f"{self._org_slug}/{repo_slug}/roles", json=payload)
 
     # Comment for this and all further methods with "course_group", "course_public_repo" and
     # "course_students_group" parameters:
@@ -307,31 +311,43 @@ class SourceCraftApi(RmsApi):
 
     def get_rms_user_by_id(
         self,
-        user_id: int,
+        user_id: str,
     ) -> RmsUser:
-        stored_user: StoredUser | None = self._storage_api.get_stored_user_by_id(user_id)
-        if stored_user is None:
-            raise RmsApiException(f"User with id {user_id} not found")
-        return stored_user.rms_identity
+        return self._get_user_profile(f"id:{user_id}")
 
     def get_rms_user_by_username(
         self,
         username: str,
     ) -> RmsUser:
-        stored_user: StoredUser = self._storage_api.get_stored_user_by_username(username)
-        return stored_user.rms_identity
+        # NOTE: yandex login is expected as username for now
+        return self._get_user_by_yandex_login(username)
 
-    def get_authenticated_rms_user(
-        self,
-        oauth_access_token: str,
-    ) -> RmsUser:
-        """Get authenticated user information using OAuth access token.
+    def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:
+        cloud_id = self._get_cloud_id_by_yandex_login(auth_username)
+        return self._get_user_profile(f"cloud-id:{cloud_id}")
 
-        :param oauth_access_token: OAuth access token
-        :return: RmsUser object with user information
-        """
-        logger.info("Getting authenticated user from OAuth token")
-        raise NotImplementedError("get_authenticated_rms_user method not implemented yet")
+    def _get_cloud_id_by_yandex_login(self, yandex_login: str) -> str:
+        response = self._iam_client.get(
+            "yandexPassportUserAccounts:byLogin",
+            params={"login": yandex_login},
+            headers=self._request_headers,
+        )
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.json()}")
+        return response.json()["id"]
+
+    def _get_user_profile(self, identity: str) -> RmsUser:
+        response = self._request("GET", f"users/{identity}")
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.json()}")
+        return self._unmarshal_user_profile(response.json())
+
+    def _unmarshal_user_profile(self, data: dict[str, Any]) -> RmsUser:
+        return RmsUser(
+            id=data["id"],
+            username=data["username"],
+            name=data["display_name"],
+        )
 
     def create_namespace_group(
         self,
@@ -348,7 +364,7 @@ class SourceCraftApi(RmsApi):
     def add_user_to_namespace_group(
         self,
         gitlab_group_id: int,
-        user_id: int,
+        user_rms_id: str,
     ) -> None:
         # TODO: invite user to org?
         return None
@@ -356,7 +372,7 @@ class SourceCraftApi(RmsApi):
     def remove_user_from_namespace_group(
         self,
         gitlab_group_id: int,
-        user_id: int,
+        user_rms_id: str,
     ) -> None:
         raise NotImplementedError("remove_user_from_namespace_group method not implemented yet")
 

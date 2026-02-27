@@ -84,7 +84,8 @@ def app_with_db(engine, session, postgres_container):
         username="regular_user",
         first_name="Regular",
         last_name="User",
-        rms_id=2,
+        rms_id="2",
+        auth_id=2,
         is_instance_admin=False,
     )
     session.add(regular_user)
@@ -106,16 +107,17 @@ def mock_session_admin(session):
     # Get the actual admin user created by DataBaseApi
     admin = session.query(User).filter_by(username="admin").first()
     return {
-        "gitlab": {
+        "auth": {
             "username": "admin",
-            "user_id": admin.id,
-            "version": 1.5,
+            "user_auth_id": admin.id,
+            "version": 1.6,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
-        "profile": {
+        "rms": {
             "username": "admin",
-            "version": 1.0,
+            "rms_id": admin.rms_id,
+            "version": 1.1,
         },
     }
 
@@ -126,16 +128,17 @@ def mock_session_regular(session):
     # Get the regular user we created
     regular = session.query(User).filter_by(username="regular_user").first()
     return {
-        "gitlab": {
+        "auth": {
             "username": "regular_user",
-            "user_id": regular.id,
-            "version": 1.5,
+            "user_auth_id": regular.id,
+            "version": 1.6,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
-        "profile": {
+        "rms": {
             "username": "regular_user",
-            "version": 1.0,
+            "rms_id": regular.rms_id,
+            "version": 1.1,
         },
     }
 
@@ -686,7 +689,8 @@ def test_add_user_to_namespace_as_instance_admin(client_with_db, session, mock_s
         username="new_user",
         first_name="New",
         last_name="User",
-        rms_id=100,
+        rms_id="100",
+        auth_id=100,
         is_instance_admin=False,
     )
     session.add(regular_user)
@@ -766,7 +770,8 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
         username="another_user",
         first_name="Another",
         last_name="User",
-        rms_id=101,
+        rms_id="101",
+        auth_id=101,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -834,7 +839,8 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
         username="another_user",
         first_name="Another",
         last_name="User",
-        rms_id=102,
+        rms_id="102",
+        auth_id=102,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -878,7 +884,8 @@ def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_sess
         username="new_user",
         first_name="New",
         last_name="User",
-        rms_id=103,
+        rms_id="103",
+        auth_id=103,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -934,7 +941,8 @@ def test_add_user_to_namespace_invalid_role(client_with_db, session, mock_sessio
         username="new_user",
         first_name="New",
         last_name="User",
-        rms_id=104,
+        rms_id="104",
+        auth_id=104,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -1043,7 +1051,8 @@ def test_add_user_to_namespace_nonexistent_namespace(client_with_db, session, mo
         username="new_user",
         first_name="New",
         last_name="User",
-        rms_id=105,
+        rms_id="105",
+        auth_id=105,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -1090,7 +1099,8 @@ def test_get_namespace_users_as_instance_admin(client_with_db, session, mock_ses
         username="test_user",
         first_name="Test",
         last_name="User",
-        rms_id=200,
+        rms_id="200",
+        auth_id=200,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -1326,7 +1336,8 @@ def test_remove_user_from_namespace_as_instance_admin(client_with_db, session, m
         username="test_user",
         first_name="Test",
         last_name="User",
-        rms_id=300,
+        rms_id="300",
+        auth_id=300,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -1400,7 +1411,8 @@ def test_remove_user_from_namespace_as_namespace_admin(
         username="another_user",
         first_name="Another",
         last_name="User",
-        rms_id=301,
+        rms_id="301",
+        auth_id=301,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -1474,7 +1486,8 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
         username="another_user",
         first_name="Another",
         last_name="User",
-        rms_id=302,
+        rms_id="302",
+        auth_id=302,
         is_instance_admin=False,
     )
     session.add(new_user)
@@ -1556,7 +1569,8 @@ def test_remove_user_from_namespace_without_access(client_with_db, session, mock
         username="another_user",
         first_name="Another",
         last_name="User",
-        rms_id=303,
+        rms_id="303",
+        auth_id=303,
         is_instance_admin=False,
     )
     session.add(new_user)

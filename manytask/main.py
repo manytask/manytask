@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, session
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -37,6 +37,14 @@ class CustomFlask(Flask):
     @property
     def favicon(self) -> str:
         return "favicon.ico"
+
+    @property
+    def signup_template(self) -> str:
+        return "signup_yandex_id.html" if self.app_config.rms == "sourcecraft" else "signup.html"
+
+    @property
+    def signup_finish_template(self) -> str:
+        return "signup_finish.html"
 
     def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
@@ -89,7 +97,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
                 admin_token=app.app_config.sourcecraft_admin_token,
                 org_slug=app.app_config.sourcecraft_org_slug,
             ),
-            app.storage_api,
         )
 
     elif rms == "mock":
@@ -128,6 +135,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     app.jinja_env.globals["get_user_roles"] = get_user_roles
     app.jinja_env.globals["has_role"] = has_role
+
+    @app.context_processor
+    def inject_rms_id() -> dict[str, int | None]:
+        rms_id = session.get("rms", {}).get("rms_id")
+        return {"rms_id": rms_id}
 
     logger = logging.getLogger(__name__)
 
@@ -275,7 +287,7 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
     }
 
     oauth.register(
-        name="gitlab",
+        name="auth_provider",
         client_id=client_id,
         client_secret=client_secret,
         authorize_url=f"{base_url}/oauth/authorize",
@@ -289,7 +301,7 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
 
 def _create_yandex_id_oauth(oauth: OAuth, client_id: str, client_secret: str) -> OAuth:
     oauth.register(
-        name="gitlab",  # TODO: rename to yandex_id and switch based on config OR register as "remote_app"
+        name="auth_provider",
         client_id=client_id,
         client_secret=client_secret,
         access_token_url="https://oauth.yandex.com/token",
