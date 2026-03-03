@@ -25,3 +25,16 @@ body {
     text-align: left;
     opacity: 0.2;
 }
+
+.mt-signout-btn {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.mt-signout-btn:hover {
+    opacity: 1;
+}
