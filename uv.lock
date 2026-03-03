@@ -394,7 +394,7 @@ wheels = [
 
 [[package]]
 name = "flask"
-version = "3.1.1"
+version = "3.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blinker" },
@@ -404,9 +404,9 @@ dependencies = [
     { name = "markupsafe" },
     { name = "werkzeug" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/de/e47735752347f4128bcf354e0da07ef311a78244eba9e3dc1d4a5ab21a98/flask-3.1.1.tar.gz", hash = "sha256:284c7b8f2f58cb737f0cf1c30fd7eaf0ccfcde196099d24ecede3fc2005aa59e", size = 753440, upload-time = "2025-05-13T15:01:17.447Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/00/35d85dcce6c57fdc871f3867d465d780f302a175ea360f62533f12b27e2b/flask-3.1.3.tar.gz", hash = "sha256:0ef0e52b8a9cd932855379197dd8f94047b359ca0a78695144304cb45f87c9eb", size = 759004, upload-time = "2026-02-19T05:00:57.678Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/68/9d4508e893976286d2ead7f8f571314af6c2037af34853a30fd769c02e9d/flask-3.1.1-py3-none-any.whl", hash = "sha256:07aae2bb5eaf77993ef57e357491839f5fd9f4dc281593a81a9e4d79a24f295c", size = 103305, upload-time = "2025-05-13T15:01:15.591Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/9c/34f6962f9b9e9c71f6e5ed806e0d0ff03c9d1b0b2340088a0cf4bce09b18/flask-3.1.3-py3-none-any.whl", hash = "sha256:f4bcbefc124291925f1a26446da31a5178f9483862233b23c0c96a20701f670c", size = 103424, upload-time = "2026-02-19T05:00:56.027Z" },
 ]
 
 [[package]]
@@ -488,14 +488,14 @@ wheels = [
 
 [[package]]
 name = "gunicorn"
-version = "24.1.1"
+version = "25.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/78/0a/10739c03537ec5b131a867bf94df2e412b437696c7e5d26970e2198a80d2/gunicorn-24.1.1.tar.gz", hash = "sha256:f006d110e5cb3102859b4f5cd48335dbd9cc28d0d27cd24ddbdafa6c60929408", size = 287567, upload-time = "2026-01-24T01:15:31.359Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/66/13/ef67f59f6a7896fdc2c1d62b5665c5219d6b0a9a1784938eb9a28e55e128/gunicorn-25.1.0.tar.gz", hash = "sha256:1426611d959fa77e7de89f8c0f32eed6aa03ee735f98c01efba3e281b1c47616", size = 594377, upload-time = "2026-02-13T11:09:58.989Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/96/90/cfe637677916fc6f53cd2b05d5746e249f683e1fa14c9e745a88c66f7290/gunicorn-24.1.1-py3-none-any.whl", hash = "sha256:757f6b621fc4f7581a90600b2cd9df593461f06a41d7259cb9b94499dc4095a8", size = 114920, upload-time = "2026-01-24T01:15:29.656Z" },
+    { url = "https://files.pythonhosted.org/packages/da/73/4ad5b1f6a2e21cf1e85afdaad2b7b1a933985e2f5d679147a1953aaa192c/gunicorn-25.1.0-py3-none-any.whl", hash = "sha256:d0b1236ccf27f72cfe14bce7caadf467186f19e865094ca84221424e839b8b8b", size = 197067, upload-time = "2026-02-13T11:09:57.146Z" },
 ]
 
 [[package]]
@@ -652,10 +652,10 @@ requires-dist = [
     { name = "alembic", specifier = "==1.18.3" },
     { name = "authlib", specifier = "==1.6.6" },
     { name = "bs4", marker = "extra == 'dev'", specifier = ">=0.0.2" },
-    { name = "flask", specifier = "==3.1.1" },
+    { name = "flask", specifier = "==3.1.3" },
     { name = "flask-wtf", specifier = ">=1.2.2" },
     { name = "gitpython", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
-    { name = "gunicorn", specifier = "==24.1.1" },
+    { name = "gunicorn", specifier = "==25.1.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==1.19.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = "==4.5.1" },
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
@@ -665,7 +665,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
     { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "python-dotenv", specifier = "==1.2.1" },
-    { name = "python-gitlab", specifier = "==8.0.0" },
+    { name = "python-gitlab", specifier = "==8.1.0" },
     { name = "pyyaml", specifier = "==6.0.1" },
     { name = "requests", specifier = "==2.32.4" },
     { name = "requests-mock", marker = "extra == 'dev'", specifier = ">=1.0.0,<2.0.0" },
@@ -674,7 +674,7 @@ requires-dist = [
     { name = "testcontainers", marker = "extra == 'dev'", specifier = "==4.14.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = "==6.0.12.12" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = "==2.32.0.20240907" },
-    { name = "werkzeug", specifier = "==3.1.5" },
+    { name = "werkzeug", specifier = "==3.1.6" },
 ]
 provides-extras = ["dev"]
 
@@ -1051,15 +1051,15 @@ wheels = [
 
 [[package]]
 name = "python-gitlab"
-version = "8.0.0"
+version = "8.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
     { name = "requests-toolbelt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c4/68/02645bc9d71554e7a263b118e4e55dafe4c4735c1ba74f9712232ed84054/python_gitlab-8.0.0.tar.gz", hash = "sha256:03eae5a9d105448796e6c0e192d402c266057e75790cf4f42c143dddf91313ce", size = 401334, upload-time = "2026-01-28T01:22:27.005Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/1d/a62fea1f3312fd9e58af41466ae072796a09684dd0cd825cc042ba39488c/python_gitlab-8.1.0.tar.gz", hash = "sha256:660f15e3f889ec430797d260322bc61d90f8d90accfc10ba37593b11aed371bd", size = 401576, upload-time = "2026-02-28T01:26:32.757Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/60/ba68e51e90a99b14af639463e5d617239029ec25927a0990ff28bd851916/python_gitlab-8.0.0-py3-none-any.whl", hash = "sha256:c635e6722c5710d35ddadfcf95c362b0aa8de11ab3972bc4f230ebd58a6c49ee", size = 144483, upload-time = "2026-01-28T01:22:25.772Z" },
+    { url = "https://files.pythonhosted.org/packages/79/d4/9848be62ef23fcac203f4386faf43a2cc13a4888447b3f5fbf7346f31374/python_gitlab-8.1.0-py3-none-any.whl", hash = "sha256:b1a59e81e5e0363185b446a707dc92c27ee8bf1fc14ce75ed8eafa58cbdce63a", size = 144498, upload-time = "2026-02-28T01:26:31.14Z" },
 ]
 
 [[package]]
@@ -1287,14 +1287,14 @@ wheels = [
 
 [[package]]
 name = "werkzeug"
-version = "3.1.5"
+version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markupsafe" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/70/1469ef1d3542ae7c2c7b72bd5e3a4e6ee69d7978fa8a3af05a38eca5becf/werkzeug-3.1.5.tar.gz", hash = "sha256:6a548b0e88955dd07ccb25539d7d0cc97417ee9e179677d22c7041c8f078ce67", size = 864754, upload-time = "2026-01-08T17:49:23.247Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/61/f1/ee81806690a87dab5f5653c1f146c92bc066d7f4cebc603ef88eb9e13957/werkzeug-3.1.6.tar.gz", hash = "sha256:210c6bede5a420a913956b4791a7f4d6843a43b6fcee4dfa08a65e93007d0d25", size = 864736, upload-time = "2026-02-19T15:17:18.884Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/e4/8d97cca767bcc1be76d16fb76951608305561c6e056811587f36cb1316a8/werkzeug-3.1.5-py3-none-any.whl", hash = "sha256:5111e36e91086ece91f93268bb39b4a35c1e6f1feac762c9c822ded0a4e322dc", size = 225025, upload-time = "2026-01-08T17:49:21.859Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/ec/d58832f89ede95652fd01f4f24236af7d32b70cab2196dfcc2d2fd13c5c2/werkzeug-3.1.6-py3-none-any.whl", hash = "sha256:7ddf3357bb9564e407607f988f683d72038551200c704012bb9a4c523d42f131", size = 225166, upload-time = "2026-02-19T15:17:17.475Z" },
 ]
 
 [[package]]
