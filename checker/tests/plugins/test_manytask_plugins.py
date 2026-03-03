@@ -12,6 +12,9 @@ from requests_mock import Mocker
 
 from checker.plugins.manytask import ManytaskPlugin, PluginExecutionFailed
 
+# Test constants
+HTTP_OK = 200
+
 
 class TestManytaskPlugin:
     REPORT_URL = HttpUrl("https://app.manytask.org/api/test/report")
@@ -204,7 +207,7 @@ class TestManytaskPlugin:
                 assert response_text in str(exc.value), "Error text wasn't provided in exception message"
             else:
                 result = ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
-                assert result.status_code == 200
+                assert result.status_code == HTTP_OK
                 assert result.text == "Success"
 
     def test_plugin_run(self, mocker: MockFixture) -> None:
