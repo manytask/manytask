@@ -14,7 +14,9 @@ class CppClangTidyPlugin(PluginABC):
     name = "cpp_clang_tidy"
 
     class Args(PluginABC.Args):
+        executable: str = "clang-tidy"
         reference_root: Path
+        build_dir: Path = Path("build")
         task_path: Path
         lint_patterns: list[str]
 
@@ -28,8 +30,8 @@ class CppClangTidyPlugin(PluginABC):
             raise PluginExecutionFailed("No files")
 
         run_args = SafeRunScriptPlugin.Args(
-            origin=str(args.reference_root / "build-asan"),
-            script=["clang-tidy-19", "-p", ".", "--use-color", "--quiet", *lint_files],
+            origin=str(args.reference_root / args.build_dir),
+            script=[args.executable, "-p", ".", "--use-color", "--quiet", *lint_files],
             paths_whitelist=[str(args.reference_root)],
             paths_blacklist=get_cpp_blacklist(args.reference_root),
         )

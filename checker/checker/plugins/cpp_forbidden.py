@@ -15,6 +15,7 @@ class CppForbiddenPlugin(PluginABC):
 
     class Args(PluginABC.Args):
         reference_root: Path
+        build_dir: Path = Path("build")
         task_path: Path
         allow_change: list[str]
         white_list: list[str]
@@ -41,7 +42,7 @@ class CppForbiddenPlugin(PluginABC):
             raise PluginExecutionFailed("No arguments for the checker")
 
         run_args = SafeRunScriptPlugin.Args(
-            origin=str(args.reference_root / "build-relwithdebinfo"),
+            origin=str(args.reference_root / args.build_dir),
             script=[args.forbidden_checker, "-p", ".", *checker_args],
             paths_whitelist=[str(args.reference_root)],
             paths_blacklist=get_cpp_blacklist(args.reference_root),
