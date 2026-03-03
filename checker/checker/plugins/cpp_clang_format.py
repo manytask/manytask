@@ -14,6 +14,7 @@ class CppClangFormatPlugin(PluginABC):
     name = "cpp_clang_format"
 
     class Args(PluginABC.Args):
+        executable: str = "clang-format"
         reference_root: Path
         task_path: Path
         lint_patterns: list[str]
@@ -32,7 +33,7 @@ class CppClangFormatPlugin(PluginABC):
                 "python3",
                 "run-clang-format.py",
                 "--clang-format-executable",
-                "clang-format-19",
+                args.executable,
                 "--color",
                 "always",
                 "-r",
