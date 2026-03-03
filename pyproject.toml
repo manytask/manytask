@@ -13,7 +13,7 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "pydantic>=2.12",
     "python-dotenv==1.2.1",
-    "python-gitlab==8.0.0",
+    "python-gitlab==8.1.0",
     "pyyaml==6.0.1",
     "requests==2.32.4",
     "sqlalchemy>=2.0.44,<3.0.0",
@@ -23,7 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "ruff==0.14.0",
+    "ruff==0.15.4",
     "mypy==1.19.1",
     "types-requests==2.32.0.20240907",
     "types-PyYAML==6.0.12.12",
