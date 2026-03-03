@@ -492,6 +492,12 @@ def update_config(course_name: str) -> ResponseReturnValue:
         logger.exception("Error while updating config for course=%s", course_name, exc_info=True)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
+    # Recalculate grades for all students using the new config
+    try:
+        app.storage_api.recalculate_all_grades(course_name)
+    except Exception:
+        logger.exception("Failed to recalculate grades after config update for course=%s", course_name)
+
     return "", HTTPStatus.OK
 
 

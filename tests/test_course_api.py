@@ -4,35 +4,16 @@ from http import HTTPStatus
 from unittest.mock import MagicMock
 
 import pytest
-from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from flask import Flask, json
 
-from manytask.abstract import AuthApi, AuthenticatedUser
 from manytask.api import namespace_bp
 from manytask.database import DataBaseApi, DatabaseConfig
+from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 from manytask.models import Course, Namespace, User, UserOnNamespace, UserOnNamespaceRole
 from manytask.web import root_bp
 from tests.constants import GITLAB_BASE_URL, TEST_SECRET_KEY
-
-
-class MockAuthApi(AuthApi):
-    """Mock AuthApi for testing."""
-
-    def check_user_is_authenticated(
-        self,
-        oauth: OAuth,
-        oauth_access_token: str,
-        oauth_refresh_token: str,
-    ) -> bool:
-        return True
-
-    def get_authenticated_user(
-        self,
-        oauth_access_token: str,
-    ) -> AuthenticatedUser:
-        return AuthenticatedUser(id=1, username="test_user")
 
 
 @pytest.fixture(autouse=True)

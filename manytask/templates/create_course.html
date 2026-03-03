@@ -59,8 +59,7 @@
                     <input type="text" class="form-control" id="gitlab_course_public_repo"
                            name="gitlab_course_public_repo"
                            placeholder="test-course/public-[year]-[fall/spring]" formnovalidate>
-                    <div class="invalid-feedback" id="public-repo-feedback">Public Repo should begin with the name
-                        of the course group
+                    <div class="invalid-feedback" id="public-repo-feedback">Public Repo should begin with either the namespace path or the course group name
                     </div>
                     <div class="form-text">The name of the repository shared by students, where the assignment
                         conditions are laid out
@@ -71,8 +70,7 @@
                     <input type="text" class="form-control" id="gitlab_course_students_group"
                            name="gitlab_course_students_group"
                            placeholder="test-course/students-[year]-[fall/spring]" formnovalidate>
-                    <div class="invalid-feedback" id="students-group-feedback">Students Group should begin with the
-                        name of the course group
+                    <div class="invalid-feedback" id="students-group-feedback">Students Group should begin with either the namespace path or the course group name
                     </div>
                     <div class="form-text">The name of the group where students' repositories are created</div>
                 </div>
@@ -121,14 +119,20 @@ document.addEventListener('DOMContentLoaded', function () {
     let namespacesLoaded = false;
     let namespacesData = [];
 
-    function validatePrefix(field, prefix, feedbackId) {
-        if (prefix.value === '0') {
-            field.classList.remove('is-invalid');
-            field.classList.add('is-valid');
-            document.getElementById(feedbackId).style.display = 'none';
-            return;
+    function validatePrefix(field, feedbackId) {
+
+        const groupName = gitlabGroupField.value;
+        const namespacePath = getSelectedNamespacePath();
+        
+        let validPrefix = "";
+        if (namespacePath) {
+            validPrefix = validPrefix + namespacePath + '/';
         }
-        if (field.value.startsWith(prefix.value + '/')) {
+        if (groupName) {
+            validPrefix = validPrefix + groupName + '/';
+        }
+        
+        if (validPrefix === '' || field.value.startsWith(validPrefix)) {
             field.classList.remove('is-invalid');
             field.classList.add('is-valid');
             document.getElementById(feedbackId).style.display = 'none';
@@ -141,12 +145,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     publicRepoField.addEventListener('input', function () {
         publicRepoChanged = true;
-        validatePrefix(publicRepoField, namespaceSelect, "public-repo-feedback")
+        validatePrefix(publicRepoField, "public-repo-feedback")
     });
 
     studentsGroupField.addEventListener('input', function () {
         studentsGroupChanged = true;
-        validatePrefix(studentsGroupField, namespaceSelect, "students-group-feedback")
+        validatePrefix(studentsGroupField, "students-group-feedback")
     });
 
     // Function to get namespace path from selected namespace
@@ -355,8 +359,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        validatePrefix(publicRepoField, namespaceSelect, "public-repo-feedback");
-        validatePrefix(studentsGroupField, namespaceSelect, "students-group-feedback");
+        validatePrefix(publicRepoField, "public-repo-feedback");
+        validatePrefix(studentsGroupField, "students-group-feedback");
 
         if (form.querySelectorAll(".is-invalid").length > 0) {
             event.preventDefault();

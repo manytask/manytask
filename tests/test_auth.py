@@ -19,6 +19,7 @@ from manytask.auth import (
     valid_gitlab_session,
 )
 from manytask.course import CourseStatus
+from manytask.mock_auth import MockAuthApi
 from manytask.web import course_bp, root_bp
 from tests.constants import (
     TEST_COURSE_NAME,
@@ -33,7 +34,7 @@ from tests.constants import (
 
 
 @pytest.fixture
-def app(mock_auth_api, mock_storage_api):
+def app(mock_storage_api):
     app = Flask(
         __name__, template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), "manytask/templates")
     )
@@ -41,28 +42,11 @@ def app(mock_auth_api, mock_storage_api):
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
-    app.auth_api = mock_auth_api
+    app.auth_api = MockAuthApi()
     app.storage_api = mock_storage_api
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
     return app
-
-
-@pytest.fixture
-def mock_auth_api():
-    class MockAuthApi:
-        def check_user_is_authenticated(
-            self,
-            oauth,
-            oauth_access_token: str,
-            oauth_refresh_token: str,
-        ) -> bool:
-            return True
-
-        def get_authenticated_user(self, access_token):
-            return AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
-
-    return MockAuthApi()
 
 
 @pytest.fixture
