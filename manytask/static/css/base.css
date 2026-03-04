@@ -38,3 +38,13 @@ body {
 .mt-signout-btn:hover {
     opacity: 1;
 }
+
+.mt-theme-toggle-offset {
+    right: 145px !important;
+}
+
+@media (max-width: 576px) {
+    .mt-theme-toggle-offset {
+        right: 120px !important;
+    }
+}
