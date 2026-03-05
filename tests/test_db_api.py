@@ -1,5 +1,6 @@
 import os
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -327,29 +328,40 @@ def update_func(add: int):
     return _update_func
 
 
+@dataclass
+class QueryCount:
+    value: int = 0
+
+
 @contextmanager
-def count_queries(engine):
-    count = 0
+def query_counter(engine):
+    counter = QueryCount()
 
     def _increment(conn, cursor, statement, parameters, context, executemany):
-        nonlocal count
-        count += 1
+        counter.value += 1
 
     event.listen(engine, "before_cursor_execute", _increment)
     try:
-        yield lambda: count
+        yield counter
     finally:
         event.remove(engine, "before_cursor_execute", _increment)
 
 
-STUDENT_1 = (TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1)
-STUDENT_2 = (TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2)
+@dataclass
+class TestStudent:
+    username: str
+    first_name: str
+    last_name: str
+    rms_id: str | int
 
 
-def add_student(db_api, course_name, student, task_name, score):
-    username, first_name, last_name, rms_id = student
-    db_api.update_or_create_user(username, first_name, last_name, rms_id)
-    db_api.store_score(course_name, username, task_name, update_func(score))
+STUDENT_1 = TestStudent(TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1)
+STUDENT_2 = TestStudent(TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2)
+
+
+def add_student(db_api, course_name, student: TestStudent, task_name, score):
+    db_api.update_or_create_user(student.username, student.first_name, student.last_name, student.rms_id)
+    db_api.store_score(course_name, student.username, task_name, update_func(score))
 
 
 def test_not_initialized_course(session, db_api, first_course_config):
@@ -1678,14 +1690,14 @@ def test_constant_queries(db_api_with_initialized_first_course, engine, method_n
 
     add_student(db_api, FIRST_COURSE_NAME, STUDENT_1, "task_0_0", 1)
 
-    with count_queries(engine) as query_count:
+    with query_counter(engine) as counter:
         method(FIRST_COURSE_NAME)
-    queries_with_1 = query_count()
+    queries_with_1_student = counter.value
 
     add_student(db_api, FIRST_COURSE_NAME, STUDENT_2, "task_0_0", 1)
 
-    with count_queries(engine) as query_count:
+    with query_counter(engine) as counter:
         method(FIRST_COURSE_NAME)
-    queries_with_2 = query_count()
+    queries_with_2_students = counter.value
 
-    assert queries_with_1 == queries_with_2
+    assert queries_with_1_student == queries_with_2_students
