@@ -25,6 +25,14 @@
         <div class="mt-version-badge fs-7">{{ manytask_version }}</div>
     {% endif %}
 
+    {% block signout %}
+        {% if session.get('gitlab') %}
+            <a href="{{ url_for('root.logout') }}" class="mt-signout-btn btn btn-outline-secondary btn-sm">
+                <i class="fas fa-sign-out-alt me-1"></i> Sign out
+            </a>
+        {% endif %}
+    {% endblock %}
+
     <div class="position-fixed top-0 end-0 p-3" style="z-index: 11">
     {% with messages = get_flashed_messages() %}
         {% if messages %}
