@@ -157,6 +157,15 @@ class Tester:
             pipeline_conf = self.testing_config.report_pipeline
         return PipelineRunner(pipeline_conf, self.plugins, verbose=self.verbose)
 
+    def _print_report_failure_details(self, result: PipelineResult) -> None:
+        """Print per-stage status and output when report pipeline fails."""
+        for stage in result.stage_results:
+            status = "FAILED" if stage.failed else ("skipped" if stage.skipped else "ok")
+            print_info(f"  stage '{stage.name}': {status}", color="red" if stage.failed else "grey")
+            if stage.output:
+                for line in stage.output.splitlines():
+                    print_info(f"    {line}", color="grey")
+
     def validate(self) -> None:
         # get all tasks
         tasks = self.course.get_tasks(enabled=True)
@@ -250,13 +259,17 @@ class Tester:
             # Report score if task pipeline succeeded
             if task_pipeline_result:
                 report_pipeline = self._get_task_report_pipeline_runner(task)
-                print_info(f"Reporting <{task.name}> task tests:", color="pink")
+                print_info(
+                    f"Reporting <{task.name}> task tests ({len(report_pipeline)} stage(s) in report pipeline):",
+                    color="pink",
+                )
                 if report:
                     task_report_result: PipelineResult = report_pipeline.run(context, dry_run=self.dry_run)
                     if task_report_result:
                         print_info("->Reporting succeeded")
                     else:
                         print_info("->Reporting failed")
+                        self._print_report_failure_details(task_report_result)
                 else:
                     _: PipelineResult = report_pipeline.run(context, dry_run=True)
                     print_info("->Reporting disabled (dry-run)")
