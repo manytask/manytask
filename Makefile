@@ -25,15 +25,15 @@ run-hooks:
 	uv run pre-commit run --all-files
 
 dev:
-	docker-compose -f $(DOCKER_COMPOSE_DEV) down
-	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
+	docker compose -f $(DOCKER_COMPOSE_DEV) down
+	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 clean-db:
-	docker-compose -f $(DOCKER_COMPOSE_DEV) down -v
+	docker compose -f $(DOCKER_COMPOSE_DEV) down -v
 	docker volume prune -f
 
 reset-dev: clean-db
-	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
+	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: install-deps
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
