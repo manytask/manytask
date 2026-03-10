@@ -32,6 +32,7 @@ from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.flask import check_instance_admin, get_courses, has_role
 from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
+from .utils.sourcecraft import normalize_string
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -136,7 +137,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
     return render_template(
         "tasks.html",
         task_base_url=app.rms_api.get_url_for_task_base(course.gitlab_course_public_repo, course.gitlab_default_branch),
-        username=student_username,
+        username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
         course_name=course.course_name,
         course_status=course.status,
         app=app,
