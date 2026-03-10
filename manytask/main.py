@@ -98,6 +98,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         )
         app.auth_api = MockAuthApi()
         app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
+        
+        # Initialize mock users in database
+        _initialize_mock_users(app.storage_api, app.rms_api)
 
     app.csrf = CSRFProtect(app)
 
@@ -163,6 +166,42 @@ def _create_debug_course(app: CustomFlask) -> None:
         deadlines_type=ManytaskDeadlinesType.HARD,
     )
     app.storage_api.create_course(course_config)
+
+
+def _initialize_mock_users(storage_api: abstract.StorageApi, rms_api: abstract.RmsApi) -> None:
+    """Initialize mock users in the database for development/testing with RMS=mock.
+    
+    Creates two users:
+    - admin (username: admin, password: admin)
+    - user (username: user, password: user)
+    """
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get mock users from RMS API
+        admin_rms_user = rms_api.get_rms_user_by_username("admin")
+        user_rms_user = rms_api.get_rms_user_by_username("user")
+        
+        # Create or update admin user in database
+        storage_api.update_or_create_user(
+            username=admin_rms_user.username,
+            first_name="Admin",
+            last_name="User",
+            rms_id=admin_rms_user.id,
+        )
+        logger.info("Mock user 'admin' initialized in database (username: admin, password: admin)")
+        
+        # Create or update regular user in database
+        storage_api.update_or_create_user(
+            username=user_rms_user.username,
+            first_name="Regular",
+            last_name="User",
+            rms_id=user_rms_user.id,
+        )
+        logger.info("Mock user 'user' initialized in database (username: user, password: user)")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize mock users: {e}")
 
 
 def _database_storage_setup() -> abstract.StorageApi:
