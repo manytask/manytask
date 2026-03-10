@@ -326,7 +326,7 @@ class TestExporterOnSimple:
         "fill_templates",
         [True, False],
     )
-    def test_copy_files_with_config(
+    def test_copy_files_with_config(  # noqa: PLR0913
         self,
         tmpdir: Path,
         simple_exporter: Exporter,
