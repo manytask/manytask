@@ -1,4 +1,6 @@
 import os
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +12,7 @@ from alembic import command
 from alembic.script import ScriptDirectory
 from dotenv import load_dotenv
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
+from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -325,6 +328,42 @@ def update_func(add: int):
     return _update_func
 
 
+@dataclass
+class QueryCount:
+    value: int = 0
+
+
+@contextmanager
+def query_counter(engine):
+    counter = QueryCount()
+
+    def _increment(conn, cursor, statement, parameters, context, executemany):
+        counter.value += 1
+
+    event.listen(engine, "before_cursor_execute", _increment)
+    try:
+        yield counter
+    finally:
+        event.remove(engine, "before_cursor_execute", _increment)
+
+
+@dataclass
+class TestStudent:
+    username: str
+    first_name: str
+    last_name: str
+    rms_id: str | int
+
+
+STUDENT_1 = TestStudent(TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1)
+STUDENT_2 = TestStudent(TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2)
+
+
+def add_student(db_api, course_name, student: TestStudent, task_name, score):
+    db_api.update_or_create_user(student.username, student.first_name, student.last_name, student.rms_id)
+    db_api.store_score(course_name, student.username, task_name, update_func(score))
+
+
 def test_not_initialized_course(session, db_api, first_course_config):
     db_api.create_course(settings_config=first_course_config)
     course_name = first_course_config.course_name
@@ -618,7 +657,9 @@ def test_store_score(db_api_with_initialized_first_course, session):
     assert stats["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats.items() if k != "task_0_0")
 
-    assert all_scores == {TEST_USERNAME: ({"task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)}
+    assert all_scores == {
+        TEST_USERNAME: ({"task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
+    }
     assert bonus_score == 0
     assert scores == {"task_0_0": 1}
 
@@ -653,6 +694,7 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
         TEST_USERNAME: (
             {"bonus_score": (1, False), "task_0_0": (1, False)},
             (TEST_FIRST_NAME, TEST_LAST_NAME),
+            None,
             None,
             None,
         )
@@ -692,7 +734,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     assert all(v == 0.0 for k, v in stats.items() if k != "task_1_3")
 
     assert all_scores == {
-        TEST_USERNAME: ({"task_1_3": (expected_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)
+        TEST_USERNAME: ({"task_1_3": (expected_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
     }
     assert bonus_score == expected_score
     assert scores == {"task_1_3": expected_score}
@@ -726,7 +768,9 @@ def test_store_score_with_changed_task_name(
     assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
     assert all(v == 0.0 for k, v in stats.items())
 
-    assert all_scores == {TEST_USERNAME: ({"task_0_0": (10, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)}
+    assert all_scores == {
+        TEST_USERNAME: ({"task_0_0": (10, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
+    }
     assert bonus_score == 0
     assert scores == {}
 
@@ -822,10 +866,12 @@ def test_many_users(db_api_with_initialized_first_course, session):
             (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
             None,
             None,
+            None,
         ),
         TEST_USERNAME_2: (
             {"task_0_0": (expected_score_2, False)},
             (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
+            None,
             None,
             None,
         ),
@@ -860,7 +906,9 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     assert stats1["task_0_0"] == 1.0
     assert all(v == 0.0 for k, v in stats1.items() if k != "task_0_0")
 
-    assert all_scores1 == {TEST_USERNAME: ({"task_0_0": (30, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)}
+    assert all_scores1 == {
+        TEST_USERNAME: ({"task_0_0": (30, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
+    }
     assert bonus_score_user1 == 0
     assert scores_user1 == {"task_0_0": 30}
 
@@ -875,7 +923,7 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
 
     user2_score = 40
     assert all_scores2 == {
-        TEST_USERNAME: ({"task_1_3": (user2_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None)
+        TEST_USERNAME: ({"task_1_3": (user2_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
     }
     assert bonus_score_user2 == user2_score
     assert scores_user2 == {"task_1_3": user2_score}
@@ -929,10 +977,12 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
             (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
             None,
             None,
+            None,
         ),
         TEST_USERNAME_2: (
             {"task_0_0": (expected_score_2, False)},
             (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
+            None,
             None,
             None,
         ),
@@ -955,8 +1005,8 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     assert all(v == 0.0 for k, v in stats2.items() if k not in ["task_1_0", "task_1_1"])
 
     assert all_scores2 == {
-        TEST_USERNAME_1: ({"task_1_0": (99, False)}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1), None, None),
-        TEST_USERNAME_2: ({"task_1_1": (7, False)}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2), None, None),
+        TEST_USERNAME_1: ({"task_1_0": (99, False)}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1), None, None, None),
+        TEST_USERNAME_2: ({"task_1_1": (7, False)}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2), None, None, None),
     }
     assert bonus_score2_user1 == 0
     assert scores2_user1 == {"task_1_0": 99}
@@ -1623,3 +1673,31 @@ def test_grade_config_estimation_with_removing_grade(
 
     for i, score in enumerate(mock_scores):
         assert grade_config_data.evaluate(score) == mock_grades_updated[i]
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "get_all_scores_with_names",
+        "recalculate_all_grades",
+        "get_stats",
+    ],
+)
+def test_constant_queries(db_api_with_initialized_first_course, engine, method_name):
+    """Query count must not grow with student count."""
+    db_api = db_api_with_initialized_first_course
+    method = getattr(db_api, method_name)
+
+    add_student(db_api, FIRST_COURSE_NAME, STUDENT_1, "task_0_0", 1)
+
+    with query_counter(engine) as counter:
+        method(FIRST_COURSE_NAME)
+    queries_with_1_student = counter.value
+
+    add_student(db_api, FIRST_COURSE_NAME, STUDENT_2, "task_0_0", 1)
+
+    with query_counter(engine) as counter:
+        method(FIRST_COURSE_NAME)
+    queries_with_2_students = counter.value
+
+    assert queries_with_1_student == queries_with_2_students

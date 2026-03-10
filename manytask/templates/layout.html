@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block signout %}{% endblock %}
+
 {% block body %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
     {% set solved_score = scores.values() | sum() %}

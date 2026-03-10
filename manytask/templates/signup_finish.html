@@ -28,7 +28,7 @@
     </div>
 
 
-    <div class="dropdown position-fixed top-0 end-0 mb-2 me-2">
+    <div class="dropdown position-fixed top-0 end-0 mb-2 me-2{% if session.get('gitlab') %} mt-theme-toggle-offset{% endif %}">
         <button class="btn btn-bd-primary py-2 dropdown-toggle d-flex align-items-center" type="button" aria-expanded="false" data-bs-toggle="dropdown" aria-label="Toggle theme (dark)">
             Toggle theme
         </button>

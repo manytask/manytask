@@ -89,10 +89,7 @@ class StorageApi(ABC):
     @abstractmethod
     def get_all_scores_with_names(
         self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]]: ...
-
-    @abstractmethod
-    def get_student_comment(self, course_name: str, username: str) -> str | None: ...
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None, str | None]]: ...
 
     @abstractmethod
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
@@ -255,6 +252,9 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_course_id_by_name(self, course_name: str) -> int | None: ...
+
+    @abstractmethod
+    def recalculate_all_grades(self, course_name: str) -> None: ...
 
     @abstractmethod
     def calculate_and_save_grade(
