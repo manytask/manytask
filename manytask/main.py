@@ -46,6 +46,10 @@ class CustomFlask(Flask):
     def signup_finish_template(self) -> str:
         return "signup_finish.html"
 
+    @property
+    def create_course_template(self) -> str:
+        return "create_course_sourcecraft.html" if self.app_config.rms == "sourcecraft" else "create_course.html"
+
     def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
 

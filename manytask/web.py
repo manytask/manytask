@@ -30,6 +30,7 @@ from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.flask import check_instance_admin, get_courses, has_role
 from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
+from .utils.sourcecraft import normalize_string
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -134,7 +135,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
     return render_template(
         "tasks.html",
         task_base_url=app.rms_api.get_url_for_task_base(course.gitlab_course_public_repo, course.gitlab_default_branch),
-        username=student_username,
+        username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
         course_name=course.course_name,
         course_status=course.status,
         app=app,
@@ -302,9 +303,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         rms_id=rms_user.id,
         auth_id=session["auth"]["user_auth_id"],
     )
-    session.setdefault("rms", {}).update(
-        set_rms_session(ClientProfile(rms_id=session["auth"]["user_auth_id"], username=session["auth"]["username"]))
-    )
+    session.setdefault("rms", {}).update(set_rms_session(ClientProfile(rms_id=rms_user.id, username=rms_user.username)))
     return redirect(url_for("root.index"))
 
 
@@ -442,13 +441,15 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
             return render_template(
-                "create_course.html", generated_token=generate_token_hex(24), error_message="CSRF Error"
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message="CSRF Error",
             )
 
         namespace_id_str = request.form.get("namespace_id", "").strip()
         if not namespace_id_str:
             return render_template(
-                "create_course.html",
+                app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message="Namespace is required",
             )
@@ -457,7 +458,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             namespace_id = int(namespace_id_str)
         except ValueError:
             return render_template(
-                "create_course.html",
+                app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message="Invalid namespace ID",
             )
@@ -472,7 +473,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             if not is_instance_admin:
                 logger.warning("User %s attempted to create course without namespace", username)
                 return render_template(
-                    "create_course.html",
+                    app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Only Instance Admin can create courses without namespace",
                 )
@@ -484,14 +485,14 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     "User %s attempted to create course with namespace id=%s without access", username, namespace_id
                 )
                 return render_template(
-                    "create_course.html",
+                    app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Access denied to selected namespace",
                 )
             except Exception as e:
                 logger.error("Error fetching namespace id=%s: %s", namespace_id, str(e))
                 return render_template(
-                    "create_course.html",
+                    app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Selected namespace not found",
                 )
@@ -504,15 +505,15 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     namespace_id,
                 )
                 return render_template(
-                    "create_course.html",
+                    app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Only Instance Admin or Namespace Admin can create courses",
                 )
 
         course_name = request.form["unique_course_name"].strip()
-        gitlab_course_group = request.form["gitlab_course_group"].strip()
-        gitlab_course_public_repo = request.form["gitlab_course_public_repo"].strip()
-        gitlab_course_students_group = request.form["gitlab_course_students_group"].strip()
+        gitlab_course_group = request.form["course_group"].strip()
+        gitlab_course_public_repo = request.form["course_public_repo"].strip()
+        gitlab_course_students_group = request.form["course_students_group"].strip()
 
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
@@ -540,7 +541,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         except Exception as e:
             logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
             return render_template(
-                "create_course.html",
+                app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message=f"Failed to create GitLab resources: {str(e)}",
             )
@@ -551,7 +552,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             gitlab_course_group=gitlab_course_group_full_path,
             gitlab_course_public_repo=gitlab_course_public_repo,
             gitlab_course_students_group=gitlab_course_students_group,
-            gitlab_default_branch=request.form["gitlab_default_branch"],
+            gitlab_default_branch=request.form["default_branch"],
             registration_secret=request.form["registration_secret"],
             token=request.form["token"],
             show_allscores=request.form.get("show_allscores", "off") == "on",
@@ -566,13 +567,14 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             return redirect(url_for("course.course_page", course_name=settings.course_name))
 
         return render_template(
-            "create_course.html",
+            app.create_course_template,
             generated_token=generate_token_hex(24),
             error_message=f"Course '{settings.course_name}' already exists.",
+            rms=app.app_config.rms,
         )
 
     return render_template(
-        "create_course.html",
+        app.create_course_template,
         generated_token=generate_token_hex(24),
     )
 
@@ -622,7 +624,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
-            return render_template("edit_course.html", error_message="CSRF Error")
+            return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
         updated_settings = CourseConfig(
             course_name=course_name,
             namespace_id=course.namespace_id,
