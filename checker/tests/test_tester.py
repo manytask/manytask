@@ -6,6 +6,14 @@ from checker.configs import ManytaskConfig
 from checker.configs.checker import CheckerTestingConfig
 from checker.tester import Tester
 
+# Test constants
+FULL_SCORE_PERCENT = 100
+HALF_SCORE_PERCENT = 50
+SCORE_075 = 0.75
+SCORE_05 = 0.5
+SCORE_04 = 0.4
+SCORE_03 = 0.3
+
 TEST_MANYTASK_CONFIG = ManytaskConfig(
     version=1,
     settings={
@@ -83,17 +91,17 @@ class TestTester:
         score_str = tester._get_task_score_percent(
             "task1_1", _get_timestamp("2025-03-01 00:01:00")
         )  # don't count 1 minute
-        assert 100 == round(float(score_str) * 100)
-        assert 0.75 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-04 12:00:00"))  # linear
-        assert 0.5 == tester._get_task_score_percent(
+        assert FULL_SCORE_PERCENT == round(float(score_str) * 100)
+        assert SCORE_075 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-04 12:00:00"))  # linear
+        assert SCORE_05 == tester._get_task_score_percent(
             "task1_1", _get_timestamp("2025-03-08 00:00:00")
         )  # before 2nd step
-        assert 0.5 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-16 00:00:00"))  # 2nd step step
+        assert SCORE_05 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-16 00:00:00"))  # 2nd step
         score_str = tester._get_task_score_percent(
             "task1_1", _get_timestamp("2025-03-16 00:01:00")
         )  # don't count 1 minute
-        assert 50 == round(float(score_str) * 100)
-        assert 0.4 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-19 12:00:00"))  # linear
-        assert 0.3 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-24 00:00:00"))
-        assert 0.3 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-04-01 00:00:00"))
+        assert HALF_SCORE_PERCENT == round(float(score_str) * 100)
+        assert SCORE_04 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-19 12:00:00"))  # linear
+        assert SCORE_03 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-24 00:00:00"))
+        assert SCORE_03 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-04-01 00:00:00"))
         assert 0 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-04-01 00:01:00"))
