@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -11,6 +10,7 @@ from typing import Any
 import httpx
 
 from .abstract import RmsApi, RmsApiException, RmsUser
+from .utils.sourcecraft import normalize_string
 
 logger = logging.getLogger(__name__)
 
@@ -228,7 +228,7 @@ class SourceCraftApi(RmsApi):
         :param project_group: string
         :return: True if repo exists, False otherwise
         """
-        response = self._get_repo(f"{project_group}-{self._normalize_string(project_name)}")
+        response = self._get_repo(f"{project_group}-{normalize_string(project_name)}")
 
         if response.status_code == HTTPStatus.OK:
             return True
@@ -237,37 +237,6 @@ class SourceCraftApi(RmsApi):
             return False
         else:
             raise RmsApiException(f"Failed to check if project exists: {response.json()}")
-
-    # TODO: use or remove
-    def _normalize_string(self, text: str) -> str:
-        """Normalize string by applying multiple transformation rules.
-
-        Rules applied:
-        1. Convert all letters to lowercase
-        2. Replace [\\s_.@]+ with '-'
-        3. Remove all characters not matching [A-Za-z0-9\\-]
-        4. Replace multiple consecutive dashes with single dash
-        5. Strip leading and trailing dashes
-
-        :param text: Input string to normalize
-        :return: Normalized string suitable for use as slug
-        """
-        # 1. Convert to lowercase
-        result = text.lower()
-
-        # 2. Replace spaces, underscores, dots, @ with dashes
-        result = re.sub(r"[\s_.@]+", "-", result)
-
-        # 3. Remove all characters not matching [A-Za-z0-9\-]
-        result = re.sub(r"[^A-Za-z0-9\-]+", "", result)
-
-        # 4. Replace multiple consecutive dashes with single dash
-        result = re.sub(r"-{2,}", "-", result)
-
-        # 5. Strip leading and trailing dashes
-        result = result.strip("-")
-
-        return result
 
     def create_project(
         self,
@@ -283,7 +252,7 @@ class SourceCraftApi(RmsApi):
         """
         logger.info(f"Creating repo for user {rms_user.username}")
 
-        student_repo_slug = f"{course_students_group}-{self._normalize_string(rms_user.username)}"
+        student_repo_slug = f"{course_students_group}-{normalize_string(rms_user.username)}"
 
         response = self._get_repo(course_public_repo)
         if response.status_code == HTTPStatus.NOT_FOUND:
@@ -319,7 +288,7 @@ class SourceCraftApi(RmsApi):
         :param course_students_group: string
         :return: URL to the student's repository
         """
-        return f"{self._base_url}/{self._org_slug}/{course_students_group}-{self._normalize_string(username)}"
+        return f"{self._base_url}/{self._org_slug}/{course_students_group}-{normalize_string(username)}"
 
     def register_new_user(
         self,
