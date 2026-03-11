@@ -16,6 +16,10 @@ from checker.exceptions import BadConfig, CheckerException
 T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
 
 TEST_TIMEZONE = "Europe/Berlin"
+# Test constants
+EXPECTED_GROUPS_COUNT = 4
+EXPECTED_TASKS_COUNT = 6
+EXPECTED_ALL_TASKS_COUNT = 7
 TEST_FILE_STRUCTURE = {
     "group1": {
         "task1_1": {".task.yml": "version: 1", "file1_1_1": "", "file1_1_2": "", "extra_file3": ""},
@@ -133,15 +137,15 @@ class TestCourse:
 
     def test_search_for_groups_by_configs(self, repository_root: Path) -> None:
         potential_groups = list(Course._search_for_groups_by_configs(repository_root))
-        assert len(potential_groups) == 4
-        assert sum(len(group.tasks) for group in potential_groups) == 6
+        assert len(potential_groups) == EXPECTED_GROUPS_COUNT
+        assert sum(len(group.tasks) for group in potential_groups) == EXPECTED_TASKS_COUNT
         for group in potential_groups:
             assert isinstance(group, FileSystemGroup)
             assert (repository_root / group.relative_path).exists()
 
     def test_search_for_tasks_by_configs(self, repository_root: Path) -> None:
         tasks = list(Course._search_for_tasks_by_configs(repository_root))
-        assert len(tasks) == 7
+        assert len(tasks) == EXPECTED_ALL_TASKS_COUNT
         for task in tasks:
             assert isinstance(task, FileSystemTask)
             assert (repository_root / task.relative_path).exists()
