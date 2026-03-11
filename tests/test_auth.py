@@ -60,6 +60,7 @@ def mock_storage_api(mock_course):  # noqa: C901
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
                 auth_id=TEST_AUTH_ID,
+                user_id=TEST_USER_ID,
                 instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
@@ -94,6 +95,15 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def check_if_course_admin(self, _course_name, _username):
             return self.course_admin
+
+        def get_stored_user_by_auth_id(self, _auth_id):
+            return self.stored_user
+
+        def get_stored_user_by_rms_id(self, _rms_id):
+            return self.stored_user
+
+        def get_stored_user_by_username(self, _username):
+            return self.stored_user
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.course_admin = course_admin

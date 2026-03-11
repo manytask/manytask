@@ -119,6 +119,11 @@ def mock_session_admin(session):
             "rms_id": admin.rms_id,
             "version": 1.1,
         },
+        "manytask": {
+            "username": "admin",
+            "user_id": admin.id,
+            "version": 1.0,
+        },
     }
 
 
@@ -139,6 +144,11 @@ def mock_session_regular(session):
             "username": "regular_user",
             "rms_id": regular.rms_id,
             "version": 1.1,
+        },
+        "manytask": {
+            "username": "regular_user",
+            "user_id": regular.id,
+            "version": 1.0,
         },
     }
 

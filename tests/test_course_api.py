@@ -111,6 +111,11 @@ def mock_session_admin(session):
             "rms_id": admin.rms_id,
             "version": 1.1,
         },
+        "manytask": {
+            "username": "admin",
+            "user_id": admin.id,
+            "version": 1.0,
+        },
     }
 
 
@@ -130,6 +135,11 @@ def mock_session_namespace_admin(session):
             "username": "namespace_admin_user",
             "rms_id": user.rms_id,
             "version": 1.1,
+        },
+        "manytask": {
+            "username": "namespace_admin_user",
+            "user_id": user.id,
+            "version": 1.0,
         },
     }
 
@@ -151,6 +161,11 @@ def mock_session_pm(session):
             "rms_id": user.rms_id,
             "version": 1.1,
         },
+        "manytask": {
+            "username": "pm_user",
+            "user_id": user.id,
+            "version": 1.0,
+        },
     }
 
 
@@ -170,6 +185,11 @@ def mock_session_regular(session):
             "username": "regular_user",
             "rms_id": user.rms_id,
             "version": 1.1,
+        },
+        "manytask": {
+            "username": "regular_user",
+            "user_id": user.id,
+            "version": 1.0,
         },
     }
 

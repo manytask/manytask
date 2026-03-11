@@ -116,15 +116,16 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
                 auth_id=TEST_AUTH_ID,
+                user_id=TEST_USER_ID,
                 instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
             self.course_admin = False
 
-        def store_score(self, _course_name, rms_id, task_name, update_fn):
-            old_score = self.scores.get(f"{rms_id}_{task_name}", 0)
+        def store_score(self, _course_name, username, task_name, update_fn):
+            old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
-            self.scores[f"{rms_id}_{task_name}"] = new_score
+            self.scores[f"{username}_{task_name}"] = new_score
             return new_score
 
         @staticmethod
@@ -137,6 +138,16 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
         def get_all_scores(course_name, self):
             return {"test_user": self.get_scores(course_name, "test_user")}
+
+        def get_stored_user_by_auth_id(self, auth_id):
+            if auth_id == self.stored_user.auth_id:
+                return self.stored_user
+            return None
+
+        def get_stored_user_by_rms_id(self, rms_id):
+            if rms_id == self.stored_user.rms_id:
+                return self.stored_user
+            return None
 
         def get_stored_user_by_username(self, username):
             if username == self.stored_user.username:
@@ -285,6 +296,11 @@ def authenticated_client(app, mock_gitlab_oauth):
             session["rms"] = {
                 "version": 1.1,
                 "rms_id": TEST_RMS_ID,
+                "username": TEST_USERNAME,
+            }
+            session["manytask"] = {
+                "version": 1.0,
+                "user_id": TEST_USER_ID,
                 "username": TEST_USERNAME,
             }
         yield client

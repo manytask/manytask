@@ -9,7 +9,7 @@ from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
 
-from manytask.abstract import AuthenticatedUser, ClientProfile
+from manytask.abstract import AuthenticatedUser, ClientProfile, StoredUser
 from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
 
@@ -42,6 +42,19 @@ def valid_rms_session(user_session: SessionMixin) -> bool:
     return result
 
 
+def valid_manytask_session(user_session: SessionMixin) -> bool:
+    SESSION_VERSION = 1.0
+    result = (
+        "manytask" in user_session
+        and "version" in user_session["manytask"]
+        and user_session["manytask"]["version"] >= SESSION_VERSION
+        and "user_id" in user_session["manytask"]
+        and "username" in user_session["manytask"]
+    )
+    logger.debug("Manytask_session_valid=%s", result)
+    return result
+
+
 def set_oauth_session(
     auth_user: AuthenticatedUser, oauth_tokens: dict[str, str] | None = None, version: float = 1.6
 ) -> dict[str, Any]:
@@ -70,18 +83,26 @@ def set_rms_session(client_profile: ClientProfile, version: float = 1.1) -> dict
     return result
 
 
-def handle_course_membership(app: CustomFlask, course: Course, rms_id: int) -> bool | str | Response:
+def set_manytask_session(user_id: int, username: str, version: float = 1.0) -> dict[str, Any]:
+    return {
+        "user_id": user_id,
+        "username": username,
+        "version": version,
+    }
+
+
+def handle_course_membership(app: CustomFlask, course: Course, username: str) -> bool | str | Response:
     """Checking user on course"""
 
     try:
-        if app.storage_api.check_user_on_course(course.course_name, rms_id):
-            logger.info("User rms_id=%s is on course %s", rms_id, course.course_name)
+        if app.storage_api.check_user_on_course(course.course_name, username):
+            logger.info("User %s is on course %s", username, course.course_name)
             return True
         else:
-            logger.info("No user rms_id=%s on course %s", rms_id, course.course_name)
+            logger.info("No user %s on course %s", username, course.course_name)
             return False
     except NoResultFound:
-        logger.info("User rms_id=%s not in the database", rms_id)
+        logger.info("User %s not in the database", username)
         return False
     except Exception:
         logger.error("Failed login while working with db", exc_info=True)
@@ -106,6 +127,8 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
         return redirect(url_for("root.index"))
 
     session.pop("username", None)
+    session.pop("rms", None)
+    session.pop("manytask", None)
     session.setdefault("auth", {}).update(set_oauth_session(auth_user, oauth_token))
     session.permanent = True
     logger.info("Session set for user=%s", auth_user.username)
@@ -124,6 +147,8 @@ def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
 def redirect_to_login_with_bad_session() -> Response:
     logger.debug("Clearing session and redirecting to signup")
     session.pop("auth", None)
+    session.pop("rms", None)
+    session.pop("manytask", None)
     return redirect(url_for("root.signup"))
 
 
@@ -151,6 +176,17 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
 
         if not valid_rms_session(session):
             return __redirect_to_signup_finish()
+
+        if not valid_manytask_session(session):
+            stored_user: StoredUser | None = app.storage_api.get_stored_user_by_auth_id(session["auth"]["user_auth_id"])
+            if stored_user is None:
+                return __redirect_to_signup_finish()
+            session.setdefault("manytask", {}).update(
+                set_manytask_session(
+                    user_id=stored_user.user_id,
+                    username=stored_user.username,
+                )
+            )
 
         logger.debug("Auth check passed")
         return f(*args, **kwargs)
@@ -211,11 +247,15 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             abort(HTTPStatus.FORBIDDEN)
 
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
-        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(course.course_name, rms_id):
+        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
+            course.course_name, session["manytask"]["username"]
+        ):
             flash("course is hidden!", "course_hidden")
             abort(redirect(url_for("root.index")))
 
-        if not handle_course_membership(app, course, rms_id) or not app.rms_api.check_project_exists(
+        if not handle_course_membership(
+            app, course, session["manytask"]["username"]
+        ) or not app.rms_api.check_project_exists(
             project_name=auth_user.username, project_group=course.gitlab_course_students_group
         ):
             logger.info("User %s (rms_id=%s) missing membership or project", auth_user.username, rms_id)
@@ -224,8 +264,8 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_user_on_course(
             course.course_name,
-            rms_id,
-            app.storage_api.check_if_instance_admin(rms_id),
+            session["manytask"]["username"],
+            app.storage_api.check_if_instance_admin(session["manytask"]["username"]),
         )
         logger.info("Synced user rms_id=%s on course %s", rms_id, course.course_name)
 
@@ -245,8 +285,8 @@ def requires_instance_admin(f: Callable[..., Any]) -> Callable[..., Any]:
         if app.debug:
             return f(*args, **kwargs)
 
-        rms_id = session["rms"]["rms_id"]
-        if not app.storage_api.check_if_instance_admin(rms_id):
+        username = session["manytask"]["username"]
+        if not app.storage_api.check_if_instance_admin(username):
             abort(HTTPStatus.FORBIDDEN)
 
         return f(*args, **kwargs)
@@ -268,7 +308,8 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
             return f(*args, **kwargs)
 
         rms_id = session["rms"]["rms_id"]
-        is_instance_admin = app.storage_api.check_if_instance_admin(rms_id)
+        username = session["manytask"]["username"]
+        is_instance_admin = app.storage_api.check_if_instance_admin(username)
         is_namespace_admin_user = is_namespace_admin(app, rms_id)
 
         if not is_instance_admin and not is_namespace_admin_user:
