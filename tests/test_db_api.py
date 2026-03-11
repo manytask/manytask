@@ -356,14 +356,17 @@ class TestStudent:
     first_name: str
     last_name: str
     rms_id: str | int
+    auth_id: int
 
 
-STUDENT_1 = TestStudent(TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1)
-STUDENT_2 = TestStudent(TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2)
+STUDENT_1 = TestStudent(TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1, TEST_AUTH_ID_1)
+STUDENT_2 = TestStudent(TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2, TEST_AUTH_ID_2)
 
 
 def add_student(db_api, course_name, student: TestStudent, task_name, score):
-    db_api.update_or_create_user(student.username, student.first_name, student.last_name, student.rms_id)
+    db_api.update_or_create_user(
+        student.username, student.first_name, student.last_name, student.rms_id, student.auth_id
+    )
     db_api.store_score(course_name, student.username, task_name, update_func(score))
 
 
