@@ -22,8 +22,10 @@ from .auth import (
     requires_instance_or_namespace_admin,
     requires_ready,
     role_required,
+    set_manytask_session,
     set_rms_session,
     valid_auth_session,
+    valid_manytask_session,
     valid_rms_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
@@ -59,7 +61,7 @@ def index() -> ResponseReturnValue:
     else:
         from .utils.flask import is_namespace_admin
 
-        is_namespace_admin_flag = is_namespace_admin(app, session["rms"]["rms_id"])
+        is_namespace_admin_flag = is_namespace_admin(app, session["manytask"]["username"])
 
     return render_template(
         "courses.html",
@@ -95,6 +97,7 @@ def login_finish() -> ResponseReturnValue:
 def logout() -> ResponseReturnValue:
     session.pop("auth", None)
     session.pop("rms", None)
+    session.pop("manytask", None)
     return redirect(url_for("root.index"))
 
 
@@ -119,15 +122,14 @@ def course_page(course_name: str) -> ResponseReturnValue:
         else:
             student_course_admin = False
     else:
-        student_username = session["auth"]["username"]
+        student_username = session["manytask"]["username"]
 
         student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["rms"]["rms_id"])
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
 
-    student_rms_id = "-1" if app.debug else session["rms"]["rms_id"]
-    tasks_scores = storage_api.get_scores(course.course_name, student_rms_id)
+    tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
 
@@ -147,7 +149,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         task_url_template=course.task_url_template,
         links=course.links,
         scores=tasks_scores,
-        bonus_score=storage_api.get_bonus_score(course.course_name, student_rms_id),
+        bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=app.favicon,
@@ -230,8 +232,8 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     if not valid_auth_session(session):
         return redirect_to_login_with_bad_session()
 
-    if valid_rms_session(session):
-        logger.warning("User already has username=%s in session", session["rms"]["username"])
+    if valid_rms_session(session) and valid_manytask_session(session):
+        logger.warning("User already has username=%s in session", session["manytask"]["username"])
         return redirect(url_for("root.index"))
 
     stored_user_or_none: StoredUser | None = app.storage_api.get_stored_user_by_auth_id(
@@ -240,6 +242,9 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     if stored_user_or_none is not None:
         session.setdefault("rms", {}).update(
             set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=session["auth"]["username"]))
+        )
+        session.setdefault("manytask", {}).update(
+            set_manytask_session(user_id=stored_user_or_none.user_id, username=stored_user_or_none.username)
         )
         return redirect(url_for("root.index"))
 
@@ -278,8 +283,17 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         rms_id=authenticated_rms_user_id,
         auth_id=session["auth"]["user_auth_id"],
     )
+
+    stored_user = app.storage_api.get_stored_user_by_auth_id(auth_id=session["auth"]["user_auth_id"])
+    if stored_user is None:
+        logger.error("Cannot fetch stored user after signup_finish for auth_id=%s", session["auth"]["user_auth_id"])
+        return redirect_to_login_with_bad_session()
+
     session.setdefault("rms", {}).update(
-        set_rms_session(ClientProfile(rms_id=session["auth"]["user_auth_id"], username=session["auth"]["username"]))
+        set_rms_session(ClientProfile(rms_id=authenticated_rms_user_id, username=authenticated_rms_user.username))
+    )
+    session.setdefault("manytask", {}).update(
+        set_manytask_session(user_id=stored_user.user_id, username=stored_user.username)
     )
     return redirect(url_for("root.index"))
 
@@ -319,7 +333,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    app.storage_api.sync_user_on_course(course.course_name, session["rms"]["rms_id"], is_course_admin)
+    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
 
     # Create use if needed
     try:
@@ -374,13 +388,13 @@ def show_database(course_name: str) -> ResponseReturnValue:
         else:
             student_course_admin = False
     else:
-        student_username = session["auth"]["username"]
+        student_username = session["manytask"]["username"]
 
         student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["rms"]["rms_id"])
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
 
     student_rms_id = "-1" if app.debug else session["rms"]["rms_id"]
     scores = storage_api.get_scores(course.course_name, student_rms_id)
@@ -439,9 +453,8 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 error_message="Invalid namespace ID",
             )
 
-        username = session["auth"]["username"]
-        user_rms_id = session["rms"]["rms_id"]
-        is_instance_admin = app.storage_api.check_if_instance_admin(user_rms_id)
+        username = session["manytask"]["username"]
+        is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
         namespace = None
         role = None
@@ -455,7 +468,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 )
         else:
             try:
-                namespace, role = app.storage_api.get_namespace_by_id(namespace_id, user_rms_id)
+                namespace, role = app.storage_api.get_namespace_by_id(namespace_id, username)
             except PermissionError:
                 logger.warning(
                     "User %s attempted to create course with namespace id=%s without access", username, namespace_id
@@ -565,14 +578,13 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         return redirect(url_for("root.index"))
 
     if not app.debug:
-        username = session["rms"]["username"]
-        user_rms_id = session["rms"]["rms_id"]
-        is_instance_admin = app.storage_api.check_if_instance_admin(user_rms_id)
+        username = session["manytask"]["username"]
+        is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
         if not is_instance_admin:
             if course.namespace_id:
                 try:
-                    namespace, role = app.storage_api.get_namespace_by_id(course.namespace_id, user_rms_id)
+                    namespace, role = app.storage_api.get_namespace_by_id(course.namespace_id, username)
                     if role != "namespace_admin":
                         logger.warning(
                             "User %s with role %s attempted to edit course %s in namespace %d",
@@ -638,9 +650,8 @@ def instance_admin_index() -> ResponseReturnValue:
     if app.debug:
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
-    username = session["rms"]["username"]
-    user_rms_id = session["rms"]["rms_id"]
-    is_instance_admin = app.storage_api.check_if_instance_admin(user_rms_id)
+    username = session["manytask"]["username"]
+    is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     if is_instance_admin:
         logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
@@ -648,7 +659,7 @@ def instance_admin_index() -> ResponseReturnValue:
 
     from .utils.flask import is_namespace_admin
 
-    is_namespace_admin_flag = is_namespace_admin(app, user_rms_id)
+    is_namespace_admin_flag = is_namespace_admin(app, username)
 
     if is_namespace_admin_flag:
         logger.info("Namespace Admin %s accessing instance admin root, redirecting to namespaces", username)
@@ -672,17 +683,17 @@ def instance_admin_panel() -> ResponseReturnValue:
 
         action = request.form.get("action", "")
         username = request.form.get("username", "")
-        current_instance_admin = session["auth"]["username"]
+        current_instance_admin = session["manytask"]["username"]
 
         stored_user = app.storage_api.get_stored_user_by_username(username)
 
         if action == "grant":
-            app.storage_api.set_instance_admin_status(stored_user.rms_id, True)
+            app.storage_api.set_instance_admin_status(stored_user.username, True)
             app.logger.warning(
                 "Instance Admin %s granted instance admin status to %s", current_instance_admin, username
             )
         elif action == "revoke":
-            app.storage_api.set_instance_admin_status(stored_user.rms_id, False)
+            app.storage_api.set_instance_admin_status(stored_user.username, False)
             app.logger.warning(
                 "Instance Admin %s revoked instance admin status from %s", current_instance_admin, username
             )
@@ -728,7 +739,7 @@ def update_profile() -> ResponseReturnValue:
     if app.debug:
         current_username = request_username
     else:
-        current_username = session["auth"]["username"]
+        current_username = session["manytask"]["username"]
 
     try:
         validate_csrf(request.form.get("csrf_token"))
@@ -743,7 +754,7 @@ def update_profile() -> ResponseReturnValue:
     target_user = app.storage_api.get_stored_user_by_username(request_username)
     if target_user is None:
         abort(HTTPStatus.NOT_FOUND)
-    app.storage_api.update_user_profile(target_user.rms_id, new_first_name, new_last_name)
+    app.storage_api.update_user_profile(target_user.username, new_first_name, new_last_name)
     logger.info("Successfully updated profile for user: %s", sanitize_log_data(request_username))
 
     referrer = request.referrer
@@ -767,9 +778,8 @@ def namespaces_list() -> ResponseReturnValue:
     """
     app: CustomFlask = current_app  # type: ignore
 
-    username = session["auth"]["username"]
-    user_rms_id = session["rms"]["rms_id"]
-    is_instance_admin = app.storage_api.check_if_instance_admin(user_rms_id)
+    username = session["manytask"]["username"]
+    is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     if is_instance_admin:
         logger.info("Instance Admin %s accessing all namespaces", username)
@@ -794,7 +804,7 @@ def namespaces_list() -> ResponseReturnValue:
             )
     else:
         logger.info("Namespace Admin %s accessing their namespaces", username)
-        user_namespaces = app.storage_api.get_user_namespaces(user_rms_id)
+        user_namespaces = app.storage_api.get_user_namespaces(username)
         namespace_data = []
 
         for ns, role in user_namespaces:
@@ -833,12 +843,11 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     """
     app: CustomFlask = current_app  # type: ignore
 
-    username = session["auth"]["username"]
-    user_rms_id = session["rms"]["rms_id"]
-    is_instance_admin = app.storage_api.check_if_instance_admin(user_rms_id)
+    username = session["manytask"]["username"]
+    is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     try:
-        namespace, user_role = app.storage_api.get_namespace_by_id(namespace_id, user_rms_id)
+        namespace, user_role = app.storage_api.get_namespace_by_id(namespace_id, username)
     except PermissionError:
         logger.warning("User %s attempted to access namespace %d without permission", username, namespace_id)
         abort(HTTPStatus.FORBIDDEN)
@@ -860,14 +869,13 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     users_data = []
     for user_id, role in namespace_users:
         try:
-            # Get user by database ID to get their RMS ID
-            user_by_db_id = app.storage_api.get_stored_user_by_user_id(str(user_id))
-            if user_by_db_id:
+            user = app.storage_api.get_stored_user_by_db_id(user_id)
+            if user:
                 users_data.append(
                     {
                         "id": user_id,
-                        "username": user_by_db_id.username,
-                        "rms_id": user_by_db_id.rms_id,
+                        "username": user.username,
+                        "rms_id": user.rms_id,
                         "role": role,
                     }
                 )

@@ -26,10 +26,11 @@ class StoredUser:
     last_name: str
     rms_id: str
     auth_id: int
+    user_id: int
     instance_admin: bool = False
 
     def __repr__(self) -> str:
-        return f"StoredUser(rms_id={self.rms_id}, username={self.username})"
+        return f"StoredUser(username={self.username})"
 
     @property
     def rms_identity(self) -> RmsUser:
@@ -41,14 +42,14 @@ class StorageApi(ABC):
     def get_scores(
         self,
         course_name: str,
-        rms_id: str,
+        username: str,
     ) -> dict[str, int]: ...
 
     @abstractmethod
     def get_bonus_score(
         self,
         course_name: str,
-        rms_id: str,
+        username: str,
     ) -> int: ...
 
     @abstractmethod
@@ -58,63 +59,26 @@ class StorageApi(ABC):
     ) -> StoredUser | None: ...
 
     @abstractmethod
-    def check_if_instance_admin(
-        self,
-        rms_id: str,
-    ) -> bool: ...
+    def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
 
     @abstractmethod
-    def check_if_course_admin(
-        self,
-        course_name: str,
-        rms_id: str,
-    ) -> bool: ...
+    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
 
     @abstractmethod
-    def check_if_program_manager(
-        self,
-        course_name: str,
-        rms_id: str,
-    ) -> bool: ...
+    def get_namespace_admin_namespaces(self, username: str) -> list[int]: ...
 
     @abstractmethod
-    def sync_user_on_course(self, course_name: str, rms_id: str, course_admin: bool) -> None: ...
-
-    @abstractmethod
-    def update_student_comment(self, course_name: str, rms_id: str, comment: str | None) -> None: ...
-
-    @abstractmethod
-    def store_score(self, course_name: str, rms_id: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
-
-    @abstractmethod
-    def sync_and_get_admin_status(self, course_name: str, rms_id: str, course_admin: bool) -> bool: ...
-
-    @abstractmethod
-    def check_user_on_course(self, course_name: str, rms_id: str) -> bool: ...
-
-    @abstractmethod
-    def update_or_create_user(
-        self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int
-    ) -> None: ...
-
-    @abstractmethod
-    def get_user_courses_names_with_statuses(self, rms_id: str) -> list[tuple[str, CourseStatus]]: ...
-
-    @abstractmethod
-    def get_namespace_admin_namespaces(self, rms_id: str) -> list[int]: ...
-
-    @abstractmethod
-    def get_courses_where_course_admin(self, rms_id: str) -> list[tuple[str, CourseStatus]]: ...
+    def get_courses_where_course_admin(self, username: str) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
     def set_instance_admin_status(
         self,
-        rms_id: str,
+        username: str,
         is_admin: bool,
     ) -> None: ...
 
     @abstractmethod
-    def update_user_profile(self, rms_id: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
+    def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
 
     @abstractmethod
     def create_namespace(
@@ -123,43 +87,43 @@ class StorageApi(ABC):
         slug: str,
         description: str | None,
         gitlab_group_id: int,
-        created_by_rms_id: str,
+        created_by_username: str,
     ) -> Any: ...
 
     @abstractmethod
-    def get_user_namespaces(self, rms_id: str) -> list[tuple[Any, str]]: ...
+    def get_user_namespaces(self, username: str) -> list[tuple[Any, str]]: ...
 
     @abstractmethod
-    def get_namespace_by_id(self, namespace_id: int, rms_id: str) -> tuple[Any, str | None]: ...
+    def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
 
     @abstractmethod
     def add_user_to_namespace(
         self,
         namespace_id: int,
-        user_rms_id: str,
+        user_username: str,
         role: str,
-        assigned_by_rms_id: str,
+        assigned_by_username: str,
     ) -> Any: ...
 
     @abstractmethod
     def calculate_and_save_grade(
         self,
         course_name: str,
-        rms_id: str,
+        username: str,
         student_scores_data: dict[str, Any],
     ) -> int: ...
 
     @abstractmethod
-    def get_effective_grade(self, course_name: str, rms_id: str) -> int: ...
+    def get_effective_grade(self, course_name: str, username: str) -> int: ...
 
     @abstractmethod
-    def override_grade(self, course_name: str, rms_id: str, new_grade: int) -> None: ...
+    def override_grade(self, course_name: str, username: str, new_grade: int) -> None: ...
 
     @abstractmethod
-    def clear_grade_override(self, course_name: str, rms_id: str) -> None: ...
+    def clear_grade_override(self, course_name: str, username: str) -> None: ...
 
     @abstractmethod
-    def is_grade_overridden(self, course_name: str, rms_id: str) -> bool: ...
+    def is_grade_overridden(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
     def get_stored_user_by_username(
@@ -172,6 +136,29 @@ class StorageApi(ABC):
         self,
         auth_id: int,
     ) -> StoredUser | None: ...
+
+    @abstractmethod
+    def check_if_instance_admin(
+        self,
+        username: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def check_if_course_admin(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def check_if_program_manager(
+        self,
+        course_name: str,
+        username: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
     def get_all_scores_with_names(
@@ -237,6 +224,20 @@ class StorageApi(ABC):
     def max_score_started(self, course_name: str) -> int: ...
 
     @abstractmethod
+    def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool: ...
+
+    @abstractmethod
+    def check_user_on_course(self, course_name: str, username: str) -> bool: ...
+
+    @abstractmethod
+    def update_or_create_user(
+        self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int
+    ) -> None: ...
+
+    @abstractmethod
+    def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]: ...
+
+    @abstractmethod
     def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
@@ -267,12 +268,6 @@ class StorageApi(ABC):
     def get_stored_user_by_db_id(
         self,
         db_id: int,
-    ) -> StoredUser | None: ...
-
-    @abstractmethod
-    def get_stored_user_by_user_id(
-        self,
-        user_id: str,
     ) -> StoredUser | None: ...
 
     @abstractmethod
@@ -419,7 +414,7 @@ class RmsApi(ABC):
 
 @dataclass
 class AuthenticatedUser:
-    id: str
+    id: int
     username: str
 
     def __repr__(self) -> str:

@@ -1,4 +1,6 @@
 import os
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +12,7 @@ from alembic import command
 from alembic.script import ScriptDirectory
 from dotenv import load_dotenv
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
+from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -328,6 +331,45 @@ def update_func(add: int):
     return _update_func
 
 
+@dataclass
+class QueryCount:
+    value: int = 0
+
+
+@contextmanager
+def query_counter(engine):
+    counter = QueryCount()
+
+    def _increment(conn, cursor, statement, parameters, context, executemany):
+        counter.value += 1
+
+    event.listen(engine, "before_cursor_execute", _increment)
+    try:
+        yield counter
+    finally:
+        event.remove(engine, "before_cursor_execute", _increment)
+
+
+@dataclass
+class TestStudent:
+    username: str
+    first_name: str
+    last_name: str
+    rms_id: str | int
+    auth_id: int
+
+
+STUDENT_1 = TestStudent(TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1, TEST_AUTH_ID_1)
+STUDENT_2 = TestStudent(TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2, TEST_AUTH_ID_2)
+
+
+def add_student(db_api, course_name, student: TestStudent, task_name, score):
+    db_api.update_or_create_user(
+        student.username, student.first_name, student.last_name, student.rms_id, student.auth_id
+    )
+    db_api.store_score(course_name, student.username, task_name, update_func(score))
+
+
 def test_not_initialized_course(session, db_api, first_course_config):
     db_api.create_course(settings_config=first_course_config)
     course_name = first_course_config.course_name
@@ -355,8 +397,8 @@ def test_not_initialized_course(session, db_api, first_course_config):
 
     stats = db_api.get_stats(course_name)
     all_scores = db_api.get_all_scores_with_names(course_name)
-    bonus_score = db_api.get_bonus_score(course_name, "999")
-    scores = db_api.get_scores(course_name, "999")
+    bonus_score = db_api.get_bonus_score(course_name, "unknown_user")
+    scores = db_api.get_scores(course_name, "unknown_user")
     max_score_started = db_api.max_score_started(course_name)
 
     assert stats == {}
@@ -1005,8 +1047,8 @@ def test_deadlines(db_api_with_two_initialized_courses, session):
 
 
 def test_bad_requests(db_api_with_two_initialized_courses, session):
-    bonus_score = db_api_with_two_initialized_courses.get_bonus_score(FIRST_COURSE_NAME, "999")
-    scores = db_api_with_two_initialized_courses.get_scores(FIRST_COURSE_NAME, "999")
+    bonus_score = db_api_with_two_initialized_courses.get_bonus_score(FIRST_COURSE_NAME, "unknown_user")
+    scores = db_api_with_two_initialized_courses.get_scores(FIRST_COURSE_NAME, "unknown_user")
 
     assert bonus_score == 0
     assert scores == {}
@@ -1640,3 +1682,31 @@ def test_grade_config_estimation_with_removing_grade(
 
     for i, score in enumerate(mock_scores):
         assert grade_config_data.evaluate(score) == mock_grades_updated[i]
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "get_all_scores_with_names",
+        "recalculate_all_grades",
+        "get_stats",
+    ],
+)
+def test_constant_queries(db_api_with_initialized_first_course, engine, method_name):
+    """Query count must not grow with student count."""
+    db_api = db_api_with_initialized_first_course
+    method = getattr(db_api, method_name)
+
+    add_student(db_api, FIRST_COURSE_NAME, STUDENT_1, "task_0_0", 1)
+
+    with query_counter(engine) as counter:
+        method(FIRST_COURSE_NAME)
+    queries_with_1_student = counter.value
+
+    add_student(db_api, FIRST_COURSE_NAME, STUDENT_2, "task_0_0", 1)
+
+    with query_counter(engine) as counter:
+        method(FIRST_COURSE_NAME)
+    queries_with_2_students = counter.value
+
+    assert queries_with_1_student == queries_with_2_students

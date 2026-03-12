@@ -27,12 +27,15 @@ from tests.constants import (
     INVALID_TASK_NAME,
     TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
     TEST_AUTH_ID,
+    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_EMAIL,
     TEST_FIRST_NAME,
+    TEST_GITLAB_SESSION_VERSION,
     TEST_INVALID_USER_ID,
     TEST_INVALID_USERNAME,
     TEST_LAST_NAME,
+    TEST_MANYTASK_SESSION_VERSION,
     TEST_PASSWORD,
     TEST_PUBLIC_REPO,
     TEST_RMS_ID,
@@ -116,6 +119,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
                 auth_id=TEST_AUTH_ID,
+                user_id=TEST_USER_ID,
                 instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
@@ -137,6 +141,16 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
         def get_all_scores(course_name, self):
             return {"test_user": self.get_scores(course_name, "test_user")}
+
+        def get_stored_user_by_auth_id(self, auth_id):
+            if auth_id == self.stored_user.auth_id:
+                return self.stored_user
+            return None
+
+        def get_stored_user_by_rms_id(self, rms_id):
+            if rms_id == self.stored_user.rms_id:
+                return self.stored_user
+            return None
 
         def get_stored_user_by_username(self, username):
             if username == self.stored_user.username:
@@ -276,15 +290,20 @@ def authenticated_client(app, mock_gitlab_oauth):
         }
         with client.session_transaction() as session:
             session["auth"] = {
-                "version": 1.6,
+                "version": TEST_GITLAB_SESSION_VERSION,
                 "username": TEST_USERNAME,
                 "user_auth_id": TEST_USER_ID,
                 "access_token": "",
                 "refresh_token": "",
             }
             session["rms"] = {
-                "version": 1.1,
+                "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
                 "rms_id": TEST_RMS_ID,
+                "username": TEST_USERNAME,
+            }
+            session["manytask"] = {
+                "version": TEST_MANYTASK_SESSION_VERSION,
+                "user_id": TEST_USER_ID,
                 "username": TEST_USERNAME,
             }
         yield client

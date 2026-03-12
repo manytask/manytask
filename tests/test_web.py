@@ -32,6 +32,7 @@ from tests.constants import (
     TEST_GROUP_NAME,
     TEST_LAST_NAME,
     TEST_LAST_NAME_1,
+    TEST_MANYTASK_SESSION_VERSION,
     TEST_PASSWORD,
     TEST_PUBLIC_REPO,
     TEST_RMS_ID,
@@ -82,6 +83,7 @@ def mock_storage_api(mock_course):  # noqa: C901
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
                 auth_id=TEST_AUTH_ID,
+                user_id=TEST_USER_ID,
                 instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
@@ -357,6 +359,11 @@ def test_not_ready(app):
                     "rms_id": TEST_RMS_ID,
                     "username": TEST_USERNAME,
                 }
+                sess["manytask"] = {
+                    "version": TEST_MANYTASK_SESSION_VERSION,
+                    "user_id": TEST_USER_ID,
+                    "username": TEST_USERNAME,
+                }
             mock_check_if_instance_admin.return_value = True
             response = client.get(f"/{TEST_COURSE_NAME}/not_ready")
             assert response.status_code == HTTPStatus.FOUND
@@ -583,6 +590,11 @@ def test_signup_finish_with_valid_session(app, mock_gitlab_oauth):
                     "rms_id": TEST_RMS_ID,
                     "username": TEST_USERNAME,
                 }
+                sess["manytask"] = {
+                    "version": TEST_MANYTASK_SESSION_VERSION,
+                    "user_id": TEST_USER_ID,
+                    "username": TEST_USERNAME,
+                }
             app.oauth = mock_gitlab_oauth
             response = client.post(url_for("root.signup_finish"))
             assert response.status_code == HTTPStatus.FOUND
@@ -637,7 +649,7 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
                 }
                 # no profile
             app.oauth = mock_gitlab_oauth
-            mock_get_stored_user_by_auth_id.return_value = None
+            mock_get_stored_user_by_auth_id.side_effect = [None, None, app.storage_api.stored_user]
 
             response = client.get(url_for("root.signup_finish"))
             soup = BeautifulSoup(response.data, "html.parser")

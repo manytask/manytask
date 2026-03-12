@@ -1,6 +1,8 @@
 ROOT_DIR := manytask
-DOCKER_COMPOSE_DEV := docker-compose.development.yml
 TESTS_DIR := tests
+CHECKER_DIR := checker/checker
+CHECKER_TESTS_DIR := checker/tests
+DOCKER_COMPOSE_DEV := docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 
 # testcontainers may fail on some macOS Docker setups due to Ryuk connectivity issues.
@@ -17,6 +19,7 @@ check-colima: format lint test-colima
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	uv sync --active --all-extras
+	cd checker && uv pip install -e .
 
 install-hooks:
 	uv run pre-commit install --install-hooks
@@ -25,36 +28,37 @@ run-hooks:
 	uv run pre-commit run --all-files
 
 dev:
-	docker-compose -f $(DOCKER_COMPOSE_DEV) down
-	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
+	docker compose -f $(DOCKER_COMPOSE_DEV) down
+	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 clean-db:
-	docker-compose -f $(DOCKER_COMPOSE_DEV) down -v
+	docker compose -f $(DOCKER_COMPOSE_DEV) down -v
 	docker volume prune -f
 
 reset-dev: clean-db
-	docker-compose -f $(DOCKER_COMPOSE_DEV) up --build
+	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: install-deps
-	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/ $(CHECKER_TESTS_DIR)/
 	# Run checker test suite from inside ./checker so `import checker.*` resolves correctly.
 	# Use `-c /dev/null` to avoid inheriting repo-level pytest config, but force rootdir back to ./checker.
 	cd checker && TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail tests
 
 test-colima: install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
-	python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	uv run python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/ 
+	cd checker && uv run python -m pytest --cov-report term-missing --cov=checker --skip-firejail tests/
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format --check $(ROOT_DIR) $(TESTS_DIR) checker/checker
-	uv run ruff check $(ROOT_DIR) $(TESTS_DIR) checker/checker
-	uv run mypy $(ROOT_DIR) checker/checker
+	uv run ruff format --check $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)
+	uv run ruff check $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)/
+	uv run mypy $(ROOT_DIR) $(CHECKER_DIR)
 
 format:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format $(ROOT_DIR) $(TESTS_DIR) checker/checker
-	uv run ruff check $(ROOT_DIR) $(TESTS_DIR) checker/checker --fix
+	uv run ruff format $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)
+	uv run ruff check $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR) --fix
 
 setup: install-deps install-hooks
 

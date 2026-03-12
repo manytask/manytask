@@ -63,6 +63,7 @@ Current developers:
 * [Ivan Samsonov](https://github.com/D1sney)
 * [Alexey Seliverstov](https://github.com/prawwtocol)
 * [Oleg Shatov](https://github.com/domwst)
+* [Andrew Siniavskij](https://github.com/Siegmeyer1)
 * [Artem Zhmurov](https://github.com/zhmurov)
 
 And many others! Please, see [the full list of contributors](https://github.com/manytask/manytask/graphs/contributors).

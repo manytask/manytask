@@ -23,9 +23,12 @@ from manytask.mock_auth import MockAuthApi
 from manytask.web import course_bp, root_bp
 from tests.constants import (
     TEST_AUTH_ID,
+    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_FIRST_NAME,
+    TEST_GITLAB_SESSION_VERSION,
     TEST_LAST_NAME,
+    TEST_MANYTASK_SESSION_VERSION,
     TEST_RMS_ID,
     TEST_SECRET,
     TEST_TOKEN,
@@ -60,6 +63,7 @@ def mock_storage_api(mock_course):  # noqa: C901
                 last_name=TEST_LAST_NAME,
                 rms_id=TEST_RMS_ID,
                 auth_id=TEST_AUTH_ID,
+                user_id=TEST_USER_ID,
                 instance_admin=False,
             )
             self.course_name = TEST_COURSE_NAME
@@ -94,6 +98,15 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def check_if_course_admin(self, _course_name, _username):
             return self.course_admin
+
+        def get_stored_user_by_auth_id(self, _auth_id):
+            return self.stored_user
+
+        def get_stored_user_by_rms_id(self, _rms_id):
+            return self.stored_user
+
+        def get_stored_user_by_username(self, _username):
+            return self.stored_user
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.course_admin = course_admin
@@ -158,7 +171,7 @@ def mock_course():
 def test_valid_auth_session_with_valid_data(app):
     with app.test_request_context():
         session["auth"] = {
-            "version": 1.6,
+            "version": TEST_GITLAB_SESSION_VERSION,
             "username": "test_user",
             "user_auth_id": 123,
         }
@@ -168,7 +181,7 @@ def test_valid_auth_session_with_valid_data(app):
 def test_valid_auth_session_with_invalid_version(app):
     with app.test_request_context():
         session["auth"] = {
-            "version": 1.0,
+            "version": TEST_MANYTASK_SESSION_VERSION,
             "username": "test_user",
             "user_auth_id": 123,
         }
@@ -178,7 +191,7 @@ def test_valid_auth_session_with_invalid_version(app):
 def test_valid_auth_session_with_missing_data(app):
     # missing user_auth_id
     with app.test_request_context():
-        session["auth"] = {"version": 1.6, "username": "test_user"}
+        session["auth"] = {"version": TEST_GITLAB_SESSION_VERSION, "username": "test_user"}
         assert valid_auth_session(session) is False
 
 
@@ -190,7 +203,7 @@ def test_valid_auth_session_with_empty_session(app):
 def test_valid_rms_session_with_valid_data(app):
     with app.test_request_context():
         session["rms"] = {
-            "version": 1.1,
+            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
             "rms_id": TEST_RMS_ID,
             "username": "test_user",
         }

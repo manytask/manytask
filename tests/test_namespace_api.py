@@ -21,7 +21,13 @@ from manytask.models import (
     UserOnNamespaceRole,
 )
 from manytask.web import root_bp
-from tests.constants import GITLAB_BASE_URL, TEST_SECRET_KEY
+from tests.constants import (
+    GITLAB_BASE_URL,
+    TEST_CLIENT_PROFILE_SESSION_VERSION,
+    TEST_GITLAB_SESSION_VERSION,
+    TEST_MANYTASK_SESSION_VERSION,
+    TEST_SECRET_KEY,
+)
 
 
 class MockAuthApi(AuthApi):
@@ -110,14 +116,19 @@ def mock_session_admin(session):
         "auth": {
             "username": "admin",
             "user_auth_id": admin.id,
-            "version": 1.6,
+            "version": TEST_GITLAB_SESSION_VERSION,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
         "rms": {
             "username": "admin",
             "rms_id": admin.rms_id,
-            "version": 1.1,
+            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+        },
+        "manytask": {
+            "username": "admin",
+            "user_id": admin.id,
+            "version": TEST_MANYTASK_SESSION_VERSION,
         },
     }
 
@@ -131,14 +142,19 @@ def mock_session_regular(session):
         "auth": {
             "username": "regular_user",
             "user_auth_id": regular.id,
-            "version": 1.6,
+            "version": TEST_GITLAB_SESSION_VERSION,
             "access_token": "mock_access_token",
             "refresh_token": "mock_refresh_token",
         },
         "rms": {
             "username": "regular_user",
             "rms_id": regular.rms_id,
-            "version": 1.1,
+            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+        },
+        "manytask": {
+            "username": "regular_user",
+            "user_id": regular.id,
+            "version": TEST_MANYTASK_SESSION_VERSION,
         },
     }
 

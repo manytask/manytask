@@ -14,7 +14,7 @@ from enum import Enum
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
-from manytask.abstract import RmsApiException, StorageApi
+from manytask.abstract import RmsApiException, StorageApi, StoredUser
 from manytask.database import TaskDisabledError
 
 from .abstract import RmsApi, RmsUser
@@ -54,6 +54,13 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
         logger.warning("Course not found: %s", course_name)
         abort(HTTPStatus.NOT_FOUND, "Course not found")
     return course
+
+
+def _get_stored_user_or_not_found(storage_api: StorageApi, rms_id: str) -> StoredUser:
+    stored_user = storage_api.get_stored_user_by_rms_id(rms_id)
+    if stored_user is None:
+        abort(HTTPStatus.NOT_FOUND, f"There is no registered user with rms_id={rms_id}")
+    return stored_user
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -128,13 +135,12 @@ def requires_namespace_admin(
                     ErrorResponse(error="Internal server error").model_dump()
                 ), HTTPStatus.INTERNAL_SERVER_ERROR
 
-            rms_id = session["rms"]["rms_id"]
-            username = session["auth"]["username"]
-            is_instance_admin = storage_api.check_if_instance_admin(rms_id)
+            username = session["manytask"]["username"]
+            is_instance_admin = storage_api.check_if_instance_admin(username)
 
             if not is_instance_admin:
                 try:
-                    namespace, user_role = storage_api.get_namespace_by_id(namespace_id, rms_id)
+                    namespace, user_role = storage_api.get_namespace_by_id(namespace_id, username)
                     if user_role != "namespace_admin":
                         logger.warning(
                             "User %s (role=%s) attempted to access namespace id=%s without admin privileges",
@@ -152,7 +158,7 @@ def requires_namespace_admin(
                     return jsonify(ErrorResponse(error="Access denied").model_dump()), HTTPStatus.FORBIDDEN
             else:
                 try:
-                    namespace, _ = storage_api.get_namespace_by_id(namespace_id, rms_id)
+                    namespace, _ = storage_api.get_namespace_by_id(namespace_id, username)
                 except (PermissionError, NoResultFound):
                     logger.warning("Namespace id=%s not found", namespace_id)
                     if return_404_if_not_found:
@@ -277,18 +283,19 @@ def _validate_and_extract_params(
     if "user_id" in form_data and "username" in form_data:
         abort(HTTPStatus.BAD_REQUEST, "Both `user_id` or `username` were provided, use only one")
     elif "user_id" in form_data:
+        user_id = form_data["user_id"]
         try:
-            user_id = form_data["user_id"]
             rms_user = rms_api.get_rms_user_by_id(user_id)
-            logger.info("Found user by id=%s: %s", user_id, rms_user.username)
+            logger.info("Found RMS user by id=%s: %s", user_id, rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no student with user ID {user_id}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id {user_id}")
     elif "username" in form_data:
+        username = form_data["username"]
         try:
-            username = form_data["username"]
             rms_user = rms_api.get_rms_user_by_username(username)
+            logger.info("Found RMS user by username=%s: %s", username, rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no student with username {username}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username {username}")
     else:
         abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
 
@@ -379,8 +386,11 @@ def report_score(course_name: str) -> ResponseReturnValue:
 
     # Log with sanitized values
     logger.info("Use submit_time: %s", submit_time)
+    stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
+    manytask_username = stored_user.username
+
     logger.info(
-        f"user={rms_user.username} (id={rms_user.id}), task={task.name}, "
+        f"user={manytask_username} (rms_id={rms_user.id}), task={task.name}, "
         f"reported_score={reported_score}, submit_time={submit_time}, check_deadline={check_deadline}"
     )
 
@@ -394,15 +404,15 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
         allow_reduction=allow_reduction,
     )
-    final_score = app.storage_api.store_score(course.course_name, rms_user.id, task.name, update_function)
+    final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
 
-    logger.info("Stored final_score=%s for user=%s, task=%s", final_score, rms_user.username, task.name)
+    logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
 
     # Recalculate and save student's final grade after score update
     try:
         # Get all student scores to recalculate grade
-        student_scores = app.storage_api.get_scores(course.course_name, rms_user.id)
-        bonus_score = app.storage_api.get_bonus_score(course.course_name, rms_user.id)
+        student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
+        bonus_score = app.storage_api.get_bonus_score(course.course_name, manytask_username)
         max_score = app.storage_api.max_score_started(course.course_name)
 
         total_score = sum(student_scores.values()) + bonus_score
@@ -418,22 +428,22 @@ def report_score(course_name: str) -> ResponseReturnValue:
                         large_count += 1
 
         student_data = {
-            "username": rms_user.username,
+            "username": manytask_username,
             "scores": student_scores,
             "total_score": total_score,
             "percent": percent,
             "large_count": large_count,
         }
 
-        app.storage_api.calculate_and_save_grade(course.course_name, rms_user.id, student_data)
-        logger.info("Recalculated and saved grade for user=%s after score update", rms_user.username)
+        app.storage_api.calculate_and_save_grade(course.course_name, manytask_username, student_data)
+        logger.info("Recalculated and saved grade for user=%s after score update", manytask_username)
     except Exception as e:
-        logger.error("Failed to recalculate grade for user=%s: %s", rms_user.username, str(e))
+        logger.error("Failed to recalculate grade for user=%s: %s", manytask_username, str(e))
         # Don't fail the request if grade calculation fails
 
     return {
         "user_id": rms_user.id,
-        "username": rms_user.username,
+        "username": manytask_username,
         "task": task.name,
         "score": final_score,
         "commit_time": submit_time.isoformat(sep=" ") if submit_time else "None",
@@ -452,17 +462,19 @@ def get_score(course_name: str) -> ResponseReturnValue:
         request.form, app.rms_api, app.storage_api, course.course_name
     )
 
-    student_scores = app.storage_api.get_scores(course.course_name, rms_user.id)
+    stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
+    manytask_username = stored_user.username
+    student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
 
     try:
         student_task_score = student_scores[task.name]
-        logger.info("user=%s, task=%s, score=%s", rms_user.username, task.name, student_task_score)
+        logger.info("user=%s, task=%s, score=%s", manytask_username, task.name, student_task_score)
     except Exception:
-        return f"Cannot get score for task {task.name} for {rms_user.username}", HTTPStatus.NOT_FOUND
+        return f"Cannot get score for task {task.name} for {manytask_username}", HTTPStatus.NOT_FOUND
 
     return {
         "user_id": rms_user.id,
-        "username": rms_user.username,
+        "username": manytask_username,
         "task": task.name,
         "score": student_task_score,
     }, HTTPStatus.OK
@@ -524,8 +536,8 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     course = __get_course_or_not_found(storage_api, course_name)
 
     if auth_method == AuthMethod.SESSION:
-        rms_id = session["rms"]["rms_id"]
-        is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_id)
+        username = session["manytask"]["username"]
+        is_course_admin = storage_api.check_if_course_admin(course.course_name, username)
     else:
         is_course_admin = True
 
@@ -547,10 +559,9 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     storage_api = app.storage_api
 
     if auth_method == AuthMethod.SESSION:
-        rms_id = session["rms"]["rms_id"]
-        username = session["rms"]["username"]
-        logger.info("Request by admin=%s for course=%s", username, course_name)
-        student_course_admin = storage_api.check_if_course_admin(course_name, rms_id)
+        username = session["manytask"]["username"]
+        logger.info("Request by user=%s for course=%s", username, course_name)
+        student_course_admin = storage_api.check_if_course_admin(course_name, username)
 
         if not student_course_admin:
             return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
@@ -632,11 +643,10 @@ def update_comment(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    admin_rms_id = session["rms"]["rms_id"]
-    profile_username_ = session["rms"]["username"]
+    profile_username_ = session["manytask"]["username"]
     logger.info("Comment update request by user=%s for course=%s", profile_username_, course_name)
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, admin_rms_id)
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username_)
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can update comments"}), HTTPStatus.FORBIDDEN
@@ -699,9 +709,8 @@ def create_namespace() -> ResponseReturnValue:
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    rms_id = session["rms"]["rms_id"]
-    username = session["auth"]["username"]
-    if not storage_api.check_if_instance_admin(rms_id):
+    username = session["manytask"]["username"]
+    if not storage_api.check_if_instance_admin(username):
         return jsonify(
             ErrorResponse(error="Only Instance Admin can create namespaces").model_dump()
         ), HTTPStatus.FORBIDDEN
@@ -718,6 +727,7 @@ def create_namespace() -> ResponseReturnValue:
     gitlab_group_id = None
 
     try:
+        rms_id = session["rms"]["rms_id"]
         logger.info("Creating GitLab group for namespace name=%s slug=%s", name, slug)
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
         logger.info("GitLab group created with id=%s", gitlab_group_id)
@@ -789,9 +799,8 @@ def get_namespaces() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    rms_id = session["rms"]["rms_id"]
-    username = session["auth"]["username"]
-    is_instance_admin = storage_api.check_if_instance_admin(rms_id)
+    username = session["manytask"]["username"]
+    is_instance_admin = storage_api.check_if_instance_admin(username)
 
     try:
         if is_instance_admin:
@@ -811,7 +820,7 @@ def get_namespaces() -> ResponseReturnValue:
             ]
         else:
             logger.info("Fetching namespaces with roles for user=%s", username)
-            namespace_role_pairs = storage_api.get_user_namespaces(rms_id)
+            namespace_role_pairs = storage_api.get_user_namespaces(username)
 
             namespace_list = [
                 NamespaceWithRoleResponse(
@@ -854,11 +863,10 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    rms_id = session["rms"]["rms_id"]
-    username = session["auth"]["username"]
+    username = session["manytask"]["username"]
 
     try:
-        namespace, role = storage_api.get_namespace_by_id(namespace_id, rms_id)
+        namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
 
         result: NamespaceResponse | NamespaceWithRoleResponse
         if role is not None:
@@ -923,8 +931,7 @@ def add_user_to_namespace(
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    rms_id = session["rms"]["rms_id"]
-    username = session["auth"]["username"]
+    username = session["manytask"]["username"]
 
     user_id = validated_data.user_id
     role = validated_data.role
@@ -943,7 +950,7 @@ def add_user_to_namespace(
                 namespace_id=namespace_id,
                 user_rms_id=str(user_id),
                 role=role,
-                assigned_by_rms_id=rms_id,
+                assigned_by_username=username,
             )
         except NoResultFound as e:
             logger.warning("User id=%s not registered in manytask: %s", user_id, str(e))
@@ -1019,8 +1026,7 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    rms_id = session["rms"]["rms_id"]
-    username = session["auth"]["username"]
+    username = session["manytask"]["username"]
 
     try:
         users_list = storage_api.get_namespace_users(namespace_id)
@@ -1029,9 +1035,7 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
 
         result = NamespaceUsersListResponse(users=users)
 
-        logger.info(
-            "Returning %d users for namespace id=%s to user=%s (rms_id=%s)", len(users), namespace_id, username, rms_id
-        )
+        logger.info("Returning %d users for namespace id=%s to user=%s", len(users), namespace_id, username)
         return jsonify(result.model_dump()), HTTPStatus.OK
 
     except Exception as e:
@@ -1064,16 +1068,14 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    admin_rms_id = session["rms"]["rms_id"]
-    username = session["auth"]["username"]
+    username = session["manytask"]["username"]
 
     try:
         try:
             role, removed_rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
             logger.info(
-                "User %s (rms_id=%s) removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
+                "User %s removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
                 username,
-                admin_rms_id,
                 user_id,
                 removed_rms_id,
                 role,
@@ -1153,8 +1155,7 @@ def update_user_role_in_namespace(
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    admin_rms_id = session["rms"]["rms_id"]
-    username = session["auth"]["username"]
+    username = session["manytask"]["username"]
     new_role = validated_data.role
 
     try:
@@ -1261,8 +1262,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    rms_id = session["rms"]["rms_id"]
-    username = session["auth"]["username"]
+    username = session["manytask"]["username"]
     namespace_id = validated_data.namespace_id
     course_name = validated_data.course_name
     course_slug = validated_data.slug
@@ -1282,7 +1282,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     students_group_id = None
 
     try:
-        is_instance_admin = storage_api.check_if_instance_admin(rms_id)
+        is_instance_admin = storage_api.check_if_instance_admin(username)
 
         namespace = None
         role = None
@@ -1294,7 +1294,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                 ), HTTPStatus.FORBIDDEN
         else:
             try:
-                namespace, role = storage_api.get_namespace_by_id(namespace_id, rms_id)
+                namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
             except (PermissionError, NoResultFound):
                 logger.warning(
                     "User %s attempted to create course in inaccessible namespace id=%s", username, namespace_id
@@ -1527,11 +1527,10 @@ def override_grade(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    admin_rms_id = session["rms"]["rms_id"]
-    profile_username = session["rms"]["username"]
+    profile_username = session["manytask"]["username"]
     logger.info("Grade override request by admin=%s for course=%s", profile_username, course_name)
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, admin_rms_id)
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
 
     if not student_course_admin:
         return jsonify({"success": False, "message": "Only course admins can override grades"}), HTTPStatus.FORBIDDEN
@@ -1579,11 +1578,10 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    admin_rms_id = session["rms"]["rms_id"]
-    profile_username = session["rms"]["username"]
+    profile_username = session["manytask"]["username"]
     logger.info("Clear grade override request by admin=%s for course=%s", profile_username, course_name)
 
-    student_course_admin = storage_api.check_if_course_admin(course.course_name, admin_rms_id)
+    student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
 
     if not student_course_admin:
         return jsonify(

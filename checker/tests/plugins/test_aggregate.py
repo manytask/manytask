@@ -8,6 +8,9 @@ from pydantic import ValidationError
 from checker.exceptions import PluginExecutionFailed
 from checker.plugins.aggregate import AggregatePlugin
 
+# Test constants
+EXPECTED_MEAN_SCORE = 20.0
+
 
 class TestAggregatePlugin:
     @pytest.mark.parametrize(
@@ -86,4 +89,4 @@ class TestAggregatePlugin:
         args = AggregatePlugin.Args(scores=[10, 20, 30], strategy="mean")
 
         result = plugin._run(args)
-        assert result.percentage == 20.0
+        assert result.percentage == EXPECTED_MEAN_SCORE
