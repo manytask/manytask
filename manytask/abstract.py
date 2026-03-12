@@ -53,83 +53,16 @@ class StorageApi(ABC):
     ) -> int: ...
 
     @abstractmethod
-    def get_stored_user_by_rms_id(
-        self,
-        rms_id: str,
-    ) -> StoredUser | None: ...
-
-    @abstractmethod
-    def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
-
-    @abstractmethod
-    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
-
-    @abstractmethod
-    def get_namespace_admin_namespaces(self, username: str) -> list[int]: ...
-
-    @abstractmethod
-    def get_courses_where_course_admin(self, username: str) -> list[tuple[str, CourseStatus]]: ...
-
-    @abstractmethod
-    def set_instance_admin_status(
-        self,
-        username: str,
-        is_admin: bool,
-    ) -> None: ...
-
-    @abstractmethod
-    def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
-
-    @abstractmethod
-    def create_namespace(
-        self,
-        name: str,
-        slug: str,
-        description: str | None,
-        gitlab_group_id: int,
-        created_by_username: str,
-    ) -> Any: ...
-
-    @abstractmethod
-    def get_user_namespaces(self, username: str) -> list[tuple[Any, str]]: ...
-
-    @abstractmethod
-    def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
-
-    @abstractmethod
-    def add_user_to_namespace(
-        self,
-        namespace_id: int,
-        user_username: str,
-        role: str,
-        assigned_by_username: str,
-    ) -> Any: ...
-
-    @abstractmethod
-    def calculate_and_save_grade(
-        self,
-        course_name: str,
-        username: str,
-        student_scores_data: dict[str, Any],
-    ) -> int: ...
-
-    @abstractmethod
-    def get_effective_grade(self, course_name: str, username: str) -> int: ...
-
-    @abstractmethod
-    def override_grade(self, course_name: str, username: str, new_grade: int) -> None: ...
-
-    @abstractmethod
-    def clear_grade_override(self, course_name: str, username: str) -> None: ...
-
-    @abstractmethod
-    def is_grade_overridden(self, course_name: str, username: str) -> bool: ...
-
-    @abstractmethod
     def get_stored_user_by_username(
         self,
         username: str,
     ) -> StoredUser: ...
+
+    @abstractmethod
+    def get_stored_user_by_rms_id(
+        self,
+        rms_id: str,
+    ) -> StoredUser | None: ...
 
     @abstractmethod
     def get_stored_user_by_auth_id(
@@ -166,6 +99,9 @@ class StorageApi(ABC):
     ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None, str | None]]: ...
 
     @abstractmethod
+    def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
+
+    @abstractmethod
     def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig: ...
 
     @abstractmethod
@@ -176,6 +112,9 @@ class StorageApi(ABC):
 
     @abstractmethod
     def update_cached_scores(self, course_name: str) -> None: ...
+
+    @abstractmethod
+    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
 
     @abstractmethod
     def create_course(
@@ -241,13 +180,54 @@ class StorageApi(ABC):
     def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
+    def get_namespace_admin_namespaces(self, username: str) -> list[int]: ...
+
+    @abstractmethod
     def get_courses_by_namespace_ids(self, namespace_ids: list[int]) -> list[tuple[str, CourseStatus]]: ...
+
+    @abstractmethod
+    def get_courses_where_course_admin(self, username: str) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
     def get_all_users(self) -> list[StoredUser]: ...
 
     @abstractmethod
+    def set_instance_admin_status(
+        self,
+        username: str,
+        is_admin: bool,
+    ) -> None: ...
+
+    @abstractmethod
+    def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None: ...
+
+    @abstractmethod
+    def create_namespace(
+        self,
+        name: str,
+        slug: str,
+        description: str | None,
+        gitlab_group_id: int,
+        created_by_username: str,
+    ) -> Any: ...
+
+    @abstractmethod
     def get_all_namespaces(self) -> list[Any]: ...
+
+    @abstractmethod
+    def get_user_namespaces(self, username: str) -> list[tuple[Any, str]]: ...
+
+    @abstractmethod
+    def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
+
+    @abstractmethod
+    def add_user_to_namespace(
+        self,
+        namespace_id: int,
+        user_username: str,
+        role: str,
+        assigned_by_username: str,
+    ) -> Any: ...
 
     @abstractmethod
     def get_namespace_users(self, namespace_id: int) -> list[tuple[int, str]]: ...
@@ -284,6 +264,26 @@ class StorageApi(ABC):
 
     @abstractmethod
     def recalculate_all_grades(self, course_name: str) -> None: ...
+
+    @abstractmethod
+    def calculate_and_save_grade(
+        self,
+        course_name: str,
+        username: str,
+        student_scores_data: dict[str, Any],
+    ) -> int: ...
+
+    @abstractmethod
+    def get_effective_grade(self, course_name: str, username: str) -> int: ...
+
+    @abstractmethod
+    def override_grade(self, course_name: str, username: str, new_grade: int) -> None: ...
+
+    @abstractmethod
+    def clear_grade_override(self, course_name: str, username: str) -> None: ...
+
+    @abstractmethod
+    def is_grade_overridden(self, course_name: str, username: str) -> bool: ...
 
 
 class RmsApiException(Exception):

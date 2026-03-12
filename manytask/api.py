@@ -286,14 +286,14 @@ def _validate_and_extract_params(
         user_id = form_data["user_id"]
         try:
             rms_user = rms_api.get_rms_user_by_id(user_id)
-            logger.info("Found RMS user by id=%s: %s", user_id, rms_user.username)
+            logger.info("Found RMS user by id=%s: %s", sanitize_log_data(user_id), rms_user.username)
         except RmsApiException:
             abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id {user_id}")
     elif "username" in form_data:
         username = form_data["username"]
         try:
             rms_user = rms_api.get_rms_user_by_username(username)
-            logger.info("Found RMS user by username=%s: %s", username, rms_user.username)
+            logger.info("Found RMS user by username=%s: %s", sanitize_log_data(username), rms_user.username)
         except RmsApiException:
             abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username {username}")
     else:
@@ -940,11 +940,6 @@ def add_user_to_namespace(
                     ErrorResponse(error=f"User with id={user_id} not found").model_dump()
                 ), HTTPStatus.NOT_FOUND
             rms_user = rms_api.get_rms_user_by_id(stored_user.rms_id)
-            if rms_user is None:
-                logger.error("User with rms_id=%s not found in RMS", stored_user.rms_id)
-                return jsonify(
-                    ErrorResponse(error=f"User with id={user_id} not found").model_dump()
-                ), HTTPStatus.NOT_FOUND
         except Exception as e:
             logger.error("User with id=%s not found in RMS: %s", user_id, str(e))
             return jsonify(ErrorResponse(error=f"User with id={user_id} not found").model_dump()), HTTPStatus.NOT_FOUND
@@ -1506,7 +1501,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     except Exception as e:
         logger.error(
             "Unexpected error creating course by user=%s: %s",
-            username,
+            sanitize_log_data(username),
             str(e),
             exc_info=True,
         )
@@ -1563,7 +1558,7 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         try:
             storage_api.get_stored_user_by_username(username)
         except NoResultFound:
-            logger.error("User with username=%s not found in database", username)
+            logger.error("User with username=%s not found in database", sanitize_log_data(username))
             return jsonify(
                 ErrorResponse(error=f"User with username={username} not found").model_dump()
             ), HTTPStatus.NOT_FOUND
@@ -1613,7 +1608,7 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
         try:
             storage_api.get_stored_user_by_username(username)
         except NoResultFound:
-            logger.error("User with username=%s not found in database", username)
+            logger.error("User with username=%s not found in database", sanitize_log_data(username))
             return jsonify(
                 ErrorResponse(error=f"User with username={username} not found").model_dump()
             ), HTTPStatus.NOT_FOUND
