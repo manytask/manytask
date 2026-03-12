@@ -1073,8 +1073,8 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
                 "User %s removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
                 username,
                 user_id,
-                role,
                 rms_id,
+                role,
                 namespace_id,
             )
         except NoResultFound:

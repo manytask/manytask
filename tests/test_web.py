@@ -32,6 +32,7 @@ from tests.constants import (
     TEST_GROUP_NAME,
     TEST_LAST_NAME,
     TEST_LAST_NAME_1,
+    TEST_MANYTASK_SESSION_VERSION,
     TEST_PASSWORD,
     TEST_PUBLIC_REPO,
     TEST_RMS_ID,
@@ -359,7 +360,7 @@ def test_not_ready(app):
                     "username": TEST_USERNAME,
                 }
                 sess["manytask"] = {
-                    "version": 1.0,
+                    "version": TEST_MANYTASK_SESSION_VERSION,
                     "user_id": TEST_USER_ID,
                     "username": TEST_USERNAME,
                 }
@@ -590,7 +591,7 @@ def test_signup_finish_with_valid_session(app, mock_gitlab_oauth):
                     "username": TEST_USERNAME,
                 }
                 sess["manytask"] = {
-                    "version": 1.0,
+                    "version": TEST_MANYTASK_SESSION_VERSION,
                     "user_id": TEST_USER_ID,
                     "username": TEST_USERNAME,
                 }

@@ -61,7 +61,7 @@ def index() -> ResponseReturnValue:
     else:
         from .utils.flask import is_namespace_admin
 
-        is_namespace_admin_flag = is_namespace_admin(app, session["rms"]["rms_id"])
+        is_namespace_admin_flag = is_namespace_admin(app, session["manytask"]["username"])
 
     return render_template(
         "courses.html",
@@ -650,7 +650,6 @@ def instance_admin_index() -> ResponseReturnValue:
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
     username = session["manytask"]["username"]
-    user_rms_id = session["rms"]["rms_id"]
     is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     if is_instance_admin:
@@ -659,7 +658,7 @@ def instance_admin_index() -> ResponseReturnValue:
 
     from .utils.flask import is_namespace_admin
 
-    is_namespace_admin_flag = is_namespace_admin(app, user_rms_id)
+    is_namespace_admin_flag = is_namespace_admin(app, username)
 
     if is_namespace_admin_flag:
         logger.info("Namespace Admin %s accessing instance admin root, redirecting to namespaces", username)

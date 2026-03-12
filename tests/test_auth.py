@@ -23,9 +23,12 @@ from manytask.mock_auth import MockAuthApi
 from manytask.web import course_bp, root_bp
 from tests.constants import (
     TEST_AUTH_ID,
+    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_FIRST_NAME,
+    TEST_GITLAB_SESSION_VERSION,
     TEST_LAST_NAME,
+    TEST_MANYTASK_SESSION_VERSION,
     TEST_RMS_ID,
     TEST_SECRET,
     TEST_TOKEN,
@@ -168,7 +171,7 @@ def mock_course():
 def test_valid_auth_session_with_valid_data(app):
     with app.test_request_context():
         session["auth"] = {
-            "version": 1.6,
+            "version": TEST_GITLAB_SESSION_VERSION,
             "username": "test_user",
             "user_auth_id": 123,
         }
@@ -178,7 +181,7 @@ def test_valid_auth_session_with_valid_data(app):
 def test_valid_auth_session_with_invalid_version(app):
     with app.test_request_context():
         session["auth"] = {
-            "version": 1.0,
+            "version": TEST_MANYTASK_SESSION_VERSION,
             "username": "test_user",
             "user_auth_id": 123,
         }
@@ -188,7 +191,7 @@ def test_valid_auth_session_with_invalid_version(app):
 def test_valid_auth_session_with_missing_data(app):
     # missing user_auth_id
     with app.test_request_context():
-        session["auth"] = {"version": 1.6, "username": "test_user"}
+        session["auth"] = {"version": TEST_GITLAB_SESSION_VERSION, "username": "test_user"}
         assert valid_auth_session(session) is False
 
 
@@ -200,7 +203,7 @@ def test_valid_auth_session_with_empty_session(app):
 def test_valid_rms_session_with_valid_data(app):
     with app.test_request_context():
         session["rms"] = {
-            "version": 1.1,
+            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
             "rms_id": TEST_RMS_ID,
             "username": "test_user",
         }
