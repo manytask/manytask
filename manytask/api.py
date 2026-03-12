@@ -581,8 +581,6 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     row_data = payload.row_data
 
     student_username = row_data.username
-    stored_user = storage_api.get_stored_user_by_username(student_username)
-    student_rms_id = stored_user.rms_id
     total_score = row_data.total_score
     logger.info("Updating scores for user=%s: %s", sanitize_log_data(student_username), new_scores)
 
@@ -591,7 +589,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
             if isinstance(new_score, (int, float)):
                 new_score = storage_api.store_score(
                     course.course_name,
-                    rms_id=student_rms_id,
+                    username=student_username,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )
@@ -610,14 +608,14 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
 
         # Calculate and save grade (applies DORESHKA logic if needed)
         # This updates final_grade but does NOT touch final_grade_override
-        storage_api.calculate_and_save_grade(course.course_name, student_rms_id, row_data.model_dump())
+        storage_api.calculate_and_save_grade(course.course_name, student_username, row_data.model_dump())
 
         # Get effective grade (override if exists, otherwise final_grade)
-        effective_grade = storage_api.get_effective_grade(course.course_name, student_rms_id)
+        effective_grade = storage_api.get_effective_grade(course.course_name, student_username)
         row_data.grade = effective_grade
 
         # Add override indicator for frontend
-        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, student_rms_id)
+        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, student_username)
 
         logger.info("Successfully updated scores for user=%s", sanitize_log_data(student_username))
         return jsonify(
@@ -661,16 +659,13 @@ def update_comment(course_name: str) -> ResponseReturnValue:
         if not username:
             return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
 
-        stored_user = storage_api.get_stored_user_by_username(username)
-        student_rms_id = stored_user.rms_id
-
         raw_comment = data.get("comment")
         sanitized_comment, error = sanitize_and_validate_comment(raw_comment)
 
         if error:
             return jsonify({"success": False, "message": error}), HTTPStatus.BAD_REQUEST
 
-        storage_api.update_student_comment(course.course_name, student_rms_id, sanitized_comment)
+        storage_api.update_student_comment(course.course_name, username, sanitized_comment)
 
         logger.info("Successfully updated comment for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK
@@ -740,7 +735,7 @@ def create_namespace() -> ResponseReturnValue:
             slug=slug,
             description=description,
             gitlab_group_id=gitlab_group_id,
-            created_by_rms_id=rms_id,
+            created_by_username=username,
         )
 
         logger.info(
@@ -938,7 +933,18 @@ def add_user_to_namespace(
 
     try:
         try:
-            rms_user = rms_api.get_rms_user_by_id(str(user_id))
+            stored_user = storage_api.get_stored_user_by_rms_id(str(user_id))
+            if stored_user is None:
+                logger.error("User with id=%s not found in database", user_id)
+                return jsonify(
+                    ErrorResponse(error=f"User with id={user_id} not found").model_dump()
+                ), HTTPStatus.NOT_FOUND
+            rms_user = rms_api.get_rms_user_by_id(stored_user.rms_id)
+            if rms_user is None:
+                logger.error("User with rms_id=%s not found in RMS", stored_user.rms_id)
+                return jsonify(
+                    ErrorResponse(error=f"User with id={user_id} not found").model_dump()
+                ), HTTPStatus.NOT_FOUND
         except Exception as e:
             logger.error("User with id=%s not found in RMS: %s", user_id, str(e))
             return jsonify(ErrorResponse(error=f"User with id={user_id} not found").model_dump()), HTTPStatus.NOT_FOUND
@@ -948,7 +954,7 @@ def add_user_to_namespace(
         try:
             user_on_namespace = storage_api.add_user_to_namespace(
                 namespace_id=namespace_id,
-                user_rms_id=str(user_id),
+                user_username=stored_user.username,
                 role=role,
                 assigned_by_username=username,
             )
@@ -970,11 +976,11 @@ def add_user_to_namespace(
 
         # Добавляем в GitLab группу только после успешного добавления в БД
         try:
-            rms_api.add_user_to_namespace_group(gitlab_group_id=namespace.gitlab_group_id, user_rms_id=str(user_id))
-            logger.info("Added user id=%s to GitLab group id=%s", user_id, namespace.gitlab_group_id)
+            rms_api.add_user_to_namespace_group(gitlab_group_id=namespace.gitlab_group_id, user_rms_id=rms_user.id)
+            logger.info("Added RMS user id=%s to GitLab group id=%s", rms_user.id, namespace.gitlab_group_id)
         except Exception as e:
             # TODO: откатить добавление в локальную БД
-            logger.error("Failed to add user id=%s to GitLab group: %s", user_id, str(e))
+            logger.error("Failed to add RMS user id=%s to GitLab group: %s", rms_user.id, str(e))
             return jsonify(
                 ErrorResponse(error="Failed to add user to GitLab group").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1554,9 +1560,15 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         except (TypeError, ValueError):
             return jsonify({"success": False, "message": "Grade must be an integer"}), HTTPStatus.BAD_REQUEST
 
-        stored_user = storage_api.get_stored_user_by_username(username)
-        student_rms_id = stored_user.rms_id
-        storage_api.override_grade(course.course_name, student_rms_id, new_grade)
+        try:
+            storage_api.get_stored_user_by_username(username)
+        except NoResultFound:
+            logger.error("User with username=%s not found in database", username)
+            return jsonify(
+                ErrorResponse(error=f"User with username={username} not found").model_dump()
+            ), HTTPStatus.NOT_FOUND
+
+        storage_api.override_grade(course.course_name, username, new_grade)
 
         logger.info("Successfully set grade override for user=%s to %d", sanitize_log_data(username), new_grade)
         return jsonify({"success": True}), HTTPStatus.OK
@@ -1598,9 +1610,15 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
         if not username:
             return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
 
-        stored_user = storage_api.get_stored_user_by_username(username)
-        student_rms_id = stored_user.rms_id
-        storage_api.clear_grade_override(course.course_name, student_rms_id)
+        try:
+            storage_api.get_stored_user_by_username(username)
+        except NoResultFound:
+            logger.error("User with username=%s not found in database", username)
+            return jsonify(
+                ErrorResponse(error=f"User with username={username} not found").model_dump()
+            ), HTTPStatus.NOT_FOUND
+
+        storage_api.clear_grade_override(course.course_name, username)
 
         logger.info("Successfully cleared grade override for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK

@@ -73,7 +73,7 @@ def create_mock_gitlab_project(project_id: int, namespace: str) -> Project:
 def mock_rms_user() -> RmsUser:
     """Fixture to create a mock RmsUser object."""
     return RmsUser(
-        id=TEST_USER_ID,
+        id=str(TEST_USER_ID),
         username=TEST_USERNAME,
         name=TEST_USERNAME,
     )

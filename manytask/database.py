@@ -910,11 +910,11 @@ class DataBaseApi(StorageApi):
             self._update_or_create(
                 session,
                 models.User,
-                defaults=dict(
+                defaults=dict[str, Any](
                     rms_id=rms_id,
                     auth_id=auth_id,
                 ),
-                create_defaults=dict(
+                create_defaults=dict[str, Any](
                     first_name=first_name,
                     last_name=last_name,
                 ),
@@ -1395,12 +1395,12 @@ class DataBaseApi(StorageApi):
             pass
 
     def _get_or_create_user_on_course(
-        self, session: Session, rms_id: str, course: models.Course
+        self, session: Session, username: str, course: models.Course
     ) -> models.UserOnCourse:
         user = self._get(
             session,
             models.User,
-            rms_id=rms_id,
+            username=username,
         )
 
         user_on_course = self._get_or_create(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
@@ -1411,14 +1411,14 @@ class DataBaseApi(StorageApi):
         self,
         session: Session,
         course_name: str,
-        rms_id: str,
+        username: str,
         enabled: bool | None = None,
         started: bool | None = None,
         only_bonus: bool = False,
     ) -> Optional[Iterable["models.Grade"]]:
         try:
             course = self._get(session, models.Course, name=course_name)
-            user = self._get(session, models.User, rms_id=rms_id)
+            user = self._get(session, models.User, username=username)
 
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
         except NoResultFound:
