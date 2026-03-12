@@ -26,7 +26,7 @@ def test_stored_user():
     )
 
     assert not stored_user1.instance_admin
-    assert repr(stored_user1) == f"StoredUser(rms_id={TEST_RMS_ID_1}, username={TEST_USERNAME_1})"
+    assert repr(stored_user1) == f"StoredUser(username={TEST_USERNAME_1})"
 
     stored_user2 = StoredUser(
         TEST_USERNAME_2,
@@ -39,4 +39,4 @@ def test_stored_user():
     )
 
     assert stored_user2.instance_admin
-    assert repr(stored_user2) == f"StoredUser(rms_id={TEST_RMS_ID_2}, username={TEST_USERNAME_2})"
+    assert repr(stored_user2) == f"StoredUser(username={TEST_USERNAME_2})"
