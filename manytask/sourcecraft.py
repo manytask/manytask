@@ -309,7 +309,7 @@ class SourceCraftApi(RmsApi):
         self,
         user_id: int,
     ) -> RmsUser:
-        stored_user: StoredUser | None = self._storage_api.get_stored_user_by_id(user_id)
+        stored_user: StoredUser | None = self._storage_api.get_stored_user_by_user_id(user_id)
         if stored_user is None:
             raise RmsApiException(f"User with id {user_id} not found")
         return stored_user.rms_identity

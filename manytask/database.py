@@ -134,7 +134,7 @@ class DataBaseApi(StorageApi):
                 models.User,
                 username=config.instance_admin_username,
                 defaults={"is_instance_admin": True},
-                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": -1},
+                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": -1, "auth_id": -1},
             )
             session.commit()
 
@@ -184,13 +184,24 @@ class DataBaseApi(StorageApi):
 
         return sum([grade.score for grade in grades])
 
+    @staticmethod
+    def _to_stored_user(user: models.User) -> StoredUser:
+        return StoredUser(
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            rms_id=user.rms_id,
+            auth_id=user.auth_id,
+            user_id=user.id,
+            instance_admin=user.is_instance_admin,
+        )
+
     def get_stored_user_by_username(
         self,
         username: str,
     ) -> StoredUser:
         """Method for getting user's stored data
 
-        :param course_name: course name
         :param username: user name
 
         :return: created or received StoredUser object
@@ -203,20 +214,14 @@ class DataBaseApi(StorageApi):
                 username=username,
             )
 
-            return StoredUser(
-                username=user.username,
-                first_name=user.first_name,
-                last_name=user.last_name,
-                rms_id=user.rms_id,
-                instance_admin=user.is_instance_admin,
-            )
+            return self._to_stored_user(user)
 
     def get_stored_user_by_rms_id(
         self,
         rms_id: int,
     ) -> StoredUser | None:
         """Method for getting user's stored data
-        :param rms_id: gitlab user id
+        :param rms_id: gitlab or sourcecraft user id
         :return: StoredUser object if exist else None
         """
 
@@ -228,18 +233,34 @@ class DataBaseApi(StorageApi):
                     rms_id=rms_id,
                 )
 
-                return StoredUser(
-                    username=user.username,
-                    first_name=user.first_name,
-                    last_name=user.last_name,
-                    rms_id=user.rms_id,
-                    instance_admin=user.is_instance_admin,
-                )
+                return self._to_stored_user(user)
 
             except NoResultFound:
                 return None
 
-    def get_stored_user_by_id(
+    def get_stored_user_by_auth_id(
+        self,
+        auth_id: int,
+    ) -> StoredUser | None:
+        """Method for getting user's stored data
+        :param auth_id: autho provider id (gitlab or yauid)
+        :return: StoredUser object if exist else None
+        """
+
+        with self._session_create() as session:
+            try:
+                user = self._get(
+                    session,
+                    models.User,
+                    auth_id=auth_id,
+                )
+
+                return self._to_stored_user(user)
+
+            except NoResultFound:
+                return None
+
+    def get_stored_user_by_user_id(
         self,
         user_id: int,
     ) -> StoredUser | None:
@@ -256,13 +277,7 @@ class DataBaseApi(StorageApi):
                     id=user_id,
                 )
 
-                return StoredUser(
-                    username=user.username,
-                    first_name=user.first_name,
-                    last_name=user.last_name,
-                    rms_id=user.rms_id,
-                    instance_admin=user.is_instance_admin,
-                )
+                return self._to_stored_user(user)
 
             except NoResultFound:
                 return None
@@ -885,19 +900,20 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' isn't enrolled in course '%s'", username, course_name)
                 return False
 
-    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int) -> None:
+    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int, auth_id: int) -> None:
         """Update or create user in DB"""
 
         with self._session_create() as session:
             logger.debug(
                 f"Creating or updating user '{username}' "
-                f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id})"
+                f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id}, auth_id={auth_id})"
             )
             self._update_or_create(
                 session,
                 models.User,
                 defaults=dict(
                     rms_id=rms_id,
+                    auth_id=auth_id,
                 ),
                 create_defaults=dict(
                     first_name=first_name,
@@ -1025,16 +1041,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             users = session.query(models.User).all()
             logger.info("Fetched all users: count=%s", len(users))
-            return [
-                StoredUser(
-                    username=user.username,
-                    first_name=user.first_name,
-                    last_name=user.last_name,
-                    rms_id=user.rms_id,
-                    instance_admin=user.is_instance_admin,
-                )
-                for user in users
-            ]
+            return [self._to_stored_user(user) for user in users]
 
     def set_instance_admin_status(self, username: str, is_admin: bool) -> None:
         """Change user admin status

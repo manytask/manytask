@@ -25,8 +25,9 @@ class StoredUser:
     first_name: str
     last_name: str
     rms_id: int
+    auth_id: int
+    user_id: int
     instance_admin: bool = False
-    # we can add more fields that we store
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
@@ -61,6 +62,12 @@ class StorageApi(ABC):
     def get_stored_user_by_rms_id(
         self,
         rms_id: int,
+    ) -> StoredUser | None: ...
+
+    @abstractmethod
+    def get_stored_user_by_auth_id(
+        self,
+        auth_id: int,
     ) -> StoredUser | None: ...
 
     @abstractmethod
@@ -162,7 +169,9 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
+    def update_or_create_user(
+        self, username: str, first_name: str, last_name: str, rms_id: int, auth_id: int
+    ) -> None: ...
 
     @abstractmethod
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]: ...
@@ -236,7 +245,7 @@ class StorageApi(ABC):
         ...
 
     @abstractmethod
-    def get_stored_user_by_id(
+    def get_stored_user_by_user_id(
         self,
         user_id: int,
     ) -> StoredUser | None: ...
@@ -414,10 +423,11 @@ class AuthenticatedUser:
 
 @dataclass
 class ClientProfile:
+    rms_id: int
     username: str
 
     def __repr__(self) -> str:
-        return f"ClientProfile(username={self.username})"
+        return f"ClientProfile(rms_id={self.rms_id}, username={self.username})"
 
 
 class AuthApi(ABC):

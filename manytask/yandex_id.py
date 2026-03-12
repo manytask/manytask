@@ -40,7 +40,7 @@ class YandexIDApi(AuthApi):
 
     def _refresh_token(self, oauth: OAuth, refresh_token: str) -> dict[str, Any] | None:
         try:
-            new_tokens = oauth.remote_app.fetch_access_token(
+            new_tokens = oauth.auth_provider.fetch_access_token(
                 grant_type="refresh_token",
                 refresh_token=refresh_token,
             )

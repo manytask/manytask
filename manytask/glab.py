@@ -594,7 +594,7 @@ class GitLabApi(RmsApi, AuthApi):
                 try:
                     logger.info("Access token expired. Trying to refresh token.")
 
-                    new_tokens = oauth.gitlab.fetch_access_token(
+                    new_tokens = oauth.auth_provider.fetch_access_token(
                         grant_type="refresh_token",
                         refresh_token=oauth_refresh_token,
                     )
@@ -605,7 +605,7 @@ class GitLabApi(RmsApi, AuthApi):
                     response = self._make_auth_request(new_access)
                     response.raise_for_status()
 
-                    session["gitlab"].update({"access_token": new_access, "refresh_token": new_refresh})
+                    session["auth"].update({"access_token": new_access, "refresh_token": new_refresh})
                     logger.info("Token refreshed successfully.")
 
                     return True

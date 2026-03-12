@@ -1,17 +1,14 @@
 from flask import session, url_for
 
+from manytask.course import CourseStatus
 from manytask.main import CustomFlask
 
 
 def get_courses(app: CustomFlask) -> list[dict[str, str]]:
-    if app.debug:
+    username = "guest" if app.debug else session["manytask"]["username"]
+    if app.debug or app.storage_api.check_if_instance_admin(username):
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
-        username = "guest"  # Default username for debug mode
-    elif app.storage_api.check_if_instance_admin(session["profile"]["username"]):
-        courses_names = app.storage_api.get_all_courses_names_with_statuses()
-        username = session["profile"]["username"]
-    elif is_namespace_admin(app, session["profile"]["username"]):
-        username = session["profile"]["username"]
+    elif is_namespace_admin(app, username):
         namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
         namespace_courses = app.storage_api.get_courses_by_namespace_ids(namespace_admin_namespaces)
         course_admin_courses = app.storage_api.get_courses_where_course_admin(username)
@@ -21,9 +18,8 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
             if name not in courses_dict:
                 courses_dict[name] = status
 
-        courses_names = list(courses_dict.items())
+        courses_names = list[tuple[str, CourseStatus]](courses_dict.items())
     else:
-        username = session["profile"]["username"]
         courses_names = app.storage_api.get_user_courses_names_with_statuses(username)
 
     courses_list = []
@@ -53,8 +49,8 @@ def check_instance_admin(app: CustomFlask) -> bool:
     if app.debug:
         return True
     else:
-        student_username = session["gitlab"]["username"]
-        return app.storage_api.check_if_instance_admin(student_username)
+        username = session["manytask"]["username"]
+        return app.storage_api.check_if_instance_admin(username)
 
 
 def is_namespace_admin(app: CustomFlask, username: str) -> bool:

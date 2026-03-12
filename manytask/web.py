@@ -1,6 +1,5 @@
 import logging
 import secrets
-from datetime import datetime, timedelta
 from http import HTTPStatus
 from urllib.parse import urlparse
 
@@ -11,6 +10,7 @@ from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
+from manytask.abstract import RmsUser, StoredUser
 from manytask.course import ManytaskDeadlinesType
 
 from .abstract import ClientProfile
@@ -22,9 +22,11 @@ from .auth import (
     requires_instance_or_namespace_admin,
     requires_ready,
     role_required,
-    set_client_profile_session,
-    valid_client_profile_session,
-    valid_gitlab_session,
+    set_manytask_session,
+    set_rms_session,
+    valid_auth_session,
+    valid_manytask_session,
+    valid_rms_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
@@ -59,7 +61,7 @@ def index() -> ResponseReturnValue:
     else:
         from .utils.flask import is_namespace_admin
 
-        is_namespace_admin_flag = is_namespace_admin(app, session["profile"]["username"])
+        is_namespace_admin_flag = is_namespace_admin(app, session["manytask"]["username"])
 
     return render_template(
         "courses.html",
@@ -77,7 +79,7 @@ def login() -> ResponseReturnValue:
     oauth: OAuth = app.oauth
 
     redirect_uri = url_for("root.login_finish", _external=True)
-    return oauth.gitlab.authorize_redirect(redirect_uri)
+    return oauth.auth_provider.authorize_redirect(redirect_uri)
 
 
 @root_bp.route("/login_finish")
@@ -86,14 +88,16 @@ def login_finish() -> ResponseReturnValue:
     oauth: OAuth = app.oauth
 
     result = handle_oauth_callback(oauth, app)
-    if "gitlab" in session:
-        logger.info("User %s successfully authenticated", session["gitlab"]["username"])
+    if "auth" in session:
+        logger.info("User %s successfully authenticated", session["auth"]["username"])
     return result
 
 
 @root_bp.route("/logout")
 def logout() -> ResponseReturnValue:
-    session.pop("gitlab", None)
+    session.pop("auth", None)
+    session.pop("rms", None)
+    session.pop("manytask", None)
     return redirect(url_for("root.index"))
 
 
@@ -118,26 +122,13 @@ def course_page(course_name: str) -> ResponseReturnValue:
         else:
             student_course_admin = False
     else:
-        student_username = session["gitlab"]["username"]
+        student_username = session["manytask"]["username"]
 
         student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
 
-    # update cache if more than 1h passed or in debug mode
-    try:
-        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
-        cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
-    except ValueError:
-        cache_delta = timedelta(days=365)
-
-    if app.debug or cache_delta.total_seconds() > CACHE_TIMEOUT_SECONDS:
-        storage_api.update_cached_scores(course.course_name)
-        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
-        cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
-
-    # get scores
     tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
@@ -163,7 +154,6 @@ def course_page(course_name: str) -> ResponseReturnValue:
         task_stats=tasks_stats,
         course_favicon=app.favicon,
         is_course_admin=student_course_admin,
-        cache_time=cache_delta,
         courses=courses,
         deadlines_type=course.deadlines_type,
         has_role=has_role,
@@ -215,10 +205,11 @@ def signup() -> ResponseReturnValue:
         )
 
         app.storage_api.update_or_create_user(
-            username,
-            validated_firstname,
-            validated_lastname,
-            rms_user.id,
+            username=username,
+            first_name=validated_firstname,
+            last_name=validated_lastname,
+            rms_id=rms_user.id,
+            auth_id=rms_user.id,
         )
 
     # render template with error... if error
@@ -238,17 +229,22 @@ def signup() -> ResponseReturnValue:
 def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     app: CustomFlask = current_app  # type: ignore
 
-    if not valid_gitlab_session(session):
+    if not valid_auth_session(session):
         return redirect_to_login_with_bad_session()
 
-    if valid_client_profile_session(session):
-        logger.warning("User already has username=%s in session", session["profile"]["username"])
+    if valid_rms_session(session) and valid_manytask_session(session):
+        logger.warning("User already has username=%s in session", session["manytask"]["username"])
         return redirect(url_for("root.index"))
 
-    stored_user_or_none = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])
+    stored_user_or_none: StoredUser | None = app.storage_api.get_stored_user_by_auth_id(
+        auth_id=session["auth"]["user_auth_id"],
+    )
     if stored_user_or_none is not None:
-        session.setdefault("profile", {}).update(
-            set_client_profile_session(ClientProfile(session["gitlab"]["username"]))
+        session.setdefault("rms", {}).update(
+            set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=session["auth"]["username"]))
+        )
+        session.setdefault("manytask", {}).update(
+            set_manytask_session(user_id=stored_user_or_none.user_id, username=stored_user_or_none.username)
         )
         return redirect(url_for("root.index"))
 
@@ -277,10 +273,28 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
             error_message="Firstname and lastname must be 1-50 characters and contain only letters or hyphens.",
         )
 
+    auth_access_token = session["auth"]["access_token"]
+    authenticated_rms_user: RmsUser = app.rms_api.get_authenticated_rms_user(oauth_access_token=auth_access_token)
+    authenticated_rms_user_id = authenticated_rms_user.id
     app.storage_api.update_or_create_user(
-        session["gitlab"]["username"], firstname, lastname, session["gitlab"]["user_id"]
+        username=session["auth"]["username"],
+        first_name=firstname,
+        last_name=lastname,
+        rms_id=authenticated_rms_user_id,
+        auth_id=session["auth"]["user_auth_id"],
     )
-    session.setdefault("profile", {}).update(set_client_profile_session(ClientProfile(session["gitlab"]["username"])))
+
+    stored_user = app.storage_api.get_stored_user_by_auth_id(auth_id=session["auth"]["user_auth_id"])
+    if stored_user is None:
+        logger.error("Cannot fetch stored user after signup_finish for auth_id=%s", session["auth"]["user_auth_id"])
+        return redirect_to_login_with_bad_session()
+
+    session.setdefault("rms", {}).update(
+        set_rms_session(ClientProfile(rms_id=authenticated_rms_user_id, username=authenticated_rms_user.username))
+    )
+    session.setdefault("manytask", {}).update(
+        set_manytask_session(user_id=stored_user.user_id, username=stored_user.username)
+    )
     return redirect(url_for("root.index"))
 
 
@@ -305,8 +319,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template("create_project.html", error_message="CSRF Error")
 
-    gitlab_access_token: str = session["gitlab"]["access_token"]
-    rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
+    auth_access_token: str = session["auth"]["access_token"]
+    rms_user = app.rms_api.get_authenticated_rms_user(auth_access_token)
 
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
@@ -319,7 +333,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    app.storage_api.sync_user_on_course(course.course_name, session["profile"]["username"], is_course_admin)
+    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
 
     # Create use if needed
     try:
@@ -374,13 +388,13 @@ def show_database(course_name: str) -> ResponseReturnValue:
         else:
             student_course_admin = False
     else:
-        student_username = session["gitlab"]["username"]
+        student_username = session["manytask"]["username"]
 
         student_repo = app.rms_api.get_url_for_repo(
             username=student_username, course_students_group=course.gitlab_course_students_group
         )
 
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
@@ -438,7 +452,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 error_message="Invalid namespace ID",
             )
 
-        username = session["gitlab"]["username"]
+        username = session["manytask"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
         namespace = None
@@ -563,7 +577,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         return redirect(url_for("root.index"))
 
     if not app.debug:
-        username = session["profile"]["username"]
+        username = session["manytask"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
         if not is_instance_admin:
@@ -635,7 +649,7 @@ def instance_admin_index() -> ResponseReturnValue:
     if app.debug:
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
-    username = session["profile"]["username"]
+    username = session["manytask"]["username"]
     is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     if is_instance_admin:
@@ -668,15 +682,17 @@ def instance_admin_panel() -> ResponseReturnValue:
 
         action = request.form.get("action", "")
         username = request.form.get("username", "")
-        current_instance_admin = session["gitlab"]["username"]
+        current_instance_admin = session["manytask"]["username"]
+
+        stored_user = app.storage_api.get_stored_user_by_username(username)
 
         if action == "grant":
-            app.storage_api.set_instance_admin_status(username, True)
+            app.storage_api.set_instance_admin_status(stored_user.username, True)
             app.logger.warning(
                 "Instance Admin %s granted instance admin status to %s", current_instance_admin, username
             )
         elif action == "revoke":
-            app.storage_api.set_instance_admin_status(username, False)
+            app.storage_api.set_instance_admin_status(stored_user.username, False)
             app.logger.warning(
                 "Instance Admin %s revoked instance admin status from %s", current_instance_admin, username
             )
@@ -722,7 +738,7 @@ def update_profile() -> ResponseReturnValue:
     if app.debug:
         current_username = request_username
     else:
-        current_username = session["gitlab"]["username"]
+        current_username = session["manytask"]["username"]
 
     try:
         validate_csrf(request.form.get("csrf_token"))
@@ -733,7 +749,10 @@ def update_profile() -> ResponseReturnValue:
     if request_username != current_username and not app.storage_api.check_if_instance_admin(current_username):
         abort(HTTPStatus.FORBIDDEN)
 
-    app.storage_api.update_user_profile(request_username, new_first_name, new_last_name)
+    target_user = app.storage_api.get_stored_user_by_username(request_username)
+    if target_user is None:
+        abort(HTTPStatus.NOT_FOUND)
+    app.storage_api.update_user_profile(target_user.username, new_first_name, new_last_name)
     logger.info("Successfully updated profile for user: %s", sanitize_log_data(request_username))
 
     referrer = request.referrer
@@ -757,7 +776,7 @@ def namespaces_list() -> ResponseReturnValue:
     """
     app: CustomFlask = current_app  # type: ignore
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     if is_instance_admin:
@@ -822,7 +841,7 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     """
     app: CustomFlask = current_app  # type: ignore
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     try:
@@ -848,7 +867,7 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     users_data = []
     for user_id, role in namespace_users:
         try:
-            user = app.storage_api.get_stored_user_by_id(user_id)
+            user = app.storage_api.get_stored_user_by_user_id(user_id)
             if user:
                 users_data.append(
                     {

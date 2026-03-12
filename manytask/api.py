@@ -14,7 +14,7 @@ from enum import Enum
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
-from manytask.abstract import RmsApiException, StorageApi
+from manytask.abstract import RmsApiException, StorageApi, StoredUser
 from manytask.database import TaskDisabledError
 
 from .abstract import RmsApi, RmsUser
@@ -54,6 +54,13 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
         logger.warning("Course not found: %s", course_name)
         abort(HTTPStatus.NOT_FOUND, "Course not found")
     return course
+
+
+def _get_stored_user_or_not_found(storage_api: StorageApi, rms_id: int) -> StoredUser:
+    stored_user = storage_api.get_stored_user_by_rms_id(rms_id)
+    if stored_user is None:
+        abort(HTTPStatus.NOT_FOUND, f"There is no registered user with rms_id={rms_id}")
+    return stored_user
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -128,7 +135,7 @@ def requires_namespace_admin(
                     ErrorResponse(error="Internal server error").model_dump()
                 ), HTTPStatus.INTERNAL_SERVER_ERROR
 
-            username = session["gitlab"]["username"]
+            username = session["manytask"]["username"]
             is_instance_admin = storage_api.check_if_instance_admin(username)
 
             if not is_instance_admin:
@@ -279,7 +286,7 @@ def _validate_and_extract_params(
         try:
             user_id = int(form_data["user_id"])
             rms_user = rms_api.get_rms_user_by_id(user_id)
-            logger.info("Found user by id=%s: %s", user_id, rms_user.username)
+            logger.info("Found RMS user by id=%s", user_id)
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
         except RmsApiException:
@@ -380,8 +387,11 @@ def report_score(course_name: str) -> ResponseReturnValue:
 
     # Log with sanitized values
     logger.info("Use submit_time: %s", submit_time)
+    stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
+    manytask_username = stored_user.username
+
     logger.info(
-        f"user={rms_user.username} (id={rms_user.id}), task={task.name}, "
+        f"user={manytask_username} (rms_id={rms_user.id}), task={task.name}, "
         f"reported_score={reported_score}, submit_time={submit_time}, check_deadline={check_deadline}"
     )
 
@@ -395,15 +405,15 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
         allow_reduction=allow_reduction,
     )
-    final_score = app.storage_api.store_score(course.course_name, rms_user.username, task.name, update_function)
+    final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
 
-    logger.info("Stored final_score=%s for user=%s, task=%s", final_score, rms_user.username, task.name)
+    logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
 
     # Recalculate and save student's final grade after score update
     try:
         # Get all student scores to recalculate grade
-        student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
-        bonus_score = app.storage_api.get_bonus_score(course.course_name, rms_user.username)
+        student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
+        bonus_score = app.storage_api.get_bonus_score(course.course_name, manytask_username)
         max_score = app.storage_api.max_score_started(course.course_name)
 
         total_score = sum(student_scores.values()) + bonus_score
@@ -419,22 +429,22 @@ def report_score(course_name: str) -> ResponseReturnValue:
                         large_count += 1
 
         student_data = {
-            "username": rms_user.username,
+            "username": manytask_username,
             "scores": student_scores,
             "total_score": total_score,
             "percent": percent,
             "large_count": large_count,
         }
 
-        app.storage_api.calculate_and_save_grade(course.course_name, rms_user.username, student_data)
-        logger.info("Recalculated and saved grade for user=%s after score update", rms_user.username)
+        app.storage_api.calculate_and_save_grade(course.course_name, manytask_username, student_data)
+        logger.info("Recalculated and saved grade for user=%s after score update", manytask_username)
     except Exception as e:
-        logger.error("Failed to recalculate grade for user=%s: %s", rms_user.username, str(e))
+        logger.error("Failed to recalculate grade for user=%s: %s", manytask_username, str(e))
         # Don't fail the request if grade calculation fails
 
     return {
         "user_id": rms_user.id,
-        "username": rms_user.username,
+        "username": manytask_username,
         "task": task.name,
         "score": final_score,
         "commit_time": submit_time.isoformat(sep=" ") if submit_time else "None",
@@ -453,17 +463,19 @@ def get_score(course_name: str) -> ResponseReturnValue:
         request.form, app.rms_api, app.storage_api, course.course_name
     )
 
-    student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
+    stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
+    manytask_username = stored_user.username
+    student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
 
     try:
         student_task_score = student_scores[task.name]
-        logger.info("user=%s, task=%s, score=%s", rms_user.username, task.name, student_task_score)
+        logger.info("user=%s, task=%s, score=%s", manytask_username, task.name, student_task_score)
     except Exception:
-        return f"Cannot get score for task {task.name} for {rms_user.username}", HTTPStatus.NOT_FOUND
+        return f"Cannot get score for task {task.name} for {manytask_username}", HTTPStatus.NOT_FOUND
 
     return {
         "user_id": rms_user.id,
-        "username": rms_user.username,
+        "username": manytask_username,
         "task": task.name,
         "score": student_task_score,
     }, HTTPStatus.OK
@@ -525,8 +537,8 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     course = __get_course_or_not_found(storage_api, course_name)
 
     if auth_method == AuthMethod.SESSION:
-        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-        is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        username = session["manytask"]["username"]
+        is_course_admin = storage_api.check_if_course_admin(course.course_name, username)
     else:
         is_course_admin = True
 
@@ -548,7 +560,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     storage_api = app.storage_api
 
     if auth_method == AuthMethod.SESSION:
-        username = session["profile"]["username"]
+        username = session["manytask"]["username"]
         logger.info("Request by admin=%s for course=%s", username, course_name)
         student_course_admin = storage_api.check_if_course_admin(course_name, username)
 
@@ -630,7 +642,7 @@ def update_comment(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username_ = session["profile"]["username"]
+    profile_username_ = session["manytask"]["username"]
     logger.info("Comment update request by user=%s for course=%s", profile_username_, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username_)
@@ -693,7 +705,7 @@ def create_namespace() -> ResponseReturnValue:
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     if not storage_api.check_if_instance_admin(username):
         return jsonify(
             ErrorResponse(error="Only Instance Admin can create namespaces").model_dump()
@@ -711,13 +723,13 @@ def create_namespace() -> ResponseReturnValue:
     gitlab_group_id = None
 
     try:
+        rms_id = session["rms"]["rms_id"]
         logger.info("Creating GitLab group for namespace name=%s slug=%s", name, slug)
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
         logger.info("GitLab group created with id=%s", gitlab_group_id)
 
-        creator_rms_id = session["gitlab"]["user_id"]
-        rms_api.add_user_to_namespace_group(gitlab_group_id, creator_rms_id)
-        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", creator_rms_id, gitlab_group_id)
+        rms_api.add_user_to_namespace_group(gitlab_group_id, rms_id)
+        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", rms_id, gitlab_group_id)
 
         namespace = storage_api.create_namespace(
             name=name,
@@ -783,7 +795,7 @@ def get_namespaces() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     is_instance_admin = storage_api.check_if_instance_admin(username)
 
     try:
@@ -847,7 +859,7 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
 
     try:
         namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
@@ -915,7 +927,7 @@ def add_user_to_namespace(
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
 
     user_id = validated_data.user_id
     role = validated_data.role
@@ -1010,7 +1022,7 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
 
     try:
         users_list = storage_api.get_namespace_users(namespace_id)
@@ -1052,7 +1064,7 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
 
     try:
         try:
@@ -1137,13 +1149,13 @@ def update_user_role_in_namespace(
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     new_role = validated_data.role
 
     try:
         # First, get the user's rms_id before making any changes
         try:
-            stored_user = storage_api.get_stored_user_by_id(user_id)
+            stored_user = storage_api.get_stored_user_by_user_id(user_id)
             if stored_user is None:
                 return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
             rms_id = stored_user.rms_id
@@ -1244,7 +1256,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     namespace_id = validated_data.namespace_id
     course_name = validated_data.course_name
     course_slug = validated_data.slug
@@ -1509,7 +1521,7 @@ def override_grade(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username = session["profile"]["username"]
+    profile_username = session["manytask"]["username"]
     logger.info("Grade override request by admin=%s for course=%s", profile_username, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
@@ -1558,7 +1570,7 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username = session["profile"]["username"]
+    profile_username = session["manytask"]["username"]
     logger.info("Clear grade override request by admin=%s for course=%s", profile_username, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
