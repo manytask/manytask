@@ -146,7 +146,7 @@ class DataBaseApi(StorageApi):
         """Method for getting all user scores
 
         :param course_name: course name
-        :param username: manytask username
+        :param username: student username
 
         :return: dict with the names of tasks and their scores
         """
@@ -171,7 +171,7 @@ class DataBaseApi(StorageApi):
         """Method for getting user's total bonus score
 
         :param course_name: course name
-        :param username: manytask username
+        :param username: student username
 
         :return: user's total bonus score
         """
@@ -288,20 +288,20 @@ class DataBaseApi(StorageApi):
     ) -> bool:
         """Method for checking user's admin status
 
-        :param username: manytask username
+        :param username: user name
 
         :return: if the user is an admin on any course
         """
-        logger.debug("Checking instance admin status for username=%s", username)
+        logger.debug("Checking instance admin status for user '%s'", username)
 
         with self._session_create() as session:
             try:
                 user = self._get(session, models.User, username=username)
                 is_admin = user.is_instance_admin
-                logger.info("User username=%s instance admin status: %s", username, is_admin)
+                logger.info("User '%s' instance admin status: %s", username, is_admin)
                 return is_admin
             except NoResultFound as e:
-                logger.info("No user found with username=%s when checking admin status: %s", username, e)
+                logger.info("No user found with username '%s' when checking admin status: %s", username, e)
                 return False
 
     def check_if_course_admin(
@@ -312,7 +312,7 @@ class DataBaseApi(StorageApi):
         """Method for checking user's admin status
 
         :param course_name: course name
-        :param username: manytask username
+        :param username: user name
 
         :return: if the user is an admin on the course
         """
@@ -331,7 +331,7 @@ class DataBaseApi(StorageApi):
                 user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
                 return user_on_course.is_course_admin
             except NoResultFound as e:
-                logger.info("No user found with username=%s when checking admin status: %s", username, e)
+                logger.info("No user found with username '%s' when checking admin status: %s", username, e)
                 return False
 
     def check_if_program_manager(
@@ -361,7 +361,7 @@ class DataBaseApi(StorageApi):
         """Method for sync user's gitlab and stored data
 
         :param course_name: course name
-        :param username: manytask username
+        :param username: user name
 
         :return: created or updated StoredUser object
         """
@@ -537,14 +537,14 @@ class DataBaseApi(StorageApi):
         """Method for storing user's task score
 
         :param course_name: course name
-        :param username: manytask username
+        :param username: user name
         :param task_name: task name
         :param update_fn: function for updating the score
 
         :return: saved score
         """
         logger.debug(
-            "Attempting to store score for username=%s in course '%s' task '%s'", username, course_name, task_name
+            "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
         )
 
         with self._session_create() as session:
@@ -566,16 +566,17 @@ class DataBaseApi(StorageApi):
 
                 session.commit()
                 logger.info(
-                    "Setting score to %d for user_id=%son task=%s",
+                    "Setting score to %d for user_id=%s (username=%s) on task=%s",
                     new_score,
                     user_on_course.user.id,
+                    user_on_course.user.username,
                     task_name,
                 )
                 return new_score
 
             except Exception as e:
                 session.rollback()
-                logger.error("Failed to update score for username=%s on '%s': %s", username, task_name, str(e))
+                logger.error("Failed to update score for '%s' on '%s': %s", username, task_name, str(e))
                 raise
 
     def get_course(
@@ -868,13 +869,13 @@ class DataBaseApi(StorageApi):
 
         with self._session_create() as session:
             logger.debug(
-                f"Syncing admin status for username={username} in course '{course_name}', new_status={course_admin}"
+                f"Syncing admin status for user '{username}' in course '{course_name}', new_status={course_admin}"
             )
             course = self._get(session, models.Course, name=course_name)
             user = self._get(session, models.User, username=username)
             user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
             if course_admin != user_on_course.is_course_admin and course_admin:
-                logger.info("Granting course admin rights to username=%s in course '%s'", username, course_name)
+                logger.info("Granting course admin rights to '%s' in course '%s'", username, course_name)
                 user_on_course = self._update(
                     session=session,
                     model=models.UserOnCourse,
@@ -888,15 +889,15 @@ class DataBaseApi(StorageApi):
         """Checking that user has been enrolled on course"""
 
         with self._session_create() as session:
-            logger.debug("Checking if username=%s is enrolled in course '%s'", username, course_name)
+            logger.debug("Checking if user '%s' is enrolled in course '%s'", username, course_name)
             course = self._get(session, models.Course, name=course_name)
             user = self._get(session, models.User, username=username)
             try:
                 self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-                logger.info("User username=%s is enrolled in course '%s'", username, course_name)
+                logger.info("User '%s' is enrolled in course '%s'", username, course_name)
                 return True
             except Exception:
-                logger.warning("User username=%s isn't enrolled in course '%s'", username, course_name)
+                logger.warning("User '%s' isn't enrolled in course '%s'", username, course_name)
                 return False
 
     def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int) -> None:
@@ -927,18 +928,18 @@ class DataBaseApi(StorageApi):
         """Get a list of courses names that the user participates in"""
 
         with self._session_create() as session:
-            logger.debug("Fetching courses with statuses for username=%s", username)
+            logger.debug("Fetching courses with statuses for user '%s'", username)
             try:
                 user = self._get(session, models.User, username=username)
             except NoResultFound:
-                logger.warning("User username=%s not found in database", username)
+                logger.warning("User '%s' not found in database", username)
                 return []
 
             hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
             user_on_courses = user.users_on_courses.filter(models.Course.status.notin_(hidden_for_user)).all()
 
             result = [(user_on_course.course.name, user_on_course.course.status) for user_on_course in user_on_courses]
-            logger.info("User username=%s participates in %s courses", username, len(result))
+            logger.info("User '%s' participates in %s courses", username, len(result))
             return result
 
     def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]:
@@ -958,11 +959,11 @@ class DataBaseApi(StorageApi):
         :return: list of namespace IDs
         """
         with self._session_create() as session:
-            logger.debug("Fetching namespace admin namespaces for username=%s", username)
+            logger.debug("Fetching namespace admin namespaces for user '%s'", username)
             try:
                 user = self._get(session, models.User, username=username)
             except NoResultFound:
-                logger.warning("User username=%s not found when fetching namespace admin namespaces", username)
+                logger.warning("User '%s' not found when fetching namespace admin namespaces", username)
                 return []
 
             namespace_ids: set[int] = set()
@@ -983,7 +984,7 @@ class DataBaseApi(StorageApi):
             namespace_ids.update(un.namespace_id for un in admin_namespaces)
 
             result = list[int](namespace_ids)
-            logger.info("User %s is namespace admin in %d namespaces", username, len(result))
+            logger.info("User '%s' is namespace admin in %d namespaces", username, len(result))
             return result
 
     def get_courses_by_namespace_ids(self, namespace_ids: list[int]) -> list[tuple[str, CourseStatus]]:
@@ -1010,11 +1011,11 @@ class DataBaseApi(StorageApi):
         :return: list of tuples (course_name, course_status)
         """
         with self._session_create() as session:
-            logger.debug("Fetching courses where username=%s is course admin", username)
+            logger.debug("Fetching courses where user '%s' is course admin", username)
             try:
                 user = self._get(session, models.User, username=username)
             except NoResultFound:
-                logger.warning("User username=%s not found when fetching course admin courses", username)
+                logger.warning("User '%s' not found when fetching course admin courses", username)
                 return []
 
             user_on_courses = (
@@ -1029,7 +1030,7 @@ class DataBaseApi(StorageApi):
             )
 
             result = [(uoc.course.name, uoc.course.status) for uoc in user_on_courses]
-            logger.info("User %s is course admin in %d courses", username, len(result))
+            logger.info("User '%s' is course admin in %d courses", username, len(result))
             return result
 
     def get_all_users(self) -> list[StoredUser]:
@@ -1048,22 +1049,22 @@ class DataBaseApi(StorageApi):
         :param username: manytask username
         :param is_admin: new admin status
         """
-        logger.info("Setting instance admin status to %s for username=%s", is_admin, username)
+        logger.info("Setting instance admin status to %s for user '%s'", is_admin, username)
 
         with self._session_create() as session:
             try:
                 if not is_admin:
-                    logger.debug("Checking admin count before removing admin status from username=%s", username)
+                    logger.debug("Checking admin count before removing admin status from '%s'", username)
                     admin_count = session.query(func.count()).filter(models.User.is_instance_admin.is_(True)).scalar()
                     if admin_count <= 1:
-                        logger.error("Cannot remove admin status from username=%s: this is the last admin", username)
+                        logger.error("Cannot remove admin status from user '%s': this is the last admin", username)
                         return
 
                 self._update(session, models.User, defaults={"is_instance_admin": is_admin}, username=username)
-                logger.info("Successfully updated admin status for username=%s to %s", username, is_admin)
+                logger.info("Successfully updated admin status for user '%s' to %s", username, is_admin)
 
             except NoResultFound:
-                logger.error("Failed to set admin status: username=%s not found in database", username)
+                logger.error("Failed to set admin status: user '%s' not found in database", username)
 
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
         """Update user profile information
@@ -1779,7 +1780,7 @@ class DataBaseApi(StorageApi):
                 user_on_course.comment = comment
                 session.commit()
 
-                logger.info(f"Updated comment for {username} in course {course_name}: -> '{comment}'")
+                logger.info(f"Updated comment for user {username} in course {course_name}: -> '{comment}'")
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
@@ -1804,7 +1805,7 @@ class DataBaseApi(StorageApi):
         """
         with self._session_create() as session:
             try:
-                logger.info("Creating namespace name=%s slug=%s for username=%s", name, slug, created_by_username)
+                logger.info("Creating namespace name=%s slug=%s for user=%s", name, slug, created_by_username)
 
                 creator = self._get(session, models.User, username=created_by_username)
 
@@ -1860,7 +1861,7 @@ class DataBaseApi(StorageApi):
         :return: List of tuples (Namespace, role_name)
         """
         with self._session_create() as session:
-            logger.debug("Fetching namespaces for username=%s", username)
+            logger.debug("Fetching namespaces for user=%s", username)
 
             try:
                 user = self._get(session, models.User, username=username)
@@ -1895,7 +1896,7 @@ class DataBaseApi(StorageApi):
         :raises PermissionError: if user doesn't have access
         """
         with self._session_create() as session:
-            logger.debug("Fetching namespace id=%s for username=%s", namespace_id, username)
+            logger.debug("Fetching namespace id=%s for user=%s", namespace_id, username)
 
             try:
                 namespace = self._get(session, models.Namespace, id=namespace_id)
@@ -2364,7 +2365,7 @@ class DataBaseApi(StorageApi):
                 session.commit()
 
                 logger.info(
-                    f"Calculated and saved grade for username={username} in {course_name}: "
+                    f"Calculated and saved grade for {username} in {course_name}: "
                     f"final_grade={final_grade} (status={course.status.value})"
                 )
 
@@ -2469,7 +2470,7 @@ class DataBaseApi(StorageApi):
         """Get effective grade for student (override if exists, otherwise final_grade).
 
         :param course_name: course name
-        :param username: student's manytask username
+        :param username: student username
         :return: effective grade (0 if no grade exists)
         """
         with self._session_create() as session:
@@ -2479,7 +2480,7 @@ class DataBaseApi(StorageApi):
 
                 # If override exists, use it
                 if user_on_course.final_grade_override is not None:
-                    logger.debug(f"Using override grade for username={username}: {user_on_course.final_grade_override}")
+                    logger.debug(f"Using override grade for {username}: {user_on_course.final_grade_override}")
                     return user_on_course.final_grade_override
 
                 # Otherwise use final_grade
@@ -2507,7 +2508,7 @@ class DataBaseApi(StorageApi):
                 user_on_course.final_grade_override = new_grade
                 session.commit()
 
-                logger.info(f"Set grade override for username={username} in {course_name}: {new_grade}")
+                logger.info(f"Set grade override for {username} in {course_name}: {new_grade}")
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
@@ -2526,7 +2527,7 @@ class DataBaseApi(StorageApi):
                 user_on_course.final_grade_override = None
                 session.commit()
 
-                logger.info(f"Cleared grade override for username={username} in {course_name}")
+                logger.info(f"Cleared grade override for {username} in {course_name}")
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
