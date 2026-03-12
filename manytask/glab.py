@@ -253,61 +253,61 @@ class GitLabApi(RmsApi, AuthApi):
 
         return created_group.id
 
-    def add_user_to_namespace_group(self, gitlab_group_id: int, user_rms_id: str) -> None:
+    def add_user_to_namespace_group(self, gitlab_group_id: int, rms_id: str) -> None:
         """Add a user to a GitLab namespace group with Maintainer access.
 
         :param gitlab_group_id: GitLab group ID
-        :param user_rms_id: GitLab user ID
+        :param rms_id: RMS user ID
         """
-        logger.info("Adding user_id=%s to GitLab group id=%s as Maintainer", user_rms_id, gitlab_group_id)
+        logger.info("Adding user_id=%s to GitLab group id=%s as Maintainer", rms_id, gitlab_group_id)
 
         try:
             group = self._gitlab.groups.get(gitlab_group_id)
 
             try:
-                existing_member = group.members.get(user_rms_id)
+                existing_member = group.members.get(rms_id)
                 logger.info(
                     "User id=%s is already a member of group id=%s with access level %s",
-                    user_rms_id,
+                    rms_id,
                     gitlab_group_id,
                     existing_member.access_level,
                 )
                 if existing_member.access_level < gitlab.const.AccessLevel.MAINTAINER:
                     existing_member.access_level = gitlab.const.AccessLevel.MAINTAINER
                     existing_member.save()
-                    logger.info("Updated user id=%s access level to Maintainer", user_rms_id)
+                    logger.info("Updated user id=%s access level to Maintainer", rms_id)
             except GitlabGetError:
                 group.members.create(
                     {
-                        "user_id": user_rms_id,
+                        "user_id": rms_id,
                         "access_level": gitlab.const.AccessLevel.MAINTAINER,
                     }
                 )
-                logger.info("User id=%s added to GitLab group id=%s as Maintainer", user_rms_id, gitlab_group_id)
+                logger.info("User id=%s added to GitLab group id=%s as Maintainer", rms_id, gitlab_group_id)
 
         except GitlabGetError as e:
             logger.error("Failed to get GitLab group id=%s: %s", gitlab_group_id, str(e))
             raise RuntimeError(f"Failed to get GitLab group {gitlab_group_id}: {str(e)}")
 
-    def remove_user_from_namespace_group(self, gitlab_group_id: int, user_rms_id: str) -> None:
+    def remove_user_from_namespace_group(self, gitlab_group_id: int, rms_id: str) -> None:
         """Remove a user from a GitLab namespace group.
 
         :param gitlab_group_id: GitLab group ID
-        :param user_rms_id: GitLab user ID (rms_id)
+        :param rms_id: RMS user ID
         """
-        logger.info("Removing user_id=%s from GitLab group id=%s", user_rms_id, gitlab_group_id)
+        logger.info("Removing user_id=%s from GitLab group id=%s", rms_id, gitlab_group_id)
 
         try:
             group = self._gitlab.groups.get(gitlab_group_id)
 
             try:
-                group.members.get(user_rms_id)
-                group.members.delete(user_rms_id)
-                logger.info("User id=%s removed from GitLab group id=%s", user_rms_id, gitlab_group_id)
+                group.members.get(rms_id)
+                group.members.delete(rms_id)
+                logger.info("User id=%s removed from GitLab group id=%s", rms_id, gitlab_group_id)
             except GitlabGetError:
                 logger.warning(
                     "User id=%s is not a member of group id=%s, skipping removal",
-                    user_rms_id,
+                    rms_id,
                     gitlab_group_id,
                 )
 
@@ -549,11 +549,11 @@ class GitLabApi(RmsApi, AuthApi):
 
     def get_rms_user_by_id(
         self,
-        user_rms_id: str,
+        user_id: str,
     ) -> RmsUser:
-        logger.info("Searching for user by id=%s", user_rms_id)
-        user_id = _validate_and_convert_user_id(user_rms_id)
-        user = self._gitlab.users.get(user_id)
+        logger.info("Searching for user by id=%s", user_id)
+        user_id_int = _validate_and_convert_user_id(user_id)
+        user = self._gitlab.users.get(user_id_int)
         logger.info("User found id=%s username=%s", user.id, user.username)
         return self._construct_rms_user(user._attrs)
 

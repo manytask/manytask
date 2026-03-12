@@ -95,11 +95,11 @@ class MockRmsApi(RmsApi):
 
         return group_id
 
-    def add_user_to_namespace_group(self, gitlab_group_id: int, user_rms_id: str) -> None:
+    def add_user_to_namespace_group(self, gitlab_group_id: int, rms_id: str) -> None:
         """Add a user to a namespace group (mock implementation).
 
         :param gitlab_group_id: GitLab group ID
-        :param user_rms_id: User ID to add
+        :param rms_id: User ID to add
         """
         group_path = None
         for path, gid in self.namespace_groups.items():
@@ -110,14 +110,14 @@ class MockRmsApi(RmsApi):
         if group_path is None:
             raise RuntimeError(f"Group with id {gitlab_group_id} not found")
 
-        if user_rms_id not in self.groups[group_path].members:
-            self.groups[group_path].members.append(user_rms_id)
+        if rms_id not in self.groups[group_path].members:
+            self.groups[group_path].members.append(rms_id)
 
-    def remove_user_from_namespace_group(self, gitlab_group_id: int, user_rms_id: str) -> None:
+    def remove_user_from_namespace_group(self, gitlab_group_id: int, rms_id: str) -> None:
         """Remove a user from a namespace group (mock implementation).
 
         :param gitlab_group_id: GitLab group ID
-        :param user_rms_id: User ID to remove
+        :param rms_id: User ID to remove
         """
         group_path = None
         for path, gid in self.namespace_groups.items():
@@ -128,8 +128,8 @@ class MockRmsApi(RmsApi):
         if group_path is None:
             raise RuntimeError(f"Group with id {gitlab_group_id} not found")
 
-        if user_rms_id in self.groups[group_path].members:
-            self.groups[group_path].members.remove(user_rms_id)
+        if rms_id in self.groups[group_path].members:
+            self.groups[group_path].members.remove(rms_id)
 
     def check_project_exists(
         self,

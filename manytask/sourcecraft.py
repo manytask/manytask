@@ -348,7 +348,7 @@ class SourceCraftApi(RmsApi):
     def add_user_to_namespace_group(
         self,
         gitlab_group_id: int,
-        user_rms_id: str,
+        rms_id: str,
     ) -> None:
         # TODO: invite user to org?
         return None
@@ -356,7 +356,7 @@ class SourceCraftApi(RmsApi):
     def remove_user_from_namespace_group(
         self,
         gitlab_group_id: int,
-        user_rms_id: str,
+        rms_id: str,
     ) -> None:
         raise NotImplementedError("remove_user_from_namespace_group method not implemented yet")
 

@@ -224,7 +224,7 @@ class StorageApi(ABC):
     def add_user_to_namespace(
         self,
         namespace_id: int,
-        user_username: str,
+        username: str,
         role: str,
         assigned_by_username: str,
     ) -> Any: ...
@@ -337,14 +337,14 @@ class RmsApi(ABC):
     def add_user_to_namespace_group(
         self,
         gitlab_group_id: int,
-        user_rms_id: str,
+        rms_id: str,
     ) -> None: ...
 
     @abstractmethod
     def remove_user_from_namespace_group(
         self,
         gitlab_group_id: int,
-        user_rms_id: str,
+        rms_id: str,
     ) -> None: ...
 
     @abstractmethod

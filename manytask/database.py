@@ -1933,14 +1933,14 @@ class DataBaseApi(StorageApi):
     def add_user_to_namespace(
         self,
         namespace_id: int,
-        user_username: str,
+        username: str,
         role: str,
         assigned_by_username: str,
     ) -> models.UserOnNamespace:
         """Add a user to a namespace with a specific role.
 
         :param namespace_id: ID of the namespace
-        :param user_username: manytask username of the user to add
+        :param username: manytask username of the user to add
         :param role: Role to assign ("namespace_admin" or "program_manager")
         :param assigned_by_username: Username of the user assigning the role
         :return: Created UserOnNamespace object
@@ -1951,17 +1951,17 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             logger.info(
                 "Adding user %s to namespace_id=%s with role=%s by user %s",
-                user_username,
+                username,
                 namespace_id,
                 role,
                 assigned_by_username,
             )
 
             try:
-                user = self._get(session, models.User, username=user_username)
+                user = self._get(session, models.User, username=username)
             except NoResultFound:
-                logger.error("User %s not found", user_username)
-                raise NoResultFound(f"User {user_username} not found")
+                logger.error("User %s not found", username)
+                raise NoResultFound(f"User {username} not found")
 
             try:
                 namespace = self._get(session, models.Namespace, id=namespace_id)
@@ -1984,7 +1984,7 @@ class DataBaseApi(StorageApi):
                 raise ValueError(f"Invalid role: {role}. Must be '{ROLE_NAMESPACE_ADMIN}' or '{ROLE_PROGRAM_MANAGER}'")
 
             user_db_id = user.id
-            user_username = user.username
+            username = user.username
             namespace_slug = namespace.slug
 
             user_on_namespace = models.UserOnNamespace(
@@ -2002,7 +2002,7 @@ class DataBaseApi(StorageApi):
 
                 logger.info(
                     "User %s (id=%s) added to namespace %s (id=%s) with role %s",
-                    user_username,
+                    username,
                     user_db_id,
                     namespace_slug,
                     namespace_id,
@@ -2023,7 +2023,7 @@ class DataBaseApi(StorageApi):
                 logger.warning(
                     "User id=%s (username=%s) already has a role in namespace id=%s",
                     user_db_id,
-                    user_username,
+                    username,
                     namespace_id,
                 )
                 raise

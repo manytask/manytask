@@ -949,7 +949,7 @@ def add_user_to_namespace(
         try:
             user_on_namespace = storage_api.add_user_to_namespace(
                 namespace_id=namespace_id,
-                user_username=stored_user.username,
+                username=stored_user.username,
                 role=role,
                 assigned_by_username=username,
             )
@@ -971,7 +971,7 @@ def add_user_to_namespace(
 
         # Добавляем в GitLab группу только после успешного добавления в БД
         try:
-            rms_api.add_user_to_namespace_group(gitlab_group_id=namespace.gitlab_group_id, user_rms_id=rms_user.id)
+            rms_api.add_user_to_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_user.id)
             logger.info("Added RMS user id=%s to GitLab group id=%s", rms_user.id, namespace.gitlab_group_id)
         except Exception as e:
             # TODO: откатить добавление в локальную БД
@@ -1087,9 +1087,7 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
             return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
 
         try:
-            rms_api.remove_user_from_namespace_group(
-                gitlab_group_id=namespace.gitlab_group_id, user_rms_id=removed_rms_id
-            )
+            rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=removed_rms_id)
             logger.info(
                 "User %s removed user rms_id=%s from GitLab group id=%s",
                 username,
@@ -1174,7 +1172,7 @@ def update_user_role_in_namespace(
         # If GitLab fails, we don't want to change the database
         if new_role == "student":
             try:
-                rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, user_rms_id=rms_id)
+                rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_id)
                 logger.info(
                     "User %s removed user rms_id=%s from GitLab group id=%s (role change to student)",
                     username,
