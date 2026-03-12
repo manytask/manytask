@@ -30,7 +30,7 @@ class StoredUser:
     instance_admin: bool = False
 
     def __repr__(self) -> str:
-        return f"StoredUser(rms_id={self.rms_id}, username={self.username})"
+        return f"StoredUser(username={self.username})"
 
     @property
     def rms_identity(self) -> RmsUser:

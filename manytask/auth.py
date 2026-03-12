@@ -234,40 +234,33 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
-        rms_id = session["rms"]["rms_id"]
-        logger.info("User %s (rms_id=%s) accessing course=%s", auth_user.username, rms_id, course.course_name)
+        username = session["manytask"]["username"]
+        logger.info("User %s accessing course=%s", username, course.course_name)
 
-        if not can_access_course(app, rms_id, course.course_name):
+        if not can_access_course(app, username, course.course_name):
             logger.warning(
-                "User %s (rms_id=%s) attempted to access course %s without permission",
-                auth_user.username,
-                rms_id,
+                "User %s attempted to access course %s without permission",
+                username,
                 course.course_name,
             )
             abort(HTTPStatus.FORBIDDEN)
 
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
-        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(
-            course.course_name, session["manytask"]["username"]
-        ):
+        if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(course.course_name, username):
             flash("course is hidden!", "course_hidden")
             abort(redirect(url_for("root.index")))
 
-        if not handle_course_membership(
-            app, course, session["manytask"]["username"]
-        ) or not app.rms_api.check_project_exists(
+        if not handle_course_membership(app, course, username) or not app.rms_api.check_project_exists(
             project_name=auth_user.username, project_group=course.gitlab_course_students_group
         ):
-            logger.info("User %s (rms_id=%s) missing membership or project", auth_user.username, rms_id)
+            logger.info("User %s missing membership or project", username)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_user_on_course(
-            course.course_name,
-            session["manytask"]["username"],
-            app.storage_api.check_if_instance_admin(session["manytask"]["username"]),
+            course.course_name, username, app.storage_api.check_if_instance_admin(username)
         )
-        logger.info("Synced user rms_id=%s on course %s", rms_id, course.course_name)
+        logger.info("Synced user %s on course %s", username, course.course_name)
 
         return f(*args, **kwargs)
 
@@ -307,15 +300,14 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
         if app.debug:
             return f(*args, **kwargs)
 
-        rms_id = session["rms"]["rms_id"]
         username = session["manytask"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
-        is_namespace_admin_user = is_namespace_admin(app, rms_id)
+        is_namespace_admin_user = is_namespace_admin(app, username)
 
         if not is_instance_admin and not is_namespace_admin_user:
             logger.warning(
-                "User rms_id=%s attempted to access %s without instance admin or namespace admin privileges",
-                rms_id,
+                "User %s attempted to access %s without instance admin or namespace admin privileges",
+                username,
                 f.__name__,
             )
             abort(HTTPStatus.FORBIDDEN)
@@ -348,13 +340,13 @@ def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., An
             if app.debug:
                 return f(*args, **kwargs)
 
-            rms_id = session["rms"]["rms_id"]
+            username = session["manytask"]["username"]
             course_name = kwargs.get("course_name", None)
 
-            if not has_role(rms_id, required_roles, app, course_name):
+            if not has_role(username, required_roles, app, course_name):
                 logger.warning(
-                    "User rms_id=%s attempted to access %s without required role(s): %s",
-                    rms_id,
+                    "User %s attempted to access %s without required role(s): %s",
+                    username,
                     f.__name__,
                     required_roles,
                 )

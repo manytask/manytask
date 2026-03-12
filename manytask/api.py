@@ -581,16 +581,16 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     new_scores = payload.new_scores
     row_data = payload.row_data
 
-    student_username = row_data.username
+    username = row_data.username
     total_score = row_data.total_score
-    logger.info("Updating scores for user=%s: %s", sanitize_log_data(student_username), new_scores)
+    logger.info("Updating scores for user=%s: %s", sanitize_log_data(username), new_scores)
 
     try:
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
                 new_score = storage_api.store_score(
                     course.course_name,
-                    username=student_username,
+                    username=username,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )
@@ -609,16 +609,16 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
 
         # Calculate and save grade (applies DORESHKA logic if needed)
         # This updates final_grade but does NOT touch final_grade_override
-        storage_api.calculate_and_save_grade(course.course_name, student_username, row_data.model_dump())
+        storage_api.calculate_and_save_grade(course.course_name, username, row_data.model_dump())
 
         # Get effective grade (override if exists, otherwise final_grade)
-        effective_grade = storage_api.get_effective_grade(course.course_name, student_username)
+        effective_grade = storage_api.get_effective_grade(course.course_name, username)
         row_data.grade = effective_grade
 
         # Add override indicator for frontend
-        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, student_username)
+        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, username)
 
-        logger.info("Successfully updated scores for user=%s", sanitize_log_data(student_username))
+        logger.info("Successfully updated scores for user=%s", sanitize_log_data(username))
         return jsonify(
             {
                 "success": True,
@@ -705,7 +705,6 @@ def create_namespace() -> ResponseReturnValue:
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    rms_id = session["rms"]["rms_id"]
     username = session["manytask"]["username"]
     if not storage_api.check_if_instance_admin(username):
         return jsonify(
@@ -724,6 +723,7 @@ def create_namespace() -> ResponseReturnValue:
     gitlab_group_id = None
 
     try:
+        rms_id = session["rms"]["rms_id"]
         logger.info("Creating GitLab group for namespace name=%s slug=%s", name, slug)
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
         logger.info("GitLab group created with id=%s", gitlab_group_id)
@@ -795,7 +795,6 @@ def get_namespaces() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    rms_id = session["rms"]["rms_id"]
     username = session["manytask"]["username"]
     is_instance_admin = storage_api.check_if_instance_admin(username)
 
@@ -1069,12 +1068,13 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
 
     try:
         try:
-            role, removed_rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
+            role, rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
             logger.info(
-                "User %s removed user_id=%s (role=%s) from namespace id=%s in database",
+                "User %s removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
                 username,
                 user_id,
                 role,
+                rms_id,
                 namespace_id,
             )
         except NoResultFound:
@@ -1082,17 +1082,17 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
             return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
 
         try:
-            rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, removed_rms_id)
+            rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, rms_id)
             logger.info(
                 "User %s removed user rms_id=%s from GitLab group id=%s",
                 username,
-                removed_rms_id,
+                rms_id,
                 namespace.gitlab_group_id,
             )
         except Exception as e:
             logger.error(
                 "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
-                removed_rms_id,
+                rms_id,
                 namespace.gitlab_group_id,
                 str(e),
             )
