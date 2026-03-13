@@ -234,7 +234,11 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course: Course = app.storage_api.get_course(kwargs["course_name"])  # type: ignore
         auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
-        username = session["manytask"]["username"]
+        stored_user: StoredUser | None = app.storage_api.get_stored_user_by_auth_id(auth_user.id)
+        if stored_user is None:
+            logger.error("User not found in database")
+            abort(HTTPStatus.FORBIDDEN)
+        username = stored_user.username
         logger.info("User %s accessing course=%s", username, course.course_name)
 
         if not can_access_course(app, username, course.course_name):

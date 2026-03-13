@@ -134,7 +134,7 @@ class DataBaseApi(StorageApi):
                 models.User,
                 username=config.instance_admin_username,
                 defaults={"is_instance_admin": True},
-                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": -1, "auth_id": -1},
+                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": "-1", "auth_id": -1},
             )
             session.commit()
 
@@ -218,7 +218,7 @@ class DataBaseApi(StorageApi):
 
     def get_stored_user_by_rms_id(
         self,
-        rms_id: int,
+        rms_id: str,
     ) -> StoredUser | None:
         """Method for getting user's stored data
         :param rms_id: gitlab or sourcecraft user id
@@ -260,12 +260,12 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 return None
 
-    def get_stored_user_by_user_id(
+    def get_stored_user_by_db_id(
         self,
-        user_id: int,
+        db_id: int,
     ) -> StoredUser | None:
         """Method for getting user's stored data by database ID
-        :param user_id: Database user ID
+        :param db_id: Database User.id
         :return: StoredUser object if exist else None
         """
 
@@ -274,7 +274,7 @@ class DataBaseApi(StorageApi):
                 user = self._get(
                     session,
                     models.User,
-                    id=user_id,
+                    id=db_id,
                 )
 
                 return self._to_stored_user(user)
@@ -314,7 +314,7 @@ class DataBaseApi(StorageApi):
         :param course_name: course name
         :param username: user name
 
-        :return: cif the user is an admin on the course
+        :return: if the user is an admin on the course
         """
 
         with self._session_create() as session:
@@ -900,7 +900,7 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' isn't enrolled in course '%s'", username, course_name)
                 return False
 
-    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int, auth_id: int) -> None:
+    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int) -> None:
         """Update or create user in DB"""
 
         with self._session_create() as session:
@@ -911,11 +911,11 @@ class DataBaseApi(StorageApi):
             self._update_or_create(
                 session,
                 models.User,
-                defaults=dict(
+                defaults=dict[str, Any](
                     rms_id=rms_id,
                     auth_id=auth_id,
                 ),
-                create_defaults=dict(
+                create_defaults=dict[str, Any](
                     first_name=first_name,
                     last_name=last_name,
                 ),
@@ -955,7 +955,7 @@ class DataBaseApi(StorageApi):
     def get_namespace_admin_namespaces(self, username: str) -> list[int]:
         """Get list of namespace IDs where user is Namespace Admin or Owner
 
-        :param username: username to check
+        :param username: manytask username
         :return: list of namespace IDs
         """
         with self._session_create() as session:
@@ -983,7 +983,7 @@ class DataBaseApi(StorageApi):
             )
             namespace_ids.update(un.namespace_id for un in admin_namespaces)
 
-            result = list(namespace_ids)
+            result = list[int](namespace_ids)
             logger.info("User '%s' is namespace admin in %d namespaces", username, len(result))
             return result
 
@@ -1007,7 +1007,7 @@ class DataBaseApi(StorageApi):
     def get_courses_where_course_admin(self, username: str) -> list[tuple[str, CourseStatus]]:
         """Get courses where user is Course Admin
 
-        :param username: username to check
+        :param username: manytask username
         :return: list of tuples (course_name, course_status)
         """
         with self._session_create() as session:
@@ -1046,7 +1046,7 @@ class DataBaseApi(StorageApi):
     def set_instance_admin_status(self, username: str, is_admin: bool) -> None:
         """Change user admin status
 
-        :param username: user name
+        :param username: manytask username
         :param is_admin: new admin status
         """
         logger.info("Setting instance admin status to %s for user '%s'", is_admin, username)
@@ -1068,7 +1068,7 @@ class DataBaseApi(StorageApi):
 
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
         """Update user profile information
-        :param username: user name
+        :param username: manytask username
         :param new_first_name: new first name
         :param new_last_name: new last name
         """
@@ -1799,7 +1799,7 @@ class DataBaseApi(StorageApi):
         :param slug: URL slug for the namespace
         :param description: Optional description
         :param gitlab_group_id: GitLab group ID
-        :param created_by_username: Username of the creator
+        :param created_by_username: manytask username of the creator
         :return: Created Namespace object
         :raises IntegrityError: If slug or gitlab_group_id already exists
         """
@@ -1857,7 +1857,7 @@ class DataBaseApi(StorageApi):
     def get_user_namespaces(self, username: str) -> list[tuple[models.Namespace, str]]:
         """Get namespaces where user has a role.
 
-        :param username: Username to filter by
+        :param username: manytask username
         :return: List of tuples (Namespace, role_name)
         """
         with self._session_create() as session:
@@ -1890,7 +1890,7 @@ class DataBaseApi(StorageApi):
         Regular users can only access namespaces where they have a role.
 
         :param namespace_id: ID of the namespace
-        :param username: Username to check access
+        :param username: manytask username to check access
         :return: (Namespace, role) where role=None for Instance Admin
         :raises NoResultFound: if namespace doesn't exist
         :raises PermissionError: if user doesn't have access
@@ -1933,14 +1933,14 @@ class DataBaseApi(StorageApi):
     def add_user_to_namespace(
         self,
         namespace_id: int,
-        user_id: int,
+        username: str,
         role: str,
         assigned_by_username: str,
     ) -> models.UserOnNamespace:
         """Add a user to a namespace with a specific role.
 
         :param namespace_id: ID of the namespace
-        :param user_id: RMS ID (GitLab ID) of the user to add
+        :param username: manytask username of the user to add
         :param role: Role to assign ("namespace_admin" or "program_manager")
         :param assigned_by_username: Username of the user assigning the role
         :return: Created UserOnNamespace object
@@ -1950,18 +1950,18 @@ class DataBaseApi(StorageApi):
         """
         with self._session_create() as session:
             logger.info(
-                "Adding user with rms_id=%s to namespace_id=%s with role=%s by user=%s",
-                user_id,
+                "Adding user %s to namespace_id=%s with role=%s by user %s",
+                username,
                 namespace_id,
                 role,
                 assigned_by_username,
             )
 
             try:
-                user = self._get(session, models.User, rms_id=user_id)
+                user = self._get(session, models.User, username=username)
             except NoResultFound:
-                logger.error("User with rms_id=%s not found", user_id)
-                raise NoResultFound(f"User with rms_id={user_id} not found")
+                logger.error("User %s not found", username)
+                raise NoResultFound(f"User {username} not found")
 
             try:
                 namespace = self._get(session, models.Namespace, id=namespace_id)
@@ -1984,7 +1984,7 @@ class DataBaseApi(StorageApi):
                 raise ValueError(f"Invalid role: {role}. Must be '{ROLE_NAMESPACE_ADMIN}' or '{ROLE_PROGRAM_MANAGER}'")
 
             user_db_id = user.id
-            user_username = user.username
+            username = user.username
             namespace_slug = namespace.slug
 
             user_on_namespace = models.UserOnNamespace(
@@ -2002,7 +2002,7 @@ class DataBaseApi(StorageApi):
 
                 logger.info(
                     "User %s (id=%s) added to namespace %s (id=%s) with role %s",
-                    user_username,
+                    username,
                     user_db_id,
                     namespace_slug,
                     namespace_id,
@@ -2021,9 +2021,9 @@ class DataBaseApi(StorageApi):
             except IntegrityError:
                 session.rollback()
                 logger.warning(
-                    "User id=%s (rms_id=%s) already has a role in namespace id=%s",
+                    "User id=%s (username=%s) already has a role in namespace id=%s",
                     user_db_id,
-                    user_id,
+                    username,
                     namespace_id,
                 )
                 raise
@@ -2050,7 +2050,7 @@ class DataBaseApi(StorageApi):
 
             return user_role_pairs
 
-    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, int]:
+    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, str]:
         """Remove a user from a namespace.
 
         :param namespace_id: ID of the namespace
@@ -2092,7 +2092,7 @@ class DataBaseApi(StorageApi):
                 logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
                 raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
 
-    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, int]:
+    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, str]:
         """Update a user's role in a namespace.
 
         If new_role is 'student', removes the user from the namespace entirely.
@@ -2211,9 +2211,9 @@ class DataBaseApi(StorageApi):
     def add_course_owners(
         self,
         course_id: int,
-        owner_rms_ids: list[int],
+        owner_rms_ids: list[str],
         namespace_id: int,
-    ) -> list[int]:
+    ) -> list[str]:
         """Add owners to a course.
 
         Validates that each owner has namespace_admin role in the course's namespace,
@@ -2344,7 +2344,7 @@ class DataBaseApi(StorageApi):
         Override is NOT touched by this method.
 
         :param course_name: course name
-        :param username: student username
+        :param username: student's manytask username
         :param student_scores_data: dict with student scores, percent, large_count, etc.
         :return: calculated final grade
         """
@@ -2497,7 +2497,7 @@ class DataBaseApi(StorageApi):
         """Set manual grade override for a student.
 
         :param course_name: course name
-        :param username: student username
+        :param username: student's manytask username
         :param new_grade: new grade value to set manually
         """
         with self._session_create() as session:
@@ -2517,7 +2517,7 @@ class DataBaseApi(StorageApi):
         """Clear manual grade override for a student.
 
         :param course_name: course name
-        :param username: student username
+        :param username: student's manytask username
         """
         with self._session_create() as session:
             try:
@@ -2536,7 +2536,7 @@ class DataBaseApi(StorageApi):
         """Check if student's grade is manually overridden.
 
         :param course_name: course name
-        :param username: student username
+        :param username: student's manytask username
         :return: True if grade is overridden, False otherwise
         """
         with self._session_create() as session:

@@ -57,7 +57,7 @@ def is_namespace_admin(app: CustomFlask, username: str) -> bool:
     """Check if user is a Namespace Admin (Owner of any namespace or has Namespace Admin role).
 
     :param app: Flask application instance
-    :param username: Username to check
+    :param username: manytask username
     :return: True if user is a namespace admin
     """
     namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
@@ -74,7 +74,7 @@ def get_user_roles(app: CustomFlask, username: str, course_name: str | None = No
     - 'student': Regular student
 
     :param app: Flask application instance
-    :param username: Username
+    :param username: manytask username
     :param course_name: Optional course name for course-specific roles
     :return: List of role strings
     """
@@ -99,7 +99,7 @@ def get_user_roles(app: CustomFlask, username: str, course_name: str | None = No
 def has_role(username: str, required_roles: list[str] | str, app: CustomFlask, course_name: str | None = None) -> bool:
     """Check if user has at least one of the required roles.
 
-    :param username: Username to check
+    :param username: manytask username
     :param required_roles: Single role string or list of role strings
     :param app: Flask application instance
     :param course_name: Optional course name for course-specific roles
@@ -120,7 +120,7 @@ def can_access_course(app: CustomFlask, username: str, course_name: str) -> bool
     For Students: access to courses they are enrolled in, or allow new students to register
 
     :param app: Flask application instance
-    :param username: Username to check
+    :param username: manytask username
     :param course_name: Course name to check access for
     :return: True if user can access the course
     """

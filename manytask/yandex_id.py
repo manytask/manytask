@@ -105,7 +105,7 @@ class YandexIDApi(AuthApi):
                 raise YandexIDApiException("Invalid user data from YandexID: id or login is missing")
 
             user = AuthenticatedUser(
-                id=int(user_id),
+                id=user_id,
                 username=username,
             )
             logger.info(f"Successfully retrieved YandexID user: {user}")

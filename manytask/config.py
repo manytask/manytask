@@ -100,7 +100,7 @@ class CreateCourseRequest(BaseModel):
     namespace_id: int
     course_name: str
     slug: str
-    owners: Optional[list[int]] = None  # gitlab user_ids
+    owners: Optional[list[str]] = None  # gitlab user_ids
 
     @field_validator("slug")
     @classmethod
@@ -128,7 +128,7 @@ class CourseResponse(BaseModel):
     gitlab_course_public_repo: str
     gitlab_course_students_group: str
     status: str
-    owners: list[int]  # gitlab user_ids
+    owners: list[str]  # gitlab user_ids
 
 
 class ManytaskUiConfig(BaseModel):
