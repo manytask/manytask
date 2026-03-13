@@ -396,9 +396,8 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
         student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
 
-    student_rms_id = "-1" if app.debug else session["rms"]["rms_id"]
-    scores = storage_api.get_scores(course.course_name, student_rms_id)
-    bonus_score = storage_api.get_bonus_score(course.course_name, student_rms_id)
+    scores = storage_api.get_scores(course.course_name, student_username)
+    bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
 
     return render_template(
         "database.html",
@@ -747,8 +746,7 @@ def update_profile() -> ResponseReturnValue:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template("courses.html", error_message="CSRF Error")
 
-    current_rms_id = "-1" if app.debug else session["rms"]["rms_id"]
-    if request_username != current_username and not app.storage_api.check_if_instance_admin(current_rms_id):
+    if request_username != current_username and not app.storage_api.check_if_instance_admin(current_username):
         abort(HTTPStatus.FORBIDDEN)
 
     target_user = app.storage_api.get_stored_user_by_username(request_username)

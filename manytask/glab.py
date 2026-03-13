@@ -260,12 +260,13 @@ class GitLabApi(RmsApi, AuthApi):
         :param rms_id: RMS user ID
         """
         logger.info("Adding user_id=%s to GitLab group id=%s as Maintainer", rms_id, gitlab_group_id)
+        gitlab_user_id = _validate_and_convert_user_id(rms_id)
 
         try:
             group = self._gitlab.groups.get(gitlab_group_id)
 
             try:
-                existing_member = group.members.get(rms_id)
+                existing_member = group.members.get(gitlab_user_id)
                 logger.info(
                     "User id=%s is already a member of group id=%s with access level %s",
                     rms_id,
@@ -279,11 +280,11 @@ class GitLabApi(RmsApi, AuthApi):
             except GitlabGetError:
                 group.members.create(
                     {
-                        "user_id": rms_id,
+                        "user_id": gitlab_user_id,
                         "access_level": gitlab.const.AccessLevel.MAINTAINER,
                     }
                 )
-                logger.info("User id=%s added to GitLab group id=%s as Maintainer", rms_id, gitlab_group_id)
+                logger.info("User id=%s added to GitLab group id=%s as Maintainer", gitlab_user_id, gitlab_group_id)
 
         except GitlabGetError as e:
             logger.error("Failed to get GitLab group id=%s: %s", gitlab_group_id, str(e))
@@ -296,18 +297,19 @@ class GitLabApi(RmsApi, AuthApi):
         :param rms_id: RMS user ID
         """
         logger.info("Removing user_id=%s from GitLab group id=%s", rms_id, gitlab_group_id)
+        gitlab_user_id = _validate_and_convert_user_id(rms_id)
 
         try:
             group = self._gitlab.groups.get(gitlab_group_id)
 
             try:
-                group.members.get(rms_id)
-                group.members.delete(rms_id)
-                logger.info("User id=%s removed from GitLab group id=%s", rms_id, gitlab_group_id)
+                group.members.get(gitlab_user_id)
+                group.members.delete(gitlab_user_id)
+                logger.info("User id=%s removed from GitLab group id=%s", gitlab_user_id, gitlab_group_id)
             except GitlabGetError:
                 logger.warning(
                     "User id=%s is not a member of group id=%s, skipping removal",
-                    rms_id,
+                    gitlab_user_id,
                     gitlab_group_id,
                 )
 

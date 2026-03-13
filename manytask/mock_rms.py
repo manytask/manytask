@@ -29,7 +29,7 @@ class MockRmsApi(RmsApi):
         self.groups: Dict[str, MockRmsGroup] = {}
         self.projects: Dict[str, MockRmsProject] = {}  # key: "group/project"
         self.namespace_groups: Dict[str, int] = {}  # path -> group_id
-        self.last_user: int = -1
+        self.last_user: str = "-1"
         self.last_group_id: int = 0
 
     @property
@@ -51,7 +51,7 @@ class MockRmsApi(RmsApi):
         user: RmsUser = RmsUser(id=str(user_id), username=username, name=f"{firstname} {lastname}")
         self.users[user_id] = user
         self.users_by_username[username] = user
-        self.last_user = int(user_id)
+        self.last_user = user_id
         return user
 
     def create_public_repo(
@@ -202,7 +202,7 @@ class MockRmsApi(RmsApi):
         oauth_access_token: str,
     ) -> RmsUser:
         # For testing, return last registered user
-        return self.users[str(self.last_user)]
+        return self.users[self.last_user]
 
     def create_course_group(
         self,
