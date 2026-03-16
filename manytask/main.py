@@ -40,7 +40,11 @@ class CustomFlask(Flask):
 
     @property
     def signup_template(self) -> str:
-        return "signup_yandex_id.html" if self.app_config.rms == "sourcecraft" else "signup.html"
+        match self.app_config.rms:
+            case "sourcecraft":
+                return "signup_yandex_id.html"
+            case _:
+                return "signup.html"
 
     @property
     def signup_finish_template(self) -> str:

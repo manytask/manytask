@@ -280,12 +280,12 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         )
 
     try:
-        # TODO: we still expect that username is same in auth and rms, need to fing a way to untangle them
+        # TODO: we still expect that username is same in auth and rms, need to find a way to untangle them (issue #880)
         rms_user: RmsUser = app.rms_api.get_rms_user_by_username(session["auth"]["username"])
     except RmsApiException as e:
         logger.error(f"Failed to get RMS user: {e}")
         if app.app_config.rms == "sourcecraft":
-            # TODO: button "Onboard on SourceCraft" instead of error message
+            # TODO: button "Onboard on SourceCraft" instead of error message (issue #863)
             return render_template(
                 app.signup_finish_template,
                 course_favicon=app.favicon,
