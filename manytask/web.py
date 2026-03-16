@@ -313,9 +313,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         logger.error("Cannot fetch stored user after signup_finish for auth_id=%s", session["auth"]["user_auth_id"])
         return redirect_to_login_with_bad_session()
 
-    session.setdefault("rms", {}).update(
-        set_rms_session(ClientProfile(rms_id=authenticated_rms_user_id, username=authenticated_rms_user.username))
-    )
+    session.setdefault("rms", {}).update(set_rms_session(ClientProfile(rms_id=rms_user.id, username=rms_user.username)))
     session.setdefault("manytask", {}).update(
         set_manytask_session(user_id=stored_user.user_id, username=stored_user.username)
     )
