@@ -209,7 +209,7 @@ def signup() -> ResponseReturnValue:
             first_name=validated_firstname,
             last_name=validated_lastname,
             rms_id=rms_user.id,
-            auth_id=rms_user.id,
+            auth_id=int(rms_user.id),
         )
 
     # render template with error... if error
@@ -867,7 +867,7 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     users_data = []
     for user_id, role in namespace_users:
         try:
-            user = app.storage_api.get_stored_user_by_user_id(user_id)
+            user = app.storage_api.get_stored_user_by_db_id(user_id)
             if user:
                 users_data.append(
                     {

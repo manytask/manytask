@@ -1512,8 +1512,8 @@ def test_zero_instance_admin_is_in_db_and_set_admin_status(db_api, session):
     assert not session.query(User).filter_by(username=TEST_USERNAME).one().is_instance_admin
     db_api.set_instance_admin_status(TEST_USERNAME, True)
     assert session.query(User).filter_by(username=TEST_USERNAME).one().is_instance_admin
-    db_api.set_instance_admin_status(session.query(User).filter_by(id=1).one().username, False)
-    assert not session.query(User).filter_by(id=1).one().is_instance_admin
+    db_api.set_instance_admin_status(TEST_USERNAME, False)
+    assert not session.query(User).filter_by(username=TEST_USERNAME).one().is_instance_admin
 
 
 def test_update_user_profile(db_api, session):
