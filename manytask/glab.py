@@ -574,12 +574,6 @@ class GitLabApi(RmsApi, AuthApi):
         logger.info("User found username=%s", rms_user.username)
         return rms_user
 
-    def get_authenticated_rms_user(self, oauth_access_token: str) -> RmsUser:
-        logger.debug("Fetching authenticated RMS user via token")
-        response = self._make_auth_request(oauth_access_token)
-        response.raise_for_status()
-        return self._construct_rms_user(response.json())
-
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"
 

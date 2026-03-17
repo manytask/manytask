@@ -41,7 +41,7 @@ class LocalConfig:
             # sourcecraft
             sourcecraft_url=os.environ.get("SOURCRAFT_URL", "https://sourcecraft.dev"),
             sourcecraft_api_url=os.environ.get("SOURCRAFT_API_URL", "https://api.sourcecraft.tech"),
-            sourcecraft_admin_token=os.environ.get("SOURCRAFT_ADMIN_TOKEN", ""),
+            sourcecraft_admin_token=os.environ.get("SOURCECRAFT_ADMIN_TOKEN", ""),
             sourcecraft_org_slug=os.environ.get("SOURCRAFT_ORG_SLUG", ""),
             # yandex_id
             yandex_id_client_id=os.environ.get("YANDEX_ID_CLIENT_ID", ""),

@@ -10,7 +10,7 @@ from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
-from manytask.abstract import RmsUser, StoredUser
+from manytask.abstract import RmsApiException, RmsUser, StoredUser
 from manytask.course import ManytaskDeadlinesType
 
 from .abstract import ClientProfile
@@ -167,7 +167,7 @@ def signup() -> ResponseReturnValue:
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
-            "signup.html",
+            app.signup_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -179,7 +179,10 @@ def signup() -> ResponseReturnValue:
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            app.signup_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
         )
 
     try:
@@ -216,7 +219,7 @@ def signup() -> ResponseReturnValue:
     except Exception as e:
         logger.warning("User registration failed: %s", e)
         return render_template(
-            "signup.html",
+            app.signup_template,
             error_message=str(e),
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
@@ -250,7 +253,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
 
     if request.method == "GET":
         return render_template(
-            "signup_finish.html",
+            app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -260,27 +263,48 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            app.signup_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
         )
 
     firstname = validate_name(request.form.get("firstname", "").strip())
     lastname = validate_name(request.form.get("lastname", "").strip())
     if firstname is None or lastname is None:
         return render_template(
-            "signup_finish.html",
+            app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
             error_message="Firstname and lastname must be 1-50 characters and contain only letters or hyphens.",
         )
 
-    auth_access_token = session["auth"]["access_token"]
-    authenticated_rms_user: RmsUser = app.rms_api.get_authenticated_rms_user(oauth_access_token=auth_access_token)
-    authenticated_rms_user_id = authenticated_rms_user.id
+    try:
+        # TODO: we still expect that username is same in auth and rms, need to find a way to untangle them (issue #880)
+        rms_user: RmsUser = app.rms_api.get_rms_user_by_username(session["auth"]["username"])
+    except RmsApiException as e:
+        logger.error(f"Failed to get RMS user: {e}")
+        if app.app_config.rms == "sourcecraft":
+            # TODO: button "Onboard on SourceCraft" instead of error message (issue #863)
+            return render_template(
+                app.signup_finish_template,
+                course_favicon=app.favicon,
+                manytask_version=app.manytask_version,
+                error_message=f"Please fill your profile in SourceCraft: {app.app_config.sourcecraft_url}",
+            )
+        else:
+            return render_template(
+                app.signup_finish_template,
+                course_favicon=app.favicon,
+                manytask_version=app.manytask_version,
+                error_message=f"Failed to get RMS user: {e}",
+            )
+
     app.storage_api.update_or_create_user(
         username=session["auth"]["username"],
         first_name=firstname,
         last_name=lastname,
-        rms_id=authenticated_rms_user_id,
+        rms_id=rms_user.id,
         auth_id=session["auth"]["user_auth_id"],
     )
 
@@ -289,9 +313,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         logger.error("Cannot fetch stored user after signup_finish for auth_id=%s", session["auth"]["user_auth_id"])
         return redirect_to_login_with_bad_session()
 
-    session.setdefault("rms", {}).update(
-        set_rms_session(ClientProfile(rms_id=authenticated_rms_user_id, username=authenticated_rms_user.username))
-    )
+    session.setdefault("rms", {}).update(set_rms_session(ClientProfile(rms_id=rms_user.id, username=rms_user.username)))
     session.setdefault("manytask", {}).update(
         set_manytask_session(user_id=stored_user.user_id, username=stored_user.username)
     )
@@ -319,8 +341,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template("create_project.html", error_message="CSRF Error")
 
-    auth_access_token: str = session["auth"]["access_token"]
-    rms_user = app.rms_api.get_authenticated_rms_user(auth_access_token)
+    rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
@@ -341,7 +362,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
         logger.error("Project creation failed: %s", ex.error_message)
-        return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
+        return render_template(app.signup_template, error_message=ex.error_message, course_name=course.course_name)
 
     return redirect(url_for("course.course_page", course_name=course_name))
 

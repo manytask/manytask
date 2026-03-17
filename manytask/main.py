@@ -38,6 +38,18 @@ class CustomFlask(Flask):
     def favicon(self) -> str:
         return "favicon.ico"
 
+    @property
+    def signup_template(self) -> str:
+        match self.app_config.rms:
+            case "sourcecraft":
+                return "signup_yandex_id.html"
+            case _:
+                return "signup.html"
+
+    @property
+    def signup_finish_template(self) -> str:
+        return "signup_finish.html"
+
     def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
 
@@ -89,7 +101,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
                 admin_token=app.app_config.sourcecraft_admin_token,
                 org_slug=app.app_config.sourcecraft_org_slug,
             ),
-            app.storage_api,
         )
 
     elif rms == "mock":
