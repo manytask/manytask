@@ -99,7 +99,7 @@ class SourceCraftApi(RmsApi):
         create_readme: bool = False,
         default_branch: str = "main",
         template_id: int | None = None,
-    ):
+    ) -> None:
         payload: dict[str, Any] = {
             "name": repo_slug,
             "slug": repo_slug,
@@ -121,7 +121,7 @@ class SourceCraftApi(RmsApi):
         self,
         repo_slug: str,
         data: dict[str, Any],
-    ):
+    ) -> None:
         response = self._request("PATCH", f"{self._org_slug}/{repo_slug}", json=data)
         if response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to update repo: {response.json()}")
@@ -131,7 +131,7 @@ class SourceCraftApi(RmsApi):
         repo_slug: str,
         role: str,
         user_id: str,
-    ):
+    ) -> None:
         payload: dict[str, Any] = {
             "subject_roles": [
                 {
@@ -192,8 +192,8 @@ class SourceCraftApi(RmsApi):
     ) -> None:
         """Create a public repository for course materials.
 
-        :param course_group: strig in form of "namespace/course_group"
-        :param course_public_repo: string in form of "namespace/course_group/public_repo"
+        :param course_group: UNUSED
+        :param course_public_repo: public repo slug
         """
         logger.info(f"Creating public repo: {course_public_repo}")
 
@@ -224,8 +224,8 @@ class SourceCraftApi(RmsApi):
     ) -> bool:
         """Check if a project exists in the given group.
 
-        :param project_name: string
-        :param project_group: string
+        :param project_name: repo slug suffix
+        :param project_group: repo slug prefix
         :return: True if repo exists, False otherwise
         """
         response = self._get_repo(f"{project_group}-{normalize_string(project_name)}")
@@ -247,8 +247,8 @@ class SourceCraftApi(RmsApi):
         """Create a personal repo for a student.
 
         :param rms_user: User information
-        :param course_students_group: string in form of "namespace/course_group/students_group"
-        :param course_public_repo: string in form of "namespace/course_group/public_repo"
+        :param course_students_group: repo slug prefix
+        :param course_public_repo: public repo slug
         """
         logger.info(f"Creating repo for user {rms_user.username}")
 
@@ -260,7 +260,7 @@ class SourceCraftApi(RmsApi):
         elif response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to get project: {response.json()}")
 
-        response = self._create_repo(
+        self._create_repo(
             repo_slug=student_repo_slug,
             visibility="private",
             template_id=response.json()["id"],
@@ -271,8 +271,8 @@ class SourceCraftApi(RmsApi):
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         """Get URL for task base directory in the public repository.
 
-        :param course_public_repo: Slug of the public course repository
-        :param default_branch: Default branch name
+        :param course_public_repo: public repo slug
+        :param default_branch: default branch name
         :return: URL to the task base directory
         """
         return f"{self._base_url}/{self._org_slug}/{course_public_repo}?ref={default_branch}"
@@ -284,8 +284,8 @@ class SourceCraftApi(RmsApi):
     ) -> str:
         """Get URL for a student's repository.
 
-        :param username: Student's username
-        :param course_students_group: string
+        :param username: student's username
+        :param course_students_group: repo slug prefix
         :return: URL to the student's repository
         """
         return f"{self._base_url}/{self._org_slug}/{course_students_group}-{normalize_string(username)}"
