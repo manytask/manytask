@@ -457,6 +457,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message="CSRF Error",
+                rms=app.app_config.rms,
             )
 
         namespace_id_str = request.form.get("namespace_id", "").strip()
@@ -465,6 +466,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message="Namespace is required",
+                rms=app.app_config.rms,
             )
 
         try:
@@ -474,6 +476,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message="Invalid namespace ID",
+                rms=app.app_config.rms,
             )
 
         username = session["manytask"]["username"]
@@ -488,6 +491,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Only Instance Admin can create courses without namespace",
+                    rms=app.app_config.rms,
                 )
         else:
             try:
@@ -500,6 +504,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Access denied to selected namespace",
+                    rms=app.app_config.rms,
                 )
             except Exception as e:
                 logger.error("Error fetching namespace id=%s: %s", namespace_id, str(e))
@@ -507,6 +512,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Selected namespace not found",
+                    rms=app.app_config.rms,
                 )
 
             if not is_instance_admin and role != "namespace_admin":
@@ -520,6 +526,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Only Instance Admin or Namespace Admin can create courses",
+                    rms=app.app_config.rms,
                 )
 
         course_name = request.form["unique_course_name"].strip()
@@ -556,6 +563,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message=f"Failed to create GitLab resources: {str(e)}",
+                rms=app.app_config.rms,
             )
 
         settings = CourseConfig(
@@ -588,6 +596,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     return render_template(
         app.create_course_template,
         generated_token=generate_token_hex(24),
+        rms=app.app_config.rms,
     )
 
 

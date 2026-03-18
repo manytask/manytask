@@ -52,11 +52,7 @@ class CustomFlask(Flask):
 
     @property
     def create_course_template(self) -> str:
-        match self.app_config.rms:
-            case "sourcecraft":
-                return "create_course_sourcecraft.html"
-            case _:
-                return "create_course.html"
+        return "create_course.html"
 
     def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
