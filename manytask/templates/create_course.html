@@ -45,63 +45,33 @@
             </div>
 
             <div class="col-md-6 mb-4">
-                {% if rms == 'sourcecraft' %}
-                <h4>SourceCraft Configuration</h4>
+                <h4>{{ labels.section_header }}</h4>
                 <div class="mb-3">
-                    <label for="course_group" class="form-label">SourceCraft Course Prefix</label>
+                    <label for="course_group" class="form-label">{{ labels.course_group_label }}</label>
                     <input type="text" class="form-control" id="course_group" name="course_group"
                            placeholder="test-course" required>
-                    <div class="form-text">Prefix for all course repositories</div>
+                    <div class="form-text">{{ labels.course_group_text }}</div>
                 </div>
                 <div class="mb-3">
-                    <label for="course_public_repo" class="form-label">SourceCraft Public Repo</label>
+                    <label for="course_public_repo" class="form-label">{{ labels.course_public_repo_label }}</label>
                     <input type="text" class="form-control" id="course_public_repo"
                            name="course_public_repo"
-                           placeholder="test-course-public-[year]-[fall/spring]" formnovalidate>
-                    <div class="invalid-feedback" id="public-repo-feedback">Public Repo should begin with the course prefix</div>
+                           placeholder="{{ labels.course_public_repo_placeholder }}" formnovalidate>
+                    <div class="invalid-feedback" id="public-repo-feedback">{{ labels.course_public_repo_feedback }}</div>
                     <div class="form-text">The name of the repository shared by students, where the assignment conditions are laid out</div>
                 </div>
                 <div class="mb-3">
-                    <label for="course_students_group" class="form-label">SourceCraft Students Prefix</label>
+                    <label for="course_students_group" class="form-label">{{ labels.course_students_group_label }}</label>
                     <input type="text" class="form-control" id="course_students_group"
                            name="course_students_group"
-                           placeholder="test-course-students-[year]-[fall/spring]" formnovalidate>
-                    <div class="invalid-feedback" id="students-group-feedback">Students Prefix should begin with the course prefix</div>
-                    <div class="form-text">Prefix for all students repositories</div>
+                           placeholder="{{ labels.course_students_group_placeholder }}" formnovalidate>
+                    <div class="invalid-feedback" id="students-group-feedback">{{ labels.course_students_group_feedback }}</div>
+                    <div class="form-text">{{ labels.course_students_group_text }}</div>
                 </div>
                 <div class="mb-3">
-                    <label for="default_branch" class="form-label">SourceCraft Default Branch</label>
+                    <label for="default_branch" class="form-label">{{ labels.default_branch_label }}</label>
                     <input type="text" class="form-control" id="default_branch" name="default_branch" value="main" required>
                 </div>
-                {% else %}
-                <h4>GitLab Configuration</h4>
-                <div class="mb-3">
-                    <label for="course_group" class="form-label">GitLab Course Group</label>
-                    <input type="text" class="form-control" id="course_group" name="course_group"
-                           placeholder="test-course" required>
-                    <div class="form-text">The general name of the GitLab group where all course materials will be stored</div>
-                </div>
-                <div class="mb-3">
-                    <label for="course_public_repo" class="form-label">GitLab Public Repo</label>
-                    <input type="text" class="form-control" id="course_public_repo"
-                           name="course_public_repo"
-                           placeholder="test-course/public-[year]-[fall/spring]" formnovalidate>
-                    <div class="invalid-feedback" id="public-repo-feedback">Public Repo should begin with either the namespace path or the course group name</div>
-                    <div class="form-text">The name of the repository shared by students, where the assignment conditions are laid out</div>
-                </div>
-                <div class="mb-3">
-                    <label for="course_students_group" class="form-label">GitLab Students Group</label>
-                    <input type="text" class="form-control" id="course_students_group"
-                           name="course_students_group"
-                           placeholder="test-course/students-[year]-[fall/spring]" formnovalidate>
-                    <div class="invalid-feedback" id="students-group-feedback">Students Group should begin with either the namespace path or the course group name</div>
-                    <div class="form-text">The name of the group where students' repositories are created</div>
-                </div>
-                <div class="mb-3">
-                    <label for="default_branch" class="form-label">GitLab Default Branch</label>
-                    <input type="text" class="form-control" id="default_branch" name="default_branch" value="main" required>
-                </div>
-                {% endif %}
             </div>
         </div>
 
