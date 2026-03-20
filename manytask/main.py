@@ -23,6 +23,39 @@ MAX_AGE_IN_SECONDS = 86400
 
 load_dotenv("../.env")  # take environment variables from .env.
 
+_CREATE_COURSE_LABELS: dict[str, dict[str, str]] = {
+    "sourcecraft": {
+        "section_header": "SourceCraft Configuration",
+        "course_group_label": "SourceCraft Course Prefix",
+        "course_group_text": "Prefix for all course repositories",
+        "course_public_repo_label": "SourceCraft Public Repo",
+        "course_public_repo_placeholder": "test-course-public-[year]-[fall/spring]",
+        "course_public_repo_feedback": "Public Repo should begin with the course prefix",
+        "course_students_group_label": "SourceCraft Students Prefix",
+        "course_students_group_placeholder": "test-course-students-[year]-[fall/spring]",
+        "course_students_group_feedback": "Students Prefix should begin with the course prefix",
+        "course_students_group_text": "Prefix for all students repositories",
+        "default_branch_label": "SourceCraft Default Branch",
+    },
+    "gitlab": {
+        "section_header": "GitLab Configuration",
+        "course_group_label": "GitLab Course Group",
+        "course_group_text": "The general name of the GitLab group where all course materials will be stored",
+        "course_public_repo_label": "GitLab Public Repo",
+        "course_public_repo_placeholder": "test-course/public-[year]-[fall/spring]",
+        "course_public_repo_feedback": (
+            "Public Repo should begin with either the namespace path or the course group name"
+        ),
+        "course_students_group_label": "GitLab Students Group",
+        "course_students_group_placeholder": "test-course/students-[year]-[fall/spring]",
+        "course_students_group_feedback": (
+            "Students Group should begin with either the namespace path or the course group name"
+        ),
+        "course_students_group_text": "The name of the group where students' repositories are created",
+        "default_branch_label": "GitLab Default Branch",
+    },
+}
+
 
 class CustomFlask(Flask):
     csrf: CSRFProtect
@@ -49,6 +82,14 @@ class CustomFlask(Flask):
     @property
     def signup_finish_template(self) -> str:
         return "signup_finish.html"
+
+    @property
+    def create_course_template(self) -> str:
+        return "create_course.html"
+
+    @property
+    def create_course_labels(self) -> dict[str, str]:
+        return _CREATE_COURSE_LABELS.get(self.app_config.rms, _CREATE_COURSE_LABELS["gitlab"])
 
     def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
