@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
+from manytask.utils.generic import lerp
+
 
 class ManytaskSettingsConfig(BaseModel):
     """Manytask settings."""
@@ -76,13 +78,34 @@ class ManytaskGroupConfig(BaseModel):
             percent: (date_or_delta if isinstance(date_or_delta, datetime) else self.start + date_or_delta)
             for percent, date_or_delta in zip([1.0, *self.steps.keys()], [*self.steps.values(), self.end])
         }
+        
+    def get_percents_after_deadline(self) -> list[tuple[datetime, float]]:
+        return list(zip(map(self.get_deadline, [self.start, *self.steps.values()]), [1.0, *self.steps.keys()]))
 
-    def get_current_percent_multiplier(self, now: datetime) -> float:
-        percents = self.get_percents_before_deadline()
-        for percent, date in percents.items():
-            if now <= date:
-                return percent
-        return 0.0
+    def get_current_percent_multiplier(self, now: datetime, deadlines_type: ManytaskDeadlinesType) -> float:
+        if now >= self.get_deadline(self.end):
+            return 0.0
+        last_point = None
+        for date, percent in self.get_percents_after_deadline():
+            if now >= date:
+                last_point = (date, percent)
+                continue
+
+            if deadlines_type == ManytaskDeadlinesType.HARD or last_point is None:
+                break
+            start = last_point[0]
+            return lerp(
+                p1=(0.0, last_point[1]),
+                p2=((date - start).total_seconds(), percent),
+                x=(now - start).total_seconds(),
+            )
+
+        # manytask : None if now is before start, ok if last_point[1] is zero
+        # manytask : return (last_point and last_point[1]) or -14.88
+        # i do not undertand when -14.88 case can be triggered, unless start is set incorrectly
+        if last_point:
+            return last_point[1]
+        return -14.88
 
     def replace_timezone(self, timezone: ZoneInfo) -> None:
         self.start = self.start.replace(tzinfo=timezone)
