@@ -440,6 +440,19 @@ class GitLabApi(RmsApi, AuthApi):
         )
         return False
 
+    def check_user_has_repo_access(
+        self,
+        rms_user_id: str,
+        project_name: str,
+        project_group: str,
+    ) -> bool:
+        project = self._gitlab.projects.get(f"{project_group}/{project_name}")
+        try:
+            project.members.get(rms_user_id)
+            return True
+        except GitlabGetError:
+            return False
+
     def create_project(self, rms_user: RmsUser, course_students_group: str, course_public_repo: str) -> None:
         logger.info("Creating project for user=%s in group=%s", rms_user.username, course_students_group)
 
@@ -583,6 +596,13 @@ class GitLabApi(RmsApi, AuthApi):
         course_students_group: str,
     ) -> str:
         return f"{self.base_url}/{course_students_group}/{username}"
+
+    def get_url_for_piplines(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str:
+        return f"{self.get_url_for_repo(username, course_students_group)}/pipelines"
 
     def _make_auth_request(self, token: str) -> requests.Response:
         headers = {"Authorization": f"Bearer {token}"}

@@ -238,6 +238,23 @@ class SourceCraftApi(RmsApi):
         else:
             raise RmsApiException(f"Failed to check if project exists: {response.json()}")
 
+    def check_user_has_repo_access(
+        self,
+        rms_user_id: str,
+        project_name: str,
+        project_group: str,
+    ) -> bool:
+        """Return True if the user is an active member (accepted invitation) of their repo."""
+        repo_slug = f"{project_group}-{normalize_string(project_name)}"
+        response = self._request("GET", f"repos/{self._org_slug}/{repo_slug}/roles")
+        if response.status_code != HTTPStatus.OK:
+            return False  # don't block on API errors
+        for entry in response.json().get("subject_roles", []):
+            subject = entry.get("subject", {})
+            if subject.get("id") == rms_user_id and subject.get("type") == "user":
+                return True
+        return False
+
     def create_project(
         self,
         rms_user: RmsUser,
@@ -289,6 +306,13 @@ class SourceCraftApi(RmsApi):
         :return: URL to the student's repository
         """
         return f"{self._base_url}/{self._org_slug}/{course_students_group}-{normalize_string(username)}"
+
+    def get_url_for_piplines(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str:
+        return f"{self.get_url_for_repo(username, course_students_group)}/cicd/runs"
 
     def register_new_user(
         self,
