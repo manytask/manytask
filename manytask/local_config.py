@@ -20,7 +20,7 @@ class LocalConfig:
     # sourcecraft
     sourcecraft_url: str
     sourcecraft_api_url: str
-    sourcecraft_admin_token: str
+    sourcecraft_sa_key_json: str
     sourcecraft_org_slug: str
 
     # yandex_id
@@ -41,7 +41,7 @@ class LocalConfig:
             # sourcecraft
             sourcecraft_url=os.environ.get("SOURCRAFT_URL", "https://sourcecraft.dev"),
             sourcecraft_api_url=os.environ.get("SOURCRAFT_API_URL", "https://api.sourcecraft.tech"),
-            sourcecraft_admin_token=os.environ.get("SOURCECRAFT_ADMIN_TOKEN", ""),
+            sourcecraft_sa_key_json=os.environ.get("SOURCECRAFT_SA_KEY_JSON", ""),
             sourcecraft_org_slug=os.environ.get("SOURCECRAFT_ORG_SLUG", ""),
             # yandex_id
             yandex_id_client_id=os.environ.get("YANDEX_ID_CLIENT_ID", ""),
@@ -64,7 +64,7 @@ class DebugLocalConfig(LocalConfig):
     # sourcecraft
     sourcecraft_url: str = "https://sourcecraft.dev"
     sourcecraft_api_url: str = "https://api.sourcecraft.tech"
-    sourcecraft_admin_token: str = ""
+    sourcecraft_sa_key_json: str = ""
     sourcecraft_org_slug: str = ""
 
     # yandex_id
