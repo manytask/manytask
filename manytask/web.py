@@ -114,25 +114,32 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
     if app.debug:
         student_username = "guest"
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
-
         if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
     else:
         student_username = session["manytask"]["username"]
-
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
         student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
+
+    student_repo = app.rms_api.get_url_for_repo(
+        username=student_username, course_students_group=course.gitlab_course_students_group
+    )
+    student_ci_url = app.rms_api.get_url_for_piplines(
+        username=student_username, course_students_group=course.gitlab_course_students_group
+    )
 
     tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
+
+    sourcecraft_accept_invite_required = False
+    if app.app_config.rms == "sourcecraft" and not app.debug:
+        sourcecraft_accept_invite_required = not app.rms_api.check_user_has_repo_access(
+            rms_user_id=session["rms"]["rms_id"],
+            project_name=student_username,
+            project_group=course.gitlab_course_students_group,
+        )
 
     return render_template(
         "tasks.html",
@@ -145,7 +152,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         allscores_url=allscores_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
-        student_ci_url=f"{student_repo}/pipelines",
+        student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         task_url_template=course.task_url_template,
         links=course.links,
@@ -158,6 +165,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         courses=courses,
         deadlines_type=course.deadlines_type,
         has_role=has_role,
+        sourcecraft_accept_invite_required=sourcecraft_accept_invite_required,
     )
 
 
@@ -286,12 +294,12 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     except RmsApiException as e:
         logger.error(f"Failed to get RMS user: {e}")
         if app.app_config.rms == "sourcecraft":
-            # TODO: button "Onboard on SourceCraft" instead of error message (issue #863)
             return render_template(
                 app.signup_finish_template,
                 course_favicon=app.favicon,
                 manytask_version=app.manytask_version,
-                error_message=f"Please fill your profile in SourceCraft: {app.app_config.sourcecraft_url}",
+                sourcecraft_not_registered=True,
+                sourcecraft_url=app.app_config.sourcecraft_url,
             )
         else:
             return render_template(
@@ -401,22 +409,20 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
     if app.debug:
         student_username = "guest"
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
-
         if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
     else:
         student_username = session["manytask"]["username"]
-
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
-
         student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
+
+    student_repo = app.rms_api.get_url_for_repo(
+        username=student_username, course_students_group=course.gitlab_course_students_group
+    )
+    student_ci_url = app.rms_api.get_url_for_piplines(
+        username=student_username, course_students_group=course.gitlab_course_students_group
+    )
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
@@ -436,7 +442,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         gitlab_url=app.rms_api.base_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
-        student_ci_url=f"{student_repo}/pipelines",
+        student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         courses=courses,
         has_role=has_role,

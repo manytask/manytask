@@ -192,12 +192,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const semester = month >= 0 && month <= 5 ? 'spring' : 'fall';
         
         if (isSourceCraft) {
-            // SourceCraft: simple prefix-based naming
+            // SourceCraft: short naming with 2-digit year and semester letter
+            const shortYear = String(year).slice(-2);
+            const semLetter = semester[0];
             if (!publicRepoChanged && groupName) {
-                publicRepoField.value = `${groupName}-public-${year}-${semester}`;
+                publicRepoField.value = `${groupName}-public-${shortYear}${semLetter}`;
             }
             if (!studentsGroupChanged && groupName) {
-                studentsGroupField.value = `${groupName}-${year}-${semester}`;
+                studentsGroupField.value = `${groupName}-st-${shortYear}${semLetter}`;
             }
         } else {
             // GitLab: namespace path + course group naming
