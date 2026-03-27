@@ -7,7 +7,12 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
 
+import grpc
 import httpx
+from yandex.cloud.iam.v1.iam_token_service_pb2_grpc import IamTokenServiceStub
+from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2 import GetUserAccountByLoginRequest
+from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2_grpc import YandexPassportUserAccountServiceStub
+from yandexcloud._sdk import SDK
 
 from .abstract import RmsApi, RmsApiException, RmsUser
 from .utils.sourcecraft import normalize_string
@@ -21,10 +26,16 @@ class SourceCraftConfig:
 
     base_url: str
     api_url: str
-    admin_token: str
     org_slug: str
-    iam_api_url: str = "https://iam.api.cloud.yandex.net/iam/v1"
+    service_account_key: dict[str, Any] | None = None
+    oauth_token: str | None = None
     dry_run: bool = False
+
+    def __post_init__(self) -> None:
+        if self.service_account_key and self.oauth_token:
+            raise ValueError("SourceCraftConfig: specify either service_account_key or oauth_token, not both")
+        if not self.service_account_key and not self.oauth_token:
+            raise ValueError("SourceCraftConfig: either service_account_key or oauth_token must be provided")
 
 
 class SourceCraftApi(RmsApi):
@@ -38,15 +49,15 @@ class SourceCraftApi(RmsApi):
         """
         self.dry_run = config.dry_run
         self._base_url = config.base_url
-        self._admin_token = config.admin_token
         self._org_slug = config.org_slug
 
         self._client = httpx.Client(
             base_url=config.api_url,
         )
-        self._iam_client = httpx.Client(
-            base_url=config.iam_api_url,
-        )
+        if config.service_account_key:
+            self._sdk = SDK(service_account_key=config.service_account_key)
+        else:
+            self._sdk = SDK(token=config.oauth_token)
 
         self._iam_token: str | None = None
         self._iam_token_last_issued: datetime | None = None
@@ -69,15 +80,13 @@ class SourceCraftApi(RmsApi):
         return self._iam_token
 
     def _get_iam_token(self) -> str:
-        response = self._iam_client.post(
-            "tokens",
-            json={
-                "yandexPassportOauthToken": self._admin_token,
-            },
-        )
-        if response.status_code != HTTPStatus.OK:
-            raise RmsApiException(f"Failed to get IAM token: {response.text}")
-        return response.json()["iamToken"]
+        token_requester = self._sdk._channels._token_requester
+        client = self._sdk.client(IamTokenServiceStub)
+        try:
+            response = client.Create(token_requester.get_token_request())  # type: ignore
+        except grpc.RpcError as e:
+            raise RmsApiException(f"Failed to get IAM token: {e}") from e
+        return response.iam_token
 
     @property
     def _request_headers(self) -> dict[str, str]:
@@ -342,14 +351,12 @@ class SourceCraftApi(RmsApi):
         return self._get_user_profile(f"cloud-id:{cloud_id}")
 
     def _get_cloud_id_by_yandex_login(self, yandex_login: str) -> str:
-        response = self._iam_client.get(
-            "./yandexPassportUserAccounts:byLogin",
-            params={"login": yandex_login},
-            headers=self._request_headers,
-        )
-        if response.status_code != HTTPStatus.OK:
-            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.text}")
-        return response.json()["id"]
+        client = self._sdk.client(YandexPassportUserAccountServiceStub)
+        try:
+            response = client.GetByLogin(GetUserAccountByLoginRequest(login=yandex_login))
+        except grpc.RpcError as e:
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {e}") from e
+        return response.id
 
     def _get_user_profile(self, identity: str) -> RmsUser:
         response = self._request("GET", f"users/{identity}")
