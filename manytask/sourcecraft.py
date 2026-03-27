@@ -26,9 +26,16 @@ class SourceCraftConfig:
 
     base_url: str
     api_url: str
-    service_account_key: dict[str, Any]
     org_slug: str
+    service_account_key: dict[str, Any] | None = None
+    oauth_token: str | None = None
     dry_run: bool = False
+
+    def __post_init__(self) -> None:
+        if self.service_account_key and self.oauth_token:
+            raise ValueError("SourceCraftConfig: specify either service_account_key or oauth_token, not both")
+        if not self.service_account_key and not self.oauth_token:
+            raise ValueError("SourceCraftConfig: either service_account_key or oauth_token must be provided")
 
 
 class SourceCraftApi(RmsApi):
@@ -47,7 +54,10 @@ class SourceCraftApi(RmsApi):
         self._client = httpx.Client(
             base_url=config.api_url,
         )
-        self._sdk = SDK(service_account_key=config.service_account_key)
+        if config.service_account_key:
+            self._sdk = SDK(service_account_key=config.service_account_key)
+        else:
+            self._sdk = SDK(token=config.oauth_token)
 
         self._iam_token: str | None = None
         self._iam_token_last_issued: datetime | None = None

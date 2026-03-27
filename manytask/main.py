@@ -140,7 +140,10 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             sourcecraft.SourceCraftConfig(
                 base_url=app.app_config.sourcecraft_url,
                 api_url=app.app_config.sourcecraft_api_url,
-                service_account_key=json.loads(app.app_config.sourcecraft_sa_key_json),
+                service_account_key=json.loads(app.app_config.sourcecraft_sa_key_json)
+                if app.app_config.sourcecraft_sa_key_json
+                else None,
+                oauth_token=app.app_config.sourcecraft_oauth_token or None,
                 org_slug=app.app_config.sourcecraft_org_slug,
             ),
         )
