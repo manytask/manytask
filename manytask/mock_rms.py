@@ -11,25 +11,25 @@ class MockRmsProject:
     name: str
     group: str
     visibility: str = "private"
-    members: List[int] = field(default_factory=list)  # List of user IDs
+    members: List[str] = field(default_factory=list)  # List of user IDs
 
 
 @dataclass
 class MockRmsGroup:
     name: str
     projects: Dict[str, MockRmsProject] = field(default_factory=dict)
-    members: List[int] = field(default_factory=list)
+    members: List[str] = field(default_factory=list)
 
 
 class MockRmsApi(RmsApi):
     def __init__(self, base_url: str):
         self._base_url = base_url
-        self.users: Dict[int, RmsUser] = {}
+        self.users: Dict[str, RmsUser] = {}
         self.users_by_username: Dict[str, RmsUser] = {}
         self.groups: Dict[str, MockRmsGroup] = {}
         self.projects: Dict[str, MockRmsProject] = {}  # key: "group/project"
         self.namespace_groups: Dict[str, int] = {}  # path -> group_id
-        self.last_user: int = -1
+        self.last_user: str = "-1"
         self.last_group_id: int = 0
         
         # Register default mock users
@@ -64,8 +64,8 @@ class MockRmsApi(RmsApi):
         if username in self.users_by_username:
             raise RmsApiException(f"User with username {username} already exists")
 
-        user_id = max(self.users.keys(), default=0) + 1
-        user: RmsUser = RmsUser(id=user_id, username=username, name=f"{firstname} {lastname}")
+        user_id = str(max([int(k) for k in self.users.keys()] + [0]) + 1) if self.users else "1"
+        user: RmsUser = RmsUser(id=str(user_id), username=username, name=f"{firstname} {lastname}")
         self.users[user_id] = user
         self.users_by_username[username] = user
         self.last_user = user_id
@@ -112,11 +112,11 @@ class MockRmsApi(RmsApi):
 
         return group_id
 
-    def add_user_to_namespace_group(self, gitlab_group_id: int, user_id: int) -> None:
+    def add_user_to_namespace_group(self, gitlab_group_id: int, rms_id: str) -> None:
         """Add a user to a namespace group (mock implementation).
 
         :param gitlab_group_id: GitLab group ID
-        :param user_id: User ID to add
+        :param rms_id: User ID to add
         """
         group_path = None
         for path, gid in self.namespace_groups.items():
@@ -127,14 +127,14 @@ class MockRmsApi(RmsApi):
         if group_path is None:
             raise RuntimeError(f"Group with id {gitlab_group_id} not found")
 
-        if user_id not in self.groups[group_path].members:
-            self.groups[group_path].members.append(user_id)
+        if rms_id not in self.groups[group_path].members:
+            self.groups[group_path].members.append(rms_id)
 
-    def remove_user_from_namespace_group(self, gitlab_group_id: int, user_id: int) -> None:
+    def remove_user_from_namespace_group(self, gitlab_group_id: int, rms_id: str) -> None:
         """Remove a user from a namespace group (mock implementation).
 
         :param gitlab_group_id: GitLab group ID
-        :param user_id: User ID to remove
+        :param rms_id: User ID to remove
         """
         group_path = None
         for path, gid in self.namespace_groups.items():
@@ -145,8 +145,8 @@ class MockRmsApi(RmsApi):
         if group_path is None:
             raise RuntimeError(f"Group with id {gitlab_group_id} not found")
 
-        if user_id in self.groups[group_path].members:
-            self.groups[group_path].members.remove(user_id)
+        if rms_id in self.groups[group_path].members:
+            self.groups[group_path].members.remove(rms_id)
 
     def check_project_exists(
         self,
@@ -155,6 +155,14 @@ class MockRmsApi(RmsApi):
     ) -> bool:
         project_path = f"{project_group}/{project_name}"
         return project_path in self.projects
+
+    def check_user_has_repo_access(
+        self,
+        rms_user_id: str,
+        project_name: str,
+        project_group: str,
+    ) -> bool:
+        return True
 
     def create_project(
         self,
@@ -189,9 +197,16 @@ class MockRmsApi(RmsApi):
     ) -> str:
         return f"{self.base_url}/{course_students_group}/{username}"
 
+    def get_url_for_piplines(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str:
+        return f"{self.get_url_for_repo(username, course_students_group)}/pipelines"
+
     def get_rms_user_by_id(
         self,
-        user_id: int,
+        user_id: str,
     ) -> RmsUser:
         if user_id not in self.users:
             raise RmsApiException(f"User with id {user_id} not found")
@@ -213,13 +228,6 @@ class MockRmsApi(RmsApi):
     ) -> bool:
         # Mock implementation always returns True
         return True
-
-    def get_authenticated_rms_user(
-        self,
-        oauth_access_token: str,
-    ) -> RmsUser:
-        # For testing, return last registered user
-        return self.users[self.last_user]
 
     def create_course_group(
         self,
