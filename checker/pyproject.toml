@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "manytask-checker"
-version = "1.0.0-dev"
+dynamic = ["version"]
 description = "Manytask checker - automated tests for students' assignments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,3 +44,6 @@ checker = "checker.__main__:cli"
 
 [tool.setuptools]
 packages = ["checker", "checker.configs"]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}

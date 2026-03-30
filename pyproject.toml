@@ -1,6 +1,13 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.workspace]
+members = [".", "checker"]
+
 [project]
 name = "manytask"
-version = "25.2"
+dynamic = ["version"]
 description = "Manytask system"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -139,3 +146,9 @@ max-args = 7
 
 [tool.ruff.lint.isort]
 known-first-party = ["manytask", "tests", "checker"]
+
+[tool.setuptools]
+packages = ["manytask"]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
