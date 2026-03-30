@@ -8,9 +8,13 @@ members = [".", "checker"]
 [project]
 name = "manytask"
 dynamic = ["version"]
-description = "Manytask system"
+description = "Manytask - a web app to organize courses and collect students scores"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
+license = {text = "MIT"}
+authors = [
+    {name = "Manytask Team"}
+]
 dependencies = [
     "alembic==1.18.3",
     "authlib==1.6.9",
