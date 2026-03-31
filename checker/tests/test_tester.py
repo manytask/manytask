@@ -2,8 +2,11 @@ import typing
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from checker.configs import ManytaskConfig
-from checker.configs.checker import CheckerTestingConfig
+from checker.configs.checker import CheckerParametersConfig, CheckerSubConfig, CheckerTestingConfig, PipelineStageConfig
+from checker.course import FileSystemTask
 from checker.tester import Tester
 
 # Test constants
@@ -105,3 +108,100 @@ class TestTester:
         assert SCORE_03 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-24 00:00:00"))
         assert SCORE_03 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-04-01 00:00:00"))
         assert 0 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-04-01 00:01:00"))
+
+    @typing.no_type_check
+    def test_parameters_merge_default_group_task(self, mocker):
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        tester = Tester(CourseMock(), CheckerConfigMock())
+
+        default_params = CheckerParametersConfig(root={"a": 1, "b": 2})
+        group_params = CheckerParametersConfig(root={"b": 30, "c": 4})
+        task_params = CheckerParametersConfig(root={"c": 50, "d": 6})
+
+        context = tester._get_context(None, None, {}, default_params, group_params, task_params)
+        assert context["parameters"] == {"a": 1, "b": 30, "c": 50, "d": 6}
+
+    @typing.no_type_check
+    def test_parameters_merge_no_group(self, mocker):
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        tester = Tester(CourseMock(), CheckerConfigMock())
+
+        default_params = CheckerParametersConfig(root={"a": 1, "b": 2})
+        task_params = CheckerParametersConfig(root={"b": 10, "c": 3})
+
+        context = tester._get_context(None, None, {}, default_params, None, task_params)
+        assert context["parameters"] == {"a": 1, "b": 10, "c": 3}
+
+    @typing.no_type_check
+    def test_parameters_merge_no_task(self, mocker):
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        tester = Tester(CourseMock(), CheckerConfigMock())
+
+        default_params = CheckerParametersConfig(root={"a": 1, "b": 2})
+        group_params = CheckerParametersConfig(root={"b": 10, "c": 3})
+
+        context = tester._get_context(None, None, {}, default_params, group_params, None)
+        assert context["parameters"] == {"a": 1, "b": 10, "c": 3}
+
+    @typing.no_type_check
+    def test_parameters_merge_only_default(self, mocker):
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        tester = Tester(CourseMock(), CheckerConfigMock())
+
+        default_params = CheckerParametersConfig(root={"a": 1, "b": 2})
+
+        context = tester._get_context(None, None, {}, default_params, None, None)
+        assert context["parameters"] == {"a": 1, "b": 2}
+
+    @typing.no_type_check
+    @pytest.mark.parametrize(
+        "method_name, config_attr, global_attr",
+        [
+            ("_get_task_pipeline_runner", "task_pipeline", "tasks_pipeline"),
+            ("_get_task_report_pipeline_runner", "report_pipeline", "report_pipeline"),
+        ],
+    )
+    @pytest.mark.parametrize("level", ["task", "group", "global"])
+    def test_pipeline_resolution_hierarchy(self, mocker, method_name, config_attr, global_attr, level):
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        mock_runner = mocker.patch("checker.tester.PipelineRunner")
+        tester = Tester(CourseMock(), CheckerConfigMock())
+
+        task_pipeline = [PipelineStageConfig(name="task_stage", run="echo task")]
+        group_pipeline = [PipelineStageConfig(name="group_stage", run="echo group")]
+        global_pipeline = [PipelineStageConfig(name="global_stage", run="echo global")]
+
+        setattr(tester.testing_config, global_attr, global_pipeline)
+
+        task_config = CheckerSubConfig(version=1, **{config_attr: task_pipeline if level == "task" else None})
+        group_config = CheckerSubConfig(version=1, **{config_attr: group_pipeline if level == "group" else None})
+        mocker.patch.object(tester, "_get_group_config", return_value=group_config if level != "global" else None)
+
+        task = FileSystemTask(name="task1_1", relative_path="group1/task1_1", config=task_config)
+        getattr(tester, method_name)(task)
+
+        if level == "task":
+            expected = task_pipeline
+        elif level == "group":
+            expected = group_pipeline
+        else:
+            expected = global_pipeline
+
+        assert mock_runner.call_args[0][0] == expected
+
+    @typing.no_type_check
+    def test_task_context_merges_all_parameter_levels(self, mocker):
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        tester = Tester(CourseMock(), CheckerConfigMock())
+        tester.default_params = CheckerParametersConfig(root={"default_key": "d", "shared": "default"})
+
+        group_config = CheckerSubConfig(
+            version=1, parameters=CheckerParametersConfig(root={"group_key": "g", "shared": "group"})
+        )
+        mocker.patch.object(tester, "_get_group_config", return_value=group_config)
+
+        task_config = CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root={"task_key": "t"}))
+        task = FileSystemTask(name="task1_1", relative_path="group1/task1_1", config=task_config)
+
+        context = tester._build_task_context(None, task, None, {})
+        assert context["parameters"] == {"default_key": "d", "group_key": "g", "task_key": "t", "shared": "group"}
