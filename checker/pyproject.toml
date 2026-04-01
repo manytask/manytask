@@ -34,7 +34,7 @@ dev = [
 checker = "checker.__main__:cli"
 
 [tool.setuptools]
-packages = ["checker", "checker.configs"]
+packages = ["checker", "checker.configs", "checker.plugins", "checker.plugins.cpp"]
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
