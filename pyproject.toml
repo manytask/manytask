@@ -27,7 +27,7 @@ dependencies = [
 dev = [
     "ruff==0.15.4",
     "mypy==1.19.1",
-    "types-requests==2.32.0.20240907",
+    "types-requests==2.33.0.20260327",
     "types-PyYAML==6.0.12.12",
     "pytest==9.0.2",
     "pytest-cov==7.1.0",
