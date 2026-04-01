@@ -831,7 +831,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0.44,<3.0.0" },
     { name = "testcontainers", marker = "extra == 'dev'", specifier = "==4.14.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = "==6.0.12.12" },
-    { name = "types-requests", marker = "extra == 'dev'", specifier = "==2.32.0.20240907" },
+    { name = "types-requests", marker = "extra == 'dev'", specifier = "==2.33.0.20260327" },
     { name = "werkzeug", specifier = "==3.1.6" },
     { name = "yandexcloud", specifier = ">=0.10" },
 ]
@@ -1432,14 +1432,14 @@ wheels = [
 
 [[package]]
 name = "types-requests"
-version = "2.32.0.20240907"
+version = "2.33.0.20260327"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/94/b6f90e5f09e1d621d5cd6d1057d5d28d4019d95f06eab205afa743ba1907/types-requests-2.32.0.20240907.tar.gz", hash = "sha256:ff33935f061b5e81ec87997e91050f7b4af4f82027a7a7a9d9aaea04a963fdf8", size = 18004, upload-time = "2024-09-07T02:35:43.592Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/02/5f/2e3dbae6e21be6ae026563bad96cbf76602d73aa85ea09f13419ddbdabb4/types_requests-2.33.0.20260327.tar.gz", hash = "sha256:f4f74f0b44f059e3db420ff17bd1966e3587cdd34062fe38a23cda97868f8dd8", size = 23804, upload-time = "2026-03-27T04:23:38.737Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/6e/425219be1dfc954c3e129b3ea70407abc78c1bd6414d0c7180df9940ca1f/types_requests-2.32.0.20240907-py3-none-any.whl", hash = "sha256:1d1e79faeaf9d42def77f3c304893dea17a97cae98168ac69f3cb465516ee8da", size = 15828, upload-time = "2024-09-07T02:35:42.152Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/55/951e733616c92cb96b57554746d2f65f4464d080cc2cc093605f897aba89/types_requests-2.33.0.20260327-py3-none-any.whl", hash = "sha256:fde0712be6d7c9a4d490042d6323115baf872d9a71a22900809d0432de15776e", size = 20737, upload-time = "2026-03-27T04:23:37.813Z" },
 ]
 
 [[package]]
