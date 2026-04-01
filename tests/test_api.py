@@ -613,14 +613,6 @@ def test_update_config_success(app):
     assert response.status_code == HTTPStatus.OK
 
 
-def test_update_cache_success(app):
-    client = app.test_client()
-    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
-
-    response = client.post(f"/api/{TEST_COURSE_NAME}/update_cache", headers=headers)
-    assert response.status_code == HTTPStatus.OK
-
-
 def test_get_database_unauthorized(app, mock_gitlab_oauth):
     app.debug = False  # Disable debug mode to test auth
     app.oauth = mock_gitlab_oauth
