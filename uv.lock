@@ -819,7 +819,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.2" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.1.0" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
     { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "python-dotenv", specifier = "==1.2.1" },
@@ -1186,16 +1186,16 @@ wheels = [
 
 [[package]]
 name = "pytest-cov"
-version = "7.0.0"
+version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "coverage" },
     { name = "pluggy" },
     { name = "pytest" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/f7/c933acc76f5208b3b00089573cf6a2bc26dc80a8aece8f52bb7d6b1855ca/pytest_cov-7.0.0.tar.gz", hash = "sha256:33c97eda2e049a0c5298e91f519302a1334c26ac65c1a483d6206fd458361af1", size = 54328, upload-time = "2025-09-09T10:57:02.113Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/51/a849f96e117386044471c8ec2bd6cfebacda285da9525c9106aeb28da671/pytest_cov-7.1.0.tar.gz", hash = "sha256:30674f2b5f6351aa09702a9c8c364f6a01c27aae0c1366ae8016160d1efc56b2", size = 55592, upload-time = "2026-03-21T20:11:16.284Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/49/1377b49de7d0c1ce41292161ea0f721913fa8722c19fb9c1e3aa0367eecb/pytest_cov-7.0.0-py3-none-any.whl", hash = "sha256:3b8e9558b16cc1479da72058bdecf8073661c7f57f7d3c5f22a1c23507f2d861", size = 22424, upload-time = "2025-09-09T10:57:00.695Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl", hash = "sha256:a0461110b7865f9a271aa1b51e516c9a95de9d696734a2f71e3e78f46e1d4678", size = 22876, upload-time = "2026-03-21T20:11:14.438Z" },
 ]
 
 [[package]]
@@ -1581,7 +1581,7 @@ wheels = [
 
 [[package]]
 name = "yandexcloud"
-version = "0.383.0"
+version = "0.384.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
@@ -1594,7 +1594,7 @@ dependencies = [
     { name = "requests" },
     { name = "six" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7d/73/be4bba1f603cb28db4fea54e1c89733e3e22ced72172bff9fb95abc4238a/yandexcloud-0.383.0.tar.gz", hash = "sha256:78a52789bf333f9664204024b625e47009ce72def727029a7c9e919016866d45", size = 3825141, upload-time = "2026-03-23T15:27:24.262Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2b/85/0d9880e830c758232078cb1c660ad30a5b43e3d1375da597e80b41869b3d/yandexcloud-0.384.0.tar.gz", hash = "sha256:d7ec0ae02e803d755f5b591263962ecd8883e46fffc386e684b6de532d0d0d43", size = 3850947, upload-time = "2026-03-30T15:33:52.504Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5e/1d/914528598414ad54c5a22a8d22ec0095ee16174bb3ddf981d66396745bba/yandexcloud-0.383.0-py3-none-any.whl", hash = "sha256:174c7652751db01fc48f100f846915c508c18696dd3e6ed190a3bb5554c21a0f", size = 5849511, upload-time = "2026-03-23T15:27:22.068Z" },
+    { url = "https://files.pythonhosted.org/packages/81/d0/2d0d8a18210c950b828a74324e36c72c9dfa2314aa7ab56b7054d482fc4e/yandexcloud-0.384.0-py3-none-any.whl", hash = "sha256:1e220e7e58a097fa87aa19302bfe2aeeb3b227178abb2003649cae382163754b", size = 5892386, upload-time = "2026-03-30T15:33:50.5Z" },
 ]
