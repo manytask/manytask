@@ -28,7 +28,7 @@ class RunPytestPlugin(RunScriptPlugin):
 
         coverage: bool | int | None = None
         allow_failures: bool = False
-        report_percentage: bool = True
+        report_percentage: bool = False
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
         tests_cmd = self._build_pytest_cmd(args, verbose=verbose)
