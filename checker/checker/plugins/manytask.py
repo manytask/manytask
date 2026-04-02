@@ -11,10 +11,12 @@ import urllib3
 from pydantic import AnyUrl
 
 from checker.exceptions import PluginExecutionFailed
+from checker.utils import print_info
 
 from .base import PluginABC, PluginOutput
 
 HTTP_ERROR_STATUS_CODE = 400
+MIN_LOG_TOKEN_LEN = 16
 
 
 class ManytaskPlugin(PluginABC):
@@ -63,6 +65,17 @@ class ManytaskPlugin(PluginABC):
         if verbose:
             output.append(str(files))
 
+        # Log request details for debugging (token is never logged in full)
+        token_len = len(args.report_token)
+        token_hint = f"length={token_len}"
+        if token_len > MIN_LOG_TOKEN_LEN:
+            token_hint += f", prefix={args.report_token[:4]!r}"
+        print_info(
+            f"Report API: POST {args.report_url} | task={args.task_name!r}, username={args.username!r}, "
+            f"score={args.score}, token: {token_hint}",
+            color="grey",
+        )
+
         response = self._post_with_retries(args.report_url, data, files)
 
         try:
@@ -89,7 +102,7 @@ class ManytaskPlugin(PluginABC):
         response = session.post(url=f"{report_url}", data=data, files=files)
 
         if response.status_code >= HTTP_ERROR_STATUS_CODE:
-            raise PluginExecutionFailed(f"{response.status_code}: {response.text}")
+            raise PluginExecutionFailed(f"Request to {report_url} failed: {response.status_code}: {response.text}")
 
         return response
 

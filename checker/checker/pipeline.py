@@ -7,7 +7,7 @@ from typing import Any
 import jinja2.nativetypes
 
 from .configs import PipelineStageConfig
-from .exceptions import BadConfig, PluginExecutionFailed
+from .exceptions import BadConfig, PluginExecutionFailed, TestingError
 from .plugins import PluginABC
 from .utils import print_info
 
@@ -222,11 +222,15 @@ class PipelineRunner:
         if allow_partial:
             print_info("error! (ignored due to partially_scored)", color="yellow")
 
+        # Include both output and message in stage result so failures can be reported later (e.g. in tester)
+        failure_output = error.output or ""
+        if error.message and error.message != str(TestingError):
+            failure_output = f"{failure_output}\nError: {error.message}".lstrip()
         stage_result = PipelineStageResult(
             name=pipeline_stage.name,
             failed=not allow_partial,  # flip the flag based on partial scoring
             skipped=False,
-            output=error.output or "",
+            output=failure_output,
             percentage=error.percentage,
             elapsed_time=elapsed_time,
         )
