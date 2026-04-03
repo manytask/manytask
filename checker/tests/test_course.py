@@ -199,6 +199,19 @@ class TestCourse:
         assert all(isinstance(task, FileSystemTask) for task in tasks)
         assert len(tasks) == expected_num_tasks
 
+    def test_get_group_for_task(self, repository_root: Path) -> None:
+        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+        group = test_course.get_group_for_task("task1_1")
+        assert group is not None
+        assert group.name == "group1"
+        group = test_course.get_group_for_task("task4_1")
+        assert group is not None
+        assert group.name == "group4"
+
+    def test_get_group_for_task_not_found(self, repository_root: Path) -> None:
+        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+        assert test_course.get_group_for_task("task_not_exist") is None
+
     def test_detect_changes_not_a_repo(self, repository_root: Path) -> None:
         test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
         with pytest.raises(CheckerException):
