@@ -1,39 +1,18 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 from zoneinfo import ZoneInfo
 
 from .configs.checker import CheckerConfig, CheckerSubConfig
 from .configs.manytask import ManytaskDeadlinesType
 from .course import Course, FileSystemTask
 from .exceptions import TestingError
-from .pipeline import PipelineResult, PipelineRunner, PipelineStageResult
+from .models import GlobalPipelineVariables, PipelineContext, PipelineResult, PipelineStageResult, TaskPipelineVariables
+from .pipeline import PipelineRunner
 from .plugins import load_plugins
 from .utils import print_header_info, print_info, print_separator
-
-
-@dataclass
-class GlobalPipelineVariables:
-    """Base variables passed in pipeline stages."""
-
-    ref_dir: str
-    repo_dir: str
-    temp_dir: str
-    task_names: list[str]
-    task_sub_paths: list[str]
-
-
-@dataclass
-class TaskPipelineVariables:
-    """Variables passed in pipeline stages for each task."""
-
-    task_name: str
-    task_sub_path: str
-    task_score_percent: float
 
 
 class Tester:
@@ -133,7 +112,7 @@ class Tester:
         self,
         global_variables: GlobalPipelineVariables,
         outputs: dict[str, PipelineStageResult],
-    ) -> dict[str, Any]:
+    ) -> PipelineContext:
         return {
             "global": global_variables,
             "task": None,
@@ -152,7 +131,7 @@ class Tester:
         outputs: dict[str, PipelineStageResult],
         task: FileSystemTask,
         task_variables: TaskPipelineVariables,
-    ) -> dict[str, Any]:
+    ) -> PipelineContext:
         context = self._build_global_context(global_variables, outputs)
         context["task"] = task_variables
 

@@ -1,54 +1,15 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from typing import Any
 
 import jinja2.nativetypes
 
 from .configs import PipelineStageConfig
 from .exceptions import BadConfig, PluginExecutionFailed
+from .models import PipelineContext, PipelineResult, PipelineStageResult
 from .plugins import PluginABC
 from .utils import print_info
-
-
-@dataclass
-class PipelineStageResult:
-    """Result of a single pipeline stage.
-    :param name: name of the stage
-    :param failed: if True, stage failed
-    :param skipped: if True, stage was skipped
-    :param percentage: optional percentage of points earned
-    :param elapsed_time: optional elapsed time in seconds
-    :param output: output of the stage
-    """
-
-    name: str
-    failed: bool
-    skipped: bool
-    percentage: float | None = None
-    elapsed_time: float | None = None
-    output: str = ""
-
-    def __str__(self) -> str:  # pragma: no cover
-        return (
-            f"PipelineStageResult: failed={int(self.failed)}, "
-            f"skipped={int(self.skipped)}, percentage={self.percentage or 1.0:.2f}, name='{self.name}'"
-        )
-
-
-@dataclass
-class PipelineResult:
-    failed: bool
-    stage_results: list[PipelineStageResult]
-
-    def __bool__(self) -> bool:
-        return not self.failed
-
-    def __str__(self) -> str:  # pragma: no cover
-        return f"PipelineResult: failed={int(self.failed)}\n" + "\n".join(
-            [f"  {stage_result}" for stage_result in self.stage_results]
-        )
 
 
 class ParametersResolver:
@@ -59,7 +20,7 @@ class ParametersResolver:
             variable_end_string="}}",
         )
 
-    def resolve(self, template: str | list[str] | Any, context: dict[str, Any]) -> Any:
+    def resolve(self, template: str | list[str] | Any, context: PipelineContext) -> Any:
         """
         Resolve the template with context.
         * If template is a string, resolve it with jinja2
@@ -109,14 +70,20 @@ class PipelineRunner:
 
         self.parameters_resolver = ParametersResolver()
 
-        self.validate({}, validate_placeholders=False)
+        self._validate_plugins()
 
     def __len__(self) -> int:
         return len(self.pipeline)
 
+    def _validate_plugins(self) -> None:
+        """Validate that all pipeline stages reference existing plugins."""
+        for pipeline_stage in self.pipeline:
+            if pipeline_stage.run not in self.plugins:
+                raise BadConfig(f"Unknown plugin {pipeline_stage.run} in pipeline stage {pipeline_stage.name}")
+
     def validate(
         self,
-        context: dict[str, Any],
+        context: PipelineContext,
         validate_placeholders: bool = True,
     ) -> None:
         """
@@ -252,7 +219,7 @@ class PipelineRunner:
 
     def run(
         self,
-        context: dict[str, Any],
+        context: PipelineContext,
         *,
         dry_run: bool = False,
     ) -> PipelineResult:
