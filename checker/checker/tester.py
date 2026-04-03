@@ -9,8 +9,14 @@ from .configs.checker import CheckerConfig, CheckerSubConfig
 from .configs.manytask import ManytaskDeadlinesType
 from .course import Course, FileSystemTask
 from .exceptions import TestingError
-from .models import GlobalPipelineVariables, PipelineContext, PipelineResult, PipelineStageResult, TaskPipelineVariables
-from .pipeline import PipelineRunner
+from .pipeline import (
+    GlobalPipelineVariables,
+    PipelineContext,
+    PipelineResult,
+    PipelineRunner,
+    PipelineStageResult,
+    TaskPipelineVariables,
+)
 from .plugins import load_plugins
 from .utils import print_header_info, print_info, print_separator
 
