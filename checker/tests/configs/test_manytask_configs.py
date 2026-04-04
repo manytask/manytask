@@ -9,6 +9,9 @@ from pydantic import ValidationError
 
 from checker.configs.manytask import ManytaskDeadlinesConfig, ManytaskGroupConfig
 
+# Test constants
+HALF_MULTIPLIER = 0.5
+
 
 class TestManytaskDeadlinesConfigGroup:
     def test_minimal_init(self) -> None:
@@ -172,7 +175,7 @@ class TestManytaskDeadlinesConfigGroup:
             group="group1",
             start="2021-01-01 00:00",
             steps={
-                0.5: "1d 09:00:00",
+                HALF_MULTIPLIER: "1d 09:00:00",
             },
             end="2d 09:00:00",
             tasks=[],
@@ -181,8 +184,8 @@ class TestManytaskDeadlinesConfigGroup:
         assert group.get_current_percent_multiplier(now=datetime(2021, 1, 1, 0, 0)) == 1.0
         assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 0, 0)) == 1.0
         assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 8, 59)) == 1.0
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 9, 1)) == 0.5
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 8, 59)) == 0.5
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 9, 1)) == HALF_MULTIPLIER
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 8, 59)) == HALF_MULTIPLIER
         assert group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 9, 1)) == 0.0
         assert group.get_current_percent_multiplier(now=datetime(2021, 1, 4, 0, 0)) == 0.0
 

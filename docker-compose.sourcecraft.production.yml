@@ -1,0 +1,29 @@
+networks:
+  manytask-net:
+    external: true
+    name: nginx-manytask-net
+
+volumes:
+    cache:
+
+services:
+    manytask-src:
+        # image: manytask/manytask:latest  # set SPECIFIC version you'll use
+        build:
+            dockerfile: Dockerfile
+            context: .
+            target: app
+        container_name: manytask-src  # change this to your project name
+        restart: always
+        expose:
+            - "5050"
+        env_file: .env.sourcecraft
+        environment:
+            VIRTUAL_HOST: ${SRC_APP_HOST}
+            VIRTUAL_PORT: 5050
+            LETSENCRYPT_HOST: ${SRC_APP_HOST}
+            LETSENCRYPT_EMAIL: no-reply@manytask.org
+        volumes:
+            - cache:/cache
+        networks:
+            - manytask-net

@@ -19,11 +19,18 @@
                 </div>
                 <button class="btn btn-primary w-100 py-2 mt-2" type="submit" value="CreateRepo">Join course</button>
             </form>
+            <script>
+                document.querySelector('form').addEventListener('submit', function() {
+                    const btn = this.querySelector('button[type="submit"]');
+                    btn.disabled = true;
+                    btn.textContent = 'Joining...';
+                });
+            </script>
         </div>
     </div>
 
 
-    <div class="dropdown position-fixed top-0 end-0 mb-2 me-2">
+    <div class="dropdown position-fixed top-0 end-0 mb-2 me-2{% if session.get('gitlab') %} mt-theme-toggle-offset{% endif %}">
         <button class="btn btn-bd-primary py-2 dropdown-toggle d-flex align-items-center" type="button" aria-expanded="false" data-bs-toggle="dropdown" aria-label="Toggle theme (dark)">
             Toggle theme
         </button>

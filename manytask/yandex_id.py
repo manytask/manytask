@@ -40,7 +40,7 @@ class YandexIDApi(AuthApi):
 
     def _refresh_token(self, oauth: OAuth, refresh_token: str) -> dict[str, Any] | None:
         try:
-            new_tokens = oauth.remote_app.fetch_access_token(
+            new_tokens = oauth.auth_provider.fetch_access_token(
                 grant_type="refresh_token",
                 refresh_token=refresh_token,
             )
@@ -105,7 +105,7 @@ class YandexIDApi(AuthApi):
                 raise YandexIDApiException("Invalid user data from YandexID: id or login is missing")
 
             user = AuthenticatedUser(
-                id=int(user_id),
+                id=user_id,
                 username=username,
             )
             logger.info(f"Successfully retrieved YandexID user: {user}")

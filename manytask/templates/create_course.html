@@ -45,38 +45,32 @@
             </div>
 
             <div class="col-md-6 mb-4">
-                <h4>GitLab Configuration</h4>
+                <h4>{{ labels.section_header }}</h4>
                 <div class="mb-3">
-                    <label for="gitlab_course_group" class="form-label">GitLab Course Group</label>
-                    <input type="text" class="form-control" id="gitlab_course_group" name="gitlab_course_group"
+                    <label for="course_group" class="form-label">{{ labels.course_group_label }}</label>
+                    <input type="text" class="form-control" id="course_group" name="course_group"
                            placeholder="test-course" required>
-                    <div class="form-text">The general name of the GitLab group where all course materials will be
-                        stored
-                    </div>
+                    <div class="form-text">{{ labels.course_group_text }}</div>
                 </div>
                 <div class="mb-3">
-                    <label for="gitlab_course_public_repo" class="form-label">GitLab Public Repo</label>
-                    <input type="text" class="form-control" id="gitlab_course_public_repo"
-                           name="gitlab_course_public_repo"
-                           placeholder="test-course/public-[year]-[fall/spring]" formnovalidate>
-                    <div class="invalid-feedback" id="public-repo-feedback">Public Repo should begin with either the namespace path or the course group name
-                    </div>
-                    <div class="form-text">The name of the repository shared by students, where the assignment
-                        conditions are laid out
-                    </div>
+                    <label for="course_public_repo" class="form-label">{{ labels.course_public_repo_label }}</label>
+                    <input type="text" class="form-control" id="course_public_repo"
+                           name="course_public_repo"
+                           placeholder="{{ labels.course_public_repo_placeholder }}" formnovalidate>
+                    <div class="invalid-feedback" id="public-repo-feedback">{{ labels.course_public_repo_feedback }}</div>
+                    <div class="form-text">The name of the repository shared by students, where the assignment conditions are laid out</div>
                 </div>
                 <div class="mb-3">
-                    <label for="gitlab_course_students_group" class="form-label">GitLab Students Group</label>
-                    <input type="text" class="form-control" id="gitlab_course_students_group"
-                           name="gitlab_course_students_group"
-                           placeholder="test-course/students-[year]-[fall/spring]" formnovalidate>
-                    <div class="invalid-feedback" id="students-group-feedback">Students Group should begin with either the namespace path or the course group name
-                    </div>
-                    <div class="form-text">The name of the group where students' repositories are created</div>
+                    <label for="course_students_group" class="form-label">{{ labels.course_students_group_label }}</label>
+                    <input type="text" class="form-control" id="course_students_group"
+                           name="course_students_group"
+                           placeholder="{{ labels.course_students_group_placeholder }}" formnovalidate>
+                    <div class="invalid-feedback" id="students-group-feedback">{{ labels.course_students_group_feedback }}</div>
+                    <div class="form-text">{{ labels.course_students_group_text }}</div>
                 </div>
                 <div class="mb-3">
-                    <label for="gitlab_default_branch" class="form-label">GitLab Default Branch</label>
-                    <input type="text" class="form-control" id="gitlab_default_branch" name="gitlab_default_branch" value="main" required>
+                    <label for="default_branch" class="form-label">{{ labels.default_branch_label }}</label>
+                    <input type="text" class="form-control" id="default_branch" name="default_branch" value="main" required>
                 </div>
             </div>
         </div>
@@ -107,9 +101,9 @@
 
 document.addEventListener('DOMContentLoaded', function () {
     // Declare all DOM elements and variables first
-    const gitlabGroupField = document.getElementById('gitlab_course_group');
-    const publicRepoField = document.getElementById('gitlab_course_public_repo');
-    const studentsGroupField = document.getElementById('gitlab_course_students_group');
+    const gitlabGroupField = document.getElementById('course_group');
+    const publicRepoField = document.getElementById('course_public_repo');
+    const studentsGroupField = document.getElementById('course_students_group');
     const namespaceSelect = document.getElementById('namespace_id');
     const namespaceError = document.getElementById('namespace-error');
     const form = document.querySelector('.needs-validation');
@@ -118,28 +112,45 @@ document.addEventListener('DOMContentLoaded', function () {
     let studentsGroupChanged = false;
     let namespacesLoaded = false;
     let namespacesData = [];
+    
+    // Determine RMS type from template
+    const isSourceCraft = {{ 'true' if rms == 'sourcecraft' else 'false' }};
 
     function validatePrefix(field, feedbackId) {
-
         const groupName = gitlabGroupField.value;
-        const namespacePath = getSelectedNamespacePath();
         
-        let validPrefix = "";
-        if (namespacePath) {
-            validPrefix = validPrefix + namespacePath + '/';
-        }
-        if (groupName) {
-            validPrefix = validPrefix + groupName + '/';
-        }
-        
-        if (validPrefix === '' || field.value.startsWith(validPrefix)) {
-            field.classList.remove('is-invalid');
-            field.classList.add('is-valid');
-            document.getElementById(feedbackId).style.display = 'none';
+        if (isSourceCraft) {
+            // SourceCraft: validate against course prefix only
+            if (groupName === '' || field.value.startsWith(groupName)) {
+                field.classList.remove('is-invalid');
+                field.classList.add('is-valid');
+                document.getElementById(feedbackId).style.display = 'none';
+            } else {
+                field.classList.remove('is-valid');
+                field.classList.add('is-invalid');
+                document.getElementById(feedbackId).style.display = 'block';
+            }
         } else {
-            field.classList.remove('is-valid');
-            field.classList.add('is-invalid');
-            document.getElementById(feedbackId).style.display = 'block';
+            // GitLab: validate against namespace path + course group
+            const namespacePath = getSelectedNamespacePath();
+            
+            let validPrefix = "";
+            if (namespacePath) {
+                validPrefix = validPrefix + namespacePath + '/';
+            }
+            if (groupName) {
+                validPrefix = validPrefix + groupName + '/';
+            }
+            
+            if (validPrefix === '' || field.value.startsWith(validPrefix)) {
+                field.classList.remove('is-invalid');
+                field.classList.add('is-valid');
+                document.getElementById(feedbackId).style.display = 'none';
+            } else {
+                field.classList.remove('is-valid');
+                field.classList.add('is-invalid');
+                document.getElementById(feedbackId).style.display = 'block';
+            }
         }
     }
 
@@ -175,31 +186,45 @@ document.addEventListener('DOMContentLoaded', function () {
     
     function updateGitLabFields() {
         const groupName = gitlabGroupField.value;
-        const namespacePath = getSelectedNamespacePath();
-        const isNoNamespace = namespaceSelect.value === '0';
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth();
         const semester = month >= 0 && month <= 5 ? 'spring' : 'fall';
         
-        // Determine the full group path
-        let fullGroupPath = groupName;
-        if (isNoNamespace) {
-            fullGroupPath = groupName;
-        } else if (namespacePath && groupName && !groupName.includes('/')) {
-            // If group name doesn't contain '/', prepend namespace path
-            fullGroupPath = `${namespacePath}/${groupName}`;
-        } else if (!groupName && namespacePath) {
-            // If only namespace is selected, use it as base
-            fullGroupPath = namespacePath;
-        }
+        if (isSourceCraft) {
+            // SourceCraft: short naming with 2-digit year and semester letter
+            const shortYear = String(year).slice(-2);
+            const semLetter = semester[0];
+            if (!publicRepoChanged && groupName) {
+                publicRepoField.value = `${groupName}-public-${shortYear}${semLetter}`;
+            }
+            if (!studentsGroupChanged && groupName) {
+                studentsGroupField.value = `${groupName}-st-${shortYear}${semLetter}`;
+            }
+        } else {
+            // GitLab: namespace path + course group naming
+            const namespacePath = getSelectedNamespacePath();
+            const isNoNamespace = namespaceSelect.value === '0';
+            
+            // Determine the full group path
+            let fullGroupPath = groupName;
+            if (isNoNamespace) {
+                fullGroupPath = groupName;
+            } else if (namespacePath && groupName && !groupName.includes('/')) {
+                // If group name doesn't contain '/', prepend namespace path
+                fullGroupPath = `${namespacePath}/${groupName}`;
+            } else if (!groupName && namespacePath) {
+                // If only namespace is selected, use it as base
+                fullGroupPath = namespacePath;
+            }
 
-        if (!publicRepoChanged && fullGroupPath) {
-            publicRepoField.value = `${fullGroupPath}/public-${year}-${semester}`;
-        }
+            if (!publicRepoChanged && fullGroupPath) {
+                publicRepoField.value = `${fullGroupPath}/public-${year}-${semester}`;
+            }
 
-        if (!studentsGroupChanged && fullGroupPath) {
-            studentsGroupField.value = `${fullGroupPath}/students-${year}-${semester}`;
+            if (!studentsGroupChanged && fullGroupPath) {
+                studentsGroupField.value = `${fullGroupPath}/students-${year}-${semester}`;
+            }
         }
     }
 
