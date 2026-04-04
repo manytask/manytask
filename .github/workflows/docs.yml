@@ -1,6 +1,5 @@
 # Simple workflow for deploying static content to GitHub Pages
-name: Build landing and docs and deploy to Pages
-
+name: Build docs and landing page
 on:
   # Runs on pushes targeting the default branch
   push:
