@@ -32,7 +32,7 @@ testing: ...                # required
 | [`testing`](#testing) | object | yes | Settings for the `checker grade` command — pipelines, plugins, change detection. |
 
 
-### `version`
+## `version`
 
 ```yaml
 version: 1
@@ -41,7 +41,7 @@ version: 1
 The only currently supported value is `1`. The checker will raise a validation error for any other value.
 
 
-### `default_parameters`
+## `default_parameters`
 
 A flat key/value map of parameters available in all pipeline stage templates as `${{ parameters.<key> }}`.  
 Values can be `bool`, `int`, `float`, `str`, a list of scalars, or `null`. Example:
@@ -57,7 +57,7 @@ default_parameters:
 These defaults can be overridden per-task or per-group in `.task.yml` / `.group.yml` files, more parameters can be added for task group or individual tasks (see [sub-configs](#taskymltaskgroupyml-sub-configs)).
 
 
-### `structure`
+## `structure`
 
 This section controls which files are copied, hidden, or ignored when exporting to the public student repository and when preparing the testing workspace.
 
@@ -79,7 +79,7 @@ structure:
 Pattern precedence: `ignore_patterns` > `private_patterns` > `public_patterns`
 
 
-### `export` section
+## `export` section
 
 Settings used by the `checker export` command to publish tasks to the public student repository. Example%
 
@@ -98,7 +98,7 @@ export:
 | `commit_message` | `str` | no  | `"chore(auto): export new tasks"` | Commit message used when pushing exported tasks. |
 | `templates` | `str` | no  | `"search"` | Template strategy for generating student-facing task files. One of `search`, `create`, `search_or_create`. |
 
-#### `templates` strategies
+### `templates` strategies
 
 | Value | Description |
 |---|---|
@@ -124,7 +124,7 @@ def add(a, b):
 ```
 
 
-### `testing` section
+## `testing` section
 
 This section controlls how the checker runs tests, the general structure is:
 
@@ -151,7 +151,7 @@ testing:
 | `tasks_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**. Can be overridden in `.task.yml`. |
 | `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task** only if `tasks_pipeline` succeeded. Can be overridden in `.task.yml`. |
 
-#### `changes_detection`
+### `changes_detection`
 
 Determines which tasks are selected for grading when running `checker grade`.
 
@@ -162,7 +162,7 @@ Determines which tasks are selected for grading when running `checker grade`.
 | `last_commit_changes` | Selects all tasks that have files changed in the last commit. *(default)* |
 | `files_changed` | *(Not yet implemented)* Compares current state against the previous commit. |
 
-#### `search_plugins`
+### `search_plugins`
 
 List of directory paths (relative to the repository root) where the checker will look for custom plugin Python files.
 
@@ -175,7 +175,7 @@ testing:
 
 Each `.py` file in those directories is imported and any class inheriting from `PluginABC` with a `name` attribute is registered automatically.
 
-#### Pipeline stages
+### Pipeline stages
 
 Each entry in `global_pipeline`, `tasks_pipeline`, or `report_pipeline` is a **pipeline stage** — a single plugin invocation.
 
@@ -200,7 +200,7 @@ Each entry in `global_pipeline`, `tasks_pipeline`, or `report_pipeline` is a **p
 | `run_if` | `bool` or template | no | `null` (always run) | Condition evaluated before running. Stage is skipped when false. Supports [templating](#templating). |
 | `register_output` | `str` | no | `null` | If set, stores the stage result in `outputs.<key>` for use by later stages. Here `<key>` is the value this field is set to. |
 
-##### `fail` values
+#### `fail` values
 
 | Value | Behaviour |
 |---|---|
