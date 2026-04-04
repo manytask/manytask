@@ -14,7 +14,7 @@ from enum import Enum
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
-from manytask.abstract import RmsApiException, StorageApi
+from manytask.abstract import RmsApiException, StorageApi, StoredUser
 from manytask.database import TaskDisabledError
 
 from .abstract import RmsApi, RmsUser
@@ -54,6 +54,13 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
         logger.warning("Course not found: %s", course_name)
         abort(HTTPStatus.NOT_FOUND, "Course not found")
     return course
+
+
+def _get_stored_user_or_not_found(storage_api: StorageApi, rms_id: str) -> StoredUser:
+    stored_user = storage_api.get_stored_user_by_rms_id(rms_id)
+    if stored_user is None:
+        abort(HTTPStatus.NOT_FOUND, f"There is no registered user with rms_id={rms_id}")
+    return stored_user
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -128,7 +135,7 @@ def requires_namespace_admin(
                     ErrorResponse(error="Internal server error").model_dump()
                 ), HTTPStatus.INTERNAL_SERVER_ERROR
 
-            username = session["gitlab"]["username"]
+            username = session["manytask"]["username"]
             is_instance_admin = storage_api.check_if_instance_admin(username)
 
             if not is_instance_admin:
@@ -276,20 +283,19 @@ def _validate_and_extract_params(
     if "user_id" in form_data and "username" in form_data:
         abort(HTTPStatus.BAD_REQUEST, "Both `user_id` or `username` were provided, use only one")
     elif "user_id" in form_data:
+        user_id = form_data["user_id"]
         try:
-            user_id = int(form_data["user_id"])
             rms_user = rms_api.get_rms_user_by_id(user_id)
-            logger.info("Found user by id=%s: %s", user_id, rms_user.username)
-        except ValueError:
-            abort(HTTPStatus.BAD_REQUEST, f"User ID is {form_data['user_id']}, but it must be an integer")
+            logger.info("Found RMS user by id=%s: %s", sanitize_log_data(user_id), rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no student with user ID {user_id}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id {user_id}")
     elif "username" in form_data:
+        username = form_data["username"]
         try:
-            username = form_data["username"]
             rms_user = rms_api.get_rms_user_by_username(username)
+            logger.info("Found RMS user by username=%s: %s", sanitize_log_data(username), rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no student with username {username}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username {username}")
     else:
         abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
 
@@ -380,8 +386,11 @@ def report_score(course_name: str) -> ResponseReturnValue:
 
     # Log with sanitized values
     logger.info("Use submit_time: %s", submit_time)
+    stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
+    manytask_username = stored_user.username
+
     logger.info(
-        f"user={rms_user.username} (id={rms_user.id}), task={task.name}, "
+        f"user={manytask_username} (rms_id={rms_user.id}), task={task.name}, "
         f"reported_score={reported_score}, submit_time={submit_time}, check_deadline={check_deadline}"
     )
 
@@ -395,15 +404,15 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
         allow_reduction=allow_reduction,
     )
-    final_score = app.storage_api.store_score(course.course_name, rms_user.username, task.name, update_function)
+    final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
 
-    logger.info("Stored final_score=%s for user=%s, task=%s", final_score, rms_user.username, task.name)
+    logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
 
     # Recalculate and save student's final grade after score update
     try:
         # Get all student scores to recalculate grade
-        student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
-        bonus_score = app.storage_api.get_bonus_score(course.course_name, rms_user.username)
+        student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
+        bonus_score = app.storage_api.get_bonus_score(course.course_name, manytask_username)
         max_score = app.storage_api.max_score_started(course.course_name)
 
         total_score = sum(student_scores.values()) + bonus_score
@@ -419,22 +428,22 @@ def report_score(course_name: str) -> ResponseReturnValue:
                         large_count += 1
 
         student_data = {
-            "username": rms_user.username,
+            "username": manytask_username,
             "scores": student_scores,
             "total_score": total_score,
             "percent": percent,
             "large_count": large_count,
         }
 
-        app.storage_api.calculate_and_save_grade(course.course_name, rms_user.username, student_data)
-        logger.info("Recalculated and saved grade for user=%s after score update", rms_user.username)
+        app.storage_api.calculate_and_save_grade(course.course_name, manytask_username, student_data)
+        logger.info("Recalculated and saved grade for user=%s after score update", manytask_username)
     except Exception as e:
-        logger.error("Failed to recalculate grade for user=%s: %s", rms_user.username, str(e))
+        logger.error("Failed to recalculate grade for user=%s: %s", manytask_username, str(e))
         # Don't fail the request if grade calculation fails
 
     return {
         "user_id": rms_user.id,
-        "username": rms_user.username,
+        "username": manytask_username,
         "task": task.name,
         "score": final_score,
         "commit_time": submit_time.isoformat(sep=" ") if submit_time else "None",
@@ -453,17 +462,19 @@ def get_score(course_name: str) -> ResponseReturnValue:
         request.form, app.rms_api, app.storage_api, course.course_name
     )
 
-    student_scores = app.storage_api.get_scores(course.course_name, rms_user.username)
+    stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
+    manytask_username = stored_user.username
+    student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
 
     try:
         student_task_score = student_scores[task.name]
-        logger.info("user=%s, task=%s, score=%s", rms_user.username, task.name, student_task_score)
+        logger.info("user=%s, task=%s, score=%s", manytask_username, task.name, student_task_score)
     except Exception:
-        return f"Cannot get score for task {task.name} for {rms_user.username}", HTTPStatus.NOT_FOUND
+        return f"Cannot get score for task {task.name} for {manytask_username}", HTTPStatus.NOT_FOUND
 
     return {
         "user_id": rms_user.id,
-        "username": rms_user.username,
+        "username": manytask_username,
         "task": task.name,
         "score": student_task_score,
     }, HTTPStatus.OK
@@ -492,6 +503,12 @@ def update_config(course_name: str) -> ResponseReturnValue:
         logger.exception("Error while updating config for course=%s", course_name, exc_info=True)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
+    # Recalculate grades for all students using the new config
+    try:
+        app.storage_api.recalculate_all_grades(course_name)
+    except Exception:
+        logger.exception("Failed to recalculate grades after config update for course=%s", course_name)
+
     return "", HTTPStatus.OK
 
 
@@ -519,8 +536,8 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     course = __get_course_or_not_found(storage_api, course_name)
 
     if auth_method == AuthMethod.SESSION:
-        rms_user = app.rms_api.get_rms_user_by_id(session["gitlab"]["user_id"])
-        is_course_admin = storage_api.check_if_course_admin(course.course_name, rms_user.username)
+        username = session["manytask"]["username"]
+        is_course_admin = storage_api.check_if_course_admin(course.course_name, username)
     else:
         is_course_admin = True
 
@@ -542,8 +559,8 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     storage_api = app.storage_api
 
     if auth_method == AuthMethod.SESSION:
-        username = session["profile"]["username"]
-        logger.info("Request by admin=%s for course=%s", username, course_name)
+        username = session["manytask"]["username"]
+        logger.info("Request by user=%s for course=%s", username, course_name)
         student_course_admin = storage_api.check_if_course_admin(course_name, username)
 
         if not student_course_admin:
@@ -563,16 +580,16 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     new_scores = payload.new_scores
     row_data = payload.row_data
 
-    username = row_data.username
+    student_username = row_data.username
     total_score = row_data.total_score
-    logger.info("Updating scores for user=%s: %s", sanitize_log_data(username), new_scores)
+    logger.info("Updating scores for user=%s: %s", sanitize_log_data(student_username), new_scores)
 
     try:
         for task_name, new_score in new_scores.items():
             if isinstance(new_score, (int, float)):
                 new_score = storage_api.store_score(
                     course.course_name,
-                    username=username,
+                    username=student_username,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                 )
@@ -591,16 +608,16 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
 
         # Calculate and save grade (applies DORESHKA logic if needed)
         # This updates final_grade but does NOT touch final_grade_override
-        storage_api.calculate_and_save_grade(course.course_name, username, row_data.model_dump())
+        storage_api.calculate_and_save_grade(course.course_name, student_username, row_data.model_dump())
 
         # Get effective grade (override if exists, otherwise final_grade)
-        effective_grade = storage_api.get_effective_grade(course.course_name, username)
+        effective_grade = storage_api.get_effective_grade(course.course_name, student_username)
         row_data.grade = effective_grade
 
         # Add override indicator for frontend
-        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, username)
+        row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, student_username)
 
-        logger.info("Successfully updated scores for user=%s", sanitize_log_data(username))
+        logger.info("Successfully updated scores for user=%s", sanitize_log_data(student_username))
         return jsonify(
             {
                 "success": True,
@@ -624,7 +641,7 @@ def update_comment(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username_ = session["profile"]["username"]
+    profile_username_ = session["manytask"]["username"]
     logger.info("Comment update request by user=%s for course=%s", profile_username_, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username_)
@@ -687,7 +704,7 @@ def create_namespace() -> ResponseReturnValue:
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     if not storage_api.check_if_instance_admin(username):
         return jsonify(
             ErrorResponse(error="Only Instance Admin can create namespaces").model_dump()
@@ -705,13 +722,13 @@ def create_namespace() -> ResponseReturnValue:
     gitlab_group_id = None
 
     try:
+        rms_id = session["rms"]["rms_id"]
         logger.info("Creating GitLab group for namespace name=%s slug=%s", name, slug)
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
         logger.info("GitLab group created with id=%s", gitlab_group_id)
 
-        creator_rms_id = session["gitlab"]["user_id"]
-        rms_api.add_user_to_namespace_group(gitlab_group_id, creator_rms_id)
-        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", creator_rms_id, gitlab_group_id)
+        rms_api.add_user_to_namespace_group(gitlab_group_id, rms_id)
+        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", rms_id, gitlab_group_id)
 
         namespace = storage_api.create_namespace(
             name=name,
@@ -777,7 +794,7 @@ def get_namespaces() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     is_instance_admin = storage_api.check_if_instance_admin(username)
 
     try:
@@ -841,7 +858,7 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
 
     try:
         namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
@@ -909,14 +926,20 @@ def add_user_to_namespace(
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
 
     user_id = validated_data.user_id
     role = validated_data.role
 
     try:
         try:
-            rms_user = rms_api.get_rms_user_by_id(user_id)
+            stored_user = storage_api.get_stored_user_by_rms_id(str(user_id))
+            if stored_user is None:
+                logger.error("User with id=%s not found in database", user_id)
+                return jsonify(
+                    ErrorResponse(error=f"User with id={user_id} not found").model_dump()
+                ), HTTPStatus.NOT_FOUND
+            rms_user = rms_api.get_rms_user_by_id(stored_user.rms_id)
         except Exception as e:
             logger.error("User with id=%s not found in RMS: %s", user_id, str(e))
             return jsonify(ErrorResponse(error=f"User with id={user_id} not found").model_dump()), HTTPStatus.NOT_FOUND
@@ -926,7 +949,7 @@ def add_user_to_namespace(
         try:
             user_on_namespace = storage_api.add_user_to_namespace(
                 namespace_id=namespace_id,
-                user_id=user_id,
+                username=stored_user.username,
                 role=role,
                 assigned_by_username=username,
             )
@@ -948,11 +971,11 @@ def add_user_to_namespace(
 
         # Добавляем в GitLab группу только после успешного добавления в БД
         try:
-            rms_api.add_user_to_namespace_group(namespace.gitlab_group_id, user_id)
-            logger.info("Added user id=%s to GitLab group id=%s", user_id, namespace.gitlab_group_id)
+            rms_api.add_user_to_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_user.id)
+            logger.info("Added RMS user id=%s to GitLab group id=%s", rms_user.id, namespace.gitlab_group_id)
         except Exception as e:
             # TODO: откатить добавление в локальную БД
-            logger.error("Failed to add user id=%s to GitLab group: %s", user_id, str(e))
+            logger.error("Failed to add RMS user id=%s to GitLab group: %s", rms_user.id, str(e))
             return jsonify(
                 ErrorResponse(error="Failed to add user to GitLab group").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1004,7 +1027,7 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
 
     try:
         users_list = storage_api.get_namespace_users(namespace_id)
@@ -1046,16 +1069,16 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
 
     try:
         try:
-            role, rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
+            role, removed_rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
             logger.info(
                 "User %s removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
                 username,
                 user_id,
-                rms_id,
+                removed_rms_id,
                 role,
                 namespace_id,
             )
@@ -1064,17 +1087,17 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
             return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
 
         try:
-            rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, rms_id)
+            rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=removed_rms_id)
             logger.info(
                 "User %s removed user rms_id=%s from GitLab group id=%s",
                 username,
-                rms_id,
+                removed_rms_id,
                 namespace.gitlab_group_id,
             )
         except Exception as e:
             logger.error(
                 "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
-                rms_id,
+                removed_rms_id,
                 namespace.gitlab_group_id,
                 str(e),
             )
@@ -1131,13 +1154,13 @@ def update_user_role_in_namespace(
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     new_role = validated_data.role
 
     try:
         # First, get the user's rms_id before making any changes
         try:
-            stored_user = storage_api.get_stored_user_by_id(user_id)
+            stored_user = storage_api.get_stored_user_by_db_id(user_id)
             if stored_user is None:
                 return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
             rms_id = stored_user.rms_id
@@ -1149,7 +1172,7 @@ def update_user_role_in_namespace(
         # If GitLab fails, we don't want to change the database
         if new_role == "student":
             try:
-                rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, rms_id)
+                rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_id)
                 logger.info(
                     "User %s removed user rms_id=%s from GitLab group id=%s (role change to student)",
                     username,
@@ -1238,7 +1261,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     storage_api = app.storage_api
     rms_api = app.rms_api
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     namespace_id = validated_data.namespace_id
     course_name = validated_data.course_name
     course_slug = validated_data.slug
@@ -1476,7 +1499,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     except Exception as e:
         logger.error(
             "Unexpected error creating course by user=%s: %s",
-            username,
+            sanitize_log_data(username),
             str(e),
             exc_info=True,
         )
@@ -1503,7 +1526,7 @@ def override_grade(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username = session["profile"]["username"]
+    profile_username = session["manytask"]["username"]
     logger.info("Grade override request by admin=%s for course=%s", profile_username, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
@@ -1530,6 +1553,14 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         except (TypeError, ValueError):
             return jsonify({"success": False, "message": "Grade must be an integer"}), HTTPStatus.BAD_REQUEST
 
+        try:
+            storage_api.get_stored_user_by_username(username)
+        except NoResultFound:
+            logger.error("User with username=%s not found in database", sanitize_log_data(username))
+            return jsonify(
+                ErrorResponse(error=f"User with username={username} not found").model_dump()
+            ), HTTPStatus.NOT_FOUND
+
         storage_api.override_grade(course.course_name, username, new_grade)
 
         logger.info("Successfully set grade override for user=%s to %d", sanitize_log_data(username), new_grade)
@@ -1552,7 +1583,7 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
 
     storage_api = app.storage_api
 
-    profile_username = session["profile"]["username"]
+    profile_username = session["manytask"]["username"]
     logger.info("Clear grade override request by admin=%s for course=%s", profile_username, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
@@ -1571,6 +1602,14 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
 
         if not username:
             return jsonify({"success": False, "message": "Username is required"}), HTTPStatus.BAD_REQUEST
+
+        try:
+            storage_api.get_stored_user_by_username(username)
+        except NoResultFound:
+            logger.error("User with username=%s not found in database", sanitize_log_data(username))
+            return jsonify(
+                ErrorResponse(error=f"User with username={username} not found").model_dump()
+            ), HTTPStatus.NOT_FOUND
 
         storage_api.clear_grade_override(course.course_name, username)
 

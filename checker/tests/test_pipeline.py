@@ -10,6 +10,9 @@ from checker.pipeline import PipelineRunner
 from checker.plugins import PluginABC
 from checker.plugins.base import PluginOutput
 
+# Test constants
+TEST_SCORE = 0.2
+
 
 class _FailPlugin(PluginABC):
     name = "fail"
@@ -105,9 +108,9 @@ class TestSampleFixtures:
         assert result.output == "Hello"
 
         plugin = sample_plugins["score"]()
-        plugin.validate({"score": 0.2})
-        result = plugin.run({"score": 0.2})
-        assert result.percentage == 0.2
+        plugin.validate({"score": TEST_SCORE})
+        result = plugin.run({"score": TEST_SCORE})
+        assert result.percentage == TEST_SCORE
         assert result.output == "Score: 0.20"
 
         plugin = sample_plugins["fail"]()
