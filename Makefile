@@ -4,13 +4,16 @@ CHECKER_DIR := checker/checker
 CHECKER_TESTS_DIR := checker/tests
 DOCKER_COMPOSE_DEV := docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
+DOCS_DIR := docs
+DOCS_BUILD_DIR := build
+DOCS_HTML_DIR := html
 
 # testcontainers may fail on some macOS Docker setups due to Ryuk connectivity issues.
 # Allow overriding: `make test TESTCONTAINERS_RYUK_DISABLED=false`
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: dev test reset-dev clean-db lint lint-fix setup install-deps check format install-hooks run-hooks makemigrations migrate downgrade history
+.PHONY: dev test reset-dev clean-db lint lint-fix setup install-deps check format install-hooks run-hooks makemigrations migrate downgrade history docs
 
 check: format lint test
 
@@ -94,3 +97,8 @@ history:
 	uv run alembic -c $(ALEMBIC_CONFIG_PATH) history
 	@echo ""
 	uv run alembic -c $(ALEMBIC_CONFIG_PATH) current || { echo "\033[33mWarning: Make sure that the database is running.\033[0m"; exit 1; }
+
+docs:
+	@command -v npm >/dev/null 2>&1 || sudo apt install -y npm
+	@command -v yfm >/dev/null 2>&1 || sudo npm i @diplodoc/cli -g
+	yfm -i $(DOCS_DIR) -o $(DOCS_HTML_DIR) --allow-custom-resources
