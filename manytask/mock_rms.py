@@ -139,6 +139,14 @@ class MockRmsApi(RmsApi):
         project_path = f"{project_group}/{project_name}"
         return project_path in self.projects
 
+    def check_user_has_repo_access(
+        self,
+        rms_user_id: str,
+        project_name: str,
+        project_group: str,
+    ) -> bool:
+        return True
+
     def create_project(
         self,
         rms_user: RmsUser,
@@ -172,6 +180,13 @@ class MockRmsApi(RmsApi):
     ) -> str:
         return f"{self.base_url}/{course_students_group}/{username}"
 
+    def get_url_for_piplines(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str:
+        return f"{self.get_url_for_repo(username, course_students_group)}/pipelines"
+
     def get_rms_user_by_id(
         self,
         user_id: str,
@@ -196,13 +211,6 @@ class MockRmsApi(RmsApi):
     ) -> bool:
         # Mock implementation always returns True
         return True
-
-    def get_authenticated_rms_user(
-        self,
-        oauth_access_token: str,
-    ) -> RmsUser:
-        # For testing, return last registered user
-        return self.users[self.last_user]
 
     def create_course_group(
         self,

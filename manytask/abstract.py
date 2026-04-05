@@ -355,6 +355,14 @@ class RmsApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
+    def check_user_has_repo_access(
+        self,
+        rms_user_id: str,
+        project_name: str,
+        project_group: str,
+    ) -> bool: ...
+
+    @abstractmethod
     def create_project(
         self,
         rms_user: RmsUser,
@@ -373,6 +381,13 @@ class RmsApi(ABC):
     ) -> str: ...
 
     @abstractmethod
+    def get_url_for_piplines(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str: ...
+
+    @abstractmethod
     def get_rms_user_by_id(
         self,
         user_id: str,
@@ -382,12 +397,6 @@ class RmsApi(ABC):
     def get_rms_user_by_username(
         self,
         username: str,
-    ) -> RmsUser: ...
-
-    @abstractmethod
-    def get_authenticated_rms_user(
-        self,
-        oauth_access_token: str,
     ) -> RmsUser: ...
 
     @abstractmethod
