@@ -56,6 +56,8 @@ items:
         href: dev.md
   - name: References
     items:
+      - name: .manytask.yml reference
+        href: manytask_yml.md
       - name: .checker.yml file
         href: checker_yml_reference.md
       - name: REST API
