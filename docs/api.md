@@ -2,8 +2,7 @@
 
 ## Checker script 
 
-There is already implemented python lib [manytask/checker](https://github.com/manytask/checker) for testing students' solutions with manytask integration. The basic idea: `checker` is a script running in a gitlab-ci that performs students' solutions testing and call `manytask` api to set scores achieved;
-More info in the [manytask/checker repo](https://github.com/manytask/checker);
+Please refer to Manytask plugin if you are using Checker (look for `plugins/manytask.py` in Checker folder).
 
 ## Custom script 
 
