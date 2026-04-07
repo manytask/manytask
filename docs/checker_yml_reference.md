@@ -145,7 +145,7 @@ testing:
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `changes_detection` | `str` | ➖ | `last_commit_changes` | Strategy for detecting which tasks changed. The full list of options are `branch_name`, `commit_message`, `tasks_pipeline`, `report_pipeline`. See details [below](#changes_detection). |
+| `changes_detection` | `str` | ➖ | `last_commit_changes` | Strategy for detecting which tasks changed. The full list of options are `branch_name`, `commit_message`, `last_commit_changes`, `files_changed`. See details [below](#changes_detection). |
 | `search_plugins` | `list[str]` | ➖ | `[]` | Paths (relative to repo root) to search for custom plugin Python files. |
 | `global_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once** per checker run, before any task pipeline. |
 | `tasks_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**. Can be overridden in `.task.yml`. |
@@ -224,7 +224,7 @@ args:
 
 ### Available template variables
 
-#### `global` — [`GlobalPipelineVariables`](../checker/pipeline.py)
+#### `global` — [`GlobalPipelineVariables`](../checker/checker/pipeline.py)
 
 Available in all three pipeline types.
 
@@ -236,7 +236,7 @@ Available in all three pipeline types.
 | `global.task_names` | `list[str]` | Names of all tasks being tested in this run. |
 | `global.task_sub_paths` | `list[str]` | Relative paths of all tasks being tested in this run. |
 
-#### `task` — [`TaskPipelineVariables`](../checker/pipeline.py)
+#### `task` — [`TaskPipelineVariables`](../checker/checker/pipeline.py)
 
 Available only in `tasks_pipeline` and `report_pipeline` (not in `global_pipeline`).
 
@@ -296,7 +296,7 @@ Example:
 
 ## `.task.yml` / `.group.yml` sub-configs
 
-Yon need to place a `.task.yml` (or `.group.yml`) file inside any task or group folder to indicate that this folder contains task (or group of tasks). These files can also be used to override parts of the root `.checker.yml` for this scope, or to add or redefine parameters.
+You need to place a `.task.yml` (or `.group.yml`) file inside any task or group folder to indicate that this folder contains task (or group of tasks). These files can also be used to override parts of the root `.checker.yml` for this scope, or to add or redefine parameters.
 
 Example:
 
@@ -334,7 +334,7 @@ report_pipeline:     # optional — replaces testing.report_pipeline for this ta
 | `task_pipeline` | `list[stage]` | Replaces `testing.tasks_pipeline` for this task. Note "task", not "tasks".|
 | `report_pipeline` | `list[stage]` | Replaces `testing.report_pipeline` for this task. |
 
-If the pipeline is defined for the smalles scope, this definition overrides lagred scope. The priority is then:
+If the pipeline is defined for the smaller scope, this definition overrides larger scope. The priority is then:
 
 1. `.task.yml` in the task folder
 2. `.group.yml` in the parent group folder
