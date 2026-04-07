@@ -11,7 +11,7 @@ Please refer to the [plugins configuration](./3_plugins.md) for more details on 
 There are 3 types of pipelines you need to define in `.checker.yml` file:
 * `global_pipeline` - pipeline to be executed once for all checker repository.  
     You can place here any general compilation, installation, etc.  
-* `task_pipeline` - pipeline to be executed for each task.  
+* `tasks_pipeline` - pipeline to be executed for each task.  
     You can place here any task-specific compilation, installation, etc.  
     For example, you run `pytest` by default, but for some tasks you want to have MR checked first.  
     (can be re-defined in `.task.yml` file)
@@ -19,5 +19,3 @@ There are 3 types of pipelines you need to define in `.checker.yml` file:
     You can place here any task-specific score reporting, etc.  
     For example, you can report the score to the Manytask platform, but for some tasks you want to have MR checked first.  
     (can be re-defined in `.task.yml` file)
-
-`
