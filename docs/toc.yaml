@@ -58,5 +58,7 @@ items:
     items:
       - name: .checker.yml file
         href: checker_yml_reference.md
+      - name: Checker built-in plugins
+        href: checker_plugins.md
       - name: REST API
         href: api.md
