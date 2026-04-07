@@ -56,11 +56,8 @@ items:
         href: dev.md
   - name: References
     items:
-<<<<<<< HEAD
       - name: .manytask.yml reference
         href: manytask_yml.md
-=======
->>>>>>> 7ab76e5f46527f89474a36e1fdac70e812e8935b
       - name: .checker.yml file
         href: checker_yml_reference.md
       - name: Checker built-in plugins
