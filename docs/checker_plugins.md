@@ -44,7 +44,7 @@ Fail if any of the given regular expressions are found in the matched files. Use
 
 ## `run_script`
 
-Execute an arbitrary shell command or script list. By far the most flexible plugin: cat be used to compile students code, run linter and typechecker, etc. In an example below, a bash script is executed from the tests folder.
+Execute an arbitrary shell command or script list. By far the most flexible plugin: can be used to compile students code, run linter and typechecker, etc. In an example below, a bash script is executed from the tests folder.
 
 ```yaml
 - name: "Install dependencies"
