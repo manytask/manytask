@@ -119,7 +119,7 @@ Combine multiple score percentages into a single value using a weighted strategy
 
 ## `report_score_manytask`
 
-Send the final score to the Manytask platform via its [REST API](./api.md). Used in `report_pipeline` to send the resulting score to the Manytask. The plugin wiil retry 3 times on HTTP errors `408`, `500`, `502`, `503`, `504` with exponentially increasing waiting times (1, 2 and 4 seconds).
+Send the final score to the Manytask platform via its [REST API](./api.md). Used in `report_pipeline` to send the resulting score to the Manytask. The plugin will retry 3 times on HTTP errors `408`, `500`, `502`, `503`, `504` with exponentially increasing waiting times (1, 2 and 4 seconds).
 
 ```yaml
 - name: "Report score"
@@ -137,7 +137,7 @@ Send the final score to the Manytask platform via its [REST API](./api.md). Used
 |---|---|---|---|---|
 | `username` | `str` | yes | — | Student's username in RMS. |
 | `task_name` | `str` | yes | — | Task identifier as registered in `.manytask.yml`. |
-| `score` | `float \| int \| null` | yes | — | Score to report, in `[0.0, 1.0]` (bonus scores may exceed `1.0` but float larger than `2.0` will ). |
+| `score` | `float \| int \| null` | yes | — | Score to report, in `[0.0, 1.0]` (bonus scores may exceed `1.0` but float larger than `2.0` will not be accepted). |
 | `report_url` | `AnyUrl` | yes | — | Base URL of the Manytask instance. |
 | `report_token` | `str` | yes | — | Authentication token for the Manytask API. |
 | `check_deadline` | `bool` | yes | — | Whether Manytask should apply deadline penalties server-side. |
