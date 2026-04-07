@@ -5,7 +5,6 @@ CHECKER_TESTS_DIR := checker/tests
 DOCKER_COMPOSE_DEV := docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 DOCS_DIR := docs
-DOCS_BUILD_DIR := build
 DOCS_HTML_DIR := html
 
 # testcontainers may fail on some macOS Docker setups due to Ryuk connectivity issues.
