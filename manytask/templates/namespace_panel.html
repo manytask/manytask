@@ -50,6 +50,7 @@
                     <table class="table table-striped table-hover">
                         <thead>
                             <tr>
+                                <th>#</th>
                                 <th>User ID</th>
                                 <th>Username</th>
                                 <th>RMS ID (GitLab)</th>
@@ -60,6 +61,7 @@
                         <tbody id="usersTableBody">
                             {% for user in users %}
                                 <tr data-user-id="{{ user.id }}" data-username="{{ user.username }}" data-current-role="{{ user.role }}">
+                                    <td>{{ loop.counter }}</td>
                                     <td>{{ user.id }}</td>
                                     <td><strong>{{ user.username }}</strong></td>
                                     <td>{{ user.rms_id }}</td>
