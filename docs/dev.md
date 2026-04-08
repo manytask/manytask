@@ -8,6 +8,65 @@ Before starting development, ensure you have the necessary access:
 
 - A computer with **Docker** installed.
 - A GitLab server with **Admin access**. If you need access to [https://gitlab.manytask2.org/](https://gitlab.manytask2.org/), you can request these from **[@artemzhmurov](https://t.me/artemzhmurov)**.
+**Alternative for Quick Development**: You can use **Mock RMS mode** (see section below) which doesn't require a GitLab server at all.
+
+## Option A: Using Mock RMS (Recommended for Quick Start)
+
+This is the easiest way to get started with development without needing a GitLab server.
+
+### Step 1 - Prepare the .env file
+
+Copy `.env.example` to `.env` and set the following minimal configuration:
+
+```bash
+# Flask token
+FLASK_SECRET_KEY=FlaskSecretToken
+
+# Use mock RMS (no GitLab needed)
+RMS=mock
+
+# Mock mode requires dummy values for these (not actually used)
+GITLAB_URL=http://localhost
+GITLAB_CLIENT_ID=dummy
+GITLAB_CLIENT_SECRET=dummy
+
+# Database configuration
+APPLY_MIGRATIONS=true
+INITIAL_INSTANCE_ADMIN=admin
+POSTGRES_USER=manytaskadmin
+POSTGRES_PASSWORD=localdevdbpass
+POSTGRES_DB=manytask
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+DATABASE_URL_EXTERNAL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
+```
+
+### Step 2 - Start the Application
+
+```bash
+docker-compose -f docker-compose.development.yml up --build -d
+```
+
+Or use the shortcut: `make dev`
+
+### Step 3 - Login with Mock Users
+
+When `RMS=mock`, two users are automatically created:
+
+| Username | Password | RMS ID | Description |
+|----------|----------|--------|-------------|
+| `admin`  | `admin`  | 1      | Admin user with full access |
+| `user`   | `user`   | 2      | Regular user for testing |
+
+You can login with either of these credentials at [http://localhost:8081/](http://localhost:8081/).
+
+**Note**: Mock mode simulates GitLab functionality without requiring an actual GitLab server. This is perfect for:
+- Quick local development
+- Testing features without GitLab setup
+- CI/CD testing environments
+- Learning how Manytask works
+
+## Option B: Using Real GitLab
+
 
 ### 1. Setting up and running the Manytask application
 

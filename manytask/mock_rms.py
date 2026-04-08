@@ -31,6 +31,23 @@ class MockRmsApi(RmsApi):
         self.namespace_groups: Dict[str, int] = {}  # path -> group_id
         self.last_user: str = "-1"
         self.last_group_id: int = 0
+        
+        # Register default mock users
+        self._register_default_users()
+    
+    def _register_default_users(self) -> None:
+        """Register default mock users for development/testing."""
+        # Admin user
+        admin_user = RmsUser(id=1, username="admin", name="Admin User")
+        self.users[1] = admin_user
+        self.users_by_username["admin"] = admin_user
+        
+        # Regular user
+        regular_user = RmsUser(id=2, username="user", name="Regular User")
+        self.users[2] = regular_user
+        self.users_by_username["user"] = regular_user
+        
+        self.last_user = 2
 
     @property
     def base_url(self) -> str:
