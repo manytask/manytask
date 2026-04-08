@@ -2,12 +2,13 @@ name-template: '$RESOLVED_VERSION'
 tag-template: '$RESOLVED_VERSION'
 
 change-template: '- $TITLE by @$AUTHOR in [#$NUMBER](https://github.com/$OWNER/$REPOSITORY/pull/$NUMBER)'
+no-changes-template: '- No changes'
 category-template: '### $TITLE'
 template: |
   <TODO: summary of changes here>
-  
+
   $CHANGES
-    
+
   **Full Changelog**: [$PREVIOUS_TAG...$RESOLVED_VERSION](https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...$RESOLVED_VERSION)
 
 
@@ -15,58 +16,53 @@ version-resolver:
   major:
     labels:
       - 'breaking'
+    commit-message:
+      - '/.*!:.*/'
   minor:
     labels:
       - 'feature'
+    commit-message:
+      - '/^feat(ure)?(\(.*\))?!?:/'
   default: patch
 
 
 autolabeler:
   - label: 'breaking'
-    title:
+    commit-message:
       - '/.*!:.*/'
   - label: 'feature'
-    title:
-      - '/feat.*/'
+    commit-message:
+      - '/^feat(ure)?(\(.*\))?:/'
   - label: 'fix'
-    title:
-      - '/fix.*/'
-      - '/bug.*/'
-  - label: 'chore'
-    title:
-      - '/chore.*/'
-#    files:
-#      - '*.md'
-#      - '*.txt'
-  - label: 'documentation'
-    title:
-      - '/docs.*/'
-  - label: 'refactor'
-    title:
-      - '/ref.*/'
-      - '/refactor.*/'
-  - label: 'style'
-    title:
-      - '/style.*/'
-  - label: 'performance'
-    title:
-      - '/perf:.*/'
-      - '/performance:.*/'
+    commit-message:
+      - '/^fix(\(.*\))?:/'
+      - '/^bug(\(.*\))?:/'
   - label: 'test'
-    title:
-      - '/test.*/'
-#    files:
-#      - 'tests/*'
+    commit-message:
+      - '/^test(\(.*\))?:/'
   - label: 'ci'
-    title:
-      - '/ci.*/'
-#    files:
-#      - '.github/*'
+    commit-message:
+      - '/^ci(\(.*\))?:/'
+  - label: 'refactor'
+    commit-message:
+      - '/^refactor(\(.*\))?:/'
+      - '/^ref(\(.*\))?:/'
+  - label: 'performance'
+    commit-message:
+      - '/^perf(ormance)?(\(.*\))?:/'
+  - label: 'style'
+    commit-message:
+      - '/^style(\(.*\))?:/'
+  - label: 'documentation'
+    commit-message:
+      - '/^docs?(\(.*\))?:/'
+      - '/^documentation(\(.*\))?:/'
   - label: 'dependencies'
-    title:
-      - '/.*deps.*:.*/'
-#    files:
-#      - 'requirements*'
+    commit-message:
+      - '/^chore\(deps(-dev)?\):/'
+  - label: 'chore'
+    commit-message:
+      - '/^chore(\(.*\))?:/'
 
 
 exclude-labels:
@@ -87,10 +83,9 @@ categories:
   - title: 'Tests and CI/CD'
     labels: ['test', 'ci']
   - title: 'Enhancement'
-    labels: ['enhancement', 'refactor', 'performance', 'style']
+    labels: ['refactor', 'performance', 'style']
   - title: 'Documentation'
     label: 'documentation'
-  - title: 'Other changes'
   - title: 'Dependency Updates'
     label: 'dependencies'
-#    collapse-after: 5
+  - title: 'Other changes'
