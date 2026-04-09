@@ -1,10 +1,12 @@
 # Simple workflow for deploying static content to GitHub Pages
-name: Build landing and docs and deploy to Pages
-
+name: Build docs and landing page
 on:
   # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
+
+  # Runs on pull requests to any branch to validate docs build
+  pull_request:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -22,8 +24,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
+  # Build-only job for pull requests to validate docs can be built successfully
+  build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Build
+        uses: diplodoc-platform/docs-build-action@v3
+        with:
+          src-root: './docs'
+          build-root: './build'
+          lint-root: './html'
+
+  # Deploy job runs only on push to main or manual trigger
   deploy:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
