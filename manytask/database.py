@@ -798,7 +798,7 @@ class DataBaseApi(StorageApi):
                 .filter(models.TaskGroup.course_id == course.id)
                 .options(
                     joinedload(models.TaskGroup.deadline),
-                    selectinload(models.TaskGroup.tasks).selectinload(models.Task.grades),
+                    selectinload(models.TaskGroup.tasks),
                 )
             )
 
@@ -936,7 +936,14 @@ class DataBaseApi(StorageApi):
                 return []
 
             hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
-            user_on_courses = user.users_on_courses.filter(models.Course.status.notin_(hidden_for_user)).all()
+            user_on_courses = (
+                session.query(models.UserOnCourse)
+                .filter(models.UserOnCourse.user_id == user.id)
+                .join(models.Course)
+                .filter(models.Course.status.notin_(hidden_for_user))
+                .options(joinedload(models.UserOnCourse.course))
+                .all()
+            )
 
             result = [(user_on_course.course.name, user_on_course.course.status) for user_on_course in user_on_courses]
             logger.info("User '%s' participates in %s courses", username, len(result))
@@ -1026,6 +1033,7 @@ class DataBaseApi(StorageApi):
                         models.UserOnCourse.is_course_admin.is_(True),
                     )
                 )
+                .options(joinedload(models.UserOnCourse.course))
                 .all()
             )
 
@@ -1695,7 +1703,6 @@ class DataBaseApi(StorageApi):
             .join(models.TaskGroup)
             .join(models.Deadline)
             .filter(models.TaskGroup.course_id == course.id)
-            .options(selectinload(models.Task.grades))
         )
 
         if enabled is not None:

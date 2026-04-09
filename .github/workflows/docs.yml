@@ -26,6 +26,7 @@ concurrency:
 jobs:
   # Build-only job for pull requests to validate docs can be built successfully
   build:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,7 +41,6 @@ jobs:
   # Deploy job runs only on push to main or manual trigger
   deploy:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
