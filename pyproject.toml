@@ -1,9 +1,20 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.workspace]
+members = [".", "checker"]
+
 [project]
 name = "manytask"
-version = "25.2"
-description = "Manytask system"
+dynamic = ["version"]
+description = "Manytask - a web app to organize courses and collect students scores"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
+license = {text = "MIT"}
+authors = [
+    {name = "Manytask Team"}
+]
 dependencies = [
     "alembic==1.18.3",
     "authlib==1.6.9",
@@ -139,3 +150,9 @@ max-args = 7
 
 [tool.ruff.lint.isort]
 known-first-party = ["manytask", "tests", "checker"]
+
+[tool.setuptools]
+packages = ["manytask"]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
