@@ -192,7 +192,7 @@ Check that a GitLab merge request is valid (no conflicts, required labels, etc.)
 | `token` | `str` | yes | — | GitLab personal access token. |
 | `task_dir` | `str` | yes | — | Task directory path. |
 | `repo_url` | `AnyUrl` | yes | — | GitLab repository URL. |
-| `requre_approval` | `bool` | no | `false` | Require at least one approval on the MR. |
+| `require_approval` | `bool` | no | `false` | Require at least one approval on the MR. |
 | `search_for_score` | `bool` | no | `false` | Search for a score comment in the MR. |
 
 
@@ -205,5 +205,5 @@ Collect a score left by a tutor in a GitLab MR comment.
 | `token` | `str` | yes | — | GitLab personal access token. |
 | `task_dir` | `str` | yes | — | Task directory path. |
 | `repo_url` | `AnyUrl` | yes | — | GitLab repository URL. |
-| `requre_approval` | `bool` | no | `false` | Require at least one approval on the MR. |
+| `require_approval` | `bool` | no | `false` | Require at least one approval on the MR. |
 | `search_for_score` | `bool` | no | `false` | Search for a score comment in the MR. |
