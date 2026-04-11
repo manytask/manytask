@@ -512,20 +512,6 @@ def update_config(course_name: str) -> ResponseReturnValue:
     return "", HTTPStatus.OK
 
 
-@bp.post("/update_cache")
-@requires_token
-def update_cache(course_name: str) -> ResponseReturnValue:
-    app: CustomFlask = current_app  # type: ignore
-
-    logger.info("Updating cached scores for course=%s", course_name)
-
-    # ----- logic ----- #
-    app.storage_api.update_cached_scores(course_name)
-
-    logger.info("Cache updated for course=%s", course_name)
-    return "", HTTPStatus.OK
-
-
 @bp.get("/database")
 @requires_auth_or_token
 @requires_ready

@@ -95,10 +95,6 @@ def mock_storage_api(mock_course):  # noqa: C901
             self.course_admin = False
 
         @staticmethod
-        def get_scores_update_timestamp(_course_name):
-            return datetime.now(tz=ZoneInfo("UTC"))
-
-        @staticmethod
         def get_all_courses_names_with_statuses():
             return [("test_course_names", CourseStatus.CREATED)]
 
@@ -177,10 +173,6 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def check_if_course_admin(self, _course_name, _username):
             return self.course_admin
-
-        @staticmethod
-        def update_cached_scores(_course_name):
-            pass
 
         @staticmethod
         def check_user_on_course(*a, **k):
