@@ -53,6 +53,7 @@ class SourceCraftApi(RmsApi):
 
         self._client = httpx.Client(
             base_url=config.api_url,
+            timeout=30.0,
         )
         if config.service_account_key:
             self._sdk = SDK(service_account_key=config.service_account_key)
