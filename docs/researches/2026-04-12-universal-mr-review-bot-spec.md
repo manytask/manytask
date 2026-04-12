@@ -84,7 +84,7 @@ manytask.yml (курс)
        │      читает MR, пишет комментарии и лейблы
        │
        ├── Checklist Runner
-       │      исполняет произвольный код из конфига курса
+       │      built-in проверки + subprocess для `run:` команд
        │
        └── Manytask API Client
               ├── GET  /api/<course>/deadlines       (новый)
@@ -102,7 +102,7 @@ manytask.yml (курс)
 | Idempotency | Redis set обработанных comment ID | Корректная работа после рестарта; хранятся ID комментариев, а не MR — чтобы новый score-комментарий (override) обрабатывался корректно |
 | Абстракция хостинга | Интерфейс над GitLab/SourceCraft | Курсы могут одновременно жить на разных платформах |
 | Права преподавателя | MVP: GitLab Developer+ access level | Достаточно для MVP; v2 — `is_course_admin` через Manytask API |
-| Безопасность checklist | Eval + liveness-проба с автоперезапуском | Бот для внутреннего использования; преподавателям доверяем |
+| Checklist механизм | Декларативные built-in проверки + произвольная shell-команда (subprocess) | Типовые проверки — готовые блоки; нестандартное — `run: <cmd>`, exit 0 = passed. Та же модель, что в GitHub Actions |
 | Username matching | GitLab username = Manytask username | Гарантировано историческим контрактом, сохраняется при переезде на SourceCraft |
 
 ---
@@ -120,11 +120,18 @@ mr_review:
     compgraph:
       folder: "09.2.HW2/tasks/compgraph"
       manual_review: true
-      checklist: |
-        # Произвольный Python-код (язык checklist — Python)
-        # Доступны: mr, gitlab_client, manytask_client
-        assert pipeline_passed(mr), "CI pipeline must pass"
-        assert no_forbidden_files(mr, ['.csv', '.db']), "Forbidden file types found"
+      checklist:
+        # Декларативные встроенные проверки (built-in shortcuts)
+        - type: pipeline_passed
+        - type: forbidden_files
+          extensions: [csv, db, txt]
+        - type: folder_structure
+          required_path: "09.2.HW2/tasks/compgraph"
+        # Произвольная shell-команда для нестандартных проверок
+        # Контекст передаётся через env: MR_ID, MR_URL, GITLAB_TOKEN, COURSE_NAME
+        # exit 0 = passed, non-0 = failed; stdout становится телом комментария
+        - type: run
+          command: "python .bot/extra_checks.py"
 ```
 
 ---
@@ -159,7 +166,7 @@ mr_review:
 | Фича | Детали |
 |------|--------|
 | Polling GitLab | Каждые 15 мин, один инстанс для всех курсов |
-| Pre-review checklist | Eval произвольного Python-кода из конфига курса |
+| Pre-review checklist | Декларативные built-in проверки (`pipeline_passed`, `forbidden_files`, `folder_structure`) + `run: <cmd>` для произвольной shell-команды |
 | Выставление оценки | Преподаватель пишет `Score: N` → бот сохраняет в Manytask |
 | Override оценки | Новый комментарий с оценкой перезаписывает предыдущую |
 | Статусы в Manytask | "На проверке" / "Проверено" / "Ждёт исправлений" + ссылка на MR |
