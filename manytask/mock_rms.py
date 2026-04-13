@@ -29,7 +29,8 @@ class MockRmsApi(RmsApi):
         self.groups: Dict[str, MockRmsGroup] = {}
         self.projects: Dict[str, MockRmsProject] = {}  # key: "group/project"
         self.namespace_groups: Dict[str, int] = {}  # path -> group_id
-        self.last_user: str = "-1"
+        self.last_user: int = "-1"
+        self.register_new_user("instance_admin", "Admin", "Adminov", "mail@spam.com", "qwerty")
         self.last_group_id: int = 0
 
     @property
