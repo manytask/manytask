@@ -37,7 +37,7 @@ Controls the course lifecycle stage. When omitted, the status is not changed on 
 | `hidden` | Course has tasks but is hidden from students; teachers have full access. |
 | `in_progress` | Course is active and running. |
 | `all_tasks_issued` | No more tasks will be added; maximum possible grade is finalized. |
-| `doreshka` | Post-course upsolving period allowing students to earn additional points, wich only satisfactory (3 out of 5) grade is possible. |
+| `doreshka` | Post-course upsolving period allowing students to earn additional points, which only satisfactory (3 out of 5) grade is possible. |
 | `finished` | Course is fully completed; no longer shown on the student main page. |
 
 Status can also be changed through the admin panel without modifying the config file.
@@ -68,7 +68,7 @@ The following placeholders are substituted at render time:
 |---|---|
 | `$GROUP_NAME` | The task group name (e.g. `week_1`) |
 | `$TASK_NAME` | The task name (e.g. `task_1_1`) |
-| `$USER_NAME` | The student's username in the RMD |
+| `$USER_NAME` | The student's username in the RMS |
 
 
 ## `deadlines`
@@ -89,7 +89,7 @@ deadlines:
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `timezone` | string | yes | — | Timezone name applied to all naive datetimes in the schedule (e.g. `Europe/Moscow`, `Europe/Berlin`, `UTC`). Shold be in [IANA Time Zone Database](https://www.iana.org/time-zones) format. |
+| `timezone` | string | yes | — | Timezone name applied to all naive datetimes in the schedule (e.g. `Europe/Moscow`, `Europe/Berlin`, `UTC`). Should be in [IANA Time Zone Database](https://www.iana.org/time-zones) format. |
 | `deadlines` | string | no | `hard` | Deadline scoring mode. `hard` or `interpolate`. See [Deadline modes](#deadline-modes). |
 | `max_submissions` | integer | no | unlimited | Maximum number of submissions allowed per task. Must be a positive integer. |
 | `submission_penalty` | float | no | `0` | Score penalty applied per extra submission beyond the limit. Must be non-negative. |
