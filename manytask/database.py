@@ -518,21 +518,6 @@ class DataBaseApi(StorageApi):
             }
             # fmt: on
 
-    def get_scores_update_timestamp(self, course_name: str) -> str:
-        """Method(deprecated) for getting last cached scores update timestamp
-
-        :param course_name: course name
-
-        :return: last update timestamp
-        """
-
-        return datetime.now(timezone.utc).isoformat()
-
-    def update_cached_scores(self, course_name: str) -> None:
-        """Method(deprecated) for updating cached scores"""
-
-        return
-
     def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int:
         """Method for storing user's task score
 
