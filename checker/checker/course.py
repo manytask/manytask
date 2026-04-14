@@ -55,6 +55,12 @@ class Course:
 
         self.branch_name = branch_name
 
+        self.task_to_group = {task.name: group for group in self.potential_groups.values() for task in group.tasks}
+
+    def get_group_for_task(self, task_name: str) -> FileSystemGroup | None:
+        """Get the group that contains the given task, or None if not found."""
+        return self.task_to_group.get(task_name)
+
     def validate(self) -> None:
         # check all groups and tasks mentioned in deadlines exists
         deadlines_groups = self.manytask_config.get_groups(enabled=True)
@@ -141,10 +147,6 @@ class Course:
                 config=group_config,
                 tasks=group_tasks,
             )
-
-    @staticmethod
-    def _is_parent(path: Path, files: list[Any]) -> bool:
-        return any(Path(file).is_relative_to(path) for file in files)
 
     def _detect_by_branch_name(
         self,

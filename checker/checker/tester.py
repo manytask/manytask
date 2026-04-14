@@ -1,39 +1,24 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 from zoneinfo import ZoneInfo
 
-from .configs.checker import CheckerConfig, CheckerParametersConfig
+from .configs.checker import CheckerConfig, CheckerSubConfig
 from .configs.manytask import ManytaskDeadlinesType
 from .course import Course, FileSystemTask
 from .exceptions import TestingError
-from .pipeline import PipelineResult, PipelineRunner, PipelineStageResult
+from .pipeline import (
+    GlobalPipelineVariables,
+    PipelineContext,
+    PipelineResult,
+    PipelineRunner,
+    PipelineStageResult,
+    TaskPipelineVariables,
+)
 from .plugins import load_plugins
 from .utils import print_header_info, print_info, print_separator
-
-
-@dataclass
-class GlobalPipelineVariables:
-    """Base variables passed in pipeline stages."""
-
-    ref_dir: str
-    repo_dir: str
-    temp_dir: str
-    task_names: list[str]
-    task_sub_paths: list[str]
-
-
-@dataclass
-class TaskPipelineVariables:
-    """Variables passed in pipeline stages for each task."""
-
-    task_name: str
-    task_sub_path: str
-    task_score_percent: float
 
 
 class Tester:
@@ -129,30 +114,57 @@ class Tester:
             task_name=task.name, task_sub_path=task.relative_path, task_score_percent=score_percent
         )
 
-    def _get_context(
+    def _build_global_context(
         self,
         global_variables: GlobalPipelineVariables,
-        task_variables: TaskPipelineVariables | None,
         outputs: dict[str, PipelineStageResult],
-        default_parameters: CheckerParametersConfig,
-        task_parameters: CheckerParametersConfig | None,
-    ) -> dict[str, Any]:
+    ) -> PipelineContext:
         return {
             "global": global_variables,
-            "task": task_variables,
+            "task": None,
             "outputs": outputs,
-            "parameters": default_parameters.__dict__ | (task_parameters.__dict__ if task_parameters else {}),
+            "parameters": self.default_params.__dict__.copy(),
             "env": os.environ.__dict__,
         }
 
+    def _get_group_config(self, task: FileSystemTask) -> CheckerSubConfig | None:
+        group = self.course.get_group_for_task(task.name)
+        return group.config if group else None
+
+    def _build_task_context(
+        self,
+        global_variables: GlobalPipelineVariables,
+        outputs: dict[str, PipelineStageResult],
+        task: FileSystemTask,
+        task_variables: TaskPipelineVariables,
+    ) -> PipelineContext:
+        context = self._build_global_context(global_variables, outputs)
+        context["task"] = task_variables
+
+        group_config = self._get_group_config(task)
+        if group_config and group_config.parameters:
+            context["parameters"] = context["parameters"] | group_config.parameters.__dict__
+        if task.config and task.config.parameters:
+            context["parameters"] = context["parameters"] | task.config.parameters.__dict__
+
+        return context
+
     def _get_task_pipeline_runner(self, task: FileSystemTask) -> PipelineRunner:
         pipeline_conf = task.config.task_pipeline
+        if pipeline_conf is None:
+            group_config = self._get_group_config(task)
+            if group_config is not None:
+                pipeline_conf = group_config.task_pipeline
         if pipeline_conf is None:
             pipeline_conf = self.testing_config.tasks_pipeline
         return PipelineRunner(pipeline_conf, self.plugins, verbose=self.verbose)
 
     def _get_task_report_pipeline_runner(self, task: FileSystemTask) -> PipelineRunner:
         pipeline_conf = task.config.report_pipeline
+        if pipeline_conf is None:
+            group_config = self._get_group_config(task)
+            if group_config is not None:
+                pipeline_conf = group_config.report_pipeline
         if pipeline_conf is None:
             pipeline_conf = self.testing_config.report_pipeline
         return PipelineRunner(pipeline_conf, self.plugins, verbose=self.verbose)
@@ -167,7 +179,7 @@ class Tester:
         # validate global pipeline (only default params and variables available)
         print_info("- global pipeline...")
         global_variables = self._get_global_pipeline_parameters(Path(), tasks)
-        context = self._get_context(global_variables, None, outputs, self.default_params, None)
+        context = self._build_global_context(global_variables, outputs)
         self.global_pipeline.validate(context, validate_placeholders=True)
         print_info("  ok")
 
@@ -178,13 +190,7 @@ class Tester:
             # create task context
             task_score = self._get_task_score_percent(task.name)
             task_variables = self._get_task_pipeline_parameters(task, task_score)
-            context = self._get_context(
-                global_variables,
-                task_variables,
-                outputs,
-                self.default_params,
-                task.config.parameters if task.config else None,
-            )
+            context = self._build_task_context(global_variables, outputs, task, task_variables)
 
             # check task parameter are
             self._get_task_pipeline_runner(task).validate(context, validate_placeholders=True)
@@ -209,13 +215,7 @@ class Tester:
         global_variables = self._get_global_pipeline_parameters(origin, tasks)
         if len(self.global_pipeline) > 0 or self.verbose:
             print_header_info("Run global pipeline:", color="pink")
-            context = self._get_context(
-                global_variables,
-                None,
-                outputs,
-                self.default_params,
-                None,
-            )
+            context = self._build_global_context(global_variables, outputs)
             global_pipeline_result: PipelineResult = self.global_pipeline.run(context, dry_run=self.dry_run)
             print_separator("-")
             print_info(str(global_pipeline_result), color="pink")
@@ -231,13 +231,7 @@ class Tester:
             # create task context
             task_score = self._get_task_score_percent(task.name, timestamp)
             task_variables = self._get_task_pipeline_parameters(task, task_score)
-            context = self._get_context(
-                global_variables,
-                task_variables,
-                outputs,
-                self.default_params,
-                task.config.parameters if task.config else None,
-            )
+            context = self._build_task_context(global_variables, outputs, task, task_variables)
 
             task_pipeline_result: PipelineResult = self._get_task_pipeline_runner(task).run(
                 context, dry_run=self.dry_run

@@ -1,3 +1,4 @@
+import json
 import logging
 import logging.config
 import logging.handlers
@@ -8,19 +9,53 @@ from typing import Any
 import yaml
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, session
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from manytask.course import ManytaskDeadlinesType
+from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
-from . import abstract, config, course, database, glab, local_config
+from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
 from .course import CourseStatus
 
 MAX_AGE_IN_SECONDS = 86400
 
 load_dotenv("../.env")  # take environment variables from .env.
+
+_CREATE_COURSE_LABELS: dict[str, dict[str, str]] = {
+    "sourcecraft": {
+        "section_header": "SourceCraft Configuration",
+        "course_group_label": "SourceCraft Course Prefix",
+        "course_group_text": "Prefix for all course repositories",
+        "course_public_repo_label": "SourceCraft Public Repo",
+        "course_public_repo_placeholder": "test-course-public-[year]-[fall/spring]",
+        "course_public_repo_feedback": "Public Repo should begin with the course prefix",
+        "course_students_group_label": "SourceCraft Students Prefix",
+        "course_students_group_placeholder": "test-course-students-[year]-[fall/spring]",
+        "course_students_group_feedback": "Students Prefix should begin with the course prefix",
+        "course_students_group_text": "Prefix for all students repositories",
+        "default_branch_label": "SourceCraft Default Branch",
+    },
+    "gitlab": {
+        "section_header": "GitLab Configuration",
+        "course_group_label": "GitLab Course Group",
+        "course_group_text": "The general name of the GitLab group where all course materials will be stored",
+        "course_public_repo_label": "GitLab Public Repo",
+        "course_public_repo_placeholder": "test-course/public-[year]-[fall/spring]",
+        "course_public_repo_feedback": (
+            "Public Repo should begin with either the namespace path or the course group name"
+        ),
+        "course_students_group_label": "GitLab Students Group",
+        "course_students_group_placeholder": "test-course/students-[year]-[fall/spring]",
+        "course_students_group_feedback": (
+            "Students Group should begin with either the namespace path or the course group name"
+        ),
+        "course_students_group_text": "The name of the group where students' repositories are created",
+        "default_branch_label": "GitLab Default Branch",
+    },
+}
 
 
 class CustomFlask(Flask):
@@ -37,6 +72,26 @@ class CustomFlask(Flask):
     def favicon(self) -> str:
         return "favicon.ico"
 
+    @property
+    def signup_template(self) -> str:
+        match self.app_config.rms:
+            case "sourcecraft":
+                return "signup_yandex_id.html"
+            case _:
+                return "signup.html"
+
+    @property
+    def signup_finish_template(self) -> str:
+        return "signup_finish.html"
+
+    @property
+    def create_course_template(self) -> str:
+        return "create_course.html"
+
+    @property
+    def create_course_labels(self) -> dict[str, str]:
+        return _CREATE_COURSE_LABELS.get(self.app_config.rms, _CREATE_COURSE_LABELS["gitlab"])
+
     def store_config(self, course_name: str, content: dict[str, Any]) -> None:
         manytask_config = config.ManytaskConfig(**content)
 
@@ -52,33 +107,62 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     _create_app_config(app, debug, test)
 
-    app.oauth = _authenticate(
-        OAuth(app),
-        app.app_config.gitlab_url,  # Internal URL for API calls
-        app.app_config.gitlab_oauth_url,  # External URL for browser redirects
-        app.app_config.gitlab_client_id,
-        app.app_config.gitlab_client_secret
-    )
-
     # logging
     logging.config.dictConfig(_logging_config(app))
 
     # api objects
-    gitlab_api: glab.GitLabApi = glab.GitLabApi(
-        glab.GitLabConfig(
-            base_url=app.app_config.gitlab_url,
-            admin_token=app.app_config.gitlab_admin_token,
-            verify_ssl=app.app_config.gitlab_verify_ssl,
-        )
-    )
+    app.storage_api = _database_storage_setup()
 
-    rms: str = os.environ.get("RMS", "GitLab").lower()
+    rms = app.app_config.rms
 
     if rms == "gitlab":
+        app.oauth = _authenticate(
+            OAuth(app),
+            app.app_config.gitlab_url,
+            app.app_config.gitlab_oauth_url,
+            app.app_config.gitlab_client_id,
+            app.app_config.gitlab_client_secret,
+        )
+        gitlab_api: glab.GitLabApi = glab.GitLabApi(
+            glab.GitLabConfig(
+                base_url=app.app_config.gitlab_url,
+                admin_token=app.app_config.gitlab_admin_token,
+                verify_ssl=app.app_config.gitlab_verify_ssl,
+            )
+        )
+        app.auth_api = gitlab_api
         app.rms_api = gitlab_api
+
+    elif rms == "sourcecraft":
+        app.oauth = _create_yandex_id_oauth(
+            OAuth(app),
+            app.app_config.yandex_id_client_id,
+            app.app_config.yandex_id_client_secret,
+        )
+        app.auth_api = yandex_id.YandexIDApi(yandex_id.YandexIDConfig())
+        app.rms_api = sourcecraft.SourceCraftApi(
+            sourcecraft.SourceCraftConfig(
+                base_url=app.app_config.sourcecraft_url,
+                api_url=app.app_config.sourcecraft_api_url,
+                service_account_key=json.loads(app.app_config.sourcecraft_sa_key_json)
+                if app.app_config.sourcecraft_sa_key_json
+                else None,
+                oauth_token=app.app_config.sourcecraft_oauth_token or None,
+                org_slug=app.app_config.sourcecraft_org_slug,
+            ),
+        )
+
     elif rms == "mock":
+        app.oauth = _authenticate(
+            OAuth(app),
+            app.app_config.gitlab_url,
+            app.app_config.gitlab_oauth_url,
+            app.app_config.gitlab_client_id,
+            app.app_config.gitlab_client_secret,
+        )
+        app.auth_api = MockAuthApi()
         app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
-    app.auth_api = gitlab_api
+
     app.csrf = CSRFProtect(app)
 
     # read VERSION file to get a version
@@ -88,8 +172,6 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             app.manytask_version = f.read().strip()
     except FileNotFoundError:
         pass
-
-    app.storage_api = _database_storage_setup(app)
 
     # for https support
     _wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
@@ -110,6 +192,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     app.jinja_env.globals["get_user_roles"] = get_user_roles
     app.jinja_env.globals["has_role"] = has_role
+
+    @app.context_processor
+    def inject_rms_id() -> dict[str, int | None]:
+        rms_id = session.get("rms", {}).get("rms_id")
+        return {"rms_id": rms_id}
 
     logger = logging.getLogger(__name__)
 
@@ -147,7 +234,7 @@ def _create_debug_course(app: CustomFlask) -> None:
     app.storage_api.create_course(course_config)
 
 
-def _database_storage_setup(app: CustomFlask) -> abstract.StorageApi:
+def _database_storage_setup() -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)
     apply_migrations = os.environ.get("APPLY_MIGRATIONS", "false").lower() in (
         "true",
@@ -257,7 +344,7 @@ def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id:
     }
 
     oauth.register(
-        name="gitlab",
+        name="auth_provider",
         client_id=client_id,
         client_secret=client_secret,
         authorize_url=f"{external_url}/oauth/authorize",  # Browser-accessible URL
@@ -265,5 +352,18 @@ def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id:
         userinfo_endpoint=f"{internal_url}/oauth/userinfo",  # Container-to-container API call
         jwks_uri=f"{internal_url}/oauth/discovery/keys",  # Container-to-container API call
         client_kwargs=client_kwargs,
+    )
+    return oauth
+
+
+def _create_yandex_id_oauth(oauth: OAuth, client_id: str, client_secret: str) -> OAuth:
+    oauth.register(
+        name="auth_provider",
+        client_id=client_id,
+        client_secret=client_secret,
+        access_token_url="https://oauth.yandex.com/token",
+        authorize_url="https://oauth.yandex.com/authorize",
+        api_base_url="https://login.yandex.ru/info",
+        client_kwargs={"scope": "login:info"},
     )
     return oauth

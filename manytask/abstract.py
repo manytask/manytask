@@ -11,7 +11,7 @@ from .course import Course, CourseConfig, CourseStatus
 
 @dataclass
 class RmsUser:
-    id: int
+    id: str
     username: str
     name: str
 
@@ -24,9 +24,10 @@ class StoredUser:
     username: str
     first_name: str
     last_name: str
-    rms_id: int
+    rms_id: str
+    auth_id: int
+    user_id: int
     instance_admin: bool = False
-    # we can add more fields that we store
 
     def __repr__(self) -> str:
         return f"StoredUser(username={self.username})"
@@ -60,7 +61,13 @@ class StorageApi(ABC):
     @abstractmethod
     def get_stored_user_by_rms_id(
         self,
-        rms_id: int,
+        rms_id: str,
+    ) -> StoredUser | None: ...
+
+    @abstractmethod
+    def get_stored_user_by_auth_id(
+        self,
+        auth_id: int,
     ) -> StoredUser | None: ...
 
     @abstractmethod
@@ -89,10 +96,7 @@ class StorageApi(ABC):
     @abstractmethod
     def get_all_scores_with_names(
         self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None]]: ...
-
-    @abstractmethod
-    def get_student_comment(self, course_name: str, username: str) -> str | None: ...
+    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None, str | None]]: ...
 
     @abstractmethod
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
@@ -102,12 +106,6 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_stats(self, course_name: str) -> dict[str, float]: ...
-
-    @abstractmethod
-    def get_scores_update_timestamp(self, course_name: str) -> str: ...
-
-    @abstractmethod
-    def update_cached_scores(self, course_name: str) -> None: ...
 
     @abstractmethod
     def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
@@ -165,7 +163,9 @@ class StorageApi(ABC):
     def check_user_on_course(self, course_name: str, username: str) -> bool: ...
 
     @abstractmethod
-    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: int) -> None: ...
+    def update_or_create_user(
+        self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int
+    ) -> None: ...
 
     @abstractmethod
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]: ...
@@ -218,7 +218,7 @@ class StorageApi(ABC):
     def add_user_to_namespace(
         self,
         namespace_id: int,
-        user_id: int,
+        username: str,
         role: str,
         assigned_by_username: str,
     ) -> Any: ...
@@ -230,31 +230,34 @@ class StorageApi(ABC):
     def add_course_owners(
         self,
         course_id: int,
-        owner_rms_ids: list[int],
+        owner_rms_ids: list[str],
         namespace_id: int,
-    ) -> list[int]:
+    ) -> list[str]:
         """
-        :returns: list of successfully added user_ids
+        :returns: list of successfully added user_rms_ids
         """
         ...
 
     @abstractmethod
-    def get_stored_user_by_id(
+    def get_stored_user_by_db_id(
         self,
-        user_id: int,
+        db_id: int,
     ) -> StoredUser | None: ...
 
     @abstractmethod
     def get_namespace_courses(self, namespace_id: int) -> list[dict[str, Any]]: ...
 
     @abstractmethod
-    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, int]: ...
+    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, str]: ...
 
     @abstractmethod
-    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, int]: ...
+    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, str]: ...
 
     @abstractmethod
     def get_course_id_by_name(self, course_name: str) -> int | None: ...
+
+    @abstractmethod
+    def recalculate_all_grades(self, course_name: str) -> None: ...
 
     @abstractmethod
     def calculate_and_save_grade(
@@ -328,19 +331,27 @@ class RmsApi(ABC):
     def add_user_to_namespace_group(
         self,
         gitlab_group_id: int,
-        user_id: int,
+        rms_id: str,
     ) -> None: ...
 
     @abstractmethod
     def remove_user_from_namespace_group(
         self,
         gitlab_group_id: int,
-        user_id: int,
+        rms_id: str,
     ) -> None: ...
 
     @abstractmethod
     def check_project_exists(
         self,
+        project_name: str,
+        project_group: str,
+    ) -> bool: ...
+
+    @abstractmethod
+    def check_user_has_repo_access(
+        self,
+        rms_user_id: str,
         project_name: str,
         project_group: str,
     ) -> bool: ...
@@ -364,21 +375,22 @@ class RmsApi(ABC):
     ) -> str: ...
 
     @abstractmethod
+    def get_url_for_piplines(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str: ...
+
+    @abstractmethod
     def get_rms_user_by_id(
         self,
-        user_id: int,
+        user_id: str,
     ) -> RmsUser: ...
 
     @abstractmethod
     def get_rms_user_by_username(
         self,
         username: str,
-    ) -> RmsUser: ...
-
-    @abstractmethod
-    def get_authenticated_rms_user(
-        self,
-        oauth_access_token: str,
     ) -> RmsUser: ...
 
     @abstractmethod
@@ -414,10 +426,11 @@ class AuthenticatedUser:
 
 @dataclass
 class ClientProfile:
+    rms_id: str
     username: str
 
     def __repr__(self) -> str:
-        return f"ClientProfile(username={self.username})"
+        return f"ClientProfile(rms_id={self.rms_id}, username={self.username})"
 
 
 class AuthApi(ABC):

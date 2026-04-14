@@ -53,6 +53,7 @@ The project would not be possible without an effort of many developers, includin
 Current developers:
 
 * [Sofia Anokhovskaya](https://github.com/cin-bun)
+* [Dzmitry Charnushevich](https://github.com/Dmi4er4)
 * [Olga Gorbunova](https://github.com/elyaishere)
 * [Ivan Gorobets](https://github.com/KIoppert)
 * [Dmitrii Kiselev](https://github.com/kanmir)
@@ -62,6 +63,7 @@ Current developers:
 * [Ivan Samsonov](https://github.com/D1sney)
 * [Alexey Seliverstov](https://github.com/prawwtocol)
 * [Oleg Shatov](https://github.com/domwst)
+* [Andrew Siniavskij](https://github.com/Siegmeyer1)
 * [Artem Zhmurov](https://github.com/zhmurov)
 
 And many others! Please, see [the full list of contributors](https://github.com/manytask/manytask/graphs/contributors).

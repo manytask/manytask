@@ -1,6 +1,5 @@
 import logging
 import secrets
-from datetime import datetime, timedelta
 from http import HTTPStatus
 from urllib.parse import urlparse
 
@@ -11,6 +10,7 @@ from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
+from manytask.abstract import RmsApiException, RmsUser, StoredUser
 from manytask.course import ManytaskDeadlinesType
 
 from .abstract import ClientProfile
@@ -22,14 +22,17 @@ from .auth import (
     requires_instance_or_namespace_admin,
     requires_ready,
     role_required,
-    set_client_profile_session,
-    valid_client_profile_session,
-    valid_gitlab_session,
+    set_manytask_session,
+    set_rms_session,
+    valid_auth_session,
+    valid_manytask_session,
+    valid_rms_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.flask import check_instance_admin, get_courses, has_role
 from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
+from .utils.sourcecraft import normalize_string
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
@@ -59,7 +62,7 @@ def index() -> ResponseReturnValue:
     else:
         from .utils.flask import is_namespace_admin
 
-        is_namespace_admin_flag = is_namespace_admin(app, session["profile"]["username"])
+        is_namespace_admin_flag = is_namespace_admin(app, session["manytask"]["username"])
 
     return render_template(
         "courses.html",
@@ -77,7 +80,7 @@ def login() -> ResponseReturnValue:
     oauth: OAuth = app.oauth
 
     redirect_uri = url_for("root.login_finish", _external=True)
-    return oauth.gitlab.authorize_redirect(redirect_uri)
+    return oauth.auth_provider.authorize_redirect(redirect_uri)
 
 
 @root_bp.route("/login_finish")
@@ -86,14 +89,16 @@ def login_finish() -> ResponseReturnValue:
     oauth: OAuth = app.oauth
 
     result = handle_oauth_callback(oauth, app)
-    if "gitlab" in session:
-        logger.info("User %s successfully authenticated", session["gitlab"]["username"])
+    if "auth" in session:
+        logger.info("User %s successfully authenticated", session["auth"]["username"])
     return result
 
 
 @root_bp.route("/logout")
 def logout() -> ResponseReturnValue:
-    session.pop("gitlab", None)
+    session.pop("auth", None)
+    session.pop("rms", None)
+    session.pop("manytask", None)
     return redirect(url_for("root.index"))
 
 
@@ -109,43 +114,37 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
     if app.debug:
         student_username = "guest"
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
-
         if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
     else:
-        student_username = session["gitlab"]["username"]
+        student_username = session["manytask"]["username"]
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
 
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
+    student_repo = app.rms_api.get_url_for_repo(
+        username=student_username, course_students_group=course.gitlab_course_students_group
+    )
+    student_ci_url = app.rms_api.get_url_for_piplines(
+        username=student_username, course_students_group=course.gitlab_course_students_group
+    )
 
-    # update cache if more than 1h passed or in debug mode
-    try:
-        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
-        cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
-    except ValueError:
-        cache_delta = timedelta(days=365)
-
-    if app.debug or cache_delta.total_seconds() > CACHE_TIMEOUT_SECONDS:
-        storage_api.update_cached_scores(course.course_name)
-        cache_time = datetime.fromisoformat(str(storage_api.get_scores_update_timestamp(course.course_name)))
-        cache_delta = datetime.now(tz=cache_time.tzinfo) - cache_time
-
-    # get scores
     tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
 
+    sourcecraft_accept_invite_required = False
+    if app.app_config.rms == "sourcecraft" and not app.debug:
+        sourcecraft_accept_invite_required = not app.rms_api.check_user_has_repo_access(
+            rms_user_id=session["rms"]["rms_id"],
+            project_name=student_username,
+            project_group=course.gitlab_course_students_group,
+        )
+
     return render_template(
         "tasks.html",
         task_base_url=app.rms_api.get_url_for_task_base(course.gitlab_course_public_repo, course.gitlab_default_branch),
-        username=student_username,
+        username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
         course_name=course.course_name,
         course_status=course.status,
         app=app,
@@ -153,7 +152,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         allscores_url=allscores_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
-        student_ci_url=f"{student_repo}/pipelines",
+        student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         task_url_template=course.task_url_template,
         links=course.links,
@@ -163,10 +162,10 @@ def course_page(course_name: str) -> ResponseReturnValue:
         task_stats=tasks_stats,
         course_favicon=app.favicon,
         is_course_admin=student_course_admin,
-        cache_time=cache_delta,
         courses=courses,
         deadlines_type=course.deadlines_type,
         has_role=has_role,
+        sourcecraft_accept_invite_required=sourcecraft_accept_invite_required,
     )
 
 
@@ -177,7 +176,7 @@ def signup() -> ResponseReturnValue:
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
-            "signup.html",
+            app.signup_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -189,7 +188,10 @@ def signup() -> ResponseReturnValue:
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            app.signup_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
         )
 
     try:
@@ -215,17 +217,18 @@ def signup() -> ResponseReturnValue:
         )
 
         app.storage_api.update_or_create_user(
-            username,
-            validated_firstname,
-            validated_lastname,
-            rms_user.id,
+            username=username,
+            first_name=validated_firstname,
+            last_name=validated_lastname,
+            rms_id=rms_user.id,
+            auth_id=int(rms_user.id),
         )
 
     # render template with error... if error
     except Exception as e:
         logger.warning("User registration failed: %s", e)
         return render_template(
-            "signup.html",
+            app.signup_template,
             error_message=str(e),
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
@@ -238,23 +241,28 @@ def signup() -> ResponseReturnValue:
 def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     app: CustomFlask = current_app  # type: ignore
 
-    if not valid_gitlab_session(session):
+    if not valid_auth_session(session):
         return redirect_to_login_with_bad_session()
 
-    if valid_client_profile_session(session):
-        logger.warning("User already has username=%s in session", session["profile"]["username"])
+    if valid_rms_session(session) and valid_manytask_session(session):
+        logger.warning("User already has username=%s in session", session["manytask"]["username"])
         return redirect(url_for("root.index"))
 
-    stored_user_or_none = app.storage_api.get_stored_user_by_rms_id(session["gitlab"]["user_id"])
+    stored_user_or_none: StoredUser | None = app.storage_api.get_stored_user_by_auth_id(
+        auth_id=session["auth"]["user_auth_id"],
+    )
     if stored_user_or_none is not None:
-        session.setdefault("profile", {}).update(
-            set_client_profile_session(ClientProfile(session["gitlab"]["username"]))
+        session.setdefault("rms", {}).update(
+            set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=session["auth"]["username"]))
+        )
+        session.setdefault("manytask", {}).update(
+            set_manytask_session(user_id=stored_user_or_none.user_id, username=stored_user_or_none.username)
         )
         return redirect(url_for("root.index"))
 
     if request.method == "GET":
         return render_template(
-            "signup_finish.html",
+            app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
         )
@@ -264,23 +272,60 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template(
-            "signup.html", course_favicon=app.favicon, manytask_version=app.manytask_version, error_message="CSRF Error"
+            app.signup_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="CSRF Error",
         )
 
     firstname = validate_name(request.form.get("firstname", "").strip())
     lastname = validate_name(request.form.get("lastname", "").strip())
     if firstname is None or lastname is None:
         return render_template(
-            "signup_finish.html",
+            app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
             error_message="Firstname and lastname must be 1-50 characters and contain only letters or hyphens.",
         )
 
+    try:
+        # TODO: we still expect that username is same in auth and rms, need to find a way to untangle them (issue #880)
+        rms_user: RmsUser = app.rms_api.get_rms_user_by_username(session["auth"]["username"])
+    except RmsApiException as e:
+        logger.error(f"Failed to get RMS user: {e}")
+        if app.app_config.rms == "sourcecraft":
+            return render_template(
+                app.signup_finish_template,
+                course_favicon=app.favicon,
+                manytask_version=app.manytask_version,
+                sourcecraft_not_registered=True,
+                sourcecraft_url=app.app_config.sourcecraft_url,
+            )
+        else:
+            return render_template(
+                app.signup_finish_template,
+                course_favicon=app.favicon,
+                manytask_version=app.manytask_version,
+                error_message=f"Failed to get RMS user: {e}",
+            )
+
     app.storage_api.update_or_create_user(
-        session["gitlab"]["username"], firstname, lastname, session["gitlab"]["user_id"]
+        username=session["auth"]["username"],
+        first_name=firstname,
+        last_name=lastname,
+        rms_id=rms_user.id,
+        auth_id=session["auth"]["user_auth_id"],
     )
-    session.setdefault("profile", {}).update(set_client_profile_session(ClientProfile(session["gitlab"]["username"])))
+
+    stored_user = app.storage_api.get_stored_user_by_auth_id(auth_id=session["auth"]["user_auth_id"])
+    if stored_user is None:
+        logger.error("Cannot fetch stored user after signup_finish for auth_id=%s", session["auth"]["user_auth_id"])
+        return redirect_to_login_with_bad_session()
+
+    session.setdefault("rms", {}).update(set_rms_session(ClientProfile(rms_id=rms_user.id, username=rms_user.username)))
+    session.setdefault("manytask", {}).update(
+        set_manytask_session(user_id=stored_user.user_id, username=stored_user.username)
+    )
     return redirect(url_for("root.index"))
 
 
@@ -305,8 +350,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error("CSRF validation failed: %s", e)
         return render_template("create_project.html", error_message="CSRF Error")
 
-    gitlab_access_token: str = session["gitlab"]["access_token"]
-    rms_user = app.rms_api.get_authenticated_rms_user(gitlab_access_token)
+    rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
@@ -319,7 +363,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
             base_url=app.rms_api.base_url,
         )
 
-    app.storage_api.sync_user_on_course(course.course_name, session["profile"]["username"], is_course_admin)
+    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
 
     # Create use if needed
     try:
@@ -327,7 +371,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
         logger.error("Project creation failed: %s", ex.error_message)
-        return render_template("signup.html", error_message=ex.error_message, course_name=course.course_name)
+        return render_template(app.signup_template, error_message=ex.error_message, course_name=course.course_name)
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
@@ -365,22 +409,20 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
     if app.debug:
         student_username = "guest"
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
-
         if request.args.get("admin", None) in ("true", "1", "yes", None):
             student_course_admin = True
         else:
             student_course_admin = False
     else:
-        student_username = session["gitlab"]["username"]
+        student_username = session["manytask"]["username"]
+        student_course_admin = storage_api.check_if_course_admin(course.course_name, student_username)
 
-        student_repo = app.rms_api.get_url_for_repo(
-            username=student_username, course_students_group=course.gitlab_course_students_group
-        )
-
-        student_course_admin = storage_api.check_if_course_admin(course.course_name, session["profile"]["username"])
+    student_repo = app.rms_api.get_url_for_repo(
+        username=student_username, course_students_group=course.gitlab_course_students_group
+    )
+    student_ci_url = app.rms_api.get_url_for_piplines(
+        username=student_username, course_students_group=course.gitlab_course_students_group
+    )
 
     scores = storage_api.get_scores(course.course_name, student_username)
     bonus_score = storage_api.get_bonus_score(course.course_name, student_username)
@@ -400,7 +442,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         gitlab_url=app.rms_api.base_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
-        student_ci_url=f"{student_repo}/pipelines",
+        student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         courses=courses,
         has_role=has_role,
@@ -418,27 +460,35 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
             return render_template(
-                "create_course.html", generated_token=generate_token_hex(24), error_message="CSRF Error"
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message="CSRF Error",
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
             )
 
         namespace_id_str = request.form.get("namespace_id", "").strip()
         if not namespace_id_str:
             return render_template(
-                "create_course.html",
+                app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message="Namespace is required",
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
             )
 
         try:
             namespace_id = int(namespace_id_str)
         except ValueError:
             return render_template(
-                "create_course.html",
+                app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message="Invalid namespace ID",
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
             )
 
-        username = session["gitlab"]["username"]
+        username = session["manytask"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
         namespace = None
@@ -447,9 +497,11 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             if not is_instance_admin:
                 logger.warning("User %s attempted to create course without namespace", username)
                 return render_template(
-                    "create_course.html",
+                    app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Only Instance Admin can create courses without namespace",
+                    rms=app.app_config.rms,
+                    labels=app.create_course_labels,
                 )
         else:
             try:
@@ -459,16 +511,20 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     "User %s attempted to create course with namespace id=%s without access", username, namespace_id
                 )
                 return render_template(
-                    "create_course.html",
+                    app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Access denied to selected namespace",
+                    rms=app.app_config.rms,
+                    labels=app.create_course_labels,
                 )
             except Exception as e:
                 logger.error("Error fetching namespace id=%s: %s", namespace_id, str(e))
                 return render_template(
-                    "create_course.html",
+                    app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Selected namespace not found",
+                    rms=app.app_config.rms,
+                    labels=app.create_course_labels,
                 )
 
             if not is_instance_admin and role != "namespace_admin":
@@ -479,15 +535,17 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     namespace_id,
                 )
                 return render_template(
-                    "create_course.html",
+                    app.create_course_template,
                     generated_token=generate_token_hex(24),
                     error_message="Only Instance Admin or Namespace Admin can create courses",
+                    rms=app.app_config.rms,
+                    labels=app.create_course_labels,
                 )
 
         course_name = request.form["unique_course_name"].strip()
-        gitlab_course_group = request.form["gitlab_course_group"].strip()
-        gitlab_course_public_repo = request.form["gitlab_course_public_repo"].strip()
-        gitlab_course_students_group = request.form["gitlab_course_students_group"].strip()
+        gitlab_course_group = request.form["course_group"].strip()
+        gitlab_course_public_repo = request.form["course_public_repo"].strip()
+        gitlab_course_students_group = request.form["course_students_group"].strip()
 
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
@@ -515,9 +573,11 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         except Exception as e:
             logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
             return render_template(
-                "create_course.html",
+                app.create_course_template,
                 generated_token=generate_token_hex(24),
                 error_message=f"Failed to create GitLab resources: {str(e)}",
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
             )
 
         settings = CourseConfig(
@@ -526,7 +586,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             gitlab_course_group=gitlab_course_group_full_path,
             gitlab_course_public_repo=gitlab_course_public_repo,
             gitlab_course_students_group=gitlab_course_students_group,
-            gitlab_default_branch=request.form["gitlab_default_branch"],
+            gitlab_default_branch=request.form["default_branch"],
             registration_secret=request.form["registration_secret"],
             token=request.form["token"],
             show_allscores=request.form.get("show_allscores", "off") == "on",
@@ -541,14 +601,17 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             return redirect(url_for("course.course_page", course_name=settings.course_name))
 
         return render_template(
-            "create_course.html",
+            app.create_course_template,
             generated_token=generate_token_hex(24),
             error_message=f"Course '{settings.course_name}' already exists.",
+            rms=app.app_config.rms,
         )
 
     return render_template(
-        "create_course.html",
+        app.create_course_template,
         generated_token=generate_token_hex(24),
+        rms=app.app_config.rms,
+        labels=app.create_course_labels,
     )
 
 
@@ -563,7 +626,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         return redirect(url_for("root.index"))
 
     if not app.debug:
-        username = session["profile"]["username"]
+        username = session["manytask"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
         if not is_instance_admin:
@@ -596,7 +659,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
-            return render_template("edit_course.html", error_message="CSRF Error")
+            return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
         updated_settings = CourseConfig(
             course_name=course_name,
             namespace_id=course.namespace_id,
@@ -635,7 +698,7 @@ def instance_admin_index() -> ResponseReturnValue:
     if app.debug:
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
-    username = session["profile"]["username"]
+    username = session["manytask"]["username"]
     is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     if is_instance_admin:
@@ -668,15 +731,17 @@ def instance_admin_panel() -> ResponseReturnValue:
 
         action = request.form.get("action", "")
         username = request.form.get("username", "")
-        current_instance_admin = session["gitlab"]["username"]
+        current_instance_admin = session["manytask"]["username"]
+
+        stored_user = app.storage_api.get_stored_user_by_username(username)
 
         if action == "grant":
-            app.storage_api.set_instance_admin_status(username, True)
+            app.storage_api.set_instance_admin_status(stored_user.username, True)
             app.logger.warning(
                 "Instance Admin %s granted instance admin status to %s", current_instance_admin, username
             )
         elif action == "revoke":
-            app.storage_api.set_instance_admin_status(username, False)
+            app.storage_api.set_instance_admin_status(stored_user.username, False)
             app.logger.warning(
                 "Instance Admin %s revoked instance admin status from %s", current_instance_admin, username
             )
@@ -722,7 +787,7 @@ def update_profile() -> ResponseReturnValue:
     if app.debug:
         current_username = request_username
     else:
-        current_username = session["gitlab"]["username"]
+        current_username = session["manytask"]["username"]
 
     try:
         validate_csrf(request.form.get("csrf_token"))
@@ -733,7 +798,10 @@ def update_profile() -> ResponseReturnValue:
     if request_username != current_username and not app.storage_api.check_if_instance_admin(current_username):
         abort(HTTPStatus.FORBIDDEN)
 
-    app.storage_api.update_user_profile(request_username, new_first_name, new_last_name)
+    target_user = app.storage_api.get_stored_user_by_username(request_username)
+    if target_user is None:
+        abort(HTTPStatus.NOT_FOUND)
+    app.storage_api.update_user_profile(target_user.username, new_first_name, new_last_name)
     logger.info("Successfully updated profile for user: %s", sanitize_log_data(request_username))
 
     referrer = request.referrer
@@ -757,7 +825,7 @@ def namespaces_list() -> ResponseReturnValue:
     """
     app: CustomFlask = current_app  # type: ignore
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     if is_instance_admin:
@@ -822,7 +890,7 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     """
     app: CustomFlask = current_app  # type: ignore
 
-    username = session["gitlab"]["username"]
+    username = session["manytask"]["username"]
     is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     try:
@@ -848,7 +916,7 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     users_data = []
     for user_id, role in namespace_users:
         try:
-            user = app.storage_api.get_stored_user_by_id(user_id)
+            user = app.storage_api.get_stored_user_by_db_id(user_id)
             if user:
                 users_data.append(
                     {

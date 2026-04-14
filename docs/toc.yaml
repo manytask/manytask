@@ -14,17 +14,18 @@ navigation:
         url: https://app.manytask.org/
       - type: link
         text: Documentation
-        url: ./production.html
+        url: ./about.html
       - type: link
         text: GitHub
         url: https://github.com/manytask
       - type: link
         text: Telegram
-        url: https://t.me/+ZL73so2oW-k1YTYy
+        url: https://t.me/manytask_chat
     rightItems:
       - type: controls
 items:
   - name: About
+    href: about.md
   - name: For students
     items:
       - name: Manytask
@@ -53,5 +54,11 @@ items:
     items:
       - name: Development
         href: dev.md
+  - name: References
+    items:
+      - name: .checker.yml file
+        href: checker_yml_reference.md
+      - name: Checker built-in plugins
+        href: checker_plugins.md
       - name: REST API
         href: api.md
