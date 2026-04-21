@@ -347,10 +347,10 @@ def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id:
         name="auth_provider",
         client_id=client_id,
         client_secret=client_secret,
-        authorize_url=f"{external_url}/oauth/authorize",  # Browser-accessible URL
-        access_token_url=f"{internal_url}/oauth/token",  # Container-to-container API call
-        userinfo_endpoint=f"{internal_url}/oauth/userinfo",  # Container-to-container API call
-        jwks_uri=f"{internal_url}/oauth/discovery/keys",  # Container-to-container API call
+        authorize_url=f"{external_url}/oauth/authorize",
+        access_token_url=f"{internal_url}/oauth/token",
+        userinfo_endpoint=f"{internal_url}/oauth/userinfo",
+        jwks_uri=f"{internal_url}/oauth/discovery/keys",
         client_kwargs=client_kwargs,
     )
     return oauth

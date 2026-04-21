@@ -11,8 +11,8 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.development.yml}"
 GITLAB_URL="${GITLAB_URL:-http://localhost:8929}"
 SETUP_SCRIPT="${SETUP_SCRIPT:-./scripts/setup_local_gitlab.sh}"
 
-log() { echo "🚀 [start] $*"; }
-err() { echo "❌ [start][error] $*" >&2; }
+log() { echo "[INFO] $*"; }
+err() { echo "[ERROR] $*" >&2; }
 
 check_requirements() {
     log "Checking requirements..."
@@ -37,13 +37,13 @@ check_requirements() {
         exit 1
     fi
 
-    log "All requirements satisfied ✓"
+    log "All requirements satisfied."
 }
 
 start_containers() {
     log "Starting Docker containers..."
     docker-compose -f "${COMPOSE_FILE}" up -d
-    log "Containers started ✓"
+    log "Containers started."
 }
 
 wait_for_gitlab() {
@@ -54,13 +54,12 @@ wait_for_gitlab() {
 
     while [ $attempt -lt $max_attempts ]; do
         if curl -fsS "${GITLAB_URL}/users/sign_in" >/dev/null 2>&1; then
-            log "GitLab is ready ✓"
+            log "GitLab is ready."
             return 0
         fi
 
         attempt=$((attempt + 1))
 
-        # Show progress every 5 attempts
         if [ $((attempt % 5)) -eq 0 ]; then
             log "Still waiting for GitLab... (attempt ${attempt}/${max_attempts})"
         fi
@@ -81,39 +80,35 @@ setup_gitlab() {
         exit 1
     fi
 
-    log "GitLab setup completed ✓"
+    log "GitLab setup completed."
 }
 
 restart_manytask() {
     log "Restarting Manytask with new environment variables..."
     docker-compose -f "${COMPOSE_FILE}" up -d manytask
-    log "Manytask restarted ✓"
+    log "Manytask restarted."
 }
 
 show_success_message() {
     echo ""
-    echo "✅ =========================================="
-    echo "✅  Local development environment is ready!"
-    echo "✅ =========================================="
+    echo "=========================================="
+    echo " Local development environment is ready!"
+    echo "=========================================="
     echo ""
-    echo "📝 Services:"
-    echo "   • Manytask:    http://localhost:8081"
-    echo "   • GitLab:      http://localhost:8929"
-    echo "   • Docs:        http://docs.localhost"
+    echo "Services:"
+    echo "  Manytask:    http://localhost:8081"
+    echo "  GitLab:      http://localhost:8929"
+    echo "  Docs:        http://docs.localhost"
     echo ""
-    echo "🔑 GitLab credentials:"
-    echo "   • Username:    root"
-    echo "   • Password:    changeme123!"
+    echo "GitLab credentials:"
+    echo "  Username:    root"
+    echo "  Password:    changeme123!"
     echo ""
-    echo "📊 Check status:"
-    echo "   docker-compose -f ${COMPOSE_FILE} ps"
-    echo ""
-    echo "📋 View logs:"
-    echo "   docker logs -f test-manytask"
-    echo "   docker logs -f manytask_gitlab"
-    echo ""
-    echo "🛑 Stop all services:"
-    echo "   docker-compose -f ${COMPOSE_FILE} down"
+    echo "Commands:"
+    echo "  Check status: docker-compose -f ${COMPOSE_FILE} ps"
+    echo "  View logs:    docker logs -f test-manytask"
+    echo "                docker logs -f manytask_gitlab"
+    echo "  Stop all:     docker-compose -f ${COMPOSE_FILE} down"
     echo ""
 }
 
