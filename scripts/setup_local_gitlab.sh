@@ -118,7 +118,9 @@ main() {
         --docker-image "${RUNNER_IMAGE}" \
         --description "manytask-local-runner" \
         --locked="false" \
-        --run-untagged="true" || log "Runner registration may have failed; check runner logs."
+        --run-untagged="true" \
+        --docker-network-mode "manytask-dev-net" \
+        --clone-url "http://gitlab:8929" || log "Runner registration may have failed; check runner logs."
 
     log "Appending secrets to ${MANYTASK_ENV} (no overwrite)..."
     touch "${MANYTASK_ENV}"

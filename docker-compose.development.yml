@@ -1,6 +1,7 @@
 networks:
-  manytask-dev-net:
-    driver: bridge
+    manytask-dev-net:
+        name: manytask-dev-net
+        driver: bridge
 
 services:
 
