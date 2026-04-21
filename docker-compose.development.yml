@@ -70,13 +70,25 @@ services:
             GITLAB_OMNIBUS_CONFIG: |
                 external_url 'http://localhost:8929'
                 gitlab_rails['gitlab_shell_ssh_port'] = 8222
+                prometheus_monitoring['enable'] = false
+                alertmanager['enable'] = false
+                node_exporter['enable'] = false
+                redis_exporter['enable'] = false
+                postgres_exporter['enable'] = false
+                gitlab_exporter['enable'] = false
+                gitlab_kas['enable'] = false
+                puma['worker_processes'] = 0
+                sidekiq['concurrency'] = 10
         ports:
             - "8929:8929"    # HTTP web UI
             - "8222:22"      # SSH (optional)
+        shm_size: '256m'
         volumes:
             - gitlab_config:/etc/gitlab
             - gitlab_logs:/var/log/gitlab
             - gitlab_data:/var/opt/gitlab
+        networks:
+            - manytask-dev-net
 
     gitlab-runner:
         image: gitlab/gitlab-runner:alpine
@@ -87,6 +99,8 @@ services:
             - /var/run/docker.sock:/var/run/docker.sock
         depends_on:
             - gitlab
+        networks:
+            - manytask-dev-net
 
 
 volumes:

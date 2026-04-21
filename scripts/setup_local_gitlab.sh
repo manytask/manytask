@@ -87,15 +87,17 @@ main() {
           # Update existing app with correct scopes
           app.update!(
             redirect_uri: '${REDIRECT_URI}',
-            scopes: 'openid email profile read_user api'
+            scopes: 'openid email profile read_user',
+            trusted: true
           )
         else
           # Create new app with all required scopes
           app = Doorkeeper::Application.create!(
             name: 'manytask-local',
             redirect_uri: '${REDIRECT_URI}',
-            scopes: 'openid email profile read_user api',
-            confidential: true
+            scopes: 'openid email profile read_user',
+            confidential: true,
+            trusted: true
           )
         end
         puts [app.uid, app.secret].join(':')
