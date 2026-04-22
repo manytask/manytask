@@ -1,18 +1,29 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.workspace]
+members = [".", "checker"]
+
 [project]
 name = "manytask"
-version = "25.2"
-description = "Manytask system"
+dynamic = ["version"]
+description = "Manytask - a web app to organize courses and collect students scores"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
+license = {text = "MIT"}
+authors = [
+    {name = "Manytask Team"}
+]
 dependencies = [
     "alembic==1.18.3",
-    "authlib==1.6.9",
+    "authlib==1.6.11",
     "gunicorn==25.1.0",
     "flask==3.1.3",
     "flask-wtf>=1.2.2",
     "psycopg2-binary>=2.9.11",
     "pydantic>=2.12",
-    "python-dotenv==1.2.1",
+    "python-dotenv==1.2.2",
     "python-gitlab==8.2.0",
     "pyyaml==6.0.1",
     "requests==2.33.0",
@@ -29,7 +40,7 @@ dev = [
     "mypy==1.20.0",
     "types-requests==2.33.0.20260327",
     "types-PyYAML==6.0.12.12",
-    "pytest==9.0.2",
+    "pytest==9.0.3",
     "pytest-cov==7.1.0",
     "pytest-mock>=3.0.0,<4.0.0",
     "requests-mock>=1.0.0,<2.0.0",
@@ -139,3 +150,9 @@ max-args = 7
 
 [tool.ruff.lint.isort]
 known-first-party = ["manytask", "tests", "checker"]
+
+[tool.setuptools]
+packages = ["manytask"]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}

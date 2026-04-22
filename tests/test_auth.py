@@ -70,10 +70,6 @@ def mock_storage_api(mock_course):  # noqa: C901
             self.course_admin = False
 
         @staticmethod
-        def get_scores_update_timestamp():
-            return datetime.now(tz=ZoneInfo("UTC"))
-
-        @staticmethod
         def get_scores(_username):
             return {"task1": 100, "task2": 90}
 
@@ -114,10 +110,6 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def check_user_on_course(self, *a, **k):
             return True
-
-        @staticmethod
-        def update_cached_scores():
-            pass
 
         @staticmethod
         def get_now_with_timezone():

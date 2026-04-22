@@ -364,13 +364,6 @@ STUDENT_1 = TestStudent(TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TE
 STUDENT_2 = TestStudent(TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2, TEST_AUTH_ID_2)
 
 
-def add_student(db_api, course_name, student: TestStudent, task_name, score):
-    db_api.update_or_create_user(
-        student.username, student.first_name, student.last_name, student.rms_id, student.auth_id
-    )
-    db_api.store_score(course_name, student.username, task_name, update_func(score))
-
-
 def test_not_initialized_course(session, db_api, first_course_config):
     db_api.create_course(settings_config=first_course_config)
     course_name = first_course_config.course_name
@@ -1691,28 +1684,66 @@ def test_grade_config_estimation_with_removing_grade(
 
 
 @pytest.mark.parametrize(
-    "method_name",
+    "method_name, method_kwargs",
     [
-        "get_all_scores_with_names",
-        "recalculate_all_grades",
-        "get_stats",
+        ("get_all_scores_with_names", {"course_name": FIRST_COURSE_NAME}),
+        ("recalculate_all_grades", {"course_name": FIRST_COURSE_NAME}),
+        ("get_stats", {"course_name": FIRST_COURSE_NAME}),
+        ("get_groups", {"course_name": FIRST_COURSE_NAME, "enabled": True, "started": True}),
+        ("get_user_courses_names_with_statuses", {"username": TEST_USERNAME_1}),
+        ("get_courses_where_course_admin", {"username": TEST_USERNAME_1}),
     ],
 )
-def test_constant_queries(db_api_with_initialized_first_course, engine, method_name):
-    """Query count must not grow with student count."""
+def test_constant_queries(  # noqa: PLR0913
+    db_api_with_initialized_first_course,
+    second_course_config,
+    second_course_deadlines_config,
+    second_course_grade_config,
+    session,
+    engine,
+    method_name,
+    method_kwargs,
+):
+    """Query count must not grow with entity count (students or courses)."""
     db_api = db_api_with_initialized_first_course
     method = getattr(db_api, method_name)
 
-    add_student(db_api, FIRST_COURSE_NAME, STUDENT_1, "task_0_0", 1)
+    # Setup 1st course and 1st student
+    course1 = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    course1.status = CourseStatus.IN_PROGRESS
+    session.commit()
+
+    db_api.update_or_create_user(
+        STUDENT_1.username, STUDENT_1.first_name, STUDENT_1.last_name, STUDENT_1.rms_id, STUDENT_1.auth_id
+    )
+    db_api.store_score(FIRST_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_1, True)
 
     with query_counter(engine) as counter:
-        method(FIRST_COURSE_NAME)
-    queries_with_1_student = counter.value
+        method(**method_kwargs)
+    queries_initial = counter.value
 
-    add_student(db_api, FIRST_COURSE_NAME, STUDENT_2, "task_0_0", 1)
+    # Setup 2nd course
+    create_course(db_api, second_course_config, second_course_deadlines_config, second_course_grade_config)
+    course2 = session.query(Course).filter_by(name=SECOND_COURSE_NAME).one()
+    course2.status = CourseStatus.IN_PROGRESS
+    session.commit()
+
+    # Register 1st student on 2nd course
+    db_api.store_score(SECOND_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
+    db_api.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_1, True)
+
+    # Setup 2nd student and register on both courses
+    db_api.update_or_create_user(
+        STUDENT_2.username, STUDENT_2.first_name, STUDENT_2.last_name, STUDENT_2.rms_id, STUDENT_2.auth_id
+    )
+    db_api.store_score(FIRST_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_2, True)
+    db_api.store_score(SECOND_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
+    db_api.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_2, True)
 
     with query_counter(engine) as counter:
-        method(FIRST_COURSE_NAME)
-    queries_with_2_students = counter.value
+        method(**method_kwargs)
+    queries_scaled = counter.value
 
-    assert queries_with_1_student == queries_with_2_students
+    assert queries_initial == queries_scaled

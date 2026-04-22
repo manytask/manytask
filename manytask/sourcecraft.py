@@ -53,6 +53,7 @@ class SourceCraftApi(RmsApi):
 
         self._client = httpx.Client(
             base_url=config.api_url,
+            timeout=30.0,
         )
         if config.service_account_key:
             self._sdk = SDK(service_account_key=config.service_account_key)
@@ -414,4 +415,7 @@ class SourceCraftApi(RmsApi):
         raise NotImplementedError("delete_project method not implemented yet")
 
     def get_group_path_by_id(self, group_id: int) -> str | None:
-        raise NotImplementedError("get_group_path_by_id method not implemented yet")
+        if group_id == -1:
+            return ""
+        else:
+            raise NotImplementedError("get_group_path_by_id method not implemented yet")

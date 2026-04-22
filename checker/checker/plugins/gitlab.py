@@ -14,7 +14,7 @@ class CheckGitlabMergeRequestPlugin(PluginABC):
         token: str
         task_dir: str
         repo_url: AnyUrl
-        requre_approval: bool = False
+        require_approval: bool = False
         search_for_score: bool = False
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
@@ -35,7 +35,7 @@ class CollectScoreGitlabMergeRequestPlugin(PluginABC):
         token: str
         task_dir: str
         repo_url: AnyUrl
-        requre_approval: bool = False
+        require_approval: bool = False
         search_for_score: bool = False
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
