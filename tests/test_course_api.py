@@ -46,6 +46,7 @@ def app_with_db(engine, session, postgres_container):
     db_config = DatabaseConfig(
         database_url=postgres_container.get_connection_url(),
         instance_admin_username="admin",
+        instance_admin_rms_id=-1,
         apply_migrations=True,
         session_factory=session_factory,
     )
