@@ -23,7 +23,7 @@ dependencies = [
     "flask-wtf>=1.2.2",
     "psycopg2-binary>=2.9.11",
     "pydantic>=2.12",
-    "python-dotenv==1.2.1",
+    "python-dotenv==1.2.2",
     "python-gitlab==8.2.0",
     "pyyaml==6.0.1",
     "requests==2.33.0",
