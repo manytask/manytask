@@ -21,9 +21,11 @@ repos:
           - pydantic>=2.9.0
           - pydantic-settings>=2.6.0
           - fastapi>=0.115.0
-          - types-redis
+          - redis>=5.0.0
           - types-PyYAML
           - loguru>=0.7.0
           - pytest>=8.0.0
+          - fakeredis>=2.0.0
+          - pytest-asyncio>=0.23.0
         args: [--strict]
         files: ^(app|tests)/
