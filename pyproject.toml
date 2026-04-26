@@ -57,6 +57,6 @@ module = ["gitlab.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov-report=term-missing"
+addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov-report=term-missing --cov-fail-under=90"
 asyncio_mode = "auto"
 testpaths = ["tests"]
