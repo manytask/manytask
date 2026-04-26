@@ -52,12 +52,29 @@ class TaskConfig(BaseModel):
 
 
 class CourseConfig(BaseModel):
-    """Stub for now — fleshed out in Task 5."""
+    """Root model of the `mr_review` section."""
 
     model_config = ConfigDict(extra="forbid")
-    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION)
+    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, description="Config layout version")
+    tasks: list[TaskConfig] = Field(min_length=1, description="Course tasks")
 
 
 def load_course_config(yaml_text: str) -> CourseConfig:
-    """Stub — implemented in Task 5."""
-    raise NotImplementedError
+    """Parse YAML text and validate against CourseConfig.
+
+    Raises:
+        ValueError: YAML syntax error or top-level not a mapping.
+        pydantic.ValidationError: schema mismatch with readable details.
+    """
+
+    import yaml
+
+    try:
+        raw = yaml.safe_load(yaml_text)
+    except yaml.YAMLError as err:
+        raise ValueError(f"invalid YAML: {err}") from err
+
+    if not isinstance(raw, dict):
+        raise ValueError("course config YAML must be a mapping at the top level")
+
+    return CourseConfig.model_validate(raw)
