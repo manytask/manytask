@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from loguru import logger
 
-from app.api import health
+from app.api import courses, health
 
 
 @asynccontextmanager
@@ -19,6 +19,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="manytask-mr-reviewer", lifespan=lifespan)
     app.include_router(health.router)
+    app.include_router(courses.router)
     return app
 
 
