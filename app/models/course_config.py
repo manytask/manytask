@@ -44,9 +44,11 @@ ChecklistStepAdapter: TypeAdapter[ChecklistStepUnion] = TypeAdapter(ChecklistSte
 
 
 class TaskConfig(BaseModel):
-    """Stub for now — fleshed out in Task 4."""
+    """Single task within a course — its checklist of steps."""
 
     model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, description="Task identifier matching folder name")
+    checklist: list[ChecklistStepUnion] = Field(min_length=1, description="Ordered checklist steps")
 
 
 class CourseConfig(BaseModel):

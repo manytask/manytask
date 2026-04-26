@@ -11,6 +11,7 @@ from app.models.course_config import (
     ForbiddenFilesStep,
     PipelinePassedStep,
     RunStep,
+    TaskConfig,
 )
 
 
@@ -64,3 +65,42 @@ class TestUnknownStepType:
             _validate_step({"type": "totally_made_up"})
         msg = str(exc_info.value)
         assert "type" in msg.lower()
+
+
+class TestTaskConfig:
+    def test_minimal_task_validates(self) -> None:
+        task = TaskConfig.model_validate(
+            {
+                "name": "task-1",
+                "checklist": [{"type": "pipeline_passed"}],
+            }
+        )
+        assert task.name == "task-1"
+        assert len(task.checklist) == 1
+        assert isinstance(task.checklist[0], PipelinePassedStep)
+
+    def test_task_with_multiple_steps(self) -> None:
+        task = TaskConfig.model_validate(
+            {
+                "name": "task-1",
+                "checklist": [
+                    {"type": "pipeline_passed"},
+                    {"type": "forbidden_files", "extensions": [".env"]},
+                    {"type": "folder_structure", "required_path": "tasks/task-1/"},
+                    {"type": "run", "command": "pytest"},
+                ],
+            }
+        )
+        assert len(task.checklist) == 4
+
+    def test_empty_checklist_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            TaskConfig.model_validate({"name": "task-1", "checklist": []})
+
+    def test_missing_name_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            TaskConfig.model_validate({"checklist": [{"type": "pipeline_passed"}]})
+
+    def test_unknown_step_type_in_task(self) -> None:
+        with pytest.raises(ValidationError):
+            TaskConfig.model_validate({"name": "task-1", "checklist": [{"type": "nope"}]})
