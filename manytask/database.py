@@ -94,7 +94,7 @@ class DatabaseConfig:
 
     database_url: str
     instance_admin_username: str
-    instance_admin_rms_id: int
+    instance_admin_rms_id: str
     apply_migrations: bool = False
     session_factory: Optional[Callable[[], Session]] = None
 
