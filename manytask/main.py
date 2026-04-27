@@ -111,7 +111,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     logging.config.dictConfig(_logging_config(app))
 
     # api objects
-    app.storage_api = _database_storage_setup()
+    app.storage_api = _database_storage_setup(app.debug)
 
     rms = app.app_config.rms
 
@@ -226,7 +226,7 @@ def _create_debug_course(app: CustomFlask) -> None:
     app.storage_api.create_course(course_config)
 
 
-def _database_storage_setup() -> abstract.StorageApi:
+def _database_storage_setup(debug: bool) -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)
     apply_migrations = os.environ.get("APPLY_MIGRATIONS", "false").lower() in (
         "true",
@@ -241,7 +241,7 @@ def _database_storage_setup() -> abstract.StorageApi:
     if instance_admin_username is None:
         raise EnvironmentError("Unable to find INITIAL_INSTANCE_ADMIN env")
 
-    if app.debug:
+    if debug:
         rms_user = abstract.RmsUser(id=-1, username="username", name="First Last")
     else:
         rms_user = app.rms_api.get_rms_user_by_username(instance_admin_username)
