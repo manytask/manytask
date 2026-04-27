@@ -664,6 +664,5 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
                 username=TEST_USERNAME,
                 first_name="Test",
                 last_name="User",
-                rms_id=TEST_RMS_ID,
                 auth_id=TEST_USER_ID,
             )
