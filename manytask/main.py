@@ -110,9 +110,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     # logging
     logging.config.dictConfig(_logging_config(app))
 
-    # api objects
-    app.storage_api = _database_storage_setup(app)
-
+    # RMS API
     rms = app.app_config.rms
 
     if rms == "gitlab":
@@ -154,6 +152,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         )
         app.auth_api = MockAuthApi()
         app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
+
+    # Storage API
+    app.storage_api = _database_storage_setup(app)
 
     app.csrf = CSRFProtect(app)
 
