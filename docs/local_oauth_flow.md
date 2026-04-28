@@ -287,7 +287,7 @@ docker logs -f manytask_gitlab
 Rebuild and restart Manytask:
 
 ```bash
-docker compose -f docker-compose.development.yml up --build --no-deps -d manytask
+docker-compose -f docker-compose.development.yml up --build --no-deps -d manytask
 ```
 
 Stop stack:
