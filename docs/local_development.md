@@ -1,6 +1,6 @@
-# OAuth Authentication Flow in Local Development
+# Local Development Guide
 
-This document explains how OAuth authentication works in local development when Manytask and GitLab run in Docker containers.
+This document explains how to set up and use the local development environment where Manytask and GitLab run in Docker containers. It also details how OAuth authentication works in this setup.
 
 ## Purpose
 
@@ -8,8 +8,8 @@ Use this guide when you:
 
 - run Manytask locally with Docker,
 - use a local GitLab instance,
-- want to understand why OAuth needs different internal and external URLs,
-- need a stable startup sequence and troubleshooting steps.
+- need a stable startup sequence and troubleshooting steps,
+- want to understand why OAuth needs different internal and external URLs.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Use this guide when you:
 
 ### Minimum Colima configuration for local GitLab
 
-GitLab needs enough RAM to become healthy. Start Colima with at least:
+GitLab needs enough resources, start Colima with at least:
 
 ```bash
 colima start --memory 4 --cpu 2 --disk 100
@@ -45,15 +45,10 @@ GITLAB_OAUTH_URL=http://localhost:8929
 GITLAB_URL=http://gitlab:8929
 ```
 
-If your container network setup does not resolve `gitlab`, use:
-
-```bash
-GITLAB_URL=http://host.docker.internal:8929
-```
 
 ## Quick start
 
-Start the environment:
+Make sure that Docker daemon is running and then start the environment:
 
 ```bash
 ./scripts/start_local_dev.sh
@@ -223,13 +218,6 @@ Actions:
 docker exec test-manytask sh -lc 'curl -fsS $GITLAB_URL/users/sign_in >/dev/null && echo OK'
 ```
 
-2. If `gitlab` hostname is not resolvable in your setup, set:
-
-```bash
-GITLAB_URL=http://host.docker.internal:8929
-```
-
-3. Restart Manytask container.
 
 ### OAuth scope errors
 
@@ -251,7 +239,7 @@ Fix:
 
 The script updates app scopes to:
 
-- `openid email profile read_user api`
+- `openid email profile read_user`
 
 ### Runner registration returns 502
 
