@@ -659,10 +659,12 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
             with client.session_transaction() as sess:
                 assert "version" in sess["rms"]
                 assert sess["rms"]["username"] == TEST_USERNAME
+                rms_id = sess["rms"]["rms_id"]
 
             mock_update_or_create_user.assert_called_once_with(
                 username=TEST_USERNAME,
                 first_name="Test",
                 last_name="User",
+                rms_id=rms_id,
                 auth_id=TEST_USER_ID,
             )
