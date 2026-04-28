@@ -9,7 +9,7 @@ RUN pip install uv==${UV_VERSION}
 
 RUN apk add --no-cache build-base
 
-RUN uv sync --locked
+RUN uv sync --locked --no-install-project
 
 
 FROM python:3.14-alpine AS app
