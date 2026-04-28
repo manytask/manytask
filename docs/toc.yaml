@@ -42,6 +42,8 @@ items:
         href: course_statuses.md
       - name: Public export
         href: checker.md
+      - name: Checker pipelines and plugins
+        href: checker_pipelines_and_plugins.md
   - name: For system administrators
     items:
       - name: Production setup
