@@ -52,7 +52,7 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
     course = storage_api.get_course(course_name)
     if course is None:
         logger.warning("Course not found: %s", course_name)
-        abort(HTTPStatus.NOT_FOUND, "Course not found")
+        abort(HTTPStatus.NOT_FOUND, f"Course '{course_name}' not found")
     return course
 
 
@@ -184,16 +184,38 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         logger.debug("Checking token for course=%s", course_name)
 
         course = __get_course_or_not_found(app.storage_api, course_name)
-
         course_token = course.token
-        token = request.form.get("token", request.headers.get("Authorization", ""))
-        if not token or not course_token:
-            logger.warning("Missing token for course=%s", course_name)
-            abort(HTTPStatus.FORBIDDEN)
-        token = token.split()[-1]
-        if not secrets.compare_digest(token, course_token):
+
+        form_token = request.form.get("token")
+        auth_header = request.headers.get("Authorization")
+
+        if form_token is None and auth_header is None:
+            logger.warning("Missing authorization for course=%s (no header, no form field)", course_name)
+            abort(
+                HTTPStatus.FORBIDDEN,
+                "Missing authorization: provide course token via 'Authorization' header or 'token' form field",
+            )
+
+        raw_token = form_token if form_token is not None else auth_header
+        assert raw_token is not None
+        # Support "Authorization: Bearer <token>" by taking the trailing component.
+        token_parts = raw_token.split()
+        submitted_token = token_parts[-1] if token_parts else ""
+
+        if not submitted_token:
+            logger.warning("Empty authorization token for course=%s", course_name)
+            abort(HTTPStatus.FORBIDDEN, "Empty authorization token")
+
+        if not course_token:
+            logger.error("Course=%s has no API token configured", course_name)
+            abort(
+                HTTPStatus.FORBIDDEN,
+                f"Course '{course_name}' has no API token configured",
+            )
+
+        if not secrets.compare_digest(submitted_token, course_token):
             logger.warning("Invalid token for course=%s", course_name)
-            abort(HTTPStatus.FORBIDDEN)
+            abort(HTTPStatus.FORBIDDEN, "Invalid course token")
 
         logger.debug("Token validated for course=%s", course_name)
         return f(*args, **kwargs)
@@ -281,21 +303,21 @@ def _validate_and_extract_params(
     """Validate and extract parameters from form data."""
 
     if "user_id" in form_data and "username" in form_data:
-        abort(HTTPStatus.BAD_REQUEST, "Both `user_id` or `username` were provided, use only one")
+        abort(HTTPStatus.BAD_REQUEST, "Both `user_id` and `username` were provided, use only one")
     elif "user_id" in form_data:
         user_id = form_data["user_id"]
         try:
             rms_user = rms_api.get_rms_user_by_id(user_id)
             logger.info("Found RMS user by id=%s: %s", sanitize_log_data(user_id), rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id {user_id}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id={user_id}")
     elif "username" in form_data:
         username = form_data["username"]
         try:
             rms_user = rms_api.get_rms_user_by_username(username)
             logger.info("Found RMS user by username=%s: %s", sanitize_log_data(username), rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username {username}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username='{username}'")
     else:
         abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
 
@@ -307,7 +329,10 @@ def _validate_and_extract_params(
         course, group, task = storage_api.find_task(course_name, task_name)
     except (KeyError, TaskDisabledError):
         logger.warning("Task not found or disabled: %s", sanitize_log_data(task_name))
-        abort(HTTPStatus.NOT_FOUND, f"There is no task with name `{task_name}` (or it is closed for submission)")
+        abort(
+            HTTPStatus.NOT_FOUND,
+            f"Task '{task_name}' not found in course '{course_name}' (or it is closed for submission)",
+        )
 
     return rms_user, course, task, group
 
@@ -362,7 +387,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     if course.status == CourseStatus.FINISHED:
-        abort(HTTPStatus.CONFLICT, f"Cannot update score the course '{course_name}' is already finished.")
+        abort(HTTPStatus.CONFLICT, f"Cannot update score: course '{course_name}' is already finished.")
 
     rms_user, course, task, group = _validate_and_extract_params(
         request.form, app.rms_api, app.storage_api, course.course_name
