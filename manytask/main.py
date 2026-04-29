@@ -117,7 +117,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     if rms == "gitlab":
         app.oauth = _authenticate(
-            OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
+            OAuth(app),
+            app.app_config.gitlab_url,
+            app.app_config.gitlab_oauth_url,
+            app.app_config.gitlab_client_id,
+            app.app_config.gitlab_client_secret,
         )
         gitlab_api: glab.GitLabApi = glab.GitLabApi(
             glab.GitLabConfig(
@@ -150,7 +154,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     elif rms == "mock":
         app.oauth = _authenticate(
-            OAuth(app), app.app_config.gitlab_url, app.app_config.gitlab_client_id, app.app_config.gitlab_client_secret
+            OAuth(app),
+            app.app_config.gitlab_url,
+            app.app_config.gitlab_oauth_url,
+            app.app_config.gitlab_client_id,
+            app.app_config.gitlab_client_secret,
         )
         app.auth_api = MockAuthApi()
         app.rms_api = MockRmsApi(base_url=app.app_config.gitlab_url)
@@ -329,7 +337,7 @@ def _create_app_config(app: CustomFlask, debug: bool | None, test: bool) -> None
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex())
 
 
-def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: str) -> OAuth:
+def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id: str, client_secret: str) -> OAuth:
     client_kwargs = {
         "scope": "openid email profile read_user",
         "code_challenge_method": "S256",
@@ -339,10 +347,10 @@ def _authenticate(oauth: OAuth, base_url: str, client_id: str, client_secret: st
         name="auth_provider",
         client_id=client_id,
         client_secret=client_secret,
-        authorize_url=f"{base_url}/oauth/authorize",
-        access_token_url=f"{base_url}/oauth/token",
-        userinfo_endpoint=f"{base_url}/oauth/userinfo",
-        jwks_uri=f"{base_url}/oauth/discovery/keys",
+        authorize_url=f"{external_url}/oauth/authorize",
+        access_token_url=f"{internal_url}/oauth/token",
+        userinfo_endpoint=f"{internal_url}/oauth/userinfo",
+        jwks_uri=f"{internal_url}/oauth/discovery/keys",
         client_kwargs=client_kwargs,
     )
     return oauth
