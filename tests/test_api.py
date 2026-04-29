@@ -970,7 +970,7 @@ def test_validate_and_extract_params_no_task_name(app):
 def test_validate_and_extract_params_student_id_not_found(app):
     """Test parsing form data wrong id"""
     app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
-    form_data = {"user_id": TEST_INVALID_USER_ID, "task": TEST_TASK_NAME}
+    form_data = {"user_id": str(TEST_INVALID_USER_ID), "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:

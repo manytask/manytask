@@ -52,7 +52,7 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
     course = storage_api.get_course(course_name)
     if course is None:
         logger.warning("Course not found: %s", course_name)
-        abort(HTTPStatus.NOT_FOUND, f"Course '{course_name}' not found")
+        abort(HTTPStatus.NOT_FOUND, f"Course '{sanitize_log_data(course_name)}' not found")
     return course
 
 
@@ -210,7 +210,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
             logger.error("Course=%s has no API token configured", course_name)
             abort(
                 HTTPStatus.FORBIDDEN,
-                f"Course '{course_name}' has no API token configured",
+                f"Course '{sanitize_log_data(course_name)}' has no API token configured",
             )
 
         if not secrets.compare_digest(submitted_token, course_token):
@@ -310,14 +310,14 @@ def _validate_and_extract_params(
             rms_user = rms_api.get_rms_user_by_id(user_id)
             logger.info("Found RMS user by id=%s: %s", sanitize_log_data(user_id), rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id={user_id}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id={sanitize_log_data(user_id)}")
     elif "username" in form_data:
         username = form_data["username"]
         try:
             rms_user = rms_api.get_rms_user_by_username(username)
             logger.info("Found RMS user by username=%s: %s", sanitize_log_data(username), rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username='{username}'")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username='{sanitize_log_data(username)}'")
     else:
         abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
 
@@ -331,7 +331,8 @@ def _validate_and_extract_params(
         logger.warning("Task not found or disabled: %s", sanitize_log_data(task_name))
         abort(
             HTTPStatus.NOT_FOUND,
-            f"Task '{task_name}' not found in course '{course_name}' (or it is closed for submission)",
+            f"Task '{sanitize_log_data(task_name)}' not found in course "
+            f"'{sanitize_log_data(course_name)}' (or it is closed for submission)",
         )
 
     return rms_user, course, task, group
@@ -370,13 +371,13 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         elif float(score_str) > max_score:
             abort(
                 HTTPStatus.BAD_REQUEST,
-                f"Reported `score` <{score_str}> is too large. Should be "
+                f"Reported `score` <{sanitize_log_data(score_str)}> is too large. Should be "
                 f"integer or float between {min_score} and {max_score}.",
             )
         else:
             return round(float(score_str) * task_score)
     except ValueError:
-        abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{score_str}> to a number")
+        abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{sanitize_log_data(score_str)}> to a number")
 
 
 @bp.post("/report")
@@ -387,7 +388,10 @@ def report_score(course_name: str) -> ResponseReturnValue:
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     if course.status == CourseStatus.FINISHED:
-        abort(HTTPStatus.CONFLICT, f"Cannot update score: course '{course_name}' is already finished.")
+        abort(
+            HTTPStatus.CONFLICT,
+            f"Cannot update score: course '{sanitize_log_data(course_name)}' is already finished.",
+        )
 
     rms_user, course, task, group = _validate_and_extract_params(
         request.form, app.rms_api, app.storage_api, course.course_name
