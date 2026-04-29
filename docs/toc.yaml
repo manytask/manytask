@@ -54,6 +54,8 @@ items:
         href: deploy_guide.md
   - name: For developers
     items:
+      - name: Local Development
+        href: local_development.md
       - name: Development
         href: dev.md
   - name: References
