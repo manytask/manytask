@@ -26,6 +26,8 @@ navigation:
 items:
   - name: About
     href: about.md
+  - name: Concepts
+    href: concepts.md
   - name: For students
     items:
       - name: Manytask
