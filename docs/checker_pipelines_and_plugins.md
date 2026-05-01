@@ -1,11 +1,34 @@
-# Plugins
+# Checker Pipelines and Plugins
 
-This page describes how to use and write plugins for checker pipelines.
+This page describes how pipelines work in the checker and how to use and write plugins for them.
 
 You can refer to the [course-template](https://github.com/manytask/course-template) repository for examples of plugins usage and custom plugins development.
 
 
-## What is the Plugin
+## Pipelines
+
+This is the most important part of the checker. Pipelines are used to actually check and grade the solution.   
+Each pipeline is a sequence of plugins. Each plugin (pipeline stage) have arguments, run_if condition and return exclusion result. 
+
+
+### 3 pipeline types
+
+There are 3 types of pipelines you need to define in `.checker.yml` file:
+* `global_pipeline` - pipeline to be executed once for all checker repository.  
+    You can place here any general compilation, installation, etc.  
+* `tasks_pipeline` - pipeline to be executed for each task.  
+    You can place here any task-specific compilation, installation, etc.  
+    For example, you run `pytest` by default, but for some tasks you want to have MR checked first.  
+    (can be re-defined in `.task.yml` file)
+* `report_pipeline` - pipeline to be executed for each task after all tests are passed (not failed).  
+    You can place here any task-specific score reporting, etc.  
+    For example, you can report the score to the Manytask platform, but for some tasks you want to have MR checked first.  
+    (can be re-defined in `.task.yml` file)
+
+
+## Plugins
+
+Plugin is a single stage of the pipeline, have arguments, return exclusion result. 
 
 ```yaml
   tasks_pipeline:
@@ -26,7 +49,6 @@ You can refer to the [course-template](https://github.com/manytask/course-templa
         script: "python -m ruff --config=pyproject.toml ${{ task.task_sub_path }}"
 ```
 
-Plugin is a single stage of the pipeline, have arguments, return exclusion result. 
 In a nutshell, it is a Python class overriding abstract class `checker.plugins.PluginABC`:
 
 > ::: checker.plugins.base.PluginABC
@@ -48,7 +70,7 @@ In case of error, `checker.exceptions.PluginExecutionFailed` have to be raised.
     So try to move all arguments validation to `Args` class in `pydantic` way.
 
 
-## How to use plugins
+### How to use plugins
 
 Plugins are used in the pipelines described in `.checker.yml` file. When running a pipeline the checker will validate plugin arguments and run it.
 
@@ -84,18 +106,9 @@ The following plugins are available out of the box, here is the list with their 
     > ::: checker.plugins.gitlab.CollectScoreGitlabMergeRequestPlugin.Args
 
 
-[//]: # (::: checker.plugins)
-
-[//]: # (    handler: python)
-
-[//]: # (TODO: list here all plugins available out of the box)
-
-
-## How to write a custom plugin
+### How to write a custom plugin
 
 To write a custom plugin you need to create a class inheriting from `checker.plugins.PluginABC` and override `_run` method, `Args` inner class and set `name` class attribute.
-
-[//]: # (TODO: test example)
 
 ```python
 from random import randint
