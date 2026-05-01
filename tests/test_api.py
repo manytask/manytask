@@ -448,6 +448,7 @@ def test_report_score_missing_user(app):
 
 def test_report_score_success(app):
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
     with app.test_request_context():
         data = {
             "task": TEST_TASK_NAME,
@@ -467,6 +468,7 @@ def test_report_score_success(app):
 
 def test_get_score_success(app):
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
     with app.test_request_context():
         data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
@@ -702,6 +704,7 @@ def test_report_score_with_flags(app):
     client = app.test_client()
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
     data = {
         "user_id": rms_user.id,
         "task": TEST_TASK_NAME,
