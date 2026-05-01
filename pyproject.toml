@@ -30,7 +30,7 @@ dependencies = [
     "sqlalchemy>=2.0.44,<3.0.0",
     "werkzeug==3.1.6",
     "httpx>=0.28.1",
-    "yandexcloud>=0.10",
+    "yandexcloud>=0.388.0",
     "grpcio>=1.78.0",
 ]
 
