@@ -43,7 +43,7 @@ items:
       - name: Course statuses
         href: course_statuses.md
       - name: Private repository
-        href: private_repository.md
+        href: private_repo.md
       - name: Public export
         href: checker.md
       - name: Checker pipelines and plugins
