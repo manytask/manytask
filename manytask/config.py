@@ -131,6 +131,28 @@ class CourseResponse(BaseModel):
     owners: list[str]  # gitlab user_ids
 
 
+class PingResponse(BaseModel):
+    course: str
+    ok: bool
+
+
+class IsAdminResponse(BaseModel):
+    username: str
+    is_admin: bool
+
+
+class DeadlineItem(BaseModel):
+    task_name: str
+    group: str
+    deadline: datetime
+    score: int
+
+
+class DeadlinesResponse(BaseModel):
+    course: str
+    tasks: list[DeadlineItem]
+
+
 class ManytaskUiConfig(BaseModel):
     task_url_template: str  # $GROUP_NAME $TASK_NAME $USER_NAME vars are available
     links: dict[str, str] = Field(default_factory=dict)
