@@ -25,6 +25,7 @@ from .config import (
     CreateCourseRequest,
     CreateNamespaceRequest,
     ErrorResponse,
+    IsAdminResponse,
     ManytaskGroupConfig,
     ManytaskTaskConfig,
     ManytaskUpdateDatabasePayload,
@@ -514,6 +515,21 @@ def get_score(course_name: str) -> ResponseReturnValue:
 @requires_token
 def ping(course_name: str) -> ResponseReturnValue:
     return jsonify(PingResponse(course=course_name, ok=True).model_dump()), HTTPStatus.OK
+
+
+@bp.get("/is_admin")
+@requires_token
+def is_admin(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    username = request.args.get("username")
+    if not username:
+        abort(HTTPStatus.BAD_REQUEST, "Query parameter `username` is required")
+    return jsonify(
+        IsAdminResponse(
+            username=username,
+            is_admin=app.storage_api.check_if_course_admin(course_name, username),
+        ).model_dump()
+    ), HTTPStatus.OK
 
 
 @bp.post("/update_config")

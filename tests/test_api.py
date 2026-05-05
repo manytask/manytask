@@ -1191,3 +1191,68 @@ def test_ping_unknown_course(app):
         response = client.get("/api/no-such-course/ping", headers=headers)
 
     assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_is_admin_true_for_known_admin(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?username={TEST_USERNAME}", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"username": TEST_USERNAME, "is_admin": True}
+
+
+def test_is_admin_false_for_known_non_admin(app):
+    app.storage_api.non_admin_users.add("plain_student")
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?username=plain_student", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"username": "plain_student", "is_admin": False}
+
+
+def test_is_admin_false_for_unknown_user(app):
+    """Per ticket contract: authorization != existence. Unknown username returns 200 + false."""
+    app.storage_api.non_admin_users.add("ghost_user")
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?username=ghost_user", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"username": "ghost_user", "is_admin": False}
+
+
+def test_is_admin_missing_username(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin", headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert b"username" in response.data
+
+
+def test_is_admin_empty_username(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?username=", headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert b"username" in response.data
+
+
+def test_is_admin_invalid_token(app):
+    client = app.test_client()
+    headers = {"Authorization": "Bearer wrong_token"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?username={TEST_USERNAME}", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
