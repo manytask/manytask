@@ -3,16 +3,19 @@ TESTS_DIR := tests
 DOCKER_COMPOSE_DEV := docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 
+COMMON_YAML ?= ../common.example.yml
+MANYTASK_CONFIG_OUT ?= ../.manytask.yml
+
 # testcontainers may fail on some macOS Docker setups due to Ryuk connectivity issues.
 # Allow overriding: `make test TESTCONTAINERS_RYUK_DISABLED=false`
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: dev test reset-dev clean-db lint setup install-deps check format check-colima install-hooks run-hooks makemigrations migrate downgrade history
+.PHONY: dev test reset-dev clean-db lint setup install-deps check format check-colima install-hooks run-hooks makemigrations migrate downgrade history copy-common-config
 
-check: format lint test
+check: copy-common-config format lint test
 
-check-colima: format lint test-colima
+check-colima: copy-common-config format lint test-colima
 
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -35,10 +38,10 @@ clean-db:
 reset-dev: clean-db
 	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
-test: install-deps
+test: copy-common-config install-deps
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
 
-test-colima: install-deps
+test-colima: copy-common-config install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
 	uv run python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
 
@@ -87,3 +90,6 @@ history:
 	uv run alembic -c $(ALEMBIC_CONFIG_PATH) history
 	@echo ""
 	uv run alembic -c $(ALEMBIC_CONFIG_PATH) current || { echo "\033[33mWarning: Make sure that the database is running.\033[0m"; exit 1; }
+
+copy-common-config:
+	cp "$(COMMON_YAML)" "$(MANYTASK_CONFIG_OUT)"
