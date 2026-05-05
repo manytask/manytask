@@ -1256,3 +1256,123 @@ def test_is_admin_invalid_token(app):
     response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?username={TEST_USERNAME}", headers=headers)
 
     assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def _build_group(
+    name: str,
+    *,
+    enabled: bool = True,
+    start: datetime,
+    end: datetime | timedelta,
+    tasks: list[tuple[str, int, bool]],
+) -> ManytaskGroupConfig:
+    """Helper: build a ManytaskGroupConfig with N tasks. tasks = [(name, score, enabled), ...]."""
+    return ManytaskGroupConfig(
+        group=name,
+        enabled=enabled,
+        start=start,
+        end=end,
+        tasks=[
+            ManytaskTaskConfig(task=task_name, score=score, enabled=task_enabled)
+            for task_name, score, task_enabled in tasks
+        ],
+    )
+
+
+def test_deadlines_basic(app):
+    start = datetime(2026, 9, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+    end = datetime(2026, 9, 15, 23, 59, 59, tzinfo=ZoneInfo("UTC"))
+    expected_score = 100
+    app.storage_api.groups_override = [
+        _build_group(
+            "01_intro",
+            start=start,
+            end=end,
+            tasks=[("compgraph", expected_score, True)],
+        )
+    ]
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["course"] == TEST_COURSE_NAME
+    assert len(body["tasks"]) == 1
+    item = body["tasks"][0]
+    assert item["task_name"] == "compgraph"
+    assert item["group"] == "01_intro"
+    assert item["score"] == expected_score
+    assert datetime.fromisoformat(item["deadline"]) == end
+
+
+def test_deadlines_empty_course(app):
+    app.storage_api.groups_override = []
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"course": TEST_COURSE_NAME, "tasks": []}
+
+
+def test_deadlines_filters_disabled_groups_and_tasks(app):
+    start = datetime(2026, 9, 1, tzinfo=ZoneInfo("UTC"))
+    end = datetime(2026, 9, 15, tzinfo=ZoneInfo("UTC"))
+    app.storage_api.groups_override = [
+        _build_group(
+            "enabled_group",
+            start=start,
+            end=end,
+            tasks=[("visible_task", 50, True), ("hidden_task", 50, False)],
+        ),
+        _build_group(
+            "disabled_group",
+            enabled=False,
+            start=start,
+            end=end,
+            tasks=[("filtered_out", 50, True)],
+        ),
+    ]
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    task_names = [t["task_name"] for t in body["tasks"]]
+    assert task_names == ["visible_task"]
+
+
+def test_deadlines_resolves_timedelta_end(app):
+    start = datetime(2026, 9, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
+    app.storage_api.groups_override = [
+        _build_group(
+            "01_intro",
+            start=start,
+            end=timedelta(days=14),
+            tasks=[("compgraph", 100, True)],
+        )
+    ]
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    expected_deadline = start + timedelta(days=14)
+    assert datetime.fromisoformat(body["tasks"][0]["deadline"]) == expected_deadline
+
+
+def test_deadlines_invalid_token(app):
+    client = app.test_client()
+    headers = {"Authorization": "Bearer wrong_token"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN

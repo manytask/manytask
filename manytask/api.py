@@ -24,6 +24,8 @@ from .config import (
     CourseResponse,
     CreateCourseRequest,
     CreateNamespaceRequest,
+    DeadlineItem,
+    DeadlinesResponse,
     ErrorResponse,
     IsAdminResponse,
     ManytaskGroupConfig,
@@ -530,6 +532,31 @@ def is_admin(course_name: str) -> ResponseReturnValue:
             is_admin=app.storage_api.check_if_course_admin(course_name, username),
         ).model_dump()
     ), HTTPStatus.OK
+
+
+@bp.get("/deadlines")
+@requires_token
+def get_deadlines(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    groups = app.storage_api.get_groups(course_name, enabled=True)
+    items: list[DeadlineItem] = []
+    for group in groups:
+        deadline = group.get_deadline(group.end)
+        for task in group.tasks:
+            if not task.enabled:
+                continue
+            items.append(
+                DeadlineItem(
+                    task_name=task.name,
+                    group=group.name,
+                    deadline=deadline,
+                    score=task.score,
+                )
+            )
+    return (
+        jsonify(DeadlinesResponse(course=course_name, tasks=items).model_dump(mode="json")),
+        HTTPStatus.OK,
+    )
 
 
 @bp.post("/update_config")
