@@ -21,77 +21,174 @@ deadlines:
 
   schedule:
 
-    - group: group_0
+    - group: Python
       start: 2000-01-01 18:00
       steps:
         0.5: 2000-03-01 18:00
       end: 2000-05-01 23:59
       enabled: true
       tasks:
-        - task: task_0_0
+        - task: codeops
+          score: 20
+        - task: byteme
+          score: 20
+        - task: arg_binding
+          score: 40
+        - task: vm
+          score: 450
+          is_large: true
+          min_score: 320
+        - task: oh_my_git
           score: 10
-        - task: task_0_1
+          is_special: true
+        - task: diesel_power
           score: 10
-        - task: task_0_2
           is_bonus: true
-          score: 10
-        - task: task_0_3
-          score: 10
-        - task: task_0_4
-          score: 10
-        - task: task_0_5
-          score: 10
 
-    - group: group_1
+    - group: C++
       start: 2000-01-01 18:00
       steps:
         0.5: 2000-02-01 23:59
       end: 2000-02-01 23:59
       enabled: true
       tasks:
-        - task: task_1_0
-          score: 10
-        - task: task_1_1
-          is_special: true
-          score: 10
-        - task: task_1_2
-          score: 10
-        - task: task_1_3
+        - task: raytracer-geom
+          score: 100
+        - task: raytracer-reader
+          score: 150
+        - task: raytracer-debug
+          score: 200
+        - task: raytracer
+          is_large: true
+          score: 1
+          min_score: 1
+        - task: bad-hash
+          score: 400
           is_bonus: true
-          score: 10
-        - task: task_1_4
-          score: 10
+        - task: bad-rand
+          score: 500
+          is_bonus: true
+          # CPP
+        - task: sfinae
+          score: 300
+        - task: concepts
+          score: 200
+        - task: executor
+          is_large: true
+          score: 1
+          min_score: 1
+        - task: coroutine
+          score: 200
+        - task: clang-fun
+          is_large: true
+          score: 1
+          min_score: 1
+        - task: futex
+          score: 100
+          is_bonus: true
 
-    - group: group_2
+    - group: OS
       start: 2000-02-01 18:00
       end: 2000-03-01 23:59
       tasks:
-        - task: task_2_0
-          score: 20
-        - task: task_2_1
-          score: 20
-        - task: task_2_2
-          score: 20
-        - task: task_2_3
-          score: 20
+        - task: rtc
+          score: 100
+          is_bonus: true
+        - task: gdb
+          score: 100
+        - task: map
+          score: 50
+        - task: asm
+          score: 100
+        - task: main-frame-allocator
+          score: 150
+        - task: big-allocator
+          score: 100
+        - task: no-leaks-in-allocator
+          score: 25
+        - task: small-allocator
+          score: 100
+        - task: allocator-cache
+          score: 100
+        - task: cpus
+          score: 50
+        - task: elf
+          score: 200
+        - task: lru
+          score: 150
 
-    - group: group_3
+    - group: Rust
+      start: 2000-02-01 18:00
+      end: 2000-03-01 23:59
+      tasks:
+        - task: paperio
+          score: 300
+        - task: polka
+          score: 100
+        - task: flatmap
+          score: 200
+        - task: chip8
+          score: 1
+          is_large: true
+          min_score: 1
+        - task: orm
+          score: 1
+          is_large: true
+          min_score: 1
+        - task: babencoin
+          score: 1
+          is_large: true
+          min_score: 1
+
+    - group: DB
       start: 2020-03-01 18:00
       steps:
         0.5: 2020-03-01 23:59
       end: 2020-05-01 23:59
       enabled: true
       tasks:
-        - task: task_3_0
-          score: 30
-        - task: task_3_1
-          score: 30
-        - task: task_3_2
-          score: 30
-        - task: task_3_3
-          score: 30
+        - task: sql
+          score: 200
+        - task: calc
+          score: 400
+        - task: sql-1-ddl
+          score: 150
+        - task: sql-2-expr
+          score: 150
+        - task: sql-3-insert
+          score: 100
+        - task: sql-4-select
+          score: 150
+        - task: sql-5-sort
+          score: 200
+        - task: sql-6-join
+          score: 200
+        - task: sql-7-group-by
+          score: 300
+        - task: sql-8-range-inference
+          score: 300
+        - task: llvm
+          score: 50
+        - task: subquery-engine
+          score: 180
 
-    - group: group_4
+    - group: EMA
+      start: 2020-03-01 18:00
+      steps:
+        0.5: 2020-03-01 23:59
+      end: 2020-05-01 23:59
+      enabled: true
+      tasks:
+        - task: lsm_tree
+          score: 7
+        - task: binary_search
+          score: 1
+        - task: ram_benchmark
+          score: 1
+        - task: disk_measurement
+          score: 1
+
+    - group: SRE
       special: true
       start: 2020-03-01 18:00
       steps:
@@ -99,28 +196,56 @@ deadlines:
       end: 2040-05-01 23:59
       enabled: true
       tasks:
-        - task: task_4_0
-          score: 40
-        - task: task_4_1
-          score: 40
-        - task: task_4_2
-          score: 40
+        - task: traces
+          score: 100
+        - task: overload-control
+          score: 500
+        - task: bpftrace-1-write
+          score: 100
+        - task: bpftrace-2-mutex
+          score: 100
+        - task: bpftrace-3-rpc
+          score: 100
 
-    - group: group_5
+    - group: DistSys
       start: 2020-05-01 18:00
       steps:
         0.5: 2040-01-01 23:59
       end: 2040-02-01 23:59
       enabled: true
       tasks:
-        - task: task_5_0
-          score: 50
-        - task: task_5_1
-          score: 50
-        - task: task_5_2
-          score: 50
+        - task: paxos
+          score: 100
+          url: https://dl.acm.org/doi/10.1145/279227.279229
+        - task: kv-sharding
+          score: 100
+        - task: snapshot_isolation
+          score: 300
+        - task: spark
+          score: 300
 
-    - group: group_6
+    - group: Advanced C++
+      start: 2020-05-01 18:00
+      steps:
+        0.5: 2040-01-01 23:59
+      end: 2040-02-01 23:59
+      enabled: true
+      tasks:
+        - task: tuple
+          score: 500
+        - task: compile-eval
+          score: 200
+        - task: constexpr-map
+          score: 100
+        - task: search-small
+          score: 150
+        - task: search-medium
+          score: 200
+        - task: search-large
+          score: 250
+
+
+    - group: Go
       start: 2020-05-01 18:00
       steps:
         0.5: 2020-05-02 23:59
@@ -128,23 +253,134 @@ deadlines:
       end: 13d 05:59:59
       enabled: true
       tasks:
-        - task: task_6_0
-          is_bonus: true
-          is_special: true
-          score: 60
-          url: https://www.python.org/about/gettingstarted/
-        - task: task_6_1
-          score: 60
+        - task: hotelbusiness
+          score: 100
+        - task: hogwarts
+          score: 100
+        - task: gitfame
+          score: 1
+          is_large: true
+          min_score: 1
+        - task: olympics
+          score: 200
+        - task: distbuild
+          score: 1
+          is_large: true
+          min_score: 1
+        - task: illegal
+          score: 100
 
-    - group: group_7
+
+    - group: Computer networks
+      start: 2020-05-01 18:00
+      steps:
+        0.5: 2020-05-02 23:59
+        0.3: 13d 05:00:00
+      end: 13d 05:59:59
+      enabled: true
+      tasks:
+        - task: http_server
+          score: 100
+        - task: static_routing
+          score: 100
+        - task: isis
+          score: 100
+        - task: rip
+          score: 100
+          is_bonus: true
+        - task: fabric
+          score: 100
+        - task: ecdsa
+          score: 80
+
+    - group: CUDA
+      start: 2020-05-01 18:00
+      steps:
+        0.5: 2020-05-02 23:59
+        0.3: 13d 05:00:00
+      end: 13d 05:59:59
+      enabled: true
+      tasks:
+        - task: gpu-puzzles-1
+          score: 100
+        - task: gemm-v0
+          score: 100
+        - task: gemm-v1
+          score: 200
+        - task: quaternions
+          score: 200
+        - task: moe-topk
+          score: 200
+        - task: cutlass-gemm
+          score: 200
+          is_bonus: true
+
+    - group: HFP
       start: 2040-03-01 18:00
       steps:
         0.5: 13d 05:00:00
       end: 13d 05:59:59
       enabled: true
       tasks:
-        - task: task_7_0
-          score: 70
+        - task: mem_few_of_big
+          score: 5
+        - task: mem_sunzi
+          score: 5
+        - task: cpu_digits
+          score: 5
+        - task: cpu_filter
+          score: 5
+        - task: multi_multi
+          score: 5
+        - task: multi_hist
+          score: 5
+
+    - group: Lean
+      start: 2040-03-01 18:00
+      steps:
+        0.5: 13d 05:00:00
+      end: 13d 05:59:59
+      enabled: true
+      tasks:
+        - task: Minsky
+          score: 100
+        - task: Debt
+          score: 100
+        - task: Konig
+          score: 100
+          is_bonus: true
+        - task: AVL
+          score: 200
+          is_bonus: true
+        - task: BFS
+          score: 100
+          is_bonus: true
+        - task: DFA
+          score: 100
+          is_bonus: true
+
+    - group: RecSys
+      start: 2020-05-01 18:00
+      steps:
+        0.5: 2020-05-02 23:59
+        0.3: 13d 05:00:00
+      end: 13d 05:59:59
+      enabled: true
+      tasks:
+        - task: experiments_server
+          score: 100
+        - task: engine_server
+          score: 100
+        - task: engine_server_reload
+          score: 200
+          is_bonus: true
+        - task: explicit_als
+          score: 50
+        - task: implicit_als
+          score: 100
+        - task: runtime_als
+          score: 100
+
 grades:
   grades:
     5: [
