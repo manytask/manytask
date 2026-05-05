@@ -124,6 +124,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             )
             self.course_name = TEST_COURSE_NAME
             self.course_admin = False
+            self.non_admin_users: set[str] = set()
 
         def store_score(self, _course_name, username, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
@@ -157,7 +158,9 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 return self.stored_user
             return None
 
-        def check_if_course_admin(self, _course_name, _username):
+        def check_if_course_admin(self, _course_name, username):
+            if username in self.non_admin_users:
+                return False
             return True
 
         def sync_columns(self, _course_name, _deadlines):
@@ -224,8 +227,15 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_groups(self, _course_name):
-            return [mock_group]
+        def get_groups(self, _course_name, enabled=None, started=None, now=None):
+            groups = getattr(self, "groups_override", None)
+            if groups is None:
+                groups = [mock_group]
+            if enabled is True:
+                groups = [g for g in groups if getattr(g, "enabled", True)]
+            elif enabled is False:
+                groups = [g for g in groups if not getattr(g, "enabled", True)]
+            return groups
 
         @staticmethod
         def get_namespace_admin_namespaces(_username):
