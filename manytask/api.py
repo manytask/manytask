@@ -33,6 +33,7 @@ from .config import (
     NamespaceUserItem,
     NamespaceUsersListResponse,
     NamespaceWithRoleResponse,
+    PingResponse,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
@@ -507,6 +508,12 @@ def get_score(course_name: str) -> ResponseReturnValue:
         "task": task.name,
         "score": student_task_score,
     }, HTTPStatus.OK
+
+
+@bp.get("/ping")
+@requires_token
+def ping(course_name: str) -> ResponseReturnValue:
+    return jsonify(PingResponse(course=course_name, ok=True).model_dump()), HTTPStatus.OK
 
 
 @bp.post("/update_config")

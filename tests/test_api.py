@@ -1153,3 +1153,41 @@ def test_update_config_no_auth_detailed_403(app):
     response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/update_config")
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert b"Missing authorization" in response.data
+
+
+def test_ping_success(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/ping", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"course": TEST_COURSE_NAME, "ok": True}
+
+
+def test_ping_invalid_token(app):
+    client = app.test_client()
+    headers = {"Authorization": "Bearer wrong_token"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/ping", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_ping_missing_token(app):
+    client = app.test_client()
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/ping")
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_ping_unknown_course(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    with patch.object(app.storage_api, "get_course", return_value=None):
+        response = client.get("/api/no-such-course/ping", headers=headers)
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
