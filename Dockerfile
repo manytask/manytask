@@ -9,7 +9,7 @@ RUN pip install uv==${UV_VERSION}
 
 RUN apk add --no-cache build-base
 
-RUN uv sync --locked
+RUN uv sync --locked --no-install-project
 
 
 FROM python:3.14-alpine AS app
@@ -26,6 +26,7 @@ COPY VERSION /app/VERSION
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
     CACHE_DIR=/cache
 
 VOLUME ["/cache"]
