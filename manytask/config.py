@@ -137,7 +137,7 @@ class PingResponse(BaseModel):
 
 
 class IsAdminResponse(BaseModel):
-    username: str
+    rms_username: str
     is_admin: bool
 
 
@@ -146,6 +146,8 @@ class DeadlineItem(BaseModel):
     group: str
     deadline: datetime
     score: int
+    is_bonus: bool
+    is_large: bool
 
 
 class DeadlinesResponse(BaseModel):

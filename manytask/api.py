@@ -523,13 +523,20 @@ def ping(course_name: str) -> ResponseReturnValue:
 @requires_token
 def is_admin(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    username = request.args.get("username")
-    if not username:
-        abort(HTTPStatus.BAD_REQUEST, "Query parameter `username` is required")
+    rms_username = request.args.get("rms_username")
+    if not rms_username:
+        abort(HTTPStatus.BAD_REQUEST, "Query parameter `rms_username` is required")
+    try:
+        rms_user = app.rms_api.get_rms_user_by_username(rms_username)
+    except RmsApiException:
+        return jsonify(IsAdminResponse(rms_username=rms_username, is_admin=False).model_dump()), HTTPStatus.OK
+    stored = app.storage_api.get_stored_user_by_rms_id(rms_user.id)
+    if stored is None:
+        return jsonify(IsAdminResponse(rms_username=rms_username, is_admin=False).model_dump()), HTTPStatus.OK
     return jsonify(
         IsAdminResponse(
-            username=username,
-            is_admin=app.storage_api.check_if_course_admin(course_name, username),
+            rms_username=rms_username,
+            is_admin=app.storage_api.check_if_course_admin(course_name, stored.username),
         ).model_dump()
     ), HTTPStatus.OK
 
@@ -551,6 +558,8 @@ def get_deadlines(course_name: str) -> ResponseReturnValue:
                     group=group.name,
                     deadline=deadline,
                     score=task.score,
+                    is_bonus=task.is_bonus,
+                    is_large=task.is_large,
                 )
             )
     return (
