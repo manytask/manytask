@@ -40,6 +40,7 @@ This page describes the main concepts used in the `Manytask` project - public/pr
 
 * **Runner** that will run all the CI tasks above. You may need specific configuration for the runner, e.g. if tests require specific hardware (SSD/GPU). In many cases, regular VM should be sufficient.
 
+
 ## Glossary
 
 * **Layout** - a structure of the private repository (and respectively public repository).   
