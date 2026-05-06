@@ -22,10 +22,11 @@ deadlines:
   schedule:
 
     - group: Python
-      start: 2000-01-01 18:00
+      start: 2025-09-01 06:00
       steps:
-        0.5: 2000-03-01 18:00
-      end: 2000-05-01 23:59
+        0.5: 2025-12-20 23:59
+        0.3: 2026-01-15 23:59
+      end: 2026-01-30 23:59
       enabled: true
       tasks:
         - task: codeops
@@ -46,10 +47,11 @@ deadlines:
           is_bonus: true
 
     - group: C++
-      start: 2000-01-01 18:00
+      start: 2025-09-01 06:00
       steps:
-        0.5: 2000-02-01 23:59
-      end: 2000-02-01 23:59
+        0.5: 2026-05-20 23:59
+        0.3: 2026-06-15 23:59
+      end: 2026-06-30 23:59
       enabled: true
       tasks:
         - task: raytracer-geom
@@ -88,8 +90,11 @@ deadlines:
           is_bonus: true
 
     - group: OS
-      start: 2000-02-01 18:00
-      end: 2000-03-01 23:59
+      start: 2025-09-01 06:00
+      steps:
+        0.5: 2026-05-20 23:59
+        0.3: 2026-06-15 23:59
+      end: 2026-06-30 23:59
       tasks:
         - task: rtc
           score: 100
@@ -118,8 +123,8 @@ deadlines:
           score: 150
 
     - group: Rust
-      start: 2000-02-01 18:00
-      end: 2000-03-01 23:59
+      start: 2025-09-01 06:00
+      end: 2026-01-30 23:59
       tasks:
         - task: paperio
           score: 300
@@ -141,10 +146,11 @@ deadlines:
           min_score: 1
 
     - group: DB
-      start: 2020-03-01 18:00
+      start: 2025-09-01 06:00
       steps:
-        0.5: 2020-03-01 23:59
-      end: 2020-05-01 23:59
+        0.5: 2027-05-20 23:59
+        0.3: 2027-06-15 23:59
+      end: 2027-06-30 23:59
       enabled: true
       tasks:
         - task: sql
@@ -173,10 +179,11 @@ deadlines:
           score: 180
 
     - group: EMA
-      start: 2020-03-01 18:00
+      start: 2025-09-01 06:00
       steps:
-        0.5: 2020-03-01 23:59
-      end: 2020-05-01 23:59
+        0.5: 2026-12-20 23:59
+        0.3: 2027-01-15 23:59
+      end: 2027-01-30 23:59
       enabled: true
       tasks:
         - task: lsm_tree
@@ -190,10 +197,8 @@ deadlines:
 
     - group: SRE
       special: true
-      start: 2020-03-01 18:00
-      steps:
-        0.5: 2020-04-01 23:59
-      end: 2040-05-01 23:59
+      start: 2025-09-01 06:00
+      end: 2027-01-30 23:59
       enabled: true
       tasks:
         - task: traces
@@ -208,10 +213,11 @@ deadlines:
           score: 100
 
     - group: DistSys
-      start: 2020-05-01 18:00
+      start: 2025-09-01 06:00
       steps:
-        0.5: 2040-01-01 23:59
-      end: 2040-02-01 23:59
+        0.5: 2026-12-20 23:59
+        0.3: 2027-01-15 23:59
+      end: 2027-01-30 23:59
       enabled: true
       tasks:
         - task: paxos
@@ -225,10 +231,8 @@ deadlines:
           score: 300
 
     - group: Advanced C++
-      start: 2020-05-01 18:00
-      steps:
-        0.5: 2040-01-01 23:59
-      end: 2040-02-01 23:59
+      start: 2025-09-01 06:00
+      end: 2027-01-30 23:59
       enabled: true
       tasks:
         - task: tuple
@@ -246,11 +250,11 @@ deadlines:
 
 
     - group: Go
-      start: 2020-05-01 18:00
+      start: 2026-02-01 06:00
       steps:
-        0.5: 2020-05-02 23:59
-        0.3: 13d 05:00:00
-      end: 13d 05:59:59
+        0.5: 2027-05-20 23:59
+        0.3: 2027-06-15 23:59
+      end: 2027-06-30 23:59
       enabled: true
       tasks:
         - task: hotelbusiness
@@ -272,11 +276,11 @@ deadlines:
 
 
     - group: Computer networks
-      start: 2020-05-01 18:00
+      start: 2026-02-01 06:00
       steps:
-        0.5: 2020-05-02 23:59
-        0.3: 13d 05:00:00
-      end: 13d 05:59:59
+        0.5: 2027-05-20 23:59
+        0.3: 2027-06-15 23:59
+      end: 2027-06-30 23:59
       enabled: true
       tasks:
         - task: http_server
@@ -294,11 +298,11 @@ deadlines:
           score: 80
 
     - group: CUDA
-      start: 2020-05-01 18:00
+      start: 2026-02-01 06:00
       steps:
-        0.5: 2020-05-02 23:59
-        0.3: 13d 05:00:00
-      end: 13d 05:59:59
+        0.5: 2027-05-20 23:59
+        0.3: 2027-06-15 23:59
+      end: 2027-06-30 23:59
       enabled: true
       tasks:
         - task: gpu-puzzles-1
@@ -316,10 +320,8 @@ deadlines:
           is_bonus: true
 
     - group: HFP
-      start: 2040-03-01 18:00
-      steps:
-        0.5: 13d 05:00:00
-      end: 13d 05:59:59
+      start: 2026-02-01 06:00
+      end: 2027-06-30 23:59
       enabled: true
       tasks:
         - task: mem_few_of_big
@@ -336,10 +338,8 @@ deadlines:
           score: 5
 
     - group: Lean
-      start: 2040-03-01 18:00
-      steps:
-        0.5: 13d 05:00:00
-      end: 13d 05:59:59
+      start: 2026-02-01 06:00
+      end: 2027-06-30 23:59
       enabled: true
       tasks:
         - task: Minsky
@@ -360,11 +360,8 @@ deadlines:
           is_bonus: true
 
     - group: RecSys
-      start: 2020-05-01 18:00
-      steps:
-        0.5: 2020-05-02 23:59
-        0.3: 13d 05:00:00
-      end: 13d 05:59:59
+      start: 2026-02-01 06:00
+      end: 2027-06-30 23:59
       enabled: true
       tasks:
         - task: experiments_server
