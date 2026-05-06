@@ -47,7 +47,7 @@ This page describes the main concepts used in the `Manytask` project - public/pr
 
 
 * **Config-s** - a yaml files with configuration for checker - `.checker.yml` and `.manytask.yml`.  
-    See the minimal example in the [Private Repository docs](./private_repo.md) page. Also, there are detailed reference docs for [.cheker.yml](./checker_yml_reference.md) and [.manytask.yml](./manytask_yml.md)
+    See the minimal example in the [Private Repository docs](./private_repo.md) page. Also, there are detailed reference docs for [.checker.yml](./checker_yml_reference.md) and [.manytask.yml](./manytask_yml.md)
 
 
 * **Pipeline** - a yaml-described pipeline in `.checker.yml` file to run during `checker check` and `checker export` commands.   
@@ -55,7 +55,7 @@ This page describes the main concepts used in the `Manytask` project - public/pr
 
 
 * **Plugin** - a single stage of the pipeline, have arguments, return exclusion result. In a nutshell, it is a Python class with `run` method and `Args` pydantic class.  
-    Checker have some [build-in plugins](./checker_plugins.md), but you can write your own.  
+    Checker have some [built-in plugins](./checker_plugins.md), but you can write your own.  
     See [Pipelines and Plugins](./checker_pipelines_and_plugins.md) page for more information on plugins.
 
 
