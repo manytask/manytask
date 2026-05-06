@@ -36,16 +36,14 @@ items:
     items:
       - name: Course as code
         href: course_as_code.md
-      - name: Deadline schedule
-        href: deadline_schedule.md
-      - name: Course grading
-        href: grading.md
-      - name: Course statuses
-        href: course_statuses.md
       - name: Private repository
         href: private_repo.md
-      - name: Public export
-        href: checker.md
+      - name: Checker configuration
+        href: checker_config.md
+      - name: Manytask configuration
+        href: manytask_config.md
+      - name: Course statuses
+        href: course_statuses.md
       - name: Checker pipelines and plugins
         href: checker_pipelines_and_plugins.md
   - name: For system administrators
@@ -65,8 +63,8 @@ items:
   - name: References
     items:
       - name: .manytask.yml reference
-        href: manytask_yml.md
-      - name: .checker.yml file
+        href: manytask_yml_reference.md
+      - name: .checker.yml reference
         href: checker_yml_reference.md
       - name: Checker built-in plugins
         href: checker_plugins.md
