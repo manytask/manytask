@@ -140,7 +140,7 @@ One can override these settings for a group of tasks or even for single task usi
 
 This file outlines the deadlines for each group, task max score and etc. In the checker it is used to validate task and deadlines integrity and it is send to Manytask to update task, their deadlines and scores.
 
-One should consult [the `.manytask.yml` reference guide](./manytask_yml.md) to see the detailed description of the file. Minimal example for a `.manytask.yml` file looks something like this:
+One should consult [the `.manytask.yml` reference guide](./manytask_yml_reference.md) to see the detailed description of the file. Minimal example for a `.manytask.yml` file looks something like this:
 
 ```yaml
 version: 1
