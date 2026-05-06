@@ -24,7 +24,10 @@ from .config import (
     CourseResponse,
     CreateCourseRequest,
     CreateNamespaceRequest,
+    DeadlineItem,
+    DeadlinesResponse,
     ErrorResponse,
+    IsAdminResponse,
     ManytaskGroupConfig,
     ManytaskTaskConfig,
     ManytaskUpdateDatabasePayload,
@@ -33,6 +36,7 @@ from .config import (
     NamespaceUserItem,
     NamespaceUsersListResponse,
     NamespaceWithRoleResponse,
+    PingResponse,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
@@ -52,7 +56,7 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
     course = storage_api.get_course(course_name)
     if course is None:
         logger.warning("Course not found: %s", course_name)
-        abort(HTTPStatus.NOT_FOUND, "Course not found")
+        abort(HTTPStatus.NOT_FOUND, f"Course '{sanitize_log_data(course_name)}' not found")
     return course
 
 
@@ -184,16 +188,38 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         logger.debug("Checking token for course=%s", course_name)
 
         course = __get_course_or_not_found(app.storage_api, course_name)
-
         course_token = course.token
-        token = request.form.get("token", request.headers.get("Authorization", ""))
-        if not token or not course_token:
-            logger.warning("Missing token for course=%s", course_name)
-            abort(HTTPStatus.FORBIDDEN)
-        token = token.split()[-1]
-        if not secrets.compare_digest(token, course_token):
+
+        form_token = request.form.get("token")
+        auth_header = request.headers.get("Authorization")
+
+        if form_token is None and auth_header is None:
+            logger.warning("Missing authorization for course=%s (no header, no form field)", course_name)
+            abort(
+                HTTPStatus.FORBIDDEN,
+                "Missing authorization: provide course token via 'Authorization' header or 'token' form field",
+            )
+
+        raw_token = form_token if form_token is not None else auth_header
+        assert raw_token is not None
+        # Support "Authorization: Bearer <token>" by taking the trailing component.
+        token_parts = raw_token.split()
+        submitted_token = token_parts[-1] if token_parts else ""
+
+        if not submitted_token:
+            logger.warning("Empty authorization token for course=%s", course_name)
+            abort(HTTPStatus.FORBIDDEN, "Empty authorization token")
+
+        if not course_token:
+            logger.error("Course=%s has no API token configured", course_name)
+            abort(
+                HTTPStatus.FORBIDDEN,
+                f"Course '{sanitize_log_data(course_name)}' has no API token configured",
+            )
+
+        if not secrets.compare_digest(submitted_token, course_token):
             logger.warning("Invalid token for course=%s", course_name)
-            abort(HTTPStatus.FORBIDDEN)
+            abort(HTTPStatus.FORBIDDEN, "Invalid course token")
 
         logger.debug("Token validated for course=%s", course_name)
         return f(*args, **kwargs)
@@ -281,21 +307,21 @@ def _validate_and_extract_params(
     """Validate and extract parameters from form data."""
 
     if "user_id" in form_data and "username" in form_data:
-        abort(HTTPStatus.BAD_REQUEST, "Both `user_id` or `username` were provided, use only one")
+        abort(HTTPStatus.BAD_REQUEST, "Both `user_id` and `username` were provided, use only one")
     elif "user_id" in form_data:
         user_id = form_data["user_id"]
         try:
             rms_user = rms_api.get_rms_user_by_id(user_id)
             logger.info("Found RMS user by id=%s: %s", sanitize_log_data(user_id), rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id {user_id}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id={sanitize_log_data(user_id)}")
     elif "username" in form_data:
         username = form_data["username"]
         try:
             rms_user = rms_api.get_rms_user_by_username(username)
             logger.info("Found RMS user by username=%s: %s", sanitize_log_data(username), rms_user.username)
         except RmsApiException:
-            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username {username}")
+            abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username='{sanitize_log_data(username)}'")
     else:
         abort(HTTPStatus.BAD_REQUEST, "You didn't provide required attribute `user_id` or `username`")
 
@@ -307,7 +333,11 @@ def _validate_and_extract_params(
         course, group, task = storage_api.find_task(course_name, task_name)
     except (KeyError, TaskDisabledError):
         logger.warning("Task not found or disabled: %s", sanitize_log_data(task_name))
-        abort(HTTPStatus.NOT_FOUND, f"There is no task with name `{task_name}` (or it is closed for submission)")
+        abort(
+            HTTPStatus.NOT_FOUND,
+            f"Task '{sanitize_log_data(task_name)}' not found in course "
+            f"'{sanitize_log_data(course_name)}' (or it is closed for submission)",
+        )
 
     return rms_user, course, task, group
 
@@ -345,13 +375,13 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         elif float(score_str) > max_score:
             abort(
                 HTTPStatus.BAD_REQUEST,
-                f"Reported `score` <{score_str}> is too large. Should be "
+                f"Reported `score` <{sanitize_log_data(score_str)}> is too large. Should be "
                 f"integer or float between {min_score} and {max_score}.",
             )
         else:
             return round(float(score_str) * task_score)
     except ValueError:
-        abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{score_str}> to a number")
+        abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{sanitize_log_data(score_str)}> to a number")
 
 
 @bp.post("/report")
@@ -362,7 +392,10 @@ def report_score(course_name: str) -> ResponseReturnValue:
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     if course.status == CourseStatus.FINISHED:
-        abort(HTTPStatus.CONFLICT, f"Cannot update score the course '{course_name}' is already finished.")
+        abort(
+            HTTPStatus.CONFLICT,
+            f"Cannot update score: course '{sanitize_log_data(course_name)}' is already finished.",
+        )
 
     rms_user, course, task, group = _validate_and_extract_params(
         request.form, app.rms_api, app.storage_api, course.course_name
@@ -478,6 +511,61 @@ def get_score(course_name: str) -> ResponseReturnValue:
         "task": task.name,
         "score": student_task_score,
     }, HTTPStatus.OK
+
+
+@bp.get("/ping")
+@requires_token
+def ping(course_name: str) -> ResponseReturnValue:
+    return jsonify(PingResponse(course=course_name, ok=True).model_dump()), HTTPStatus.OK
+
+
+@bp.get("/is_admin")
+@requires_token
+def is_admin(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    rms_username = request.args.get("rms_username")
+    if not rms_username:
+        abort(HTTPStatus.BAD_REQUEST, "Query parameter `rms_username` is required")
+    try:
+        rms_user = app.rms_api.get_rms_user_by_username(rms_username)
+    except RmsApiException:
+        return jsonify(IsAdminResponse(rms_username=rms_username, is_admin=False).model_dump()), HTTPStatus.OK
+    stored = app.storage_api.get_stored_user_by_rms_id(rms_user.id)
+    if stored is None:
+        return jsonify(IsAdminResponse(rms_username=rms_username, is_admin=False).model_dump()), HTTPStatus.OK
+    return jsonify(
+        IsAdminResponse(
+            rms_username=rms_username,
+            is_admin=app.storage_api.check_if_course_admin(course_name, stored.username),
+        ).model_dump()
+    ), HTTPStatus.OK
+
+
+@bp.get("/deadlines")
+@requires_token
+def get_deadlines(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    groups = app.storage_api.get_groups(course_name, enabled=True)
+    items: list[DeadlineItem] = []
+    for group in groups:
+        deadline = group.get_deadline(group.end)
+        for task in group.tasks:
+            if not task.enabled:
+                continue
+            items.append(
+                DeadlineItem(
+                    task_name=task.name,
+                    group=group.name,
+                    deadline=deadline,
+                    score=task.score,
+                    is_bonus=task.is_bonus,
+                    is_large=task.is_large,
+                )
+            )
+    return (
+        jsonify(DeadlinesResponse(course=course_name, tasks=items).model_dump(mode="json")),
+        HTTPStatus.OK,
+    )
 
 
 @bp.post("/update_config")
