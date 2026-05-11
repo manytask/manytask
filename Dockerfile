@@ -2,14 +2,15 @@ FROM python:3.14-alpine AS app_builder
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock VERSION ./
+COPY ./manytask/ /app/manytask
 
 ENV UV_VERSION=0.9.5
 RUN pip install uv==${UV_VERSION}
 
 RUN apk add --no-cache build-base
 
-RUN uv sync --locked --no-install-project
+RUN uv sync --locked
 
 
 FROM python:3.14-alpine AS app
@@ -26,7 +27,6 @@ COPY VERSION /app/VERSION
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
     CACHE_DIR=/cache
 
 VOLUME ["/cache"]
