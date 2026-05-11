@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock VERSION ./
 COPY ./manytask/ /app/manytask
+COPY ./checker/pyproject.toml /app/checker/pyproject.toml
 
 ENV UV_VERSION=0.11.8
 RUN pip install uv==${UV_VERSION}
