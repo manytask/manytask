@@ -5,7 +5,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock VERSION ./
 COPY ./manytask/ /app/manytask
 
-ENV UV_VERSION=0.9.5
+ENV UV_VERSION=0.11.8
 RUN pip install uv==${UV_VERSION}
 
 RUN apk add --no-cache build-base
