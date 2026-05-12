@@ -89,7 +89,13 @@ class ManytaskPlugin(PluginABC):
         response = session.post(url=f"{report_url}", data=data, files=files)
 
         if response.status_code >= HTTP_ERROR_STATUS_CODE:
-            raise PluginExecutionFailed(f"{response.status_code}: {response.text}")
+            # Put the full response body into `output` so the pipeline prints it
+            # unconditionally (pipeline.py prints `error.output` always, but `message`
+            # only in verbose mode).
+            raise PluginExecutionFailed(
+                f"{response.status_code}: {response.text}",
+                output=f"Manytask returned HTTP {response.status_code}:\n{response.text}",
+            )
 
         return response
 
