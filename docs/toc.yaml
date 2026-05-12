@@ -26,6 +26,8 @@ navigation:
 items:
   - name: About
     href: about.md
+  - name: Concepts
+    href: concepts.md
   - name: For students
     items:
       - name: Manytask
@@ -40,6 +42,8 @@ items:
         href: grading.md
       - name: Course statuses
         href: course_statuses.md
+      - name: Private repository
+        href: private_repo.md
       - name: Public export
         href: checker.md
       - name: Checker pipelines and plugins

@@ -24,7 +24,10 @@ from .config import (
     CourseResponse,
     CreateCourseRequest,
     CreateNamespaceRequest,
+    DeadlineItem,
+    DeadlinesResponse,
     ErrorResponse,
+    IsAdminResponse,
     ManytaskGroupConfig,
     ManytaskTaskConfig,
     ManytaskUpdateDatabasePayload,
@@ -33,6 +36,7 @@ from .config import (
     NamespaceUserItem,
     NamespaceUsersListResponse,
     NamespaceWithRoleResponse,
+    PingResponse,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
@@ -507,6 +511,61 @@ def get_score(course_name: str) -> ResponseReturnValue:
         "task": task.name,
         "score": student_task_score,
     }, HTTPStatus.OK
+
+
+@bp.get("/ping")
+@requires_token
+def ping(course_name: str) -> ResponseReturnValue:
+    return jsonify(PingResponse(course=course_name, ok=True).model_dump()), HTTPStatus.OK
+
+
+@bp.get("/is_admin")
+@requires_token
+def is_admin(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    rms_username = request.args.get("rms_username")
+    if not rms_username:
+        abort(HTTPStatus.BAD_REQUEST, "Query parameter `rms_username` is required")
+    try:
+        rms_user = app.rms_api.get_rms_user_by_username(rms_username)
+    except RmsApiException:
+        return jsonify(IsAdminResponse(rms_username=rms_username, is_admin=False).model_dump()), HTTPStatus.OK
+    stored = app.storage_api.get_stored_user_by_rms_id(rms_user.id)
+    if stored is None:
+        return jsonify(IsAdminResponse(rms_username=rms_username, is_admin=False).model_dump()), HTTPStatus.OK
+    return jsonify(
+        IsAdminResponse(
+            rms_username=rms_username,
+            is_admin=app.storage_api.check_if_course_admin(course_name, stored.username),
+        ).model_dump()
+    ), HTTPStatus.OK
+
+
+@bp.get("/deadlines")
+@requires_token
+def get_deadlines(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    groups = app.storage_api.get_groups(course_name, enabled=True)
+    items: list[DeadlineItem] = []
+    for group in groups:
+        deadline = group.get_deadline(group.end)
+        for task in group.tasks:
+            if not task.enabled:
+                continue
+            items.append(
+                DeadlineItem(
+                    task_name=task.name,
+                    group=group.name,
+                    deadline=deadline,
+                    score=task.score,
+                    is_bonus=task.is_bonus,
+                    is_large=task.is_large,
+                )
+            )
+    return (
+        jsonify(DeadlinesResponse(course=course_name, tasks=items).model_dump(mode="json")),
+        HTTPStatus.OK,
+    )
 
 
 @bp.post("/update_config")

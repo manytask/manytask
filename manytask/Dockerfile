@@ -2,9 +2,11 @@ FROM python:3.14-alpine AS app_builder
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock VERSION ./
+COPY ./manytask/ /app/manytask
+COPY ./checker/pyproject.toml /app/checker/pyproject.toml
 
-ENV UV_VERSION=0.9.5
+ENV UV_VERSION=0.11.8
 RUN pip install uv==${UV_VERSION}
 
 RUN apk add --no-cache build-base

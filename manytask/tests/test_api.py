@@ -124,6 +124,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             )
             self.course_name = TEST_COURSE_NAME
             self.course_admin = False
+            self.non_admin_users: set[str] = set()
 
         def store_score(self, _course_name, username, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
@@ -157,7 +158,9 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 return self.stored_user
             return None
 
-        def check_if_course_admin(self, _course_name, _username):
+        def check_if_course_admin(self, _course_name, username):
+            if username in self.non_admin_users:
+                return False
             return True
 
         def sync_columns(self, _course_name, _deadlines):
@@ -224,8 +227,15 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def get_now_with_timezone(_course_name):
             return datetime.now(tz=ZoneInfo("UTC"))
 
-        def get_groups(self, _course_name):
-            return [mock_group]
+        def get_groups(self, _course_name, enabled=None, started=None, now=None):
+            groups = getattr(self, "groups_override", None)
+            if groups is None:
+                groups = [mock_group]
+            if enabled is True:
+                groups = [g for g in groups if getattr(g, "enabled", True)]
+            elif enabled is False:
+                groups = [g for g in groups if not getattr(g, "enabled", True)]
+            return groups
 
         @staticmethod
         def get_namespace_admin_namespaces(_username):
@@ -448,6 +458,7 @@ def test_report_score_missing_user(app):
 
 def test_report_score_success(app):
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
     with app.test_request_context():
         data = {
             "task": TEST_TASK_NAME,
@@ -467,6 +478,7 @@ def test_report_score_success(app):
 
 def test_get_score_success(app):
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
     with app.test_request_context():
         data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
@@ -702,6 +714,7 @@ def test_report_score_with_flags(app):
     client = app.test_client()
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
     data = {
         "user_id": rms_user.id,
         "task": TEST_TASK_NAME,
@@ -1143,3 +1156,277 @@ def test_update_config_no_auth_detailed_403(app):
     response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/update_config")
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert b"Missing authorization" in response.data
+
+
+def test_ping_success(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/ping", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"course": TEST_COURSE_NAME, "ok": True}
+
+
+def test_ping_invalid_token(app):
+    client = app.test_client()
+    headers = {"Authorization": "Bearer wrong_token"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/ping", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_ping_missing_token(app):
+    client = app.test_client()
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/ping")
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_ping_unknown_course(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    with patch.object(app.storage_api, "get_course", return_value=None):
+        response = client.get("/api/no-such-course/ping", headers=headers)
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_is_admin_true_for_known_admin(app):
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?rms_username={TEST_USERNAME}", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"rms_username": TEST_USERNAME, "is_admin": True}
+
+
+def test_is_admin_false_for_known_non_admin(app):
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.non_admin_users.add(TEST_USERNAME)
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?rms_username={TEST_USERNAME}", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"rms_username": TEST_USERNAME, "is_admin": False}
+
+
+def test_is_admin_false_for_unknown_rms_user(app):
+    """Per ticket contract: authorization != existence. Unknown rms_username returns 200 + false."""
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?rms_username=ghost_user", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"rms_username": "ghost_user", "is_admin": False}
+
+
+def test_is_admin_false_for_rms_user_not_in_storage(app):
+    """RMS user exists, but no manytask account linked: 200 + false."""
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    # Second user gets rms_id="2", which does NOT match the mock's single stored_user (rms_id=TEST_RMS_ID="1").
+    app.rms_api.register_new_user("orphan_user", "Orphan", "User", "orphan@example.com", TEST_PASSWORD)
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?rms_username=orphan_user", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"rms_username": "orphan_user", "is_admin": False}
+
+
+def test_is_admin_missing_rms_username(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin", headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert b"rms_username" in response.data
+
+
+def test_is_admin_empty_rms_username(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?rms_username=", headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert b"rms_username" in response.data
+
+
+def test_is_admin_invalid_token(app):
+    client = app.test_client()
+    headers = {"Authorization": "Bearer wrong_token"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/is_admin?rms_username={TEST_USERNAME}", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def _build_group(
+    name: str,
+    *,
+    enabled: bool = True,
+    start: datetime,
+    end: datetime | timedelta,
+    tasks: list[ManytaskTaskConfig],
+) -> ManytaskGroupConfig:
+    """Helper: build a ManytaskGroupConfig from a list of pre-built ManytaskTaskConfig instances."""
+    return ManytaskGroupConfig(
+        group=name,
+        enabled=enabled,
+        start=start,
+        end=end,
+        tasks=tasks,
+    )
+
+
+def _task(
+    name: str, score: int, *, enabled: bool = True, is_bonus: bool = False, is_large: bool = False
+) -> ManytaskTaskConfig:
+    return ManytaskTaskConfig(task=name, score=score, enabled=enabled, is_bonus=is_bonus, is_large=is_large)
+
+
+def test_deadlines_basic(app):
+    start = datetime(2026, 9, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+    end = datetime(2026, 9, 15, 23, 59, 59, tzinfo=ZoneInfo("UTC"))
+    expected_score = 100
+    app.storage_api.groups_override = [
+        _build_group(
+            "01_intro",
+            start=start,
+            end=end,
+            tasks=[_task("compgraph", expected_score)],
+        )
+    ]
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["course"] == TEST_COURSE_NAME
+    assert len(body["tasks"]) == 1
+    item = body["tasks"][0]
+    assert item["task_name"] == "compgraph"
+    assert item["group"] == "01_intro"
+    assert item["score"] == expected_score
+    assert item["is_bonus"] is False
+    assert item["is_large"] is False
+    assert datetime.fromisoformat(item["deadline"]) == end
+
+
+def test_deadlines_empty_course(app):
+    app.storage_api.groups_override = []
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {"course": TEST_COURSE_NAME, "tasks": []}
+
+
+def test_deadlines_filters_disabled_groups_and_tasks(app):
+    start = datetime(2026, 9, 1, tzinfo=ZoneInfo("UTC"))
+    end = datetime(2026, 9, 15, tzinfo=ZoneInfo("UTC"))
+    app.storage_api.groups_override = [
+        _build_group(
+            "enabled_group",
+            start=start,
+            end=end,
+            tasks=[_task("visible_task", 50), _task("hidden_task", 50, enabled=False)],
+        ),
+        _build_group(
+            "disabled_group",
+            enabled=False,
+            start=start,
+            end=end,
+            tasks=[_task("filtered_out", 50)],
+        ),
+    ]
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    task_names = [t["task_name"] for t in body["tasks"]]
+    assert task_names == ["visible_task"]
+
+
+def test_deadlines_resolves_timedelta_end(app):
+    start = datetime(2026, 9, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
+    app.storage_api.groups_override = [
+        _build_group(
+            "01_intro",
+            start=start,
+            end=timedelta(days=14),
+            tasks=[_task("compgraph", 100)],
+        )
+    ]
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    expected_deadline = start + timedelta(days=14)
+    assert datetime.fromisoformat(body["tasks"][0]["deadline"]) == expected_deadline
+
+
+def test_deadlines_marks_bonus_and_large_tasks(app):
+    start = datetime(2026, 9, 1, tzinfo=ZoneInfo("UTC"))
+    end = datetime(2026, 9, 15, tzinfo=ZoneInfo("UTC"))
+    app.storage_api.groups_override = [
+        _build_group(
+            "01_intro",
+            start=start,
+            end=end,
+            tasks=[
+                _task("plain", 100),
+                _task("bonus_task", 50, is_bonus=True),
+                _task("large_task", 200, is_large=True),
+                _task("bonus_and_large", 300, is_bonus=True, is_large=True),
+            ],
+        )
+    ]
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    by_name = {t["task_name"]: t for t in body["tasks"]}
+    assert by_name["plain"]["is_bonus"] is False and by_name["plain"]["is_large"] is False
+    assert by_name["bonus_task"]["is_bonus"] is True and by_name["bonus_task"]["is_large"] is False
+    assert by_name["large_task"]["is_bonus"] is False and by_name["large_task"]["is_large"] is True
+    assert by_name["bonus_and_large"]["is_bonus"] is True and by_name["bonus_and_large"]["is_large"] is True
+
+
+def test_deadlines_invalid_token(app):
+    client = app.test_client()
+    headers = {"Authorization": "Bearer wrong_token"}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
