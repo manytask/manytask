@@ -32,7 +32,9 @@ class TestAggregatePlugin:
             ({}, ValidationError),
         ],
     )
-    def test_plugin_args(self, parameters: dict[str, Any], expected_exception: Exception | None) -> None:
+    def test_plugin_args(
+        self, parameters: dict[str, Any], expected_exception: Exception | None
+    ) -> None:
         if expected_exception:
             with pytest.raises(expected_exception):
                 AggregatePlugin.Args(**parameters)

@@ -23,7 +23,9 @@ class CppBuildPlugin(PluginABC):
         targets = args.tests[::2]
         build_types = args.tests[1::2]
         if len(targets) != len(build_types):
-            raise PluginExecutionFailed("Wrong task config (len(targets) != len(build_types))")
+            raise PluginExecutionFailed(
+                "Wrong task config (len(targets) != len(build_types))"
+            )
 
         if args.benchmark is not None:
             targets.append(args.benchmark)

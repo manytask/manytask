@@ -35,7 +35,9 @@ class CppCrashMePlugin(PluginABC):
             origin=str(args.task_path),
             script=script,
             env_whitelist=["PATH"],
-            paths_whitelist=[str(args.reference_root / p) for p in args.paths_whitelist],
+            paths_whitelist=[
+                str(args.reference_root / p) for p in args.paths_whitelist
+            ],
             paths_blacklist=get_cpp_blacklist(args.reference_root),
         )
         output = SafeRunScriptPlugin()._run(run_args, verbose=verbose).output

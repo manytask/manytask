@@ -79,7 +79,9 @@ class CppRunBenchmarksPlugin(PluginABC):
             raise PluginExecutionFailed()
 
     @staticmethod
-    def _run_benchmarks(args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool) -> None:
+    def _run_benchmarks(
+        args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool
+    ) -> None:
         xml_path = tmp_dir / CppRunBenchmarksPlugin._REPORT_XML
         run_args = SafeRunScriptPlugin.Args(
             origin=str(build_dir),
@@ -107,6 +109,10 @@ class CppRunBenchmarksPlugin(PluginABC):
         build_dir = args.root / f"build-{build_type.lower()}"
         with tempfile.TemporaryDirectory() as tmp_dir:
             CppRunBenchmarksPlugin._run_benchmarks(
-                args=args, tmp_dir=Path(tmp_dir), build_dir=build_dir, target=args.benchmark, verbose=verbose
+                args=args,
+                tmp_dir=Path(tmp_dir),
+                build_dir=build_dir,
+                target=args.benchmark,
+                verbose=verbose,
             )
         return PluginOutput(output="Benchmark is passed")

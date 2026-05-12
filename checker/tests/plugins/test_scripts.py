@@ -37,7 +37,9 @@ class TestRunScriptPlugin:
             ),
         ],
     )
-    def test_plugin_args(self, parameters: dict[str, Any], expected_exception: Exception | None) -> None:
+    def test_plugin_args(
+        self, parameters: dict[str, Any], expected_exception: Exception | None
+    ) -> None:
         if expected_exception:
             with pytest.raises(expected_exception):
                 RunScriptPlugin.Args(**parameters)
@@ -56,7 +58,9 @@ class TestRunScriptPlugin:
             ("echo Hello && false", "Hello", PluginExecutionFailed),
         ],
     )
-    def test_simple_cases(self, script: str, output: str, expected_exception: Exception | None) -> None:
+    def test_simple_cases(
+        self, script: str, output: str, expected_exception: Exception | None
+    ) -> None:
         plugin = RunScriptPlugin()
         args = RunScriptPlugin.Args(origin="/tmp", script=script)
 
@@ -77,7 +81,9 @@ class TestRunScriptPlugin:
             (["sleep", "1"], 0.5, PluginExecutionFailed),
         ],
     )
-    def test_timeout(self, script: str, timeout: float, expected_exception: Exception | None) -> None:
+    def test_timeout(
+        self, script: str, timeout: float, expected_exception: Exception | None
+    ) -> None:
         # TODO: check if timeout float
         plugin = RunScriptPlugin()
         args = RunScriptPlugin.Args(origin="/tmp", script=script, timeout=timeout)
@@ -88,15 +94,25 @@ class TestRunScriptPlugin:
         else:
             plugin._run(args)
 
-    @pytest.mark.parametrize("env_additional", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
+    @pytest.mark.parametrize(
+        "env_additional", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}]
+    )
     @pytest.mark.parametrize("env_whitelist", [None, [], ["A"], ["A", "C"]])
-    @pytest.mark.parametrize("mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
+    @pytest.mark.parametrize(
+        "mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}]
+    )
     def test_run_with_environment_variable(
-        self, env_additional: dict[str, str], env_whitelist: list[str] | None, mocked_env: dict[str, str]
+        self,
+        env_additional: dict[str, str],
+        env_whitelist: list[str] | None,
+        mocked_env: dict[str, str],
     ) -> None:
         plugin = RunScriptPlugin()
         args = RunScriptPlugin.Args(
-            origin="/tmp", script="env", env_additional=env_additional, env_whitelist=env_whitelist
+            origin="/tmp",
+            script="env",
+            env_additional=env_additional,
+            env_whitelist=env_whitelist,
         )
 
         with patch.dict("os.environ", mocked_env, clear=True):

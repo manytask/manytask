@@ -5,7 +5,12 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from checker.configs import ManytaskConfig
-from checker.configs.checker import CheckerParametersConfig, CheckerSubConfig, CheckerTestingConfig, PipelineStageConfig
+from checker.configs.checker import (
+    CheckerParametersConfig,
+    CheckerSubConfig,
+    CheckerTestingConfig,
+    PipelineStageConfig,
+)
 from checker.course import FileSystemTask
 from checker.tester import Tester
 
@@ -79,35 +84,57 @@ class CheckerConfigMock:
 
 
 def _get_timestamp(ts: str) -> datetime:
-    return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("Europe/Moscow"))
+    return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(
+        tzinfo=ZoneInfo("Europe/Moscow")
+    )
 
 
 class TestTester:
     @typing.no_type_check
     def test_task_score_percent(self, mocker):
-        mock_load_plugins = mocker.patch("pkgutil.iter_modules")  # disable load_plugins typecheck
+        mock_load_plugins = mocker.patch(
+            "pkgutil.iter_modules"
+        )  # disable load_plugins typecheck
         mock_load_plugins.return_value = []
         tester = Tester(CourseMock(), CheckerConfigMock())
-        assert 1 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-02-16 00:00:00"))  # start
-        assert 1 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-02-20 00:00:00"))  # before 1st step
-        assert 1 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-01 00:00:00"))  # 1st step
+        assert 1 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-02-16 00:00:00")
+        )  # start
+        assert 1 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-02-20 00:00:00")
+        )  # before 1st step
+        assert 1 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-03-01 00:00:00")
+        )  # 1st step
         score_str = tester._get_task_score_percent(
             "task1_1", _get_timestamp("2025-03-01 00:01:00")
         )  # don't count 1 minute
         assert FULL_SCORE_PERCENT == round(float(score_str) * 100)
-        assert SCORE_075 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-04 12:00:00"))  # linear
+        assert SCORE_075 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-03-04 12:00:00")
+        )  # linear
         assert SCORE_05 == tester._get_task_score_percent(
             "task1_1", _get_timestamp("2025-03-08 00:00:00")
         )  # before 2nd step
-        assert SCORE_05 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-16 00:00:00"))  # 2nd step
+        assert SCORE_05 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-03-16 00:00:00")
+        )  # 2nd step
         score_str = tester._get_task_score_percent(
             "task1_1", _get_timestamp("2025-03-16 00:01:00")
         )  # don't count 1 minute
         assert HALF_SCORE_PERCENT == round(float(score_str) * 100)
-        assert SCORE_04 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-19 12:00:00"))  # linear
-        assert SCORE_03 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-03-24 00:00:00"))
-        assert SCORE_03 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-04-01 00:00:00"))
-        assert 0 == tester._get_task_score_percent("task1_1", _get_timestamp("2025-04-01 00:01:00"))
+        assert SCORE_04 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-03-19 12:00:00")
+        )  # linear
+        assert SCORE_03 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-03-24 00:00:00")
+        )
+        assert SCORE_03 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-04-01 00:00:00")
+        )
+        assert 0 == tester._get_task_score_percent(
+            "task1_1", _get_timestamp("2025-04-01 00:01:00")
+        )
 
     @typing.no_type_check
     @pytest.mark.parametrize(
@@ -118,22 +145,32 @@ class TestTester:
             ({"b": 10, "c": 3}, None, {"a": 1, "b": 10, "c": 3}),
         ],
     )
-    def test_task_context_parameters_merge(self, mocker, group_params, task_params, expected):
+    def test_task_context_parameters_merge(
+        self, mocker, group_params, task_params, expected
+    ):
         mocker.patch("pkgutil.iter_modules", return_value=[])
         tester = Tester(CourseMock(), CheckerConfigMock())
         tester.default_params = CheckerParametersConfig(root={"a": 1, "b": 2})
 
         group_config = (
-            CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root=group_params)) if group_params else None
+            CheckerSubConfig(
+                version=1, parameters=CheckerParametersConfig(root=group_params)
+            )
+            if group_params
+            else None
         )
         mocker.patch.object(tester, "_get_group_config", return_value=group_config)
 
         task_config = (
-            CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root=task_params))
+            CheckerSubConfig(
+                version=1, parameters=CheckerParametersConfig(root=task_params)
+            )
             if task_params
             else CheckerSubConfig(version=1)
         )
-        task = FileSystemTask(name="task1_1", relative_path="group1/task1_1", config=task_config)
+        task = FileSystemTask(
+            name="task1_1", relative_path="group1/task1_1", config=task_config
+        )
 
         context = tester._build_task_context(None, {}, task, None)
         assert context["parameters"] == expected
@@ -156,7 +193,9 @@ class TestTester:
         ],
     )
     @pytest.mark.parametrize("level", ["task", "group", "global"])
-    def test_pipeline_resolution_hierarchy(self, mocker, method_name, config_attr, global_attr, level):
+    def test_pipeline_resolution_hierarchy(
+        self, mocker, method_name, config_attr, global_attr, level
+    ):
         mocker.patch("pkgutil.iter_modules", return_value=[])
         mock_runner = mocker.patch("checker.tester.PipelineRunner")
         tester = Tester(CourseMock(), CheckerConfigMock())
@@ -167,11 +206,21 @@ class TestTester:
 
         setattr(tester.testing_config, global_attr, global_pipeline)
 
-        task_config = CheckerSubConfig(version=1, **{config_attr: task_pipeline if level == "task" else None})
-        group_config = CheckerSubConfig(version=1, **{config_attr: group_pipeline if level == "group" else None})
-        mocker.patch.object(tester, "_get_group_config", return_value=group_config if level != "global" else None)
+        task_config = CheckerSubConfig(
+            version=1, **{config_attr: task_pipeline if level == "task" else None}
+        )
+        group_config = CheckerSubConfig(
+            version=1, **{config_attr: group_pipeline if level == "group" else None}
+        )
+        mocker.patch.object(
+            tester,
+            "_get_group_config",
+            return_value=group_config if level != "global" else None,
+        )
 
-        task = FileSystemTask(name="task1_1", relative_path="group1/task1_1", config=task_config)
+        task = FileSystemTask(
+            name="task1_1", relative_path="group1/task1_1", config=task_config
+        )
         getattr(tester, method_name)(task)
 
         if level == "task":

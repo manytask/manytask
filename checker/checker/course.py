@@ -50,12 +50,22 @@ class Course:
         self.repository_root = repository_root
         self.reference_root = reference_root or repository_root
 
-        self.potential_groups = {group.name: group for group in self._search_for_groups_by_configs(self.reference_root)}
-        self.potential_tasks = {task.name: task for task in self._search_for_tasks_by_configs(self.reference_root)}
+        self.potential_groups = {
+            group.name: group
+            for group in self._search_for_groups_by_configs(self.reference_root)
+        }
+        self.potential_tasks = {
+            task.name: task
+            for task in self._search_for_tasks_by_configs(self.reference_root)
+        }
 
         self.branch_name = branch_name
 
-        self.task_to_group = {task.name: group for group in self.potential_groups.values() for task in group.tasks}
+        self.task_to_group = {
+            task.name: group
+            for group in self.potential_groups.values()
+            for task in group.tasks
+        }
 
     def get_group_for_task(self, task_name: str) -> FileSystemGroup | None:
         """Get the group that contains the given task, or None if not found."""
@@ -80,7 +90,9 @@ class Course:
         *,
         now: datetime | None = None,
     ) -> list[FileSystemGroup]:
-        search_deadlines_groups = self.manytask_config.get_groups(enabled=enabled, started=started, now=now)
+        search_deadlines_groups = self.manytask_config.get_groups(
+            enabled=enabled, started=started, now=now
+        )
 
         return [
             self.potential_groups[deadline_group.name]
@@ -95,7 +107,9 @@ class Course:
         *,
         now: datetime | None = None,
     ) -> list[FileSystemTask]:
-        search_deadlines_tasks = self.manytask_config.get_tasks(enabled=enabled, started=started, now=now)
+        search_deadlines_tasks = self.manytask_config.get_tasks(
+            enabled=enabled, started=started, now=now
+        )
 
         return [
             self.potential_tasks[deadline_task.name]
@@ -131,13 +145,18 @@ class Course:
             relative_group_path = group_config_path.parent.relative_to(root)
 
             # if empty file - use default
-            if group_config_path.read_text().strip() == "" or group_config_path.read_text().strip() == "\n":
+            if (
+                group_config_path.read_text().strip() == ""
+                or group_config_path.read_text().strip() == "\n"
+            ):
                 group_config = CheckerSubConfig.default()
             # if any content - read yml
             else:
                 group_config = CheckerSubConfig.from_yaml(group_config_path)
 
-            group_tasks = list(Course._search_for_tasks_by_configs(group_config_path.parent))
+            group_tasks = list(
+                Course._search_for_tasks_by_configs(group_config_path.parent)
+            )
             for task in group_tasks:
                 task.relative_path = str(relative_group_path / task.relative_path)
 
@@ -159,14 +178,20 @@ class Course:
             branch_name = repo.active_branch.name
         except TypeError:
             if self.branch_name is None:
-                raise CheckerException("Detached HEAD state and no branch name provided")
+                raise CheckerException(
+                    "Detached HEAD state and no branch name provided"
+                )
             branch_name = self.branch_name
         print_info(f"Branch name: {branch_name}", color="grey")
 
         # try to get groups first
-        changed_enabled_groups = [group for group in enabled_groups if group.name == branch_name]
+        changed_enabled_groups = [
+            group for group in enabled_groups if group.name == branch_name
+        ]
         if changed_enabled_groups:
-            return self._tasks_from_groups(changed_enabled_groups, potential_tasks, "branch name == group name")
+            return self._tasks_from_groups(
+                changed_enabled_groups, potential_tasks, "branch name == group name"
+            )
 
         # if no groups found, try to get tasks
         changed_tasks = [task for task in potential_tasks if task.name == branch_name]
@@ -175,7 +200,9 @@ class Course:
             color="grey",
         )
         if not changed_tasks:
-            print_info(f"No active task/group found for branch {branch_name}", color="yellow")
+            print_info(
+                f"No active task/group found for branch {branch_name}", color="yellow"
+            )
 
         return changed_tasks
 
@@ -192,18 +219,27 @@ class Course:
         print_info(f"Commit message: {commit_message}", color="grey")
 
         # try to get groups first
-        changed_enabled_groups = [group for group in enabled_groups if group.name in commit_message]
+        changed_enabled_groups = [
+            group for group in enabled_groups if group.name in commit_message
+        ]
         if changed_enabled_groups:
-            return self._tasks_from_groups(changed_enabled_groups, potential_tasks, "group name in commit message")
+            return self._tasks_from_groups(
+                changed_enabled_groups, potential_tasks, "group name in commit message"
+            )
 
         # if no groups found, try to get tasks
-        changed_tasks = [task for task in potential_tasks if task.name in commit_message]
+        changed_tasks = [
+            task for task in potential_tasks if task.name in commit_message
+        ]
         print_info(
             f"Changed tasks: {[t.name for t in changed_tasks]} (task name in commit message)",
             color="grey",
         )
         if not changed_tasks:
-            print_info(f"No active tasks/groups found for commit message {commit_message}", color="yellow")
+            print_info(
+                f"No active tasks/groups found for commit message {commit_message}",
+                color="yellow",
+            )
 
         return changed_tasks
 
@@ -220,14 +256,19 @@ class Course:
         changed_tasks = [
             task
             for task in potential_tasks
-            if any(file is not None and Path(file).is_relative_to(task.relative_path) for file in changed_files)
+            if any(
+                file is not None and Path(file).is_relative_to(task.relative_path)
+                for file in changed_files
+            )
         ]
         print_info(
             f"Changed tasks: {[t.name for t in changed_tasks]} (changed files in last commit)",
             color="grey",
         )
         if not changed_tasks:
-            warnings.warn(f"No active tasks found for last commit changes {changed_files}")
+            warnings.warn(
+                f"No active tasks found for last commit changes {changed_files}"
+            )
 
         return changed_tasks
 
@@ -238,10 +279,18 @@ class Course:
         reason: str,
     ) -> list[FileSystemTask]:
         """Extract tasks from groups and log the change."""
-        print_info(f"Changed groups: {[g.name for g in groups]} ({reason})", color="grey")
-        changed_enabled_tasks_names = {task.name for group in groups for task in group.tasks}
-        changed_tasks = [task for task in potential_tasks if task.name in changed_enabled_tasks_names]
-        print_info(f"Changed tasks: {[t.name for t in changed_tasks]} ({reason})", color="grey")
+        print_info(
+            f"Changed groups: {[g.name for g in groups]} ({reason})", color="grey"
+        )
+        changed_enabled_tasks_names = {
+            task.name for group in groups for task in group.tasks
+        }
+        changed_tasks = [
+            task for task in potential_tasks if task.name in changed_enabled_tasks_names
+        ]
+        print_info(
+            f"Changed tasks: {[t.name for t in changed_tasks]} ({reason})", color="grey"
+        )
         return changed_tasks
 
     def detect_changes(
@@ -267,7 +316,9 @@ class Course:
         try:
             repo = git.Repo(self.repository_root)
         except git.exc.InvalidGitRepositoryError:
-            raise CheckerException(f"Git Repository in {self.repository_root} not found")
+            raise CheckerException(
+                f"Git Repository in {self.repository_root} not found"
+            )
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME:
             return self._detect_by_branch_name(repo, potential_tasks, enabled_groups)
@@ -275,7 +326,10 @@ class Course:
         if detection_type == CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE:
             return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
 
-        if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
+        if (
+            detection_type
+            == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES
+        ):
             return self._detect_by_last_commit_changes(repo, potential_tasks)
 
         assert False, "Unreachable code"  # pragma: no cover

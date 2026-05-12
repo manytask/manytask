@@ -18,8 +18,12 @@ from .exporter import Exporter
 from .tester import Tester
 from .utils import print_ascii_tag, print_info
 
-ClickReadableFile = click.Path(exists=True, file_okay=True, readable=True, path_type=Path)
-ClickReadableDirectory = click.Path(exists=True, file_okay=False, readable=True, path_type=Path)
+ClickReadableFile = click.Path(
+    exists=True, file_okay=True, readable=True, path_type=Path
+)
+ClickReadableDirectory = click.Path(
+    exists=True, file_okay=False, readable=True, path_type=Path
+)
 ClickWritableDirectory = click.Path(file_okay=False, writable=True, path_type=Path)
 
 CHECKER_CONFIG = ".checker.yml"
@@ -40,7 +44,9 @@ def cli(
 
 @cli.command()
 @click.argument("root", type=ClickReadableDirectory, default=".")
-@click.option("-v/-s", "--verbose/--silent", is_flag=True, default=True, help="Verbose output")
+@click.option(
+    "-v/-s", "--verbose/--silent", is_flag=True, default=True, help="Verbose output"
+)
 @click.pass_context
 def validate(
     ctx: click.Context,
@@ -145,7 +151,9 @@ def validate(
     default=True,
     help="Verbose tests output",
 )
-@click.option("--dry-run", is_flag=True, help="Do not execute anything, only log actions")
+@click.option(
+    "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
+)
 @click.pass_context
 def check(  # noqa: PLR0913
     ctx: click.Context,
@@ -249,13 +257,17 @@ def _parse_timestamp(
     try:
         return datetime.fromisoformat(value)
     except ValueError as e:
-        raise click.BadParameter("Use ISO 8601, e.g. 2025-09-08T13:39:13 or 2025-09-08T13:39:13Z") from e
+        raise click.BadParameter(
+            "Use ISO 8601, e.g. 2025-09-08T13:39:13 or 2025-09-08T13:39:13Z"
+        ) from e
 
 
 @cli.command()
 @click.argument("root", type=ClickReadableDirectory, default=".")
 @click.argument("reference_root", type=ClickReadableDirectory, default=".")
-@click.option("--submit-score", is_flag=True, help="Submit score to the Manytask server")
+@click.option(
+    "--submit-score", is_flag=True, help="Submit score to the Manytask server"
+)
 @click.option(
     "--timestamp",
     type=str,
@@ -264,8 +276,12 @@ def _parse_timestamp(
     show_default="current time in Europe/Moscow",
     help="Timestamp to use for the submission",
 )
-@click.option("--username", type=str, default=None, help="Username to use for the submission")
-@click.option("--branch", type=str, default=None, help="Rewrite branch name for the submission")
+@click.option(
+    "--username", type=str, default=None, help="Username to use for the submission"
+)
+@click.option(
+    "--branch", type=str, default=None, help="Rewrite branch name for the submission"
+)
 @click.option("--no-clean", is_flag=True, help="Clean or not check tmp folders")
 @click.option(
     "-v/-s",
@@ -274,7 +290,9 @@ def _parse_timestamp(
     default=False,
     help="Verbose tests output",
 )
-@click.option("--dry-run", is_flag=True, help="Do not execute anything, only log actions")
+@click.option(
+    "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
+)
 @click.pass_context
 def grade(  # noqa: PLR0913
     ctx: click.Context,
@@ -355,8 +373,12 @@ def grade(  # noqa: PLR0913
 @cli.command()
 @click.argument("reference_root", type=ClickReadableDirectory, default=".")
 @click.argument("export_root", type=ClickWritableDirectory, default="./export")
-@click.option("--commit", is_flag=True, help="Commit and push changes to the repository")
-@click.option("--dry-run", is_flag=True, help="Do not execute anything, only log actions")
+@click.option(
+    "--commit", is_flag=True, help="Commit and push changes to the repository"
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
+)
 @click.pass_context
 def export(
     ctx: click.Context,
@@ -396,13 +418,17 @@ def export(
         dry_run=dry_run,
     )
     export_root.mkdir(exist_ok=True, parents=True)
-    exporter.export_public(export_root, commit=commit, commit_message=checker_config.export.commit_message)
+    exporter.export_public(
+        export_root, commit=commit, commit_message=checker_config.export.commit_message
+    )
 
 
 @cli.command()
 @click.argument("reference_root", type=ClickReadableDirectory, default=".")
 @click.argument("export_root", type=ClickWritableDirectory, default="./export")
-@click.option("--dry-run", is_flag=True, help="Do not execute anything, only log actions")
+@click.option(
+    "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
+)
 @click.pass_context
 def export_private(
     ctx: click.Context,

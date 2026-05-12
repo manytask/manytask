@@ -15,8 +15,12 @@ class RunScriptPlugin(PluginABC):
 
     class Args(PluginABC.Args):
         origin: str
-        script: Union[str, list[str]]  # as pydantic does not support | in older python versions
-        timeout: Union[float, None] = None  # as pydantic does not support | in older python versions
+        script: Union[
+            str, list[str]
+        ]  # as pydantic does not support | in older python versions
+        timeout: Union[float, None] = (
+            None  # as pydantic does not support | in older python versions
+        )
         env_additional: dict[str, str] = dict()
         env_whitelist: Optional[list[str]] = None
         input: Optional[Path] = None

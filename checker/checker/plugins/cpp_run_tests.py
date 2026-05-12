@@ -46,7 +46,9 @@ class CppRunTestsPlugin(PluginABC):
                     print_info(f.read())
 
     @staticmethod
-    def _run_tests(args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool) -> None:
+    def _run_tests(
+        args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool
+    ) -> None:
         env = CppRunTestsPlugin._get_sanitizers_env(args, tmp_dir)
         paths_whitelist = [str(args.root / p) for p in args.paths_whitelist]
         run_args = SafeRunScriptPlugin.Args(
@@ -71,7 +73,9 @@ class CppRunTestsPlugin(PluginABC):
         targets = args.tests[::2]
         build_types = args.tests[1::2]
         if len(targets) != len(build_types):
-            raise PluginExecutionFailed("Wrong task config (len(targets) != len(build_types))")
+            raise PluginExecutionFailed(
+                "Wrong task config (len(targets) != len(build_types))"
+            )
 
         if not targets:
             raise PluginExecutionFailed("No targets")
@@ -81,6 +85,10 @@ class CppRunTestsPlugin(PluginABC):
             build_dir = args.root / f"build-{build_type.lower()}"
             with tempfile.TemporaryDirectory() as tmp_dir:
                 CppRunTestsPlugin._run_tests(
-                    args=args, tmp_dir=Path(tmp_dir), build_dir=build_dir, target=target, verbose=verbose
+                    args=args,
+                    tmp_dir=Path(tmp_dir),
+                    build_dir=build_dir,
+                    target=target,
+                    verbose=verbose,
                 )
         return PluginOutput(output="Tests are passed")

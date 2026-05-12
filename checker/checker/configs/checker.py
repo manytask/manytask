@@ -126,7 +126,9 @@ class CheckerConfig(CustomBaseModel, YamlLoaderMixin["CheckerConfig"]):
 
     version: int  # if config exists, version is always present
 
-    default_parameters: CheckerParametersConfig = Field(default_factory=lambda: CheckerParametersConfig(root={}))
+    default_parameters: CheckerParametersConfig = Field(
+        default_factory=lambda: CheckerParametersConfig(root={})
+    )
 
     structure: CheckerStructureConfig
     export: CheckerExportConfig

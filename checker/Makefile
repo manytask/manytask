@@ -5,7 +5,7 @@
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: install-deps test test-colima lint format copy-common-config run-checker-tests
+.PHONY: install-deps test test-colima lint copy-common-config run-checker-tests
 
 COMMON_YAML ?= ../common.example.yml
 CHECKER_CONFIG_OUT ?= ./.checker.yml
@@ -27,14 +27,9 @@ test-colima: copy-common-config install-deps
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format --check $(CHECKER_PKG) $(TESTS_DIR)
-	uv run ruff check $(CHECKER_PKG) $(TESTS_DIR)/
-	uv run mypy $(CHECKER_PKG)
-
-format:
-	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
 	uv run ruff format $(CHECKER_PKG) $(TESTS_DIR)
 	uv run ruff check $(CHECKER_PKG) $(TESTS_DIR)/ --fix
+	uv run mypy $(CHECKER_PKG)
 
 copy-common-config:
 	cp "$(COMMON_YAML)" "$(CHECKER_CONFIG_OUT)"

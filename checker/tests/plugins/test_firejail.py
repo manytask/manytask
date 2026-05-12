@@ -41,7 +41,9 @@ class TestSafeRunScriptPlugin:
             ({"origin": "/tmp/123", "script": "echo Hello", "timeout": 10}, None),
         ],
     )
-    def test_plugin_args(self, parameters: dict[str, Any], expected_exception: Exception | None) -> None:
+    def test_plugin_args(
+        self, parameters: dict[str, Any], expected_exception: Exception | None
+    ) -> None:
         if expected_exception:
             with pytest.raises(expected_exception):
                 SafeRunScriptPlugin.Args(**parameters)
@@ -58,7 +60,9 @@ class TestSafeRunScriptPlugin:
             ("echo Hello && false", "Hello", PluginExecutionFailed),
         ],
     )
-    def test_run_script(self, script: str, output: str, expected_exception: Exception | None) -> None:
+    def test_run_script(
+        self, script: str, output: str, expected_exception: Exception | None
+    ) -> None:
         plugin = SafeRunScriptPlugin()
         args = SafeRunScriptPlugin.Args(origin="/tmp", script=script)
 
@@ -79,7 +83,9 @@ class TestSafeRunScriptPlugin:
             ("sleep 2", 1, PluginExecutionFailed),
         ],
     )
-    def test_timeout(self, script: str, timeout: float, expected_exception: Exception | None) -> None:
+    def test_timeout(
+        self, script: str, timeout: float, expected_exception: Exception | None
+    ) -> None:
         # TODO: check if timeout float
         plugin = SafeRunScriptPlugin()
         args = SafeRunScriptPlugin.Args(origin="/tmp", script=script, timeout=timeout)
@@ -100,7 +106,9 @@ class TestSafeRunScriptPlugin:
     )
     def test_hide_evns(self, env_whitelist) -> None:
         plugin = SafeRunScriptPlugin()
-        args = SafeRunScriptPlugin.Args(origin="/tmp", script="printenv", env_whitelist=env_whitelist)
+        args = SafeRunScriptPlugin.Args(
+            origin="/tmp", script="printenv", env_whitelist=env_whitelist
+        )
 
         res_lines = [line.strip() for line in plugin._run(args).output.splitlines()]
         envs: list[str] = []
@@ -133,7 +141,12 @@ class TestSafeRunScriptPlugin:
         "origin, paths_whitelist, access_file, expected_exception",
         [
             (Path("/tmp"), [], Path("/tmp/tmp.txt"), None),
-            (Path("/tmp"), [], in_home("tmp/tmp.txt"), None),  # this is a trick!!! origin /tmp is replaced by ~/tmp
+            (
+                Path("/tmp"),
+                [],
+                in_home("tmp/tmp.txt"),
+                None,
+            ),  # this is a trick!!! origin /tmp is replaced by ~/tmp
             (Path("/tmp"), [], in_home("tmp.txt"), PluginExecutionFailed),
             (Path("/tmp"), [HOME], in_home("tmp.txt"), None),
             (HOME, [], in_home("tmp.txt"), None),
@@ -149,9 +162,19 @@ class TestSafeRunScriptPlugin:
             (in_home("tmp"), [], in_home("tmp/tmp.txt"), None),
             (in_home("not_tmp"), [in_home("tmp")], in_home("tmp/tmp.txt"), None),
             (in_home("tmp"), [], in_home("tmp.txt"), PluginExecutionFailed),
-            (in_home("not_tmp"), [in_home("tmp")], in_home("tmp.txt"), PluginExecutionFailed),
+            (
+                in_home("not_tmp"),
+                [in_home("tmp")],
+                in_home("tmp.txt"),
+                PluginExecutionFailed,
+            ),
             (in_home("tmp"), [], in_home("not_tmp/tmp.txt"), PluginExecutionFailed),
-            (Path("/tmp"), [in_home("tmp")], in_home("not_tmp/tmp.txt"), PluginExecutionFailed),
+            (
+                Path("/tmp"),
+                [in_home("tmp")],
+                in_home("not_tmp/tmp.txt"),
+                PluginExecutionFailed,
+            ),
         ],
     )
     def test_file_system_access(
@@ -197,12 +220,21 @@ class TestSafeRunScriptPlugin:
     )
     def test_no_extra_output(self, test_file_content: str) -> None:
         def _generate_random_content() -> str:
-            return "".join([RANDOM_LINES[randrange(0, len(RANDOM_LINES))] for _ in range(0, randrange(0, 100))])
+            return "".join(
+                [
+                    RANDOM_LINES[randrange(0, len(RANDOM_LINES))]
+                    for _ in range(0, randrange(0, 100))
+                ]
+            )
 
         tmp_dir = in_home("tmp")
         tmp_dir.mkdir(parents=True, exist_ok=True)
         file_path = tmp_dir.joinpath("tmp.txt")
-        file_content = test_file_content if test_file_content != RANDOM_CONTENT else _generate_random_content()
+        file_content = (
+            test_file_content
+            if test_file_content != RANDOM_CONTENT
+            else _generate_random_content()
+        )
         with open(file_path, "w") as f:
             f.write(file_content)
 
@@ -216,15 +248,25 @@ class TestSafeRunScriptPlugin:
 
         file_path.unlink()
 
-    @pytest.mark.parametrize("env_additional", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
+    @pytest.mark.parametrize(
+        "env_additional", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}]
+    )
     @pytest.mark.parametrize("env_whitelist", [[], ["A"], ["A", "C"]])
-    @pytest.mark.parametrize("mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
+    @pytest.mark.parametrize(
+        "mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}]
+    )
     def test_run_with_environment_variable(
-        self, env_additional: dict[str, str], env_whitelist: list[str], mocked_env: dict[str, str]
+        self,
+        env_additional: dict[str, str],
+        env_whitelist: list[str],
+        mocked_env: dict[str, str],
     ) -> None:
         plugin = SafeRunScriptPlugin()
         args = SafeRunScriptPlugin.Args(
-            origin="/tmp", script="env", env_additional=env_additional, env_whitelist=env_whitelist
+            origin="/tmp",
+            script="env",
+            env_additional=env_additional,
+            env_whitelist=env_whitelist,
         )
 
         with patch.dict("os.environ", mocked_env, clear=True):

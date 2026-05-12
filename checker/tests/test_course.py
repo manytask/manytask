@@ -22,7 +22,12 @@ EXPECTED_TASKS_COUNT = 6
 EXPECTED_ALL_TASKS_COUNT = 7
 TEST_FILE_STRUCTURE = {
     "group1": {
-        "task1_1": {".task.yml": "version: 1", "file1_1_1": "", "file1_1_2": "", "extra_file3": ""},
+        "task1_1": {
+            ".task.yml": "version: 1",
+            "file1_1_1": "",
+            "file1_1_2": "",
+            "extra_file3": "",
+        },
         "task1_2": {".task.yml": "", "file1_2_1": "", "file1_2_2": ""},
         "random_folder": {"file1": "", "file2": ""},
         "extra_file2": "",
@@ -31,7 +36,13 @@ TEST_FILE_STRUCTURE = {
     "group2": {
         "task2_1": {".task.yml": "", "file2_1_1": "", "file2_1_2": ""},
         "task2_2": {".task.yml": "version: 1"},
-        "task2_3": {".task.yml": " \n  \n", "file2_3_1": "", "file2_3_2": "", "file2_3_3": "", "file2_3_4": ""},
+        "task2_3": {
+            ".task.yml": " \n  \n",
+            "file2_3_1": "",
+            "file2_3_2": "",
+            "file2_3_3": "",
+            "file2_3_4": "",
+        },
         "random_folder": {"file1": "", "file2": ""},
         ".group.yml": "version: 1",
     },
@@ -123,12 +134,16 @@ def git_init_repository_root(repository_root: Path) -> Path:
 
 class TestCourse:
     def test_init(self, repository_root: Path) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+        )
         assert test_course.repository_root == repository_root
         assert test_course.manytask_config == TEST_MANYTASK_CONFIG
 
     def test_validate(self, repository_root: Path) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+        )
 
         try:
             test_course.validate()
@@ -138,7 +153,9 @@ class TestCourse:
     def test_search_for_groups_by_configs(self, repository_root: Path) -> None:
         potential_groups = list(Course._search_for_groups_by_configs(repository_root))
         assert len(potential_groups) == EXPECTED_GROUPS_COUNT
-        assert sum(len(group.tasks) for group in potential_groups) == EXPECTED_TASKS_COUNT
+        assert (
+            sum(len(group.tasks) for group in potential_groups) == EXPECTED_TASKS_COUNT
+        )
         for group in potential_groups:
             assert isinstance(group, FileSystemGroup)
             assert (repository_root / group.relative_path).exists()
@@ -153,19 +170,27 @@ class TestCourse:
     def test_validate_missing_task(self, repository_root: Path) -> None:
         shutil.rmtree(repository_root / "group1" / "task1_1")
         with pytest.raises(BadConfig):
-            Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root).validate()
+            Course(
+                manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+            ).validate()
 
     def test_validate_missing_group(self, repository_root: Path) -> None:
         shutil.rmtree(repository_root / "group3")
         with pytest.warns():
-            Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root).validate()
+            Course(
+                manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+            ).validate()
 
     def test_init_task_bad_config(self, repository_root: Path) -> None:
-        with open(repository_root / "group1" / "task1_1" / Course.TASK_CONFIG_NAME, "w") as f:
+        with open(
+            repository_root / "group1" / "task1_1" / Course.TASK_CONFIG_NAME, "w"
+        ) as f:
             f.write("bad_config")
 
         with pytest.raises(BadConfig):
-            Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+            Course(
+                manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+            )
 
     @pytest.mark.parametrize(
         "enabled, expected_num_groups",
@@ -175,8 +200,12 @@ class TestCourse:
             (False, 1),
         ],
     )
-    def test_get_groups(self, enabled: bool | None, expected_num_groups, repository_root: Path) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+    def test_get_groups(
+        self, enabled: bool | None, expected_num_groups, repository_root: Path
+    ) -> None:
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+        )
 
         groups = test_course.get_groups(enabled=enabled)
         assert isinstance(groups, list)
@@ -191,8 +220,12 @@ class TestCourse:
             (False, 3),
         ],
     )
-    def test_get_tasks(self, enabled: bool | None, expected_num_tasks, repository_root: Path) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+    def test_get_tasks(
+        self, enabled: bool | None, expected_num_tasks, repository_root: Path
+    ) -> None:
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+        )
 
         tasks = test_course.get_tasks(enabled=enabled)
         assert isinstance(tasks, list)
@@ -200,7 +233,9 @@ class TestCourse:
         assert len(tasks) == expected_num_tasks
 
     def test_get_group_for_task(self, repository_root: Path) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+        )
         group = test_course.get_group_for_task("task1_1")
         assert group is not None
         assert group.name == "group1"
@@ -209,19 +244,33 @@ class TestCourse:
         assert group.name == "group4"
 
     def test_get_group_for_task_not_found(self, repository_root: Path) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+        )
         assert test_course.get_group_for_task("task_not_exist") is None
 
     def test_detect_changes_not_a_repo(self, repository_root: Path) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root
+        )
         with pytest.raises(CheckerException):
-            test_course.detect_changes(CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE)
+            test_course.detect_changes(
+                CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE
+            )
 
     @pytest.mark.parametrize(
         "branch_name, changed_files, expected_changed_tasks",
         [
             ("task1_1", ["group1/task1_1/file1_1_1"], ["task1_1"]),
-            ("task1_1", ["group1/task1_1/file1_1_1", "random_file.txt", "group1/task1_1/file1_1_1"], ["task1_1"]),
+            (
+                "task1_1",
+                [
+                    "group1/task1_1/file1_1_1",
+                    "random_file.txt",
+                    "group1/task1_1/file1_1_1",
+                ],
+                ["task1_1"],
+            ),
             ("task2_1", ["group2/task2_1/file1_1_1"], []),  # not enabled
             ("not_a_task", ["group2/task2_1/file2_1_1"], []),
             ("root_task_1", ["root_task_1/file1"], ["root_task_1"]),
@@ -242,23 +291,32 @@ class TestCourse:
         changed_files: list[str],
         expected_changed_tasks: list[str],
     ) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG,
+            repository_root=git_init_repository_root,
+        )
         repo = git.Repo(git_init_repository_root)
 
         # create new branch
         repo.git.checkout("-b", branch_name)
         # create or change files
         for filename in changed_files:
-            Path(git_init_repository_root / filename).write_text(f"random_text_to_write_in_file {filename}")
+            Path(git_init_repository_root / filename).write_text(
+                f"random_text_to_write_in_file {filename}"
+            )
         # commit changes (allow empty commit)
         repo.git.add(".")
         repo.git.commit("-m", "random commit message", "--allow-empty")
 
-        changed_tasks = test_course.detect_changes(CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME)
+        changed_tasks = test_course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME
+        )
         assert isinstance(changed_tasks, list)
         assert all(isinstance(task, FileSystemTask) for task in changed_tasks)
         assert len(changed_tasks) == len(expected_changed_tasks)
-        assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+        assert sorted(task.name for task in changed_tasks) == sorted(
+            expected_changed_tasks
+        )
 
     @pytest.mark.parametrize(
         "commit_message, changed_files, expected_changed_tasks",
@@ -267,7 +325,11 @@ class TestCourse:
             ("fixses in task1_1", ["group1/task1_1/file1_1_1"], ["task1_1"]),
             (
                 "task1_1 some commit",
-                ["group1/task1_1/file1_1_1", "random_file.txt", "group1/task1_1/file1_1_1"],
+                [
+                    "group1/task1_1/file1_1_1",
+                    "random_file.txt",
+                    "group1/task1_1/file1_1_1",
+                ],
                 ["task1_1"],
             ),
             ("add fixes for task2_1", ["group2/task2_1/file1_1_1"], []),  # not enabled
@@ -282,9 +344,21 @@ class TestCourse:
             ("commit root_task_1", [], ["root_task_1"]),
             ("commit root_task_1 and some more", [], ["root_task_1"]),
             # group names
-            ("commit with group1 group1 group1 group1", ["group1/task1_1/file1_1_1"], ["task1_1", "task1_2"]),
-            ("commit with group1", ["group2/task2_1/file1_1_1"], ["task1_1", "task1_2"]),
-            ("my solutions for group1 and group_without_folder", [], ["task1_1", "task1_2", "root_task_1"]),
+            (
+                "commit with group1 group1 group1 group1",
+                ["group1/task1_1/file1_1_1"],
+                ["task1_1", "task1_2"],
+            ),
+            (
+                "commit with group1",
+                ["group2/task2_1/file1_1_1"],
+                ["task1_1", "task1_2"],
+            ),
+            (
+                "my solutions for group1 and group_without_folder",
+                [],
+                ["task1_1", "task1_2", "root_task_1"],
+            ),
             ("group2 and group22", ["group2/task2_1/file1_1_1"], []),  # not enabled
             ("group3", ["group1/task1_1/file1_1_1"], []),  # empty group
             ("group_without_folder", [], ["root_task_1"]),
@@ -297,32 +371,52 @@ class TestCourse:
         changed_files: list[str],
         expected_changed_tasks: list[str],
     ) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG,
+            repository_root=git_init_repository_root,
+        )
         repo = git.Repo(git_init_repository_root)
 
         # create or change files
         for filename in changed_files:
-            Path(git_init_repository_root / filename).write_text(f"random_text_to_write_in_file {filename}")
+            Path(git_init_repository_root / filename).write_text(
+                f"random_text_to_write_in_file {filename}"
+            )
         # commit changes (allow empty commit)
         repo.git.add(".")
         repo.git.commit("-m", commit_message, "--allow-empty")
 
-        changed_tasks = test_course.detect_changes(CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE)
+        changed_tasks = test_course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE
+        )
         assert isinstance(changed_tasks, list)
         assert all(isinstance(task, FileSystemTask) for task in changed_tasks)
         assert len(changed_tasks) == len(expected_changed_tasks)
-        assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+        assert sorted(task.name for task in changed_tasks) == sorted(
+            expected_changed_tasks
+        )
 
     @pytest.mark.parametrize(
         "changed_files, expected_changed_tasks",
         [
             (["group1/task1_1/file.txt"], ["task1_1"]),
-            (["group1/task1_1/file.txt", "random_file.txt", "group1/task1_1/file.txt"], ["task1_1"]),
+            (
+                [
+                    "group1/task1_1/file.txt",
+                    "random_file.txt",
+                    "group1/task1_1/file.txt",
+                ],
+                ["task1_1"],
+            ),
             (["group2/task2_1/file.txt"], []),  # not enabled
             (["group2/task2_1/file2_1_1.txt"], []),  # not enabled
             (["some_root_file", "random_folder/random_file.txt"], []),
             (
-                ["group2/task2_1/file2_1_1.txt", "group1/task1_1/file.txt", "root_task_1/some.txt"],
+                [
+                    "group2/task2_1/file2_1_1.txt",
+                    "group1/task1_1/file.txt",
+                    "root_task_1/some.txt",
+                ],
                 ["task1_1", "root_task_1"],
             ),
             (["root_task_1/file1.txt"], ["root_task_1"]),
@@ -330,20 +424,32 @@ class TestCourse:
         ],
     )
     def test_detect_changes_by_last_commit_changes(
-        self, git_init_repository_root: Path, changed_files: list[str], expected_changed_tasks: list[str]
+        self,
+        git_init_repository_root: Path,
+        changed_files: list[str],
+        expected_changed_tasks: list[str],
     ) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG,
+            repository_root=git_init_repository_root,
+        )
         repo = git.Repo(git_init_repository_root)
 
         # create or change files
         for filename in changed_files:
-            Path(git_init_repository_root / filename).write_text(f"random_text_to_write_in_file {filename}")
+            Path(git_init_repository_root / filename).write_text(
+                f"random_text_to_write_in_file {filename}"
+            )
         # commit changes (allow empty commit)
         repo.git.add(".")
         repo.git.commit("-m", "random commit message", "--allow-empty")
 
-        changed_tasks = test_course.detect_changes(CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES)
+        changed_tasks = test_course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES
+        )
         assert isinstance(changed_tasks, list)
         assert all(isinstance(task, FileSystemTask) for task in changed_tasks)
         assert len(changed_tasks) == len(expected_changed_tasks)
-        assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+        assert sorted(task.name for task in changed_tasks) == sorted(
+            expected_changed_tasks
+        )

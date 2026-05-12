@@ -14,7 +14,9 @@ class TestParametersResolver:
         "template, context, expected",
         [
             ("${{ a }}", {"a": 2}, 2),
-            pytest.param("${{ b }}", {"b": "2"}, "2", marks=pytest.mark.xfail()),  # TODO: check why returned as int
+            pytest.param(
+                "${{ b }}", {"b": "2"}, "2", marks=pytest.mark.xfail()
+            ),  # TODO: check why returned as int
             ("${{ c }}", {"c": [1, 2, "4"]}, [1, 2, "4"]),
             ("    ${{ d }}", {"d": 2}, 2),
             ("${{ e }}   ", {"e": 2}, 2),
@@ -24,7 +26,9 @@ class TestParametersResolver:
             ("${{ i }}", {"i": 2.0}, 2.0),
         ],
     )
-    def test_keep_native_type(self, template: str, context: dict[str, Any], expected: Any) -> None:
+    def test_keep_native_type(
+        self, template: str, context: dict[str, Any], expected: Any
+    ) -> None:
         resolver = ParametersResolver()
         assert resolver.resolve(template, context) == expected
 
@@ -37,7 +41,9 @@ class TestParametersResolver:
             ("${{ a }}", {"a": 2, "b": 3}, 2),
         ],
     )
-    def test_string_input(self, template: str, context: dict[str, Any], expected: Any) -> None:
+    def test_string_input(
+        self, template: str, context: dict[str, Any], expected: Any
+    ) -> None:
         resolver = ParametersResolver()
         assert resolver.resolve(template, context) == expected
 
@@ -53,7 +59,9 @@ class TestParametersResolver:
             ),
         ],
     )
-    def test_list_input(self, template: list[Any], context: dict[str, Any], expected: list[Any]) -> None:
+    def test_list_input(
+        self, template: list[Any], context: dict[str, Any], expected: list[Any]
+    ) -> None:
         resolver = ParametersResolver()
         assert resolver.resolve(template, context) == expected
 
@@ -113,9 +121,13 @@ class TestParametersResolver:
                 {"valid_var": {"valid_field": 1}},
                 marks=pytest.mark.xfail(),
             ),
-            pytest.param("${{ not_existing }} ${{ a }}", {"a": 2}, marks=pytest.mark.xfail()),
+            pytest.param(
+                "${{ not_existing }} ${{ a }}", {"a": 2}, marks=pytest.mark.xfail()
+            ),
             pytest.param("${{ not_existing }}", {"a": 2}, marks=pytest.mark.xfail()),
-            pytest.param("invalid_syntax }}", {"invalid_syntax": 2}, marks=pytest.mark.xfail()),
+            pytest.param(
+                "invalid_syntax }}", {"invalid_syntax": 2}, marks=pytest.mark.xfail()
+            ),
         ],
     )
     def test_invalid_template(self, template: Any, context: dict[str, Any]) -> None:

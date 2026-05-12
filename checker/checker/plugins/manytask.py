@@ -26,11 +26,15 @@ class ManytaskPlugin(PluginABC):
     name = "report_score_manytask"
 
     class Args(PluginABC.Args):
-        origin: Optional[str] = None  # as pydantic does not support | in older python versions
+        origin: Optional[str] = (
+            None  # as pydantic does not support | in older python versions
+        )
         patterns: list[str] = ["*"]
         username: str
         task_name: str
-        score: float | None  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
+        score: (
+            float | None
+        )  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
         report_url: AnyUrl
         report_token: str
         check_deadline: bool
@@ -40,7 +44,9 @@ class ManytaskPlugin(PluginABC):
         output: list[str] = []
 
         if not args.send_time.tzinfo:
-            output.append("Warning: No timezone provided for send_time, possible time miscalculations")
+            output.append(
+                "Warning: No timezone provided for send_time, possible time miscalculations"
+            )
         try:
             send_time_formatted = args.send_time.strftime(self.DEFAULT_TIME_FORMAT)
         except ValueError as e:
@@ -81,7 +87,9 @@ class ManytaskPlugin(PluginABC):
         data: dict[str, Any],
         files: dict[str, tuple[str, IO[bytes]]] | None,
     ) -> requests.Response:
-        retry_strategy = urllib3.Retry(total=3, backoff_factor=1, status_forcelist=[408, 500, 502, 503, 504])
+        retry_strategy = urllib3.Retry(
+            total=3, backoff_factor=1, status_forcelist=[408, 500, 502, 503, 504]
+        )
         adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
         session = requests.Session()
         session.mount("https://", adapter)
@@ -100,7 +108,9 @@ class ManytaskPlugin(PluginABC):
         return response
 
     @staticmethod
-    def _collect_files_to_send(origin: str, patterns: list[str]) -> dict[str, tuple[str, IO[bytes]]]:
+    def _collect_files_to_send(
+        origin: str, patterns: list[str]
+    ) -> dict[str, tuple[str, IO[bytes]]]:
         source_dir = Path(origin)
         return {
             path.name: (str(path.relative_to(source_dir)), open(path, "rb"))

@@ -8,7 +8,9 @@ T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
 
 
 class TestGenerateFileStructure:
-    def test_simple_case(self, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> None:
+    def test_simple_case(
+        self, generate_file_structure: T_GENERATE_FILE_STRUCTURE
+    ) -> None:
         files_content = {
             "test.py": "print('Hello')\n",
             "test.txt": "Hello\n",
@@ -20,7 +22,9 @@ class TestGenerateFileStructure:
         assert (root / "test.py").read_text() == "print('Hello')\n"
         assert (root / "test.txt").read_text() == "Hello\n"
 
-    def test_subfolders(self, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> None:
+    def test_subfolders(
+        self, generate_file_structure: T_GENERATE_FILE_STRUCTURE
+    ) -> None:
         files_content = {
             "folder": {
                 "test.py": "print('Hello')\n",
@@ -47,7 +51,9 @@ class TestGenerateFileStructure:
         assert (root / "deep_folder" / "folder" / "test.py").is_file()
         assert (root / "deep_folder" / "folder" / "test.txt").is_file()
 
-    def test_empty_files(self, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> None:
+    def test_empty_files(
+        self, generate_file_structure: T_GENERATE_FILE_STRUCTURE
+    ) -> None:
         files_content = {
             "test.py": "",
             "test.txt": "",
@@ -59,7 +65,9 @@ class TestGenerateFileStructure:
         assert (root / "test.py").read_text() == ""
         assert (root / "test.txt").read_text() == ""
 
-    def test_empty_directory(self, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> None:
+    def test_empty_directory(
+        self, generate_file_structure: T_GENERATE_FILE_STRUCTURE
+    ) -> None:
         files_content = {
             "folder": {},
             "deep_folder": {

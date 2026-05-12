@@ -14,7 +14,9 @@ class AggregatePlugin(PluginABC):
 
     class Args(PluginABC.Args):
         scores: list[float]
-        weights: Union[list[float], None] = None  # as pydantic does not support | in older python versions
+        weights: Union[list[float], None] = (
+            None  # as pydantic does not support | in older python versions
+        )
         strategy: Literal["mean", "sum", "min", "max", "product"] = "mean"
         # TODO: validate for weights: len weights should be equal to len scores
         # TODO: validate not empty scores
@@ -34,7 +36,9 @@ class AggregatePlugin(PluginABC):
                 output=f"Length of scores ({len(args.scores)}) or weights ({len(weights)}) is zero",
             )
 
-        weighted_scores = [score * weight for score, weight in zip(args.scores, weights)]
+        weighted_scores = [
+            score * weight for score, weight in zip(args.scores, weights)
+        ]
 
         if args.strategy == "mean":
             score = sum(weighted_scores) / len(weighted_scores)
