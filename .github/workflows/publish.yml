@@ -32,6 +32,7 @@ jobs:
   release-docker:
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
+      context: manytask
       platforms: linux/amd64,linux/arm64
       tags: manytask/manytask:${{ github.ref_name }}
       target: app

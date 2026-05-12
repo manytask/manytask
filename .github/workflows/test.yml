@@ -28,27 +28,32 @@ jobs:
           version: 0.9.5
 
       - name: Install dependencies
+        working-directory: manytask
         run: uv sync --locked --all-extras
 
       - name: Run ruff format
+        working-directory: manytask
         run: uv run ruff format --check .
-         
+
       - name: Run ruff check
+        working-directory: manytask
         run: uv run ruff check .
-         
+
       - name: Run mypy
-        run: uv run mypy manytask checker/checker
-         
+        working-directory: manytask
+        run: uv run mypy manytask
+
       - name: Run manytask tests
+        working-directory: manytask
         run: uv run pytest
 
       - name: Run checker tests (skip firejail like upstream checker CI)
-        run: |
-          cd checker
-          PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib --skip-firejail tests
+        working-directory: checker
+        run: PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib --skip-firejail tests
 
   build-docker:
     needs: test
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
+      context: manytask
       tags: manytask:${{ github.sha }}
