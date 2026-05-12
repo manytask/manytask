@@ -17,7 +17,7 @@ services:
         restart: always
         expose:
             - "5050"
-        env_file: .env.sourcecraft
+        env_file: ../manytask/.env.sourcecraft
         environment:
             VIRTUAL_HOST: ${SRC_APP_HOST}
             VIRTUAL_PORT: 5050

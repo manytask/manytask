@@ -34,21 +34,21 @@ Here is the way you can go if you have 1 server with 1 manytask instance (1 cour
 1. Create docker/docker-compose script with latest manytask version  
    Note: Best practice is to use version tag (e.g. `manytask/manytask:9.9.9`) **not** `latest` tag
 
-   See [docker-compose.production.yml](/docker-compose.production.yml) file as an example  
+   See [compose/docker-compose.production.yml](/compose/docker-compose.production.yml) file as an example  
    ```shell
-   curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/docker-compose.development.yml -o docker-compose.yml 
+   curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/compose/docker-compose.development.yml -o docker-compose.yml 
    ```
 
 2. Create `.env` file with production environment  
 
-   See [.env.example](../.env.example) as an example
+   See [.env.example](../manytask/.env.example) as an example
    ```shell
-   curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/.env.example -o .env
+   curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/manytask/.env.example -o .env
    ```
 
 3. Setup `nginx-proxy`/`letencrypt`/`certbot` to update https certificates automatically  
    
-   If you are using [docker-compose.production.yml](/docker-compose.production.yml) example, it's already set up.
+   If you are using [compose/docker-compose.production.yml](/compose/docker-compose.production.yml) example, it's already set up.
 
 
 ### From repo (not recommended)
@@ -62,13 +62,13 @@ You can use this repo to set up manytask in production mode
    
 2. Copy and fill `.env` file
     ```shell
-    cp .env.example .env
+    cp manytask/.env.example .env
     nano .env
     ```
 
 #### Docker build (manytask only)
 ```shell
-docker build --tag manytask:build .
+docker build -f manytask/Dockerfile --tag manytask:build .
 docker stop manytask && docker rm manytask || true
 docker run \
     -d \
@@ -95,8 +95,8 @@ docker run \
 
 #### Docker-compose (manytask with certs)
 ```shell
-docker-compose -f docker-compose.production.yml up -d
-docker-compose -f docker-compose.production.yml logs -f
+docker compose -f compose/docker-compose.production.yml up -d
+docker compose -f compose/docker-compose.production.yml logs -f
 ```
 
 
