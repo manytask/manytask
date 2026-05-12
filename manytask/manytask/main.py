@@ -4,6 +4,7 @@ import logging.config
 import logging.handlers
 import os
 import secrets
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -97,6 +98,12 @@ class CustomFlask(Flask):
 
         # Update course settings
         self.storage_api.update_course(course_name, manytask_config)
+
+
+def _load_common_example_course_yaml() -> dict[str, Any]:
+    path = Path(__file__).resolve().parent.parent.parent / "common.example.yml"
+    with path.open() as f:
+        return yaml.load(f, Loader=yaml.SafeLoader)
 
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
@@ -204,9 +211,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     if app.debug:
         _create_debug_course(app)
 
-        with open(".manytask.example.yml", "r") as f:
-            debug_manytask_config_data = yaml.load(f, Loader=yaml.SafeLoader)
-        app.store_config("python2025", debug_manytask_config_data)
+        app.store_config("python2025", _load_common_example_course_yaml())
 
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = MAX_AGE_IN_SECONDS
 

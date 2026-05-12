@@ -10,8 +10,8 @@ services:
     manytask-src:
         # image: manytask/manytask:latest  # set SPECIFIC version you'll use
         build:
-            dockerfile: Dockerfile
-            context: .
+            dockerfile: manytask/Dockerfile
+            context: ..
             target: app
         container_name: manytask-src  # change this to your project name
         restart: always

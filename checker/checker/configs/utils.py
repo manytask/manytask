@@ -10,7 +10,7 @@ from checker.exceptions import BadConfig
 
 
 class CustomBaseModel(pydantic.BaseModel):
-    model_config = pydantic.ConfigDict(extra="forbid", validate_default=True)
+    model_config = pydantic.ConfigDict(extra="ignore", validate_default=True)
 
 
 T = TypeVar("T", bound=pydantic.BaseModel)

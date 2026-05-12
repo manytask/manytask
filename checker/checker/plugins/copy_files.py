@@ -30,10 +30,17 @@ class CopyFilesPlugin(PluginABC):
 
     @staticmethod
     def _copy_files(
-        source: Path, target: Path, patterns: list[str], ignore_patterns: list[str], verbose: bool = False
+        source: Path,
+        target: Path,
+        patterns: list[str],
+        ignore_patterns: list[str],
+        verbose: bool = False,
     ) -> None:
         target.mkdir(parents=True, exist_ok=True)
-        ignore_entries: list[Path] = sum([list(source.glob(ignore_pattern)) for ignore_pattern in ignore_patterns], [])
+        ignore_entries: list[Path] = sum(
+            [list(source.glob(ignore_pattern)) for ignore_pattern in ignore_patterns],
+            [],
+        )
         for pattern in patterns:
             for entry in source.glob(pattern):
                 if entry not in ignore_entries:
@@ -48,7 +55,12 @@ class CopyFilesPlugin(PluginABC):
 
     @staticmethod
     def _copy_entry(
-        entry: Path, source: Path, target: Path, patterns: list[str], ignore_patterns: list[str], verbose: bool = False
+        entry: Path,
+        source: Path,
+        target: Path,
+        patterns: list[str],
+        ignore_patterns: list[str],
+        verbose: bool = False,
     ) -> None:
         relative_path = entry.relative_to(source)
         source_path = source / relative_path

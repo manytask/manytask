@@ -96,7 +96,10 @@ class TestExporterOnSimple:
     @pytest.fixture()
     def simple_student_folder(self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> Path:
         layout = {
-            "task1": {"test.txt": "Some Changes", "public_file.py": "print('Hello LOL this too')\n"},
+            "task1": {
+                "test.txt": "Some Changes",
+                "public_file.py": "print('Hello LOL this too')\n",
+            },
             "task2": {"test.txt": "Student changed it"},
             "just_file": "hey",
             "public_folder": {"file_in_public_folder": "try to change"},
@@ -134,7 +137,11 @@ class TestExporterOnSimple:
         simple_exporter.validate()
 
     def test_simple_validate_mix_templates_in_task(
-        self, tmpdir: Path, simple_exporter: Exporter, simple_private_folder: Path, simple_export_folder: Path
+        self,
+        tmpdir: Path,
+        simple_exporter: Exporter,
+        simple_private_folder: Path,
+        simple_export_folder: Path,
     ) -> None:
         # add other time to existing tasks
         (simple_private_folder / "task1" / "new.txt").touch()
@@ -149,7 +156,11 @@ class TestExporterOnSimple:
         assert "use both" in str(exc_info.value)
 
     @pytest.mark.parametrize(
-        "template_type", [CheckerExportConfig.TemplateType.CREATE, CheckerExportConfig.TemplateType.SEARCH]
+        "template_type",
+        [
+            CheckerExportConfig.TemplateType.CREATE,
+            CheckerExportConfig.TemplateType.SEARCH,
+        ],
     )
     def test_simple_validate_no_templates(
         self,
@@ -170,7 +181,11 @@ class TestExporterOnSimple:
         assert "Have to include at least" in str(exc_info.value)
 
     @pytest.mark.parametrize(
-        "template_type", [CheckerExportConfig.TemplateType.SEARCH, CheckerExportConfig.TemplateType.SEARCH_OR_CREATE]
+        "template_type",
+        [
+            CheckerExportConfig.TemplateType.SEARCH,
+            CheckerExportConfig.TemplateType.SEARCH_OR_CREATE,
+        ],
     )
     def test_simple_validate_no_original_file_for_templates(
         self,
@@ -191,7 +206,11 @@ class TestExporterOnSimple:
         assert "does not have original" in str(exc_info.value)
 
     @pytest.mark.parametrize(
-        "template_type", [CheckerExportConfig.TemplateType.CREATE, CheckerExportConfig.TemplateType.SEARCH]
+        "template_type",
+        [
+            CheckerExportConfig.TemplateType.CREATE,
+            CheckerExportConfig.TemplateType.SEARCH,
+        ],
     )
     def test_simple_validate_wrong_template_type(
         self, tmpdir: Path, simple_exporter: Exporter, template_type: str
@@ -243,7 +262,10 @@ class TestExporterOnSimple:
                 [],
             ),
             (
-                {"some_folder": {"some_file.txt": "123", "empty_file.py": ""}, "other_file": "123"},
+                {
+                    "some_folder": {"some_file.txt": "123", "empty_file.py": ""},
+                    "other_file": "123",
+                },
                 [],
             ),
             (
@@ -272,18 +294,29 @@ class TestExporterOnSimple:
             ),
             (
                 {
-                    "some_folder": {"some_file.txt.template": "123", "some_file.txt": "321", "empty_file.py": ""},
+                    "some_folder": {
+                        "some_file.txt.template": "123",
+                        "some_file.txt": "321",
+                        "empty_file.py": "",
+                    },
                     "other_file": "123",
                 },
                 [],  # search in current dir only
             ),
             (
-                {"some_folder": {"empty_file.py": ""}, "some_file.txt.template": "123", "some_file.txt": "321"},
+                {
+                    "some_folder": {"empty_file.py": ""},
+                    "some_file.txt.template": "123",
+                    "some_file.txt": "321",
+                },
                 ["some_file.txt"],
             ),
             (
                 {
-                    "some_folder.template": {"some_file.txt": "123", "empty_file.py": ""},
+                    "some_folder.template": {
+                        "some_file.txt": "123",
+                        "empty_file.py": "",
+                    },
                     "some_folder": {"some_file": ""},
                     "other_file": "123",
                 },
@@ -291,7 +324,11 @@ class TestExporterOnSimple:
             ),
             (
                 {
-                    "some_folder": {"some_file.txt.template": "123", "some_file.txt": "321", "empty_file.py": ""},
+                    "some_folder": {
+                        "some_file.txt.template": "123",
+                        "some_file.txt": "321",
+                        "empty_file.py": "",
+                    },
                     "other_file": "SOLUTION BEGIN\nSOLUTION END",
                     "other_other_file": "",
                     "other_other_file.template": "",
@@ -317,8 +354,27 @@ class TestExporterOnSimple:
     @pytest.mark.parametrize(
         "copy_public, copy_private, copy_other, expected_files",
         [
-            (True, False, False, ["task1/public_file.py", "public_file.py", "public_folder/file_in_public_folder"]),
-            (False, True, False, ["task1/.task.yml", "task2/.task.yml", "task2/.private.file", ".private.file"]),
+            (
+                True,
+                False,
+                False,
+                [
+                    "task1/public_file.py",
+                    "public_file.py",
+                    "public_folder/file_in_public_folder",
+                ],
+            ),
+            (
+                False,
+                True,
+                False,
+                [
+                    "task1/.task.yml",
+                    "task2/.task.yml",
+                    "task2/.private.file",
+                    ".private.file",
+                ],
+            ),
             (False, False, True, ["task1/test.txt", "task2/test.txt", "just_file"]),
         ],
     )
@@ -431,7 +487,11 @@ class TestExporterOnSimple:
             ) == "NEW TEXT"
 
     def test_export_public(
-        self, tmpdir: Path, simple_exporter: Exporter, simple_private_folder: Path, simple_export_folder: Path
+        self,
+        tmpdir: Path,
+        simple_exporter: Exporter,
+        simple_private_folder: Path,
+        simple_export_folder: Path,
     ) -> None:
         simple_exporter.export_public(simple_export_folder, commit=False)
 
@@ -451,7 +511,11 @@ class TestExporterOnSimple:
         assert (simple_export_folder / "task2" / "test.txt").read_text(encoding="utf-8") == "Will replace the file"
 
     def test_export_for_testing(
-        self, tmpdir: Path, simple_exporter: Exporter, simple_private_folder: Path, simple_export_folder: Path
+        self,
+        tmpdir: Path,
+        simple_exporter: Exporter,
+        simple_private_folder: Path,
+        simple_export_folder: Path,
     ) -> None:
         simple_exporter.export_for_testing(simple_export_folder)
 
@@ -479,7 +543,11 @@ class TestExporterOnSimple:
         assert (simple_export_folder / "task1" / "public_file.py").read_text(encoding="utf-8") == "print('Hello')\n"
 
     def test_export_for_contribution(
-        self, tmpdir: Path, simple_exporter: Exporter, simple_private_folder: Path, simple_export_folder: Path
+        self,
+        tmpdir: Path,
+        simple_exporter: Exporter,
+        simple_private_folder: Path,
+        simple_export_folder: Path,
     ) -> None:
         simple_exporter.export_for_contribution(simple_export_folder)
 
@@ -557,7 +625,10 @@ class _TestExporter:
     )
     SAMPLE_TEST_STRUCTURE_CONFIG = CheckerStructureConfig(
         ignore_patterns=[".ignore_folder"],
-        public_patterns=[".private_exception", ".group.yml"],  # note: .task.yml ignored by default
+        public_patterns=[
+            ".private_exception",
+            ".group.yml",
+        ],  # note: .task.yml ignored by default
         private_patterns=[".*", "private.*"],
     )
     SAMPLE_EXPORT_CONFIG = CheckerExportConfig(
@@ -634,7 +705,10 @@ class _TestExporter:
         )
         generate_file_structure(
             {
-                "task1": {".task.yml": "version: 1\n", "test.txt": "SOLUTION BEGIN\nHello\nSOLUTION END\n"},
+                "task1": {
+                    ".task.yml": "version: 1\n",
+                    "test.txt": "SOLUTION BEGIN\nHello\nSOLUTION END\n",
+                },
                 "test.py": "print('Hello')\n",
             },
             root=simple_private_folder,

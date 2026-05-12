@@ -34,7 +34,7 @@ Understanding your students' schedules will help reduce unnecessary conflicts an
 # How to specify config for final grade
 
 To configurate how final grade is computed you need to specify it in the course yaml config
-(look at `.manytask.example.yml` for example).
+(look at `common.example.yml` in the repository root for example).
 
 ## Grading process logic
 

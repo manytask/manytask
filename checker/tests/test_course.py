@@ -22,7 +22,12 @@ EXPECTED_TASKS_COUNT = 6
 EXPECTED_ALL_TASKS_COUNT = 7
 TEST_FILE_STRUCTURE = {
     "group1": {
-        "task1_1": {".task.yml": "version: 1", "file1_1_1": "", "file1_1_2": "", "extra_file3": ""},
+        "task1_1": {
+            ".task.yml": "version: 1",
+            "file1_1_1": "",
+            "file1_1_2": "",
+            "extra_file3": "",
+        },
         "task1_2": {".task.yml": "", "file1_2_1": "", "file1_2_2": ""},
         "random_folder": {"file1": "", "file2": ""},
         "extra_file2": "",
@@ -31,7 +36,13 @@ TEST_FILE_STRUCTURE = {
     "group2": {
         "task2_1": {".task.yml": "", "file2_1_1": "", "file2_1_2": ""},
         "task2_2": {".task.yml": "version: 1"},
-        "task2_3": {".task.yml": " \n  \n", "file2_3_1": "", "file2_3_2": "", "file2_3_3": "", "file2_3_4": ""},
+        "task2_3": {
+            ".task.yml": " \n  \n",
+            "file2_3_1": "",
+            "file2_3_2": "",
+            "file2_3_3": "",
+            "file2_3_4": "",
+        },
         "random_folder": {"file1": "", "file2": ""},
         ".group.yml": "version: 1",
     },
@@ -221,7 +232,15 @@ class TestCourse:
         "branch_name, changed_files, expected_changed_tasks",
         [
             ("task1_1", ["group1/task1_1/file1_1_1"], ["task1_1"]),
-            ("task1_1", ["group1/task1_1/file1_1_1", "random_file.txt", "group1/task1_1/file1_1_1"], ["task1_1"]),
+            (
+                "task1_1",
+                [
+                    "group1/task1_1/file1_1_1",
+                    "random_file.txt",
+                    "group1/task1_1/file1_1_1",
+                ],
+                ["task1_1"],
+            ),
             ("task2_1", ["group2/task2_1/file1_1_1"], []),  # not enabled
             ("not_a_task", ["group2/task2_1/file2_1_1"], []),
             ("root_task_1", ["root_task_1/file1"], ["root_task_1"]),
@@ -242,7 +261,10 @@ class TestCourse:
         changed_files: list[str],
         expected_changed_tasks: list[str],
     ) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG,
+            repository_root=git_init_repository_root,
+        )
         repo = git.Repo(git_init_repository_root)
 
         # create new branch
@@ -267,7 +289,11 @@ class TestCourse:
             ("fixses in task1_1", ["group1/task1_1/file1_1_1"], ["task1_1"]),
             (
                 "task1_1 some commit",
-                ["group1/task1_1/file1_1_1", "random_file.txt", "group1/task1_1/file1_1_1"],
+                [
+                    "group1/task1_1/file1_1_1",
+                    "random_file.txt",
+                    "group1/task1_1/file1_1_1",
+                ],
                 ["task1_1"],
             ),
             ("add fixes for task2_1", ["group2/task2_1/file1_1_1"], []),  # not enabled
@@ -282,9 +308,21 @@ class TestCourse:
             ("commit root_task_1", [], ["root_task_1"]),
             ("commit root_task_1 and some more", [], ["root_task_1"]),
             # group names
-            ("commit with group1 group1 group1 group1", ["group1/task1_1/file1_1_1"], ["task1_1", "task1_2"]),
-            ("commit with group1", ["group2/task2_1/file1_1_1"], ["task1_1", "task1_2"]),
-            ("my solutions for group1 and group_without_folder", [], ["task1_1", "task1_2", "root_task_1"]),
+            (
+                "commit with group1 group1 group1 group1",
+                ["group1/task1_1/file1_1_1"],
+                ["task1_1", "task1_2"],
+            ),
+            (
+                "commit with group1",
+                ["group2/task2_1/file1_1_1"],
+                ["task1_1", "task1_2"],
+            ),
+            (
+                "my solutions for group1 and group_without_folder",
+                [],
+                ["task1_1", "task1_2", "root_task_1"],
+            ),
             ("group2 and group22", ["group2/task2_1/file1_1_1"], []),  # not enabled
             ("group3", ["group1/task1_1/file1_1_1"], []),  # empty group
             ("group_without_folder", [], ["root_task_1"]),
@@ -297,7 +335,10 @@ class TestCourse:
         changed_files: list[str],
         expected_changed_tasks: list[str],
     ) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG,
+            repository_root=git_init_repository_root,
+        )
         repo = git.Repo(git_init_repository_root)
 
         # create or change files
@@ -317,12 +358,23 @@ class TestCourse:
         "changed_files, expected_changed_tasks",
         [
             (["group1/task1_1/file.txt"], ["task1_1"]),
-            (["group1/task1_1/file.txt", "random_file.txt", "group1/task1_1/file.txt"], ["task1_1"]),
+            (
+                [
+                    "group1/task1_1/file.txt",
+                    "random_file.txt",
+                    "group1/task1_1/file.txt",
+                ],
+                ["task1_1"],
+            ),
             (["group2/task2_1/file.txt"], []),  # not enabled
             (["group2/task2_1/file2_1_1.txt"], []),  # not enabled
             (["some_root_file", "random_folder/random_file.txt"], []),
             (
-                ["group2/task2_1/file2_1_1.txt", "group1/task1_1/file.txt", "root_task_1/some.txt"],
+                [
+                    "group2/task2_1/file2_1_1.txt",
+                    "group1/task1_1/file.txt",
+                    "root_task_1/some.txt",
+                ],
                 ["task1_1", "root_task_1"],
             ),
             (["root_task_1/file1.txt"], ["root_task_1"]),
@@ -330,9 +382,15 @@ class TestCourse:
         ],
     )
     def test_detect_changes_by_last_commit_changes(
-        self, git_init_repository_root: Path, changed_files: list[str], expected_changed_tasks: list[str]
+        self,
+        git_init_repository_root: Path,
+        changed_files: list[str],
+        expected_changed_tasks: list[str],
     ) -> None:
-        test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+        test_course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG,
+            repository_root=git_init_repository_root,
+        )
         repo = git.Repo(git_init_repository_root)
 
         # create or change files
