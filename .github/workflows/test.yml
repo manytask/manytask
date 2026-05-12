@@ -124,4 +124,5 @@ jobs:
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
       context: manytask
+      dockerfile: manytask/Dockerfile
       tags: manytask:${{ github.sha }}
