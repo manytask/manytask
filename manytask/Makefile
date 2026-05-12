@@ -1,5 +1,6 @@
 ROOT_DIR := manytask
 TESTS_DIR := tests
+DOCKER_COMPOSE_DEV := ../compose/docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 DOCS_DIR := ../docs
 DOCS_HTML_DIR := html
@@ -23,13 +24,15 @@ install-deps:
 	uv sync --active --all-extras
 
 dev:
-	$(MAKE) -C .. dev
+	docker compose -f $(DOCKER_COMPOSE_DEV) down
+	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 clean-db:
-	$(MAKE) -C .. clean-db
+	docker compose -f $(DOCKER_COMPOSE_DEV) down -v
+	docker volume prune -f
 
-reset-dev:
-	$(MAKE) -C .. reset-dev
+reset-dev: clean-db
+	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: copy-common-config install-deps run-manytask-tests
 
