@@ -41,7 +41,7 @@ reset-dev: clean-db
 	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: install-deps
-	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) poetry run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/ $(CHECKER_TESTS_DIR)/
+	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/ $(CHECKER_TESTS_DIR)/
 	# Run checker test suite from inside ./checker so `import checker.*` resolves correctly.
 	# Use `-c /dev/null` to avoid inheriting repo-level pytest config, but force rootdir back to ./checker.
 	cd checker && TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail tests

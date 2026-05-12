@@ -205,6 +205,11 @@ class TestManytaskPlugin:
                     ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
                 assert str(response_status_code) in str(exc.value), "Status code wasn't provided in exception message"
                 assert response_text in str(exc.value), "Error text wasn't provided in exception message"
+                # The full response body must also be stored in `output` so the pipeline
+                # prints it unconditionally (not just in verbose mode).
+                assert exc.value.output is not None, "Response body wasn't propagated to PluginExecutionFailed.output"
+                assert response_text in exc.value.output, "Response body missing from PluginExecutionFailed.output"
+                assert str(response_status_code) in exc.value.output, "Status code missing from output"
             else:
                 result = ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
                 assert result.status_code == HTTP_OK
