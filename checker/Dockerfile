@@ -17,7 +17,7 @@ RUN apk update && apk add --no-cache \
 WORKDIR /usr/src/app
 
 # Copy source code
-COPY pyproject.toml VERSION Makefile setup.py README.md ./
+COPY pyproject.toml VERSION Makefile README.md ./
 COPY checker ./checker
 
 # Install python dependencies and checker

@@ -123,6 +123,7 @@ jobs:
       - test-checker
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
-      context: manytask
+      # Repository root: Dockerfile COPY paths are manytask/… (see manytask/Dockerfile).
+      context: .
       dockerfile: manytask/Dockerfile
       tags: manytask:${{ github.sha }}
