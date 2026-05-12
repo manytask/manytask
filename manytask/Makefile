@@ -1,8 +1,5 @@
 ROOT_DIR := manytask
 TESTS_DIR := tests
-# Recipes run with cwd = manytask/; checker lives at repo root.
-CHECKER_DIR := ../checker/checker
-CHECKER_TESTS_DIR := ../checker/tests
 DOCKER_COMPOSE_DEV := docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 DOCS_DIR := ../docs
@@ -25,7 +22,6 @@ check-colima: copy-common-config lint test-colima
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	uv sync --active --all-extras
-	cd ../checker && uv pip install -e .
 
 dev:
 	docker compose -f $(DOCKER_COMPOSE_DEV) down
@@ -49,9 +45,9 @@ test-colima: copy-common-config install-deps
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)
-	uv run ruff check $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)/ --fix
-	uv run mypy $(ROOT_DIR) $(CHECKER_DIR)
+	uv run ruff format $(ROOT_DIR) $(TESTS_DIR)
+	uv run ruff check $(ROOT_DIR) $(TESTS_DIR)/ --fix
+	uv run mypy $(ROOT_DIR)
 
 setup: install-deps
 
