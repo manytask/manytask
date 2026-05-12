@@ -5,7 +5,7 @@
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: install-deps test test-colima lint format copy-common-config
+.PHONY: install-deps test test-colima lint format copy-common-config run-checker-tests
 
 COMMON_YAML ?= ../common.example.yml
 CHECKER_CONFIG_OUT ?= ./.checker.yml
@@ -16,7 +16,9 @@ TESTS_DIR := tests
 install-deps:
 	uv sync --extra dev
 
-test: copy-common-config install-deps
+test: copy-common-config install-deps run-checker-tests
+
+run-checker-tests:
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail tests
 
 test-colima: copy-common-config install-deps

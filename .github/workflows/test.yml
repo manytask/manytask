@@ -10,13 +10,68 @@ on:
 
 permissions:
   contents: read
-      
+
 jobs:
-  test:
+  # Install toolchain once per job; reuse repo Make targets (`make lint`, `make run-*-tests`)
+  # so local checks match CI (see manytask/Makefile and checker/Makefile).
+
+  lint-manytask:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.9.5
+
+      - name: Install dependencies (manytask + editable checker)
+        working-directory: manytask
+        run: |
+          uv sync --locked --all-extras
+          uv pip install -e ../checker
+
+      - name: Lint (make lint)
+        working-directory: manytask
+        run: make lint
+
+  test-manytask:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.9.5
+
+      - name: Install dependencies (manytask + editable checker)
+        working-directory: manytask
+        run: |
+          uv sync --locked --all-extras
+          uv pip install -e ../checker
+
+      - name: Test (make copy-common-config run-manytask-tests)
+        working-directory: manytask
+        run: |
+          make copy-common-config
+          make run-manytask-tests
+
+  lint-checker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -28,31 +83,44 @@ jobs:
           version: 0.9.5
 
       - name: Install dependencies
-        working-directory: manytask
-        run: uv sync --locked --all-extras
-
-      - name: Run ruff format
-        working-directory: manytask
-        run: uv run ruff format --check .
-
-      - name: Run ruff check
-        working-directory: manytask
-        run: uv run ruff check .
-
-      - name: Run mypy
-        working-directory: manytask
-        run: uv run mypy manytask
-
-      - name: Run manytask tests
-        working-directory: manytask
-        run: uv run pytest
-
-      - name: Run checker tests (skip firejail like upstream checker CI)
         working-directory: checker
-        run: PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib --skip-firejail tests
+        run: uv sync --locked --extra dev
+
+      - name: Lint (make lint)
+        working-directory: checker
+        run: make lint
+
+  test-checker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.9.5
+
+      - name: Install dependencies
+        working-directory: checker
+        run: uv sync --locked --extra dev
+
+      - name: Test (make copy-common-config run-checker-tests)
+        working-directory: checker
+        run: |
+          make copy-common-config
+          make run-checker-tests
 
   build-docker:
-    needs: test
+    needs:
+      - lint-manytask
+      - test-manytask
+      - lint-checker
+      - test-checker
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
       context: manytask

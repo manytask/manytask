@@ -16,7 +16,7 @@ MANYTASK_CONFIG_OUT ?= ../.manytask.yml
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: dev test reset-dev clean-db lint setup install-deps check format check-colima install-hooks run-hooks makemigrations migrate downgrade history docs test-colima copy-common-config
+.PHONY: dev test reset-dev clean-db lint setup install-deps check format check-colima install-hooks run-hooks makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests
 
 check: copy-common-config format lint test
 
@@ -44,7 +44,9 @@ clean-db:
 reset-dev: clean-db
 	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
-test: copy-common-config install-deps
+test: copy-common-config install-deps run-manytask-tests
+
+run-manytask-tests:
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
 
 test-colima: copy-common-config install-deps
