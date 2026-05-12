@@ -970,7 +970,7 @@ def test_validate_and_extract_params_no_task_name(app):
 def test_validate_and_extract_params_student_id_not_found(app):
     """Test parsing form data wrong id"""
     app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
-    form_data = {"user_id": TEST_INVALID_USER_ID, "task": TEST_TASK_NAME}
+    form_data = {"user_id": str(TEST_INVALID_USER_ID), "task": TEST_TASK_NAME}
     course_name = "Pyhton"
 
     with pytest.raises(HTTPException) as exc_info:
@@ -1024,3 +1024,122 @@ def test_get_requests_invalid_or_disabled_task(app, path, task_name):
 
         response = app.test_client().get(path, data=data, headers=headers)
         assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+# ----- Detailed error responses for /report (and shared helpers) -----
+#
+# Following the project pattern, abort(STATUS, "msg") returns Flask's HTML error page
+# with the message embedded in the body. Tests check status code + a distinguishing
+# substring in response.data (same approach as test_report_score_missing_task above).
+
+
+def _valid_token_headers():
+    return {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+
+def _post_report(app, *, data=None, headers=None):
+    return app.test_client().post(
+        f"/api/{TEST_COURSE_NAME}/report",
+        data=data or {},
+        headers=headers or {},
+    )
+
+
+def test_report_no_auth_detailed_403(app):
+    response = _post_report(app)
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"Missing authorization" in response.data
+
+
+def test_report_empty_token_detailed_403(app):
+    # Empty form value hits the "empty token" branch; "Authorization: Bearer "
+    # would split to "Bearer" and fall through to "invalid token" instead.
+    response = _post_report(app, data={"token": ""})
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"Empty authorization token" in response.data
+
+
+def test_report_invalid_token_detailed_403(app):
+    response = _post_report(app, headers={"Authorization": "Bearer wrong_token"})
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"Invalid course token" in response.data
+
+
+def test_report_course_without_token_detailed_403(app, mock_course):
+    mock_course.token = ""
+    response = _post_report(app, headers=_valid_token_headers())
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"has no API token configured" in response.data
+    assert TEST_COURSE_NAME.encode() in response.data
+
+
+def test_report_unknown_course_detailed_404(app):
+    app.storage_api = MagicMock(DataBaseApi)
+    app.storage_api.get_course.return_value = None
+    response = app.test_client().post("/api/no_such_course/report", headers=_valid_token_headers())
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert b"no_such_course" in response.data
+
+
+def test_report_unknown_rms_user_id_detailed_404(app):
+    response = _post_report(
+        app,
+        data={"user_id": str(TEST_INVALID_USER_ID), "task": TEST_TASK_NAME},
+        headers=_valid_token_headers(),
+    )
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert str(TEST_INVALID_USER_ID).encode() in response.data
+    assert b"RMS user" in response.data
+
+
+def test_report_unknown_rms_username_detailed_404(app):
+    response = _post_report(
+        app,
+        data={"username": TEST_INVALID_USERNAME, "task": TEST_TASK_NAME},
+        headers=_valid_token_headers(),
+    )
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert TEST_INVALID_USERNAME.encode() in response.data
+
+
+def test_report_user_not_in_manytask_detailed_404(app):
+    # First registered RMS user gets id="1" (== TEST_RMS_ID, present in mock storage).
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    # Second user gets id="2" — exists in RMS, but not in mock storage.
+    second = app.rms_api.register_new_user("other_user", "Other", "User", "other@example.com", TEST_PASSWORD)
+
+    response = _post_report(
+        app,
+        data={"user_id": second.id, "task": TEST_TASK_NAME},
+        headers=_valid_token_headers(),
+    )
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert b"no registered user" in response.data
+    assert f"rms_id={second.id}".encode() in response.data
+
+
+def test_report_unknown_task_detailed_404(app):
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    response = _post_report(
+        app,
+        data={"user_id": TEST_RMS_ID, "task": INVALID_TASK_NAME},
+        headers=_valid_token_headers(),
+    )
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert INVALID_TASK_NAME.encode() in response.data
+    assert TEST_COURSE_NAME.encode() in response.data
+
+
+def test_score_endpoint_invalid_token_detailed_403(app):
+    response = app.test_client().get(
+        f"/api/{TEST_COURSE_NAME}/score",
+        headers={"Authorization": "Bearer bad"},
+    )
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"Invalid course token" in response.data
+
+
+def test_update_config_no_auth_detailed_403(app):
+    response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/update_config")
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"Missing authorization" in response.data

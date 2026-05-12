@@ -10,6 +10,7 @@ class LocalConfig:
 
     # gitlab
     gitlab_url: str
+    gitlab_oauth_url: str
     gitlab_admin_token: str
     gitlab_verify_ssl: bool
 
@@ -30,10 +31,12 @@ class LocalConfig:
 
     @classmethod
     def from_env(cls) -> LocalConfig:
+        gitlab_url = os.environ.get("GITLAB_URL", "https://gitlab.manytask2.org")
         return cls(
             rms=os.environ.get("RMS", "GitLab").lower(),
             # gitlab
-            gitlab_url=os.environ.get("GITLAB_URL", "https://gitlab.manytask2.org"),
+            gitlab_url=gitlab_url,
+            gitlab_oauth_url=os.environ.get("GITLAB_OAUTH_URL", gitlab_url),
             gitlab_admin_token=os.environ.get("GITLAB_ADMIN_TOKEN", ""),
             gitlab_verify_ssl=os.environ.get("GITLAB_VERIFY_SSL", "true").lower() in ("true", "1", "yes"),
             # gitlab oauth2
@@ -56,6 +59,7 @@ class DebugLocalConfig(LocalConfig):
     rms: str = "gitlab"
     # gitlab
     gitlab_url: str = "https://gitlab.manytask2.org"
+    gitlab_oauth_url: str = "https://gitlab.manytask2.org"
     gitlab_admin_token: str = ""
     gitlab_verify_ssl: bool = True
 
