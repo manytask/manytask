@@ -2,9 +2,6 @@
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.uv.workspace]
-members = [".", "checker"]
-
 [project]
 name = "manytask"
 dynamic = ["version"]
@@ -45,7 +42,6 @@ dev = [
     "pytest-cov==7.1.0",
     "pytest-mock>=3.0.0,<4.0.0",
     "requests-mock>=1.0.0,<2.0.0",
-    "pre-commit==4.6.0",
     "testcontainers==4.14.0",
     "GitPython>=3.0.0,<4.0.0",
     "bs4>=0.0.2",

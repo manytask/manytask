@@ -7,8 +7,7 @@ services:
 
     docs:
         build:
-            context: .
-            target: docs
+            context: ../docs
         container_name: test-manytask-docs
         restart: always
         environment:
@@ -28,7 +27,8 @@ services:
 
     manytask:
         build:
-            context: .
+            context: ..
+            dockerfile: manytask/Dockerfile
             target: app
         container_name: test-manytask
         env_file: .env
@@ -102,7 +102,6 @@ services:
             - gitlab
         networks:
             - manytask-dev-net
-
 
 volumes:
     postgres_data:

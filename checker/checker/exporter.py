@@ -418,13 +418,19 @@ class Exporter:
         # if will replace with template - ignore file
         if path.name in exclude_paths:
             if self.verbose:
-                print_info(f"    - Skip <{path.relative_to(global_root)}> because of templating", color="grey")
+                print_info(
+                    f"    - Skip <{path.relative_to(global_root)}> because of templating",
+                    color="grey",
+                )
             return True, False, False
 
         # ignore if match ignore patterns
         if config.ignore_patterns and any(path.match(ignore_pattern) for ignore_pattern in config.ignore_patterns):
             if self.verbose:
-                print_info(f"    - Skip <{path.relative_to(global_root)}> because of ignore patterns", color="grey")
+                print_info(
+                    f"    - Skip <{path.relative_to(global_root)}> because of ignore patterns",
+                    color="grey",
+                )
             return True, False, False
 
         # If matches public patterns AND copy_public is False - skip
@@ -434,7 +440,8 @@ class Exporter:
         if is_public and not copy_public:
             if self.verbose:
                 print_info(
-                    f"    - Skip <{path.relative_to(global_root)}> because of public patterns skip", color="grey"
+                    f"    - Skip <{path.relative_to(global_root)}> because of public patterns skip",
+                    color="grey",
                 )
             return True, is_public, False
 
@@ -448,7 +455,8 @@ class Exporter:
         if is_private and not copy_private:
             if self.verbose:
                 print_info(
-                    f"    - Skip <{path.relative_to(global_root)}> because of skip private patterns skip", color="grey"
+                    f"    - Skip <{path.relative_to(global_root)}> because of skip private patterns skip",
+                    color="grey",
                 )
             return True, is_public, is_private
 
@@ -656,7 +664,10 @@ class Exporter:
 
         if extra_ignore_paths is not None and str(root.relative_to(global_root)) in extra_ignore_paths:
             if self.verbose:
-                print_info(f"    - Skip <{root.relative_to(global_root)}> because of extra ignore paths", color="grey")
+                print_info(
+                    f"    - Skip <{root.relative_to(global_root)}> because of extra ignore paths",
+                    color="grey",
+                )
             return
 
         # select paths to ignore - original to replace or templates to ignore

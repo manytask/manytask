@@ -26,7 +26,14 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "pytest-mock>=3.14",
+    "pytest-xdist>=3.8.0",
+    "python-dotenv>=1.0",
+    "requests-mock>=1.12",
     "ruff>=0.1.0",
+    "mypy>=1.0",
+    "types-PyYAML",
+    "types-requests",
 ]
 
 [project.scripts]
@@ -37,3 +44,20 @@ packages = ["checker", "checker.configs", "checker.plugins", "checker.plugins.cp
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
+
+[tool.mypy]
+no_incremental = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_any_generics = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+allow_untyped_decorators = true
+exclude = [
+    "tests/",
+    ".venv/",
+]

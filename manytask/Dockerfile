@@ -2,16 +2,16 @@ FROM python:3.14-alpine AS app_builder
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock VERSION ./
-COPY ./manytask/ /app/manytask
-COPY ./checker/pyproject.toml /app/checker/pyproject.toml
+# Build context: repository root (parent of manytask/), see docker-compose *.yml
+COPY manytask/pyproject.toml manytask/uv.lock manytask/VERSION ./
+COPY manytask/manytask/ /app/manytask
 
 ENV UV_VERSION=0.11.8
 RUN pip install uv==${UV_VERSION}
 
 RUN apk add --no-cache build-base
 
-RUN uv sync --locked
+RUN uv sync --locked --no-install-project
 
 
 FROM python:3.14-alpine AS app
@@ -23,8 +23,8 @@ WORKDIR /app
 
 COPY --from=app_builder /app/.venv /app/.venv
 
-COPY ./manytask/ /app/manytask
-COPY VERSION /app/VERSION
+COPY manytask/manytask/ /app/manytask
+COPY manytask/VERSION /app/VERSION
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
@@ -48,14 +48,3 @@ RUN mkdir -p /root/.postgresql && \
         --retry 3 --retry-delay 2 --connect-timeout 10 && \
     chmod 0600 /root/.postgresql/root.crt
 
-
-
-FROM node:24 AS docs_builder
-
-RUN npm i @diplodoc/cli -g
-COPY ./docs ./docs
-RUN rm -rf html
-RUN yfm -i ./docs -o ./html --allow-custom-resources
-
-FROM nginx AS docs
-COPY --from=docs_builder ./html /usr/share/nginx/html

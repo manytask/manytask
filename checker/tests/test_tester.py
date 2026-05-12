@@ -5,7 +5,12 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from checker.configs import ManytaskConfig
-from checker.configs.checker import CheckerParametersConfig, CheckerSubConfig, CheckerTestingConfig, PipelineStageConfig
+from checker.configs.checker import (
+    CheckerParametersConfig,
+    CheckerSubConfig,
+    CheckerTestingConfig,
+    PipelineStageConfig,
+)
 from checker.course import FileSystemTask
 from checker.tester import Tester
 
@@ -169,7 +174,11 @@ class TestTester:
 
         task_config = CheckerSubConfig(version=1, **{config_attr: task_pipeline if level == "task" else None})
         group_config = CheckerSubConfig(version=1, **{config_attr: group_pipeline if level == "group" else None})
-        mocker.patch.object(tester, "_get_group_config", return_value=group_config if level != "global" else None)
+        mocker.patch.object(
+            tester,
+            "_get_group_config",
+            return_value=group_config if level != "global" else None,
+        )
 
         task = FileSystemTask(name="task1_1", relative_path="group1/task1_1", config=task_config)
         getattr(tester, method_name)(task)
