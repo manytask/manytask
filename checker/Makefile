@@ -5,7 +5,10 @@
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: install-deps test test-colima lint format
+.PHONY: install-deps test test-colima lint format copy-common-config
+
+COMMON_YAML ?= ../common.example.yml
+CHECKER_CONFIG_OUT ?= ./.checker.yml
 
 CHECKER_PKG := checker
 TESTS_DIR := tests
@@ -13,10 +16,10 @@ TESTS_DIR := tests
 install-deps:
 	uv sync --extra dev
 
-test: install-deps
+test: copy-common-config install-deps
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail tests
 
-test-colima: install-deps
+test-colima: copy-common-config install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
 	uv run python -m pytest --cov-report term-missing --cov=checker --skip-firejail tests/
 
@@ -30,3 +33,6 @@ format:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
 	uv run ruff format $(CHECKER_PKG) $(TESTS_DIR)
 	uv run ruff check $(CHECKER_PKG) $(TESTS_DIR)/ --fix
+
+copy-common-config:
+	cp "$(COMMON_YAML)" "$(CHECKER_CONFIG_OUT)"

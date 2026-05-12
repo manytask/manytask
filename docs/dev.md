@@ -77,7 +77,8 @@ You can run `make dev` as a shortcut for this command.
 4. Create a **public** or **internal** project inside the group — this will be the shared assignment's repository.
 
 #### Step 3 — Send the course config to Manytask
-On the server:
+On the server (from the repository root so `@common.example.yml` resolves):
+
 ```bash
 export TESTER_TOKEN=<course_token>
 ```
@@ -85,7 +86,7 @@ export TESTER_TOKEN=<course_token>
 curl -X POST \
   -H "Authorization: Bearer $TESTER_TOKEN" \
   -H "Content-type: application/x-yaml" \
-  --data-binary "@.manytask.example.yml" \
+  --data-binary "@common.example.yml" \
   "http://localhost:8081/api/<course_name>/update_config"
 ```
 Replace `<course_name>` with your actual course name.
