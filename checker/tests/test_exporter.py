@@ -22,9 +22,7 @@ def assert_files_in_folder(folder: Path, expected_files: list[str]) -> None:
     for file in folder.glob("**/*"):
         if file.is_dir():
             continue
-        assert str(file.relative_to(folder)) in expected_files, (
-            f"File {file.relative_to(folder)} not expected"
-        )
+        assert str(file.relative_to(folder)) in expected_files, f"File {file.relative_to(folder)} not expected"
 
 
 class TestExporterOnSimple:
@@ -72,9 +70,7 @@ class TestExporterOnSimple:
         )
 
     @pytest.fixture()
-    def simple_private_folder(
-        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE
-    ) -> Path:
+    def simple_private_folder(self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> Path:
         layout = {
             "task1": {
                 ".task.yml": "version: 1\nstructure:\n    ignore_patterns: [extra_ignore_me]\n",
@@ -98,9 +94,7 @@ class TestExporterOnSimple:
         return Path(tmpdir / "repository")
 
     @pytest.fixture()
-    def simple_student_folder(
-        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE
-    ) -> Path:
+    def simple_student_folder(self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> Path:
         layout = {
             "task1": {
                 "test.txt": "Some Changes",
@@ -247,21 +241,17 @@ class TestExporterOnSimple:
         simple_export_folder: Path,
         file_content: str,
     ) -> None:
-        simple_exporter.export_config.templates = (
-            CheckerExportConfig.TemplateType.CREATE
-        )
+        simple_exporter.export_config.templates = CheckerExportConfig.TemplateType.CREATE
 
         # remove .template and write comment-style template
         (simple_private_folder / "task2" / "test.txt.template").unlink()
-        (simple_private_folder / "task2" / "test.txt").write_text(
-            file_content, encoding="utf-8"
-        )
+        (simple_private_folder / "task2" / "test.txt").write_text(file_content, encoding="utf-8")
 
         with pytest.raises(BadStructure) as exc_info:
             simple_exporter.validate()
-        assert "invalid template comments" in str(
+        assert "invalid template comments" in str(exc_info.value) or "does not have template comments" in str(
             exc_info.value
-        ) or "does not have template comments" in str(exc_info.value)
+        )
 
     # TODO: ignore_templates tests
     @pytest.mark.parametrize(
@@ -358,9 +348,7 @@ class TestExporterOnSimple:
         # use other directory, not original Exporter one
         generate_file_structure(file_structure, root=Path(tmpdir / "test_data"))
 
-        excluded_paths = simple_exporter._search_for_exclude_due_to_templates(
-            Path(tmpdir / "test_data"), False
-        )
+        excluded_paths = simple_exporter._search_for_exclude_due_to_templates(Path(tmpdir / "test_data"), False)
         assert sorted(excluded_paths) == sorted(expected_excluded_paths)
 
     @pytest.mark.parametrize(
@@ -429,9 +417,7 @@ class TestExporterOnSimple:
     ) -> None:
         # set .template as empty file/folder will delete original file
         if is_file:
-            (simple_private_folder / "task2" / "test.txt.template").write_text(
-                "", encoding="utf-8"
-            )
+            (simple_private_folder / "task2" / "test.txt.template").write_text("", encoding="utf-8")
         else:
             (simple_private_folder / "task2" / "test.txt.template").unlink()
             (simple_private_folder / "task2" / "test.txt.template").mkdir()
@@ -465,25 +451,19 @@ class TestExporterOnSimple:
 
         # make template folder or file
         if is_source_file:
-            Path(simple_private_folder / "task2" / "test.txt.template").write_text(
-                "NEW TEXT", encoding="utf-8"
-            )
+            Path(simple_private_folder / "task2" / "test.txt.template").write_text("NEW TEXT", encoding="utf-8")
         else:
             Path(simple_private_folder / "task2" / "test.txt.template").mkdir()
-            Path(
-                simple_private_folder / "task2" / "test.txt.template" / "new_file.txt"
-            ).write_text("NEW TEXT", encoding="utf-8")
+            Path(simple_private_folder / "task2" / "test.txt.template" / "new_file.txt").write_text(
+                "NEW TEXT", encoding="utf-8"
+            )
 
         # make original folder or file
         if is_destination_file:
-            Path(simple_private_folder / "task2" / "test.txt").write_text(
-                "OLD TEXT", encoding="utf-8"
-            )
+            Path(simple_private_folder / "task2" / "test.txt").write_text("OLD TEXT", encoding="utf-8")
         else:
             Path(simple_private_folder / "task2" / "test.txt").mkdir()
-            Path(
-                simple_private_folder / "task2" / "test.txt" / "old_file.txt"
-            ).write_text("OLD TEXT", encoding="utf-8")
+            Path(simple_private_folder / "task2" / "test.txt" / "old_file.txt").write_text("OLD TEXT", encoding="utf-8")
 
         simple_exporter._copy_files_with_config(
             simple_private_folder,
@@ -498,17 +478,13 @@ class TestExporterOnSimple:
         # regardless of original file - just copy there template
         if is_source_file:
             assert (simple_export_folder / "task2" / "test.txt").is_file()
-            assert (simple_export_folder / "task2" / "test.txt").read_text(
-                encoding="utf-8"
-            ) == "NEW TEXT"
+            assert (simple_export_folder / "task2" / "test.txt").read_text(encoding="utf-8") == "NEW TEXT"
         else:
             assert (simple_export_folder / "task2" / "test.txt").is_dir()
-            assert (
-                simple_export_folder / "task2" / "test.txt" / "new_file.txt"
-            ).is_file()
-            assert (
-                simple_export_folder / "task2" / "test.txt" / "new_file.txt"
-            ).read_text(encoding="utf-8") == "NEW TEXT"
+            assert (simple_export_folder / "task2" / "test.txt" / "new_file.txt").is_file()
+            assert (simple_export_folder / "task2" / "test.txt" / "new_file.txt").read_text(
+                encoding="utf-8"
+            ) == "NEW TEXT"
 
     def test_export_public(
         self,
@@ -531,12 +507,8 @@ class TestExporterOnSimple:
             ],
         )
         # check templates was resolved if needed (all here)
-        assert (simple_export_folder / "task1" / "test.txt").read_text(
-            encoding="utf-8"
-        ) == "Some TODO: Your solution\n"
-        assert (simple_export_folder / "task2" / "test.txt").read_text(
-            encoding="utf-8"
-        ) == "Will replace the file"
+        assert (simple_export_folder / "task1" / "test.txt").read_text(encoding="utf-8") == "Some TODO: Your solution\n"
+        assert (simple_export_folder / "task2" / "test.txt").read_text(encoding="utf-8") == "Will replace the file"
 
     def test_export_for_testing(
         self,
@@ -563,20 +535,12 @@ class TestExporterOnSimple:
             ],
         )
         # check templates was resolved if needed (non here)
-        assert (simple_export_folder / "task1" / "test.txt").read_text(
-            encoding="utf-8"
-        ) == "Some Changes"
-        assert (simple_export_folder / "task2" / "test.txt").read_text(
-            encoding="utf-8"
-        ) == "Student changed it"
+        assert (simple_export_folder / "task1" / "test.txt").read_text(encoding="utf-8") == "Some Changes"
+        assert (simple_export_folder / "task2" / "test.txt").read_text(encoding="utf-8") == "Student changed it"
         assert (simple_export_folder / "just_file").read_text(encoding="utf-8") == "hey"
         # overwritten to public tests
-        assert (
-            simple_export_folder / "public_folder" / "file_in_public_folder"
-        ).read_text(encoding="utf-8") == "file"
-        assert (simple_export_folder / "task1" / "public_file.py").read_text(
-            encoding="utf-8"
-        ) == "print('Hello')\n"
+        assert (simple_export_folder / "public_folder" / "file_in_public_folder").read_text(encoding="utf-8") == "file"
+        assert (simple_export_folder / "task1" / "public_file.py").read_text(encoding="utf-8") == "print('Hello')\n"
 
     def test_export_for_contribution(
         self,
@@ -606,12 +570,10 @@ class TestExporterOnSimple:
         assert (simple_export_folder / "task1" / "test.txt").read_text(
             encoding="utf-8"
         ) == "Some SOLUTION BEGIN\nHello\nSOLUTION END\n"
-        assert (simple_export_folder / "task2" / "test.txt").read_text(
+        assert (simple_export_folder / "task2" / "test.txt").read_text(encoding="utf-8") == "Some"
+        assert (simple_export_folder / "public_folder" / "file_in_public_folder").read_text(
             encoding="utf-8"
-        ) == "Some"
-        assert (
-            simple_export_folder / "public_folder" / "file_in_public_folder"
-        ).read_text(encoding="utf-8") == "try to change"
+        ) == "try to change"
         assert (simple_export_folder / "task1" / "public_file.py").read_text(
             encoding="utf-8"
         ) == "print('Hello LOL this too')\n"
@@ -808,12 +770,8 @@ class _TestExporter:
         )
 
         generate_file_structure(file_structure, root=Path(tmpdir / "test_data"))
-        excluded_paths = exporter._search_for_exclude_due_to_templates(
-            Path(tmpdir / "test_data"), False
-        )
-        assert sorted(path_name for path_name in excluded_paths) == sorted(
-            expected_excluded_paths
-        )
+        excluded_paths = exporter._search_for_exclude_due_to_templates(Path(tmpdir / "test_data"), False)
+        assert sorted(path_name for path_name in excluded_paths) == sorted(expected_excluded_paths)
 
     @pytest.mark.parametrize(
         "file_content",

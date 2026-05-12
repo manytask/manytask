@@ -58,9 +58,7 @@ class Tester:
 
         self.plugins = load_plugins(self.testing_config.search_plugins, verbose=verbose)
 
-        self.global_pipeline = PipelineRunner(
-            self.testing_config.global_pipeline, self.plugins, verbose=verbose
-        )
+        self.global_pipeline = PipelineRunner(self.testing_config.global_pipeline, self.plugins, verbose=verbose)
 
         self.repository_dir = self.course.repository_root
         self.reference_dir = self.course.reference_root
@@ -69,18 +67,11 @@ class Tester:
         self.dry_run = dry_run
 
         group_with_percents = [
-            (group, group.get_percents_before_deadline())
-            for group in course.manytask_config.deadlines.get_groups()
+            (group, group.get_percents_before_deadline()) for group in course.manytask_config.deadlines.get_groups()
         ]
-        self.task_to_percents = {
-            task.name: percs
-            for group, percs in group_with_percents
-            for task in group.tasks
-        }
+        self.task_to_percents = {task.name: percs for group, percs in group_with_percents for task in group.tasks}
         self.deadlines_type = course.manytask_config.deadlines.deadlines
-        self.interpolation_window = (
-            (course.manytask_config.deadlines.window or 0) * 3600 * 24
-        )  # in seconds
+        self.interpolation_window = (course.manytask_config.deadlines.window or 0) * 3600 * 24  # in seconds
 
     def _calc_interpolated_percent(
         self,
@@ -89,14 +80,10 @@ class Tester:
         prev_percent: float,
         prev_timestamp: datetime,
     ) -> float:
-        frac: float = (
-            timestamp - prev_timestamp
-        ).total_seconds() / self.interpolation_window
+        frac: float = (timestamp - prev_timestamp).total_seconds() / self.interpolation_window
         return percent if frac >= 1 else prev_percent - frac * (prev_percent - percent)
 
-    def _get_task_score_percent(
-        self, task: str, timestamp: datetime | None = None
-    ) -> float:
+    def _get_task_score_percent(self, task: str, timestamp: datetime | None = None) -> float:
         timestamp = timestamp or datetime.now(tz=ZoneInfo("Europe/Moscow"))
         steps: dict[float, datetime] = self.task_to_percents[task]
         prev_percent: float = 1
@@ -105,9 +92,7 @@ class Tester:
             if timestamp <= ts:
                 if self.deadlines_type == ManytaskDeadlinesType.HARD:
                     return percent
-                return self._calc_interpolated_percent(
-                    percent, timestamp, prev_percent, prev_timestamp
-                )
+                return self._calc_interpolated_percent(percent, timestamp, prev_percent, prev_timestamp)
             prev_percent, prev_timestamp = percent, ts
         return 0.0
 
@@ -164,13 +149,9 @@ class Tester:
 
         group_config = self._get_group_config(task)
         if group_config and group_config.parameters:
-            context["parameters"] = (
-                context["parameters"] | group_config.parameters.__dict__
-            )
+            context["parameters"] = context["parameters"] | group_config.parameters.__dict__
         if task.config and task.config.parameters:
-            context["parameters"] = (
-                context["parameters"] | task.config.parameters.__dict__
-            )
+            context["parameters"] = context["parameters"] | task.config.parameters.__dict__
 
         return context
 
@@ -215,17 +196,11 @@ class Tester:
             # create task context
             task_score = self._get_task_score_percent(task.name)
             task_variables = self._get_task_pipeline_parameters(task, task_score)
-            context = self._build_task_context(
-                global_variables, outputs, task, task_variables
-            )
+            context = self._build_task_context(global_variables, outputs, task, task_variables)
 
             # check task parameter are
-            self._get_task_pipeline_runner(task).validate(
-                context, validate_placeholders=True
-            )
-            self._get_task_report_pipeline_runner(task).validate(
-                context, validate_placeholders=True
-            )
+            self._get_task_pipeline_runner(task).validate(context, validate_placeholders=True)
+            self._get_task_report_pipeline_runner(task).validate(context, validate_placeholders=True)
 
             print_info("  ok")
 
@@ -247,9 +222,7 @@ class Tester:
         if len(self.global_pipeline) > 0 or self.verbose:
             print_header_info("Run global pipeline:", color="pink")
             context = self._build_global_context(global_variables, outputs)
-            global_pipeline_result: PipelineResult = self.global_pipeline.run(
-                context, dry_run=self.dry_run
-            )
+            global_pipeline_result: PipelineResult = self.global_pipeline.run(context, dry_run=self.dry_run)
             print_separator("-")
             print_info(str(global_pipeline_result), color="pink")
 
@@ -264,13 +237,11 @@ class Tester:
             # create task context
             task_score = self._get_task_score_percent(task.name, timestamp)
             task_variables = self._get_task_pipeline_parameters(task, task_score)
-            context = self._build_task_context(
-                global_variables, outputs, task, task_variables
-            )
+            context = self._build_task_context(global_variables, outputs, task, task_variables)
 
-            task_pipeline_result: PipelineResult = self._get_task_pipeline_runner(
-                task
-            ).run(context, dry_run=self.dry_run)
+            task_pipeline_result: PipelineResult = self._get_task_pipeline_runner(task).run(
+                context, dry_run=self.dry_run
+            )
             print_separator("-")
 
             print_info(str(task_pipeline_result), color="pink")
@@ -281,9 +252,7 @@ class Tester:
                 report_pipeline = self._get_task_report_pipeline_runner(task)
                 print_info(f"Reporting <{task.name}> task tests:", color="pink")
                 if report:
-                    task_report_result: PipelineResult = report_pipeline.run(
-                        context, dry_run=self.dry_run
-                    )
+                    task_report_result: PipelineResult = report_pipeline.run(context, dry_run=self.dry_run)
                     if task_report_result:
                         print_info("->Reporting succeeded")
                     else:

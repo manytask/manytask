@@ -23,9 +23,7 @@ class Exporter:
     TEMPLATE_START_COMMENT = "SOLUTION BEGIN"
     TEMPLATE_END_COMMENT = "SOLUTION END"
     TEMPLATE_REPLACE_COMMENT = "TODO: Your solution"
-    TEMPLATE_COMMENT_REGEX = re.compile(
-        f"{TEMPLATE_START_COMMENT}(.*?){TEMPLATE_END_COMMENT}", re.DOTALL
-    )
+    TEMPLATE_COMMENT_REGEX = re.compile(f"{TEMPLATE_START_COMMENT}(.*?){TEMPLATE_END_COMMENT}", re.DOTALL)
 
     def __init__(
         self,
@@ -75,9 +73,7 @@ class Exporter:
         for template_file_or_folder in task_folder.glob(f"**/*{self.TEMPLATE_SUFFIX}"):
             has_template_files = True
             # check that all files have original files
-            if not (
-                template_file_or_folder.parent / template_file_or_folder.stem
-            ).exists():
+            if not (template_file_or_folder.parent / template_file_or_folder.stem).exists():
                 raise BadStructure(
                     f"Template file/folder {template_file_or_folder} does not have "
                     f"original file/folder {self.reference_root / template_file_or_folder.stem}"
@@ -86,17 +82,13 @@ class Exporter:
 
         return has_template_files, has_valid_template_files
 
-    def _validate_template_comments_in_file(
-        self, task_name: str, file_path: Path, content: str
-    ) -> None:
+    def _validate_template_comments_in_file(self, task_name: str, file_path: Path, content: str) -> None:
         """Validate template comments in a single file.
 
         Validate using regex and count matches of start and end comments.
         """
         # check have equal num of comments
-        if content.count(self.TEMPLATE_START_COMMENT) != content.count(
-            self.TEMPLATE_END_COMMENT
-        ):
+        if content.count(self.TEMPLATE_START_COMMENT) != content.count(self.TEMPLATE_END_COMMENT):
             raise BadStructure(
                 f"Task {task_name} has invalid template comments in file {file_path}. "
                 f"The number of <{self.TEMPLATE_START_COMMENT}> and "
@@ -105,18 +97,14 @@ class Exporter:
 
         # check between comments no other comment pair
         for match in self.TEMPLATE_COMMENT_REGEX.finditer(content):
-            if self.TEMPLATE_START_COMMENT in match.group(
-                1
-            ) or self.TEMPLATE_END_COMMENT in match.group(1):
+            if self.TEMPLATE_START_COMMENT in match.group(1) or self.TEMPLATE_END_COMMENT in match.group(1):
                 raise BadStructure(
                     f"Task {task_name} has invalid template comments in file {file_path}."
                     f" There is <{self.TEMPLATE_START_COMMENT}> or <{self.TEMPLATE_END_COMMENT}> "
                     f"between valid pair of comments"
                 )
 
-    def _validate_template_comments(
-        self, task_name: str, task_folder: Path
-    ) -> tuple[bool, bool]:
+    def _validate_template_comments(self, task_name: str, task_folder: Path) -> tuple[bool, bool]:
         """Validate template comments in all files in the task folder.
 
         Check all (not binary) files for template comments.
@@ -137,16 +125,11 @@ class Exporter:
             except UnicodeDecodeError:
                 continue
 
-            if (
-                self.TEMPLATE_START_COMMENT not in file_content
-                and self.TEMPLATE_END_COMMENT not in file_content
-            ):
+            if self.TEMPLATE_START_COMMENT not in file_content and self.TEMPLATE_END_COMMENT not in file_content:
                 continue
 
             has_template_comments = True
-            self._validate_template_comments_in_file(
-                task_name, potential_comments_file, file_content
-            )
+            self._validate_template_comments_in_file(task_name, potential_comments_file, file_content)
             has_valid_template_comments = True
 
         return has_template_comments, has_valid_template_comments
@@ -184,9 +167,7 @@ class Exporter:
                 )
         elif template_type == CheckerExportConfig.TemplateType.SEARCH_OR_CREATE:
             if has_template_files and has_template_comments:
-                raise BadStructure(
-                    f"Task {task_name} can not use both `.template` file/folder and template comments"
-                )
+                raise BadStructure(f"Task {task_name} can not use both `.template` file/folder and template comments")
             if not has_valid_template_files and not has_valid_template_comments:
                 raise BadStructure(
                     f"Task {task_name} does not have `.template` file/folder or at least one pair of "
@@ -212,11 +193,9 @@ class Exporter:
             # TODO: check template not public and not private file
 
             task_folder = self.reference_root / task.relative_path
-            has_template_files, has_valid_template_files = (
-                self._validate_template_files(task_folder)
-            )
-            has_template_comments, has_valid_template_comments = (
-                self._validate_template_comments(task.name, task_folder)
+            has_template_files, has_valid_template_files = self._validate_template_files(task_folder)
+            has_template_comments, has_valid_template_comments = self._validate_template_comments(
+                task.name, task_folder
             )
             self._validate_template_type(
                 task.name,
@@ -258,9 +237,9 @@ class Exporter:
                     continue
                 with potential_comments_file.open("r") as f:
                     file_content = f.read().strip()
-                    if file_content.startswith(
-                        self.TEMPLATE_START_COMMENT
-                    ) and file_content.endswith(self.TEMPLATE_END_COMMENT):
+                    if file_content.startswith(self.TEMPLATE_START_COMMENT) and file_content.endswith(
+                        self.TEMPLATE_END_COMMENT
+                    ):
                         exclude_paths.append(potential_comments_file.name)
 
         return exclude_paths
@@ -416,10 +395,7 @@ class Exporter:
         ):
             return False
         content = path.read_text()
-        return (
-            self.TEMPLATE_START_COMMENT in content
-            and self.TEMPLATE_END_COMMENT in content
-        )
+        return self.TEMPLATE_START_COMMENT in content and self.TEMPLATE_END_COMMENT in content
 
     def _should_skip_path(  # noqa: C901, PLR0911, PLR0912, PLR0913
         self,
@@ -449,9 +425,7 @@ class Exporter:
             return True, False, False
 
         # ignore if match ignore patterns
-        if config.ignore_patterns and any(
-            path.match(ignore_pattern) for ignore_pattern in config.ignore_patterns
-        ):
+        if config.ignore_patterns and any(path.match(ignore_pattern) for ignore_pattern in config.ignore_patterns):
             if self.verbose:
                 print_info(
                     f"    - Skip <{path.relative_to(global_root)}> because of ignore patterns",
@@ -461,10 +435,7 @@ class Exporter:
 
         # If matches public patterns AND copy_public is False - skip
         is_public = bool(
-            config.public_patterns
-            and any(
-                path.match(public_pattern) for public_pattern in config.public_patterns
-            )
+            config.public_patterns and any(path.match(public_pattern) for public_pattern in config.public_patterns)
         )
         if is_public and not copy_public:
             if self.verbose:
@@ -479,10 +450,7 @@ class Exporter:
         is_private = bool(
             not is_public
             and config.private_patterns
-            and any(
-                path.match(private_pattern)
-                for private_pattern in config.private_patterns
-            )
+            and any(path.match(private_pattern) for private_pattern in config.private_patterns)
         )
         if is_private and not copy_private:
             if self.verbose:
@@ -504,9 +472,7 @@ class Exporter:
 
         # if file is empty file/folder - just do not copy (delete original file due to exclude_paths)
         if fill_templates and is_path_template_file:
-            if path.is_dir() and not any(
-                (path_destination / file).exists() for file in path.iterdir()
-            ):
+            if path.is_dir() and not any((path_destination / file).exists() for file in path.iterdir()):
                 if self.verbose:
                     print_info(
                         f"    - Skip <{path.relative_to(global_root)}> because it is empty folder and "
@@ -525,9 +491,7 @@ class Exporter:
 
         return False, is_public, is_private
 
-    def _get_sub_config(
-        self, path: Path, config: CheckerStructureConfig, global_root: Path
-    ) -> CheckerStructureConfig:
+    def _get_sub_config(self, path: Path, config: CheckerStructureConfig, global_root: Path) -> CheckerStructureConfig:
         """Get sub-config for a directory if exists, otherwise return current config.
 
         If have sub-config - update config with sub-config.
@@ -651,9 +615,7 @@ class Exporter:
         # if template comments in file - replace them, not greedy
         if fill_templates and is_path_template_comment:
             file_content = path.read_text()
-            file_content = self.TEMPLATE_COMMENT_REGEX.sub(
-                self.TEMPLATE_REPLACE_COMMENT, file_content
-            )
+            file_content = self.TEMPLATE_COMMENT_REGEX.sub(self.TEMPLATE_REPLACE_COMMENT, file_content)
             path_destination.touch(exist_ok=True)
             path_destination.write_text(file_content)
         else:
@@ -700,10 +662,7 @@ class Exporter:
             )
             print_info(f"  {config=}", color="white")
 
-        if (
-            extra_ignore_paths is not None
-            and str(root.relative_to(global_root)) in extra_ignore_paths
-        ):
+        if extra_ignore_paths is not None and str(root.relative_to(global_root)) in extra_ignore_paths:
             if self.verbose:
                 print_info(
                     f"    - Skip <{root.relative_to(global_root)}> because of extra ignore paths",
@@ -712,18 +671,14 @@ class Exporter:
             return
 
         # select paths to ignore - original to replace or templates to ignore
-        exclude_paths = self._search_for_exclude_due_to_templates(
-            root, not fill_templates
-        )
+        exclude_paths = self._search_for_exclude_due_to_templates(root, not fill_templates)
 
         # Iterate over all files in the root directory
         for path in root.iterdir():
             path_destination = destination / path.relative_to(root)
             is_text_file = self._is_text_file(path)
             is_path_template_file = self._is_template_file(path)
-            is_path_template_comment = self._is_template_comment_file(
-                path, is_text_file
-            )
+            is_path_template_comment = self._is_template_comment_file(path, is_text_file)
 
             should_skip, is_public, is_private = self._should_skip_path(
                 path,

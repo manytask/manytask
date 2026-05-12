@@ -155,9 +155,7 @@ class TestManytaskDeadlinesConfigGroup:
             (datetime(3000, 1, 5, 1, 0), 0.0),
         ],
     )
-    def test_get_current_percent_multiplier(
-        self, now: datetime, expected_percent: float
-    ) -> None:
+    def test_get_current_percent_multiplier(self, now: datetime, expected_percent: float) -> None:
         group = ManytaskGroupConfig(
             group="group1",
             start="2021-01-01 00:00",
@@ -183,29 +181,13 @@ class TestManytaskDeadlinesConfigGroup:
             tasks=[],
         )
 
-        assert (
-            group.get_current_percent_multiplier(now=datetime(2021, 1, 1, 0, 0)) == 1.0
-        )
-        assert (
-            group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 0, 0)) == 1.0
-        )
-        assert (
-            group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 8, 59)) == 1.0
-        )
-        assert (
-            group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 9, 1))
-            == HALF_MULTIPLIER
-        )
-        assert (
-            group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 8, 59))
-            == HALF_MULTIPLIER
-        )
-        assert (
-            group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 9, 1)) == 0.0
-        )
-        assert (
-            group.get_current_percent_multiplier(now=datetime(2021, 1, 4, 0, 0)) == 0.0
-        )
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 1, 0, 0)) == 1.0
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 0, 0)) == 1.0
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 8, 59)) == 1.0
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 9, 1)) == HALF_MULTIPLIER
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 8, 59)) == HALF_MULTIPLIER
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 9, 1)) == 0.0
+        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 4, 0, 0)) == 0.0
 
 
 class TestManytaskDeadlinesConfig:
@@ -270,9 +252,7 @@ class TestManytaskDeadlinesConfig:
     )
     def test_valid_timezone(self, timezone: str) -> None:
         real_timezone = ZoneInfo(timezone)
-        real_start = datetime.strptime("2021-01-01 00:00", "%Y-%m-%d %H:%M").replace(
-            tzinfo=real_timezone
-        )
+        real_start = datetime.strptime("2021-01-01 00:00", "%Y-%m-%d %H:%M").replace(tzinfo=real_timezone)
         real_step = real_start + timedelta(days=1)
         real_end = real_start + timedelta(days=2)
 
@@ -553,12 +533,8 @@ class TestManytaskDeadlinesConfig:
         groups = deadlines.get_groups(enabled=enabled, started=started, now=now)
         tasks = deadlines.get_tasks(enabled=enabled, started=started, now=now)
 
-        assert len([i.name for i in groups]) == len(expected_groups), (
-            "Number of groups is not correct"
-        )
-        assert len([i.name for i in tasks]) == len(expected_tasks), (
-            "Number of tasks is not correct"
-        )
+        assert len([i.name for i in groups]) == len(expected_groups), "Number of groups is not correct"
+        assert len([i.name for i in tasks]) == len(expected_tasks), "Number of tasks is not correct"
 
     @pytest.mark.parametrize(
         "window, deadline",

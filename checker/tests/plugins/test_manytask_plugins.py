@@ -106,9 +106,7 @@ class TestManytaskPlugin:
             ({"report_url": "invalidurl"}, ValidationError),
         ],
     )
-    def test_plugin_args(
-        self, parameters: dict[str, Any], expected_exception: Type[BaseException] | None
-    ) -> None:
+    def test_plugin_args(self, parameters: dict[str, Any], expected_exception: Type[BaseException] | None) -> None:
         args = self.get_default_args_dict()
         args.update(parameters)
         if expected_exception:
@@ -176,9 +174,7 @@ class TestManytaskPlugin:
 
             assert result is not None, "Didn't collect files"
             assert len(result) == taken_files_num, "Wrong file quantity are collected"
-            assert sorted(result.keys()) == sorted(expected_filenames), (
-                "Wrong files are collected"
-            )
+            assert sorted(result.keys()) == sorted(expected_filenames), "Wrong files are collected"
 
             if taken_files_num:
                 open.assert_called_with(mocker.ANY, "rb")  # type: ignore[attr-defined]
@@ -206,30 +202,16 @@ class TestManytaskPlugin:
 
             if expected_exception:
                 with pytest.raises(expected_exception) as exc:
-                    ManytaskPlugin._post_with_retries(
-                        self.REPORT_URL, {"key": "value"}, None
-                    )
-                assert str(response_status_code) in str(exc.value), (
-                    "Status code wasn't provided in exception message"
-                )
-                assert response_text in str(exc.value), (
-                    "Error text wasn't provided in exception message"
-                )
+                    ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
+                assert str(response_status_code) in str(exc.value), "Status code wasn't provided in exception message"
+                assert response_text in str(exc.value), "Error text wasn't provided in exception message"
                 # The full response body must also be stored in `output` so the pipeline
                 # prints it unconditionally (not just in verbose mode).
-                assert exc.value.output is not None, (
-                    "Response body wasn't propagated to PluginExecutionFailed.output"
-                )
-                assert response_text in exc.value.output, (
-                    "Response body missing from PluginExecutionFailed.output"
-                )
-                assert str(response_status_code) in exc.value.output, (
-                    "Status code missing from output"
-                )
+                assert exc.value.output is not None, "Response body wasn't propagated to PluginExecutionFailed.output"
+                assert response_text in exc.value.output, "Response body missing from PluginExecutionFailed.output"
+                assert str(response_status_code) in exc.value.output, "Status code missing from output"
             else:
-                result = ManytaskPlugin._post_with_retries(
-                    self.REPORT_URL, {"key": "value"}, None
-                )
+                result = ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
                 assert result.status_code == HTTP_OK
                 assert result.text == "Success"
 
@@ -249,9 +231,7 @@ class TestManytaskPlugin:
         mocker.patch.object(ManytaskPlugin, "_collect_files_to_send")
         ManytaskPlugin._collect_files_to_send.return_value = expected_files  # type: ignore[attr-defined]
         mocker.patch.object(ManytaskPlugin, "_post_with_retries")
-        ManytaskPlugin._post_with_retries.return_value.json.return_value = {
-            "score": result_score
-        }  # type: ignore[attr-defined]
+        ManytaskPlugin._post_with_retries.return_value.json.return_value = {"score": result_score}  # type: ignore[attr-defined]
         result = ManytaskPlugin().run(args_dict)
 
         assert result.output == (
@@ -259,9 +239,7 @@ class TestManytaskPlugin:
             f"requested score: {self.TEST_SCORE}, result score: {result_score}"
         )
 
-        ManytaskPlugin._post_with_retries.assert_called_once_with(
-            self.REPORT_URL, expected_data, expected_files
-        )  # type: ignore[attr-defined]
+        ManytaskPlugin._post_with_retries.assert_called_once_with(self.REPORT_URL, expected_data, expected_files)  # type: ignore[attr-defined]
 
     def test_verbose(self, mocker: MockFixture) -> None:
         args_dict = self.get_default_full_args_dict()
@@ -271,9 +249,7 @@ class TestManytaskPlugin:
         mocker.patch.object(ManytaskPlugin, "_collect_files_to_send")
         ManytaskPlugin._collect_files_to_send.return_value = expected_files  # type: ignore[attr-defined]
         mocker.patch.object(ManytaskPlugin, "_post_with_retries")
-        ManytaskPlugin._post_with_retries.return_value.json.return_value = {
-            "score": result_score
-        }  # type: ignore[attr-defined]
+        ManytaskPlugin._post_with_retries.return_value.json.return_value = {"score": result_score}  # type: ignore[attr-defined]
         result = ManytaskPlugin().run(args_dict, verbose=True)
 
         assert str(expected_files) in result.output

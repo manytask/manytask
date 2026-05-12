@@ -23,12 +23,8 @@ class SafeRunScriptPlugin(PluginABC):
 
     class Args(PluginABC.Args):
         origin: str
-        script: Union[
-            str, list[str]
-        ]  # as pydantic does not support | in older python versions
-        timeout: Union[float, None] = (
-            None  # as pydantic does not support | in older python versions
-        )
+        script: Union[str, list[str]]  # as pydantic does not support | in older python versions
+        timeout: Union[float, None] = None  # as pydantic does not support | in older python versions
         input: Optional[Path] = None
 
         env_additional: dict[str, str] = dict()
@@ -132,9 +128,7 @@ class SafeRunScriptPlugin(PluginABC):
         if not is_available:
             if args.allow_fallback:
                 return self._fallback_to_run_script(args, verbose)
-            raise PluginExecutionFailed(
-                "Firejail is not installed", output=error_output
-            )
+            raise PluginExecutionFailed("Firejail is not installed", output=error_output)
 
         command = self._build_firejail_command(args)
 

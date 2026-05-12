@@ -79,9 +79,7 @@ class CppRunBenchmarksPlugin(PluginABC):
             raise PluginExecutionFailed()
 
     @staticmethod
-    def _run_benchmarks(
-        args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool
-    ) -> None:
+    def _run_benchmarks(args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool) -> None:
         xml_path = tmp_dir / CppRunBenchmarksPlugin._REPORT_XML
         run_args = SafeRunScriptPlugin.Args(
             origin=str(build_dir),

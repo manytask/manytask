@@ -34,9 +34,7 @@ class _ScorePlugin(PluginABC):
                 percentage=args.score,
             )
         else:
-            return PluginOutput(
-                output=f"Score: {args.score:.2f}", percentage=args.score
-            )
+            return PluginOutput(output=f"Score: {args.score:.2f}", percentage=args.score)
 
 
 class _EchoPlugin(PluginABC):
@@ -152,9 +150,7 @@ class TestPipelineRunnerValidation:
             )
         assert "Unknown plugin" in str(exc_info.value)
 
-    def test_validate_placeholders(
-        self, sample_correct_pipeline: list[PipelineStageConfig]
-    ) -> None:
+    def test_validate_placeholders(self, sample_correct_pipeline: list[PipelineStageConfig]) -> None:
         with pytest.raises(BadConfig) as exc_info:
             _ = PipelineRunner(
                 pipeline=sample_correct_pipeline,
@@ -203,9 +199,7 @@ class TestPipelineRunnerValidation:
             verbose=False,
         )
         with pytest.raises(BadConfig) as exc_info:
-            pipeline_runner.validate(
-                {"message": "some valid message"}, validate_placeholders=True
-            )
+            pipeline_runner.validate({"message": "some valid message"}, validate_placeholders=True)
         assert "Invalid template" in str(exc_info.value)
 
     def test_run_correct_pipeline_verbose(

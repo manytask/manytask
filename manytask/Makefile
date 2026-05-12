@@ -16,22 +16,16 @@ MANYTASK_CONFIG_OUT ?= ../.manytask.yml
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: dev test reset-dev clean-db lint setup install-deps check format check-colima install-hooks run-hooks makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests
+.PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests
 
-check: copy-common-config format lint test
+check: copy-common-config lint test
 
-check-colima: copy-common-config format lint test-colima
+check-colima: copy-common-config lint test-colima
 
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	uv sync --active --all-extras
 	cd ../checker && uv pip install -e .
-
-install-hooks:
-	uv run pre-commit install --install-hooks
-
-run-hooks:
-	uv run pre-commit run --all-files
 
 dev:
 	docker compose -f $(DOCKER_COMPOSE_DEV) down
@@ -59,16 +53,11 @@ test-colima: copy-common-config install-deps
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format --check $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)
-	uv run ruff check $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)/
+	uv run ruff format $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)
+	uv run ruff check $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)/ --fix
 	uv run mypy $(ROOT_DIR) $(CHECKER_DIR)
 
-format:
-	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR)
-	uv run ruff check $(ROOT_DIR) $(CHECKER_DIR) $(TESTS_DIR) $(CHECKER_TESTS_DIR) --fix
-
-setup: install-deps install-hooks
+setup: install-deps
 
 makemigrations:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }

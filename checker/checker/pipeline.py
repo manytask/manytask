@@ -113,9 +113,7 @@ class ParametersResolver:
         elif isinstance(template, list):
             return [self.resolve(item, context) for item in template]
         elif isinstance(template, dict):
-            return {
-                key: self.resolve(value, context) for key, value in template.items()
-            }
+            return {key: self.resolve(value, context) for key, value in template.items()}
         else:
             return template
 
@@ -153,9 +151,7 @@ class PipelineRunner:
         """Validate that all pipeline stages reference existing plugins."""
         for pipeline_stage in self.pipeline:
             if pipeline_stage.run not in self.plugins:
-                raise BadConfig(
-                    f"Unknown plugin {pipeline_stage.run} in pipeline stage {pipeline_stage.name}"
-                )
+                raise BadConfig(f"Unknown plugin {pipeline_stage.run} in pipeline stage {pipeline_stage.name}")
 
     def validate(
         self,
@@ -171,23 +167,17 @@ class PipelineRunner:
         for pipeline_stage in self.pipeline:
             # validate plugin exists
             if pipeline_stage.run not in self.plugins:
-                raise BadConfig(
-                    f"Unknown plugin {pipeline_stage.run} in pipeline stage {pipeline_stage.name}"
-                )
+                raise BadConfig(f"Unknown plugin {pipeline_stage.run} in pipeline stage {pipeline_stage.name}")
             plugin_class = self.plugins[pipeline_stage.run]
 
             # validate args of the plugin (first resolve placeholders)
             if validate_placeholders:
-                resolved_args = self.parameters_resolver.resolve(
-                    pipeline_stage.args, context
-                )
+                resolved_args = self.parameters_resolver.resolve(pipeline_stage.args, context)
                 plugin_class.validate(resolved_args)
 
             # validate run_if condition
             if validate_placeholders and pipeline_stage.run_if:
-                resolved_run_if = self.parameters_resolver.resolve(
-                    pipeline_stage.run_if, context
-                )
+                resolved_run_if = self.parameters_resolver.resolve(pipeline_stage.run_if, context)
                 if not isinstance(resolved_run_if, bool):
                     raise BadConfig(
                         f"Invalid run_if condition {pipeline_stage.run_if} in pipeline stage {pipeline_stage.name}"
@@ -195,13 +185,11 @@ class PipelineRunner:
 
             # add output to context if set register parameter
             if pipeline_stage.register_output:
-                context.setdefault("outputs", {})[pipeline_stage.register_output] = (
-                    PipelineStageResult(
-                        name=pipeline_stage.name,
-                        failed=False,
-                        skipped=True,
-                        percentage=1.0,
-                    )
+                context.setdefault("outputs", {})[pipeline_stage.register_output] = PipelineStageResult(
+                    name=pipeline_stage.name,
+                    failed=False,
+                    skipped=True,
+                    percentage=1.0,
                 )
 
     def _print_verbose_stage_info(
@@ -313,9 +301,7 @@ class PipelineRunner:
 
         for pipeline_stage in self.pipeline:
             # resolve placeholders in arguments
-            resolved_args = self.parameters_resolver.resolve(
-                pipeline_stage.args, context=context
-            )
+            resolved_args = self.parameters_resolver.resolve(pipeline_stage.args, context=context)
             resolved_run_if = (
                 self.parameters_resolver.resolve(pipeline_stage.run_if, context=context)
                 if pipeline_stage.run_if is not None
@@ -323,33 +309,23 @@ class PipelineRunner:
             )
 
             # if not verbose and skipping (student mode) dont print anything
-            if (
-                not dry_run
-                and not self.verbose
-                and (skip_the_rest or resolved_run_if is False)
-            ):
+            if not dry_run and not self.verbose and (skip_the_rest or resolved_run_if is False):
                 continue
 
             print_info(f'--> Running "{pipeline_stage.name}" stage:', color="orange")
             if self.verbose:
-                self._print_verbose_stage_info(
-                    pipeline_stage, resolved_run_if, resolved_args
-                )
+                self._print_verbose_stage_info(pipeline_stage, resolved_run_if, resolved_args)
 
             # skip the rest of stages if failed before
             if skip_the_rest:
                 print_info("skipped! (got error above)", color="blue")
-                pipeline_stage_results.append(
-                    self._create_skipped_result(pipeline_stage.name)
-                )
+                pipeline_stage_results.append(self._create_skipped_result(pipeline_stage.name))
                 continue
 
             # resolve run condition if any; skip if run_if=False
             if pipeline_stage.run_if is not None and not resolved_run_if:
                 print_info(f"skipped! (run_if={resolved_run_if})", color="blue")
-                pipeline_stage_results.append(
-                    self._create_skipped_result(pipeline_stage.name)
-                )
+                pipeline_stage_results.append(self._create_skipped_result(pipeline_stage.name))
                 continue
 
             # skip if dry run
@@ -357,9 +333,7 @@ class PipelineRunner:
                 stage_result = self._run_dry(pipeline_stage)
                 pipeline_stage_results.append(stage_result)
                 if pipeline_stage.register_output:
-                    context.setdefault("outputs", {})[
-                        pipeline_stage.register_output
-                    ] = stage_result
+                    context.setdefault("outputs", {})[pipeline_stage.register_output] = stage_result
                 continue
 
             # select the plugin to run
@@ -371,9 +345,7 @@ class PipelineRunner:
             try:
                 result = plugin.run(resolved_args, verbose=self.verbose)
                 _end_time = time.perf_counter()
-                stage_result = self._run_plugin_success(
-                    pipeline_stage, result, _end_time - _start_time
-                )
+                stage_result = self._run_plugin_success(pipeline_stage, result, _end_time - _start_time)
                 pipeline_stage_results.append(stage_result)
             except PluginExecutionFailed as e:
                 _end_time = time.perf_counter()
@@ -388,9 +360,7 @@ class PipelineRunner:
 
             # register output if required
             if pipeline_stage.register_output:
-                context.setdefault("outputs", {})[pipeline_stage.register_output] = (
-                    pipeline_stage_results[-1]
-                )
+                context.setdefault("outputs", {})[pipeline_stage.register_output] = pipeline_stage_results[-1]
 
         return PipelineResult(
             failed=not pipeline_passed,

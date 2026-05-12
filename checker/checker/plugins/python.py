@@ -41,13 +41,9 @@ class RunPytestPlugin(RunScriptPlugin):
 
         try:
             if args.report_percentage:
-                pipe_path, reader_thread = self._setup_percentage_reporting(
-                    tests_cmd, report_data_holder
-                )
+                pipe_path, reader_thread = self._setup_percentage_reporting(tests_cmd, report_data_holder)
 
-            script_cmd = self._build_script_cmd(
-                tests_cmd, args.target, allow_failures=args.report_percentage
-            )
+            script_cmd = self._build_script_cmd(tests_cmd, args.target, allow_failures=args.report_percentage)
 
             run_script_args = RunScriptPlugin.Args(
                 origin=args.origin,
@@ -116,18 +112,14 @@ class RunPytestPlugin(RunScriptPlugin):
         return pipe_path, reader_thread
 
     @staticmethod
-    def _build_script_cmd(
-        tests_cmd: list[str], target: str, *, allow_failures: bool
-    ) -> str:
+    def _build_script_cmd(tests_cmd: list[str], target: str, *, allow_failures: bool) -> str:
         script_cmd = " ".join(tests_cmd + [target])
         if allow_failures:
             return f"{script_cmd} || true"
         return script_cmd
 
     @staticmethod
-    def _apply_percentage_from_report(
-        result: PluginOutput, report_data_holder: dict[str, Any]
-    ) -> None:
+    def _apply_percentage_from_report(result: PluginOutput, report_data_holder: dict[str, Any]) -> None:
         report_data = report_data_holder.get("data")
         error = report_data_holder.get("error")
 
@@ -136,23 +128,17 @@ class RunPytestPlugin(RunScriptPlugin):
         if not report_data:
             raise PluginExecutionFailed("No report data received from pytest plugin")
         if not isinstance(report_data, dict):
-            raise PluginExecutionFailed(
-                f"Invalid report data type: expected dict, got {type(report_data).__name__}"
-            )
+            raise PluginExecutionFailed(f"Invalid report data type: expected dict, got {type(report_data).__name__}")
 
         summary = report_data.get("summary", {})
         if not isinstance(summary, dict):
-            raise PluginExecutionFailed(
-                f"Invalid summary type: expected dict, got {type(summary).__name__}"
-            )
+            raise PluginExecutionFailed(f"Invalid summary type: expected dict, got {type(summary).__name__}")
 
         passed = summary.get("passed", 0)
         total = summary.get("total", 0)
 
         if not isinstance(passed, (int, float)) or not isinstance(total, (int, float)):
-            raise PluginExecutionFailed(
-                f"Invalid test counts: passed={passed!r}, total={total!r}"
-            )
+            raise PluginExecutionFailed(f"Invalid test counts: passed={passed!r}, total={total!r}")
 
         result.percentage = (passed / total) if total > 0 else 0
 

@@ -22,9 +22,7 @@ def generate_file_structure(
 
     tmpdir = tmp_path_factory.mktemp("test")
 
-    def _generate_file_structure(
-        files_content: dict[str, Any], root: Path = tmpdir
-    ) -> Path:
+    def _generate_file_structure(files_content: dict[str, Any], root: Path = tmpdir) -> Path:
         """
         Generate file structure in temporary folder.
         Recursively iterate over files_content and create files and folders.
