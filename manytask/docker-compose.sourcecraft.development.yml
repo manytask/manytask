@@ -2,8 +2,7 @@ services:
 
     docs:
         build:
-            context: .
-            target: docs
+            context: ../docs
         container_name: test-manytask-docs
         restart: always
         network_mode: bridge

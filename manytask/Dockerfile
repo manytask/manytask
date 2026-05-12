@@ -46,14 +46,3 @@ RUN mkdir -p /root/.postgresql && \
         --retry 3 --retry-delay 2 --connect-timeout 10 && \
     chmod 0600 /root/.postgresql/root.crt
 
-
-
-FROM node:24 AS docs_builder
-
-RUN npm i @diplodoc/cli -g
-COPY ./docs ./docs
-RUN rm -rf html
-RUN yfm -i ./docs -o ./html --allow-custom-resources
-
-FROM nginx AS docs
-COPY --from=docs_builder ./html /usr/share/nginx/html
