@@ -26,7 +26,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: 0.9.5
 
@@ -51,7 +51,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: 0.9.5
 
@@ -78,7 +78,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: 0.9.5
 
@@ -101,7 +101,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: 0.9.5
 
