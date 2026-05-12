@@ -50,7 +50,7 @@ RUN mkdir -p /root/.postgresql && \
 
 
 
-FROM node:24 AS docs_builder
+FROM node:26 AS docs_builder
 
 RUN npm i @diplodoc/cli -g
 COPY ./docs ./docs
