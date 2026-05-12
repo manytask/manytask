@@ -102,7 +102,6 @@ services:
         networks:
             - manytask-dev-net
 
-
 volumes:
     postgres_data:
         name: manytask_postgres_data

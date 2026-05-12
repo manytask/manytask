@@ -2,9 +2,6 @@
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.uv.workspace]
-members = [".", "checker"]
-
 [project]
 name = "manytask"
 dynamic = ["version"]
