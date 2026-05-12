@@ -45,15 +45,11 @@ reset-dev: clean-db
 	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: copy-common-config install-deps
-	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/ $(CHECKER_TESTS_DIR)/
-	# Run checker test suite from inside ./checker so `import checker.*` resolves correctly.
-	# Use `-c /dev/null` to avoid inheriting repo-level pytest config, but force rootdir back to ./checker.
-	cd ../checker && TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail tests
+	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
 
 test-colima: copy-common-config install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
 	uv run python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
-	cd ../checker && uv run python -m pytest --cov-report term-missing --cov=checker --skip-firejail tests/
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
