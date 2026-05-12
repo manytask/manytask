@@ -27,7 +27,8 @@ services:
 
     manytask:
         build:
-            context: .
+            context: ..
+            dockerfile: manytask/Dockerfile
             target: app
         container_name: test-manytask
         env_file: .env

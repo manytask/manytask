@@ -2,9 +2,9 @@ FROM python:3.14-alpine AS app_builder
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock VERSION ./
-COPY ./manytask/ /app/manytask
-COPY ./checker/pyproject.toml /app/checker/pyproject.toml
+# Build context: repository root (parent of manytask/), see docker-compose *.yml
+COPY manytask/pyproject.toml manytask/uv.lock manytask/VERSION ./
+COPY manytask/manytask/ /app/manytask
 
 ENV UV_VERSION=0.11.8
 RUN pip install uv==${UV_VERSION}
@@ -23,8 +23,8 @@ WORKDIR /app
 
 COPY --from=app_builder /app/.venv /app/.venv
 
-COPY ./manytask/ /app/manytask
-COPY VERSION /app/VERSION
+COPY manytask/manytask/ /app/manytask
+COPY manytask/VERSION /app/VERSION
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

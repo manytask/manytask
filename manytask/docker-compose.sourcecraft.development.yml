@@ -21,7 +21,8 @@ services:
 
     manytask:
         build:
-            context: .
+            context: ..
+            dockerfile: manytask/Dockerfile
             target: app
         container_name: test-manytask
         network_mode: bridge
