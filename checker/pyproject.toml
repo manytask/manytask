@@ -26,7 +26,10 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "pytest-mock>=3.14",
     "pytest-xdist>=3.8.0",
+    "python-dotenv>=1.0",
+    "requests-mock>=1.12",
     "ruff>=0.1.0",
     "mypy>=1.0",
     "types-PyYAML",

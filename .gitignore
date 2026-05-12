@@ -142,7 +142,6 @@ dmypy.json
 .tmp
 scripts/setup_test_admin.py
 scripts/check_admin_panel_access.py
-.gitignore
 .github-main/CODE_OF_CONDUCT.md
 .github-main/CONTRIBUTING.md
 .github-main/LICENSE
