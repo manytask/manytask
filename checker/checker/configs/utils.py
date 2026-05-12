@@ -10,8 +10,6 @@ from checker.exceptions import BadConfig
 
 
 class CustomBaseModel(pydantic.BaseModel):
-    # Ignore unknown keys so a unified course YAML can contain both checker and manytask sections
-    # until split, or so optional fields omitted by tooling do not fail validation.
     model_config = pydantic.ConfigDict(extra="ignore", validate_default=True)
 
 
