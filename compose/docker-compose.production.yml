@@ -80,7 +80,7 @@ services:
         restart: always
         expose:
             - "5050"
-        env_file: .env
+        env_file: ../manytask/.env
         environment:
             VIRTUAL_HOST: ${APP_HOST}
             VIRTUAL_PORT: 5050

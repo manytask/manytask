@@ -31,7 +31,7 @@ services:
             dockerfile: manytask/Dockerfile
             target: app
         container_name: test-manytask
-        env_file: .env
+        env_file: ../manytask/.env
         environment:
             VIRTUAL_HOST: localhost
             VIRTUAL_PORT: 5050
@@ -39,20 +39,20 @@ services:
         ports:
             - "8081:5050"
         volumes:
-            - ./manytask/:/app/manytask
-            - .tmp/cache/:/cache
+            - ../manytask/manytask:/app/manytask
+            - ../manytask/.tmp/cache:/cache
         networks:
             - manytask-dev-net
 
     postgres:
         image: postgres:17
         container_name: manytask_postgres
-        env_file: .env
+        env_file: ../manytask/.env
         expose:
             - "5432"
         volumes:
             - postgres_data:/var/lib/postgresql/data
-            - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+            - ../manytask/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
             interval: 5s

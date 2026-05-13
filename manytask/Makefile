@@ -1,6 +1,6 @@
 ROOT_DIR := manytask
 TESTS_DIR := tests
-DOCKER_COMPOSE_DEV := docker-compose.development.yml
+DOCKER_COMPOSE_DEV := ../compose/docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 DOCS_DIR := ../docs
 DOCS_HTML_DIR := html

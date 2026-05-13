@@ -15,7 +15,7 @@ Use this guide when you:
 
 - Docker and Docker Compose installed.
 - Colima installed (macOS).
-- Local project configured with `docker-compose.development.yml`.
+- Local project configured with `compose/docker-compose.development.yml`; Docker commands assume **repository root** as working directory (`compose/` sits next to `manytask/`).
 
 ### Minimum Colima configuration for local GitLab
 
@@ -257,7 +257,7 @@ Start full local stack:
 Check containers:
 
 ```bash
-docker-compose -f docker-compose.development.yml ps
+docker compose -f compose/docker-compose.development.yml ps
 ```
 
 Manytask logs:
@@ -275,13 +275,13 @@ docker logs -f manytask_gitlab
 Rebuild and restart Manytask:
 
 ```bash
-docker-compose -f docker-compose.development.yml up --build --no-deps -d manytask
+docker compose -f compose/docker-compose.development.yml up --build --no-deps -d manytask
 ```
 
 Stop stack:
 
 ```bash
-docker-compose -f docker-compose.development.yml down
+docker compose -f compose/docker-compose.development.yml down
 ```
 
 ## References
