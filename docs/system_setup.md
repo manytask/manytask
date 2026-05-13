@@ -41,7 +41,7 @@ Manytask currently operates only with self-hosted gitlab instance (to easily cre
 
 3. Setup forwarding of `smth.manytask.org` to your manytask container and get ssl certs  
    the easiest way is to use [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) for auto-forwarding and auto ssl certs generation   
-   check Compose examples under `compose/` in the manytask repo
+   check сompose examples under `compose/` in the manytask repo
 
 
 ---
