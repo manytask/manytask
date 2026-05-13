@@ -51,15 +51,15 @@ Copy `.env.example` to `.env` and follow the instructions in the file to fill it
 
 #### Step 4 — Start the Application
 
-To start the app, run:
+From the **repository root** (the directory that contains both `manytask/` and `compose/`), run:
 
 ```bash
-docker-compose -f docker-compose.development.yml up --build -d
+docker compose -f compose/docker-compose.development.yml up --build -d
 ```
 
 This should expose Manytask app on port 8081 [http://localhost:8081/](http://localhost:8081/) and docs on port 8080 [http://localhost:8080/](http://localhost:8080/).
 
-You can run `make dev` as a shortcut for this command.
+You can run **`make dev` from `manytask/`** (shortcut for the same Compose file; equivalent to passing `-f ../compose/docker-compose.development.yml` from there).
 
 ### 4. Adding a Course
 

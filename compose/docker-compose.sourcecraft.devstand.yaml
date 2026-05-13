@@ -1,11 +1,12 @@
 services:
     manytask:
         build:
-            context: .
+            context: ..
+            dockerfile: manytask/Dockerfile
             target: app
         container_name: test-manytask-src
         network_mode: bridge
-        env_file: .env.sourcecraft
+        env_file: ../manytask/.env.sourcecraft
         environment:
             VIRTUAL_HOST: src.manytask2.org
             VIRTUAL_PORT: 5050
@@ -13,8 +14,8 @@ services:
         ports:
             - "8082:5050"
         volumes:
-            - ./manytask/:/app/manytask
-            - .tmp/cache/:/cache
+            - ../manytask/manytask:/app/manytask
+            - ../manytask/.tmp/cache:/cache
         links:
             - postgres:postgres
 
@@ -22,12 +23,12 @@ services:
         image: postgres:17
         container_name: manytask_postgres-src
         network_mode: bridge
-        env_file: .env.sourcecraft
+        env_file: ../manytask/.env.sourcecraft
         expose:
             - "5432"
         volumes:
             - postgres_data:/var/lib/postgresql/data
-            - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+            - ../manytask/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U manytask -d manytask"]
             interval: 5s
