@@ -48,10 +48,21 @@ rails_runner() {
     docker exec -i "${GITLAB_CONTAINER}" sh -lc "gitlab-rails runner \"$1\""
 }
 
+get_env_value() {
+    local key="$1"
+    if [ -f "${MANYTASK_ENV}" ]; then
+        grep -E "^${key}=.+" "${MANYTASK_ENV}" 2>/dev/null | tail -n 1 | cut -d= -f2- || true
+    fi
+}
+
 ensure_env_line() {
     local key="$1" value="$2"
     if ! grep -q "^${key}=" "${MANYTASK_ENV}" 2>/dev/null; then
         printf "%s=%s\n" "${key}" "${value}" >> "${MANYTASK_ENV}"
+    elif grep -q "^${key}=$" "${MANYTASK_ENV}" 2>/dev/null; then
+        local escaped_value
+        escaped_value=$(printf '%s\n' "${value}" | sed 's/[&\\]/\\&/g')
+        sed -i.bak "s|^${key}=$|${key}=${escaped_value}|" "${MANYTASK_ENV}"
     else
         log "Key ${key} already present in ${MANYTASK_ENV}, leaving as is."
     fi
@@ -63,22 +74,33 @@ main() {
 
     wait_for_gitlab
 
-    log "Creating/retrieving admin PAT..."
-    ADMIN_PAT=$(rails_runner "
-        user = User.find_by_username('root')
-        pat  = user.personal_access_tokens.find_by(name: 'manytask-admin')
-        unless pat
-          pat = user.personal_access_tokens.create!(
-            name: 'manytask-admin',
-            scopes: [:api, :read_user, :read_api, :write_repository, :sudo],
-            expires_at: 1.year.from_now.to_date
-          )
-          pat.set_token(SecureRandom.hex(32))
-          pat.save!
-        end
-        puts pat.token
-    ")
-    log "Admin PAT acquired."
+    ADMIN_PAT="$(get_env_value GITLAB_ADMIN_TOKEN)"
+    if [ -n "${ADMIN_PAT}" ]; then
+        log "Using GITLAB_ADMIN_TOKEN from ${MANYTASK_ENV}."
+    else
+        log "Creating/retrieving admin PAT..."
+        ADMIN_PAT=$(rails_runner "
+            user = User.find_by_username('root')
+            pat  = user.personal_access_tokens.find_by(name: 'manytask-admin')
+            if pat && pat.token.nil?
+              # GitLab stores PATs hashed after creation, so plaintext is unavailable
+              # for an existing token. Recreate it so the setup script can export it.
+              pat.revoke!
+              pat = nil
+            end
+            unless pat
+              pat = user.personal_access_tokens.create!(
+                name: 'manytask-admin',
+                scopes: [:api, :read_user, :read_api, :write_repository, :sudo],
+                expires_at: 1.year.from_now.to_date
+              )
+              pat.set_token(SecureRandom.hex(32))
+              pat.save!
+            end
+            puts pat.token
+        ")
+        log "Admin PAT acquired."
+    fi
 
     log "Creating/retrieving OAuth app..."
     OAUTH_DATA=$(rails_runner "
