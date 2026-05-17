@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import Request
 
 from app.config import Settings
+from app.hosting import HostingAdapter
 from app.manytask import ManytaskClient, TokenAuthCache
 from app.storage import CourseStore
 
@@ -23,3 +26,11 @@ def get_manytask_client(request: Request) -> ManytaskClient:
 
 def get_auth_cache(request: Request) -> TokenAuthCache:
     return request.app.state.auth_cache  # type: ignore[no-any-return]
+
+
+def get_hosting_executor(request: Request) -> ThreadPoolExecutor:
+    return request.app.state.hosting_executor  # type: ignore[no-any-return]
+
+
+def get_hosting_adapter(request: Request) -> HostingAdapter:
+    return request.app.state.hosting_adapter  # type: ignore[no-any-return]
