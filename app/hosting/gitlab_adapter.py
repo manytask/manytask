@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from typing import Any, TypeVar
 
 import gitlab
@@ -50,6 +51,13 @@ class GitLabAdapter:
             batch = coros_list[start : start + self._batch_size]
             results.extend(await asyncio.gather(*batch))
         return results
+
+    @staticmethod
+    def _parse_iso8601(value: str) -> datetime:
+        """GitLab returns 2026-05-01T10:00:00.000Z; Python <3.11 didn't accept Z directly."""
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.fromisoformat(value)
 
     @staticmethod
     def _summary_to_mr(summary: GroupMergeRequest) -> MergeRequest:
@@ -127,6 +135,17 @@ class GitLabAdapter:
         pipelines = mr.pipelines.list(per_page=1, page=1)
         return [p.attributes for p in pipelines]
 
+    def _list_notes_blocking(self, project_id: int, mr_iid: int) -> list[dict[str, Any]]:
+        project = self._gl.projects.get(project_id, lazy=True)
+        mr = project.mergerequests.get(mr_iid, lazy=True)
+        notes = mr.notes.list(
+            sort="asc",
+            order_by="id",
+            per_page=100,
+            iterator=True,
+        )
+        return [n.attributes for n in notes]
+
     async def get_changes(self, mr: MergeRequest) -> list[FileChange]:
         raw = await self._run_in_executor(self._get_changes_blocking, mr.project_id, mr.mr_iid)
         return [
@@ -157,7 +176,24 @@ class GitLabAdapter:
         )
 
     async def get_comments(self, mr: MergeRequest, since_id: int | None = None) -> list[Comment]:
-        raise NotImplementedError
+        raw = await self._run_in_executor(self._list_notes_blocking, mr.project_id, mr.mr_iid)
+        out: list[Comment] = []
+        for item in raw:
+            if item.get("system"):
+                continue
+            note_id = int(item["id"])
+            if since_id is not None and note_id <= since_id:
+                continue
+            author = item.get("author") or {}
+            out.append(
+                Comment(
+                    id=note_id,
+                    author_username=str(author.get("username", "")),
+                    body=str(item.get("body", "")),
+                    created_at=self._parse_iso8601(str(item["created_at"])),
+                )
+            )
+        return out
 
     async def post_or_update_comment(self, mr: MergeRequest, anchor_tag: str, body: str) -> Comment:
         raise NotImplementedError

@@ -341,3 +341,128 @@ class TestGetPipelineStatus:
 
         assert ps.state == "none"
         assert ps.id == 1
+
+
+class TestGetComments:
+    def _mr(self) -> "MergeRequest":
+        from app.hosting.models import MergeRequest
+
+        return MergeRequest(
+            project_id=42,
+            mr_iid=7,
+            sha="x",
+            web_url="x",
+            source_branch="s",
+            target_branch="t",
+            author_username="u",
+            labels=(),
+            title="t",
+        )
+
+    def test_returns_all_when_no_since_id(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 100,
+                    "body": "first",
+                    "author": {"username": "alice"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+                {
+                    "id": 101,
+                    "body": "second",
+                    "author": {"username": "bob"},
+                    "created_at": "2026-05-01T11:00:00.000Z",
+                    "system": False,
+                },
+            ],
+            status=200,
+        )
+
+        import asyncio
+
+        comments = asyncio.run(gitlab_adapter.get_comments(self._mr()))
+
+        assert [c.id for c in comments] == [100, 101]
+        assert comments[0].author_username == "alice"
+        assert comments[0].created_at.year == 2026
+
+    def test_since_id_filter(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 100,
+                    "body": "old",
+                    "author": {"username": "u"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+                {
+                    "id": 101,
+                    "body": "new",
+                    "author": {"username": "u"},
+                    "created_at": "2026-05-01T11:00:00.000Z",
+                    "system": False,
+                },
+                {
+                    "id": 102,
+                    "body": "newer",
+                    "author": {"username": "u"},
+                    "created_at": "2026-05-01T12:00:00.000Z",
+                    "system": False,
+                },
+            ],
+            status=200,
+        )
+
+        import asyncio
+
+        comments = asyncio.run(gitlab_adapter.get_comments(self._mr(), since_id=100))
+
+        assert [c.id for c in comments] == [101, 102]
+
+    def test_skips_system_notes(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 100,
+                    "body": "human",
+                    "author": {"username": "alice"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+                {
+                    "id": 101,
+                    "body": "marked as draft",
+                    "author": {"username": "alice"},
+                    "created_at": "2026-05-01T11:00:00.000Z",
+                    "system": True,
+                },
+            ],
+            status=200,
+        )
+
+        import asyncio
+
+        comments = asyncio.run(gitlab_adapter.get_comments(self._mr()))
+
+        assert [c.id for c in comments] == [100]
