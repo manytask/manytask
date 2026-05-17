@@ -18,6 +18,10 @@ _T = TypeVar("_T")
 class GitLabAdapter:
     """python-gitlab-backed adapter. Sync calls run on a dedicated executor."""
 
+    _KNOWN_PIPELINE_STATES: frozenset[str] = frozenset(
+        {"success", "failed", "running", "canceled", "pending", "skipped", "manual"}
+    )
+
     def __init__(
         self,
         token: str,
@@ -117,6 +121,12 @@ class GitLabAdapter:
         payload = mr.changes()
         return list(payload.get("changes") or [])
 
+    def _list_pipelines_blocking(self, project_id: int, mr_iid: int) -> list[dict[str, Any]]:
+        project = self._gl.projects.get(project_id, lazy=True)
+        mr = project.mergerequests.get(mr_iid, lazy=True)
+        pipelines = mr.pipelines.list(per_page=1, page=1)
+        return [p.attributes for p in pipelines]
+
     async def get_changes(self, mr: MergeRequest) -> list[FileChange]:
         raw = await self._run_in_executor(self._get_changes_blocking, mr.project_id, mr.mr_iid)
         return [
@@ -132,7 +142,19 @@ class GitLabAdapter:
         ]
 
     async def get_pipeline_status(self, mr: MergeRequest) -> PipelineStatus:
-        raise NotImplementedError
+        items = await self._run_in_executor(self._list_pipelines_blocking, mr.project_id, mr.mr_iid)
+        if not items:
+            return PipelineStatus(id=None, state="none", web_url=None, sha=None)
+
+        head = items[0]
+        raw_state = str(head.get("status", ""))
+        state: Any = raw_state if raw_state in self._KNOWN_PIPELINE_STATES else "none"
+        return PipelineStatus(
+            id=int(head["id"]) if head.get("id") is not None else None,
+            state=state,
+            web_url=head.get("web_url"),
+            sha=head.get("sha"),
+        )
 
     async def get_comments(self, mr: MergeRequest, since_id: int | None = None) -> list[Comment]:
         raise NotImplementedError

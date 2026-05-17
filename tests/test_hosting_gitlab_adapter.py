@@ -251,3 +251,93 @@ class TestGetChanges:
         changes = asyncio.run(gitlab_adapter.get_changes(self._mr()))
 
         assert changes == []
+
+
+class TestGetPipelineStatus:
+    def _mr(self) -> "MergeRequest":
+        from app.hosting.models import MergeRequest
+
+        return MergeRequest(
+            project_id=42,
+            mr_iid=7,
+            sha="deadbeef",
+            web_url="x",
+            source_branch="s",
+            target_branch="t",
+            author_username="u",
+            labels=(),
+            title="t",
+        )
+
+    def test_success_pipeline(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/pipelines",
+            json=[
+                {
+                    "id": 9001,
+                    "status": "success",
+                    "sha": "deadbeef",
+                    "web_url": "https://gitlab.test/group/proj-42/-/pipelines/9001",
+                }
+            ],
+            status=200,
+        )
+
+        import asyncio
+
+        ps = asyncio.run(gitlab_adapter.get_pipeline_status(self._mr()))
+
+        assert ps.id == 9001
+        assert ps.state == "success"
+        assert ps.sha == "deadbeef"
+
+    def test_no_pipeline_returns_none_state(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/pipelines",
+            json=[],
+            status=200,
+        )
+
+        import asyncio
+
+        ps = asyncio.run(gitlab_adapter.get_pipeline_status(self._mr()))
+
+        assert ps.id is None
+        assert ps.state == "none"
+        assert ps.web_url is None
+
+    def test_unknown_state_falls_back_to_none(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/pipelines",
+            json=[
+                {
+                    "id": 1,
+                    "status": "weird-future-state",
+                    "sha": "x",
+                    "web_url": "x",
+                }
+            ],
+            status=200,
+        )
+
+        import asyncio
+
+        ps = asyncio.run(gitlab_adapter.get_pipeline_status(self._mr()))
+
+        assert ps.state == "none"
+        assert ps.id == 1
