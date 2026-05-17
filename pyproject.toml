@@ -54,10 +54,10 @@ files = ["app", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["gitlab.*", "httpx", "respx"]
+module = ["gitlab.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov=app.api --cov=app.manytask --cov-report=term-missing"
+addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov=app.api --cov=app.manytask --cov-report=term-missing --cov-fail-under=90"
 asyncio_mode = "auto"
 testpaths = ["tests"]

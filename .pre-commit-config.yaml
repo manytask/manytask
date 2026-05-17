@@ -27,5 +27,7 @@ repos:
           - pytest>=8.0.0
           - fakeredis>=2.0.0
           - pytest-asyncio>=0.23.0
+          - httpx>=0.28.0
+          - respx>=0.22.0
         args: [--strict]
         files: ^(app|tests)/

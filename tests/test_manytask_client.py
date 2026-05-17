@@ -20,7 +20,7 @@ async def client() -> ManytaskClient:
 
 
 class TestPingSuccess:
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_ping_200_returns_silently(self, client: ManytaskClient) -> None:
         route = respx.get("http://manytask.test/api/python-101/ping").mock(
             return_value=httpx.Response(
@@ -37,35 +37,35 @@ class TestPingSuccess:
 
 
 class TestPingErrors:
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_403_raises_forbidden(self, client: ManytaskClient) -> None:
         respx.get("http://manytask.test/api/python-101/ping").mock(return_value=httpx.Response(403))
 
         with pytest.raises(ManytaskTokenForbidden):
             await client.ping("python-101", token="tok-bad")
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_404_raises_course_not_found(self, client: ManytaskClient) -> None:
         respx.get("http://manytask.test/api/no-such/ping").mock(return_value=httpx.Response(404))
 
         with pytest.raises(ManytaskCourseNotFound):
             await client.ping("no-such", token="tok")
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_500_raises_unavailable(self, client: ManytaskClient) -> None:
         respx.get("http://manytask.test/api/python-101/ping").mock(return_value=httpx.Response(500, text="boom"))
 
         with pytest.raises(ManytaskUnavailable):
             await client.ping("python-101", token="tok")
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_timeout_raises_unavailable(self, client: ManytaskClient) -> None:
         respx.get("http://manytask.test/api/python-101/ping").mock(side_effect=httpx.TimeoutException("slow"))
 
         with pytest.raises(ManytaskUnavailable):
             await client.ping("python-101", token="tok")
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_connect_error_raises_unavailable(
         self,
         client: ManytaskClient,

@@ -40,7 +40,7 @@ def _ping_url(course: str) -> str:
 
 
 class TestPostCourse:
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_valid_token_creates_course(
         self,
         client_with_overrides: AsyncClient,
@@ -72,7 +72,7 @@ class TestPostCourse:
         assert token == "course-tok-A"
         assert cfg.tasks[0].name == "task-1"
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_invalid_token_returns_403(self, client_with_overrides: AsyncClient) -> None:
         respx.get(_ping_url("python-101")).mock(return_value=httpx.Response(403))
 
@@ -84,7 +84,7 @@ class TestPostCourse:
 
         assert response.status_code == 403
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_unknown_course_returns_404(self, client_with_overrides: AsyncClient) -> None:
         respx.get(_ping_url("ghost")).mock(return_value=httpx.Response(404))
 
@@ -96,7 +96,7 @@ class TestPostCourse:
 
         assert response.status_code == 404
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_manytask_unavailable_returns_502(self, client_with_overrides: AsyncClient) -> None:
         respx.get(_ping_url("python-101")).mock(return_value=httpx.Response(500))
 
@@ -117,7 +117,7 @@ class TestPostCourse:
 
         assert response.status_code == 403
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_invalid_yaml_returns_422(self, client_with_overrides: AsyncClient) -> None:
         respx.get(_ping_url("python-101")).mock(
             return_value=httpx.Response(200, json={"course": "python-101", "ok": True})
@@ -133,7 +133,7 @@ class TestPostCourse:
         body = response.json()
         assert "yaml" in str(body).lower() or "mr_review" in str(body).lower()
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_yaml_without_mr_review_returns_422(
         self,
         client_with_overrides: AsyncClient,
@@ -151,7 +151,7 @@ class TestPostCourse:
         assert response.status_code == 422
         assert "mr_review" in str(response.json()).lower()
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_invalid_mr_review_step_returns_422(
         self,
         client_with_overrides: AsyncClient,
@@ -178,7 +178,7 @@ mr_review:
         assert response.status_code == 422
         assert "extensions" in str(response.json())
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_cross_course_token_rejected(
         self,
         client_with_overrides: AsyncClient,
@@ -200,7 +200,7 @@ mr_review:
         )
         assert rejected.status_code == 403
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_second_call_uses_cache_and_skips_ping(
         self,
         client_with_overrides: AsyncClient,
@@ -226,7 +226,7 @@ mr_review:
 
 
 class TestDeleteCourse:
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_delete_with_course_token_succeeds(
         self,
         client_with_overrides: AsyncClient,
@@ -251,7 +251,7 @@ class TestDeleteCourse:
         store = CourseStore(fake_redis)
         assert await store.get_course("python-101") is None
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_delete_with_admin_token_succeeds(
         self,
         client_with_overrides: AsyncClient,
@@ -285,7 +285,7 @@ class TestDeleteCourse:
 
         assert response.status_code == 204
 
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_delete_with_wrong_token_returns_403(
         self,
         client_with_overrides: AsyncClient,
@@ -363,9 +363,33 @@ class TestListCourses:
         )
         assert response.status_code == 403
 
+    async def test_list_courses_includes_broken_entry(
+        self,
+        client_with_overrides: AsyncClient,
+        fake_redis: FakeRedis,
+    ) -> None:
+        await fake_redis.hset(  # type: ignore[misc]
+            "courses:legacy",
+            mapping={
+                "config_json": "{}",
+                "course_token": "tok",
+                "schema_version": "999",
+                "updated_at": "2026-04-26T00:00:00+00:00",
+            },
+        )
+
+        response = await client_with_overrides.get(
+            "/courses",
+            headers={"Authorization": "Bearer admin-token"},
+        )
+
+        assert response.status_code == 200
+        legacy = next(item for item in response.json() if item["name"] == "legacy")
+        assert legacy["schema_version"] == -1
+
 
 class TestRestartPersistence:
-    @respx.mock  # type: ignore[misc]
+    @respx.mock
     async def test_course_survives_simulated_restart(
         self,
         client_with_overrides: AsyncClient,
