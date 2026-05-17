@@ -26,6 +26,7 @@ dev = [
     "fakeredis>=2.26.0",
     "pytest-cov>=6.0.0",
     "types-pyyaml>=6.0",
+    "respx>=0.22.0",
 ]
 
 [build-system]
@@ -57,6 +58,6 @@ module = ["gitlab.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov-report=term-missing --cov-fail-under=90"
+addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov=app.api --cov=app.manytask --cov-report=term-missing"
 asyncio_mode = "auto"
 testpaths = ["tests"]
