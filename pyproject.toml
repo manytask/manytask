@@ -54,7 +54,7 @@ files = ["app", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["gitlab.*"]
+module = ["gitlab.*", "httpx", "respx"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
