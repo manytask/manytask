@@ -466,3 +466,153 @@ class TestGetComments:
         comments = asyncio.run(gitlab_adapter.get_comments(self._mr()))
 
         assert [c.id for c in comments] == [100]
+
+
+class TestPostOrUpdateComment:
+    def _mr(self) -> "MergeRequest":
+        from app.hosting.models import MergeRequest
+
+        return MergeRequest(
+            project_id=42,
+            mr_iid=7,
+            sha="x",
+            web_url="x",
+            source_branch="s",
+            target_branch="t",
+            author_username="u",
+            labels=(),
+            title="t",
+        )
+
+    def test_creates_new_comment_when_no_anchor_match(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 1,
+                    "body": "unrelated",
+                    "author": {"username": "alice"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+            ],
+            status=200,
+        )
+        mock_gitlab.add(
+            responses.POST,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json={
+                "id": 999,
+                "body": "<!-- mr-reviewer:score-task-1 -->\nscore: 100",
+                "author": {"username": "bot"},
+                "created_at": "2026-05-01T12:00:00.000Z",
+                "system": False,
+            },
+            status=201,
+        )
+
+        import asyncio
+
+        result = asyncio.run(gitlab_adapter.post_or_update_comment(self._mr(), "score-task-1", "score: 100"))
+
+        assert result.id == 999
+        assert "<!-- mr-reviewer:score-task-1 -->" in result.body
+
+    def test_updates_existing_comment_with_matching_anchor(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 1,
+                    "body": "<!-- mr-reviewer:score-task-1 -->\nold body",
+                    "author": {"username": "bot"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+                {
+                    "id": 2,
+                    "body": "human reply",
+                    "author": {"username": "alice"},
+                    "created_at": "2026-05-01T11:00:00.000Z",
+                    "system": False,
+                },
+            ],
+            status=200,
+        )
+        mock_gitlab.add(
+            responses.PUT,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes/1",
+            json={
+                "id": 1,
+                "body": "<!-- mr-reviewer:score-task-1 -->\nnew body",
+                "author": {"username": "bot"},
+                "created_at": "2026-05-01T10:00:00.000Z",
+                "system": False,
+            },
+            status=200,
+        )
+
+        import asyncio
+
+        result = asyncio.run(gitlab_adapter.post_or_update_comment(self._mr(), "score-task-1", "new body"))
+
+        assert result.id == 1
+        assert "new body" in result.body
+
+        post_calls = [c for c in mock_gitlab.calls if c.request.method == "POST"]
+        assert post_calls == [], "must not POST a new comment when an anchored one exists"
+
+    def test_picks_only_first_matching_anchor(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 1,
+                    "body": "<!-- mr-reviewer:dup -->\nfirst",
+                    "author": {"username": "bot"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+                {
+                    "id": 2,
+                    "body": "<!-- mr-reviewer:dup -->\nsecond",
+                    "author": {"username": "bot"},
+                    "created_at": "2026-05-01T11:00:00.000Z",
+                    "system": False,
+                },
+            ],
+            status=200,
+        )
+        mock_gitlab.add(
+            responses.PUT,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes/1",
+            json={
+                "id": 1,
+                "body": "<!-- mr-reviewer:dup -->\nupdated",
+                "author": {"username": "bot"},
+                "created_at": "2026-05-01T10:00:00.000Z",
+                "system": False,
+            },
+            status=200,
+        )
+
+        import asyncio
+
+        result = asyncio.run(gitlab_adapter.post_or_update_comment(self._mr(), "dup", "updated"))
+
+        assert result.id == 1

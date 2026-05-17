@@ -11,6 +11,7 @@ from typing import Any, TypeVar
 import gitlab
 from gitlab.v4.objects import Group, GroupMergeRequest
 
+from app.hosting.anchor import has_anchor, make_anchor_marker
 from app.hosting.models import Comment, FileChange, MergeRequest, PipelineStatus
 
 _T = TypeVar("_T")
@@ -195,8 +196,56 @@ class GitLabAdapter:
             )
         return out
 
+    def _create_note_blocking(self, project_id: int, mr_iid: int, body: str) -> dict[str, Any]:
+        project = self._gl.projects.get(project_id, lazy=True)
+        mr = project.mergerequests.get(mr_iid, lazy=True)
+        note = mr.notes.create({"body": body})
+        return dict(note.attributes)
+
+    def _update_note_blocking(self, project_id: int, mr_iid: int, note_id: int, body: str) -> dict[str, Any]:
+        project = self._gl.projects.get(project_id, lazy=True)
+        mr = project.mergerequests.get(mr_iid, lazy=True)
+        result: dict[str, Any] = mr.notes.update(note_id, {"body": body})
+        return result
+
+    @staticmethod
+    def _build_anchored_body(anchor_tag: str, body: str) -> str:
+        marker = make_anchor_marker(anchor_tag)
+        if body.lstrip().startswith(marker):
+            return body
+        return f"{marker}\n{body}"
+
+    def _attrs_to_comment(self, attrs: dict[str, Any]) -> Comment:
+        author = attrs.get("author") or {}
+        return Comment(
+            id=int(attrs["id"]),
+            author_username=str(author.get("username", "")),
+            body=str(attrs.get("body", "")),
+            created_at=self._parse_iso8601(str(attrs["created_at"])),
+        )
+
     async def post_or_update_comment(self, mr: MergeRequest, anchor_tag: str, body: str) -> Comment:
-        raise NotImplementedError
+        anchored_body = self._build_anchored_body(anchor_tag, body)
+        raw_notes = await self._run_in_executor(self._list_notes_blocking, mr.project_id, mr.mr_iid)
+        existing_id: int | None = None
+        for item in raw_notes:
+            if item.get("system"):
+                continue
+            if has_anchor(str(item.get("body", "")), anchor_tag):
+                existing_id = int(item["id"])
+                break
+
+        if existing_id is None:
+            attrs = await self._run_in_executor(self._create_note_blocking, mr.project_id, mr.mr_iid, anchored_body)
+        else:
+            attrs = await self._run_in_executor(
+                self._update_note_blocking,
+                mr.project_id,
+                mr.mr_iid,
+                existing_id,
+                anchored_body,
+            )
+        return self._attrs_to_comment(attrs)
 
     async def add_labels(self, mr: MergeRequest, labels: list[str]) -> MergeRequest:
         raise NotImplementedError
