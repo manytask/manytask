@@ -63,6 +63,26 @@ class GitLabAdapter:
             title=str(attrs.get("title", "")),
         )
 
+    @staticmethod
+    def _project_mr_to_mr(obj: Any) -> MergeRequest:
+        attrs = obj.attributes
+        author = attrs.get("author") or {}
+        return MergeRequest(
+            project_id=int(attrs["project_id"]),
+            mr_iid=int(attrs["iid"]),
+            sha=str(attrs.get("sha") or ""),
+            web_url=str(attrs.get("web_url", "")),
+            source_branch=str(attrs.get("source_branch", "")),
+            target_branch=str(attrs.get("target_branch", "")),
+            author_username=str(author.get("username", "")),
+            labels=tuple(attrs.get("labels") or ()),
+            title=str(attrs.get("title", "")),
+        )
+
+    def _get_mr_blocking(self, project_id: int, mr_iid: int) -> Any:
+        project = self._gl.projects.get(project_id, lazy=True)
+        return project.mergerequests.get(mr_iid)
+
     def _list_open_mrs_blocking(self, group_path: str, label: str) -> list[GroupMergeRequest]:
         group: Group = self._gl.groups.get(group_path, lazy=True)
         # Manually paginate with explicit page numbers for test compatibility
@@ -88,10 +108,28 @@ class GitLabAdapter:
         return [self._summary_to_mr(s) for s in summaries]
 
     async def get_mr(self, project_id: int, mr_iid: int) -> MergeRequest:
-        raise NotImplementedError
+        obj = await self._run_in_executor(self._get_mr_blocking, project_id, mr_iid)
+        return self._project_mr_to_mr(obj)
+
+    def _get_changes_blocking(self, project_id: int, mr_iid: int) -> list[dict[str, Any]]:
+        project = self._gl.projects.get(project_id, lazy=True)
+        mr = project.mergerequests.get(mr_iid, lazy=True)
+        payload = mr.changes()
+        return list(payload.get("changes") or [])
 
     async def get_changes(self, mr: MergeRequest) -> list[FileChange]:
-        raise NotImplementedError
+        raw = await self._run_in_executor(self._get_changes_blocking, mr.project_id, mr.mr_iid)
+        return [
+            FileChange(
+                old_path=str(item.get("old_path", "")),
+                new_path=str(item.get("new_path", "")),
+                new_file=bool(item.get("new_file", False)),
+                renamed_file=bool(item.get("renamed_file", False)),
+                deleted_file=bool(item.get("deleted_file", False)),
+                diff=str(item.get("diff", "")),
+            )
+            for item in raw
+        ]
 
     async def get_pipeline_status(self, mr: MergeRequest) -> PipelineStatus:
         raise NotImplementedError

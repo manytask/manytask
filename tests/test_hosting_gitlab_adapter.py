@@ -6,6 +6,7 @@ import pytest
 import responses
 
 from app.hosting.gitlab_adapter import GitLabAdapter
+from app.hosting.models import MergeRequest
 
 
 def _mr_summary(project_id: int, iid: int, *, label: str = "review-needed") -> dict[str, object]:
@@ -123,3 +124,130 @@ class TestListOpenMrs:
 
         with pytest.raises(gitlab.exceptions.GitlabListError):
             asyncio.run(gitlab_adapter.list_open_mrs("missing", "review-needed"))
+
+
+def _mr_full(project_id: int, iid: int) -> dict[str, object]:
+    base = _mr_summary(project_id, iid)
+    base["description"] = ""
+    return base
+
+
+def _mr_changes(project_id: int, iid: int) -> dict[str, object]:
+    return {
+        **_mr_full(project_id, iid),
+        "changes": [
+            {
+                "old_path": "src/main.py",
+                "new_path": "src/main.py",
+                "new_file": False,
+                "renamed_file": False,
+                "deleted_file": False,
+                "diff": "@@ -1 +1 @@\n-old\n+new\n",
+            },
+            {
+                "old_path": "README.md",
+                "new_path": "docs/README.md",
+                "new_file": False,
+                "renamed_file": True,
+                "deleted_file": False,
+                "diff": "",
+            },
+        ],
+    }
+
+
+class TestGetMr:
+    def test_fetches_full_mr(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7",
+            json=_mr_full(42, 7),
+            status=200,
+        )
+
+        import asyncio
+
+        mr = asyncio.run(gitlab_adapter.get_mr(42, 7))
+
+        assert mr.project_id == 42
+        assert mr.mr_iid == 7
+        assert mr.title == "task-7: solution"
+        assert mr.author_username == "user-7"
+
+    def test_404_propagates_gitlab_error(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/999",
+            json={"message": "404 Not found"},
+            status=404,
+        )
+
+        import asyncio
+
+        import gitlab.exceptions
+
+        with pytest.raises(gitlab.exceptions.GitlabGetError):
+            asyncio.run(gitlab_adapter.get_mr(42, 999))
+
+
+class TestGetChanges:
+    def _mr(self, project_id: int = 42, iid: int = 7) -> MergeRequest:
+        return MergeRequest(
+            project_id=project_id,
+            mr_iid=iid,
+            sha="x",
+            web_url="x",
+            source_branch="s",
+            target_branch="t",
+            author_username="u",
+            labels=(),
+            title="t",
+        )
+
+    def test_returns_changes(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/changes",
+            json=_mr_changes(42, 7),
+            status=200,
+        )
+
+        import asyncio
+
+        changes = asyncio.run(gitlab_adapter.get_changes(self._mr()))
+
+        assert len(changes) == 2
+        assert changes[0].old_path == "src/main.py"
+        assert changes[1].renamed_file is True
+
+    def test_empty_diff(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        empty = _mr_full(42, 7)
+        empty["changes"] = []
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/changes",
+            json=empty,
+            status=200,
+        )
+
+        import asyncio
+
+        changes = asyncio.run(gitlab_adapter.get_changes(self._mr()))
+
+        assert changes == []
