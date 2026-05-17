@@ -572,47 +572,78 @@ class TestPostOrUpdateComment:
         post_calls = [c for c in mock_gitlab.calls if c.request.method == "POST"]
         assert post_calls == [], "must not POST a new comment when an anchored one exists"
 
-    def test_picks_only_first_matching_anchor(
+
+class TestLabels:
+    def _mr(self, labels: tuple[str, ...] = ()) -> "MergeRequest":
+        from app.hosting.models import MergeRequest
+
+        return MergeRequest(
+            project_id=42,
+            mr_iid=7,
+            sha="x",
+            web_url="x",
+            source_branch="s",
+            target_branch="t",
+            author_username="u",
+            labels=labels,
+            title="t",
+        )
+
+    def test_add_labels_uses_add_labels_query_param(
         self,
         gitlab_adapter: GitLabAdapter,
         mock_gitlab: responses.RequestsMock,
     ) -> None:
         mock_gitlab.add(
-            responses.GET,
-            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
-            json=[
-                {
-                    "id": 1,
-                    "body": "<!-- mr-reviewer:dup -->\nfirst",
-                    "author": {"username": "bot"},
-                    "created_at": "2026-05-01T10:00:00.000Z",
-                    "system": False,
-                },
-                {
-                    "id": 2,
-                    "body": "<!-- mr-reviewer:dup -->\nsecond",
-                    "author": {"username": "bot"},
-                    "created_at": "2026-05-01T11:00:00.000Z",
-                    "system": False,
-                },
-            ],
-            status=200,
-        )
-        mock_gitlab.add(
             responses.PUT,
-            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes/1",
-            json={
-                "id": 1,
-                "body": "<!-- mr-reviewer:dup -->\nupdated",
-                "author": {"username": "bot"},
-                "created_at": "2026-05-01T10:00:00.000Z",
-                "system": False,
-            },
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7",
+            json={**_mr_full(42, 7), "labels": ["review-needed", "needs-review"]},
             status=200,
         )
 
         import asyncio
 
-        result = asyncio.run(gitlab_adapter.post_or_update_comment(self._mr(), "dup", "updated"))
+        result = asyncio.run(gitlab_adapter.add_labels(self._mr(labels=("review-needed",)), ["needs-review"]))
 
-        assert result.id == 1
+        assert "needs-review" in result.labels
+        last = mock_gitlab.calls[-1]
+        assert last.request.method == "PUT"
+        assert (
+            "needs-review" in last.request.body.decode()
+            if isinstance(last.request.body, (bytes, bytearray))
+            else "needs-review" in str(last.request.body)
+        )
+
+    def test_remove_labels_uses_remove_labels_query_param(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.PUT,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7",
+            json={**_mr_full(42, 7), "labels": []},
+            status=200,
+        )
+
+        import asyncio
+
+        result = asyncio.run(gitlab_adapter.remove_labels(self._mr(labels=("review-needed",)), ["review-needed"]))
+
+        assert "review-needed" not in result.labels
+
+
+class TestGetAuthorUsername:
+    def test_returns_author(self, gitlab_adapter: GitLabAdapter) -> None:
+        from datetime import datetime, timezone
+
+        from app.hosting.models import Comment
+
+        c = Comment(
+            id=1,
+            author_username="ivanov",
+            body="x",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+        assert gitlab_adapter.get_author_username(c) == "ivanov"

@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import partial
 from typing import Any, TypeVar
 
 import gitlab
@@ -92,6 +93,21 @@ class GitLabAdapter:
             title=str(attrs.get("title", "")),
         )
 
+    @staticmethod
+    def _attrs_dict_to_mr(attrs: dict[str, Any]) -> MergeRequest:
+        author = attrs.get("author") or {}
+        return MergeRequest(
+            project_id=int(attrs["project_id"]),
+            mr_iid=int(attrs["iid"]),
+            sha=str(attrs.get("sha") or ""),
+            web_url=str(attrs.get("web_url", "")),
+            source_branch=str(attrs.get("source_branch", "")),
+            target_branch=str(attrs.get("target_branch", "")),
+            author_username=str(author.get("username", "")),
+            labels=tuple(attrs.get("labels") or ()),
+            title=str(attrs.get("title", "")),
+        )
+
     def _get_mr_blocking(self, project_id: int, mr_iid: int) -> Any:
         project = self._gl.projects.get(project_id, lazy=True)
         return project.mergerequests.get(mr_iid)
@@ -146,6 +162,28 @@ class GitLabAdapter:
             iterator=True,
         )
         return [n.attributes for n in notes]
+
+    def _update_labels_blocking(
+        self,
+        project_id: int,
+        mr_iid: int,
+        *,
+        add: list[str] | None,
+        remove: list[str] | None,
+    ) -> dict[str, Any]:
+        project = self._gl.projects.get(project_id, lazy=True)
+        mr = project.mergerequests.get(mr_iid, lazy=True)
+        payload: dict[str, Any] = {}
+        if add:
+            payload["add_labels"] = ",".join(add)
+        if remove:
+            payload["remove_labels"] = ",".join(remove)
+        if not payload:
+            return dict(mr.attributes)
+        for key, value in payload.items():
+            setattr(mr, key, value)
+        mr.save()
+        return dict(mr.attributes)
 
     async def get_changes(self, mr: MergeRequest) -> list[FileChange]:
         raw = await self._run_in_executor(self._get_changes_blocking, mr.project_id, mr.mr_iid)
@@ -248,10 +286,28 @@ class GitLabAdapter:
         return self._attrs_to_comment(attrs)
 
     async def add_labels(self, mr: MergeRequest, labels: list[str]) -> MergeRequest:
-        raise NotImplementedError
+        attrs = await self._run_in_executor(
+            partial(
+                self._update_labels_blocking,
+                mr.project_id,
+                mr.mr_iid,
+                add=labels,
+                remove=None,
+            )
+        )
+        return self._attrs_dict_to_mr(attrs)
 
     async def remove_labels(self, mr: MergeRequest, labels: list[str]) -> MergeRequest:
-        raise NotImplementedError
+        attrs = await self._run_in_executor(
+            partial(
+                self._update_labels_blocking,
+                mr.project_id,
+                mr.mr_iid,
+                add=None,
+                remove=labels,
+            )
+        )
+        return self._attrs_dict_to_mr(attrs)
 
     def get_author_username(self, comment: Comment) -> str:
         return comment.author_username
