@@ -1,10 +1,24 @@
-"""Build the right HostingClient for the configured provider."""
+"""Build the right HostingAdapter for the configured provider."""
 
-from app.config import Settings
-from app.hosting.gitlab_adapter import GitLabHostingClient
-from app.hosting.protocol import HostingClient
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+
+from app.hosting.gitlab_adapter import GitLabAdapter
+from app.hosting.protocol import HostingAdapter
 
 
-def build_hosting_client(settings: Settings) -> HostingClient:
-    """TODO: dispatch on a provider field once multi-provider lands."""
-    return GitLabHostingClient(token=settings.gitlab_token, base_url="https://gitlab.com")
+def build_hosting_adapter(
+    hosting_type: str,
+    *,
+    gitlab_token: str,
+    gitlab_base_url: str,
+    executor: ThreadPoolExecutor,
+) -> HostingAdapter:
+    if hosting_type == "gitlab":
+        return GitLabAdapter(
+            token=gitlab_token,
+            base_url=gitlab_base_url,
+            executor=executor,
+        )
+    raise ValueError(f"unsupported hosting_type: {hosting_type!r}")
