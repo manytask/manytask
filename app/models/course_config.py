@@ -78,3 +78,28 @@ def load_course_config(yaml_text: str) -> CourseConfig:
         raise ValueError("course config YAML must be a mapping at the top level")
 
     return CourseConfig.model_validate(raw)
+
+
+def load_manytask_yaml(yaml_text: str) -> CourseConfig:
+    """Parse full ``manytask.yml`` and validate the ``mr_review`` subsection.
+
+    Raises:
+        ValueError: YAML syntax error, top-level not a mapping, or no ``mr_review`` key.
+        pydantic.ValidationError: ``mr_review`` exists but does not match ``CourseConfig``.
+    """
+
+    import yaml
+
+    try:
+        raw = yaml.safe_load(yaml_text)
+    except yaml.YAMLError as err:
+        raise ValueError(f"invalid YAML: {err}") from err
+
+    if not isinstance(raw, dict):
+        raise ValueError("manytask.yml must be a mapping at the top level")
+
+    mr_review = raw.get("mr_review")
+    if mr_review is None:
+        raise ValueError("manytask.yml has no `mr_review` section")
+
+    return CourseConfig.model_validate(mr_review)

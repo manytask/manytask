@@ -196,3 +196,76 @@ tasks:
     def test_yaml_top_level_must_be_mapping(self) -> None:
         with pytest.raises(ValueError):
             load_course_config("- just\n- a\n- list\n")
+
+
+FULL_MANYTASK_YAML = """
+version: 1
+ui:
+  task_url_template: "https://gitlab.example.com/$GROUP_NAME/$USER_NAME/$TASK_NAME"
+
+deadlines:
+  timezone: Europe/Berlin
+  schedule:
+    - group: g0
+      start: 2030-01-01 18:00
+      end: 2030-05-01 23:59
+      tasks:
+        - task: t0
+          score: 10
+
+mr_review:
+  schema_version: 1
+  tasks:
+    - name: task-1
+      checklist:
+        - type: pipeline_passed
+        - type: forbidden_files
+          extensions: [".env"]
+"""
+
+
+class TestLoadManytaskYaml:
+    def test_extracts_mr_review_section(self) -> None:
+        from app.models.course_config import load_manytask_yaml
+
+        cfg = load_manytask_yaml(FULL_MANYTASK_YAML)
+
+        assert cfg.schema_version == 1
+        assert len(cfg.tasks) == 1
+        assert cfg.tasks[0].name == "task-1"
+
+    def test_missing_mr_review_section_raises_value_error(self) -> None:
+        from app.models.course_config import load_manytask_yaml
+
+        text = "version: 1\nui: {}\n"
+        with pytest.raises(ValueError) as exc_info:
+            load_manytask_yaml(text)
+        assert "mr_review" in str(exc_info.value)
+
+    def test_invalid_mr_review_section_raises_validation_error(self) -> None:
+        from app.models.course_config import load_manytask_yaml
+
+        text = """
+version: 1
+mr_review:
+  schema_version: 1
+  tasks:
+    - name: task-1
+      checklist:
+        - type: forbidden_files
+"""
+        with pytest.raises(ValidationError) as exc_info:
+            load_manytask_yaml(text)
+        assert "extensions" in str(exc_info.value)
+
+    def test_top_level_must_be_mapping(self) -> None:
+        from app.models.course_config import load_manytask_yaml
+
+        with pytest.raises(ValueError):
+            load_manytask_yaml("- a\n- b\n")
+
+    def test_invalid_yaml_raises_value_error(self) -> None:
+        from app.models.course_config import load_manytask_yaml
+
+        with pytest.raises(ValueError):
+            load_manytask_yaml("mr_review: [\n  - oops\n")

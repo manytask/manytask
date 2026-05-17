@@ -11,6 +11,7 @@ from app.models.course_config import (
     RunStep,
     TaskConfig,
     load_course_config,
+    load_manytask_yaml,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "RunStep",
     "TaskConfig",
     "load_course_config",
+    "load_manytask_yaml",
 ]
