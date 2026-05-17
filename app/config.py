@@ -38,6 +38,16 @@ class Settings(BaseSettings):
         description="Worker poll interval in seconds",
         alias="POLL_INTERVAL_SEC",
     )
+    gitlab_base_url: str = Field(
+        default="https://gitlab.com",
+        description="GitLab API base URL (no trailing slash)",
+        alias="GITLAB_BASE_URL",
+    )
+    hosting_executor_workers: int = Field(
+        default=32,
+        description="Thread pool size for sync hosting client calls",
+        alias="HOSTING_EXECUTOR_WORKERS",
+    )
 
 
 @lru_cache

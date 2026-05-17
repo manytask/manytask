@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator, Iterator
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import pytest_asyncio
+import responses as responses_lib
 from fakeredis import FakeServer
 from fakeredis.aioredis import FakeRedis
 from fastapi import FastAPI
@@ -21,9 +23,31 @@ from app.api.dependencies import (
     get_settings_dep,
 )
 from app.config import Settings
+from app.hosting.gitlab_adapter import GitLabAdapter
 from app.main import create_app
 from app.manytask import ManytaskClient, TokenAuthCache
 from app.storage import CourseStore
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Disable coverage fail-under when running only benchmark tests.
+
+    The 90% gate is meaningful for the full suite.  A ``pytest -m benchmark``
+    run intentionally exercises only one heavy test, so its per-file coverage
+    numbers are far below 90%.  We disable the gate here instead of forcing
+    callers to append ``--no-cov`` every time.
+    """
+    config = session.config
+    markexpr = getattr(config.option, "markexpr", "") or ""
+    if markexpr.strip() == "benchmark":
+        # Disable the coverage failure threshold for benchmark-only runs.
+        # Modify both config.option (used by pytest-cov's hookwrapper) and
+        # directly patch the CovPlugin instance (which holds its own reference).
+        if hasattr(config.option, "cov_fail_under"):
+            config.option.cov_fail_under = 0.0
+        cov_plugin = config.pluginmanager.get_plugin("_cov")
+        if cov_plugin is not None and hasattr(cov_plugin, "options"):
+            cov_plugin.options.cov_fail_under = 0.0
 
 
 @pytest.fixture
@@ -105,3 +129,42 @@ def _loguru_to_caplog(caplog: pytest.LogCaptureFixture) -> Iterator[None]:
         yield
     finally:
         _loguru_logger.remove(handler_id)
+
+
+_GITLAB_BASE = "https://gitlab.test"
+
+
+@pytest.fixture
+def gitlab_executor() -> Iterator[ThreadPoolExecutor]:
+    """Small thread pool for tests — mocked HTTP doesn't benefit from 32 threads."""
+    executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gitlab-test")
+    try:
+        yield executor
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
+@pytest.fixture
+def gitlab_adapter(gitlab_executor: ThreadPoolExecutor) -> GitLabAdapter:
+    return GitLabAdapter(
+        token="test-token",  # noqa: S106
+        base_url=_GITLAB_BASE,
+        executor=gitlab_executor,
+        batch_size=4,
+    )
+
+
+@pytest.fixture
+def gitlab_base_url() -> str:
+    return _GITLAB_BASE
+
+
+@pytest.fixture
+def mock_gitlab() -> Iterator[responses_lib.RequestsMock]:
+    """Activated `responses.RequestsMock` for the duration of a test.
+
+    Use ``mock_gitlab.add(...)`` to register stubs. ``assert_all_requests_are_fired=False``
+    allows over-mocking (e.g. 500 MR benchmark stubs only some endpoints).
+    """
+    with responses_lib.RequestsMock(assert_all_requests_are_fired=False) as mock:
+        yield mock
