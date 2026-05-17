@@ -43,6 +43,40 @@ curl http://localhost:8000/healthz
 # {"status":"ok"}
 ```
 
+## Course onboarding API
+
+The bot exposes per-course admin endpoints under `/courses`. Every route is
+authenticated with a Bearer token and validated against manytask `/ping`.
+
+| Method | Route               | Auth                                   |
+|--------|---------------------|----------------------------------------|
+| `POST`   | `/courses/<name>`   | `Authorization: Bearer <COURSE_TOKEN>` |
+| `DELETE` | `/courses/<name>`   | `Authorization: Bearer <COURSE_TOKEN>` or `Bearer <BOT_ADMIN_TOKEN>` |
+| `GET`    | `/courses`          | `Authorization: Bearer <BOT_ADMIN_TOKEN>` |
+| `GET`    | `/healthz`          | none                                   |
+
+The `<COURSE_TOKEN>` is the same token the course uses for manytask
+(`/api/<course>/report` etc.). The bot validates it by calling
+`GET <MANYTASK_BASE_URL>/api/<name>/ping` and caches successful checks in Redis
+for `BOT_PING_CACHE_TTL_SEC` seconds.
+
+Push a course config from CI/CD:
+
+```bash
+curl -fSs -X POST "http://bot.example.com/courses/python-101" \
+  -H "Authorization: Bearer $COURSE_TOKEN" \
+  -H "Content-Type: application/x-yaml" \
+  --data-binary @manytask.yml
+```
+
+Possible responses:
+
+- `201 Created` — config persisted, course included in the next polling tick.
+- `403 Forbidden` — token rejected by manytask `/ping` (e.g. cross-course token).
+- `404 Not Found` — manytask does not know the course at all.
+- `422 Unprocessable Entity` — YAML parse error or `mr_review` section invalid.
+- `502 Bad Gateway` — manytask is unreachable; retry later.
+
 ## Local development
 
 ```bash
