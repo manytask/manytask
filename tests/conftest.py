@@ -29,6 +29,27 @@ from app.manytask import ManytaskClient, TokenAuthCache
 from app.storage import CourseStore
 
 
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Disable coverage fail-under when running only benchmark tests.
+
+    The 90% gate is meaningful for the full suite.  A ``pytest -m benchmark``
+    run intentionally exercises only one heavy test, so its per-file coverage
+    numbers are far below 90%.  We disable the gate here instead of forcing
+    callers to append ``--no-cov`` every time.
+    """
+    config = session.config
+    markexpr = getattr(config.option, "markexpr", "") or ""
+    if markexpr.strip() == "benchmark":
+        # Disable the coverage failure threshold for benchmark-only runs.
+        # Modify both config.option (used by pytest-cov's hookwrapper) and
+        # directly patch the CovPlugin instance (which holds its own reference).
+        if hasattr(config.option, "cov_fail_under"):
+            config.option.cov_fail_under = 0.0
+        cov_plugin = config.pluginmanager.get_plugin("_cov")
+        if cov_plugin is not None and hasattr(cov_plugin, "options"):
+            cov_plugin.options.cov_fail_under = 0.0
+
+
 @pytest.fixture
 def app() -> FastAPI:
     return create_app()

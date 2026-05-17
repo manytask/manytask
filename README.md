@@ -77,6 +77,21 @@ Possible responses:
 - `422 Unprocessable Entity` — YAML parse error or `mr_review` section invalid.
 - `502 Bad Gateway` — manytask is unreachable; retry later.
 
+## Hosting providers
+
+The bot reads MRs through a provider-agnostic `HostingAdapter` interface
+defined in `app/hosting/protocol.py`. Today only GitLab is wired up
+(`app/hosting/gitlab_adapter.py`); SourceCraft will arrive as a sibling
+implementation without touching the worker or the checklist runner.
+
+All sync `python-gitlab` calls run on a dedicated `ThreadPoolExecutor`
+(`BOT_HOSTING_EXECUTOR_WORKERS=32` by default) so they never block FastAPI's
+default executor. Per-MR work uses `asyncio.gather` in batches of 16 to keep
+the GitLab connection pool healthy on courses with thousands of open MRs.
+
+The factory is `app.hosting.build_hosting_adapter(hosting_type, ...)`. Add a
+new provider by implementing `HostingAdapter` and extending the factory.
+
 ## Local development
 
 ```bash
