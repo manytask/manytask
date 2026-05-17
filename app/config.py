@@ -12,6 +12,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         env_prefix="BOT_",
         extra="ignore",
+        populate_by_name=True,
     )
 
     gitlab_token: str = Field(default="", description="GitLab API token")
@@ -21,6 +22,16 @@ class Settings(BaseSettings):
         default="http://localhost:8080",
         description="Base URL of the manytask service",
         alias="MANYTASK_BASE_URL",
+    )
+    manytask_request_timeout_sec: float = Field(
+        default=5.0,
+        description="Per-request timeout for manytask HTTP calls",
+        alias="MANYTASK_REQUEST_TIMEOUT_SEC",
+    )
+    ping_cache_ttl_sec: int = Field(
+        default=30,
+        description="TTL for cached successful ping validations",
+        alias="PING_CACHE_TTL_SEC",
     )
     poll_interval_sec: float = Field(
         default=10.0,
