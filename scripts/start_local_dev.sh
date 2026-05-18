@@ -7,9 +7,9 @@ set -euo pipefail
 # 3. Sets up GitLab OAuth and tokens
 # 4. Restarts Manytask with new environment variables
 
-COMPOSE_FILE="${COMPOSE_FILE:-../compose/docker-compose.development.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-./compose/docker-compose.development.yml}"
 GITLAB_URL="${GITLAB_URL:-http://localhost:8929}"
-SETUP_SCRIPT="${SETUP_SCRIPT:-../scripts/setup_local_gitlab.sh}"
+SETUP_SCRIPT="${SETUP_SCRIPT:-./scripts/setup_local_gitlab.sh}"
 
 log() { echo "[INFO] $*"; }
 err() { echo "[ERROR] $*" >&2; }
