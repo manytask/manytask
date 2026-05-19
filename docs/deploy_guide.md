@@ -93,7 +93,7 @@ INITIAL_INSTANCE_ADMIN=your_gitlab_username
 
 ```bash
 cd /srv/manytask/old_deploy
-sudo docker compose -f compose/docker-compose.development.yml down
+sudo docker compose -f compose/docker-compose.production.yml down
 ```
 
 ---
@@ -102,7 +102,7 @@ sudo docker compose -f compose/docker-compose.development.yml down
 
 ```bash
 cd /srv/manytask/app_deploy_new
-sudo docker compose -f compose/docker-compose.development.yml up -d --build
+sudo docker compose -f compose/docker-compose.production.yml up -d --build
 ```
 
 ---
@@ -169,7 +169,7 @@ curl -X POST "https://app.example.com/api/course-name/update_config" \
     ├── app_deploy/                  # old deployment
     └── app_deploy_new/              # new deployment
         ├── .env
-        ├── compose/docker-compose.development.yml
+        ├── compose/docker-compose.production.yml
         ├── manytask/Dockerfile
         ├── manytask/
         └── ...
