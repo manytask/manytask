@@ -5,26 +5,6 @@ networks:
 
 services:
 
-    docs:
-        build:
-            context: ../docs
-        container_name: test-manytask-docs
-        restart: always
-        environment:
-            VIRTUAL_HOST: localhost
-            VIRTUAL_PORT: 80
-            LETSENCRYPT_HOST: localhost
-        ports:
-            - "8080:80"
-        healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
-            interval: 1m
-            timeout: 15s
-            retries: 3
-            start_period: 30s
-        networks:
-            - manytask-dev-net
-
     manytask:
         build:
             context: ..
