@@ -57,7 +57,7 @@ From the **repository root** (the directory that contains both `manytask/` and `
 docker compose -f compose/docker-compose.development.yml up --build -d
 ```
 
-This should expose Manytask app on port 8081 [http://localhost:8081/](http://localhost:8081/) and docs on port 8080 [http://localhost:8080/](http://localhost:8080/).
+This should expose Manytask app on port 8081 [http://localhost:8081/](http://localhost:8081/).
 
 You can run **`make dev` from `manytask/`** (shortcut for the same Compose file; equivalent to passing `-f ../compose/docker-compose.development.yml` from there).
 

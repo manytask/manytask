@@ -7,11 +7,13 @@ set -euo pipefail
 # 3) Creates/reads an OAuth app for manytask and grabs client_id/secret
 # 4) Reads the runners registration token
 # 5) Registers the gitlab-runner container
-# 6) Appends all secrets into .env (non-destructive)
+# 6) Appends all secrets into manytask/.env (non-destructive)
 
 GITLAB_CONTAINER="${GITLAB_CONTAINER:-manytask_gitlab}"
 RUNNER_CONTAINER="${RUNNER_CONTAINER:-manytask_gitlab_runner}"
-MANYTASK_ENV="${MANYTASK_ENV:-.env}"
+# The manytask container loads env_file: ../manytask/.env from compose/, so
+# secrets must land in manytask/.env (repo-relative) to actually reach it.
+MANYTASK_ENV="${MANYTASK_ENV:-manytask/.env}"
 
 # Host URL for readiness check (external); internal URL for env variables
 HOST_GITLAB_URL="${HOST_GITLAB_URL:-http://localhost:8929}"

@@ -36,7 +36,7 @@ Here is the way you can go if you have 1 server with 1 manytask instance (1 cour
 
    See [compose/docker-compose.production.yml](/compose/docker-compose.production.yml) file as an example  
    ```shell
-   curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/compose/docker-compose.development.yml -o docker-compose.yml 
+   curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/compose/docker-compose.production.yml -o docker-compose.yml 
    ```
 
 2. Create `.env` file with production environment  
