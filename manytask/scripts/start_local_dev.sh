@@ -104,12 +104,12 @@ show_success_message() {
     echo "  Password:    changeme123!"
     echo ""
     echo "Commands:"
-    echo "  Check status: docker-compose -f ${COMPOSE_FILE} ps"
+    echo "  Check status: docker compose -f ${COMPOSE_FILE} ps"
     echo "  View logs:    docker logs -f test-manytask"
     echo "                docker logs -f manytask_gitlab"
     echo "  Rebuild and restart Manytask:"
-    echo "                docker-compose -f ${COMPOSE_FILE} up --build --no-deps -d manytask"
-    echo "  Stop all:     docker-compose -f ${COMPOSE_FILE} down"
+    echo "                docker compose -f ${COMPOSE_FILE} up --build --no-deps -d manytask"
+    echo "  Stop all:     docker compose -f ${COMPOSE_FILE} down"
     echo ""
 }
 
