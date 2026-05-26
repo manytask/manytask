@@ -27,7 +27,14 @@ class HostingAdapter(Protocol):
 
     async def get_comments(self, mr: MergeRequest, since_id: int | None = None) -> list[Comment]: ...
 
-    async def post_or_update_comment(self, mr: MergeRequest, anchor_tag: str, body: str) -> Comment: ...
+    async def post_or_update_comment(
+        self,
+        mr: MergeRequest,
+        anchor_tag: str,
+        body: str,
+        *,
+        only_from_author: str | None = None,
+    ) -> Comment: ...
 
     async def add_labels(self, mr: MergeRequest, labels: list[str]) -> MergeRequest: ...
 

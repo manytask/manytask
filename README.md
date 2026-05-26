@@ -92,6 +92,46 @@ the GitLab connection pool healthy on courses with thousands of open MRs.
 The factory is `app.hosting.build_hosting_adapter(hosting_type, ...)`. Add a
 new provider by implementing `HostingAdapter` and extending the factory.
 
+## Checklist & `run:` trust model
+
+The bot runs an ordered list of checks for every open MR:
+
+- `pipeline_passed` — head pipeline must be `success`.
+- `forbidden_files` — no files with blacklisted extensions.
+- `folder_structure` — every change lives under a configured prefix.
+- `run` — runs `<command>` in a sandboxed subprocess.
+
+Summary is rendered to Markdown via Jinja2 and posted to the MR with an
+anchor of the form `<!-- mr-reviewer:checklist:<task_name> -->`. The bot
+upserts its own comment by anchor + author filter — a student cannot make
+the bot edit a forged comment by faking the anchor.
+
+### `run:` sandbox
+
+- Working directory: shallow sparse clone of the MR's source branch, with
+  sparse-checkout restricted to files changed in the MR. A 5 MiB student
+  task occupies under 100 MiB on disk because the rest of the repo is
+  fetched as blobless references.
+- Environment: explicit whitelist of `MR_ID`, `MR_URL`, `COURSE_NAME`,
+  `MANYTASK_COURSE_TOKEN`, `PATH`, `HOME`, `LANG`. **No `GITLAB_TOKEN`** —
+  course scripts cannot exfiltrate the bot's GitLab credentials.
+- Timeout: `BOT_RUN_STEP_TIMEOUT_SEC` (default 60s). Process is killed and
+  the step reports a failure if it overruns.
+- Uid: in MVP the `run:` step executes inside the same container as the
+  rest of the bot, under the container's non-root `botuser` (uid 10001).
+  This means **course `run:` commands are trusted code** — a malicious
+  course could read other courses' configs from memory. Run only courses
+  whose teaching staff you trust. A future ticket will move `run:` into
+  per-MR ephemeral pods for full isolation.
+- Stdout: truncated to the first 4 KiB before being placed into the
+  checklist comment. Stderr: logged with the GitLab token redacted.
+
+The bot also applies labels:
+
+- `checklist` — always applied after a run (the bot processed the MR).
+- `fix it` — applied additionally when at least one step failed; removed
+  when all checks pass.
+
 ## Local development
 
 ```bash

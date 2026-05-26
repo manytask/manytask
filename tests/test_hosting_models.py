@@ -22,6 +22,7 @@ class TestMergeRequest:
             author_username="ivanov",
             labels=("review-needed",),
             title="task-1: solution",
+            project_path_with_namespace="group/proj",
         )
         assert mr.project_id == 42
         assert mr.labels == ("review-needed",)
@@ -37,6 +38,7 @@ class TestMergeRequest:
             author_username="u",
             labels=(),
             title="t",
+            project_path_with_namespace="group/proj",
         )
         with pytest.raises(FrozenInstanceError):
             mr.project_id = 2  # type: ignore[misc]
@@ -52,6 +54,7 @@ class TestMergeRequest:
             author_username="u",
             labels=("a", "b"),
             title="t",
+            project_path_with_namespace="group/proj",
         )
         assert isinstance(mr.labels, tuple)
         assert hash(mr) == hash(mr)
@@ -118,3 +121,53 @@ class TestPipelineStatus:
         ps = PipelineStatus(id=None, state="none", web_url=None, sha=None)
         assert ps.id is None
         assert ps.state == "none"
+
+
+class TestMergeRequestProjectPath:
+    def test_project_path_field_required(self) -> None:
+        mr = MergeRequest(
+            project_id=42,
+            mr_iid=7,
+            sha="x",
+            web_url="https://gitlab.test/group/proj/-/merge_requests/7",
+            source_branch="task-1",
+            target_branch="main",
+            author_username="ivanov",
+            labels=(),
+            title="t",
+            project_path_with_namespace="group/proj",
+        )
+        assert mr.project_path_with_namespace == "group/proj"
+
+    def test_project_path_can_be_empty(self) -> None:
+        mr = MergeRequest(
+            project_id=42,
+            mr_iid=7,
+            sha="x",
+            web_url="x",
+            source_branch="s",
+            target_branch="t",
+            author_username="u",
+            labels=(),
+            title="t",
+            project_path_with_namespace="",
+        )
+        assert mr.project_path_with_namespace == ""
+
+
+class TestDeriveProjectPath:
+    def test_strips_host_and_mr_suffix(self) -> None:
+        url = "https://gitlab.example.com/group/sub/proj/-/merge_requests/42"
+        from app.hosting.models import derive_project_path_from_web_url
+
+        assert derive_project_path_from_web_url(url) == "group/sub/proj"
+
+    def test_empty_url_returns_empty(self) -> None:
+        from app.hosting.models import derive_project_path_from_web_url
+
+        assert derive_project_path_from_web_url("") == ""
+
+    def test_url_without_mr_suffix_returns_empty(self) -> None:
+        from app.hosting.models import derive_project_path_from_web_url
+
+        assert derive_project_path_from_web_url("https://gitlab.test/group/proj") == ""

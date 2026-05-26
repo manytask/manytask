@@ -22,11 +22,14 @@ from app.api.dependencies import (
     get_manytask_client,
     get_settings_dep,
 )
+from app.checklist.step import CheckContext
 from app.config import Settings
+from app.hosting import MergeRequest
 from app.hosting.gitlab_adapter import GitLabAdapter
 from app.main import create_app
 from app.manytask import ManytaskClient, TokenAuthCache
 from app.storage import CourseStore
+from tests._fakes import FakeHostingAdapter
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
@@ -168,3 +171,34 @@ def mock_gitlab() -> Iterator[responses_lib.RequestsMock]:
     """
     with responses_lib.RequestsMock(assert_all_requests_are_fired=False) as mock:
         yield mock
+
+
+@pytest.fixture
+def sample_mr() -> MergeRequest:
+    return MergeRequest(
+        project_id=42,
+        mr_iid=7,
+        sha="deadbeef",
+        web_url="https://gitlab.test/group/proj/-/merge_requests/7",
+        source_branch="task-1",
+        target_branch="main",
+        author_username="student",
+        labels=("review-needed",),
+        title="task-1: solution",
+        project_path_with_namespace="group/proj",
+    )
+
+
+@pytest.fixture
+def bot_username() -> str:
+    return "manytask-mr-reviewer-bot"
+
+
+@pytest.fixture
+def fake_hosting_adapter() -> FakeHostingAdapter:
+    return FakeHostingAdapter()
+
+
+@pytest.fixture
+def sample_ctx() -> CheckContext:
+    return CheckContext(course_name="python-101", course_token="course-token-xxx")

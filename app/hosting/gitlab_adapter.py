@@ -13,7 +13,13 @@ import gitlab
 from gitlab.v4.objects import Group, GroupMergeRequest
 
 from app.hosting.anchor import has_anchor, make_anchor_marker
-from app.hosting.models import Comment, FileChange, MergeRequest, PipelineStatus
+from app.hosting.models import (
+    Comment,
+    FileChange,
+    MergeRequest,
+    PipelineStatus,
+    derive_project_path_from_web_url,
+)
 
 _T = TypeVar("_T")
 
@@ -65,47 +71,65 @@ class GitLabAdapter:
     def _summary_to_mr(summary: GroupMergeRequest) -> MergeRequest:
         attrs = summary.attributes
         author = attrs.get("author") or {}
+        web_url = str(attrs.get("web_url", ""))
+        references = attrs.get("references") or {}
+        project_path = str(references.get("full", "")).split("!")[0] if references.get("full") else ""
+        if not project_path:
+            project_path = derive_project_path_from_web_url(web_url)
         return MergeRequest(
             project_id=int(attrs["project_id"]),
             mr_iid=int(attrs["iid"]),
             sha=str(attrs.get("sha") or ""),
-            web_url=str(attrs.get("web_url", "")),
+            web_url=web_url,
             source_branch=str(attrs.get("source_branch", "")),
             target_branch=str(attrs.get("target_branch", "")),
             author_username=str(author.get("username", "")),
             labels=tuple(attrs.get("labels") or ()),
             title=str(attrs.get("title", "")),
+            project_path_with_namespace=project_path,
         )
 
     @staticmethod
     def _project_mr_to_mr(obj: Any) -> MergeRequest:
         attrs = obj.attributes
         author = attrs.get("author") or {}
+        web_url = str(attrs.get("web_url", ""))
+        references = attrs.get("references") or {}
+        project_path = str(references.get("full", "")).split("!")[0] if references.get("full") else ""
+        if not project_path:
+            project_path = derive_project_path_from_web_url(web_url)
         return MergeRequest(
             project_id=int(attrs["project_id"]),
             mr_iid=int(attrs["iid"]),
             sha=str(attrs.get("sha") or ""),
-            web_url=str(attrs.get("web_url", "")),
+            web_url=web_url,
             source_branch=str(attrs.get("source_branch", "")),
             target_branch=str(attrs.get("target_branch", "")),
             author_username=str(author.get("username", "")),
             labels=tuple(attrs.get("labels") or ()),
             title=str(attrs.get("title", "")),
+            project_path_with_namespace=project_path,
         )
 
     @staticmethod
     def _attrs_dict_to_mr(attrs: dict[str, Any]) -> MergeRequest:
         author = attrs.get("author") or {}
+        web_url = str(attrs.get("web_url", ""))
+        references = attrs.get("references") or {}
+        project_path = str(references.get("full", "")).split("!")[0] if references.get("full") else ""
+        if not project_path:
+            project_path = derive_project_path_from_web_url(web_url)
         return MergeRequest(
             project_id=int(attrs["project_id"]),
             mr_iid=int(attrs["iid"]),
             sha=str(attrs.get("sha") or ""),
-            web_url=str(attrs.get("web_url", "")),
+            web_url=web_url,
             source_branch=str(attrs.get("source_branch", "")),
             target_branch=str(attrs.get("target_branch", "")),
             author_username=str(author.get("username", "")),
             labels=tuple(attrs.get("labels") or ()),
             title=str(attrs.get("title", "")),
+            project_path_with_namespace=project_path,
         )
 
     def _get_mr_blocking(self, project_id: int, mr_iid: int) -> Any:
@@ -262,16 +286,28 @@ class GitLabAdapter:
             created_at=self._parse_iso8601(str(attrs["created_at"])),
         )
 
-    async def post_or_update_comment(self, mr: MergeRequest, anchor_tag: str, body: str) -> Comment:
+    async def post_or_update_comment(
+        self,
+        mr: MergeRequest,
+        anchor_tag: str,
+        body: str,
+        *,
+        only_from_author: str | None = None,
+    ) -> Comment:
         anchored_body = self._build_anchored_body(anchor_tag, body)
         raw_notes = await self._run_in_executor(self._list_notes_blocking, mr.project_id, mr.mr_iid)
         existing_id: int | None = None
         for item in raw_notes:
             if item.get("system"):
                 continue
-            if has_anchor(str(item.get("body", "")), anchor_tag):
-                existing_id = int(item["id"])
-                break
+            if not has_anchor(str(item.get("body", "")), anchor_tag):
+                continue
+            if only_from_author is not None:
+                author = item.get("author") or {}
+                if str(author.get("username", "")) != only_from_author:
+                    continue
+            existing_id = int(item["id"])
+            break
 
         if existing_id is None:
             attrs = await self._run_in_executor(self._create_note_blocking, mr.project_id, mr.mr_iid, anchored_body)
