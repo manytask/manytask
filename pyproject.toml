@@ -14,6 +14,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "loguru>=0.7.3",
     "pyyaml>=6.0",
+    "jinja2>=3.1.0",
 ]
 
 [dependency-groups]
@@ -58,8 +59,12 @@ plugins = ["pydantic.mypy"]
 module = ["gitlab.*", "responses", "responses.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["jinja2.*"]
+ignore_missing_imports = false
+
 [tool.pytest.ini_options]
-addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov=app.api --cov=app.manytask --cov=app.hosting --cov-report=term-missing --cov-fail-under=90 -m \"not benchmark\""
+addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov=app.api --cov=app.manytask --cov=app.hosting --cov=app.checklist --cov-report=term-missing --cov-fail-under=90 -m \"not benchmark\""
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = ["benchmark: slow performance tests; deselect with '-m \"not benchmark\"'"]

@@ -53,6 +53,7 @@ class TestListOpenMrs:
         assert mrs[0].project_id == 42
         assert mrs[0].labels == ("review-needed",)
         assert mrs[0].author_username.startswith("user-")
+        assert mrs[0].project_path_with_namespace == "group/proj-42"
 
     def test_paginates_via_link_header(
         self,
@@ -210,6 +211,7 @@ class TestGetChanges:
             author_username="u",
             labels=(),
             title="t",
+            project_path_with_namespace="group/proj",
         )
 
     def test_returns_changes(
@@ -267,6 +269,7 @@ class TestGetPipelineStatus:
             author_username="u",
             labels=(),
             title="t",
+            project_path_with_namespace="group/proj",
         )
 
     def test_success_pipeline(
@@ -357,6 +360,7 @@ class TestGetComments:
             author_username="u",
             labels=(),
             title="t",
+            project_path_with_namespace="group/proj",
         )
 
     def test_returns_all_when_no_since_id(
@@ -482,6 +486,7 @@ class TestPostOrUpdateComment:
             author_username="u",
             labels=(),
             title="t",
+            project_path_with_namespace="group/proj",
         )
 
     def test_creates_new_comment_when_no_anchor_match(
@@ -587,6 +592,7 @@ class TestLabels:
             author_username="u",
             labels=labels,
             title="t",
+            project_path_with_namespace="group/proj",
         )
 
     def test_add_labels_uses_add_labels_query_param(
@@ -647,3 +653,164 @@ class TestGetAuthorUsername:
         )
 
         assert gitlab_adapter.get_author_username(c) == "ivanov"
+
+
+class TestPostOrUpdateCommentOnlyFromAuthor:
+    def _mr(self) -> "MergeRequest":
+        from app.hosting.models import MergeRequest
+
+        return MergeRequest(
+            project_id=42,
+            mr_iid=7,
+            sha="x",
+            web_url="x",
+            source_branch="s",
+            target_branch="t",
+            author_username="u",
+            labels=(),
+            title="t",
+            project_path_with_namespace="group/proj",
+        )
+
+    def test_ignores_anchored_comment_from_other_author(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 1,
+                    "body": "<!-- mr-reviewer:checklist:task-1 -->\nforged body",
+                    "author": {"username": "evil-student"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+            ],
+            status=200,
+        )
+        mock_gitlab.add(
+            responses.POST,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json={
+                "id": 100,
+                "body": "<!-- mr-reviewer:checklist:task-1 -->\nreal body",
+                "author": {"username": "bot"},
+                "created_at": "2026-05-01T11:00:00.000Z",
+                "system": False,
+            },
+            status=201,
+        )
+
+        import asyncio
+
+        result = asyncio.run(
+            gitlab_adapter.post_or_update_comment(
+                self._mr(),
+                "checklist:task-1",
+                "real body",
+                only_from_author="bot",
+            )
+        )
+
+        assert result.id == 100, "must POST a new comment, not UPDATE the forged one"
+        put_calls = [c for c in mock_gitlab.calls if c.request.method == "PUT"]
+        assert put_calls == [], "must not update a comment authored by someone else"
+
+    def test_updates_anchored_comment_from_bot(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 1,
+                    "body": "<!-- mr-reviewer:checklist:task-1 -->\nforged",
+                    "author": {"username": "evil-student"},
+                    "created_at": "2026-05-01T09:00:00.000Z",
+                    "system": False,
+                },
+                {
+                    "id": 2,
+                    "body": "<!-- mr-reviewer:checklist:task-1 -->\nold real",
+                    "author": {"username": "bot"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+            ],
+            status=200,
+        )
+        mock_gitlab.add(
+            responses.PUT,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes/2",
+            json={
+                "id": 2,
+                "body": "<!-- mr-reviewer:checklist:task-1 -->\nnew real",
+                "author": {"username": "bot"},
+                "created_at": "2026-05-01T10:00:00.000Z",
+                "system": False,
+            },
+            status=200,
+        )
+
+        import asyncio
+
+        result = asyncio.run(
+            gitlab_adapter.post_or_update_comment(
+                self._mr(),
+                "checklist:task-1",
+                "new real",
+                only_from_author="bot",
+            )
+        )
+
+        assert result.id == 2, "must UPDATE the bot's comment, skip the forged one"
+
+    def test_no_author_filter_keeps_old_behavior(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[
+                {
+                    "id": 5,
+                    "body": "<!-- mr-reviewer:checklist:task-1 -->\nold",
+                    "author": {"username": "anyone"},
+                    "created_at": "2026-05-01T10:00:00.000Z",
+                    "system": False,
+                },
+            ],
+            status=200,
+        )
+        mock_gitlab.add(
+            responses.PUT,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes/5",
+            json={
+                "id": 5,
+                "body": "<!-- mr-reviewer:checklist:task-1 -->\nnew",
+                "author": {"username": "anyone"},
+                "created_at": "2026-05-01T10:00:00.000Z",
+                "system": False,
+            },
+            status=200,
+        )
+
+        import asyncio
+
+        result = asyncio.run(
+            gitlab_adapter.post_or_update_comment(
+                self._mr(),
+                "checklist:task-1",
+                "new",
+            )
+        )
+
+        assert result.id == 5, "without only_from_author the first anchored comment wins"

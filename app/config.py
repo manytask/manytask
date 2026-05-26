@@ -48,6 +48,26 @@ class Settings(BaseSettings):
         description="Thread pool size for sync hosting client calls",
         alias="HOSTING_EXECUTOR_WORKERS",
     )
+    bot_username: str = Field(
+        default="manytask-mr-reviewer-bot",
+        description="GitLab username under which the bot posts comments",
+        alias="BOT_USERNAME",
+    )
+    bot_label_processed: str = Field(
+        default="checklist",
+        description="Label set when the bot has processed the MR (always)",
+        alias="BOT_LABEL_PROCESSED",
+    )
+    bot_label_fail: str = Field(
+        default="fix it",
+        description="Label set when at least one checklist step failed",
+        alias="BOT_LABEL_FAIL",
+    )
+    run_step_timeout_sec: float = Field(
+        default=60.0,
+        description="Hard timeout for the run: checklist step",
+        alias="RUN_STEP_TIMEOUT_SEC",
+    )
 
 
 @lru_cache

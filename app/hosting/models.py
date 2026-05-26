@@ -34,6 +34,7 @@ class MergeRequest:
     author_username: str
     labels: tuple[str, ...]
     title: str
+    project_path_with_namespace: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,3 +61,22 @@ class PipelineStatus:
     state: PipelineState
     web_url: str | None
     sha: str | None
+
+
+def derive_project_path_from_web_url(web_url: str) -> str:
+    """Strip ``https://<host>/`` and ``/-/merge_requests/<n>`` to get ``<group>/<proj>``.
+
+    GitLab's MR JSON sometimes ships ``references.full`` and sometimes not, so
+    we parse the always-present ``web_url`` instead.
+    """
+
+    if not web_url:
+        return ""
+    marker = "/-/merge_requests/"
+    idx = web_url.find(marker)
+    if idx == -1:
+        return ""
+    path_part = web_url[:idx]
+    after_scheme = path_part.split("://", 1)[-1]
+    _, _, path = after_scheme.partition("/")
+    return path
