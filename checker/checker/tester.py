@@ -74,7 +74,11 @@ class Tester:
         self.interpolation_window = (course.manytask_config.deadlines.window or 0) * 3600 * 24  # in seconds
 
     def _calc_interpolated_percent(
-        self, percent: float, timestamp: datetime, prev_percent: float, prev_timestamp: datetime
+        self,
+        percent: float,
+        timestamp: datetime,
+        prev_percent: float,
+        prev_timestamp: datetime,
     ) -> float:
         frac: float = (timestamp - prev_timestamp).total_seconds() / self.interpolation_window
         return percent if frac >= 1 else prev_percent - frac * (prev_percent - percent)
@@ -111,7 +115,9 @@ class Tester:
         score_percent: float,
     ) -> TaskPipelineVariables:
         return TaskPipelineVariables(
-            task_name=task.name, task_sub_path=task.relative_path, task_score_percent=score_percent
+            task_name=task.name,
+            task_sub_path=task.relative_path,
+            task_score_percent=score_percent,
         )
 
     def _build_global_context(

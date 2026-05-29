@@ -92,11 +92,17 @@ class TestRunScriptPlugin:
     @pytest.mark.parametrize("env_whitelist", [None, [], ["A"], ["A", "C"]])
     @pytest.mark.parametrize("mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
     def test_run_with_environment_variable(
-        self, env_additional: dict[str, str], env_whitelist: list[str] | None, mocked_env: dict[str, str]
+        self,
+        env_additional: dict[str, str],
+        env_whitelist: list[str] | None,
+        mocked_env: dict[str, str],
     ) -> None:
         plugin = RunScriptPlugin()
         args = RunScriptPlugin.Args(
-            origin="/tmp", script="env", env_additional=env_additional, env_whitelist=env_whitelist
+            origin="/tmp",
+            script="env",
+            env_additional=env_additional,
+            env_whitelist=env_whitelist,
         )
 
         with patch.dict("os.environ", mocked_env, clear=True):

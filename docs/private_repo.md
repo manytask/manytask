@@ -19,25 +19,23 @@ Each task location detected by `.task.yml` file (can be just empty). Each group,
 
 Here's a breakdown:
 
-```yaml
-00_Setup/
-    01_HelloWorld/
-      [solution files].template  # file or folder, if set templates="search" in .checker.yml
-        [some files]
-      [gold solution files]
-      [some private tests]
-      [some public tests]
-      .task.yml  # task config with default parameters overwriting
-    02_SimpleAdd/
-        ...
-    .group.yml  # group config with default parameters overwriting
-01_FirstSteps/
-    01_CheckAnIf/
-        ...
-    02_LoopALoop/
-        ...
-.checker.yml  # checker config with default parameters and pipelines
-.manytask.yml  # deadlines config with task scores to send to Manytask
+```
+private/
+├── .checker.yml          # Checker configuration
+├── .manytask.yml         # Course configuration
+├── Dockerfile            # Docker file with environment and checker
+├── 00_Setup/             # Task group
+│   ├── .group.yml        # Group config with parameters overwriting
+│   ├── 01_HelloWorld/                  # Task
+│   │   ├── .task.yml                   # Task config with parameters overwriting
+│   │   ├── [solution files]            # Gold solution (can be folder)
+│   │   ├── [solution files].template   # Template that replaces solution files on export
+│   │   ├── [public tests]              # Tests that students can see
+│   │   └── [private tests]             # Tests that are not shown to students
+│   └── 02_SimpleAdd/
+│       └── ...
+└── 01_FirstSteps/
+    └── ...
 ```
 
 Note that:
@@ -142,7 +140,7 @@ One can override these settings for a group of tasks or even for single task usi
 
 This file outlines the deadlines for each group, task max score and etc. In the checker it is used to validate task and deadlines integrity and it is send to Manytask to update task, their deadlines and scores.
 
-One should consult [the `.manytask.yml` reference guide](./manytask_yml.md) to see the detailed description of the file. Minimal example for a `.manytask.yml` file looks something like this:
+One should consult [the `.manytask.yml` reference guide](./manytask_yml_reference.md) to see the detailed description of the file. Minimal example for a `.manytask.yml` file looks something like this:
 
 ```yaml
 version: 1
@@ -192,30 +190,52 @@ deadlines:
 
 This file will be used by the Manytask web app, hence there is some UI information, that is used to enrich the interface for the students (setting and ui sections). The main part of the file is the deadlines section, which lists the tasks in the repo with their respective deadlines. Tasks are combined into groups, which are course topics (usually one group of tasks correspond to a lecture or a week of the course). 
 
+## Docker file with environment and checker
+
+Checking solutions will be happening in CI/CD and we need to set up environment for that. This is done using Docker with a basic example below.
+
+```dockerfile
+FROM python:3.13.7-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl git && \
+    apt-get autoremove -qyy && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+
+RUN git clone https://github.com/manytask/manytask.git && \
+    cd manytask/checker && \
+    python3 -m pip install --upgrade uv && \
+    uv sync --frozen && \
+    uv pip install .
+```
+
+Here we use python slim image and expand on it by first installing `curl` and `git`. We are going to use REST API to communicate with Manytask (hence `curl` is installed). We use `git` to get and install checker in the second `RUN` command, this will be used to run tests on the repo.
+
 ## Install and run Manytask Checker 
 
 Build you docker image from scratch and install checker there. This way you have full control and can minimize the size of the image as much as you like. The `checker` can be installed directly from the Manytask repository:
     
-    - Create and activate virtual environment:
-    
-        ```shell
-        python3 -m venv .venv
-        source .venv/bin/activate
-        ```
-    
-    - Clone Manytask repository and install checker:
-        
-        ```shell
-        git clone https://github.com/manytask/manytask.git
-        cd manytask/checker
-        uv pip install .
-        ```
+- Create and activate virtual environment:
 
-    - Verify the installation:
-        
-        ```shell
-        checker --version
-        ```
+  ```shell
+  python3 -m venv .venv
+  source .venv/bin/activate
+  ```
+
+- Clone Manytask repository and install checker:
+    
+  ```shell
+  git clone https://github.com/manytask/manytask.git
+  cd manytask/checker
+  uv pip install .
+  ```
+
+- Verify the installation:
+    
+    ```shell
+    checker --version
+    ```
 
 To run tests you need to have a docker testing environment that includes your course's specific environment and the pre-installed checker. It is than useful to create a docker file, where the installation script is executed to have checker available in the docker environment.
 
@@ -236,14 +256,14 @@ First approach is faster and easier to debug, it is ok for local testing, using 
 
 After you have a working checker executable, you can validate that you repository has valid structure:
 
-    ```shell
-    (.venv) checker validate
-    ```
+  ```shell
+  (.venv) checker validate
+  ```
 
 And test all tasks, separate task group or a single task:
 
-    ```shell
-    (.venv) checker check
-    (.venv) checker check --group 00_Setup
-    (.venv) checker check --task 01_HelloWorld
-    ```
+  ```shell
+  (.venv) checker check
+  (.venv) checker check --group 00_Setup
+  (.venv) checker check --task 01_HelloWorld
+  ```

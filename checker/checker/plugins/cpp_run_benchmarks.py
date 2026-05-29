@@ -107,6 +107,10 @@ class CppRunBenchmarksPlugin(PluginABC):
         build_dir = args.root / f"build-{build_type.lower()}"
         with tempfile.TemporaryDirectory() as tmp_dir:
             CppRunBenchmarksPlugin._run_benchmarks(
-                args=args, tmp_dir=Path(tmp_dir), build_dir=build_dir, target=args.benchmark, verbose=verbose
+                args=args,
+                tmp_dir=Path(tmp_dir),
+                build_dir=build_dir,
+                target=args.benchmark,
+                verbose=verbose,
             )
         return PluginOutput(output="Benchmark is passed")

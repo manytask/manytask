@@ -203,7 +203,10 @@ class Course:
             color="grey",
         )
         if not changed_tasks:
-            print_info(f"No active tasks/groups found for commit message {commit_message}", color="yellow")
+            print_info(
+                f"No active tasks/groups found for commit message {commit_message}",
+                color="yellow",
+            )
 
         return changed_tasks
 

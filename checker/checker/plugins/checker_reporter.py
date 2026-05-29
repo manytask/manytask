@@ -143,7 +143,10 @@ class CheckerReporterPlugin:
             # Log unexpected errors
             import sys
 
-            print(f"ERROR: Unexpected error in checker reporter: {type(e).__name__}: {e}", file=sys.stderr)
+            print(
+                f"ERROR: Unexpected error in checker reporter: {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
 
     @pytest.hookimpl(tryfirst=True)
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
@@ -183,8 +186,14 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Add custom command line options for our plugin."""
     parser.addoption(
-        "--checker-report", action="store", default=None, help="Path to write secure JSON report (file or FIFO pipe)"
+        "--checker-report",
+        action="store",
+        default=None,
+        help="Path to write secure JSON report (file or FIFO pipe)",
     )
     parser.addoption(
-        "--checker-use-pipe", action="store_true", default=False, help="Use pipe mode for secure IPC instead of file"
+        "--checker-use-pipe",
+        action="store_true",
+        default=False,
+        help="Use pipe mode for secure IPC instead of file",
     )

@@ -16,9 +16,9 @@ class TestCustomBaseModel:
     def test_valid_config(self) -> None:
         self.SomeTestModel(a=1, b="123")
 
-    def test_extra_argument_error(self) -> None:
-        with pytest.raises(pydantic.ValidationError):
-            self.SomeTestModel(a=1, b="123", c=1)
+    def test_extra_arguments_ignored(self) -> None:
+        m = self.SomeTestModel(a=1, b="123", c=1)
+        assert m.model_dump() == {"a": 1, "b": "123"}
 
     def test_invalid_type_error(self) -> None:
         with pytest.raises(pydantic.ValidationError):
@@ -95,5 +95,4 @@ class TestYamlLoader:
                 "b": {"title": "B", "type": "string"},
             },
             "required": ["a", "b"],
-            "additionalProperties": False,
         }

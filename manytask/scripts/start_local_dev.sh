@@ -7,7 +7,7 @@ set -euo pipefail
 # 3. Sets up GitLab OAuth and tokens
 # 4. Restarts Manytask with new environment variables
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.development.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-./compose/docker-compose.development.yml}"
 GITLAB_URL="${GITLAB_URL:-http://localhost:8929}"
 SETUP_SCRIPT="${SETUP_SCRIPT:-./scripts/setup_local_gitlab.sh}"
 
@@ -98,19 +98,18 @@ show_success_message() {
     echo "Services:"
     echo "  Manytask:    http://localhost:8081"
     echo "  GitLab:      http://localhost:8929"
-    echo "  Docs:        http://docs.localhost"
     echo ""
     echo "GitLab credentials:"
     echo "  Username:    root"
     echo "  Password:    changeme123!"
     echo ""
     echo "Commands:"
-    echo "  Check status: docker-compose -f ${COMPOSE_FILE} ps"
+    echo "  Check status: docker compose -f ${COMPOSE_FILE} ps"
     echo "  View logs:    docker logs -f test-manytask"
     echo "                docker logs -f manytask_gitlab"
     echo "  Rebuild and restart Manytask:"
-    echo "                docker-compose -f ${COMPOSE_FILE} up --build --no-deps -d manytask"
-    echo "  Stop all:     docker-compose -f ${COMPOSE_FILE} down"
+    echo "                docker compose -f ${COMPOSE_FILE} up --build --no-deps -d manytask"
+    echo "  Stop all:     docker compose -f ${COMPOSE_FILE} down"
     echo ""
 }
 

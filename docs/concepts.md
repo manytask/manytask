@@ -48,7 +48,7 @@ This page describes the main concepts used in the `Manytask` project - public/pr
 
 
 * **Config-s** - a yaml files with configuration for checker - `.checker.yml` and `.manytask.yml`.  
-    See the minimal example in the [Private Repository docs](./private_repo.md) page. Also, there are detailed reference docs for [.checker.yml](./checker_yml_reference.md) and [.manytask.yml](./manytask_yml.md)
+    See the minimal example in the [Private Repository docs](./private_repo.md) page. Also, there are detailed reference docs for [.checker.yml](./checker_yml_reference.md) and [.manytask.yml](./manytask_yml_reference.md)
 
 
 * **Pipeline** - a yaml-described pipeline in `.checker.yml` file to run during `checker check` and `checker export` commands.   

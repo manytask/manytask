@@ -84,7 +84,12 @@ class SafeRunScriptPlugin(PluginABC):
 
         Construct firejail command.
         """
-        command: list[str] = ["firejail", "--quiet", "--noprofile", "--deterministic-exit-code"]
+        command: list[str] = [
+            "firejail",
+            "--quiet",
+            "--noprofile",
+            "--deterministic-exit-code",
+        ]
 
         # lock network access
         if args.lock_network:

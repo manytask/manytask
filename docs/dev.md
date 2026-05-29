@@ -51,15 +51,15 @@ Copy `.env.example` to `.env` and follow the instructions in the file to fill it
 
 #### Step 4 — Start the Application
 
-To start the app, run:
+From the **repository root** (the directory that contains both `manytask/` and `compose/`), run:
 
 ```bash
-docker-compose -f docker-compose.development.yml up --build -d
+docker compose -f compose/docker-compose.development.yml up --build -d
 ```
 
-This should expose Manytask app on port 8081 [http://localhost:8081/](http://localhost:8081/) and docs on port 8080 [http://localhost:8080/](http://localhost:8080/).
+This should expose Manytask app on port 8081 [http://localhost:8081/](http://localhost:8081/).
 
-You can run `make dev` as a shortcut for this command.
+You can run **`make dev` from `manytask/`** (shortcut for the same Compose file; equivalent to passing `-f ../compose/docker-compose.development.yml` from there).
 
 ### 4. Adding a Course
 
@@ -77,7 +77,8 @@ You can run `make dev` as a shortcut for this command.
 4. Create a **public** or **internal** project inside the group — this will be the shared assignment's repository.
 
 #### Step 3 — Send the course config to Manytask
-On the server:
+On the server (from the repository root so `@common.example.yml` resolves):
+
 ```bash
 export TESTER_TOKEN=<course_token>
 ```
@@ -85,7 +86,7 @@ export TESTER_TOKEN=<course_token>
 curl -X POST \
   -H "Authorization: Bearer $TESTER_TOKEN" \
   -H "Content-type: application/x-yaml" \
-  --data-binary "@.manytask.example.yml" \
+  --data-binary "@common.example.yml" \
   "http://localhost:8081/api/<course_name>/update_config"
 ```
 Replace `<course_name>` with your actual course name.

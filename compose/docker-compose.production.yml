@@ -53,9 +53,7 @@ services:
             - manytask-net
     docs:
         build:
-            dockerfile: Dockerfile
-            context: .
-            target: docs
+            context: ../docs
         container_name: manytask-docs
         restart: always
         expose:
@@ -75,14 +73,14 @@ services:
     manytask:
         # image: manytask/manytask:latest  # set SPECIFIC version you'll use
         build:
-            dockerfile: Dockerfile
-            context: .
+            dockerfile: manytask/Dockerfile
+            context: ..
             target: app
         container_name: manytask  # change this to your project name
         restart: always
         expose:
             - "5050"
-        env_file: .env
+        env_file: ../manytask/.env
         environment:
             VIRTUAL_HOST: ${APP_HOST}
             VIRTUAL_PORT: 5050
