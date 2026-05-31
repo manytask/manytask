@@ -110,7 +110,7 @@ class TestTaskConfig:
 
 
 VALID_YAML = """
-schema_version: 1
+gitlab_group: course/students
 tasks:
   - name: task-1
     checklist:
@@ -128,13 +128,16 @@ tasks:
 
 class TestCourseConfig:
     def test_default_schema_version(self) -> None:
-        cfg = CourseConfig.model_validate({"tasks": [{"name": "t", "checklist": [{"type": "pipeline_passed"}]}]})
+        cfg = CourseConfig.model_validate(
+            {"gitlab_group": "g/s", "tasks": [{"name": "t", "checklist": [{"type": "pipeline_passed"}]}]}
+        )
         assert cfg.schema_version == CURRENT_SCHEMA_VERSION
 
     def test_explicit_schema_version(self) -> None:
         cfg = CourseConfig.model_validate(
             {
                 "schema_version": 1,
+                "gitlab_group": "g/s",
                 "tasks": [{"name": "t", "checklist": [{"type": "pipeline_passed"}]}],
             }
         )
@@ -142,12 +145,13 @@ class TestCourseConfig:
 
     def test_empty_tasks_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            CourseConfig.model_validate({"tasks": []})
+            CourseConfig.model_validate({"gitlab_group": "g/s", "tasks": []})
 
     def test_extra_fields_rejected(self) -> None:
         with pytest.raises(ValidationError):
             CourseConfig.model_validate(
                 {
+                    "gitlab_group": "g/s",
                     "tasks": [{"name": "t", "checklist": [{"type": "pipeline_passed"}]}],
                     "unexpected": "field",
                 }
@@ -157,7 +161,7 @@ class TestCourseConfig:
 class TestLoadCourseConfig:
     def test_valid_yaml_round_trip(self) -> None:
         cfg = load_course_config(VALID_YAML)
-        assert cfg.schema_version == 1
+        assert cfg.schema_version == CURRENT_SCHEMA_VERSION
         assert len(cfg.tasks) == 2
         assert cfg.tasks[0].name == "task-1"
         assert isinstance(cfg.tasks[1].checklist[1], RunStep)
@@ -170,7 +174,7 @@ class TestLoadCourseConfig:
 
     def test_yaml_with_invalid_step_type_raises_validation_error(self) -> None:
         bad = """
-schema_version: 1
+gitlab_group: course/students
 tasks:
   - name: task-1
     checklist:
@@ -183,7 +187,7 @@ tasks:
 
     def test_yaml_missing_required_field_raises_validation_error(self) -> None:
         bad = """
-schema_version: 1
+gitlab_group: course/students
 tasks:
   - name: task-1
     checklist:
@@ -214,7 +218,7 @@ deadlines:
           score: 10
 
 mr_review:
-  schema_version: 1
+  gitlab_group: course/students
   tasks:
     - name: task-1
       checklist:
@@ -230,7 +234,7 @@ class TestLoadManytaskYaml:
 
         cfg = load_manytask_yaml(FULL_MANYTASK_YAML)
 
-        assert cfg.schema_version == 1
+        assert cfg.schema_version == CURRENT_SCHEMA_VERSION
         assert len(cfg.tasks) == 1
         assert cfg.tasks[0].name == "task-1"
 
@@ -248,7 +252,7 @@ class TestLoadManytaskYaml:
         text = """
 version: 1
 mr_review:
-  schema_version: 1
+  gitlab_group: course/students
   tasks:
     - name: task-1
       checklist:
@@ -269,3 +273,52 @@ mr_review:
 
         with pytest.raises(ValueError):
             load_manytask_yaml("mr_review: [\n  - oops\n")
+
+
+class TestCourseConfigV2Fields:
+    def test_gitlab_group_is_required(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            CourseConfig.model_validate({"tasks": [{"name": "t", "checklist": [{"type": "pipeline_passed"}]}]})
+        assert "gitlab_group" in str(exc_info.value)
+
+    def test_manual_review_defaults_true(self) -> None:
+        cfg = CourseConfig.model_validate(
+            {
+                "gitlab_group": "course/students",
+                "tasks": [{"name": "t", "checklist": [{"type": "pipeline_passed"}]}],
+            }
+        )
+        assert cfg.tasks[0].manual_review is True
+
+    def test_manual_review_can_be_false(self) -> None:
+        cfg = CourseConfig.model_validate(
+            {
+                "gitlab_group": "course/students",
+                "tasks": [{"name": "t", "manual_review": False, "checklist": [{"type": "pipeline_passed"}]}],
+            }
+        )
+        assert cfg.tasks[0].manual_review is False
+
+    def test_score_comment_pattern_default(self) -> None:
+        cfg = CourseConfig.model_validate(
+            {
+                "gitlab_group": "course/students",
+                "tasks": [{"name": "t", "checklist": [{"type": "pipeline_passed"}]}],
+            }
+        )
+        assert cfg.score_comment_pattern == "Score: {score}"
+
+    @pytest.mark.parametrize("pattern", ["Score: X", "Score: {score} / {score}", ""])
+    def test_score_comment_pattern_must_have_one_placeholder(self, pattern: str) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            CourseConfig.model_validate(
+                {
+                    "gitlab_group": "course/students",
+                    "score_comment_pattern": pattern,
+                    "tasks": [{"name": "t", "checklist": [{"type": "pipeline_passed"}]}],
+                }
+            )
+        assert "score_comment_pattern" in str(exc_info.value)
+
+    def test_current_schema_version_is_2(self) -> None:
+        assert CURRENT_SCHEMA_VERSION == 2

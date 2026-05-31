@@ -25,7 +25,28 @@ Universal merge-request review bot for [manytask](https://github.com/manytask) c
 +----------------+
 ```
 
-The HTTP layer (FastAPI) exposes `/healthz` and admin endpoints under `/courses` to register or remove courses. A long-running worker reads course configs from Redis, polls each hosting provider for new MRs, runs the checklist, and posts comments back.
+The HTTP layer (FastAPI) exposes `/healthz` and admin endpoints under `/courses` to register or remove courses.
+
+## Polling worker
+
+On startup the bot launches a background worker (`app/worker/loop.py`) as an
+asyncio task. Every `POLL_INTERVAL_SEC` (default 900) it:
+
+1. Re-reads all courses from Redis (`CourseStore`) — a `DELETE /courses` mid-cycle
+   is handled gracefully.
+2. For each course, for each task with `manual_review: true`, lists open MRs in
+   the course's `gitlab_group` labelled with the task name.
+3. Runs the checklist and upserts the summary comment + labels.
+4. Processes new reviewer score comments: a comment matching the course's
+   `score_comment_pattern` (default `Score: {score}`) from a verified course admin
+   is reported to manytask with `allow_reduction=true` and `check_deadline=false`
+   (a manual override is authoritative — not capped by a prior score, not reduced
+   by the deadline multiplier).
+
+Each MR is processed under a `PER_MR_TIMEOUT_SEC` (default 120) guard so one slow
+MR cannot stall the cycle. Admin verification uses manytask
+`GET /api/<course>/is_admin?rms_username=<gitlab username>` (the deployed endpoint
+keys on `rms_username`; the bot relies on "GitLab username == manytask username").
 
 ## Quick start
 
@@ -76,6 +97,22 @@ Possible responses:
 - `404 Not Found` — manytask does not know the course at all.
 - `422 Unprocessable Entity` — YAML parse error or `mr_review` section invalid.
 - `502 Bad Gateway` — manytask is unreachable; retry later.
+
+The `mr_review` section in the course YAML requires `gitlab_group` (GitLab group
+path scanned for student MRs) and supports optional `score_comment_pattern` and
+per-task `manual_review` (defaults to `true`; set `false` to skip a task in the
+polling worker). Example:
+
+```yaml
+mr_review:
+  gitlab_group: python/students-2025-fall
+  score_comment_pattern: "Score: {score}"
+  tasks:
+    - name: compgraph
+      manual_review: true
+      checklist:
+        - type: pipeline_passed
+```
 
 ## Hosting providers
 
@@ -156,5 +193,5 @@ Useful commands:
 - `app/manytask/` — manytask HTTP client
 - `app/storage/` — Redis-backed stores
 - `app/checklist/` — checklist runner and built-in steps
-- `app/worker/` — background poll loop
+- `app/worker/` — poll loop, score processing, metrics
 - `tests/` — pytest suite

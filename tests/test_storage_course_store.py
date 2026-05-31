@@ -13,6 +13,7 @@ def _config() -> CourseConfig:
     return CourseConfig.model_validate(
         {
             "schema_version": CURRENT_SCHEMA_VERSION,
+            "gitlab_group": "course/students",
             "tasks": [
                 {
                     "name": "task-1",

@@ -64,7 +64,7 @@ module = ["jinja2.*"]
 ignore_missing_imports = false
 
 [tool.pytest.ini_options]
-addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov=app.api --cov=app.manytask --cov=app.hosting --cov=app.checklist --cov-report=term-missing --cov-fail-under=90 -m \"not benchmark\""
+addopts = "-v --color=yes -ra --cov=app.models --cov=app.storage --cov=app.api --cov=app.manytask --cov=app.hosting --cov=app.checklist --cov=app.worker --cov-report=term-missing --cov-fail-under=90 -m \"not benchmark\""
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = ["benchmark: slow performance tests; deselect with '-m \"not benchmark\"'"]
