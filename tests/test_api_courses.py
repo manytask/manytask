@@ -7,6 +7,7 @@ import respx
 from fakeredis.aioredis import FakeRedis
 from httpx import AsyncClient
 
+from app.models import CURRENT_SCHEMA_VERSION
 from app.storage import CourseStore
 
 VALID_MANYTASK_YAML = """
@@ -25,7 +26,7 @@ deadlines:
           score: 10
 
 mr_review:
-  schema_version: 1
+  gitlab_group: course/students
   tasks:
     - name: task-1
       checklist:
@@ -62,7 +63,7 @@ class TestPostCourse:
         assert response.status_code == 201
         body = response.json()
         assert body["name"] == "python-101"
-        assert body["schema_version"] == 1
+        assert body["schema_version"] == CURRENT_SCHEMA_VERSION
         assert body["tasks_count"] == 1
 
         store = CourseStore(fake_redis)
@@ -162,7 +163,7 @@ class TestPostCourse:
 
         bad_yaml = b"""
 mr_review:
-  schema_version: 1
+  gitlab_group: course/students
   tasks:
     - name: task-1
       checklist:
@@ -350,7 +351,7 @@ class TestListCourses:
         assert "config_json" not in body_str
 
         for item in body:
-            assert item["schema_version"] == 1
+            assert item["schema_version"] == CURRENT_SCHEMA_VERSION
             assert item["tasks_count"] == 1
 
     async def test_wrong_admin_token_returns_403(

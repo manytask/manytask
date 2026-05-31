@@ -9,7 +9,7 @@ from fastapi import Request
 from app.config import Settings
 from app.hosting import HostingAdapter
 from app.manytask import ManytaskClient, TokenAuthCache
-from app.storage import CourseStore
+from app.storage import CourseStore, ProcessedCommentStore
 
 
 def get_settings_dep(request: Request) -> Settings:
@@ -18,6 +18,10 @@ def get_settings_dep(request: Request) -> Settings:
 
 def get_course_store(request: Request) -> CourseStore:
     return request.app.state.course_store  # type: ignore[no-any-return]
+
+
+def get_processed_store(request: Request) -> ProcessedCommentStore:
+    return request.app.state.processed_store  # type: ignore[no-any-return]
 
 
 def get_manytask_client(request: Request) -> ManytaskClient:

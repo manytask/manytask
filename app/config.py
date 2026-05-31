@@ -34,9 +34,14 @@ class Settings(BaseSettings):
         alias="PING_CACHE_TTL_SEC",
     )
     poll_interval_sec: float = Field(
-        default=10.0,
+        default=900.0,
         description="Worker poll interval in seconds",
         alias="POLL_INTERVAL_SEC",
+    )
+    per_mr_timeout_sec: float = Field(
+        default=120.0,
+        description="Hard per-MR processing timeout inside the poll cycle",
+        alias="PER_MR_TIMEOUT_SEC",
     )
     gitlab_base_url: str = Field(
         default="https://gitlab.com",

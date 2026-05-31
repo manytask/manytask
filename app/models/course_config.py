@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
-CURRENT_SCHEMA_VERSION: int = 1
+CURRENT_SCHEMA_VERSION: int = 2
 """Bump when course config layout changes incompatibly."""
 
 
@@ -48,6 +48,10 @@ class TaskConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, description="Task identifier matching folder name")
+    manual_review: bool = Field(
+        default=True,
+        description="Whether the polling worker scans this task's MRs for review",
+    )
     checklist: list[ChecklistStepUnion] = Field(min_length=1, description="Ordered checklist steps")
 
 
@@ -56,7 +60,21 @@ class CourseConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, description="Config layout version")
+    gitlab_group: str = Field(min_length=1, description="GitLab group path scanned for student MRs")
+    score_comment_pattern: str = Field(
+        default="Score: {score}",
+        description="Reviewer score comment template; '{score}' is the numeric placeholder",
+    )
     tasks: list[TaskConfig] = Field(min_length=1, description="Course tasks")
+
+    @field_validator("score_comment_pattern")
+    @classmethod
+    def _exactly_one_score_placeholder(cls, value: str) -> str:
+        # Reject at upload what compile_score_pattern (app.worker.score_pattern)
+        # would otherwise raise on every poll cycle for the course.
+        if value.count("{score}") != 1:
+            raise ValueError("score_comment_pattern must contain exactly one '{score}' placeholder")
+        return value
 
 
 def load_course_config(yaml_text: str) -> CourseConfig:
