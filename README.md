@@ -48,6 +48,110 @@ MR cannot stall the cycle. Admin verification uses manytask
 `GET /api/<course>/is_admin?rms_username=<gitlab username>` (the deployed endpoint
 keys on `rms_username`; the bot relies on "GitLab username == manytask username").
 
+## Observability & reliability
+
+### Endpoints
+
+- `GET /healthz` — liveness. Returns `200 {"status":"ok"}` when Redis answers
+  `PING` and the time since the last **completed** poll cycle (or process
+  start, before any cycle finishes) is within `HEALTHZ_POLL_STALE_SEC`
+  (default 1800s). `last_poll_timestamp` is seeded at boot and refreshed only
+  when a poll cycle completes. Returns `503` if Redis is unreachable or that
+  watermark is too old; the Docker `HEALTHCHECK` uses this to recycle a wedged
+  container.
+
+  - Before the first cycle completes, the boot-time seed is the watermark — a
+    fresh bot reports healthy only while that first cycle runs **shorter** than
+    `HEALTHZ_POLL_STALE_SEC`. The timestamp does not advance mid-cycle.
+  - A poll cycle still in progress when `HEALTHZ_POLL_STALE_SEC` elapses since
+    the last completion (or boot) makes `/healthz` return 503 even if the
+    worker is actively processing MRs; with Docker `restart: always` that can
+    recycle a still-healthy container.
+  - **Ops:** set `HEALTHZ_POLL_STALE_SEC` comfortably above the worst-case full
+    poll-cycle duration (scales with number of MRs × `PER_MR_TIMEOUT_SEC`),
+    otherwise long but healthy in-progress cycles look stale and trigger
+    restarts.
+
+- `GET /metrics` — Prometheus exposition (unauthenticated; restrict network
+  access to the scraper). Metrics:
+  - `poll_cycles_total`, `poll_cycle_overlapping_total`, `poll_duration_seconds`
+  - `mrs_processed_total{course}`
+  - `checklist_failures_total{course,type}`
+  - `manytask_errors_total{endpoint}`
+  - `run_step_duration_seconds{course,task}`
+
+### Logging
+
+Logs are emitted to stdout. `LOG_JSON=true` (default) serializes each record as
+JSON; set `LOG_JSON=false` for human-readable local dev. The default level is
+`LOG_LEVEL` (falls back to `INFO` if set to an unknown value). Per-module
+overrides use `LOG_MODULE_LEVELS`, e.g.
+`app.worker=DEBUG,app.manytask=WARNING` (format `module=LEVEL,module2=LEVEL`;
+malformed entries and unknown levels are ignored).
+
+### Reliability
+
+- Transient Manytask failures (transport errors / 5xx) and GitLab failures
+  (connection/timeout / 5xx) are retried with exponential backoff
+  (`MANYTASK_RETRY_*` / `GITLAB_RETRY_*`; default 3 attempts each, 1 = no
+  retry).
+- The GitLab adapter watches `RateLimit-Remaining`; when the remaining budget
+  drops below `GITLAB_RATE_LIMIT_THRESHOLD` of `RateLimit-Limit` it sleeps until
+  `RateLimit-Reset` (capped at `GITLAB_RATE_LIMIT_MAX_SLEEP_SEC`; uses
+  `GITLAB_RATE_LIMIT_FALLBACK_SLEEP_SEC` when `RateLimit-Reset` is missing).
+- Retrying the GitLab note-creation POST on an ambiguous 5xx/timeout can in rare
+  cases create a duplicate anchored comment if GitLab persisted the first
+  request — an accepted tradeoff of blanket 5xx retry on blocking GitLab calls.
+
+### HEALTHCHECK runbook
+
+The image declares `HEALTHCHECK` with `curl -fsS http://localhost:8000/healthz`
+(`-f` fails on HTTP 503). Development compose sets `restart: always` on the
+bot service.
+
+Manual test:
+
+1. Start the stack:
+
+```bash
+docker compose -f docker-compose.development.yml up --build -d
+```
+
+2. Confirm the container is healthy:
+
+```bash
+docker inspect --format '{{.State.Health.Status}}' mrr-bot
+# healthy
+```
+
+3. Confirm `/healthz` responds OK:
+
+```bash
+curl http://localhost:8000/healthz
+# {"status":"ok"}
+```
+
+4. Stop Redis:
+
+```bash
+docker stop mrr-redis
+```
+
+5. Confirm `/healthz` now returns 503:
+
+```bash
+curl -i http://localhost:8000/healthz
+# HTTP/1.1 503 Service Unavailable
+```
+
+6. After ~90s, confirm the container is unhealthy; with `restart: always` the
+   container is recycled:
+
+```bash
+docker inspect --format '{{.State.Health.Status}}' mrr-bot
+# unhealthy
+```
+
 ## Quick start
 
 Requirements: Docker, Docker Compose, `uv` (for local development).
@@ -75,6 +179,7 @@ authenticated with a Bearer token and validated against manytask `/ping`.
 | `DELETE` | `/courses/<name>`   | `Authorization: Bearer <COURSE_TOKEN>` or `Bearer <BOT_ADMIN_TOKEN>` |
 | `GET`    | `/courses`          | `Authorization: Bearer <BOT_ADMIN_TOKEN>` |
 | `GET`    | `/healthz`          | none                                   |
+| `GET`    | `/metrics`          | none (Prometheus exposition)           |
 
 The `<COURSE_TOKEN>` is the same token the course uses for manytask
 (`/api/<course>/report` etc.). The bot validates it by calling
@@ -187,11 +292,12 @@ Useful commands:
 ## Layout
 
 - `app/main.py` — FastAPI factory and lifespan
-- `app/api/` — HTTP routes (`/healthz`, `/courses`)
+- `app/api/` — HTTP routes (`/healthz`, `/metrics`, `/courses`)
 - `app/config.py` — settings via `pydantic-settings`
+- `app/observability/` — Prometheus metrics + loguru configuration
 - `app/hosting/` — provider-agnostic protocol + GitLab adapter
 - `app/manytask/` — manytask HTTP client
 - `app/storage/` — Redis-backed stores
 - `app/checklist/` — checklist runner and built-in steps
-- `app/worker/` — poll loop, score processing, metrics
+- `app/worker/` — poll loop and score processing
 - `tests/` — pytest suite

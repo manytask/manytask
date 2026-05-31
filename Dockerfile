@@ -19,7 +19,7 @@ FROM python:3.13-slim-bookworm AS runtime
 # git is needed by the run: checklist step (shallow sparse clone).
 # bash because the run: step pipes through `bash -c <command>`.
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y git ca-certificates bash \
+    && apt-get install --no-install-recommends -y git ca-certificates bash curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root user — the entire bot process plus every subprocess it spawns
@@ -38,5 +38,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -fsS http://localhost:8000/healthz || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

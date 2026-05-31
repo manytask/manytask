@@ -3,6 +3,7 @@ services:
     build: .
     image: manytask-mr-reviewer:dev
     container_name: mrr-bot
+    restart: always
     env_file:
       - .env.example
     environment:
@@ -10,6 +11,12 @@ services:
       MANYTASK_BASE_URL: http://mock-manytask:8080
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
     depends_on:
       redis:
         condition: service_healthy

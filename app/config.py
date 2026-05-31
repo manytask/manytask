@@ -73,6 +73,71 @@ class Settings(BaseSettings):
         description="Hard timeout for the run: checklist step",
         alias="RUN_STEP_TIMEOUT_SEC",
     )
+    log_level: str = Field(
+        default="INFO",
+        description="Default loguru level for all modules",
+        alias="LOG_LEVEL",
+    )
+    log_json: bool = Field(
+        default=True,
+        description="Emit logs as JSON on stdout (disable for human-readable local dev)",
+        alias="LOG_JSON",
+    )
+    log_module_levels: str = Field(
+        default="",
+        description="Per-module level overrides, e.g. 'app.worker=DEBUG,app.manytask=WARNING'",
+        alias="LOG_MODULE_LEVELS",
+    )
+    healthz_poll_stale_sec: float = Field(
+        default=1800.0,
+        description="Age of the last completed poll cycle above which /healthz returns 503",
+        alias="HEALTHZ_POLL_STALE_SEC",
+    )
+    manytask_retry_attempts: int = Field(
+        default=3,
+        description="Total attempts (1 = no retry) for transient manytask failures",
+        alias="MANYTASK_RETRY_ATTEMPTS",
+    )
+    manytask_retry_backoff_sec: float = Field(
+        default=0.5,
+        description="Exponential backoff multiplier for manytask retries",
+        alias="MANYTASK_RETRY_BACKOFF_SEC",
+    )
+    manytask_retry_max_backoff_sec: float = Field(
+        default=5.0,
+        description="Cap on a single manytask retry wait",
+        alias="MANYTASK_RETRY_MAX_BACKOFF_SEC",
+    )
+    gitlab_retry_attempts: int = Field(
+        default=3,
+        description="Total attempts (1 = no retry) for transient GitLab failures",
+        alias="GITLAB_RETRY_ATTEMPTS",
+    )
+    gitlab_retry_backoff_sec: float = Field(
+        default=0.5,
+        description="Exponential backoff multiplier for GitLab retries",
+        alias="GITLAB_RETRY_BACKOFF_SEC",
+    )
+    gitlab_retry_max_backoff_sec: float = Field(
+        default=10.0,
+        description="Cap on a single GitLab retry wait",
+        alias="GITLAB_RETRY_MAX_BACKOFF_SEC",
+    )
+    gitlab_rate_limit_threshold: float = Field(
+        default=0.1,
+        description="Sleep when RateLimit-Remaining / RateLimit-Limit falls below this fraction",
+        alias="GITLAB_RATE_LIMIT_THRESHOLD",
+    )
+    gitlab_rate_limit_max_sleep_sec: float = Field(
+        default=60.0,
+        description="Cap on a single rate-limit sleep",
+        alias="GITLAB_RATE_LIMIT_MAX_SLEEP_SEC",
+    )
+    gitlab_rate_limit_fallback_sleep_sec: float = Field(
+        default=5.0,
+        description="Sleep used when RateLimit-Reset header is missing",
+        alias="GITLAB_RATE_LIMIT_FALLBACK_SLEEP_SEC",
+    )
 
 
 @lru_cache

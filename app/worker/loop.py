@@ -13,8 +13,8 @@ from app.checklist.step import CheckContext
 from app.config import Settings
 from app.hosting import HostingAdapter, MergeRequest
 from app.models import CourseConfig, TaskConfig
+from app.observability import Metrics
 from app.storage import CourseStore
-from app.worker.metrics import WorkerMetrics
 from app.worker.score import ScoreProcessor
 from app.worker.score_pattern import compile_score_pattern
 
@@ -37,7 +37,7 @@ class WorkerLoop:
         publisher: ChecklistPublisher,
         score_processor: ScoreProcessor,
         settings: Settings,
-        metrics: WorkerMetrics,
+        metrics: Metrics,
     ) -> None:
         self._course_store = course_store
         self._hosting = hosting
@@ -129,5 +129,9 @@ class WorkerLoop:
         compiled: re.Pattern[str],
     ) -> None:
         results = await self._runner.run(task, mr, ctx)
+        for result in results:
+            if not result.passed:
+                self._metrics.record_checklist_failure(ctx.course_name, result.name)
         await self._publisher.publish(mr=mr, task_name=task.name, results=results)
         await self._score_processor.process(ctx=ctx, mr=mr, task_name=task.name, compiled=compiled)
+        self._metrics.record_mr_processed(ctx.course_name)

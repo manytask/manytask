@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from app.checklist import ChecklistRunner
 from app.checklist.result import CheckResult
-from app.checklist.runner import ChecklistRunner
 from app.checklist.step import CheckContext
 from app.hosting import MergeRequest
 from app.models import (
@@ -15,6 +15,7 @@ from app.models import (
 from app.models import (
     TaskConfig,
 )
+from app.observability import Metrics
 from tests._fakes import FakeHostingAdapter
 
 
@@ -106,3 +107,41 @@ class TestChecklistRunner:
         results = await runner.run(task, sample_mr, sample_ctx)
 
         assert [r.name for r in results] == ["pipeline passed", "folder structure"]
+
+
+class _FakeRunStep:
+    name = "run"
+
+    async def run(self, mr: MergeRequest, ctx: CheckContext) -> CheckResult:
+        return CheckResult(name="run", passed=True, message="ok")
+
+
+async def test_run_step_duration_is_observed() -> None:
+    metrics = Metrics()
+    runner = ChecklistRunner(
+        hosting=FakeHostingAdapter(),
+        sandbox=None,
+        steps_builder=lambda task: [_FakeRunStep()],
+        metrics=metrics,
+    )
+    task = TaskConfig.model_validate({"name": "task-1", "checklist": [{"type": "pipeline_passed"}]})
+    mr = MergeRequest(
+        project_id=1,
+        mr_iid=1,
+        sha="x",
+        web_url="u",
+        source_branch="b",
+        target_branch="main",
+        author_username="s",
+        labels=(),
+        title="t",
+        project_path_with_namespace="g/p",
+    )
+    ctx = CheckContext(course_name="python-101", course_token="tok")
+
+    await runner.run(task, mr, ctx)
+
+    assert (
+        metrics.registry.get_sample_value("run_step_duration_seconds_count", {"course": "python-101", "task": "task-1"})
+        == 1.0
+    )
