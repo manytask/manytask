@@ -14,9 +14,9 @@ from app.config import Settings
 from app.hosting.gitlab_adapter import GitLabAdapter
 from app.manytask import ManytaskClient
 from app.models import CourseConfig
+from app.observability import Metrics
 from app.storage import CourseStore, ProcessedCommentStore
 from app.worker.loop import WorkerLoop
-from app.worker.metrics import WorkerMetrics
 from app.worker.score import ScoreProcessor
 
 GITLAB = "https://gitlab.test"
@@ -156,7 +156,7 @@ async def test_full_cycle_reviews_and_reports_override() -> None:
                         bot_username=BOT,
                     ),
                     settings=settings,
-                    metrics=WorkerMetrics(),
+                    metrics=Metrics(),
                 )
 
                 await loop.run_cycle()

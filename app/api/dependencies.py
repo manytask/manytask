@@ -5,10 +5,12 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import Request
+from redis.asyncio import Redis
 
 from app.config import Settings
 from app.hosting import HostingAdapter
 from app.manytask import ManytaskClient, TokenAuthCache
+from app.observability import Metrics
 from app.storage import CourseStore, ProcessedCommentStore
 
 
@@ -38,3 +40,11 @@ def get_hosting_executor(request: Request) -> ThreadPoolExecutor:
 
 def get_hosting_adapter(request: Request) -> HostingAdapter:
     return request.app.state.hosting_adapter  # type: ignore[no-any-return]
+
+
+def get_metrics(request: Request) -> Metrics:
+    return request.app.state.metrics  # type: ignore[no-any-return]
+
+
+def get_redis(request: Request) -> Redis:
+    return request.app.state.redis  # type: ignore[no-any-return]

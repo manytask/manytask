@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -10,7 +11,10 @@ from functools import partial
 from typing import Any, TypeVar
 
 import gitlab
+import requests
 from gitlab.v4.objects import Group, GroupMergeRequest
+from loguru import logger
+from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app.hosting.anchor import has_anchor, make_anchor_marker
 from app.hosting.models import (
@@ -22,6 +26,15 @@ from app.hosting.models import (
 )
 
 _T = TypeVar("_T")
+
+
+def _is_retryable_gitlab_error(exc: BaseException) -> bool:
+    if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+        return True
+    if isinstance(exc, gitlab.exceptions.GitlabError):
+        code = getattr(exc, "response_code", None)
+        return code is not None and code >= 500
+    return False
 
 
 class GitLabAdapter:
@@ -38,16 +51,65 @@ class GitLabAdapter:
         executor: ThreadPoolExecutor,
         *,
         batch_size: int = 16,
+        retry_attempts: int = 1,
+        retry_backoff_sec: float = 0.5,
+        retry_max_backoff_sec: float = 10.0,
+        rate_limit_threshold: float = 0.1,
+        rate_limit_max_sleep_sec: float = 60.0,
+        rate_limit_fallback_sleep_sec: float = 5.0,
     ) -> None:
         self._token = token
         self._base_url = base_url.rstrip("/")
         self._executor = executor
         self._batch_size = batch_size
+        self._rate_limit_threshold = rate_limit_threshold
+        self._rate_limit_max_sleep_sec = rate_limit_max_sleep_sec
+        self._rate_limit_fallback_sleep_sec = rate_limit_fallback_sleep_sec
         self._gl = gitlab.Gitlab(url=self._base_url, private_token=self._token)
+        self._gl.session.hooks["response"].append(self._rate_limit_hook)
+        self._retrying = Retrying(
+            stop=stop_after_attempt(max(1, retry_attempts)),
+            wait=wait_exponential(multiplier=retry_backoff_sec, max=retry_max_backoff_sec),
+            retry=retry_if_exception(_is_retryable_gitlab_error),
+            reraise=True,
+        )
+
+    def _rate_limit_hook(self, response: Any, *args: Any, **kwargs: Any) -> Any:
+        """requests response hook: sleep (in the executor thread) when the
+        GitLab rate-limit budget is nearly exhausted."""
+        remaining = response.headers.get("RateLimit-Remaining")
+        limit = response.headers.get("RateLimit-Limit")
+        if remaining is None or limit is None:
+            return response
+        try:
+            remaining_i = int(remaining)
+            limit_i = int(limit)
+        except (TypeError, ValueError):
+            return response
+        if limit_i <= 0 or remaining_i / limit_i >= self._rate_limit_threshold:
+            return response
+
+        sleep_for = self._rate_limit_fallback_sleep_sec
+        reset = response.headers.get("RateLimit-Reset")
+        if reset is not None:
+            try:
+                sleep_for = max(0.0, int(reset) - time.time())
+            except (TypeError, ValueError):
+                pass
+        sleep_for = min(sleep_for, self._rate_limit_max_sleep_sec)
+        logger.warning(
+            "gitlab rate-limit low: {}/{} remaining; sleeping {:.1f}s",
+            remaining_i,
+            limit_i,
+            sleep_for,
+        )
+        if sleep_for > 0:
+            time.sleep(sleep_for)
+        return response
 
     async def _run_in_executor(self, func: Callable[..., _T], *args: Any) -> _T:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(self._executor, func, *args)
+        return await loop.run_in_executor(self._executor, partial(self._retrying, func, *args))
 
     async def _gather_in_batches(
         self,
@@ -259,6 +321,8 @@ class GitLabAdapter:
         return out
 
     def _create_note_blocking(self, project_id: int, mr_iid: int, body: str) -> dict[str, Any]:
+        # Retrying this POST on ambiguous 5xx/timeout may duplicate the note if GitLab persisted it;
+        # accepted tradeoff of blanket 5xx retry on blocking GitLab calls.
         project = self._gl.projects.get(project_id, lazy=True)
         mr = project.mergerequests.get(mr_iid, lazy=True)
         note = mr.notes.create({"body": body})

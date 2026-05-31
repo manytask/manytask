@@ -9,11 +9,11 @@ from fakeredis.aioredis import FakeRedis
 
 from app.checklist import ChecklistPublisher, ChecklistRunner, SummaryRenderer
 from app.config import Settings
-from app.hosting import MergeRequest
+from app.hosting import MergeRequest, PipelineStatus
 from app.models import CourseConfig
+from app.observability import Metrics
 from app.storage import CourseStore, ProcessedCommentStore
 from app.worker.loop import WorkerLoop
-from app.worker.metrics import WorkerMetrics
 from app.worker.score import ScoreProcessor
 from tests._fakes import FakeHostingAdapter, FakeManytaskClient
 
@@ -51,7 +51,7 @@ def _build_loop(
     manytask: FakeManytaskClient,
     processed: ProcessedCommentStore,
     settings: Settings,
-    metrics: WorkerMetrics | None = None,
+    metrics: Metrics | None = None,
 ) -> WorkerLoop:
     runner = ChecklistRunner(hosting=hosting, sandbox=None)
     publisher = ChecklistPublisher(
@@ -69,7 +69,7 @@ def _build_loop(
         publisher=publisher,
         score_processor=score_processor,
         settings=settings,
-        metrics=metrics or WorkerMetrics(),
+        metrics=metrics or Metrics(),
     )
 
 
@@ -217,7 +217,7 @@ async def test_overlap_recorded_when_cycle_exceeds_interval(settings: Settings) 
     settings = Settings(poll_interval_sec=0.0, per_mr_timeout_sec=120.0)
     redis = FakeRedis(decode_responses=True)
     course_store = CourseStore(redis)
-    metrics = WorkerMetrics()
+    metrics = Metrics()
     loop = _build_loop(
         course_store=course_store,
         hosting=FakeHostingAdapter(),
@@ -229,8 +229,8 @@ async def test_overlap_recorded_when_cycle_exceeds_interval(settings: Settings) 
 
     await loop.run_cycle()
 
-    assert metrics.cycles_total == 1
-    assert metrics.overlapping_cycles_total == 1  # any duration > 0.0 interval
+    assert metrics.registry.get_sample_value("poll_cycles_total") == 1.0
+    assert metrics.registry.get_sample_value("poll_cycle_overlapping_total") == 1.0
 
 
 async def test_poll_forever_cancellation_is_graceful(settings: Settings) -> None:
@@ -249,3 +249,31 @@ async def test_poll_forever_cancellation_is_graceful(settings: Settings) -> None
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+async def test_cycle_records_mr_processed_and_failures(settings: Settings) -> None:
+    redis = FakeRedis(decode_responses=True)
+    course_store = CourseStore(redis)
+    await course_store.upsert_course("python-101", _config(), course_token="tok")
+    hosting = FakeHostingAdapter()
+    hosting.pipeline_status = PipelineStatus(id=1, state="failed", web_url=None, sha="x")
+    hosting.open_mrs[("course/students", "task-1")] = [_mr()]
+    metrics = Metrics()
+    loop = _build_loop(
+        course_store=course_store,
+        hosting=hosting,
+        manytask=FakeManytaskClient(),
+        processed=ProcessedCommentStore(redis),
+        settings=settings,
+        metrics=metrics,
+    )
+
+    await loop.run_cycle()
+
+    assert metrics.registry.get_sample_value("mrs_processed_total", {"course": "python-101"}) == 1.0
+    assert (
+        metrics.registry.get_sample_value(
+            "checklist_failures_total", {"course": "python-101", "type": "pipeline passed"}
+        )
+        == 1.0
+    )
