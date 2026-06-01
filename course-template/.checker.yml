@@ -1,0 +1,89 @@
+version: 1
+
+default_parameters:
+  run_testing: true
+  timeout: 30
+
+structure:
+  ignore_patterns:
+    - ".git"
+    - ".idea"
+    - ".vscode"
+    - "__pycache__"
+    - ".venv"
+    - ".*_cache"
+    - "*.pyc"
+
+  # Precedence in checker's exporter: public > private > other.
+  # `copy_other=True` during public export already copies normal files,
+  # so public_patterns only needs the dotfiles students/grading require.
+  # NEVER use "*" here: Path.match("*") matches dotfiles too, which makes
+  # every file public and silently disables private_patterns (leaking
+  # test_private.py and .releaser-ci.yml into the public repo).
+  public_patterns:
+    - ".gitignore"
+    - ".gitlab-ci.yml"
+    - ".checker.yml"    # `checker grade` reads it in the student repo
+    - ".manytask.yml"   # course/deadlines config, also read by grade
+    - ".task.yml"       # per-task structure (checker/course.py)
+    - ".group.yml"      # per-group structure (checker/course.py)
+
+  # Dotfiles are private by default (".*"), so any future secret an
+  # instructor drops in (.env, .secret, ...) stays out of the public repo
+  # unless explicitly allow-listed above.
+  private_patterns:
+    - ".*"
+    - "test_private.py"
+
+export:
+  destination: https://gitlab.manytask2.org/sandbox/public
+  default_branch: main
+  commit_message: "chore(auto): export new tasks"
+  templates: search
+
+testing:
+  changes_detection: last_commit_changes
+
+  tasks_pipeline:
+    - name: "Run public tests"
+      run_if: ${{ parameters.run_testing }}
+      fail: fast
+      run: "run_pytest"
+      register_output: public_tests
+      args:
+        origin: "${{ global.temp_dir }}"
+        target: "${{ task.task_sub_path }}/test_public.py"
+        timeout: ${{ parameters.timeout }}
+
+    - name: "Run private tests"
+      run_if: ${{ parameters.run_testing }}
+      fail: fast
+      run: "run_pytest"
+      register_output: private_tests
+      args:
+        origin: "${{ global.temp_dir }}"
+        target: "${{ task.task_sub_path }}/test_private.py"
+        timeout: ${{ parameters.timeout }}
+        report_percentage: true
+
+  # report_pipeline reports the score back to the Manytask web app.
+  # It requires the MANYTASK_TOKEN env var (set as a CI/CD secret variable
+  # in your private repository) and is only meant to run inside CI.
+  # Uncomment after configuring the secret AND choosing a working report_url.
+  # See README.md → "Required CI/CD variables".
+  #
+  # NOTE: app.manytask2.org (dev) is currently unavailable. Either point
+  # report_url at the prod app (https://app.manytask.org) once a real
+  # MANYTASK_TOKEN is provisioned, or wait for the dev app to be restored.
+  #
+  # report_pipeline:
+  #   - name: "Report score to manytask"
+  #     run: "report_score_manytask"
+  #     args:
+  #       origin: "${{ global.temp_dir }}"
+  #       username: ${{ env.GITLAB_USER_LOGIN }}
+  #       task_name: ${{ task.task_name }}
+  #       score: ${{ outputs.private_tests.percentage }}
+  #       report_url: https://app.manytask2.org
+  #       report_token: ${{ env.MANYTASK_TOKEN }}
+  #       check_deadline: true
