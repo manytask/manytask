@@ -4,19 +4,20 @@
 
 stages:
   - validate
+  - build
   - test
   - deploy
 
 variables:
   PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/pip"
-  # checker is installed from the manytask monorepo @main, not PyPI: the latest
-  # PyPI release (0.9.2) predates the `validate`/`export` commands this template
-  # relies on. `@main` tracks the latest checker on purpose — switch to a pinned
-  # PyPI version (`manytask-checker>=X`) once a release with these commands ships.
+  # checker is installed from the manytask monorepo at a pinned commit, not PyPI:
+  # the latest PyPI release (0.9.2) lacks `validate`/`export` and predates monorepo
+  # checker. Bump CHECKER_PIP_SPEC when you need a newer checker (or switch to a
+  # PyPI pin once a release with these commands ships).
   #
   # The jobs below run `pip install "$CHECKER_PIP_SPEC" pytest`: checker does not
   # bundle a test runner (it is runner-agnostic), so the course provides pytest.
-  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@main#subdirectory=checker"
+  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@eca1874f39d0e379485cecfa4f653d87ff79d1bb#subdirectory=checker"
 
 validate:
   image: python:3.12-slim
@@ -28,20 +29,50 @@ validate:
   script:
     - checker validate
 
-# Runs the reference solution through the full task pipeline — public AND
-# private tests — on a live runner. In the private repo `reference_root`
-# defaults to `.`, which already contains test_private.py, so this is where
-# private grading is exercised end-to-end (the student grade job needs the
-# testenv image to get the private tests; see .gitlab-ci.yml).
-check:
-  image: python:3.12-slim
-  stage: test
+# Builds the course testenv image and pushes it to the GitLab container
+# registry. The image bakes the private reference (public + private tests) at
+# /opt/course via `checker export-private` (see testenv.docker). Built with
+# kaniko so no privileged/Docker-in-Docker runner is required.
+#
+# CI_REGISTRY, CI_REGISTRY_IMAGE, CI_REGISTRY_USER and CI_REGISTRY_PASSWORD are
+# GitLab predefined variables, populated automatically when the project's
+# Container Registry is enabled. The job authenticates to the registry with the
+# job token via /kaniko/.docker/config.json.
+#
+# Both :$CI_COMMIT_SHORT_SHA (immutable, consumed by the `check` job below) and
+# :latest are pushed. For a single-`main` repo pushing :latest unconditionally
+# is fine; for a multi-branch template, restrict the :latest tag to the default
+# branch so feature branches do not clobber it.
+build-testenv:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
   before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
-    - python -m pip install --upgrade pip
-    - pip install "$CHECKER_PIP_SPEC" pytest
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf '%s:%s' \"$CI_REGISTRY_USER\" \"$CI_REGISTRY_PASSWORD\" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
   script:
-    - checker check
+    - >-
+      /kaniko/executor
+      --context "$CI_PROJECT_DIR"
+      --dockerfile "$CI_PROJECT_DIR/testenv.docker"
+      --build-arg "CHECKER_PIP_SPEC=$CHECKER_PIP_SPEC"
+      --destination "$CI_REGISTRY_IMAGE/testenv:$CI_COMMIT_SHORT_SHA"
+      --destination "$CI_REGISTRY_IMAGE/testenv:latest"
+
+# Runs the reference solution through the full task pipeline — public AND
+# private tests — on a live runner, INSIDE the testenv image just built. This
+# is the dress rehearsal for the student grade job: `checker check . /opt/course`
+# overlays the baked private tests (from /opt/course) onto the gold solution
+# (from the checkout, `.`). Tools are baked into the image, so there is no
+# before_script. Proves the image build + baked reference end-to-end, with no
+# token dependencies.
+check:
+  image: "$CI_REGISTRY_IMAGE/testenv:$CI_COMMIT_SHORT_SHA"
+  stage: test
+  needs: ["build-testenv"]
+  script:
+    - checker check . /opt/course
 
 deploy-public:
   image: python:3.12-slim

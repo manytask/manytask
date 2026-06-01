@@ -1,3 +1,12 @@
+# Course testenv image — built by .releaser-ci.yml (build-testenv job) and pushed
+# to the GitLab container registry. It bakes the PRIVATE reference tree (gold
+# solutions + filled templates + public AND private tests) at /opt/course via
+# `checker export-private`, so the student grade job can overlay the hidden tests
+# onto a submission. This is the documented manytask "testenv" mechanism
+# (see docs/concepts.md): the image carries a copy of the private repo with the
+# private tests, and is used to run `checker grade` in student repos and
+# `checker check` in the private repo.
+
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -8,9 +17,21 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /opt/checker
+# checker is installed from the manytask monorepo at a pinned commit, not PyPI
+# (the latest PyPI release lacks the monorepo commands). CI overrides this via
+# --build-arg CHECKER_PIP_SPEC=$CHECKER_PIP_SPEC; keep this default in sync with
+# the CHECKER_PIP_SPEC variable in .releaser-ci.yml / .gitlab-ci.yml.
+# checker does not bundle a test runner (it is runner-agnostic), so install pytest.
+ARG CHECKER_PIP_SPEC="git+https://github.com/manytask/manytask.git@eca1874f39d0e379485cecfa4f653d87ff79d1bb#subdirectory=checker"
+RUN pip install --upgrade pip && pip install "$CHECKER_PIP_SPEC" pytest
 
-COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install manytask-checker pytest
+# Bake the full private reference at /opt/course. The build context is the
+# private repository; `export-private` materializes gold/"other" files, fills
+# templates, and copies public + private tests. /build is removed in the same
+# layer so the raw source does not persist (only the exported reference remains).
+# (The CLI command is `export-private` with a hyphen — click maps the
+# export_private function name to a dashed command.)
+COPY . /build
+RUN checker export-private /build /opt/course && rm -rf /build
 
 WORKDIR /workspace

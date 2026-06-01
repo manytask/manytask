@@ -6,37 +6,33 @@ stages:
   - grade
 
 variables:
-  PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/pip"
-  # checker is installed from the manytask monorepo @main, not PyPI: the latest
-  # PyPI release (0.9.2) predates the `grade` behavior this template relies on.
-  # `@main` tracks the latest checker on purpose — switch to a pinned PyPI
-  # version (`manytask-checker>=X`) once a release with these commands ships.
-  #
-  # The job below runs `pip install "$CHECKER_PIP_SPEC" pytest`: checker does not
-  # bundle a test runner (it is runner-agnostic), so the course provides pytest.
-  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@main#subdirectory=checker"
+  # Full registry path to the course testenv image built by the PRIVATE repo's
+  # .releaser-ci.yml (build-testenv job). This file is exported verbatim into the
+  # public/student repository, so the image must be referenced by its absolute
+  # registry path — NOT $CI_REGISTRY_IMAGE, which would resolve to the student
+  # project's own (empty) registry. The image bakes the private reference at
+  # /opt/course, which is how the student grade job reaches the hidden tests.
+  # Override via a group CI/CD variable if your registry path differs.
+  TESTENV_IMAGE: "registry.gitlab.manytask2.org/sandbox/private/testenv:latest"
 
 grade:
-  # NOTE (iteration 2): `checker grade` overlays the PRIVATE tests from its
-  # reference_root onto the student's solution. In the public/student repo
-  # reference_root defaults to `.`, which does NOT contain test_private.py, so
-  # the private step has nothing to run here. The intended fix is to set
-  # `image:` to the course testenv image (built by .releaser-ci.yml with the
-  # private tests baked in) and run `checker grade . <baked-reference-path>`.
-  # Until that image is wired, only the public tests grade. The private
-  # pipeline is verified live by the `check` job in .releaser-ci.yml.
-  image: python:3.12-slim
+  # `checker grade . /opt/course` overlays the PRIVATE tests baked into the
+  # testenv image (at /opt/course) onto the student's solution (from the
+  # checkout, `.`), then runs public + private tests. Tools and the hidden
+  # reference are baked into the image, so there is no before_script.
+  #
+  # Cross-project registry pull: student repos are forks of sandbox/public and
+  # must pull this image from sandbox/private's registry. Set DOCKER_AUTH_CONFIG
+  # as a group CI/CD variable holding a deploy/group token with read_registry
+  # scope on sandbox/private (see docs/course_template.md).
+  #
+  # Add `--submit-score` (and a MANYTASK_TOKEN CI variable) to report the score
+  # back to the manytask web app once app.manytask2.org is available.
+  image: "$TESTENV_IMAGE"
   stage: grade
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
       when: on_success
     - when: never
-  before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
-    - python -m pip install --upgrade pip
-    - pip install "$CHECKER_PIP_SPEC" pytest
   script:
-    - checker grade
-  cache:
-    paths:
-      - .cache/pip
+    - checker grade . /opt/course

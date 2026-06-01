@@ -40,10 +40,10 @@ placeholders planned as follow-up iterations of
 course-template/
 ├── .checker.yml          # structure, export rules, testing pipeline
 ├── .manytask.yml         # settings + deadlines schedule
-├── .gitlab-ci.yml        # CI for grading student submissions
-├── .releaser-ci.yml      # CI for exporting private → public (not exported)
+├── .gitlab-ci.yml        # CI for grading student submissions (uses the testenv image)
+├── .releaser-ci.yml      # CI: build+push testenv image, check, export private → public (not exported)
 ├── .gitignore
-├── testenv.docker        # image used by the grading job
+├── testenv.docker        # testenv image: bakes the private reference at /opt/course
 ├── pyproject.toml        # Python toolchain
 ├── tools/                # shared tooling (empty placeholder)
 ├── python/
@@ -67,6 +67,48 @@ This is the smallest end-to-end example that:
 - demonstrates the `.template` strategy for hiding reference solutions,
 - separates public and private tests,
 - reports its score back to the Manytask web app once the report pipeline is enabled in CI.
+
+## How grading works (testenv image)
+
+Student submissions must be graded against the **hidden** (`test_private.py`) tests,
+but those tests are never exported to the public/student repository. Manytask solves
+this with a **testenv docker image** (see [Concepts](./concepts.md)): an image that
+carries a copy of the private repository — including the private tests — and the
+checker. The same image runs `checker check` in the private repo and `checker grade`
+in student repos.
+
+The template wires this in two pipelines:
+
+1. **Private repo (`.releaser-ci.yml`)** — on every push:
+   - **`build-testenv`** builds [`testenv.docker`](../course-template/testenv.docker)
+     with [kaniko](https://github.com/GoogleContainerTools/kaniko) (no privileged
+     runner needed) and pushes it to the project's GitLab Container Registry. The
+     Dockerfile bakes the full private reference at **`/opt/course`** via
+     `checker export-private` (gold solutions, filled templates, public **and**
+     private tests). Both `:$CI_COMMIT_SHORT_SHA` and `:latest` tags are pushed.
+   - **`check`** runs *inside that image*: `checker check . /opt/course` overlays the
+     baked private tests onto the reference solution and runs the full pipeline on a
+     live runner. This is the dress rehearsal for student grading.
+   - **`deploy-public`** exports public files to `sandbox/public`.
+
+2. **Student repo (`.gitlab-ci.yml`)** — on every push, the **`grade`** job uses the
+   testenv image (`image: "$TESTENV_IMAGE"`) and runs `checker grade . /opt/course`:
+   the student's solution comes from the checkout (`.`), the hidden tests come from the
+   baked `/opt/course`. Add `--submit-score` (plus a `MANYTASK_TOKEN`) to report the
+   score to the web app.
+
+Because the image lives in the **private** project's registry but student repos are
+forks of the **public** project, students pull it across projects via a
+`DOCKER_AUTH_CONFIG` group CI/CD variable (a deploy/group token with `read_registry`
+scope on the private project). `TESTENV_IMAGE` must be the **absolute** registry path
+(e.g. `registry.gitlab.manytask2.org/sandbox/private/testenv:latest`), since
+`.gitlab-ci.yml` is exported verbatim and `$CI_REGISTRY_IMAGE` would resolve to the
+student project's own empty registry.
+
+> **Caveat (inherent to this design):** a student who controls their own CI can read
+> files from the image, including the baked private tests. This is a property of the
+> documented manytask testenv approach; the template demonstrates the flow rather than
+> hardening against it.
 
 ## Using the template for your own course
 
@@ -94,6 +136,8 @@ This is the smallest end-to-end example that:
     | Variable | Purpose |
     |---|---|
     | `GITLAB_API_TOKEN` | Lets `checker export --commit` push to the public repo. Group access token, role `Maintainer`, scope `write_repository`. |
+    | `DOCKER_AUTH_CONFIG` | Lets student repos pull the testenv image from the private project's registry. Set as a **group** variable holding creds for a deploy/group token with `read_registry` scope on the private project. |
+    | `TESTENV_IMAGE` | Absolute registry path to the testenv image used by the student `grade` job (e.g. `registry.gitlab.manytask2.org/<course>/private/testenv:latest`). Defaults to the sandbox path in `.gitlab-ci.yml`; override for your course. |
     | `MANYTASK_TOKEN` | Lets the grader report scores back to the Manytask web app. |
     | `TESTER_TOKEN` | Authentication for the grading job. |
 
