@@ -12,8 +12,12 @@ variables:
   # registry path — NOT $CI_REGISTRY_IMAGE, which would resolve to the student
   # project's own (empty) registry. The image bakes the private reference at
   # /opt/course, which is how the student grade job reaches the hidden tests.
-  # Override via a group CI/CD variable if your registry path differs.
-  TESTENV_IMAGE: "registry.gitlab.manytask2.org/sandbox/private/testenv:latest"
+  #
+  # The host MUST match the private project's CI_REGISTRY (where build-testenv
+  # pushed the image) — on this instance that is `gitlab.manytask2.org:5050`, NOT
+  # a `registry.` subdomain. The DOCKER_AUTH_CONFIG `auths` key below must use the
+  # same host. Override via a group CI/CD variable if your registry path differs.
+  TESTENV_IMAGE: "gitlab.manytask2.org:5050/sandbox/private/testenv:latest"
 
 grade:
   # `checker grade . /opt/course` overlays the PRIVATE tests baked into the

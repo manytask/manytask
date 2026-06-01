@@ -101,9 +101,11 @@ Because the image lives in the **private** project's registry but student repos 
 forks of the **public** project, students pull it across projects via a
 `DOCKER_AUTH_CONFIG` group CI/CD variable (a deploy/group token with `read_registry`
 scope on the private project). `TESTENV_IMAGE` must be the **absolute** registry path
-(e.g. `registry.gitlab.manytask2.org/sandbox/private/testenv:latest`), since
-`.gitlab-ci.yml` is exported verbatim and `$CI_REGISTRY_IMAGE` would resolve to the
-student project's own empty registry.
+whose host matches the private project's `CI_REGISTRY` — on this instance
+`gitlab.manytask2.org:5050/sandbox/private/testenv:latest` (a `:5050` port, not a
+`registry.` subdomain) — since `.gitlab-ci.yml` is exported verbatim and
+`$CI_REGISTRY_IMAGE` would resolve to the student project's own empty registry. The
+`auths` key in `DOCKER_AUTH_CONFIG` must use that same host.
 
 > **Caveat (inherent to this design):** a student who controls their own CI can read
 > files from the image, including the baked private tests. This is a property of the
@@ -137,7 +139,7 @@ student project's own empty registry.
     |---|---|
     | `GITLAB_API_TOKEN` | Lets `checker export --commit` push to the public repo. Group access token, role `Maintainer`, scope `write_repository`. |
     | `DOCKER_AUTH_CONFIG` | Lets student repos pull the testenv image from the private project's registry. Set as a **group** variable holding creds for a deploy/group token with `read_registry` scope on the private project. |
-    | `TESTENV_IMAGE` | Absolute registry path to the testenv image used by the student `grade` job (e.g. `registry.gitlab.manytask2.org/<course>/private/testenv:latest`). Defaults to the sandbox path in `.gitlab-ci.yml`; override for your course. |
+    | `TESTENV_IMAGE` | Absolute registry path to the testenv image used by the student `grade` job; host must match the private project's `CI_REGISTRY` (e.g. `gitlab.manytask2.org:5050/<course>/private/testenv:latest`). Defaults to the sandbox path in `.gitlab-ci.yml`; override for your course. |
     | `MANYTASK_TOKEN` | Lets the grader report scores back to the Manytask web app. |
     | `TESTER_TOKEN` | Authentication for the grading job. |
 
