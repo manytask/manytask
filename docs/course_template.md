@@ -1,6 +1,6 @@
 # Course template (sandbox)
 
-To make spinning up a new course painless, Manytask ships a **reference course template** — a private repository that already has a working `.checker.yml`, `.manytask.yml`, CI pipelines, a Docker test environment, and one tiny task you can solve locally.
+To make spinning up a new course painless, Manytask ships a **reference course template** — a pre-configured repository that already has a working `.checker.yml`, `.manytask.yml`, CI pipelines, a Docker test environment, and one solved sample task per supported language.
 
 Use it to:
 
@@ -10,9 +10,20 @@ Use it to:
 
 ## Where to find it
 
-The template lives in a separate GitLab repository on the **dev** GitLab instance:
+The canonical source lives **in this monorepo** under [`course-template/`](../course-template/).
 
-> **`gitlab.manytask2.org/sandbox/private`** *(work in progress — see [manytask#637](https://github.com/manytask/manytask/issues/637) for status)*
+It is deployed to the GitLab private template repository at:
+
+> **`gitlab.manytask2.org/sandbox/private`**
+
+A maintainer runs `course-template/deploy.sh` to push changes from the monorepo to GitLab:
+
+```bash
+# From the repository root
+course-template/deploy.sh git@gitlab.manytask2.org:sandbox/private.git
+```
+
+The script clones (or initialises) the GitLab repo, mirrors the `course-template/` tree over it (excluding `.git` and `deploy.sh` itself), and force-pushes to `main`.
 
 Once the template stabilises it will be promoted to the production instance
 (`gitlab.manytask.org/sandbox`) and bound to a `sandbox` course on
@@ -20,23 +31,34 @@ Once the template stabilises it will be promoted to the production instance
 
 ## What is inside
 
+The template is designed for five language groups. Only `python/` is present in the
+initial iteration; the remaining groups — **C++**, **Bash**, **Go**, **Rust** — are
+placeholders planned as follow-up iterations of
+[manytask#637](https://github.com/manytask/manytask/issues/637).
+
 ```
-sandbox/
+course-template/
 ├── .checker.yml          # structure, export rules, testing pipeline
 ├── .manytask.yml         # settings + deadlines schedule
 ├── .gitlab-ci.yml        # CI for grading student submissions
-├── .releaser-ci.yml      # CI for exporting private → public
+├── .releaser-ci.yml      # CI for exporting private → public (not exported)
+├── .gitignore
 ├── testenv.docker        # image used by the grading job
 ├── pyproject.toml        # Python toolchain
-└── python/
-    └── add/              # the only task so far — sum of two integers
-        ├── .task.yml
-        ├── README.md
-        ├── add.py            # reference solution (NOT exported)
-        ├── add.py.template   # what students see (becomes add.py)
-        ├── test_public.py    # visible tests
-        ├── test_private.py   # hidden grading tests
-        └── conftest.py       # adds the task folder to sys.path
+├── tools/                # shared tooling (empty placeholder)
+├── python/
+│   └── add/              # sample task: sum of two integers
+│       ├── .task.yml
+│       ├── README.md
+│       ├── add.py            # reference solution (NOT exported)
+│       ├── add.py.template   # what students see (becomes add.py on export)
+│       ├── test_public.py    # visible tests
+│       ├── test_private.py   # hidden grading tests (NOT exported)
+│       └── conftest.py       # adds the task folder to sys.path
+├── cpp/                  # (planned)
+├── bash/                 # (planned)
+├── go/                   # (planned)
+└── rust/                 # (planned)
 ```
 
 This is the smallest end-to-end example that:
@@ -46,13 +68,18 @@ This is the smallest end-to-end example that:
 - separates public and private tests,
 - reports its score back to the Manytask web app once the report pipeline is enabled in CI.
 
-Additional languages — **C++**, **Bash**, **Go**, **Rust** — are planned as
-follow-up iterations of [manytask#637](https://github.com/manytask/manytask/issues/637).
-
 ## Using the template for your own course
 
 1. Create two empty GitLab projects — `<your-course>/private` (template clone) and `<your-course>/public` (auto-generated for students) — plus an empty `<your-course>/students` group.
-2. Clone the sandbox repo and re-point `origin` at your private project:
+2. Clone the monorepo, then deploy the template to your private GitLab project:
+
+    ```bash
+    git clone https://github.com/manytask/manytask.git
+    cd manytask
+    course-template/deploy.sh git@gitlab.manytask2.org:<your-course>/private.git
+    ```
+
+   Alternatively, clone the already-deployed GitLab template directly:
 
     ```bash
     git clone https://gitlab.manytask2.org/sandbox/private private
@@ -73,8 +100,8 @@ follow-up iterations of [manytask#637](https://github.com/manytask/manytask/issu
 5. Ask a Manytask admin to register your course (slug, public repo URL, students group URL).
 6. Push to `main` — the pipeline validates configs, exports public files, and updates deadlines on the web app.
 
-Full step-by-step instructions live in the sandbox repository's own
-[`README.md`](https://gitlab.manytask2.org/sandbox/private/-/blob/main/README.md).
+Full step-by-step instructions live in the template's own
+[`README.md`](../course-template/README.md).
 
 ## Related references
 
