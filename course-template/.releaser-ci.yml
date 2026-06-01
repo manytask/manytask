@@ -34,10 +34,15 @@ validate:
 # /opt/course via `checker export-private` (see testenv.docker). Built with
 # kaniko so no privileged/Docker-in-Docker runner is required.
 #
-# CI_REGISTRY, CI_REGISTRY_IMAGE, CI_REGISTRY_USER and CI_REGISTRY_PASSWORD are
-# GitLab predefined variables, populated automatically when the project's
-# Container Registry is enabled. The job authenticates to the registry with the
-# job token via /kaniko/.docker/config.json.
+# CI_REGISTRY and CI_REGISTRY_IMAGE are GitLab predefined variables, populated
+# automatically when the project's Container Registry is enabled.
+#
+# Authentication uses a DEPLOY TOKEN, not the CI job token: on self-managed
+# GitLab the job token is frequently not permitted to push to the registry
+# (the push fails with "UNAUTHORIZED: HTTP Basic: Access denied"). Create a
+# project (or group) deploy token named exactly `gitlab-deploy-token` with the
+# `read_registry` + `write_registry` scopes; GitLab then auto-exposes it to CI
+# as CI_DEPLOY_USER / CI_DEPLOY_PASSWORD, which kaniko uses below.
 #
 # Both :$CI_COMMIT_SHORT_SHA (immutable, consumed by the `check` job below) and
 # :latest are pushed. For a single-`main` repo pushing :latest unconditionally
@@ -50,7 +55,11 @@ build-testenv:
     entrypoint: [""]
   before_script:
     - mkdir -p /kaniko/.docker
-    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf '%s:%s' \"$CI_REGISTRY_USER\" \"$CI_REGISTRY_PASSWORD\" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    # Authenticate with username/password directly rather than a base64 `auth`
+    # blob: kaniko silently falls back to anonymous (→ 401 at the registry's
+    # jwt/auth) if it cannot parse the `auth` field. printf inserts the values
+    # verbatim; deploy-token secrets are alphanumeric so the JSON stays valid.
+    - printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}' "$CI_REGISTRY" "$CI_DEPLOY_USER" "$CI_DEPLOY_PASSWORD" > /kaniko/.docker/config.json
   script:
     - >-
       /kaniko/executor

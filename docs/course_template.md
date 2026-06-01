@@ -141,7 +141,16 @@ student project's own empty registry.
     | `MANYTASK_TOKEN` | Lets the grader report scores back to the Manytask web app. |
     | `TESTER_TOKEN` | Authentication for the grading job. |
 
-5. Ask a Manytask admin to register your course (slug, public repo URL, students group URL).
+5. Create a **deploy token** so `build-testenv` can push the image. On the **private**
+   project: **Settings → Repository → Deploy tokens**, name it exactly
+   `gitlab-deploy-token`, scopes `read_registry` + `write_registry`. GitLab then
+   auto-exposes it to CI as `CI_DEPLOY_USER` / `CI_DEPLOY_PASSWORD`, which the kaniko
+   `build-testenv` job uses to authenticate — the CI **job token** is not used, because
+   self-managed GitLab often denies it registry-push access (`UNAUTHORIZED: HTTP Basic:
+   Access denied`). The same token's `read_registry` scope can back the
+   `DOCKER_AUTH_CONFIG` group variable above for the student pull side.
+
+6. Ask a Manytask admin to register your course (slug, public repo URL, students group URL).
 6. Push to `main` — the pipeline validates configs, exports public files, and updates deadlines on the web app.
 
 Full step-by-step instructions live in the template's own
