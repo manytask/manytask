@@ -206,10 +206,10 @@ Expected: the exported tree contains `python/add/add.py` (the *stub* from `add.p
 - [ ] **Step 3: Turn the assertion into a one-liner (used by CI in Task 2.4)**
 
 ```bash
-if find /tmp/ct-export -type f \( -name 'test_private*' -o -name '.releaser-ci.yml' \) | grep -q .; then
+if find /tmp/ct-export -type f \( -name '*private*' -o -name '.releaser-ci.yml' \) | grep -q .; then
   echo "LEAK: private files in export"; exit 1; else echo "clean export"; fi
 ```
-Expected: `clean export`.
+Expected: `clean export`. (`*private*` covers every language's hidden test, including Go's `private_test.go` added in Chunk 3 — use it from the start so the guard stays valid.)
 
 ### Task 2.3: Add the GitLab deploy/sync script
 
@@ -286,7 +286,7 @@ jobs:
         run: |
           rm -rf /tmp/ct-export && mkdir -p /tmp/ct-export
           checker export course-template /tmp/ct-export
-          if find /tmp/ct-export -type f \( -name 'test_private*' -o -name '.releaser-ci.yml' \) | grep -q .; then
+          if find /tmp/ct-export -type f \( -name '*private*' -o -name '.releaser-ci.yml' \) | grep -q .; then
             echo "::error::private files leaked into export"; exit 1
           fi
           echo "clean export"
@@ -397,9 +397,21 @@ task_pipeline:
       timeout: ${{ parameters.timeout }}
 ```
 `cpp/add/.task.yml`: `version: 1`
-`cpp/add/add.h`: `#pragma once\nint add(int a, int b);`
-`cpp/add/add.cpp`: `#include "add.h"\nint add(int a, int b) { return a + b; }`
-`cpp/add/add.cpp.template`: `#include "add.h"\nint add(int a, int b) { (void)a; (void)b; return 0; /* TODO: implement */ }`
+`cpp/add/add.h`:
+```cpp
+#pragma once
+int add(int a, int b);
+```
+`cpp/add/add.cpp`:
+```cpp
+#include "add.h"
+int add(int a, int b) { return a + b; }
+```
+`cpp/add/add.cpp.template`:
+```cpp
+#include "add.h"
+int add(int a, int b) { (void)a; (void)b; return 0; /* TODO: implement */ }
+```
 `cpp/add/test_public.cpp`:
 ```cpp
 #include <cassert>
@@ -461,8 +473,16 @@ task_pipeline:
       script: "cd ${{ task.task_sub_path }} && bash test_private.sh"
       timeout: ${{ parameters.timeout }}
 ```
-`bash/add/add.sh`: `add() { echo $(( $1 + $2 )); }`
-`bash/add/add.sh.template`: `add() { echo 0; # TODO: implement\n}`
+`bash/add/add.sh`:
+```bash
+add() { echo $(( $1 + $2 )); }
+```
+`bash/add/add.sh.template` (the `# TODO` comment and the closing `}` MUST be on separate lines, or `}` gets commented out):
+```bash
+add() {
+  echo 0  # TODO: implement
+}
+```
 `bash/add/test_public.sh`:
 ```bash
 #!/usr/bin/env bash
@@ -506,9 +526,26 @@ task_pipeline:
       script: "cd ${{ task.task_sub_path }} && go test ./..."
       timeout: ${{ parameters.timeout }}
 ```
-`go/add/go.mod`: `module add\n\ngo 1.21`
-`go/add/add.go`: `package main\n\nfunc Add(a, b int) int { return a + b }`
-`go/add/add.go.template`: `package main\n\nfunc Add(a, b int) int { return 0 // TODO: implement\n}`
+`go/add/go.mod`:
+```
+module add
+
+go 1.21
+```
+`go/add/add.go`:
+```go
+package main
+
+func Add(a, b int) int { return a + b }
+```
+`go/add/add.go.template` (the `//` comment and closing `}` MUST be on separate lines):
+```go
+package main
+
+func Add(a, b int) int {
+	return 0 // TODO: implement
+}
+```
 `go/add/public_test.go`:
 ```go
 package main
@@ -564,10 +601,10 @@ task_pipeline:
     run: run_script
     args:
       origin: "${{ global.temp_dir }}"
-      script: "cd ${{ task.task_sub_path }} && printf 'include!(\"add.rs\");\\ninclude!(\"test_private.rs\");\\n' > /tmp/priv_harness.rs && rustc --test /tmp/priv_harness.rs -o /tmp/rust_priv && /tmp/rust_priv"
+      script: "cd ${{ task.task_sub_path }} && printf 'include!(\"add.rs\");\\ninclude!(\"test_private.rs\");\\n' > priv_harness.rs && rustc --test priv_harness.rs -o /tmp/rust_priv && /tmp/rust_priv; rm -f priv_harness.rs"
       timeout: ${{ parameters.timeout }}
 ```
-(The private step builds its harness inline so `tests.rs` in the public repo never references the missing private file.)
+(The private step builds its harness **inside the task dir** — `include!` resolves paths relative to the harness file, so `add.rs`/`test_private.rs` must sit beside it; writing it to `/tmp` would fail to find them. The harness lives only in the grading temp copy, never in the exported public repo, so `tests.rs` in the student repo never references the missing private file.)
 `rust/add/.task.yml`: `version: 1`; `README.md`: statement.
 
 - [ ] **Step 2: Verify (toolchain permitting)**
