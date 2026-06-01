@@ -8,6 +8,10 @@ on:
       - ".github/workflows/course-template.yml"
   push:
     branches: [main]
+    paths:
+      - "course-template/**"
+      - "checker/**"
+      - ".github/workflows/course-template.yml"
 
 permissions:
   contents: read
@@ -30,7 +34,7 @@ jobs:
 
       - name: Install in-tree checker
         working-directory: checker
-        run: uv sync --locked && uv pip install -e .
+        run: uv sync --locked
 
       - name: checker validate
         working-directory: checker

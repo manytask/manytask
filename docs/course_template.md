@@ -79,7 +79,7 @@ This is the smallest end-to-end example that:
     course-template/deploy.sh git@gitlab.manytask2.org:<your-course>/private.git
     ```
 
-   Alternatively, clone the already-deployed GitLab template directly:
+   Alternatively, clone the deployed GitLab template directly (available only after a maintainer has run `deploy.sh` to publish it to `gitlab.manytask2.org/sandbox/private`):
 
     ```bash
     git clone https://gitlab.manytask2.org/sandbox/private private
