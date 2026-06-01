@@ -17,6 +17,14 @@ variables:
   CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@main#subdirectory=checker"
 
 grade:
+  # NOTE (iteration 2): `checker grade` overlays the PRIVATE tests from its
+  # reference_root onto the student's solution. In the public/student repo
+  # reference_root defaults to `.`, which does NOT contain test_private.py, so
+  # the private step has nothing to run here. The intended fix is to set
+  # `image:` to the course testenv image (built by .releaser-ci.yml with the
+  # private tests baked in) and run `checker grade . <baked-reference-path>`.
+  # Until that image is wired, only the public tests grade. The private
+  # pipeline is verified live by the `check` job in .releaser-ci.yml.
   image: python:3.12-slim
   stage: grade
   rules:

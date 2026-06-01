@@ -325,6 +325,28 @@ git commit -m "docs: point course template at the in-monorepo source"
 
 ## Chunk 3: Add the four remaining languages (cpp, bash, go, rust)
 
+> **RE-SCOPE (2026-06-01, user directive): Python-first, iterative.**
+> Rather than landing all five languages at once, prove the grading path on
+> **Python alone** end-to-end on live runners first, then add the other
+> languages one iteration at a time. Local toolchains aren't required — grading
+> runs in Docker. Iterations:
+>
+> - **Iteration 1 (DONE — verify on `sandbox/private`):** Make the private repo
+>   CI exercise private grading live. Added a `check` job to `.releaser-ci.yml`
+>   that runs `checker check` (reference solution through the full public+private
+>   task pipeline). In the private repo `reference_root` defaults to `.`, which
+>   already holds `test_private.py`, so this needs no registry image — just
+>   `python:3.12-slim` + pytest. Verified locally: public + private tests pass
+>   (`3 passed`, `TESTING PASSED`). User pushes to `sandbox/private` and confirms
+>   the `check` job runs private tests on a live runner.
+> - **Iteration 2 (next, after user confirms iter 1):** Wire the student-facing
+>   grade job — build the testenv image with private tests baked in (Task 3.6),
+>   push to the registry, point `.gitlab-ci.yml`'s grade job `image:` at it, and
+>   run `checker grade . <baked-reference>`. Registry/runner-dependent. The grade
+>   job currently carries a NOTE comment documenting this gap.
+> - **Iteration 3+ :** Add cpp / bash / go / rust (Tasks 3.1–3.5, 3.7), each via
+>   the multi-toolchain testenv. Designed once Python's full path is proven.
+
 **Why:** Satisfy the #637 DoD (one course, five languages). Each language adds a group with a `task_pipeline` and one trivial `add`-style task. Per-language grading on live runners is **verified in GitLab CI**, not on the laptop — except where the toolchain happens to be installed.
 
 **Naming convention (all languages):** solution file `add.<ext>` (excluded from export), `add.<ext>.template` (becomes the student's stub), `test_public.<ext>` (exported), and a hidden test whose filename contains `private` (Go must use `private_test.go` for the `_test.go` suffix). One glob (`*private*`) keeps every hidden test private.

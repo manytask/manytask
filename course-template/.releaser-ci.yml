@@ -4,6 +4,7 @@
 
 stages:
   - validate
+  - test
   - deploy
 
 variables:
@@ -26,6 +27,21 @@ validate:
     - pip install "$CHECKER_PIP_SPEC" pytest
   script:
     - checker validate
+
+# Runs the reference solution through the full task pipeline — public AND
+# private tests — on a live runner. In the private repo `reference_root`
+# defaults to `.`, which already contains test_private.py, so this is where
+# private grading is exercised end-to-end (the student grade job needs the
+# testenv image to get the private tests; see .gitlab-ci.yml).
+check:
+  image: python:3.12-slim
+  stage: test
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+    - python -m pip install --upgrade pip
+    - pip install "$CHECKER_PIP_SPEC" pytest
+  script:
+    - checker check
 
 deploy-public:
   image: python:3.12-slim
