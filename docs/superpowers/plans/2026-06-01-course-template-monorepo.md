@@ -346,6 +346,12 @@ Determine: does the student grade job (a) clone the private/reference repo via `
 
 - [ ] **Step 3: Write the decision as a comment block** at the top of each new `.group.yml` you create below, so the pipeline shape is justified. If the mechanism cannot be determined from the repo, STOP and surface to the human — do not guess.
 
+> **SPIKE FINDING (2026-06-01, high confidence) — answer = (C), with a gap.**
+> Hidden tests are NOT cloned at grade time. `checker grade` has no clone logic; `reference_root` defaults to `.`; `TESTER_TOKEN` is score-reporting auth only (`docs/checker_config.md:174`), not a git token. The intended mechanism is the **Testenv Docker image**: per `docs/concepts.md:27`, the testenv "should contain a copy of the private repository with private tests; it is used to run `checker grade` in students' repositories", produced via `checker export_private` (`concepts.md:24`). `docs/concepts.md:38` confirms the student grade job runs both public and private tests — i.e. private tests come from the image, not a fetch.
+> **Consequence for pipeline shape:** keep the SAME two-step public+private shape as the existing Python `.checker.yml` for every language. The pipelines are correct as-is.
+> **Consequence for Task 3.6 (load-bearing gap):** the shipped template does NOT yet implement this — `testenv.docker` bakes in no private tests and `.gitlab-ci.yml` runs on `python:3.12-slim` with bare `checker grade`, so private tests would be absent at grade time and the private step would fail. Task 3.6 MUST therefore (a) bake the private tests into the testenv image (`checker export_private` into it, or COPY the private tree) **in addition to** the five toolchains, and (b) point `.gitlab-ci.yml`'s grade job `image:` at that image. Live grading remains operator-verified (needs GitLab + registry).
+> **Local verification still works:** `checker check <root> <reference_root>` with `reference_root` = the full template runs public+private locally (the reference context has the private files), so each language's pipeline is verifiable on the laptop, toolchain permitting.
+
 ### Task 3.1: Generalize private-file patterns + per-language test split
 
 **Files:** Modify `course-template/.checker.yml`
@@ -627,9 +633,13 @@ cd .. && git add course-template/rust && git commit -m "feat(course-template): a
 
 Move off `python:3.12-slim` to a base that can host every toolchain (e.g. `debian:bookworm-slim` + apt installs for `python3 python3-pip g++ golang bash`, plus `rustup`/`rustc` via the `rust` apt package or rustup). Pin versions. Install the checker (`$CHECKER_PIP_SPEC` or `manytask-checker`) + `pytest`. Keep `WORKDIR /workspace`.
 
+- [ ] **Step 1b: Bake the private tests into the image (REQUIRED — per the Task 3.0 spike).**
+
+The grade job runs `checker grade` with no clone; private tests must already be on disk in the image. So the testenv image must carry a copy of the private repo's tests. Do this in the image build (e.g. `COPY` the course tree in and run `checker export_private` to materialise the reference/private tree at the task paths, or `COPY` the private test files directly). Without this, the "Run private tests" step fails at grade time and the DoD's "tasks are graded" is not met.
+
 - [ ] **Step 2: Decide image delivery for the grade job**
 
-Per the spec, the grade job needs the toolchains. Either (a) build+push `testenv.docker` to the GitLab project registry in `.releaser-ci.yml` and set `image:` in `.gitlab-ci.yml` to it, or (b) install toolchains inline in `before_script`. Pick (a) for a clean template; document the `CI_REGISTRY_IMAGE` usage. Record the choice in a comment.
+Per the spec + spike, the grade job needs the toolchains AND the private tests. Build+push `testenv.docker` to the GitLab project registry in `.releaser-ci.yml` and set `image:` in `.gitlab-ci.yml`'s grade job to `$CI_REGISTRY_IMAGE/...` (replacing the current `python:3.12-slim`). Document the `CI_REGISTRY_IMAGE` usage in a comment. (Inline toolchain install in `before_script` is a fallback but does NOT solve the private-tests-present problem — the image is the right place.)
 
 - [ ] **Step 3: Build the image locally to confirm it's valid (if Docker available)**
 
