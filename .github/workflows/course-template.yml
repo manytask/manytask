@@ -1,0 +1,47 @@
+name: course-template
+
+on:
+  pull_request:
+    paths:
+      - "course-template/**"
+      - "checker/**"
+      - ".github/workflows/course-template.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-no-leak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: 0.9.5
+
+      - name: Install in-tree checker
+        working-directory: checker
+        run: uv sync --locked && uv pip install -e .
+
+      - name: checker validate
+        working-directory: checker
+        run: uv run checker validate ../course-template
+
+      - name: Dry-export and assert no private files leak
+        working-directory: checker
+        run: |
+          rm -rf /tmp/ct-export && mkdir -p /tmp/ct-export
+          uv run checker export ../course-template /tmp/ct-export
+          if find /tmp/ct-export -type f \( -name '*private*' -o -name '.releaser-ci.yml' \) | grep -q .; then
+            echo "::error::private files leaked into export"; exit 1
+          fi
+          echo "clean export"
