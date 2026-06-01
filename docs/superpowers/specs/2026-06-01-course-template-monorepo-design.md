@@ -79,11 +79,11 @@ manytask/
     └── tools/
 ```
 
-Rationale: top-level is discoverable ("here is the template, copy it"); the name describes purpose to a monorepo reader; it does not scope a course-as-code artifact under `checker/`; and its contents map 1:1 to the GitLab `sandbox/private` repo. The deployed instance keeps the name **`sandbox`** everywhere it already appears (GitLab namespace, course slug, `.manytask.yml`, docs). *(Open naming question for spec review: `course-template/` vs `sandbox/` as the directory name — §11.)*
+Rationale: top-level is discoverable ("here is the template, copy it"); the name describes purpose to a monorepo reader; it does not scope a course-as-code artifact under `checker/`; and its contents map 1:1 to the GitLab `sandbox/private` repo. The deployed instance keeps the name **`sandbox`** everywhere it already appears (GitLab namespace, course slug, `.manytask.yml`, docs). **Decided:** directory name is `course-template/`.
 
 ### 4.2 Source-of-truth / sync model
 
-The monorepo is the single source of truth. Deployment to `gitlab.manytask2.org/sandbox/private` happens by pushing the `course-template/` subtree (via `git subtree split`/push or a small sync script — exact mechanism decided in the plan). The standalone `~/manytask-sandbox` repo is absorbed; its git history is **not** imported (early commits contain the private-file leak — a clean start is preferable).
+The monorepo is the single source of truth. **Decided:** deployment to `gitlab.manytask2.org/sandbox/private` is done by a **simple committed sync script** (copy `course-template/` contents into a clone of the GitLab repo and push) plus documented manual steps — not `git subtree`, since we are not preserving history. Exact script form is decided in the plan. The standalone `~/manytask-sandbox` repo is absorbed; its git history is **not** imported (early commits contain the private-file leak — a clean start is preferable).
 
 ### 4.3 Multi-language structure
 
@@ -172,8 +172,8 @@ The work is one spec implemented incrementally:
 - No changes to `checker/demo-sample-course/`.
 - No live deploy, secrets, or course registration.
 
-## 10. Open questions for spec review
+## 10. Resolved decisions (were open questions)
 
-1. Directory name: `course-template/` (purpose-named, recommended) vs `sandbox/` (matches the deployed instance name everywhere else)?
-2. Phase-1 breadth: author all five languages now (matches DoD), accepting that cpp/go/rust grading is verified only in GitLab CI — confirmed direction, flag if the user wants to stage languages instead.
-3. Sync mechanism: `git subtree push` vs a committed sync script — defer to the implementation plan, or decide now?
+1. **Directory name:** `course-template/` (purpose-named). ✅ decided.
+2. **Phase-1 breadth:** author all five languages now (matches DoD); cpp/go/rust grading is verified only in GitLab CI. ✅ confirmed.
+3. **Sync mechanism:** a simple committed sync script + documented manual steps (not `git subtree`). ✅ decided; exact script form deferred to the plan.
