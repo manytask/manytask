@@ -23,7 +23,7 @@ A maintainer runs `course-template/deploy.sh` to push changes from the monorepo 
 course-template/deploy.sh git@gitlab.manytask2.org:sandbox/private.git
 ```
 
-The script clones (or initialises) the GitLab repo, mirrors the `course-template/` tree over it (excluding `.git` and `deploy.sh` itself), and force-pushes to `main`.
+The script clones (or initialises) the GitLab repo, mirrors the `course-template/` tree over it (excluding `.git` and `deploy.sh` itself), commits the result, and pushes to `main`.
 
 Once the template stabilises it will be promoted to the production instance
 (`gitlab.manytask.org/sandbox`) and bound to a `sandbox` course on
