@@ -41,7 +41,7 @@ This design covers both: relocating the template into the monorepo as the canoni
 ### Root cause (verified)
 
 - `checker/checker/plugins/__init__.py:load_plugins()` iterates every module in `checker/plugins/` and calls `spec.loader.exec_module(module)` to discover `PluginABC` subclasses.
-- One of those modules, `checker/plugins/checker_reporter.py`, does an unguarded top-level `import pytest` (line 17) and defines `@pytest.hookimpl`-decorated hooks at class-definition time.
+- One of those modules, `checker/plugins/checker_reporter.py`, does an unguarded top-level `import pytest` and defines `@pytest.hookimpl`-decorated hooks at class-definition time.
 - `checker_reporter` is **not** a `PluginABC` — it is a *pytest* plugin, loaded into the pytest subprocess via `-p checker.plugins.checker_reporter` (see `plugins/python.py:_setup_percentage_reporting`). It has no reason to be executed during checker's own plugin discovery.
 - Reproduced: with `pytest` unavailable, `load_plugins()` raises `ModuleNotFoundError: No module named 'pytest'` at the "Loading plugins..." step — crashing `checker validate`/`grade`/`export` for **any** course, including non-pytest (C++/Go/Rust/Bash) courses.
 
@@ -54,6 +54,7 @@ A lighter alternative (if relocation proves to ripple): guard the pytest-depende
 ### Verification
 
 - **Regression test (TDD, write first):** a test in `checker/tests/plugins/` that runs `load_plugins()` in an environment where `pytest` is not importable and asserts it succeeds (no `ModuleNotFoundError`). Drive the fix from this failing test.
+- **End-to-end guard:** if the fix relocates the reporter, also keep coverage for the percentage-reporting path (`run_pytest` with `report_percentage: true`, which loads the reporter via `-p`) so the relocation doesn't silently break score reporting.
 - Existing checker test suite stays green.
 - `checker validate` / `checker check` against the template still pass.
 
@@ -90,9 +91,9 @@ One course, one set of root configs, five language groups. Layout per group:
 
 ```
 <lang>/
-├── .group.yml                      # shared parameters for the language (e.g. timeout, language tag)
+├── .group.yml                      # shared parameters AND the per-language test pipeline
 └── <task>/
-    ├── .task.yml                   # per-task pipeline override (see below)
+    ├── .task.yml                   # usually empty; per-task pipeline override only when a task differs
     ├── README.md                   # task statement
     ├── <solution files>            # reference solution (NOT exported)
     ├── <template files> (*.template)  # what students get
@@ -102,16 +103,16 @@ One course, one set of root configs, five language groups. Layout per group:
 
 Trivial tasks (anyone can solve), one per language to start, e.g. an `add`/`hello`-style task per language.
 
-**Per-language grading mechanism (verified against checker):** `.task.yml` parses into `CheckerSubConfig`, which supports a `task_pipeline` override; `tester.py` uses `task.config.task_pipeline` when present and falls back to the global `testing.tasks_pipeline` otherwise. Parameters cascade `default_parameters` → `.group.yml` → `.task.yml`. Therefore:
+**Per-language grading mechanism (verified against checker):** both `.group.yml` and `.task.yml` parse into `CheckerSubConfig`, which supports a `task_pipeline` override. `tester.py` resolves the pipeline per task as task `.task.yml` → group `.group.yml` → global `testing.tasks_pipeline` (three-level fallback). Parameters cascade `default_parameters` → `.group.yml` → `.task.yml`. To stay DRY, the per-language pipeline lives in the group's `.group.yml` (shared by all its tasks); an individual `.task.yml` overrides it only when a task genuinely differs. Therefore:
 
-- **Python** uses the existing `run_pytest`-based pipeline (global default).
-- **C++ / Go / Rust / Bash** each define a `task_pipeline` in their `.task.yml` that uses `run_script` to compile and run that language's tests (`go test`, `cargo test`, a `g++`-compiled test driver, shell assertions / `bats` for Bash).
+- **Python** uses the existing `run_pytest`-based pipeline (set in `python/.group.yml`, or left to the global default).
+- **C++ / Go / Rust / Bash** each define a `task_pipeline` in their `<lang>/.group.yml` that uses `run_script` to compile and run that language's tests (`go test`, `cargo test`, a `g++`-compiled test driver, shell assertions / `bats` for Bash).
 
 This is a real, supported mechanism — no checker changes needed for multi-language.
 
 ### 4.4 Test environment
 
-`testenv.docker` must carry all five toolchains (python+pytest, g++, bash, go, rust). The image is specified here; building/grading per language is verified in the deployed GitLab CI (the dev runner has Docker), not necessarily on the developer laptop.
+`testenv.docker` must carry all five toolchains (python+pytest, g++, bash, go, rust). Carrying four extra toolchains means the base almost certainly moves off `python:3.12-slim` (e.g. a fuller Debian base or a multi-stage build) and toolchain versions should be pinned. The image is specified here; building/grading per language is verified in the deployed GitLab CI (the dev runner has Docker), not necessarily on the developer laptop.
 
 ### 4.5 CI files
 
@@ -119,7 +120,10 @@ This is a real, supported mechanism — no checker changes needed for multi-lang
 
 ### 4.6 Monorepo CI integration
 
-Add a job in the monorepo's CI (GitHub Actions under `.github/`) that installs the in-tree checker and runs `checker validate course-template` (and `checker check` if feasible) on PRs touching `course-template/` or `checker/`. This is the cheap structural guard that would have caught the private-file leak; it does not require the multi-toolchain Docker image.
+Add a job in the monorepo's CI (GitHub Actions under `.github/`) that installs the in-tree checker and, on PRs touching `course-template/` or `checker/`, runs two cheap checks (neither needs the multi-toolchain Docker image):
+
+1. `checker validate course-template` — pipeline/placeholder structural validity.
+2. A **dry-run export** to a temp dir (`checker export-private`/`export` into a throwaway directory) followed by an assertion that the exported public tree contains **no** private files (`test_private*`, `.releaser-ci.yml`, reference solutions). `checker validate` does **not** exercise the `public_patterns`/`private_patterns` export filtering — only export does — so this dry-export assertion is the actual guard that would have caught the private-file leak.
 
 ### 4.7 Docs
 
