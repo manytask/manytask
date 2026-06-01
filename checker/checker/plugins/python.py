@@ -103,7 +103,7 @@ class RunPytestPlugin(RunScriptPlugin):
         # Use our secure plugin with pipe mode.
         tests_cmd += [
             "-p",
-            "checker.plugins.checker_reporter",
+            "checker.checker_reporter",
             "--checker-report",
             str(pipe_path),
             "--checker-use-pipe",
