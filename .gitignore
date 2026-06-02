@@ -3,6 +3,7 @@
 .vscode/
 .DS_Store
 .roo/
+.run/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -140,4 +141,3 @@ dmypy.json
 
 # tmp
 .tmp
-scripts
