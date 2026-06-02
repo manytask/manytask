@@ -9,8 +9,12 @@ The template demonstrates the standard *Course as Code* layout:
 - One **public** repository that is auto-generated from the private one by `checker export`.
 - One **students group** in GitLab where Manytask creates a fork of the public repo for each student.
 
-See the upstream concept docs:
-<https://manytask.org/course_as_code.html>
+See the upstream docs:
+
+- Concept: [Course as Code](https://manytask.org/course_as_code.html)
+- Checker configuration: <https://manytask.org/checker_config.html>
+- `.checker.yml` reference: <https://manytask.org/checker_yml_reference.html>
+- Checker pipelines and plugins: <https://manytask.org/checker_pipelines_and_plugins.html>
 
 ---
 
@@ -21,7 +25,7 @@ See the upstream concept docs:
 ├── .checker.yml          # checker structure, export rules, testing pipeline
 ├── .manytask.yml         # course settings + deadlines schedule
 ├── .gitlab-ci.yml        # CI for grading student submissions (lives in public)
-├── .releaser-ci.yml      # CI for exporting private → public (lives in private)
+├── .releaser-ci.yml      # CI for exporting private -> public (lives in private)
 ├── testenv.docker        # image used by .gitlab-ci.yml to run tests
 ├── pyproject.toml        # python toolchain dependencies
 ├── tools/                # placeholder for shared plugins / testlib
@@ -55,12 +59,21 @@ of [manytask#637](https://github.com/manytask/manytask/issues/637).
 Also create an empty group `<your-course>/students` — Manytask will create
 per-student forks of `public` inside it.
 
-### 2. Clone this template into your private project
+### 2. Copy this template into your private project
+
+The template lives in the `course-template/` folder of the Manytask repo, so
+clone that repo and copy the folder out — a plain `git clone` can't fetch a
+single subdirectory:
 
 ```bash
-git clone https://gitlab.manytask2.org/sandbox/private private
+git clone https://github.com/manytask/manytask.git
+cp -r manytask/course-template private
+rm -rf manytask
 cd private
-git remote set-url origin git@gitlab.com:<your-course>/private.git
+git init -b main
+git add .
+git commit -m "chore: init course from template"
+git remote add origin git@gitlab.com:<your-course>/private.git
 git push -u origin main
 ```
 
@@ -68,13 +81,13 @@ git push -u origin main
 
 Change at least these fields:
 
-- `.checker.yml` → `export.destination` → URL of your `public` repo
-- `.manytask.yml` → `ui.task_url_template`, `ui.links`, `deadlines.schedule` (set real dates)
-- `.releaser-ci.yml` → `REGISTRY` variable if you build images
+- `.checker.yml` -> `export.destination` -> URL of your `public` repo
+- `.manytask.yml` -> `ui.task_url_template`, `ui.links`, `deadlines.schedule` (set real dates)
+- `.releaser-ci.yml` -> `REGISTRY` variable if you build images
 
 ### 4. Set required GitLab CI/CD variables
 
-In **Group → Settings → CI/CD → Variables**:
+In **Group -> Settings -> CI/CD -> Variables**:
 
 | Variable | Where to get it | Used for |
 |---|---|---|
@@ -121,6 +134,10 @@ pip install manytask-checker
 checker validate
 checker export --dry-run
 ```
+
+For the full list of commands and config options, see the
+[checker configuration docs](https://manytask.org/checker_config.html) and the
+[`.checker.yml` reference](https://manytask.org/checker_yml_reference.html).
 
 ---
 

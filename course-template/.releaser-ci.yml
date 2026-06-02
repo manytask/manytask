@@ -1,4 +1,4 @@
-# CI pipeline executed in the INSTRUCTOR private repository.
+# CI pipeline executed in the TEACHER private repository.
 # On push to main: exports tasks to the public student repository
 # and updates the deadlines on the Manytask web application.
 
@@ -56,7 +56,7 @@ build-testenv:
   before_script:
     - mkdir -p /kaniko/.docker
     # Authenticate with username/password directly rather than a base64 `auth`
-    # blob: kaniko silently falls back to anonymous (→ 401 at the registry's
+    # blob: kaniko silently falls back to anonymous (-> 401 at the registry's
     # jwt/auth) if it cannot parse the `auth` field. printf inserts the values
     # verbatim; deploy-token secrets are alphanumeric so the JSON stays valid.
     - printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}' "$CI_REGISTRY" "$CI_DEPLOY_USER" "$CI_DEPLOY_PASSWORD" > /kaniko/.docker/config.json
@@ -122,8 +122,8 @@ deploy-public:
     # subcommand for this (checker only exports files). See docs/deploy_guide.md
     # §9.1 "Send Course Configuration".
     #
-    # MANYTASK_TOKEN here is the per-course token (Group/Project → Settings →
-    # CI/CD → Variables). MANYTASK_URL / MANYTASK_COURSE default to the sandbox
+    # MANYTASK_TOKEN here is the per-course token (Group/Project -> Settings ->
+    # CI/CD -> Variables). MANYTASK_URL / MANYTASK_COURSE default to the sandbox
     # dev instance; override them for your course.
     - |
       if [ -n "$MANYTASK_TOKEN" ]; then

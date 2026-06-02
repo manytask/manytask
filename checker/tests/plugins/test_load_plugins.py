@@ -4,12 +4,9 @@ from checker.plugins import load_plugins
 
 
 def test_load_plugins_without_pytest(monkeypatch):
-    """Plugin discovery must not require pytest to be importable.
-
-    Regression: checker_reporter.py used to live in checker/plugins/ with a
-    top-level `import pytest`, so load_plugins() (which exec_module's every
-    plugin file) crashed at startup when pytest was absent — breaking checker
-    for non-pytest (e.g. C++) courses.
+    """
+    Regression test: checker_reporter.py was in checker/plugins/ with a
+    top-level `import pytest`, so load_plugins() crashed at startup when pytest was absent. This is incorrect behavior for non-pytest courses.
     """
     real_import = builtins.__import__
 
@@ -22,4 +19,4 @@ def test_load_plugins_without_pytest(monkeypatch):
 
     plugins = load_plugins()
 
-    assert "run_pytest" in plugins  # pytest *runner* plugin still discovered
+    assert "run_pytest" in plugins

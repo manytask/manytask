@@ -29,7 +29,7 @@ structure:
     - ".group.yml"      # per-group structure (checker/course.py)
 
   # Dotfiles are private by default (".*"), so any future secret an
-  # instructor drops in (.env, .secret, ...) stays out of the public repo
+  # teacher drops in (.env, .secret, ...) stays out of the public repo
   # unless explicitly allow-listed above.
   #
   # "*private*" hides every language's hidden tests in one rule — test_private.py,
@@ -77,11 +77,7 @@ testing:
   # It requires the MANYTASK_TOKEN env var (set as a CI/CD secret variable
   # in your private repository) and is only meant to run inside CI.
   # Uncomment after configuring the secret AND choosing a working report_url.
-  # See README.md → "Required CI/CD variables".
-  #
-  # NOTE: app.manytask2.org (dev) is currently unavailable. Either point
-  # report_url at the prod app (https://app.manytask.org) once a real
-  # MANYTASK_TOKEN is provisioned, or wait for the dev app to be restored.
+  # See README.md -> "Required CI/CD variables".
   #
   # report_pipeline:
   #   - name: "Report score to manytask"
