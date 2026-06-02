@@ -1,8 +1,10 @@
+import os
 import time
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from dotenv import load_dotenv
 from flask import Flask, Response, url_for
 from flask.testing import FlaskClient
 from sqlalchemy import create_engine, text
@@ -12,6 +14,24 @@ from testcontainers.postgres import PostgresContainer
 from manytask.main import create_app
 
 ALEMBIC_PATH = "manytask/alembic.ini"
+
+
+@pytest.fixture(autouse=True)
+def setup_environment(monkeypatch):
+    """Set the environment variables shared by all test modules."""
+    load_dotenv()
+    if not os.getenv("MANYTASK_COURSE_TOKEN"):
+        monkeypatch.setenv("MANYTASK_COURSE_TOKEN", "test_token")
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test_key")
+    monkeypatch.setenv("TESTING", "true")
+    yield
+
+
+@pytest.fixture
+def client_with_db(app_with_db):
+    """Flask test client backed by a real database (uses the module's app_with_db)."""
+    with app_with_db.test_client() as client:
+        yield client
 
 
 @pytest.fixture()

@@ -1,17 +1,12 @@
 """Tests for namespace API endpoints."""
 
 from http import HTTPStatus
-from unittest.mock import MagicMock
 
 import pytest
 from authlib.integrations.flask_client import OAuth
-from dotenv import load_dotenv
-from flask import Flask, json
+from flask import json
 
 from manytask.abstract import AuthApi, AuthenticatedUser
-from manytask.api import namespace_bp
-from manytask.database import DataBaseApi, DatabaseConfig
-from manytask.mock_rms import MockRmsApi
 from manytask.models import (
     ROLE_NAMESPACE_ADMIN,
     ROLE_PROGRAM_MANAGER,
@@ -20,13 +15,17 @@ from manytask.models import (
     UserOnNamespace,
     UserOnNamespaceRole,
 )
-from manytask.web import root_bp
-from tests.constants import (
-    GITLAB_BASE_URL,
-    TEST_CLIENT_PROFILE_SESSION_VERSION,
-    TEST_GITLAB_SESSION_VERSION,
-    TEST_MANYTASK_SESSION_VERSION,
-    TEST_SECRET_KEY,
+from tests.helpers import (
+    assert_forbidden_admin_only,
+    assert_not_json_rejected,
+    assert_slugs_rejected,
+    assign_namespace_role,
+    build_mock_session,
+    build_namespace_app,
+    create_namespace,
+    make_user,
+    post_json,
+    register_rms_user,
 )
 
 
@@ -50,61 +49,17 @@ class MockAuthApi(AuthApi):
         return AuthenticatedUser(id=1, username="test_user")
 
 
-@pytest.fixture(autouse=True)
-def setup_environment(monkeypatch):
-    load_dotenv()
-    monkeypatch.setenv("FLASK_SECRET_KEY", "test_key")
-    monkeypatch.setenv("TESTING", "true")
-    yield
-
-
 @pytest.fixture
 def app_with_db(engine, session, postgres_container):
     """Create Flask app with real database."""
-    app = Flask(__name__)
-    app.config["DEBUG"] = False
-    app.config["TESTING"] = True
-    app.secret_key = TEST_SECRET_KEY
-    app.register_blueprint(root_bp)
-    app.register_blueprint(namespace_bp)
-
-    # Setup storage_api with test database
-    def session_factory():
-        return session
-
-    db_config = DatabaseConfig(
-        database_url=postgres_container.get_connection_url(),
-        instance_admin_username="admin",
-        apply_migrations=False,
-        session_factory=session_factory,
-    )
-
-    app.storage_api = DataBaseApi(db_config)
-    app.rms_api = MockRmsApi(GITLAB_BASE_URL)
-    app.auth_api = MockAuthApi()
-    app.oauth = MagicMock()  # Mock OAuth object
+    app = build_namespace_app(session, postgres_container, apply_migrations=False, auth_api=MockAuthApi())
 
     # DataBaseApi already created admin user with username="admin" and rms_id=-1
     # Just create a regular user
-    regular_user = User(
-        username="regular_user",
-        first_name="Regular",
-        last_name="User",
-        rms_id="2",
-        auth_id=2,
-        is_instance_admin=False,
-    )
-    session.add(regular_user)
+    session.add(make_user("regular_user", "Regular", "User", "2", 2))
     session.commit()
 
     return app
-
-
-@pytest.fixture
-def client_with_db(app_with_db):
-    """Flask test client with database."""
-    with app_with_db.test_client() as client:
-        yield client
 
 
 @pytest.fixture
@@ -112,25 +67,7 @@ def mock_session_admin(session):
     """Mock session for admin user."""
     # Get the actual admin user created by DataBaseApi
     admin = session.query(User).filter_by(username="admin").first()
-    return {
-        "auth": {
-            "username": "admin",
-            "user_auth_id": admin.id,
-            "version": TEST_GITLAB_SESSION_VERSION,
-            "access_token": "mock_access_token",
-            "refresh_token": "mock_refresh_token",
-        },
-        "rms": {
-            "username": "admin",
-            "rms_id": admin.rms_id,
-            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-        },
-        "manytask": {
-            "username": "admin",
-            "user_id": admin.id,
-            "version": TEST_MANYTASK_SESSION_VERSION,
-        },
-    }
+    return build_mock_session("admin", user_auth_id=admin.id, rms_id=admin.rms_id, user_id=admin.id)
 
 
 @pytest.fixture
@@ -138,25 +75,7 @@ def mock_session_regular(session):
     """Mock session for regular user."""
     # Get the regular user we created
     regular = session.query(User).filter_by(username="regular_user").first()
-    return {
-        "auth": {
-            "username": "regular_user",
-            "user_auth_id": regular.id,
-            "version": TEST_GITLAB_SESSION_VERSION,
-            "access_token": "mock_access_token",
-            "refresh_token": "mock_refresh_token",
-        },
-        "rms": {
-            "username": "regular_user",
-            "rms_id": regular.rms_id,
-            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-        },
-        "manytask": {
-            "username": "regular_user",
-            "user_id": regular.id,
-            "version": TEST_MANYTASK_SESSION_VERSION,
-        },
-    }
+    return build_mock_session("regular_user", user_auth_id=regular.id, rms_id=regular.rms_id, user_id=regular.id)
 
 
 def test_create_namespace_as_instance_admin(client_with_db, session, mock_session_admin):
@@ -167,18 +86,9 @@ def test_create_namespace_as_instance_admin(client_with_db, session, mock_sessio
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={
-            "name": "HSE",
-            "slug": "hse-namespace",
-            "description": "Namespace for Higher School of Economics courses",
-        },
-        content_type="application/json",
+    data = create_namespace(
+        client_with_db, name="HSE", slug="hse-namespace", description="Namespace for Higher School of Economics courses"
     )
-
-    assert response.status_code == HTTPStatus.CREATED
-    data = json.loads(response.data)
 
     assert "id" in data
     assert data["name"] == "HSE"
@@ -209,14 +119,14 @@ def test_create_namespace_as_regular_user(client_with_db, mock_session_regular):
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_regular)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/namespaces",
-        json={
+        {
             "name": "HSE",
             "slug": "hse-namespace",
             "description": "Test",
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
@@ -232,27 +142,27 @@ def test_create_namespace_duplicate_slug(client_with_db, session, mock_session_a
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response1 = client_with_db.post(
+    response1 = post_json(
+        client_with_db,
         "/api/namespaces",
-        json={
+        {
             "name": "HSE",
             "slug": "hse-namespace",
             "description": "First namespace",
         },
-        content_type="application/json",
     )
 
     assert response1.status_code == HTTPStatus.CREATED
 
     # Try to create second namespace with same slug
-    response2 = client_with_db.post(
+    response2 = post_json(
+        client_with_db,
         "/api/namespaces",
-        json={
+        {
             "name": "Another HSE",
             "slug": "hse-namespace",
             "description": "Second namespace",
         },
-        content_type="application/json",
     )
 
     assert response2.status_code == HTTPStatus.CONFLICT
@@ -267,29 +177,13 @@ def test_create_namespace_invalid_slug(client_with_db, mock_session_admin):
         sess.update(mock_session_admin)
 
     # Test various invalid slugs
-    invalid_slugs = [
-        "invalid..slug",  # Consecutive dots
-        "-invalid",  # Starts with dash
-        "invalid-",  # Ends with dash
-        "invalid slug",  # Contains space
-        "invalid/slug",  # Contains slash
-        "",  # Empty
-    ]
-
-    for invalid_slug in invalid_slugs:
-        response = client_with_db.post(
-            "/api/namespaces",
-            json={
-                "name": "Test",
-                "slug": invalid_slug,
-                "description": "Test",
-            },
-            content_type="application/json",
-        )
-
-        assert response.status_code == HTTPStatus.BAD_REQUEST, f"Slug '{invalid_slug}' should be invalid"
-        data = json.loads(response.data)
-        assert "error" in data
+    invalid_slugs = ["invalid..slug", "-invalid", "invalid-", "invalid slug", "invalid/slug", ""]
+    assert_slugs_rejected(
+        client_with_db,
+        "/api/namespaces",
+        invalid_slugs,
+        lambda slug: {"name": "Test", "slug": slug, "description": "Test"},
+    )
 
 
 def test_create_namespace_missing_fields(client_with_db, mock_session_admin):
@@ -299,25 +193,25 @@ def test_create_namespace_missing_fields(client_with_db, mock_session_admin):
         sess.update(mock_session_admin)
 
     # Missing name
-    response1 = client_with_db.post(
+    response1 = post_json(
+        client_with_db,
         "/api/namespaces",
-        json={
+        {
             "slug": "test-slug",
             "description": "Test",
         },
-        content_type="application/json",
     )
 
     assert response1.status_code == HTTPStatus.BAD_REQUEST
 
     # Missing slug
-    response2 = client_with_db.post(
+    response2 = post_json(
+        client_with_db,
         "/api/namespaces",
-        json={
+        {
             "name": "Test",
             "description": "Test",
         },
-        content_type="application/json",
     )
 
     assert response2.status_code == HTTPStatus.BAD_REQUEST
@@ -329,16 +223,7 @@ def test_create_namespace_not_json(client_with_db, mock_session_admin):
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        data="not json",
-        content_type="text/plain",
-    )
-
-    assert response.status_code == HTTPStatus.BAD_REQUEST
-    data = json.loads(response.data)
-    assert "error" in data
-    assert "JSON" in data["error"]
+    assert_not_json_rejected(client_with_db, "/api/namespaces")
 
 
 def test_create_namespace_without_description(client_with_db, session, mock_session_admin):
@@ -347,13 +232,13 @@ def test_create_namespace_without_description(client_with_db, session, mock_sess
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/namespaces",
-        json={
+        {
             "name": "HSE",
             "slug": "hse-namespace",
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -383,14 +268,14 @@ def test_create_namespace_valid_slugs(client_with_db, session, mock_session_admi
     ]
 
     for i, valid_slug in enumerate(valid_slugs):
-        response = client_with_db.post(
+        response = post_json(
+            client_with_db,
             "/api/namespaces",
-            json={
+            {
                 "name": f"Test {i}",
                 "slug": valid_slug,
                 "description": "Test",
             },
-            content_type="application/json",
         )
 
         assert response.status_code == HTTPStatus.CREATED, f"Slug '{valid_slug}' should be valid"
@@ -407,25 +292,17 @@ def test_get_namespaces_as_instance_admin(client_with_db, session, mock_session_
         sess.update(mock_session_admin)
 
     # Create multiple namespaces
-    response1 = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse", "description": "HSE namespace"},
-        content_type="application/json",
+    response1 = post_json(
+        client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse", "description": "HSE namespace"}
     )
     assert response1.status_code == HTTPStatus.CREATED
 
-    response2 = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "MIT", "slug": "mit", "description": "MIT namespace"},
-        content_type="application/json",
+    response2 = post_json(
+        client_with_db, "/api/namespaces", {"name": "MIT", "slug": "mit", "description": "MIT namespace"}
     )
     assert response2.status_code == HTTPStatus.CREATED
 
-    response3 = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "Stanford", "slug": "stanford"},
-        content_type="application/json",
-    )
+    response3 = post_json(client_with_db, "/api/namespaces", {"name": "Stanford", "slug": "stanford"})
     assert response3.status_code == HTTPStatus.CREATED
 
     # Get all namespaces
@@ -457,18 +334,14 @@ def test_get_namespaces_as_regular_user_with_roles(client_with_db, session, mock
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response1 = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse", "description": "HSE namespace"},
-        content_type="application/json",
+    response1 = post_json(
+        client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse", "description": "HSE namespace"}
     )
     assert response1.status_code == HTTPStatus.CREATED
     ns1_data = json.loads(response1.data)
 
-    response2 = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "MIT", "slug": "mit", "description": "MIT namespace"},
-        content_type="application/json",
+    response2 = post_json(
+        client_with_db, "/api/namespaces", {"name": "MIT", "slug": "mit", "description": "MIT namespace"}
     )
     assert response2.status_code == HTTPStatus.CREATED
 
@@ -476,14 +349,13 @@ def test_get_namespaces_as_regular_user_with_roles(client_with_db, session, mock
     regular_user = session.query(User).filter_by(username="regular_user").first()
     hse_namespace = session.query(Namespace).filter_by(slug="hse").first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=regular_user.id,
         namespace_id=hse_namespace.id,
         role=UserOnNamespaceRole.PROGRAM_MANAGER,
         assigned_by_id=regular_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Get namespaces as regular user
     with client_with_db.session_transaction() as sess:
@@ -518,11 +390,7 @@ def test_get_namespaces_as_regular_user_without_roles(
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response1 = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse"},
-        content_type="application/json",
-    )
+    response1 = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse"})
     assert response1.status_code == HTTPStatus.CREATED
 
     # Get namespaces as regular user (without any roles)
@@ -562,10 +430,8 @@ def test_get_namespace_by_id_as_instance_admin(client_with_db, session, mock_ses
         sess.update(mock_session_admin)
 
     # Create a namespace
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse", "description": "HSE namespace"},
-        content_type="application/json",
+    response = post_json(
+        client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse", "description": "HSE namespace"}
     )
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
@@ -596,10 +462,8 @@ def test_get_namespace_by_id_as_regular_user_with_access(
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse", "description": "HSE namespace"},
-        content_type="application/json",
+    response = post_json(
+        client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse", "description": "HSE namespace"}
     )
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
@@ -609,14 +473,13 @@ def test_get_namespace_by_id_as_regular_user_with_access(
     regular_user = session.query(User).filter_by(username="regular_user").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=regular_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.PROGRAM_MANAGER,
         assigned_by_id=regular_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Get namespace as regular user
     with client_with_db.session_transaction() as sess:
@@ -646,11 +509,7 @@ def test_get_namespace_by_id_as_regular_user_without_access(
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -691,11 +550,7 @@ def test_add_user_to_namespace_as_instance_admin(client_with_db, session, mock_s
         sess.update(mock_session_admin)
 
     # Create namespace
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -729,10 +584,10 @@ def test_add_user_to_namespace_as_instance_admin(client_with_db, session, mock_s
         )
 
     # Add user to namespace with program_manager role
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": regular_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
-        content_type="application/json",
+        {"user_id": regular_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -758,11 +613,7 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -772,14 +623,13 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     admin_user = session.query(User).filter_by(username="admin").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=regular_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.NAMESPACE_ADMIN,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Create another user to add
     new_user = User(
@@ -794,12 +644,7 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[new_user.rms_id] = RmsUser(
-        id=new_user.rms_id, username=new_user.username, name=f"{new_user.first_name} {new_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, new_user)
 
     # Switch to regular_user (who is now namespace admin)
     with client_with_db.session_transaction() as sess:
@@ -807,10 +652,10 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
         sess.update(mock_session_regular)
 
     # Add new user to namespace
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN},
-        content_type="application/json",
+        {"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN},
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -827,11 +672,7 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -841,14 +682,13 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
     admin_user = session.query(User).filter_by(username="admin").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=regular_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.PROGRAM_MANAGER,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Create another user to add
     new_user = User(
@@ -868,10 +708,10 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
         sess.update(mock_session_regular)
 
     # Try to add new user - should fail
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
-        content_type="application/json",
+        {"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
@@ -886,11 +726,7 @@ def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_sess
         sess.update(mock_session_admin)
 
     # Create namespace
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -908,26 +744,21 @@ def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_sess
     session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[new_user.rms_id] = RmsUser(
-        id=new_user.rms_id, username=new_user.username, name=f"{new_user.first_name} {new_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, new_user)
 
     # Add user first time
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
-        content_type="application/json",
+        {"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
     )
     assert response.status_code == HTTPStatus.CREATED
 
     # Try to add same user again with different role - should fail
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN},
-        content_type="application/json",
+        {"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN},
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
@@ -943,11 +774,7 @@ def test_add_user_to_namespace_invalid_role(client_with_db, session, mock_sessio
         sess.update(mock_session_admin)
 
     # Create namespace
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -968,10 +795,8 @@ def test_add_user_to_namespace_invalid_role(client_with_db, session, mock_sessio
     invalid_roles = ["student", "invalid", ""]
 
     for invalid_role in invalid_roles:
-        response = client_with_db.post(
-            f"/api/namespaces/{namespace_id}/users",
-            json={"user_id": new_user.rms_id, "role": invalid_role},
-            content_type="application/json",
+        response = post_json(
+            client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": new_user.rms_id, "role": invalid_role}
         )
 
         assert response.status_code == HTTPStatus.BAD_REQUEST, f"Role '{invalid_role}' should be invalid"
@@ -986,27 +811,15 @@ def test_add_user_to_namespace_missing_fields(client_with_db, mock_session_admin
         sess.update(mock_session_admin)
 
     # Missing user_id
-    response = client_with_db.post(
-        "/api/namespaces/1/users",
-        json={"role": ROLE_NAMESPACE_ADMIN},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces/1/users", {"role": ROLE_NAMESPACE_ADMIN})
     assert response.status_code == HTTPStatus.BAD_REQUEST
 
     # Missing role
-    response = client_with_db.post(
-        "/api/namespaces/1/users",
-        json={"user_id": 1},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces/1/users", {"user_id": 1})
     assert response.status_code == HTTPStatus.BAD_REQUEST
 
     # Empty JSON
-    response = client_with_db.post(
-        "/api/namespaces/1/users",
-        json={},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces/1/users", {})
     assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
@@ -1035,20 +848,14 @@ def test_add_user_to_namespace_nonexistent_user(client_with_db, session, mock_se
         sess.update(mock_session_admin)
 
     # Create namespace
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
 
     # Try to add non-existent user
-    response = client_with_db.post(
-        f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": 99999, "role": ROLE_NAMESPACE_ADMIN},
-        content_type="application/json",
+    response = post_json(
+        client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": 99999, "role": ROLE_NAMESPACE_ADMIN}
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -1075,18 +882,11 @@ def test_add_user_to_namespace_nonexistent_namespace(client_with_db, session, mo
     session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[new_user.rms_id] = RmsUser(
-        id=new_user.rms_id, username=new_user.username, name=f"{new_user.first_name} {new_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, new_user)
 
     # Try to add user to non-existent namespace
-    response = client_with_db.post(
-        "/api/namespaces/99999/users",
-        json={"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN},
-        content_type="application/json",
+    response = post_json(
+        client_with_db, "/api/namespaces/99999/users", {"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN}
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -1101,11 +901,7 @@ def test_get_namespace_users_as_instance_admin(client_with_db, session, mock_ses
         sess.update(mock_session_admin)
 
     # Create namespace
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1123,18 +919,13 @@ def test_get_namespace_users_as_instance_admin(client_with_db, session, mock_ses
     session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[new_user.rms_id] = RmsUser(
-        id=new_user.rms_id, username=new_user.username, name=f"{new_user.first_name} {new_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, new_user)
 
     # Add user to namespace
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
-        content_type="application/json",
+        {"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
     )
     assert response.status_code == HTTPStatus.CREATED
 
@@ -1166,11 +957,7 @@ def test_get_namespace_users_as_namespace_admin(client_with_db, session, mock_se
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1180,14 +967,13 @@ def test_get_namespace_users_as_namespace_admin(client_with_db, session, mock_se
     admin_user = session.query(User).filter_by(username="admin").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=regular_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.NAMESPACE_ADMIN,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Switch to regular_user (who is now namespace admin)
     with client_with_db.session_transaction() as sess:
@@ -1218,11 +1004,7 @@ def test_get_namespace_users_as_program_manager_forbidden(
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1232,14 +1014,13 @@ def test_get_namespace_users_as_program_manager_forbidden(
     admin_user = session.query(User).filter_by(username="admin").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=regular_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.PROGRAM_MANAGER,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Switch to regular_user (who is program manager)
     with client_with_db.session_transaction() as sess:
@@ -1249,10 +1030,7 @@ def test_get_namespace_users_as_program_manager_forbidden(
     # Try to get users list - should fail
     response = client_with_db.get(f"/api/namespaces/{namespace_id}/users")
 
-    assert response.status_code == HTTPStatus.FORBIDDEN
-    data = json.loads(response.data)
-    assert "error" in data
-    assert "Instance Admin or Namespace Admin" in data["error"]
+    assert_forbidden_admin_only(response)
 
 
 def test_get_namespace_users_without_access(client_with_db, session, mock_session_admin, mock_session_regular):
@@ -1262,11 +1040,7 @@ def test_get_namespace_users_without_access(client_with_db, session, mock_sessio
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1308,11 +1082,7 @@ def test_get_namespace_users_empty_list(client_with_db, session, mock_session_ad
         sess.update(mock_session_admin)
 
     # Create namespace (admin becomes namespace_admin automatically)
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1338,11 +1108,7 @@ def test_remove_user_from_namespace_as_instance_admin(client_with_db, session, m
         sess.update(mock_session_admin)
 
     # Create namespace
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1360,18 +1126,11 @@ def test_remove_user_from_namespace_as_instance_admin(client_with_db, session, m
     session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[new_user.rms_id] = RmsUser(
-        id=new_user.rms_id, username=new_user.username, name=f"{new_user.first_name} {new_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, new_user)
 
     # Add user to namespace
-    response = client_with_db.post(
-        f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": "program_manager"},
-        content_type="application/json",
+    response = post_json(
+        client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": new_user.rms_id, "role": "program_manager"}
     )
     assert response.status_code == HTTPStatus.CREATED
 
@@ -1399,11 +1158,7 @@ def test_remove_user_from_namespace_as_namespace_admin(
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1413,14 +1168,13 @@ def test_remove_user_from_namespace_as_namespace_admin(
     admin_user = session.query(User).filter_by(username="admin").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=regular_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.NAMESPACE_ADMIN,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Create another user to remove
     new_user = User(
@@ -1435,18 +1189,11 @@ def test_remove_user_from_namespace_as_namespace_admin(
     session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[new_user.rms_id] = RmsUser(
-        id=new_user.rms_id, username=new_user.username, name=f"{new_user.first_name} {new_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, new_user)
 
     # Add user to namespace
-    response = client_with_db.post(
-        f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": "program_manager"},
-        content_type="application/json",
+    response = post_json(
+        client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": new_user.rms_id, "role": "program_manager"}
     )
     assert response.status_code == HTTPStatus.CREATED
 
@@ -1474,11 +1221,7 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1488,14 +1231,13 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     admin_user = session.query(User).filter_by(username="admin").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=regular_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.PROGRAM_MANAGER,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Create another user to try to remove
     new_user = User(
@@ -1510,18 +1252,11 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[new_user.rms_id] = RmsUser(
-        id=new_user.rms_id, username=new_user.username, name=f"{new_user.first_name} {new_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, new_user)
 
     # Add user to namespace
-    response = client_with_db.post(
-        f"/api/namespaces/{namespace_id}/users",
-        json={"user_id": new_user.rms_id, "role": "namespace_admin"},
-        content_type="application/json",
+    response = post_json(
+        client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": new_user.rms_id, "role": "namespace_admin"}
     )
     assert response.status_code == HTTPStatus.CREATED
 
@@ -1533,10 +1268,7 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     # Try to remove user - should fail
     response = client_with_db.delete(f"/api/namespaces/{namespace_id}/users/{new_user.id}")
 
-    assert response.status_code == HTTPStatus.FORBIDDEN
-    data = json.loads(response.data)
-    assert "error" in data
-    assert "Instance Admin or Namespace Admin" in data["error"]
+    assert_forbidden_admin_only(response)
 
 
 def test_remove_user_from_namespace_nonexistent_user(client_with_db, session, mock_session_admin):
@@ -1546,11 +1278,7 @@ def test_remove_user_from_namespace_nonexistent_user(client_with_db, session, mo
         sess.update(mock_session_admin)
 
     # Create namespace
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]
@@ -1571,11 +1299,7 @@ def test_remove_user_from_namespace_without_access(client_with_db, session, mock
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "HSE", "slug": "hse-namespace"},
-        content_type="application/json",
-    )
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
     namespace_data = json.loads(response.data)
     namespace_id = namespace_data["id"]

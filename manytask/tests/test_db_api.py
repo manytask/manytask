@@ -1,4 +1,3 @@
-import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -10,7 +9,6 @@ import pytest
 import yaml
 from alembic import command
 from alembic.script import ScriptDirectory
-from dotenv import load_dotenv
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
@@ -308,16 +306,6 @@ def db_api_with_two_initialized_courses(
     create_course(db_api, first_course_config, first_course_deadlines_config, first_course_grade_config)
     create_course(db_api, second_course_config, second_course_deadlines_config, second_course_grade_config)
     return db_api
-
-
-@pytest.fixture(autouse=True)
-def setup_environment(monkeypatch):
-    load_dotenv()
-    if not os.getenv("MANYTASK_COURSE_TOKEN"):
-        monkeypatch.setenv("MANYTASK_COURSE_TOKEN", "test_token")
-    monkeypatch.setenv("FLASK_SECRET_KEY", "test_key")
-    monkeypatch.setenv("TESTING", "true")
-    yield
 
 
 def update_func(add: int):
