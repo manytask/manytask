@@ -353,14 +353,12 @@ UPDATED_TASK_URL_TEMPLATE = "https://gitlab.test.com/test_updated/$GROUP_NAME/$T
 
 
 def create_user(db_api: DataBaseApi, student: TestStudent = STUDENT):
-    """Create (or update) a user from a TestStudent via the public db_api."""
     return db_api.update_or_create_user(
         student.username, student.first_name, student.last_name, student.rms_id, student.auth_id
     )
 
 
 def make_user(student: TestStudent = STUDENT, **kwargs) -> User:
-    """Build a User ORM object from a TestStudent."""
     return User(
         username=student.username,
         first_name=student.first_name,
@@ -379,7 +377,6 @@ def add_user_on_course(
     course_id: int = 1,
     is_course_admin: bool,
 ) -> tuple[User, UserOnCourse]:
-    """Persist a User and an associated UserOnCourse row."""
     user = make_user(student, id=user_id)
     user_on_course = UserOnCourse(user_id=user.id, course_id=course_id, is_course_admin=is_course_admin)
     session.add(user)
@@ -389,7 +386,6 @@ def add_user_on_course(
 
 
 def get_user_results(db_api: DataBaseApi, course_name: str, username: str):
-    """Return (stats, all_scores, bonus_score, scores) for a user on a course."""
     return (
         db_api.get_stats(course_name),
         db_api.get_all_scores_with_names(course_name),
@@ -404,7 +400,6 @@ def assert_empty_stats(
     expected_keys: set[str],
     expected_max_score: int,
 ) -> None:
-    """Assert all stats are zero and the started max score matches."""
     stats = db_api.get_stats(course_name)
     assert set(stats.keys()) == expected_keys
     assert all(v == 0 for v in stats.values())
@@ -412,7 +407,6 @@ def assert_empty_stats(
 
 
 def assert_stats(stats: dict, expected_keys: set[str], nonzero: dict[str, float]) -> None:
-    """Assert stats keys match and only ``nonzero`` (name -> ratio) entries are non-zero."""
     assert set(stats.keys()) == expected_keys
     for name, ratio in nonzero.items():
         assert stats[name] == ratio
@@ -420,7 +414,6 @@ def assert_stats(stats: dict, expected_keys: set[str], nonzero: dict[str, float]
 
 
 def named_scores(scores: dict, student: TestStudent = STUDENT) -> tuple:
-    """Build an expected ``get_all_scores_with_names`` entry: (scores, (first, last), None, None, None)."""
     return (scores, (student.first_name, student.last_name), None, None, None)
 
 
@@ -442,10 +435,8 @@ def assert_course(  # noqa: PLR0913
     submission_penalty: float,
     status: CourseStatus | None = None,
 ) -> None:
-    """Assert that a Course row matches the expected attributes.
-
-    Defaults reflect the freshly created first course; pass overrides for fields that differ.
-    ``status=None`` only checks truthiness (used where the exact status is irrelevant).
+    """
+    Assert that a Course row matches the expected attributes.
     """
     expected = {
         "name": name,
@@ -476,7 +467,6 @@ def assert_tasks(
     disabled_groups: tuple[str, ...],
     disabled_tasks: tuple[str, ...],
 ) -> None:
-    """Assert task flags and scores for every task in the database."""
     tasks = session.query(Task).all()
     for task in tasks:
         if task.group.name == BONUS_GROUP:
