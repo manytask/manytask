@@ -31,9 +31,16 @@ structure:
   # Dotfiles are private by default (".*"), so any future secret an
   # instructor drops in (.env, .secret, ...) stays out of the public repo
   # unless explicitly allow-listed above.
+  #
+  # "*private*" hides every language's hidden tests in one rule — test_private.py,
+  # test_private.cpp, test_private.go, test_private.rs, test_private.sh — so adding
+  # a new language needs no change here. (Gold solutions like add.py / add.cpp stay
+  # private via the `templates: search` export strategy below, not this list.)
+  # NEVER widen this to "*": Path.match("*") also matches dotfiles, which would
+  # flip every file public and silently leak the private tests.
   private_patterns:
     - ".*"
-    - "test_private.py"
+    - "*private*"
 
 export:
   destination: https://gitlab.manytask2.org/sandbox/public

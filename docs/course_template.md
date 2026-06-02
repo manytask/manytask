@@ -31,35 +31,43 @@ Once the template stabilises it will be promoted to the production instance
 
 ## What is inside
 
-The template is designed for five language groups. Only `python/` is present in the
-initial iteration; the remaining groups — **C++**, **Bash**, **Go**, **Rust** — are
-placeholders planned as follow-up iterations of
-[manytask#637](https://github.com/manytask/manytask/issues/637).
+The template ships five language groups — **Python**, **C++**, **Bash**, **Go**,
+**Rust** — each with one solved `add` sample task, demonstrating
+[manytask#637](https://github.com/manytask/manytask/issues/637). Python tasks test
+with `run_pytest`; the compiled/script languages override the pipeline in their
+`.group.yml` to compile-and-run the solution with the test driver via `run_script`.
+A single multi-toolchain `testenv.docker` (Alpine + every toolchain) grades them all,
+because `checker grade` has no per-language scoping — one commit may touch several
+groups and the same image runs all of them.
 
 ```
 course-template/
-├── .checker.yml          # structure, export rules, testing pipeline
-├── .manytask.yml         # settings + deadlines schedule
+├── .checker.yml          # structure, export rules, GLOBAL run_pytest pipeline
+├── .manytask.yml         # settings + deadlines schedule (one group per language)
 ├── .gitlab-ci.yml        # CI for grading student submissions (uses the testenv image)
 ├── .releaser-ci.yml      # CI: build+push testenv image, check, export private → public (not exported)
 ├── .gitignore
-├── testenv.docker        # testenv image: bakes the private reference at /opt/course
+├── testenv.docker        # ONE Alpine image with python/g++/go/rust/bash; bakes private ref at /opt/course
 ├── pyproject.toml        # Python toolchain
 ├── tools/                # shared tooling (empty placeholder)
 ├── python/
-│   └── add/              # sample task: sum of two integers
-│       ├── .task.yml
-│       ├── README.md
-│       ├── add.py            # reference solution (NOT exported)
-│       ├── add.py.template   # what students see (becomes add.py on export)
-│       ├── test_public.py    # visible tests
-│       ├── test_private.py   # hidden grading tests (NOT exported)
-│       └── conftest.py       # adds the task folder to sys.path
-├── cpp/                  # (planned)
-├── bash/                 # (planned)
-├── go/                   # (planned)
-└── rust/                 # (planned)
+│   └── add/              # sum of two integers — run_pytest
+│       ├── .task.yml · README.md
+│       ├── add.py · add.py.template      # reference (private) · student stub (exported as add.py)
+│       ├── test_public.py · test_private.py   # visible · hidden (NOT exported)
+│       └── conftest.py                   # adds the task folder to sys.path
+├── cpp/                  # .group.yml overrides pipeline: g++ compile+run (run_script)
+│   └── add_cpp/          # add.cpp(.template) · test_public.cpp · test_private.cpp
+├── bash/                 # .group.yml: bash test driver sources the solution
+│   └── add_bash/         # add.sh(.template) · test_public.sh · test_private.sh
+├── go/                   # .group.yml: `go run add.go test_*.go` (GOPATH mode)
+│   └── add_go/           # add.go(.template) · test_public.go · test_private.go
+└── rust/                 # .group.yml: `rustc --test` (single-file, no cargo)
+    └── add_rust/         # add.rs(.template) · test_public.rs · test_private.rs
 ```
+
+Task folder names are globally unique (`add`, `add_cpp`, `add_bash`, `add_go`,
+`add_rust`) because the checker requires unique task names across all groups.
 
 This is the smallest end-to-end example that:
 
@@ -70,7 +78,7 @@ This is the smallest end-to-end example that:
 
 ## How grading works (testenv image)
 
-Student submissions must be graded against the **hidden** (`test_private.py`) tests,
+Student submissions must be graded against the **hidden** (`test_private.*`) tests,
 but those tests are never exported to the public/student repository. Manytask solves
 this with a **testenv docker image** (see [Concepts](./concepts.md)): an image that
 carries a copy of the private repository — including the private tests — and the

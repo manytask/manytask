@@ -1,0 +1,25 @@
+version: 1
+
+# Rust tasks compile a test driver that textually includes the solution
+# (`include!("add.rs")`) with `rustc --test`, then run the resulting harness; a
+# non-zero exit code (failed assertion) fails the stage. No cargo / Cargo.toml is
+# needed — single-file rustc keeps tasks minimal. Overrides the global run_pytest
+# pipeline (.checker.yml) for every task in the rust/ group.
+task_pipeline:
+  - name: "Compile & run public tests"
+    run_if: ${{ parameters.run_testing }}
+    fail: fast
+    run: "run_script"
+    args:
+      origin: "${{ global.temp_dir }}/${{ task.task_sub_path }}"
+      script: "rustc --edition 2021 --test test_public.rs -o /tmp/rust_public && /tmp/rust_public"
+      timeout: ${{ parameters.timeout }}
+
+  - name: "Compile & run private tests"
+    run_if: ${{ parameters.run_testing }}
+    fail: fast
+    run: "run_script"
+    args:
+      origin: "${{ global.temp_dir }}/${{ task.task_sub_path }}"
+      script: "rustc --edition 2021 --test test_private.rs -o /tmp/rust_private && /tmp/rust_private"
+      timeout: ${{ parameters.timeout }}

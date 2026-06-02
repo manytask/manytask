@@ -24,3 +24,35 @@ deadlines:
       tasks:
         - task: add
           score: 100
+
+    - group: cpp
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_cpp
+          score: 100
+
+    - group: bash
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_bash
+          score: 100
+
+    - group: go
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_go
+          score: 100
+
+    - group: rust
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_rust
+          score: 100
