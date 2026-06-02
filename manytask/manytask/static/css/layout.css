@@ -88,8 +88,6 @@
     color: rgba(255, 255, 255, 0.8) !important;
 }
 
-/* User-menu styles (.nav-avatar-circle, .dropdown-menu, .dropdown-item, .nav-user-menu)
-   live in user-menu.css so they can be shared with the course list page. */
 
 .nav-current-course {
     display: flex;

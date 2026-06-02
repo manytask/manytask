@@ -338,7 +338,9 @@ def test_logout(app):
 
 
 def test_index_shows_profile_menu(app, mock_gitlab_oauth):
-    """The course list page exposes the user/profile menu (issue #741)."""
+    """
+    The course list page should show the user menu
+    """
     CSRFProtect(app)
     with app.test_request_context():
         with app.test_client() as client:
