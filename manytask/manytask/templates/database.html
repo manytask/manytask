@@ -678,6 +678,18 @@
                         });
                     });
 
+                    // Prepend a row-number ("line number") column, pinned to the left
+                    columns.unshift({
+                        title: "#",
+                        formatter: "rownum",
+                        hozAlign: "center",
+                        headerSort: false,
+                        frozen: true,
+                        width: 50,
+                        minWidth: 1,
+                        headerTooltip: "Row number"
+                    });
+
                     window.tabulatorTable = new Tabulator("#database-table", {
                         data: data.students,
                         columns: columns,
@@ -826,7 +838,8 @@
                                     // Get visible columns
                                     const visibleColumns = table.getColumns()
                                         .filter(col => col.isVisible())
-                                        .map(col => col.getField());
+                                        .map(col => col.getField())
+                                        .filter(field => field);
 
 
                                     // Prepare data for export
