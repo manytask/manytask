@@ -15,7 +15,7 @@ Use this guide when you:
 
 - Docker and Docker Compose installed.
 - Colima installed (macOS).
-- Local project configured with `compose/docker-compose.development.yml`; Docker commands assume **repository root** as working directory (`compose/` sits next to `manytask/`).
+- Local project configured with `compose/docker-compose.development.yml`; Docker commands assume **manytask/** as working directory.
 
 ### Minimum Colima configuration for local GitLab
 
@@ -51,8 +51,11 @@ GITLAB_URL=http://gitlab:8929
 Make sure that Docker daemon is running and then start the environment:
 
 ```bash
+cd manytask
 ./scripts/start_local_dev.sh
 ```
+
+If `.env` is missing, the script creates it from `.env.example`.
 
 This script does the following:
 

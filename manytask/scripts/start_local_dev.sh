@@ -40,6 +40,20 @@ check_requirements() {
     log "All requirements satisfied."
 }
 
+ensure_env_file() {
+    if [ -f .env ]; then
+        return
+    fi
+
+    if [ ! -f .env.example ]; then
+        err "Env file not found and no template available: .env.example"
+        exit 1
+    fi
+
+    cp .env.example .env
+    log "Created .env from .env.example"
+}
+
 start_containers() {
     log "Starting Docker containers..."
     docker-compose -f "${COMPOSE_FILE}" up -d
@@ -118,6 +132,7 @@ main() {
     echo ""
 
     check_requirements
+    ensure_env_file
     start_containers
     wait_for_gitlab
     setup_gitlab
