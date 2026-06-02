@@ -141,3 +141,5 @@ dmypy.json
 # tmp
 .tmp
 scripts
+# worktrees
+.worktrees/
