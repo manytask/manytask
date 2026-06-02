@@ -325,6 +325,35 @@ def test_signup_post_password_mismatch(app, mock_course):
         assert b"Passwords don&#39;t match" in response.data
 
 
+def test_signup_get_redirects_to_login_when_registration_disabled(app):
+    app.app_config.registration_enabled = False
+    with app.test_request_context():
+        response = app.test_client().get("/signup")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.headers["Location"] == url_for("root.login")
+
+
+def test_signup_post_redirects_to_login_when_registration_disabled(app, mock_course):
+    app.app_config.registration_enabled = False
+    with app.test_client() as client:
+        with patch.object(app.rms_api, "register_new_user") as mock_register:
+            response = client.post(
+                "/signup",
+                data={
+                    "username": TEST_USERNAME,
+                    "firstname": "Test",
+                    "lastname": "User",
+                    "email": "test@example.com",
+                    "password": "password123",
+                    "password2": "password123",
+                    "secret": mock_course.registration_secret,
+                },
+            )
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.headers["Location"] == url_for("root.login")
+        mock_register.assert_not_called()
+
+
 def test_logout(app):
     with app.test_request_context():
         with app.test_client() as client:

@@ -29,6 +29,9 @@ class LocalConfig:
     yandex_id_client_id: str
     yandex_id_client_secret: str
 
+    # registration
+    registration_enabled: bool
+
     @classmethod
     def from_env(cls) -> LocalConfig:
         gitlab_url = os.environ.get("GITLAB_URL", "https://gitlab.manytask2.org")
@@ -51,6 +54,8 @@ class LocalConfig:
             # yandex_id
             yandex_id_client_id=os.environ.get("YANDEX_ID_CLIENT_ID", ""),
             yandex_id_client_secret=os.environ.get("YANDEX_ID_CLIENT_SECRET", ""),
+            # registration
+            registration_enabled=os.environ.get("REGISTRATION_ENABLED", "true").lower() in ("true", "1", "yes"),
         )
 
 
@@ -77,6 +82,9 @@ class DebugLocalConfig(LocalConfig):
     # yandex_id
     yandex_id_client_id: str = ""
     yandex_id_client_secret: str = ""
+
+    # registration
+    registration_enabled: bool = True
 
     show_allscores: bool = True
 

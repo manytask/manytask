@@ -173,6 +173,11 @@ def course_page(course_name: str) -> ResponseReturnValue:
 def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
+    # When registration is disabled, skip the signup form entirely and behave as if
+    # the user clicked the "Login" button: go straight to the OAuth login flow.
+    if not app.app_config.registration_enabled:
+        return redirect(url_for("root.login"))
+
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
