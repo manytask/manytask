@@ -447,26 +447,24 @@ def assert_course(  # noqa: PLR0913
     Defaults reflect the freshly created first course; pass overrides for fields that differ.
     ``status=None`` only checks truthiness (used where the exact status is irrelevant).
     """
-    assert course.name == name
-    assert course.registration_secret == registration_secret
-    assert course.token == token
-    assert course.show_allscores == show_allscores
-    if status is None:
-        assert course.status
-    else:
-        assert course.status == status
-
-    assert course.gitlab_course_group == gitlab_course_group
-    assert course.gitlab_course_public_repo == gitlab_course_public_repo
-    assert course.gitlab_course_students_group == gitlab_course_students_group
-    assert course.gitlab_default_branch == gitlab_default_branch
-
-    assert course.task_url_template == task_url_template
-    assert course.links == (DEFAULT_LINKS if links is None else links)
-
-    assert course.timezone == timezone
-    assert course.max_submissions == max_submissions
-    assert course.submission_penalty == submission_penalty
+    expected = {
+        "name": name,
+        "registration_secret": registration_secret,
+        "token": token,
+        "show_allscores": show_allscores,
+        "gitlab_course_group": gitlab_course_group,
+        "gitlab_course_public_repo": gitlab_course_public_repo,
+        "gitlab_course_students_group": gitlab_course_students_group,
+        "gitlab_default_branch": gitlab_default_branch,
+        "task_url_template": task_url_template,
+        "links": DEFAULT_LINKS if links is None else links,
+        "timezone": timezone,
+        "max_submissions": max_submissions,
+        "submission_penalty": submission_penalty,
+    }
+    assert {field: getattr(course, field) for field in expected} == expected
+    # ``status=None`` only checks the value is set; otherwise require an exact match.
+    assert course.status if status is None else course.status == status
 
 
 def assert_tasks(
@@ -484,21 +482,32 @@ def assert_tasks(
         if task.group.name == BONUS_GROUP:
             assert task.name == BONUS_SCORE
             continue
-        assert task.group.name == "group_" + task.name[len("task_")]
 
-        assert task.is_bonus == (task.name in bonus_tasks)
-        assert task.is_large == (task.name in large_tasks)
-        assert task.is_special == (task.name in special_tasks)
-        assert task.group.enabled != (task.group.name in disabled_groups)
-        assert task.enabled != (task.name in disabled_tasks)
-
-        # for convenience task score related to its name(exception is group_0, it has multiplier "1")
+        # for convenience task score relates to its name (exception is group_0, it has multiplier "1")
         # for example for task_1_3 score is 10, task_3_0 score is 30
-        score_multiplier = int(task.name.split("_")[1])
-        score_multiplier = 1 if score_multiplier == 0 else score_multiplier
-        expected_task_score = score_multiplier * 10
+        score_multiplier = int(task.name.split("_")[1]) or 1
 
-        assert task.score == expected_task_score
+        actual = {
+            "name": task.name,
+            "group_name": task.group.name,
+            "is_bonus": task.is_bonus,
+            "is_large": task.is_large,
+            "is_special": task.is_special,
+            "group_enabled": task.group.enabled,
+            "enabled": task.enabled,
+            "score": task.score,
+        }
+        expected = {
+            "name": task.name,
+            "group_name": "group_" + task.name[len("task_")],
+            "is_bonus": task.name in bonus_tasks,
+            "is_large": task.name in large_tasks,
+            "is_special": task.name in special_tasks,
+            "group_enabled": task.group.name not in disabled_groups,
+            "enabled": task.name not in disabled_tasks,
+            "score": score_multiplier * 10,
+        }
+        assert actual == expected
 
 
 def test_not_initialized_course(session, db_api, first_course_config):
