@@ -569,12 +569,6 @@ def get_deadlines(course_name: str) -> ResponseReturnValue:
 
 
 def _format_config_validation_error(course_name: str, exc: ValidationError) -> str:
-    """Build a human-readable, single-line summary of a config ValidationError.
-
-    Produces messages like:
-        Invalid config for course=foo: deadlines.schedule: Value error, Task names should be unique, ...
-    keeping the field location and reason but omitting pydantic's noisier output (error counts, doc URLs).
-    """
     details = []
     for error in exc.errors():
         location = ".".join(str(part) for part in error["loc"]) or "config"
@@ -599,24 +593,26 @@ def update_config(course_name: str) -> ResponseReturnValue:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
     except yaml.YAMLError as e:
-        message = f"Invalid YAML in config for course={course_name}: {e}"
-        logger.warning(message)
-        return message, HTTPStatus.BAD_REQUEST
+        return (
+            f"Invalid YAML in config for course={course_name}: {e}", 
+            HTTPStatus.BAD_REQUEST
+        )
 
     if not isinstance(config_data, dict):
-        got = type(config_data).__name__
-        message = f"Invalid config for course={course_name}: expected a YAML mapping (object), got {got}"
-        logger.warning(message)
-        return message, HTTPStatus.BAD_REQUEST
+        return (
+            f"Invalid config for course={course_name}: expected a YAML mapping (object), got {type(config_data).__name__}",
+            HTTPStatus.BAD_REQUEST
+        )
 
     try:
         # Store the new config
         app.store_config(course_name, config_data)
         logger.info("Stored new config for course=%s", course_name)
     except ValidationError as e:
-        message = _format_config_validation_error(course_name, e)
-        logger.warning(message)
-        return message, HTTPStatus.BAD_REQUEST
+        return (
+            _format_config_validation_error(course_name, e),
+            HTTPStatus.BAD_REQUEST
+        )
     except Exception:
         logger.exception("Error while updating config for course=%s", course_name)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
