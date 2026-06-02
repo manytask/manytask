@@ -30,8 +30,11 @@ grade:
   # as a group CI/CD variable holding a deploy/group token with read_registry
   # scope on sandbox/private (see docs/course_template.md).
   #
-  # Add `--submit-score` (and a MANYTASK_TOKEN CI variable) to report the score
-  # back to the manytask web app once app.manytask2.org is available.
+  # Score reporting: `checker grade` always runs the report_pipeline, which is
+  # commented out in .checker.yml by default. To report scores back to the
+  # manytask web app, uncomment that report_pipeline (report_score_manytask) and
+  # provide a MANYTASK_TOKEN CI variable — NOT a `--submit-score` flag (that grade
+  # option is currently a no-op in checker).
   image: "$TESTENV_IMAGE"
   stage: grade
   rules:

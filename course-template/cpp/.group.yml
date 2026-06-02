@@ -2,8 +2,8 @@ version: 1
 
 # C++ tasks compile the student's solution together with a test driver and run
 # the resulting binary; a non-zero exit code fails the stage. This task_pipeline
-# overrides the global run_pytest pipeline (.checker.yml) for every task in the
-# cpp/ group. Two stages mirror the python flow: public tests first (fail fast),
+# overrides the default run_pytest tasks_pipeline (.checker.yml) for every task in
+# the cpp/ group. Two stages mirror the python flow: public tests first (fail fast),
 # then the hidden private tests baked into the testenv image.
 task_pipeline:
   - name: "Compile & run public tests"

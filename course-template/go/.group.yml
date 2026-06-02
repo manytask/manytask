@@ -5,7 +5,7 @@ version: 1
 # both `package main` — the solution has no main(), each driver does, so exactly
 # one main() is compiled per stage. Files are passed explicitly, so this works in
 # GOPATH mode (no go.mod); the image sets GO111MODULE=off and a writable GOCACHE.
-# Overrides the global run_pytest pipeline (.checker.yml) for the go/ group.
+# Overrides the default run_pytest tasks_pipeline (.checker.yml) for the go/ group.
 task_pipeline:
   - name: "Run public tests"
     run_if: ${{ parameters.run_testing }}

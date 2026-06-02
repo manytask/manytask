@@ -1,8 +1,8 @@
 version: 1
 
 # Bash tasks source the student's solution and run a test driver; a non-zero exit
-# code fails the stage. Overrides the global run_pytest pipeline (.checker.yml)
-# for every task in the bash/ group.
+# code fails the stage. Overrides the default run_pytest tasks_pipeline
+# (.checker.yml) for every task in the bash/ group.
 task_pipeline:
   - name: "Run public tests"
     run_if: ${{ parameters.run_testing }}

@@ -3,8 +3,8 @@ version: 1
 # Rust tasks compile a test driver that textually includes the solution
 # (`include!("add.rs")`) with `rustc --test`, then run the resulting harness; a
 # non-zero exit code (failed assertion) fails the stage. No cargo / Cargo.toml is
-# needed — single-file rustc keeps tasks minimal. Overrides the global run_pytest
-# pipeline (.checker.yml) for every task in the rust/ group.
+# needed — single-file rustc keeps tasks minimal. Overrides the default run_pytest
+# tasks_pipeline (.checker.yml) for every task in the rust/ group.
 task_pipeline:
   - name: "Compile & run public tests"
     run_if: ${{ parameters.run_testing }}
