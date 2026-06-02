@@ -207,10 +207,10 @@ RUN git clone https://github.com/manytask/manytask.git && \
     cd manytask/checker && \
     python3 -m pip install --upgrade uv && \
     uv sync --frozen && \
-    uv pip install .
+    ln -s /manytask/checker/.venv/bin/checker /usr/local/bin/checker
 ```
 
-Here we use python slim image and expand on it by first installing `curl` and `git`. We are going to use REST API to communicate with Manytask (hence `curl` is installed). We use `git` to get and install checker in the second `RUN` command, this will be used to run tests on the repo.
+Here we use python slim image and expand on it by first installing `curl` and `git`. We are going to use REST API to communicate with Manytask (hence `curl` is installed). We use `git` to get and install checker in the second `RUN` command, this will be used to run tests on the repo. `uv sync` creates a virtual environment at `manytask/checker/.venv` and installs the checker into it; the final `ln -s` symlinks the `checker` executable into `/usr/local/bin` so it is available as a command in the container (otherwise the container would have a virtual environment that is never activated, and `checker` would not be found).
 
 ## Install and run Manytask Checker 
 
