@@ -451,7 +451,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
 
 @instance_admin_bp.route("/courses/new", methods=["GET", "POST"])
 @requires_instance_or_namespace_admin
-def create_course() -> ResponseReturnValue:  # noqa: PLR0911
+def create_course() -> ResponseReturnValue:  # noqa: PLR0911, PLR0912
     app: CustomFlask = current_app  # type: ignore
 
     if request.method == "POST":
@@ -547,6 +547,18 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         gitlab_course_public_repo = request.form["course_public_repo"].strip()
         gitlab_course_students_group = request.form["course_students_group"].strip()
 
+        # Check that the course doesn't already exist before creating GitLab resources, so the user
+        # gets a clear "course already exists" message instead of a confusing GitLab group/repo error.
+        if app.storage_api.get_course(course_name):
+            logger.info("Course '%s' already exists", course_name)
+            return render_template(
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message=f"Course '{course_name}' already exists.",
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
+            )
+
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
         gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
@@ -605,6 +617,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             generated_token=generate_token_hex(24),
             error_message=f"Course '{settings.course_name}' already exists.",
             rms=app.app_config.rms,
+            labels=app.create_course_labels,
         )
 
     return render_template(

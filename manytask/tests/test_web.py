@@ -366,6 +366,66 @@ def test_not_ready(app):
             assert response.status_code == HTTPStatus.FOUND
 
 
+def _admin_session():
+    return {
+        "auth": {
+            "version": TEST_GITLAB_SESSION_VERSION,
+            "username": TEST_USERNAME,
+            "user_auth_id": TEST_USER_ID,
+            "access_token": TEST_TOKEN,
+            "refresh_token": TEST_TOKEN,
+        },
+        "rms": {
+            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+            "rms_id": TEST_RMS_ID,
+            "username": TEST_USERNAME,
+        },
+        "manytask": {
+            "version": TEST_MANYTASK_SESSION_VERSION,
+            "user_id": TEST_USER_ID,
+            "username": TEST_USERNAME,
+        },
+    }
+
+
+def test_create_course_existing_reports_course_already_exists(app, mock_gitlab_oauth, mock_course):
+    """Re-creating an existing course states the course already exists, not a GitLab error."""
+    CSRFProtect(app)
+    app.create_course_labels = {}
+    app.oauth = mock_gitlab_oauth
+
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess.update(_admin_session())
+
+        with (
+            patch.object(app.storage_api, "check_if_instance_admin", return_value=True),
+            patch.object(app.storage_api, "get_course", return_value=mock_course),
+        ):
+            get_response = client.get("/instance_admin/courses/new")
+            soup = BeautifulSoup(get_response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+            response = client.post(
+                "/instance_admin/courses/new",
+                data={
+                    "csrf_token": csrf_token,
+                    "namespace_id": "0",
+                    "unique_course_name": TEST_COURSE_NAME,
+                    "course_group": "test-group",
+                    "course_public_repo": "test-group/public-2025",
+                    "course_students_group": "test-group/students-2025",
+                    "default_branch": "main",
+                    "registration_secret": TEST_SECRET,
+                    "token": TEST_TOKEN,
+                },
+            )
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"already exists" in response.data
+    assert b"Failed to create GitLab resources" not in response.data
+
+
 def check_admin_in_data(response, check_true):
     assert response.status_code == HTTPStatus.OK
     if check_true:
