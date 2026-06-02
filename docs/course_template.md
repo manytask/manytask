@@ -166,7 +166,7 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
 6. Push to `main` — the pipeline validates configs, exports public files, and updates deadlines on the web app.
 
 Full step-by-step instructions live in the template's own
-[`README.md`](../course-template/README.md).
+[`README.md`](https://github.com/manytask/manytask/blob/main/course-template/README.md).
 
 ## Related references
 

@@ -92,7 +92,7 @@ structure:
 > needs to list the specific **dotfiles** students require (dotfiles are private
 > by default via the `".*"` rule), and `private_patterns` can safely use
 > `"*private*"` to hide every language's hidden tests. See
-> [`course-template/.checker.yml`](../course-template/.checker.yml) for a
+> [`course-template/.checker.yml`](https://github.com/manytask/manytask/blob/main/course-template/.checker.yml) for a
 > worked example.
 
 Pattern precedence: `ignore_patterns` > `private_patterns` > `public_patterns`
