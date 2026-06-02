@@ -11,9 +11,7 @@ set -euo pipefail
 
 GITLAB_CONTAINER="${GITLAB_CONTAINER:-manytask_gitlab}"
 RUNNER_CONTAINER="${RUNNER_CONTAINER:-manytask_gitlab_runner}"
-# The manytask container loads env_file: ../manytask/.env from compose/, so
-# secrets must land in manytask/.env (repo-relative) to actually reach it.
-MANYTASK_ENV="${MANYTASK_ENV:-manytask/.env}"
+MANYTASK_ENV="${MANYTASK_ENV:-.env}"
 
 # Host URL for readiness check (external); internal URL for env variables
 HOST_GITLAB_URL="${HOST_GITLAB_URL:-http://localhost:8929}"
