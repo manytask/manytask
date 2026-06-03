@@ -15,7 +15,7 @@ from werkzeug.exceptions import HTTPException
 from manytask.abstract import RmsUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
-from manytask.config import ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
 from manytask.course import CourseStatus
 from manytask.database import DataBaseApi, TaskDisabledError
 from manytask.mock_auth import MockAuthApi
@@ -574,6 +574,79 @@ def test_update_config_success(app):
     data = {"test": "config"}
     response = client.post(f"/api/{TEST_COURSE_NAME}/update_config", data=yaml.dump(data), headers=headers)
     assert response.status_code == HTTPStatus.OK
+
+
+def test_update_config_reports_invalid_yaml(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
+
+    # Unterminated flow sequence -> yaml.YAMLError
+    malformed_yaml = b"version: 1\nui: [unclosed"
+    response = client.post(f"/api/{TEST_COURSE_NAME}/update_config", data=malformed_yaml, headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    body = response.get_data(as_text=True)
+    assert "YAML" in body
+    # The underlying parser error should be surfaced to the caller.
+    assert "expected" in body.lower() or "found" in body.lower()
+
+
+def test_update_config_reports_duplicate_task_names(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
+
+    # Route store_config through the real validation so a real ValidationError is raised.
+    def real_store_config(course_name, content):
+        ManytaskConfig(**content)
+
+    app.store_config = real_store_config
+
+    config_dict = {
+        "version": 1,
+        "ui": {"task_url_template": "https://example.org/$GROUP_NAME/$USER_NAME/$TASK_NAME"},
+        "deadlines": {
+            "timezone": "Europe/Moscow",
+            "schedule": [
+                {
+                    "group": "week_1",
+                    "start": "2025-01-01 10:00",
+                    "end": "2025-01-15 23:59",
+                    "tasks": [
+                        {"task": "dup_task", "score": 10},
+                        {"task": "dup_task", "score": 10},
+                    ],
+                }
+            ],
+        },
+    }
+    response = client.post(f"/api/{TEST_COURSE_NAME}/update_config", data=yaml.dump(config_dict), headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    body = response.get_data(as_text=True)
+    # The specific reason must reach the caller, not a generic "Bad request".
+    assert "Task names should be unique" in body
+    assert "dup_task" in body
+
+
+@pytest.mark.parametrize(
+    "raw_body",
+    [
+        b"",  # empty file -> parses to None
+        b"   \n",  # whitespace only -> parses to None
+        b"version",  # bare scalar -> parses to str
+        b"- a\n- b\n",  # top-level list -> parses to list
+    ],
+)
+def test_update_config_reports_non_mapping(app, raw_body):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
+
+    response = client.post(f"/api/{TEST_COURSE_NAME}/update_config", data=raw_body, headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    body = response.get_data(as_text=True)
+    # A non-mapping config must report a clear reason, not the opaque generic message.
+    assert "mapping" in body.lower() or "object" in body.lower()
 
 
 def test_get_database_unauthorized(app, mock_gitlab_oauth):
