@@ -1,203 +1,65 @@
 """Tests for course creation API endpoint."""
 
 from http import HTTPStatus
-from unittest.mock import MagicMock
 
 import pytest
-from dotenv import load_dotenv
-from flask import Flask, json
+from flask import json
 
-from manytask.api import namespace_bp
-from manytask.database import DataBaseApi, DatabaseConfig
 from manytask.mock_auth import MockAuthApi
-from manytask.mock_rms import MockRmsApi
-from manytask.models import Course, Namespace, User, UserOnNamespace, UserOnNamespaceRole
-from manytask.web import root_bp
-from tests.constants import (
-    GITLAB_BASE_URL,
-    TEST_CLIENT_PROFILE_SESSION_VERSION,
-    TEST_GITLAB_SESSION_VERSION,
-    TEST_MANYTASK_SESSION_VERSION,
-    TEST_SECRET_KEY,
+from manytask.models import Course, Namespace, User, UserOnNamespaceRole
+from tests.helpers import (
+    assert_forbidden_admin_only,
+    assert_not_json_rejected,
+    assert_slugs_rejected,
+    assign_namespace_role,
+    build_mock_session,
+    build_namespace_app,
+    create_namespace,
+    make_user,
+    post_json,
+    register_rms_user,
 )
-
-
-@pytest.fixture(autouse=True)
-def setup_environment(monkeypatch):
-    load_dotenv()
-    monkeypatch.setenv("FLASK_SECRET_KEY", "test_key")
-    monkeypatch.setenv("TESTING", "true")
-    yield
 
 
 @pytest.fixture
 def app_with_db(engine, session, postgres_container):
     """Create Flask app with real database."""
-    app = Flask(__name__)
-    app.config["DEBUG"] = False
-    app.config["TESTING"] = True
-    app.secret_key = TEST_SECRET_KEY
-    app.register_blueprint(root_bp)
-    app.register_blueprint(namespace_bp)
+    app = build_namespace_app(session, postgres_container, apply_migrations=True, auth_api=MockAuthApi())
 
-    def session_factory():
-        return session
-
-    db_config = DatabaseConfig(
-        database_url=postgres_container.get_connection_url(),
-        instance_admin_username="admin",
-        apply_migrations=True,
-        session_factory=session_factory,
-    )
-
-    app.storage_api = DataBaseApi(db_config)
-    app.rms_api = MockRmsApi(GITLAB_BASE_URL)
-    app.auth_api = MockAuthApi()
-    app.oauth = MagicMock()
-
-    # Create a regular user
-    regular_user = User(
-        username="regular_user",
-        first_name="Regular",
-        last_name="User",
-        rms_id="2",
-        auth_id=2,
-        is_instance_admin=False,
-    )
-    session.add(regular_user)
-
-    # Create a namespace_admin user
-    namespace_admin_user = User(
-        username="namespace_admin_user",
-        first_name="Namespace",
-        last_name="Admin",
-        rms_id="3",
-        auth_id=3,
-        is_instance_admin=False,
-    )
-    session.add(namespace_admin_user)
-
-    # Create a program_manager user
-    pm_user = User(
-        username="pm_user",
-        first_name="PM",
-        last_name="User",
-        rms_id="4",
-        auth_id=4,
-        is_instance_admin=False,
-    )
-    session.add(pm_user)
-
+    session.add(make_user("regular_user", "Regular", "User", "2", 2))
+    session.add(make_user("namespace_admin_user", "Namespace", "Admin", "3", 3))
+    session.add(make_user("pm_user", "PM", "User", "4", 4))
     session.commit()
 
     return app
 
 
 @pytest.fixture
-def client_with_db(app_with_db):
-    """Flask test client with database."""
-    with app_with_db.test_client() as client:
-        yield client
-
-
-@pytest.fixture
 def mock_session_admin(session):
     """Mock session for admin user."""
     admin = session.query(User).filter_by(username="admin").first()
-    return {
-        "auth": {
-            "username": "admin",
-            "user_auth_id": admin.auth_id,
-            "version": TEST_GITLAB_SESSION_VERSION,
-            "access_token": "mock_access_token",
-            "refresh_token": "mock_refresh_token",
-        },
-        "rms": {
-            "username": "admin",
-            "rms_id": admin.rms_id,
-            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-        },
-        "manytask": {
-            "username": "admin",
-            "user_id": admin.id,
-            "version": TEST_MANYTASK_SESSION_VERSION,
-        },
-    }
+    return build_mock_session("admin", user_auth_id=admin.auth_id, rms_id=admin.rms_id, user_id=admin.id)
 
 
 @pytest.fixture
 def mock_session_namespace_admin(session):
     """Mock session for namespace admin user."""
     user = session.query(User).filter_by(username="namespace_admin_user").first()
-    return {
-        "auth": {
-            "username": "namespace_admin_user",
-            "user_auth_id": user.auth_id,
-            "version": TEST_GITLAB_SESSION_VERSION,
-            "access_token": "mock_access_token",
-            "refresh_token": "mock_refresh_token",
-        },
-        "rms": {
-            "username": "namespace_admin_user",
-            "rms_id": user.rms_id,
-            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-        },
-        "manytask": {
-            "username": "namespace_admin_user",
-            "user_id": user.id,
-            "version": TEST_MANYTASK_SESSION_VERSION,
-        },
-    }
+    return build_mock_session("namespace_admin_user", user_auth_id=user.auth_id, rms_id=user.rms_id, user_id=user.id)
 
 
 @pytest.fixture
 def mock_session_pm(session):
     """Mock session for program manager user."""
     user = session.query(User).filter_by(username="pm_user").first()
-    return {
-        "auth": {
-            "username": "pm_user",
-            "user_auth_id": user.auth_id,
-            "version": TEST_GITLAB_SESSION_VERSION,
-            "access_token": "mock_access_token",
-            "refresh_token": "mock_refresh_token",
-        },
-        "rms": {
-            "username": "pm_user",
-            "rms_id": user.rms_id,
-            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-        },
-        "manytask": {
-            "username": "pm_user",
-            "user_id": user.id,
-            "version": TEST_MANYTASK_SESSION_VERSION,
-        },
-    }
+    return build_mock_session("pm_user", user_auth_id=user.auth_id, rms_id=user.rms_id, user_id=user.id)
 
 
 @pytest.fixture
 def mock_session_regular(session):
     """Mock session for regular user."""
     user = session.query(User).filter_by(username="regular_user").first()
-    return {
-        "auth": {
-            "username": "regular_user",
-            "user_auth_id": user.auth_id,
-            "version": TEST_GITLAB_SESSION_VERSION,
-            "access_token": "mock_access_token",
-            "refresh_token": "mock_refresh_token",
-        },
-        "rms": {
-            "username": "regular_user",
-            "rms_id": user.rms_id,
-            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-        },
-        "manytask": {
-            "username": "regular_user",
-            "user_id": user.id,
-            "version": TEST_MANYTASK_SESSION_VERSION,
-        },
-    }
+    return build_mock_session("regular_user", user_auth_id=user.auth_id, rms_id=user.rms_id, user_id=user.id)
 
 
 @pytest.fixture
@@ -206,19 +68,9 @@ def test_namespace(session, client_with_db, mock_session_admin):
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/namespaces",
-        json={
-            "name": "Test University",
-            "slug": "test-university",
-            "description": "Test namespace",
-        },
-        content_type="application/json",
+    return create_namespace(
+        client_with_db, name="Test University", slug="test-university", description="Test namespace"
     )
-
-    assert response.status_code == HTTPStatus.CREATED
-    data = json.loads(response.data)
-    return data
 
 
 def test_create_course_as_instance_admin(client_with_db, session, mock_session_admin, test_namespace):
@@ -229,14 +81,14 @@ def test_create_course_as_instance_admin(client_with_db, session, mock_session_a
 
     namespace_id = test_namespace["id"]
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Algorithms 2024 Spring",
             "slug": "algorithms-2024-spring",
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -268,38 +120,30 @@ def test_create_course_as_namespace_admin_in_own_namespace(
     ns_admin_user = session.query(User).filter_by(username="namespace_admin_user").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=ns_admin_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.NAMESPACE_ADMIN,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Register user in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[ns_admin_user.rms_id] = RmsUser(
-        id=ns_admin_user.rms_id,
-        username=ns_admin_user.username,
-        name=f"{ns_admin_user.first_name} {ns_admin_user.last_name}",
-    )
+    register_rms_user(client_with_db.application, ns_admin_user)
 
     # Switch to namespace admin
     with client_with_db.session_transaction() as sess:
         sess.clear()
         sess.update(mock_session_namespace_admin)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Machine Learning 2024",
             "slug": "ml-2024",
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -316,19 +160,11 @@ def test_create_course_as_namespace_admin_in_other_namespace(
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response1 = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "Namespace 1", "slug": "ns1"},
-        content_type="application/json",
-    )
+    response1 = post_json(client_with_db, "/api/namespaces", {"name": "Namespace 1", "slug": "ns1"})
     assert response1.status_code == HTTPStatus.CREATED
     ns1_data = json.loads(response1.data)
 
-    response2 = client_with_db.post(
-        "/api/namespaces",
-        json={"name": "Namespace 2", "slug": "ns2"},
-        content_type="application/json",
-    )
+    response2 = post_json(client_with_db, "/api/namespaces", {"name": "Namespace 2", "slug": "ns2"})
     assert response2.status_code == HTTPStatus.CREATED
     ns2_data = json.loads(response2.data)
 
@@ -337,38 +173,30 @@ def test_create_course_as_namespace_admin_in_other_namespace(
     ns_admin_user = session.query(User).filter_by(username="namespace_admin_user").first()
     ns1 = session.query(Namespace).filter_by(id=ns1_data["id"]).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=ns_admin_user.id,
         namespace_id=ns1.id,
         role=UserOnNamespaceRole.NAMESPACE_ADMIN,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[ns_admin_user.rms_id] = RmsUser(
-        id=ns_admin_user.rms_id,
-        username=ns_admin_user.username,
-        name=f"{ns_admin_user.first_name} {ns_admin_user.last_name}",
-    )
+    register_rms_user(client_with_db.application, ns_admin_user)
 
     # Try to create course in ns2
     with client_with_db.session_transaction() as sess:
         sess.clear()
         sess.update(mock_session_namespace_admin)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": ns2_data["id"],
             "course_name": "Unauthorized Course",
             "slug": "unauthorized",
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -388,42 +216,33 @@ def test_create_course_as_program_manager_forbidden(
     pm_user = session.query(User).filter_by(username="pm_user").first()
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=pm_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.PROGRAM_MANAGER,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[pm_user.rms_id] = RmsUser(
-        id=pm_user.rms_id, username=pm_user.username, name=f"{pm_user.first_name} {pm_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, pm_user)
 
     # Try to create course
     with client_with_db.session_transaction() as sess:
         sess.clear()
         sess.update(mock_session_pm)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Forbidden Course",
             "slug": "forbidden",
         },
-        content_type="application/json",
     )
 
-    assert response.status_code == HTTPStatus.FORBIDDEN
-    data = json.loads(response.data)
-    assert "error" in data
-    assert "Instance Admin or Namespace Admin" in data["error"]
+    assert_forbidden_admin_only(response)
 
 
 def test_create_course_as_regular_user_forbidden(client_with_db, session, mock_session_regular, test_namespace):
@@ -434,14 +253,14 @@ def test_create_course_as_regular_user_forbidden(client_with_db, session, mock_s
 
     namespace_id = test_namespace["id"]
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Forbidden Course",
             "slug": "forbidden",
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -458,37 +277,29 @@ def test_create_course_with_valid_owners(client_with_db, session, mock_session_a
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
     # Add namespace_admin_user as namespace admin
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=ns_admin_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.NAMESPACE_ADMIN,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[ns_admin_user.rms_id] = RmsUser(
-        id=ns_admin_user.rms_id,
-        username=ns_admin_user.username,
-        name=f"{ns_admin_user.first_name} {ns_admin_user.last_name}",
-    )
+    register_rms_user(client_with_db.application, ns_admin_user)
 
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Course with Owners",
             "slug": "course-with-owners",
             "owners": [ns_admin_user.rms_id],
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -513,27 +324,20 @@ def test_create_course_with_invalid_owners_not_in_namespace(
     regular_user = session.query(User).filter_by(username="regular_user").first()
 
     # Register in mock RMS but don't add to namespace
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[regular_user.rms_id] = RmsUser(
-        id=regular_user.rms_id,
-        username=regular_user.username,
-        name=f"{regular_user.first_name} {regular_user.last_name}",
-    )
+    register_rms_user(client_with_db.application, regular_user)
 
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Course with Invalid Owners",
             "slug": "course-invalid-owners",
             "owners": [regular_user.rms_id],
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -552,35 +356,29 @@ def test_create_course_with_invalid_owners_not_namespace_admin(
     namespace = session.query(Namespace).filter_by(id=namespace_id).first()
 
     # Add pm_user as program manager (not namespace admin)
-    user_on_namespace = UserOnNamespace(
+    assign_namespace_role(
+        session,
         user_id=pm_user.id,
         namespace_id=namespace.id,
         role=UserOnNamespaceRole.PROGRAM_MANAGER,
         assigned_by_id=admin_user.id,
     )
-    session.add(user_on_namespace)
-    session.commit()
 
     # Register in mock RMS
-    from manytask.abstract import RmsUser
-
-    app = client_with_db.application
-    app.rms_api.users[pm_user.rms_id] = RmsUser(
-        id=pm_user.rms_id, username=pm_user.username, name=f"{pm_user.first_name} {pm_user.last_name}"
-    )
+    register_rms_user(client_with_db.application, pm_user)
 
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Course PM Owner",
             "slug": "course-pm-owner",
             "owners": [pm_user.rms_id],
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -598,26 +396,26 @@ def test_create_course_duplicate_course_name(client_with_db, session, mock_sessi
         sess.update(mock_session_admin)
 
     # Create first course
-    response1 = client_with_db.post(
+    response1 = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Duplicate Course",
             "slug": "duplicate-course-1",
         },
-        content_type="application/json",
     )
     assert response1.status_code == HTTPStatus.CREATED
 
     # Try to create second course with same name but different slug
-    response2 = client_with_db.post(
+    response2 = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Duplicate Course",
             "slug": "duplicate-course-2",
         },
-        content_type="application/json",
     )
 
     assert response2.status_code == HTTPStatus.CONFLICT
@@ -634,26 +432,26 @@ def test_create_course_duplicate_slug(client_with_db, session, mock_session_admi
         sess.update(mock_session_admin)
 
     # Create first course
-    response1 = client_with_db.post(
+    response1 = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "First Course",
             "slug": "same-slug",
         },
-        content_type="application/json",
     )
     assert response1.status_code == HTTPStatus.CREATED
 
     # Try to create second course with same slug but different name
-    response2 = client_with_db.post(
+    response2 = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Second Course",
             "slug": "same-slug",
         },
-        content_type="application/json",
     )
 
     assert response2.status_code == HTTPStatus.CONFLICT
@@ -669,28 +467,13 @@ def test_create_course_invalid_slug(client_with_db, mock_session_admin, test_nam
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    invalid_slugs = [
-        "invalid..slug",  # Consecutive dots
-        "-invalid",  # Starts with dash
-        "invalid-",  # Ends with dash
-        "invalid slug",  # Contains space
-        "",  # Empty
-    ]
-
-    for invalid_slug in invalid_slugs:
-        response = client_with_db.post(
-            "/api/admin/courses",
-            json={
-                "namespace_id": namespace_id,
-                "course_name": "Test Course",
-                "slug": invalid_slug,
-            },
-            content_type="application/json",
-        )
-
-        assert response.status_code == HTTPStatus.BAD_REQUEST, f"Slug '{invalid_slug}' should be invalid"
-        data = json.loads(response.data)
-        assert "error" in data
+    invalid_slugs = ["invalid..slug", "-invalid", "invalid-", "invalid slug", ""]
+    assert_slugs_rejected(
+        client_with_db,
+        "/api/admin/courses",
+        invalid_slugs,
+        lambda slug: {"namespace_id": namespace_id, "course_name": "Test Course", "slug": slug},
+    )
 
 
 def test_create_course_missing_fields(client_with_db, mock_session_admin):
@@ -700,35 +483,35 @@ def test_create_course_missing_fields(client_with_db, mock_session_admin):
         sess.update(mock_session_admin)
 
     # Missing course_name
-    response1 = client_with_db.post(
+    response1 = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": 1,
             "slug": "test-slug",
         },
-        content_type="application/json",
     )
     assert response1.status_code == HTTPStatus.BAD_REQUEST
 
     # Missing slug
-    response2 = client_with_db.post(
+    response2 = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": 1,
             "course_name": "Test Course",
         },
-        content_type="application/json",
     )
     assert response2.status_code == HTTPStatus.BAD_REQUEST
 
     # Missing namespace_id
-    response3 = client_with_db.post(
+    response3 = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "course_name": "Test Course",
             "slug": "test-slug",
         },
-        content_type="application/json",
     )
     assert response3.status_code == HTTPStatus.BAD_REQUEST
 
@@ -739,16 +522,7 @@ def test_create_course_not_json(client_with_db, mock_session_admin):
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
-        "/api/admin/courses",
-        data="not json",
-        content_type="text/plain",
-    )
-
-    assert response.status_code == HTTPStatus.BAD_REQUEST
-    data = json.loads(response.data)
-    assert "error" in data
-    assert "JSON" in data["error"]
+    assert_not_json_rejected(client_with_db, "/api/admin/courses")
 
 
 def test_create_course_nonexistent_namespace(client_with_db, mock_session_admin):
@@ -757,14 +531,14 @@ def test_create_course_nonexistent_namespace(client_with_db, mock_session_admin)
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": 99999,
             "course_name": "Test Course",
             "slug": "test-course",
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -780,15 +554,15 @@ def test_create_course_with_nonexistent_owner(client_with_db, mock_session_admin
     with client_with_db.session_transaction() as sess:
         sess.update(mock_session_admin)
 
-    response = client_with_db.post(
+    response = post_json(
+        client_with_db,
         "/api/admin/courses",
-        json={
+        {
             "namespace_id": namespace_id,
             "course_name": "Test Course",
             "slug": "test-course",
             "owners": [99999],  # Non-existent user
         },
-        content_type="application/json",
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
