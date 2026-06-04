@@ -56,13 +56,15 @@ def index() -> ResponseReturnValue:
     courses = get_courses(app)
     is_instance_admin = check_instance_admin(app)
 
+    username = "guest" if app.debug else session["manytask"]["username"]
+
     # Check if user is a namespace admin
     if app.debug:
         is_namespace_admin_flag = True
     else:
         from .utils.flask import is_namespace_admin
 
-        is_namespace_admin_flag = is_namespace_admin(app, session["manytask"]["username"])
+        is_namespace_admin_flag = is_namespace_admin(app, username)
 
     return render_template(
         "courses.html",
@@ -71,6 +73,8 @@ def index() -> ResponseReturnValue:
         courses=courses,
         is_instance_admin=is_instance_admin,
         is_namespace_admin=is_namespace_admin_flag,
+        username=username,
+        gitlab_url=app.rms_api.base_url,
     )
 
 
