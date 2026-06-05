@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Students progress{% endblock %}
+
+{% block additional_styles %}
+    <meta http-equiv="refresh" content="30">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/courses.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/progress.css') }}">
+{% endblock %}
+
+{% block body %}
+    <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
+        <h1 class="mt-4 mb-3">Students progress</h1>
+
+        {% if not entries %}
+            <p class="text-muted">
+                No students provided. Use query parameters like
+                <code>?n=2&amp;username1=student1&amp;course1=python-2026-spring&amp;username2=vasya123&amp;course2=cpp-2026-spring</code>.
+            </p>
+        {% endif %}
+
+        <ul class="course-list progress-list">
+            {% for entry in entries %}
+                {% set bucket = (entry.percent // 10) * 10 %}
+                <li class="course-item progress-item progress-bucket-{{ bucket }}">
+                    <div class="progress-row">
+                        <div class="progress-info">
+                            <span class="progress-username">{{ entry.username or '—' }}</span>
+                            <span class="progress-course">{{ entry.course or '—' }}</span>
+                        </div>
+                        <div class="progress-value">
+                            {% if entry.error %}
+                                <span class="progress-error">{{ entry.error }}</span>
+                            {% else %}
+                                <span class="progress-percent">{{ entry.percent }}%</span>
+                                <span class="progress-score">({{ entry.score }}/{{ entry.max_score }})</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill progress-bucket-{{ bucket }}"
+                             style="width: {{ entry.percent }}%"></div>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endblock %}
