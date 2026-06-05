@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Students progress{% endblock %}
+{% block title %}{{ page_title or "Students progress" }}{% endblock %}
 
 {% block additional_styles %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/courses.css') }}">
@@ -9,7 +9,7 @@
 
 {% block body %}
     <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
-        <h1 class="mt-4 mb-3">Students progress</h1>
+        <h1 class="mt-4 mb-3">{{ page_title or "Students progress" }}</h1>
 
         <div id="progress-status" class="progress-status text-muted small mb-2">
             Auto-refreshing every 15 s.

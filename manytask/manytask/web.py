@@ -156,10 +156,12 @@ def progress() -> ResponseReturnValue:
     """
     app: CustomFlask = current_app  # type: ignore
     entries = _compute_progress_entries(app)
+    title = request.args.get("title", "").strip() or "Students progress"
 
     return render_template(
         "progress.html",
         entries=entries,
+        page_title=title,
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
     )
