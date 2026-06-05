@@ -125,9 +125,11 @@ def progress() -> ResponseReturnValue:
                 entries.append(entry)
                 continue
 
+            # `get_scores` already returns scores for ALL tasks of the course
+            # (including bonus ones), so we must NOT add `get_bonus_score` on
+            # top of it — that would double-count bonus tasks.
             scores = storage_api.get_scores(course_name, username) or {}
-            bonus = storage_api.get_bonus_score(course_name, username) or 0
-            total_score = sum(scores.values()) + bonus
+            total_score = sum(scores.values())
             max_score = storage_api.max_score(course_name) or 0
 
             percent = 0
