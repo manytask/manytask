@@ -74,22 +74,14 @@ def index() -> ResponseReturnValue:
     )
 
 
-@root_bp.route("/progress.html", methods=["GET"])
-@root_bp.route("/progress", methods=["GET"])
-def progress() -> ResponseReturnValue:
-    """Render a page that shows percentage progress for several students on several courses.
+def _compute_progress_entries(app: CustomFlask) -> list[dict]:
+    """Compute progress entries from the current request's query string.
 
     Query parameters:
         n (int): number of (student, course) pairs.
         usernameN (str): student login for pair N (1-indexed).
         courseN (str): course name for pair N (1-indexed).
-
-    Example:
-        /progress.html?n=2&username1=student1&course1=python-2026-spring
-                      &username2=vasya123&course2=cpp-2026-spring
     """
-    app: CustomFlask = current_app  # type: ignore
-
     try:
         n = int(request.args.get("n", "0"))
     except ValueError:
@@ -150,12 +142,35 @@ def progress() -> ResponseReturnValue:
 
         entries.append(entry)
 
+    return entries
+
+
+@root_bp.route("/progress.html", methods=["GET"])
+@root_bp.route("/progress", methods=["GET"])
+def progress() -> ResponseReturnValue:
+    """Render a page that shows percentage progress for several students on several courses.
+
+    Example:
+        /progress.html?n=2&username1=student1&course1=python-2026-spring
+                      &username2=vasya123&course2=cpp-2026-spring
+    """
+    app: CustomFlask = current_app  # type: ignore
+    entries = _compute_progress_entries(app)
+
     return render_template(
         "progress.html",
         entries=entries,
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
     )
+
+
+@root_bp.route("/progress.json", methods=["GET"])
+def progress_json() -> ResponseReturnValue:
+    """Return current progress entries as JSON for async refresh."""
+    app: CustomFlask = current_app  # type: ignore
+    entries = _compute_progress_entries(app)
+    return {"entries": entries}
 
 
 @root_bp.route("/login", methods=["GET", "POST"])
