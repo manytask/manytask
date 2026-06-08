@@ -1,56 +1,33 @@
 networks:
   manytask-net:
     name: nginx-manytask-net
-    driver: bridge
+    external: true
 
 volumes:
-    cache:
-    solutions:
-    acme:
-        name: acme
-    certs:
-        name: certs
-    vhost:
-        name: vhost
-    html:
-        name: html
-    conf:
-        name: conf
+  cache:
+  solutions:
+  postgres_data:
+    name: manytask_postgres_data
+    external: true
 
 services:
-    nginx-proxy:
-        image: nginxproxy/nginx-proxy:1.7.0
-        container_name: nginx-proxy
+    postgres:
+        image: postgres:17
+        container_name: manytask_postgres
         restart: always
-        ports:
-            - "80:80"
-            - "443:443"
-        environment:
-            DHPARAM_SKIP: "true"
+        env_file: ../manytask/.env
+        expose:
+            - "5432"
         volumes:
-            - certs:/etc/nginx/certs:ro
-            - vhost:/etc/nginx/vhost.d
-            - html:/usr/share/nginx/html
-            - /var/run/docker.sock:/tmp/docker.sock:ro
-            - conf:/etc/nginx/conf.d
+            - postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
         networks:
             - manytask-net
 
-    acme-companion:
-        image: nginxproxy/acme-companion:2.5.2
-        container_name: nginx-proxy-acme
-        restart: always
-        environment:
-            DEFAULT_EMAIL: no-reply@manytask.org
-            NGINX_PROXY_CONTAINER: nginx-proxy
-        volumes:
-            - /var/run/docker.sock:/var/run/docker.sock:ro
-            - acme:/etc/acme.sh
-            - certs:/etc/nginx/certs:rw
-            - vhost:/etc/nginx/vhost.d:rw
-            - html:/usr/share/nginx/html:rw
-        networks:
-            - manytask-net
     docs:
         build:
             context: ../docs
@@ -62,6 +39,7 @@ services:
             VIRTUAL_HOST: ${DOCS_HOST}
             VIRTUAL_PORT: 80
             LETSENCRYPT_HOST: ${DOCS_HOST}
+            LETSENCRYPT_EMAIL: no-reply@manytask.org
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:80" ]
             interval: 1m
@@ -70,13 +48,13 @@ services:
             start_period: 30s
         networks:
             - manytask-net
+
     manytask:
-        # image: manytask/manytask:latest  # set SPECIFIC version you'll use
         build:
             dockerfile: manytask/Dockerfile
             context: ..
             target: app
-        container_name: manytask  # change this to your project name
+        container_name: manytask
         restart: always
         expose:
             - "5050"
@@ -90,3 +68,6 @@ services:
             - cache:/cache
         networks:
             - manytask-net
+        depends_on:
+            postgres:
+                condition: service_healthy
