@@ -42,8 +42,8 @@ items:
         href: checker_config.md
       - name: Manytask configuration
         href: manytask_config.md
-      - name: Course statuses
-        href: course_statuses.md
+      - name: Running the course
+        href: running_course.md
       - name: Checker pipelines and plugins
         href: checker_pipelines_and_plugins.md
   - name: For system administrators

@@ -1,42 +1,11 @@
-# How to schedule deadlines
+# Manytask configuration
 
-## Avoid Scheduling Deadlines on Lecture Days
-
-It's better not to set deadlines on the same day as a lecture. Students will likely be preoccupied with completing tasks and may not have time to attend the lecture. We value students' participation in lectures and encourage their presence.
-
-
-## Deadline Timing and Late Submissions
-
-Deadlines are typically set to 23:59:00. However, there's a possibility that a student might submit their code at 23:58:01, which could mistakenly be marked as late. In such cases, you can manually update the score using the CLI.
-
-## Set Both Soft and Hard Deadlines
-
-It is generally better to define both soft and hard deadlines. If students are given a chance to get even a fractional score for the task they are more likely to solve the task and submit their solution for checks. Soft deadline is also beneficial for the testing systems since it allows to distribute the load more evenly.
-
-Example (specific to manytask, subject to version differences):
-
-
-```yaml
-  deadlines: hard
-  schedule:
-    - group: bpftrace
-      enabled: true
-      start: 2024-11-01 19:00:00
-      steps:
-        0.7: 2024-12-03 23:59:00
-      end: 2025-02-01 23:59:00
-```
-
-## Be Mindful of Students’ Exam Schedules
-Avoid setting deadlines on dates when students have exams at external institutions.
-Understanding your students' schedules will help reduce unnecessary conflicts and stress.
-
-# How to specify config for final grade
+## How to specify config for final grade
 
 To configurate how final grade is computed you need to specify it in the course yaml config
 (look at `common.example.yml` in the repository root for example).
 
-## Grading process logic
+### Grading process logic
 
 Each grade is described by its value and conditions needed to achieve it.
 Values are UNIQUE INTEGERS organized with respect to the logic <<THE HIGHER THE VALUE, THE BETTER THE GRADE>>,
@@ -54,7 +23,7 @@ The student's grade dict meets the conditions of the list of grade dicts if it m
 In the words of logic, each grade config is represented by `Disjunctive normal form` -- list of dicts.
 Each dict inside this list represents a `Conjunction`.
 
-## Grade config example
+### Grade config example
 
 Consider your course has 2 large tasks and many basic tasks, so the final grade depends on the number of completed
 large tasks and percent of completed basic tasks in a way that completing a large task decreases the share of basic tasks needed to obtain the same mark.
@@ -78,41 +47,42 @@ Otherwise, student fails and gets 2, then your config would look like this:
 
 ```yaml
 grades:
-    5: [
-      {
-        "percent": 90,
-        "large_count": 1,
-      },
-      {
-        "percent": 80,
-        "large_count": 2,
-      }
-    ]
-    4: [
-      {
-        "percent": 80,
-        "large_count": 1,
-      },
-      {
-        "percent": 70,
-        "large_count": 2,
-      }
-    ]
-    3: [
-      {
-        "percent": 60,
-        "large_count": 1,
-      },
-      {
-        "percent": 50,
-        "large_count": 2,
-      }
-    ]
-    2: [
-      {
-        "": 0
-      }
-    ]
+  grades:
+      5: [
+        {
+          "percent": 90,
+          "large_count": 1,
+        },
+        {
+          "percent": 80,
+          "large_count": 2,
+        }
+      ]
+      4: [
+        {
+          "percent": 80,
+          "large_count": 1,
+        },
+        {
+          "percent": 70,
+          "large_count": 2,
+        }
+      ]
+      3: [
+        {
+          "percent": 60,
+          "large_count": 1,
+        },
+        {
+          "percent": 50,
+          "large_count": 2,
+        }
+      ]
+      2: [
+        {
+          "": 0
+        }
+      ]
 ```
 
 You could easily apply pattern (of grade 2) from this example to make empty, mocked conditions for the lowest grade.
@@ -122,18 +92,19 @@ It is worth mentioning that suggested system is quite flexible and allows you to
 score in a chosen task. For example, if you want to grade students with 5 if they did not solve any big homeworks, but got 100 points for task `impossible` you could achieve it in the following fashion.
 
 ```yaml
-grades:
-    5: [
-      {
-        "percent": 90,
-        "large_count": 1,
-      },
-      {
-        "percent": 80,
-        "scores/impossible": 100,
-      }
-    ]
-    ...
+grade:
+  grades:
+      5: [
+        {
+          "percent": 90,
+          "large_count": 1,
+        },
+        {
+          "percent": 80,
+          "scores/impossible": 100,
+        }
+      ]
+      ...
 ```
 
 Moreover, you could specify the minimum score needed to consider large task solved,
