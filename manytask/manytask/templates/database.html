@@ -444,9 +444,10 @@
 
             function normalizeForSearch(str) {
                 if (!str) return "";
+                const lower = str.toLowerCase();
                 let out = "";
-                for (let i = 0; i < str.length; i++) {
-                    const ch = str[i];
+                for (let i = 0; i < lower.length; i++) {
+                    const ch = lower[i];
                     out += Object.prototype.hasOwnProperty.call(CYRILLIC_TO_LATIN, ch)
                         ? CYRILLIC_TO_LATIN[ch]
                         : ch;
@@ -463,7 +464,7 @@
                 // Normally we would search for match in first and last name independently,
                 // which would cover most of the cases. But the approach below allows one
                 // to be more specific by typing both name and last name in the search box
-                // in any order (e.g. "Ivanov Iv" woill match Иван Иванов, but not Илья Иванов).
+                // in any order (e.g. "Ivanov Iv" will match Иван Иванов, but not Илья Иванов).
                 const first_name = data.first_name ? data.first_name : "";
                 const last_name = data.last_name ? data.last_name : "";
                 const the_very_full_name = `${first_name} ${last_name} ${first_name}`;
