@@ -438,11 +438,12 @@
                 'п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'c',
                 'ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu',
                 'я':'ya',
-                // Ukrainian / Belarusian extras (common in student names)
+                // Ukrainian / Belarusian extras
                 'ї':'i','і':'i','є':'e','ґ':'g','ў':'u'
             };
 
-            function cyrillicToLatin(str) {
+            function normalizeForSearch(str) {
+                if (!str) return "";
                 let out = "";
                 for (let i = 0; i < str.length; i++) {
                     const ch = str[i];
@@ -453,31 +454,17 @@
                 return out;
             }
 
-            function normalizeForSearch(str) {
-                if (!str) return "";
-                return cyrillicToLatin(String(str).toLowerCase());
-            }
-
             function customFilter(data) {
                 const searchTerm = normalizeForSearch(valueEl.value);
                 if (!searchTerm) return true;
                 if (normalizeForSearch(data.username).includes(searchTerm)) {
                     return true;
                 }
-                if (data.first_name && data.last_name) {
-                    const full_name = `${data.first_name} ${data.last_name}`;
-                    const reversed_name = `${data.last_name} ${data.first_name}`;
-                    if (normalizeForSearch(full_name).includes(searchTerm)) {
-                        return true;
-                    }
-                    if (normalizeForSearch(reversed_name).includes(searchTerm)) {
-                        return true;
-                    }
-                }
-                if (data.first_name && normalizeForSearch(data.first_name).includes(searchTerm)) {
-                    return true;
-                }
-                if (data.last_name && normalizeForSearch(data.last_name).includes(searchTerm)) {
+                const first_name = data.first_name ? data.first_name : "";
+                const last_name = data.last_name ? data.last_name : "";
+                const the_very_full_name = `${first_name} ${last_name} ${first_name}`;
+                
+                if (normalizeForSearch(the_very_full_name).includes(searchTerm)) {
                     return true;
                 }
                 return false;
