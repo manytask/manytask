@@ -460,6 +460,10 @@
                 if (normalizeForSearch(data.username).includes(searchTerm)) {
                     return true;
                 }
+                // Normally we would search for match in first and last name independently,
+                // which would cover most of the cases. But the approach below allows one
+                // to be more specific by typing both name and last name in the search box
+                // in any order (e.g. "Ivanov Iv" woill match Иван Иванов, but not Илья Иванов).
                 const first_name = data.first_name ? data.first_name : "";
                 const last_name = data.last_name ? data.last_name : "";
                 const the_very_full_name = `${first_name} ${last_name} ${first_name}`;
