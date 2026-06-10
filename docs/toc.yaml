@@ -40,7 +40,7 @@ items:
         href: private_repo.md
       - name: Checker configuration
         href: checker_config.md
-      - name: Manytask configurationЯ
+      - name: Manytask configuration
         href: manytask_config.md
       - name: Running the course
         href: running_course.md
