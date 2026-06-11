@@ -36,6 +36,8 @@ items:
     items:
       - name: Course as code
         href: course_as_code.md
+      - name: Course template
+        href: course_template.md
       - name: Private repository
         href: private_repo.md
       - name: Checker configuration
