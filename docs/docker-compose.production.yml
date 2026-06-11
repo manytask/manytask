@@ -1,0 +1,32 @@
+# Production stack for the documentation site.
+#
+# Joins the shared edge network so nginx-proxy serves it at ${DOCS_HOST}.
+# Runnable on its own (`docker compose -f docs/docker-compose.production.yml up`)
+# or via the root umbrella at compose/docker-compose.production.yml.
+networks:
+  manytask-net:
+    name: nginx-manytask-net
+    external: true
+
+services:
+  docs:
+    build:
+      context: .
+    image: manytask-docs
+    container_name: manytask-docs
+    restart: always
+    environment:
+      VIRTUAL_HOST: ${DOCS_HOST}
+      VIRTUAL_PORT: 80
+      LETSENCRYPT_HOST: ${DOCS_HOST}
+      LETSENCRYPT_EMAIL: no-reply@manytask.org
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 1m
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    networks:
+      - manytask-net

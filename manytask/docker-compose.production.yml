@@ -1,0 +1,59 @@
+# Production stack for the manytask web app + its database.
+#
+# Joins the shared edge network created by compose/docker-compose.proxy.yml, so
+# nginx-proxy terminates TLS and routes ${APP_HOST} to the app. Runnable on its
+# own (`docker compose -f manytask/docker-compose.production.yml up`) or via the
+# root umbrella at compose/docker-compose.production.yml.
+#
+# Requires the proxy stack (and thus the network) to be up first.
+networks:
+  manytask-net:
+    name: nginx-manytask-net
+    external: true
+
+volumes:
+  cache:
+  postgres_data:
+    name: manytask_postgres_data
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: manytask_postgres
+    restart: always
+    env_file: .env
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - manytask-net
+
+  manytask:
+    build:
+      context: ..
+      dockerfile: manytask/Dockerfile
+      target: app
+    image: manytask
+    container_name: manytask
+    restart: always
+    env_file: .env
+    environment:
+      VIRTUAL_HOST: ${APP_HOST}
+      VIRTUAL_PORT: 5050
+      LETSENCRYPT_HOST: ${APP_HOST}
+      LETSENCRYPT_EMAIL: no-reply@manytask.org
+    expose:
+      - "5050"
+    volumes:
+      - cache:/cache
+    networks:
+      - manytask-net
+    depends_on:
+      postgres:
+        condition: service_healthy

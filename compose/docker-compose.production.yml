@@ -1,73 +1,16 @@
-networks:
-  manytask-net:
-    name: nginx-manytask-net
-    external: true
-
-volumes:
-  cache:
-  solutions:
-  postgres_data:
-    name: manytask_postgres_data
-    external: true
-
-services:
-    postgres:
-        image: postgres:17
-        container_name: manytask_postgres
-        restart: always
-        env_file: ../manytask/.env
-        expose:
-            - "5432"
-        volumes:
-            - postgres_data:/var/lib/postgresql/data
-        healthcheck:
-            test: ["CMD-SHELL", "pg_isready"]
-            interval: 5s
-            timeout: 5s
-            retries: 5
-        networks:
-            - manytask-net
-
-    docs:
-        build:
-            context: ../docs
-        container_name: manytask-docs
-        restart: always
-        expose:
-            - "80"
-        environment:
-            VIRTUAL_HOST: ${DOCS_HOST}
-            VIRTUAL_PORT: 80
-            LETSENCRYPT_HOST: ${DOCS_HOST}
-            LETSENCRYPT_EMAIL: no-reply@manytask.org
-        healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:80" ]
-            interval: 1m
-            timeout: 15s
-            retries: 3
-            start_period: 30s
-        networks:
-            - manytask-net
-
-    manytask:
-        build:
-            dockerfile: manytask/Dockerfile
-            context: ..
-            target: app
-        container_name: manytask
-        restart: always
-        expose:
-            - "5050"
-        env_file: ../manytask/.env
-        environment:
-            VIRTUAL_HOST: ${APP_HOST}
-            VIRTUAL_PORT: 5050
-            LETSENCRYPT_HOST: ${APP_HOST}
-            LETSENCRYPT_EMAIL: no-reply@manytask.org
-        volumes:
-            - cache:/cache
-        networks:
-            - manytask-net
-        depends_on:
-            postgres:
-                condition: service_healthy
+# Umbrella for the manytask production stand: web app + database + docs.
+#
+# A thin `include` of the per-component stacks, so each stays runnable on its own
+# while this file brings the whole stand up in one go. This is what the deploy
+# workflow runs.
+#
+# The shared edge proxy and the nginx-manytask-net network are owned by
+# docker-compose.proxy.yml and must be up first (once per host):
+#   docker compose -f compose/docker-compose.proxy.yml up -d
+#
+# Then the stand (interpolates ${APP_HOST}/${DOCS_HOST} from manytask/.env):
+#   docker compose --env-file manytask/.env \
+#     -f compose/docker-compose.production.yml up --build -d
+include:
+  - ../manytask/docker-compose.production.yml
+  - ../docs/docker-compose.production.yml
