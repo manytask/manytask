@@ -44,9 +44,9 @@ services:
     restart: always
     env_file: .env
     environment:
-      VIRTUAL_HOST: ${APP_HOST}
+      VIRTUAL_HOST: ${APP_HOST:?set APP_HOST, e.g. --env-file manytask/.env}
       VIRTUAL_PORT: 5050
-      LETSENCRYPT_HOST: ${APP_HOST}
+      LETSENCRYPT_HOST: ${APP_HOST:?set APP_HOST, e.g. --env-file manytask/.env}
       LETSENCRYPT_EMAIL: no-reply@manytask.org
     expose:
       - "5050"
