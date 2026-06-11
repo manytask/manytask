@@ -568,6 +568,15 @@ def get_deadlines(course_name: str) -> ResponseReturnValue:
     )
 
 
+def _format_config_validation_error(course_name: str, exc: ValidationError) -> str:
+    details = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error["loc"]) or "config"
+        details.append(f"{location}: {error['msg']}")
+    summary = "; ".join(details) if details else str(exc)
+    return f"Invalid config for course={course_name}: {summary}"
+
+
 @bp.post("/update_config")
 @requires_token
 def update_config(course_name: str) -> ResponseReturnValue:
@@ -583,12 +592,29 @@ def update_config(course_name: str) -> ResponseReturnValue:
     try:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
+    except yaml.YAMLError as e:
+        return (
+            f"Invalid YAML in config for course={course_name}: {e}", 
+            HTTPStatus.BAD_REQUEST
+        )
 
+    if not isinstance(config_data, dict):
+        return (
+            f"Invalid config for course={course_name}: expected a YAML mapping (object), got {type(config_data).__name__}",
+            HTTPStatus.BAD_REQUEST
+        )
+
+    try:
         # Store the new config
         app.store_config(course_name, config_data)
         logger.info("Stored new config for course=%s", course_name)
+    except ValidationError as e:
+        return (
+            _format_config_validation_error(course_name, e),
+            HTTPStatus.BAD_REQUEST
+        )
     except Exception:
-        logger.exception("Error while updating config for course=%s", course_name, exc_info=True)
+        logger.exception("Error while updating config for course=%s", course_name)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
     # Recalculate grades for all students using the new config
