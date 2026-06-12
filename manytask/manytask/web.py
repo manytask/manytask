@@ -74,6 +74,107 @@ def index() -> ResponseReturnValue:
     )
 
 
+def _compute_progress_entries(app: CustomFlask) -> list[dict]:
+    """Compute progress entries from the current request's query string.
+
+    Query parameters:
+        n (int): number of (student, course) pairs.
+        usernameN (str): student login for pair N (1-indexed).
+        courseN (str): course name for pair N (1-indexed).
+    """
+    try:
+        n = int(request.args.get("n", "0"))
+    except ValueError:
+        n = 0
+    if n < 0:
+        n = 0
+
+    storage_api = app.storage_api
+    entries: list[dict] = []
+
+    for i in range(1, n + 1):
+        username = request.args.get(f"username{i}", "").strip()
+        course_name = request.args.get(f"course{i}", "").strip()
+
+        entry: dict = {
+            "username": username,
+            "course": course_name,
+            "percent": 0,
+            "score": 0,
+            "max_score": 0,
+            "error": None,
+        }
+
+        if not username or not course_name:
+            entry["error"] = "Missing username or course"
+            entries.append(entry)
+            continue
+
+        try:
+            course: Course | None = storage_api.get_course(course_name)
+            if course is None:
+                entry["error"] = "Course not found"
+                entries.append(entry)
+                continue
+
+            # `get_scores` already returns scores for ALL tasks of the course
+            # (including bonus ones), so we must NOT add `get_bonus_score` on
+            # top of it — that would double-count bonus tasks.
+            scores = storage_api.get_scores(course_name, username) or {}
+            total_score = sum(scores.values())
+            max_score = storage_api.max_score(course_name) or 0
+
+            percent = 0
+            if max_score > 0:
+                percent = int(round(total_score * 100 / max_score))
+            percent = max(0, min(100, percent))
+
+            entry.update(
+                {
+                    "score": total_score,
+                    "max_score": max_score,
+                    "percent": percent,
+                }
+            )
+        except Exception as e:
+            logger.warning("Failed to compute progress for %s on %s: %s", username, course_name, e)
+            entry["error"] = "Failed to fetch progress"
+
+        entries.append(entry)
+
+    return entries
+
+
+@root_bp.route("/progress.html", methods=["GET"])
+@root_bp.route("/progress", methods=["GET"])
+def progress() -> ResponseReturnValue:
+    """Render a page that shows percentage progress for several students on several courses.
+
+    Example:
+        /progress.html?n=2&username1=student1&course1=python-2026-spring
+                      &username2=vasya123&course2=cpp-2026-spring
+    """
+    app: CustomFlask = current_app  # type: ignore
+    entries = _compute_progress_entries(app)
+    title = request.args.get("title", "").strip() or "Students progress"
+
+    return render_template(
+        "progress.html",
+        entries=entries,
+        page_title=title,
+        course_favicon=app.favicon,
+        manytask_version=app.manytask_version,
+    )
+
+
+@root_bp.route("/progress.json", methods=["GET"])
+def progress_json() -> ResponseReturnValue:
+    """Return current progress entries as JSON for async refresh."""
+    app: CustomFlask = current_app  # type: ignore
+    entries = _compute_progress_entries(app)
+    return {"entries": entries}
+
+
 @root_bp.route("/login", methods=["GET", "POST"])
 def login() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
