@@ -1,0 +1,58 @@
+version: 1
+status: in_progress
+
+settings:
+  course_name: sandbox
+  gitlab_base_url: https://gitlab.manytask2.org
+  public_repo: sandbox/public
+  students_group: sandbox/students
+
+ui:
+  task_url_template: https://gitlab.manytask2.org/sandbox/students/$USER_NAME/$GROUP_NAME/$TASK_NAME
+  links:
+    "Source repo": https://gitlab.manytask2.org/sandbox
+
+deadlines:
+  timezone: Europe/Moscow
+  deadlines: hard
+
+  schedule:
+    - group: python
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add
+          score: 100
+
+    - group: cpp
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_cpp
+          score: 100
+
+    - group: bash
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_bash
+          score: 100
+
+    - group: go
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_go
+          score: 100
+
+    - group: rust
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_rust
+          score: 100
