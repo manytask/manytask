@@ -398,6 +398,33 @@ class TestGetComments:
         assert comments[0].author_username == "alice"
         assert comments[0].created_at.year == 2026
 
+    def test_lists_notes_with_valid_order_by(
+        self,
+        gitlab_adapter: GitLabAdapter,
+        mock_gitlab: responses.RequestsMock,
+    ) -> None:
+        # Regression: GitLab notes API only accepts order_by created_at/updated_at.
+        # order_by=id 400s ("order_by does not have a valid value"). The matcher
+        # makes this test fail (no mock match) if the adapter regresses to "id".
+        mock_gitlab.add(
+            responses.GET,
+            "https://gitlab.test/api/v4/projects/42/merge_requests/7/notes",
+            json=[],
+            status=200,
+            match=[
+                responses.matchers.query_param_matcher(
+                    {"order_by": "created_at", "sort": "asc"},
+                    strict_match=False,
+                )
+            ],
+        )
+
+        import asyncio
+
+        comments = asyncio.run(gitlab_adapter.get_comments(self._mr()))
+
+        assert comments == []
+
     def test_since_id_filter(
         self,
         gitlab_adapter: GitLabAdapter,

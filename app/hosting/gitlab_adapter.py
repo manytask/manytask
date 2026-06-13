@@ -243,7 +243,7 @@ class GitLabAdapter:
         mr = project.mergerequests.get(mr_iid, lazy=True)
         notes = mr.notes.list(
             sort="asc",
-            order_by="id",
+            order_by="created_at",
             per_page=100,
             iterator=True,
         )
