@@ -92,7 +92,7 @@ It is worth mentioning that suggested system is quite flexible and allows you to
 score in a chosen task. For example, if you want to grade students with 5 if they did not solve any big homeworks, but got 100 points for task `impossible` you could achieve it in the following fashion.
 
 ```yaml
-grade:
+grades:
   grades:
       5: [
         {

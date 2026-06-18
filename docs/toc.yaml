@@ -38,6 +38,8 @@ items:
         href: course_as_code.md
       - name: The basic example
         href: basic_example.md
+      - name: Course template
+        href: course_template.md
       - name: Private repository
         href: private_repo.md
       - name: Checker configuration
@@ -58,8 +60,6 @@ items:
         href: deploy_guide.md
   - name: For developers
     items:
-      - name: Local Development
-        href: local_development.md
       - name: Development
         href: dev.md
   - name: References
