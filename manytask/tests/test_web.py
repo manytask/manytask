@@ -303,6 +303,42 @@ def test_logout(app):
                 assert "auth" not in sess
 
 
+def test_index_shows_profile_menu(app, mock_gitlab_oauth):
+    """
+    The course list page should show the user menu
+    """
+    CSRFProtect(app)
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess["auth"] = {
+                    "version": TEST_GITLAB_SESSION_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_auth_id": TEST_USER_ID,
+                    "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
+                }
+                sess["rms"] = {
+                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "rms_id": TEST_RMS_ID,
+                    "username": TEST_USERNAME,
+                }
+                sess["manytask"] = {
+                    "version": 1.5,
+                    "user_id": TEST_USER_ID,
+                    "username": TEST_USERNAME,
+                }
+            app.oauth = mock_gitlab_oauth
+            response = client.get("/")
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            assert "nav-user-menu" in body
+            assert "Account Settings" in body
+            assert f"{GITLAB_BASE_URL}/-/user_settings/profile" in body
+            assert "changeUserInfoModal" in body
+            assert TEST_USERNAME in body
+
+
 def test_not_ready(app):
     with app.test_request_context():
         with (
