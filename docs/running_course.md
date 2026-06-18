@@ -62,8 +62,7 @@ Deadlines are typically set to 23:59:00. However, when checking for the deadline
 
 It is generally better to use soft deadlines. If students are given a chance to get even a fractional score for the task they are more likely to solve the task and submit their solution for checks. Soft deadline is also beneficial for the testing systems since it allows to distribute the load more evenly.
 
-Example:
-
+For example, here we still give 70% of the score after the first deadline, which was on 2024-12-03:
 
 ```yaml
   deadlines: hard
