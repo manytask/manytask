@@ -86,7 +86,7 @@ Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fil
 | `GITLAB_ADMIN_TOKEN`     | Personal Access Token from Step 1                                                                                 |
 | `GITLAB_CLIENT_ID`       | Application ID from Step 2                                                                                        |
 | `GITLAB_CLIENT_SECRET`   | Application Secret from Step 2                                                                                    |
-| `APPLY_MIGRATIONS`       | Apply DB migrations on startup (`true` by default)                                                                |
+| `APPLY_MIGRATIONS`       | Apply DB migrations on startup (`True` by default)                                                                |
 | `INITIAL_INSTANCE_ADMIN` | Your GitLab username — granted instance-admin rights on first start                                                |
 | `POSTGRES_USER`          | Postgres username (e.g. `manytaskadmin`)                                                                          |
 | `POSTGRES_PASSWORD`      | Postgres password (e.g. `localdevdbpass`)                                                                         |
@@ -323,15 +323,16 @@ This does not block the Manytask OAuth login flow. You can continue local app te
 
 A brief description of the main files in the project:
 
-- [`abstract.py`](manytask/manytask/abstract.py) – abstract implementations of core objects.
-- [`api.py`](manytask/manytask/api.py) – API endpoints.
-- [`auth.py`](manytask/manytask/auth.py) – authentication on the website and in GitLab.
-- [`course.py`](manytask/manytask/course.py) – business logic for the `Course` class.
-- [`database.py`](manytask/manytask/database.py) – database interaction.
-- [`glab.py`](manytask/manytask/glab.py) – interaction with GitLab.
-- [`main.py`](manytask/manytask/main.py) – application entry point.
-- [`models.py`](manytask/manytask/models.py) – database model definitions.
-- [`web.py`](manytask/manytask/web.py) – web endpoint definitions.
+- **`abstract.py`** – abstract implementations of core objects.
+- **`api.py`** – API endpoints.
+- **`auth.py`** – authentication logic.
+- **`course.py`** – business logic for the `Course` class.
+- **`database.py`** – database interaction.
+- **`glab.py`** – interaction with GitLab (including authentication).
+- **`sourcecraft.py`** – interaction with SourceCraft.
+- **`main.py`** – application entry point.
+- **`models.py`** – database model definitions.
+- **`web.py`** – web endpoint definitions.
 
 ## References
 
