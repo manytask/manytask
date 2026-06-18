@@ -36,6 +36,8 @@ items:
     items:
       - name: Course as code
         href: course_as_code.md
+      - name: The basic example
+        href: basic_example.md
       - name: Course template
         href: course_template.md
       - name: Private repository
