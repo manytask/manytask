@@ -1,4 +1,5 @@
-FROM python:3.13-slim-bookworm AS builder
+# Build context is the repository root (parent of mr-reviewer/); see the compose files.
+FROM python:3.14-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -7,14 +8,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
+COPY mr-reviewer/pyproject.toml mr-reviewer/uv.lock mr-reviewer/README.md ./
+RUN uv sync --locked --no-install-project --no-dev
 
-COPY . .
-RUN uv sync --frozen --no-dev
+COPY mr-reviewer/app ./app
+RUN uv sync --locked --no-dev
 
 
-FROM python:3.13-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS app
 
 # git is needed by the run: checklist step (shallow sparse clone).
 # bash because the run: step pipes through `bash -c <command>`.
@@ -28,7 +29,8 @@ RUN useradd --create-home --uid 10001 botuser
 
 WORKDIR /app
 
-COPY --from=builder /app /app
+COPY --from=builder /app/.venv /app/.venv
+COPY mr-reviewer/app /app/app
 RUN chown -R botuser:botuser /app
 
 USER botuser

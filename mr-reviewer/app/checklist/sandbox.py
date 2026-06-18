@@ -154,7 +154,7 @@ class RunSandbox:
             return
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError, PermissionError:
             try:
                 proc.kill()
             except ProcessLookupError:

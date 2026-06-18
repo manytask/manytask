@@ -84,7 +84,7 @@ class GitLabAdapter:
         try:
             remaining_i = int(remaining)
             limit_i = int(limit)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return response
         if limit_i <= 0 or remaining_i / limit_i >= self._rate_limit_threshold:
             return response
@@ -94,7 +94,7 @@ class GitLabAdapter:
         if reset is not None:
             try:
                 sleep_for = max(0.0, int(reset) - time.time())
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 pass
         sleep_for = min(sleep_for, self._rate_limit_max_sleep_sec)
         logger.warning(

@@ -1,7 +1,7 @@
-# Deploys the mr-reviewer bot next to an existing manytask stack.
-# The manytask compose owns nginx-proxy + acme-companion and the
-# `nginx-manytask-net` network; we attach to it so the new VIRTUAL_HOST
-# gets TLS automatically. Build on the VM (see EDUCATION-59068, decision D2).
+# mr-reviewer production stack — joins the shared manytask edge proxy.
+# Brought up via compose/docker-compose.production.yml (umbrella include).
+# The shared edge proxy + nginx-manytask-net network are owned by
+# compose/docker-compose.proxy.yml and must be up first (once per host).
 networks:
   manytask-net:
     external: true
@@ -25,7 +25,10 @@ services:
       retries: 5
 
   mrr-bot:
-    build: .
+    build:
+      context: ..
+      dockerfile: mr-reviewer/Dockerfile
+      target: app
     image: manytask-mr-reviewer:prod
     container_name: mrr-bot
     restart: always

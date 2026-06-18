@@ -1,6 +1,9 @@
 services:
   bot:
-    build: .
+    build:
+      context: ..
+      dockerfile: mr-reviewer/Dockerfile
+      target: app
     image: manytask-mr-reviewer:dev
     container_name: mrr-bot
     restart: always
