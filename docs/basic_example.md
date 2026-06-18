@@ -15,7 +15,7 @@ The course creation page also contains course token (i.e. TESTER_TOKEN below), w
 
 ## Public repository
 
-Let us illustrate how one can set up a vary basic repository that will allow for checking students solutions and report scores back to the Manytask server. We are going to ask students to implement a function that checks if the number is prime, returning `True` if it is and `False` otherwise. First, let us create a layout of the repository and than we will go through the files and describe what they are.
+Let us illustrate how one can set up a very basic repository that will allow for checking students solutions and report scores back to the Manytask server. We are going to ask students to implement a function that checks if the number is prime, returning `True` if it is and `False` otherwise. First, let us create a layout of the repository and than we will go through the files and describe what they are.
 
 ### Repository layout
 
@@ -66,7 +66,7 @@ def test_known_primes() -> None:
 
 Note that when we introduce private repo, we will be able to add private tests, head-to-head tests with golden solution, etc.
 
-The `check.sh` is used here to unify testing procedures for different tasks. CI will change directory to the task folder and run `check.sh` from there. So each task must have the `check.sh` file, but its contest may vary, depending on the task nature. The only requirement is that if the tests fail, this script should return with an error - this will indicate that we should not report score to the Manytask web app. In our case, the script runs pytest:
+The `check.sh` is used here to unify testing procedures for different tasks. CI will change directory to the task folder and run `check.sh` from there. So each task must have the `check.sh` file, but its content may vary, depending on the task nature. The only requirement is that if the tests fail, this script should return with an error - this will indicate that we should not report score to the Manytask web app. In our case, the script runs pytest:
 
 ```bash
 #!/bin/bash
@@ -80,7 +80,7 @@ Now we need a CI/CD configuration file that will:
 - on success, report the score to the Manytask server via
   `POST /api/<course_name>/report` using the bare task name.
 
-Here is a simple version of such `gitlab-ci.yml` file:
+Here is a simple version of such `.gitlab-ci.yml` file:
 
 ```yaml
 stages:
@@ -107,7 +107,7 @@ check_task:
       # Report the score to the Manytask server.
       curl --fail -X POST --show-error "${MANYTASK_URL}/api/${COURSE_NAME}/report" \
         -H "Authorization: Bearer ${TESTER_TOKEN}" \
-        -d "task=${CI_COMMIT_MESSAGE}&username=${GITLAB_USER_LOGIN}&score=1.0" \
+        -d "task=${CI_COMMIT_MESSAGE}&username=${GITLAB_USER_LOGIN}&score=1.0"
 ```
 
 The script culminates by the `curl` call, which reports score to the Manytask server. Several variables are used there, which are either defined somewhere or collected during the script execution:
@@ -117,6 +117,8 @@ The script culminates by the `curl` call, which reports score to the Manytask se
 - `TASK_PATH` is the path to the task folder, which in our case coincides with the task name.
 - `GITLAB_USER_LOGIN` is the internal GitLab variable that contains the username of the student, it is used when the report is sent to the Manytask server.
 - `TESTER_TOKEN` is the token that is used to authenticate with the Manytask server. It should be defined in the CI/CD settings of the course folder in GitLab.
+
+Note that we send `score=1.0` as a score: this represents 100%, but we could set up tests and CI to send fractional score.
 
 We surely run the `check.sh` script before reporting - if the script fails, this way curl command will not run if the tests fail. Note that we use alpine image, which is very light. But we have to install bash, curl, python and pytest packages in the `before_script` section so that our scripts work. Also note that we are sending `1.0` as a score: this represents 100%, but we could set up tests and CI to send fractional score.
 
@@ -144,7 +146,7 @@ The CI pipeline gets the name of the task to check from `CI_COMMIT_MESSAGE`.
 
 ## Manytask configuration file
 
-Now the files are ready, we need to push them the public repo and inform Manytask that there is a task for solving. This is done with `.manytask.yml` configuration file. The contents of such a file for our one-problem repo is below, please refer to [Manytask configuration file reference](manytask_yml_reference.md) for details.
+Now the files are ready, we need to push them to the public repo and inform Manytask that there is a task for solving. This is done with `.manytask.yml` configuration file. The contents of such a file for our one-problem repo is below, please refer to [Manytask configuration file reference](manytask_yml_reference.md) for details.
 
 ```yaml
 version: 1
@@ -181,7 +183,7 @@ deadlines:
           score: 100
 ```
 
-Here we set the course `status` to `in_progress`, which will mae it possible to register to the course and start solving. The basic setting include links to Gitlab, public repo and students group. In UI section, we configure links to each task in the interface, add extra link (e.g. to course chat group or LMS).In the `deadlines` section, the tasks are configured. Here we use `hard` deadlines - zero points are issued after deadline is expired. We use Moscow timezone. The `schedule` contains a list of task groups. Each group has its own deadlines, which are followed by individual tasks in a group. One group can have many tasks. The `enabled: true` means that the task group is available for solving. The individual tasks are listed with names and maximum points that task cost.
+Here we set the course `status` to `in_progress`, which will make it possible to register to the course and start solving. The basic setting include links to Gitlab, public repo and students group. In UI section, we configure links to each task in the interface, add extra link (e.g. to course chat group or LMS). In the `deadlines` section, the tasks are configured. Here we use `hard` deadlines - zero points are issued after deadline is expired. We use Moscow timezone. The `schedule` contains a list of task groups. Each group has its own deadlines, which are followed by individual tasks in a group. One group can have many tasks. The `enabled: true` means that the task group is available for solving. The individual tasks are listed with names and maximum points that task cost.
 
 Once we are happy with the contents of the `.manytask.yml` file, we can send it to the Manytask server with the following command:
 
@@ -196,4 +198,4 @@ The `TESTER_TOKEN` is the course token, that is available on the course settings
 
 ## Limitations
 
-This approach of setting up the course is probably the simplest, but it is rather limited in real world. First and foremost - students are not restricted in any way in what they are allowed to change. Hence ont can just skip the testing stage and report scores right away: you don't even need to steal the course token, which is also possible in such setup. Secondly, as the name suggests, all the files in the public repo are public and accessible for the students. This means that there is no way to set up private tests or store golden solution in this repo. The third disadvantage is that we need to ask students to provide the task name as a commit message, which is an additional step they may forget to do. We will see how we can overcome these limitations with Manytask Checker in the following sections.
+This approach of setting up the course is probably the simplest, but it is rather limited in real world. First and foremost - students are not restricted in any way in what they are allowed to change. Hence one can just skip the testing stage and report scores right away: you don't even need to steal the course token, which is also possible in such setup. Secondly, as the name suggests, all the files in the public repo are public and accessible for the students. This means that there is no way to set up private tests or store golden solution in this repo. The third disadvantage is that we need to ask students to provide the task name as a commit message, which is an additional step they may forget to do. We will see how we can overcome these limitations with Manytask Checker in the following sections.
