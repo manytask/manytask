@@ -115,6 +115,52 @@ jobs:
           make copy-common-config
           make run-checker-tests
 
+  lint-mr-reviewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: 0.9.5
+
+      - name: Install dependencies
+        working-directory: mr-reviewer
+        run: uv sync --locked
+
+      - name: Lint (make lint)
+        working-directory: mr-reviewer
+        run: make lint
+
+  test-mr-reviewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: 0.9.5
+
+      - name: Install dependencies
+        working-directory: mr-reviewer
+        run: uv sync --locked
+
+      - name: Test (make run-mr-reviewer-tests)
+        working-directory: mr-reviewer
+        run: make run-mr-reviewer-tests
+
   build-docker:
     needs:
       - lint-manytask
@@ -127,3 +173,14 @@ jobs:
       context: .
       dockerfile: manytask/Dockerfile
       tags: manytask:${{ github.sha }}
+
+  build-docker-mr-reviewer:
+    needs:
+      - lint-mr-reviewer
+      - test-mr-reviewer
+    uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
+    with:
+      context: .
+      dockerfile: mr-reviewer/Dockerfile
+      target: app
+      tags: manytask-mr-reviewer:${{ github.sha }}

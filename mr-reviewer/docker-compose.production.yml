@@ -1,0 +1,46 @@
+# mr-reviewer production stack — joins the shared manytask edge proxy.
+# Brought up via compose/docker-compose.production.yml (umbrella include).
+# The shared edge proxy + nginx-manytask-net network are owned by
+# compose/docker-compose.proxy.yml and must be up first (once per host).
+networks:
+  manytask-net:
+    external: true
+    name: nginx-manytask-net
+
+volumes:
+  mrr-redis-data:
+
+services:
+  mrr-redis:
+    image: redis:7-alpine
+    container_name: mrr-redis
+    restart: always
+    networks: [manytask-net]
+    volumes:
+      - mrr-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mrr-bot:
+    build:
+      context: ..
+      dockerfile: mr-reviewer/Dockerfile
+      target: app
+    image: manytask-mr-reviewer:prod
+    container_name: mrr-bot
+    restart: always
+    env_file: .env
+    environment:
+      VIRTUAL_HOST: bot.manytask2.org
+      VIRTUAL_PORT: 8000
+      LETSENCRYPT_HOST: bot.manytask2.org
+      LETSENCRYPT_EMAIL: no-reply@manytask.org
+    expose:
+      - "8000"
+    networks: [manytask-net]
+    depends_on:
+      mrr-redis:
+        condition: service_healthy
