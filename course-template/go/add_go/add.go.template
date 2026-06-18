@@ -1,0 +1,7 @@
+// Student stub — exported as add.go. Implement Add so it returns a + b.
+package main
+
+func Add(a, b int) int {
+	// TODO: implement me
+	return 0
+}
