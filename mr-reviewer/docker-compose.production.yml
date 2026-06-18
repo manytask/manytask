@@ -1,0 +1,43 @@
+# Deploys the mr-reviewer bot next to an existing manytask stack.
+# The manytask compose owns nginx-proxy + acme-companion and the
+# `nginx-manytask-net` network; we attach to it so the new VIRTUAL_HOST
+# gets TLS automatically. Build on the VM (see EDUCATION-59068, decision D2).
+networks:
+  manytask-net:
+    external: true
+    name: nginx-manytask-net
+
+volumes:
+  mrr-redis-data:
+
+services:
+  mrr-redis:
+    image: redis:7-alpine
+    container_name: mrr-redis
+    restart: always
+    networks: [manytask-net]
+    volumes:
+      - mrr-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mrr-bot:
+    build: .
+    image: manytask-mr-reviewer:prod
+    container_name: mrr-bot
+    restart: always
+    env_file: .env
+    environment:
+      VIRTUAL_HOST: bot.manytask2.org
+      VIRTUAL_PORT: 8000
+      LETSENCRYPT_HOST: bot.manytask2.org
+      LETSENCRYPT_EMAIL: no-reply@manytask.org
+    expose:
+      - "8000"
+    networks: [manytask-net]
+    depends_on:
+      mrr-redis:
+        condition: service_healthy
