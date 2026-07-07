@@ -135,3 +135,39 @@ deploy-public:
       else
         echo "Skipping course-config update — MANYTASK_TOKEN not set (app.manytask2.org currently down)"
       fi
+
+# Deliver the mr-reviewer config to the review bot. The bot reads the SAME
+# .manytask.yml and picks up its `mr_review:` subsection; without that section
+# the course is not scanned, so this job self-skips when it is absent.
+#
+# The bot authenticates the push by replaying MANYTASK_TOKEN against manytask's
+# per-course /ping — it is the same course token used for update_config above,
+# so no extra secret is needed. Set BOT_URL (group/project CI/CD variable) to
+# the reviewer bot's base URL, e.g. https://bot.manytask.org. When BOT_URL is
+# unset the job is a no-op, keeping the template runnable on courses without a
+# bot.
+deploy-mr-review:
+  image: python:3.12-slim
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+    - when: never
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+  script:
+    - |
+      if [ -z "$BOT_URL" ] || [ -z "$MANYTASK_TOKEN" ]; then
+        echo "Skipping mr-reviewer config push — BOT_URL or MANYTASK_TOKEN not set"
+        exit 0
+      fi
+      # No section -> nothing to scan. A top-level `mr_review:` key is required.
+      if ! grep -qE '^mr_review:' .manytask.yml; then
+        echo "Skipping mr-reviewer config push — no mr_review section in .manytask.yml"
+        exit 0
+      fi
+      curl -fsSL -X POST \
+        "${BOT_URL}/courses/${MANYTASK_COURSE:-sandbox}" \
+        -H "Authorization: Bearer $MANYTASK_TOKEN" \
+        -H "Content-Type: application/x-yaml" \
+        --data-binary @.manytask.yml
