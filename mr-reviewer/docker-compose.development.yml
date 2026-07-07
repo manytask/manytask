@@ -1,0 +1,47 @@
+services:
+  bot:
+    build:
+      context: ..
+      dockerfile: mr-reviewer/Dockerfile
+      target: app
+    image: manytask-mr-reviewer:dev
+    container_name: mrr-bot
+    restart: always
+    env_file:
+      - .env.example
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MANYTASK_BASE_URL: http://mock-manytask:8080
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      redis:
+        condition: service_healthy
+      mock-manytask:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    container_name: mrr-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mock-manytask:
+    image: wiremock/wiremock:3.9.1
+    container_name: mrr-mock-manytask
+    command: ["--port", "8080", "--verbose"]
+    volumes:
+      - ./mocks/manytask:/home/wiremock
+    ports:
+      - "8080:8080"

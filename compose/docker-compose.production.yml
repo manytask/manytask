@@ -14,3 +14,4 @@
 include:
   - ../manytask/docker-compose.production.yml
   - ../docs/docker-compose.production.yml
+  - ../mr-reviewer/docker-compose.production.yml
