@@ -629,10 +629,11 @@ def _handle_course_admin_action(app: CustomFlask, course_name: str, action: str)
             course_name, current_user
         )
         if not is_allowed:
+            safe_course_name = sanitize_log_data(course_name)
             logger.warning(
                 "User %s attempted to change course admin status in course %s without permission",
                 current_user,
-                course_name,
+                safe_course_name,
             )
             abort(HTTPStatus.FORBIDDEN)
     else:
