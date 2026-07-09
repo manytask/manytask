@@ -129,7 +129,133 @@
             <a href="{{ url_for('course.course_page', course_name=course.course_name) }}" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
+
+    <div class="action-group mt-4">
+        <h4><i class="fas fa-user-shield me-2"></i>Course Admin management</h4>
+        <div class="admin-actions">
+            <button type="button" class="btn btn-warning admin-btn" data-bs-toggle="modal"
+                    data-bs-target="#grantCourseAdminModal">
+                <i class="fas fa-user-shield"></i>
+                <span>Grant course admin rights</span>
+            </button>
+
+            <button type="button" class="btn btn-danger admin-btn" data-bs-toggle="modal"
+                    data-bs-target="#revokeCourseAdminModal">
+                <i class="fas fa-user-slash"></i>
+                <span>Revoke course admin rights</span>
+            </button>
+        </div>
+    </div>
 </div>
+
+<div class="modal fade" id="grantCourseAdminModal" tabindex="-1" aria-labelledby="grantCourseAdminModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="grantCourseAdminModalLabel">Grant Course Admin Rights</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="grantCourseAdminForm"
+                      action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}"
+                      method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="grant_course_admin">
+                    <div class="mb-3">
+                        <label for="userToGrant" class="form-label">Select new course admin</label>
+
+                        <div class="search-box">
+                            <label for="grantSearchInput"></label>
+                            <input type="text" class="form-control" placeholder="Search users..."
+                                   id="grantSearchInput" autocomplete="off">
+                        </div>
+
+                        <select class="form-select" id="userToGrant" name="username" required size="5">
+                            {% for stored_user, is_admin in course_users|default([]) %}
+                                {% if not is_admin %}
+                                    <option value="{{ stored_user.username }}">{{ stored_user.username }}
+                                        ({{ stored_user.first_name }} {{ stored_user.last_name }})
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="grantCourseAdminForm" class="btn btn-warning">Grant Rights</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="revokeCourseAdminModal" tabindex="-1" aria-labelledby="revokeCourseAdminModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="revokeCourseAdminModalLabel">Revoke Course Admin Rights</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="revokeCourseAdminForm"
+                      action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}"
+                      method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="revoke_course_admin">
+                    <div class="mb-3">
+                        <label for="userToRevoke" class="form-label">Remove the course admin</label>
+
+                        <div class="search-box">
+                            <label for="revokeSearchInput"></label>
+                            <input type="text" class="form-control" placeholder="Search admins..."
+                                   id="revokeSearchInput" autocomplete="off">
+                        </div>
+
+                        <select class="form-select" id="userToRevoke" name="username" required size="5">
+                            <option value="" disabled>Select a user</option>
+                            {% for stored_user, is_admin in course_users|default([]) %}
+                                {% if is_admin %}
+                                    <option value="{{ stored_user.username }}">{{ stored_user.username }}
+                                        ({{ stored_user.first_name }} {{ stored_user.last_name }})
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="revokeCourseAdminForm" class="btn btn-danger">Revoke Rights</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function filterUsers(type) {
+        const inputId = `${type}SearchInput`;
+        const selectId = `userTo${type.charAt(0).toUpperCase() + type.slice(1)}`;
+
+        const input = document.getElementById(inputId);
+        const filter = input.value.toLowerCase();
+        const select = document.getElementById(selectId);
+        const options = select.getElementsByTagName('option');
+
+        for (let i = 0; i < options.length; i++) {
+            const text = options[i].textContent || options[i].innerText;
+            options[i].style.display = text.toLowerCase().includes(filter) ? '' : 'none';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('grantSearchInput').addEventListener('input', () => filterUsers('grant'));
+        document.getElementById('revokeSearchInput').addEventListener('input', () => filterUsers('revoke'));
+    });
+</script>
 
 <script>
 (function () {
