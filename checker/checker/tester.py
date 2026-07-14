@@ -230,6 +230,7 @@ class Tester:
                 raise TestingError("Global pipeline failed")
 
         failed_tasks = []
+        failed_reports = []
         for task in tasks:
             # run task pipeline
             print_header_info(f"Run <{task.name}> task pipeline:", color="pink")
@@ -257,6 +258,7 @@ class Tester:
                         print_info("->Reporting succeeded")
                     else:
                         print_info("->Reporting failed")
+                        failed_reports.append(task.name)
                 else:
                     _: PipelineResult = report_pipeline.run(context, dry_run=True)
                     print_info("->Reporting disabled (dry-run)")
@@ -266,3 +268,6 @@ class Tester:
 
         if failed_tasks:
             raise TestingError(f"Task pipelines failed: {failed_tasks}")
+
+        if failed_reports:
+            raise TestingError(f"Reporting score failed for: {failed_tasks}")
