@@ -155,9 +155,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         task_url_template=course.task_url_template,
-        task_url_username=normalize_string(student_username)
-        if app.app_config.rms == "sourcecraft"
-        else student_username,
+        task_url_username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
         links=course.links,
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
