@@ -16,6 +16,7 @@ from manytask.models import (
     UserOnNamespaceRole,
 )
 from tests.helpers import (
+    add_test_user,
     assert_forbidden_admin_only,
     assert_not_json_rejected,
     assert_slugs_rejected,
@@ -25,7 +26,6 @@ from tests.helpers import (
     create_namespace,
     make_user,
     post_json,
-    register_rms_user,
     set_session,
 )
 
@@ -607,19 +607,10 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     )
 
     # Create another user to add
-    new_user = User(
-        username="another_user",
-        first_name="Another",
-        last_name="User",
-        rms_id="101",
-        auth_id=101,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="another_user", first_name="Another", last_name="User", rms_id="101", auth_id=101,
     )
-    session.add(new_user)
-    session.commit()
-
-    # Register in mock RMS
-    register_rms_user(client_with_db.application, new_user)
 
     # Switch to regular_user (who is now namespace admin)
     set_session(client_with_db, mock_session_regular, clear=True)
@@ -663,16 +654,11 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
     )
 
     # Create another user to add
-    new_user = User(
-        username="another_user",
-        first_name="Another",
-        last_name="User",
-        rms_id="102",
-        auth_id=102,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="another_user", first_name="Another", last_name="User", rms_id="102", auth_id=102,
+        register_rms=False,
     )
-    session.add(new_user)
-    session.commit()
 
     # Switch to regular_user (who is program manager)
     set_session(client_with_db, mock_session_regular, clear=True)
@@ -701,19 +687,10 @@ def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_sess
     namespace_id = namespace_data["id"]
 
     # Create user
-    new_user = User(
-        username="new_user",
-        first_name="New",
-        last_name="User",
-        rms_id="103",
-        auth_id=103,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="new_user", first_name="New", last_name="User", rms_id="103", auth_id=103,
     )
-    session.add(new_user)
-    session.commit()
-
-    # Register in mock RMS
-    register_rms_user(client_with_db.application, new_user)
 
     # Add user first time
     response = post_json(
@@ -748,16 +725,11 @@ def test_add_user_to_namespace_invalid_role(client_with_db, session, mock_sessio
     namespace_id = namespace_data["id"]
 
     # Create user
-    new_user = User(
-        username="new_user",
-        first_name="New",
-        last_name="User",
-        rms_id="104",
-        auth_id=104,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="new_user", first_name="New", last_name="User", rms_id="104", auth_id=104,
+        register_rms=False,
     )
-    session.add(new_user)
-    session.commit()
 
     # Try invalid roles
     invalid_roles = ["student", "invalid", ""]
@@ -834,19 +806,10 @@ def test_add_user_to_namespace_nonexistent_namespace(client_with_db, session, mo
     set_session(client_with_db, mock_session_admin)
 
     # Create user
-    new_user = User(
-        username="new_user",
-        first_name="New",
-        last_name="User",
-        rms_id="105",
-        auth_id=105,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="new_user", first_name="New", last_name="User", rms_id="105", auth_id=105,
     )
-    session.add(new_user)
-    session.commit()
-
-    # Register in mock RMS
-    register_rms_user(client_with_db.application, new_user)
 
     # Try to add user to non-existent namespace
     response = post_json(
@@ -870,19 +833,10 @@ def test_get_namespace_users_as_instance_admin(client_with_db, session, mock_ses
     namespace_id = namespace_data["id"]
 
     # Create another user and add to namespace
-    new_user = User(
-        username="test_user",
-        first_name="Test",
-        last_name="User",
-        rms_id="200",
-        auth_id=200,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="test_user", first_name="Test", last_name="User", rms_id="200", auth_id=200,
     )
-    session.add(new_user)
-    session.commit()
-
-    # Register in mock RMS
-    register_rms_user(client_with_db.application, new_user)
 
     # Add user to namespace
     response = post_json(
@@ -1065,19 +1019,10 @@ def test_remove_user_from_namespace_as_instance_admin(client_with_db, session, m
     namespace_id = namespace_data["id"]
 
     # Create a user and add to namespace
-    new_user = User(
-        username="test_user",
-        first_name="Test",
-        last_name="User",
-        rms_id="300",
-        auth_id=300,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="test_user", first_name="Test", last_name="User", rms_id="300", auth_id=300,
     )
-    session.add(new_user)
-    session.commit()
-
-    # Register in mock RMS
-    register_rms_user(client_with_db.application, new_user)
 
     # Add user to namespace
     response = post_json(
@@ -1127,19 +1072,10 @@ def test_remove_user_from_namespace_as_namespace_admin(
     )
 
     # Create another user to remove
-    new_user = User(
-        username="another_user",
-        first_name="Another",
-        last_name="User",
-        rms_id="301",
-        auth_id=301,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="another_user", first_name="Another", last_name="User", rms_id="301", auth_id=301,
     )
-    session.add(new_user)
-    session.commit()
-
-    # Register in mock RMS
-    register_rms_user(client_with_db.application, new_user)
 
     # Add user to namespace
     response = post_json(
@@ -1187,19 +1123,10 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     )
 
     # Create another user to try to remove
-    new_user = User(
-        username="another_user",
-        first_name="Another",
-        last_name="User",
-        rms_id="302",
-        auth_id=302,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="another_user", first_name="Another", last_name="User", rms_id="302", auth_id=302,
     )
-    session.add(new_user)
-    session.commit()
-
-    # Register in mock RMS
-    register_rms_user(client_with_db.application, new_user)
 
     # Add user to namespace
     response = post_json(
@@ -1248,16 +1175,11 @@ def test_remove_user_from_namespace_without_access(client_with_db, session, mock
     namespace_id = namespace_data["id"]
 
     # Create another user
-    new_user = User(
-        username="another_user",
-        first_name="Another",
-        last_name="User",
-        rms_id="303",
-        auth_id=303,
-        is_instance_admin=False,
+    new_user = add_test_user(
+        session, client_with_db.application,
+        username="another_user", first_name="Another", last_name="User", rms_id="303", auth_id=303,
+        register_rms=False,
     )
-    session.add(new_user)
-    session.commit()
 
     # Switch to regular_user (who has no access to namespace)
     set_session(client_with_db, mock_session_regular, clear=True)

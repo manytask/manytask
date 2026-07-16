@@ -145,6 +145,15 @@ def make_user(username, first_name, last_name, rms_id, auth_id, *, is_instance_a
     )
 
 
+def add_test_user(session, app, *, username, first_name, last_name, rms_id, auth_id, register_rms=True):  # noqa: PLR0913
+    user = make_user(username, first_name, last_name, rms_id, auth_id)
+    session.add(user)
+    session.commit()
+    if register_rms:
+        register_rms_user(app, user)
+    return user
+
+
 def assign_namespace_role(session, *, user_id, namespace_id, role, assigned_by_id):
     user_on_namespace = UserOnNamespace(
         user_id=user_id,
