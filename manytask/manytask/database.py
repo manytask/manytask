@@ -311,6 +311,12 @@ class DataBaseApi(StorageApi):
     ) -> bool:
         """Method for checking user's admin status
 
+        A user is considered a course admin if any of the following holds:
+        - the user is an instance admin;
+        - the user is a namespace admin (namespace owner or user with the
+          namespace_admin role) for the namespace the course belongs to;
+        - the user has the course admin flag set for this course.
+
         :param course_name: course name
         :param username: user name
 
@@ -328,11 +334,62 @@ class DataBaseApi(StorageApi):
                     return True
 
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+
+                if self._is_user_namespace_admin(session, user.id, course.namespace_id):
+                    return True
+
+                try:
+                    user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+                except NoResultFound:
+                    return False
                 return user_on_course.is_course_admin
             except NoResultFound as e:
                 logger.info("No user found with username '%s' when checking admin status: %s", username, e)
                 return False
+
+    @staticmethod
+    def _is_user_namespace_admin(session: Session, user_id: int, namespace_id: int | None) -> bool:
+        """Check if a user is a namespace admin for the given namespace.
+
+        A user is a namespace admin if they are the namespace owner (creator) or
+        have the namespace_admin role in it. This matches the definition used in
+        ``get_namespace_admin_namespaces``.
+
+        :param session: SQLAlchemy session
+        :param user_id: Database User.id
+        :param namespace_id: Namespace id (may be None if the course has no namespace)
+        :return: True if the user is a namespace admin for the given namespace
+        """
+        if namespace_id is None:
+            return False
+
+        is_owner = (
+            session.query(models.Namespace)
+            .filter(
+                and_(
+                    models.Namespace.id == namespace_id,
+                    models.Namespace.created_by_id == user_id,
+                )
+            )
+            .first()
+            is not None
+        )
+        if is_owner:
+            return True
+
+        is_admin = (
+            session.query(models.UserOnNamespace)
+            .filter(
+                and_(
+                    models.UserOnNamespace.user_id == user_id,
+                    models.UserOnNamespace.namespace_id == namespace_id,
+                    models.UserOnNamespace.role == models.UserOnNamespaceRole.NAMESPACE_ADMIN,
+                )
+            )
+            .first()
+            is not None
+        )
+        return is_admin
 
     def check_if_program_manager(
         self,

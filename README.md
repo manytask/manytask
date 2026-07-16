@@ -27,6 +27,7 @@ The full `Manytask` setup includes:
 * CI/CD runners -  where students' solutions will be tested 
 * Manytask Checker script - some script to test students' solutions and send scores/grades to the Manytask web application
 * Manytask instance - web application managing students' grades and deadlines
+* **mr-reviewer/** - universal merge-request review bot for manytask courses.
 
 So the main aims of Manytask:
 * Store and manage students' grades (store, provide, show, edit, etc.)

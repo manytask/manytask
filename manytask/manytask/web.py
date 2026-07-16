@@ -148,7 +148,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
     return render_template(
         "tasks.html",
         task_base_url=app.rms_api.get_url_for_task_base(course.gitlab_course_public_repo, course.gitlab_default_branch),
-        username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
+        username=student_username,
         course_name=course.course_name,
         course_status=course.status,
         app=app,
@@ -159,6 +159,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         task_url_template=course.task_url_template,
+        task_url_username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
         links=course.links,
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(course.course_name, student_username),

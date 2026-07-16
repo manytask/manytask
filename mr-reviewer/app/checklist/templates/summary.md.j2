@@ -1,0 +1,9 @@
+**Checklist for `{{ task_name }}`**
+
+{% if results -%}
+{% for r in results -%}
+- {% if r.passed %}[x]{% else %}[ ]{% endif %} {{ r.name }} — {{ r.message }}
+{% endfor -%}
+{% else -%}
+_no checks configured for this task_
+{%- endif %}

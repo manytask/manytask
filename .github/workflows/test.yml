@@ -18,7 +18,7 @@ jobs:
   lint-manytask:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -26,7 +26,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: 0.9.5
 
@@ -43,7 +43,7 @@ jobs:
   test-manytask:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -51,7 +51,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: 0.9.5
 
@@ -70,7 +70,7 @@ jobs:
   lint-checker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -78,7 +78,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: 0.9.5
 
@@ -93,7 +93,7 @@ jobs:
   test-checker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -101,7 +101,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: 0.9.5
 
@@ -115,6 +115,52 @@ jobs:
           make copy-common-config
           make run-checker-tests
 
+  lint-mr-reviewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: 0.9.5
+
+      - name: Install dependencies
+        working-directory: mr-reviewer
+        run: uv sync --locked
+
+      - name: Lint (make lint)
+        working-directory: mr-reviewer
+        run: make lint
+
+  test-mr-reviewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: 0.9.5
+
+      - name: Install dependencies
+        working-directory: mr-reviewer
+        run: uv sync --locked
+
+      - name: Test (make run-mr-reviewer-tests)
+        working-directory: mr-reviewer
+        run: make run-mr-reviewer-tests
+
   build-docker:
     needs:
       - lint-manytask
@@ -127,3 +173,14 @@ jobs:
       context: .
       dockerfile: manytask/Dockerfile
       tags: manytask:${{ github.sha }}
+
+  build-docker-mr-reviewer:
+    needs:
+      - lint-mr-reviewer
+      - test-mr-reviewer
+    uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
+    with:
+      context: .
+      dockerfile: mr-reviewer/Dockerfile
+      target: app
+      tags: manytask-mr-reviewer:${{ github.sha }}

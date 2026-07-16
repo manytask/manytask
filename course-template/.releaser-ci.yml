@@ -1,0 +1,173 @@
+# CI pipeline executed in the TEACHER private repository.
+# On push to main: exports tasks to the public student repository
+# and updates the deadlines on the Manytask web application.
+
+stages:
+  - validate
+  - build
+  - test
+  - deploy
+
+variables:
+  PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/pip"
+  # checker is installed from the manytask monorepo at a pinned commit, not PyPI:
+  # the latest PyPI release (0.9.2) lacks `validate`/`export` and predates monorepo
+  # checker. Bump CHECKER_PIP_SPEC when you need a newer checker (or switch to a
+  # PyPI pin once a release with these commands ships).
+  #
+  # The jobs below run `pip install "$CHECKER_PIP_SPEC" pytest`: checker does not
+  # bundle a test runner (it is runner-agnostic), so the course provides pytest.
+  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@eca1874f39d0e379485cecfa4f653d87ff79d1bb#subdirectory=checker"
+
+validate:
+  image: python:3.12-slim
+  stage: validate
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+    - python -m pip install --upgrade pip
+    - pip install "$CHECKER_PIP_SPEC" pytest
+  script:
+    - checker validate
+
+# Builds the course testenv image and pushes it to the GitLab container
+# registry. The image bakes the private reference (public + private tests) at
+# /opt/course via `checker export-private` (see testenv.docker). Built with
+# kaniko so no privileged/Docker-in-Docker runner is required.
+#
+# CI_REGISTRY and CI_REGISTRY_IMAGE are GitLab predefined variables, populated
+# automatically when the project's Container Registry is enabled.
+#
+# Authentication uses a DEPLOY TOKEN, not the CI job token: on self-managed
+# GitLab the job token is frequently not permitted to push to the registry
+# (the push fails with "UNAUTHORIZED: HTTP Basic: Access denied"). Create a
+# project (or group) deploy token named exactly `gitlab-deploy-token` with the
+# `read_registry` + `write_registry` scopes; GitLab then auto-exposes it to CI
+# as CI_DEPLOY_USER / CI_DEPLOY_PASSWORD, which kaniko uses below.
+#
+# Both :$CI_COMMIT_SHORT_SHA (immutable, consumed by the `check` job below) and
+# :latest are pushed. For a single-`main` repo pushing :latest unconditionally
+# is fine; for a multi-branch template, restrict the :latest tag to the default
+# branch so feature branches do not clobber it.
+build-testenv:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    # Authenticate with username/password directly rather than a base64 `auth`
+    # blob: kaniko silently falls back to anonymous (-> 401 at the registry's
+    # jwt/auth) if it cannot parse the `auth` field. printf inserts the values
+    # verbatim; deploy-token secrets are alphanumeric so the JSON stays valid.
+    - printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}' "$CI_REGISTRY" "$CI_DEPLOY_USER" "$CI_DEPLOY_PASSWORD" > /kaniko/.docker/config.json
+  script:
+    - >-
+      /kaniko/executor
+      --context "$CI_PROJECT_DIR"
+      --dockerfile "$CI_PROJECT_DIR/testenv.docker"
+      --build-arg "CHECKER_PIP_SPEC=$CHECKER_PIP_SPEC"
+      --destination "$CI_REGISTRY_IMAGE/testenv:$CI_COMMIT_SHORT_SHA"
+      --destination "$CI_REGISTRY_IMAGE/testenv:latest"
+
+# Runs the reference solution through the full task pipeline — public AND
+# private tests — on a live runner, INSIDE the testenv image just built. This
+# is the dress rehearsal for the student grade job: `checker check . /opt/course`
+# overlays the baked private tests (from /opt/course) onto the gold solution
+# (from the checkout, `.`). Tools are baked into the image, so there is no
+# before_script. Proves the image build + baked reference end-to-end, with no
+# token dependencies.
+check:
+  image: "$CI_REGISTRY_IMAGE/testenv:$CI_COMMIT_SHORT_SHA"
+  stage: test
+  needs: ["build-testenv"]
+  script:
+    - checker check . /opt/course
+
+deploy-public:
+  image: python:3.12-slim
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+    - when: never
+  variables:
+    # Authenticated URL for cloning/pushing the public repository.
+    # GITLAB_API_TOKEN is a group/project CI/CD variable with write_repository scope.
+    PUBLIC_REPO_URL: "https://oauth2:${GITLAB_API_TOKEN}@gitlab.manytask2.org/sandbox/public.git"
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends git curl && rm -rf /var/lib/apt/lists/*
+    - python -m pip install --upgrade pip
+    - pip install "$CHECKER_PIP_SPEC" pytest
+    - git config --global user.email "ci@manytask.org"
+    - git config --global user.name "Manytask CI"
+    # `checker export --commit` runs git inside ./export and pushes via the
+    # remote it finds there. Pre-clone the public repo (or init if empty) so
+    # git does not bubble up into the private-repo CI checkout (detached HEAD).
+    - |
+      if ! git clone "$PUBLIC_REPO_URL" ./export; then
+        mkdir -p ./export
+        cd ./export
+        git init
+        git remote add origin "$PUBLIC_REPO_URL"
+        cd ..
+      fi
+      cd ./export
+      git checkout -B main
+      cd ..
+  script:
+    - checker export --commit
+    # Push the course config (deadlines, schedule, settings) to the Manytask web
+    # app. Manytask is "course as code": the app stores the schedule from
+    # .manytask.yml and is updated over its HTTP API — there is NO `checker`
+    # subcommand for this (checker only exports files). See docs/deploy_guide.md
+    # §9.1 "Send Course Configuration".
+    #
+    # MANYTASK_TOKEN here is the per-course token (Group/Project -> Settings ->
+    # CI/CD -> Variables). MANYTASK_URL / MANYTASK_COURSE default to the sandbox
+    # dev instance; override them for your course.
+    - |
+      if [ -n "$MANYTASK_TOKEN" ]; then
+        curl -fsSL -X POST \
+          "${MANYTASK_URL:-https://app.manytask2.org}/api/${MANYTASK_COURSE:-sandbox}/update_config" \
+          -H "Authorization: Bearer $MANYTASK_TOKEN" \
+          -H "Content-Type: application/x-yaml" \
+          --data-binary @.manytask.yml
+      else
+        echo "Skipping course-config update — MANYTASK_TOKEN not set (app.manytask2.org currently down)"
+      fi
+
+# Deliver the mr-reviewer config to the review bot. The bot reads the SAME
+# .manytask.yml and picks up its `mr_review:` subsection; without that section
+# the course is not scanned, so this job self-skips when it is absent.
+#
+# The bot authenticates the push by replaying MANYTASK_TOKEN against manytask's
+# per-course /ping — it is the same course token used for update_config above,
+# so no extra secret is needed. Set BOT_URL (group/project CI/CD variable) to
+# the reviewer bot's base URL, e.g. https://bot.manytask.org. When BOT_URL is
+# unset the job is a no-op, keeping the template runnable on courses without a
+# bot.
+deploy-mr-review:
+  image: python:3.12-slim
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+    - when: never
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+  script:
+    - |
+      if [ -z "$BOT_URL" ] || [ -z "$MANYTASK_TOKEN" ]; then
+        echo "Skipping mr-reviewer config push — BOT_URL or MANYTASK_TOKEN not set"
+        exit 0
+      fi
+      # No section -> nothing to scan. A top-level `mr_review:` key is required.
+      if ! grep -qE '^mr_review:' .manytask.yml; then
+        echo "Skipping mr-reviewer config push — no mr_review section in .manytask.yml"
+        exit 0
+      fi
+      curl -fsSL -X POST \
+        "${BOT_URL}/courses/${MANYTASK_COURSE:-sandbox}" \
+        -H "Authorization: Bearer $MANYTASK_TOKEN" \
+        -H "Content-Type: application/x-yaml" \
+        --data-binary @.manytask.yml

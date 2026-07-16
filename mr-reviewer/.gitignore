@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+
+# Env / IDE
+.env
+.env.*
+!.env.example
+!.env.production.example
+.idea/
+.vscode/
+
+# Build / OS
+dist/
+build/
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Local-only docs (planning, tickets — not part of repo)
+docs/
+ticket.md
+
+# Claude Code session artifacts
+.claude/
+
+# Git worktrees
+.worktrees/
