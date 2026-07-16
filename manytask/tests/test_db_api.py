@@ -24,7 +24,18 @@ from manytask.config import (
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
-from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
+from manytask.models import (
+    Course,
+    Deadline,
+    Grade,
+    Namespace,
+    Task,
+    TaskGroup,
+    User,
+    UserOnCourse,
+    UserOnNamespace,
+    UserOnNamespaceRole,
+)
 from tests.constants import (
     BONUS_GROUP,
     BONUS_SCORE,
@@ -864,6 +875,96 @@ def test_sync_user_on_course(db_api_with_initialized_first_course, session):
 
     assert session.query(User).count() == USER_EXPECTED
     assert session.query(UserOnCourse).count() == 1
+
+
+def _create_namespace_with_course(
+    session: Session,
+    *,
+    created_by_id: int,
+    course_id: int = 1,
+    namespace_id: int = 1,
+) -> Namespace:
+    """Create a namespace and attach the given course to it."""
+    namespace = Namespace(
+        id=namespace_id,
+        name="Test Namespace",
+        slug="test-namespace",
+        description=None,
+        gitlab_group_id=namespace_id,
+        created_by_id=created_by_id,
+    )
+    session.add(namespace)
+    course = session.query(Course).filter_by(id=course_id).one()
+    course.namespace_id = namespace_id
+    session.commit()
+    return namespace
+
+
+def test_check_if_course_admin_namespace_owner(db_api_with_initialized_first_course, session):
+    """Namespace owner (creator) must be treated as a course admin."""
+    instance_admin_id = session.query(User).filter_by(username="instance_admin").one().id
+    create_user(db_api_with_initialized_first_course)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+
+    _create_namespace_with_course(session, created_by_id=user.id)
+
+    # user is the namespace owner, so it is a course admin even without UserOnCourse
+    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    # unrelated user (instance admin excluded from this check via a non-owner) is not
+    assert instance_admin_id != user.id
+
+
+def test_check_if_course_admin_namespace_admin_role(db_api_with_initialized_first_course, session):
+    """User with namespace_admin role must be treated as a course admin."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    create_user(db_api_with_initialized_first_course)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+
+    _create_namespace_with_course(session, created_by_id=owner_id)
+
+    session.add(
+        UserOnNamespace(
+            user_id=user.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+
+
+def test_check_if_course_admin_namespace_program_manager_is_not_admin(db_api_with_initialized_first_course, session):
+    """User with only program_manager role in the namespace is not a course admin."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    create_user(db_api_with_initialized_first_course)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+
+    _create_namespace_with_course(session, created_by_id=owner_id)
+
+    session.add(
+        UserOnNamespace(
+            user_id=user.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.PROGRAM_MANAGER,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+
+
+def test_check_if_course_admin_no_namespace_uses_course_flag(db_api_with_initialized_first_course, session):
+    """When the course has no namespace, only the per-course admin flag matters."""
+    create_user(db_api_with_initialized_first_course)
+
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, True)
+    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
 
 
 def test_many_users(db_api_with_initialized_first_course, session):

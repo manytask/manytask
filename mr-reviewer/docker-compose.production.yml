@@ -15,6 +15,11 @@ services:
     image: redis:7-alpine
     container_name: mrr-redis
     restart: always
+    # Persist to the mrr-redis-data volume with append-only file (AOF) so a
+    # restart keeps the registered course configs and the processed-comment
+    # dedupe set — otherwise the bot re-scans every reviewed MR after a bounce
+    # and can re-report scores.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     networks: [manytask-net]
     volumes:
       - mrr-redis-data:/data
@@ -25,11 +30,11 @@ services:
       retries: 5
 
   mrr-bot:
-    build:
-      context: ..
-      dockerfile: mr-reviewer/Dockerfile
-      target: app
-    image: manytask-mr-reviewer:prod
+    # Pull the pre-built image published by .github/workflows/publish.yml
+    # (manytask/mr-reviewer:<release-tag>) instead of building on the host.
+    # The registry carries no `latest`, so pin the released tag on the host:
+    #   MR_REVIEWER_TAG=<release-tag>  (e.g. in manytask/.env)
+    image: manytask/mr-reviewer:${MR_REVIEWER_TAG:-latest}
     container_name: mrr-bot
     restart: always
     env_file: .env
