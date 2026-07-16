@@ -186,8 +186,19 @@ class StorageApi(ABC):
     def get_all_users(self) -> list[StoredUser]: ...
 
     @abstractmethod
+    def get_course_users_with_admin_status(self, course_name: str) -> list[tuple[StoredUser, bool]]: ...
+
+    @abstractmethod
     def set_instance_admin_status(
         self,
+        username: str,
+        is_admin: bool,
+    ) -> None: ...
+
+    @abstractmethod
+    def set_course_admin_status(
+        self,
+        course_name: str,
         username: str,
         is_admin: bool,
     ) -> None: ...

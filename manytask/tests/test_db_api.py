@@ -1319,6 +1319,53 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
     assert updated_user_on_course.is_course_admin
 
 
+def test_set_course_admin_status_grant(db_api_with_two_initialized_courses, session):
+    user, _ = add_user_on_course(session, is_course_admin=False)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_revoke(db_api_with_two_initialized_courses, session):
+    user, _ = add_user_on_course(session, is_course_admin=True)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert not updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_can_revoke_last_admin(db_api_with_two_initialized_courses, session):
+    # a course may have zero course admins, unlike an instance
+    user, _ = add_user_on_course(session, is_course_admin=True)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert not updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_unknown_user(db_api_with_two_initialized_courses, session):
+    # should not raise, just log an error
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, "nonexistent_user", True)
+
+
+def test_get_course_users_with_admin_status(db_api_with_two_initialized_courses, session):
+    add_user_on_course(session, is_course_admin=True)
+    add_user_on_course(session, student=STUDENT_1, user_id=3, is_course_admin=False)
+
+    result = db_api_with_two_initialized_courses.get_course_users_with_admin_status(FIRST_COURSE_NAME)
+
+    result_map = {stored_user.username: is_admin for stored_user, is_admin in result}
+    assert result_map == {TEST_USERNAME: True, TEST_USERNAME_1: False}
+
+
+def test_get_course_users_with_admin_status_unknown_course(db_api_with_two_initialized_courses):
+    assert db_api_with_two_initialized_courses.get_course_users_with_admin_status("nonexistent_course") == []
+
+
 def test_check_user_on_course(db_api_with_two_initialized_courses, session):
     add_user_on_course(session, is_course_admin=True)
 
