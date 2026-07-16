@@ -24,6 +24,7 @@ from tests.constants import (
     TEST_MANYTASK_SESSION_VERSION,
     TEST_RMS_ID,
     TEST_SECRET_KEY,
+    TEST_TOKEN,
     TEST_USER_ID,
     TEST_USERNAME,
 )
@@ -52,6 +53,31 @@ def build_mock_session(username, *, user_auth_id, rms_id, user_id):
             "version": TEST_MANYTASK_SESSION_VERSION,
         },
     }
+
+
+def build_test_session(*, include_rms=True, include_manytask=False):
+    session = {
+        "auth": {
+            "version": TEST_GITLAB_SESSION_VERSION,
+            "username": TEST_USERNAME,
+            "user_auth_id": TEST_USER_ID,
+            "access_token": TEST_TOKEN,
+            "refresh_token": TEST_TOKEN,
+        },
+    }
+    if include_rms:
+        session["rms"] = {
+            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+            "rms_id": TEST_RMS_ID,
+            "username": TEST_USERNAME,
+        }
+    if include_manytask:
+        session["manytask"] = {
+            "version": TEST_MANYTASK_SESSION_VERSION,
+            "user_id": TEST_USER_ID,
+            "username": TEST_USERNAME,
+        }
+    return session
 
 
 def post_json(client, url, payload):

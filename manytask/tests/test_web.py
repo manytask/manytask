@@ -19,7 +19,6 @@ from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
-    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_EMAIL,
     TEST_FIRST_NAME,
@@ -28,10 +27,8 @@ from tests.constants import (
     TEST_GROUP_NAME,
     TEST_LAST_NAME,
     TEST_LAST_NAME_1,
-    TEST_MANYTASK_SESSION_VERSION,
     TEST_PASSWORD,
     TEST_PUBLIC_REPO,
-    TEST_RMS_ID,
     TEST_SECRET,
     TEST_SECRET_KEY,
     TEST_STUDENTS_GROUP,
@@ -40,7 +37,14 @@ from tests.constants import (
     TEST_USERNAME,
     TEST_USERNAME_1,
 )
-from tests.helpers import MockCourseBase, MockStorageApiBase, make_created_course_mock, raise_for_invalid_task
+from tests.helpers import (
+    MockCourseBase,
+    MockStorageApiBase,
+    build_test_session,
+    make_created_course_mock,
+    raise_for_invalid_task,
+    set_session,
+)
 
 
 @pytest.fixture
@@ -229,18 +233,7 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             patch.object(app.storage_api, "check_user_on_course") as mock_check_user_on_course,
         ):
             with client.session_transaction() as sess:
-                sess["auth"] = {
-                    "version": TEST_GITLAB_SESSION_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_auth_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                    "refresh_token": TEST_TOKEN,
-                }
-                sess["rms"] = {
-                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-                    "rms_id": TEST_RMS_ID,
-                    "username": TEST_USERNAME,
-                }
+                sess.update(build_test_session())
             app.oauth = mock_gitlab_oauth
             mock_check_user_on_course.return_value = False
             response = client.get(f"/{TEST_COURSE_NAME}/")
@@ -298,23 +291,7 @@ def test_not_ready(app):
             patch.object(app.storage_api, "check_if_instance_admin") as mock_check_if_instance_admin,
         ):
             with client.session_transaction() as sess:
-                sess["auth"] = {
-                    "version": TEST_GITLAB_SESSION_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_auth_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                    "refresh_token": TEST_TOKEN,
-                }
-                sess["rms"] = {
-                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-                    "rms_id": TEST_RMS_ID,
-                    "username": TEST_USERNAME,
-                }
-                sess["manytask"] = {
-                    "version": TEST_MANYTASK_SESSION_VERSION,
-                    "user_id": TEST_USER_ID,
-                    "username": TEST_USERNAME,
-                }
+                sess.update(build_test_session(include_manytask=True))
             mock_check_if_instance_admin.return_value = True
             response = client.get(f"/{TEST_COURSE_NAME}/not_ready")
             assert response.status_code == HTTPStatus.FOUND
@@ -353,19 +330,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
 
     with app.test_request_context():
         with app.test_client() as client:
-            with client.session_transaction() as sess:
-                sess["auth"] = {
-                    "version": TEST_GITLAB_SESSION_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_auth_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                    "refresh_token": TEST_TOKEN,
-                }
-                sess["rms"] = {
-                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-                    "rms_id": TEST_RMS_ID,
-                    "username": TEST_USERNAME,
-                }
+            set_session(client, build_test_session())
 
             app.oauth = mock_gitlab_oauth
             app.debug = debug
@@ -379,19 +344,7 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
             else:
                 check_func(response, False)
 
-            with client.session_transaction() as sess:
-                sess["auth"] = {
-                    "version": TEST_GITLAB_SESSION_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_auth_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                    "refresh_token": TEST_TOKEN,
-                }
-                sess["rms"] = {
-                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-                    "rms_id": TEST_RMS_ID,
-                    "username": TEST_USERNAME,
-                }
+            set_session(client, build_test_session())
 
             app.storage_api.course_admin = True
 
@@ -404,19 +357,8 @@ def test_course_page_user_sync(app, mock_gitlab_oauth, mock_course, path_and_fun
             else:
                 check_func(response, True)
 
-            with client.session_transaction() as sess:
-                sess["auth"] = {
-                    "version": TEST_GITLAB_SESSION_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_auth_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                    "refresh_token": TEST_TOKEN,
-                }
-                sess["rms"] = {
-                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-                    "rms_id": TEST_RMS_ID,
-                    "username": TEST_USERNAME,
-                }
+            set_session(client, build_test_session())
+
             app.storage_api.course_admin = False
             app.storage_api.stored_user.instance_admin = True
 
@@ -529,23 +471,7 @@ def test_signup_finish_with_valid_session(app, mock_gitlab_oauth):
             patch.object(app.storage_api, "get_stored_user_by_auth_id") as mock_get_stored_user_by_auth_id,
         ):
             with client.session_transaction() as sess:
-                sess["auth"] = {
-                    "version": TEST_GITLAB_SESSION_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_auth_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                    "refresh_token": TEST_TOKEN,
-                }
-                sess["rms"] = {
-                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-                    "rms_id": TEST_RMS_ID,
-                    "username": TEST_USERNAME,
-                }
-                sess["manytask"] = {
-                    "version": TEST_MANYTASK_SESSION_VERSION,
-                    "user_id": TEST_USER_ID,
-                    "username": TEST_USERNAME,
-                }
+                sess.update(build_test_session(include_manytask=True))
             app.oauth = mock_gitlab_oauth
             response = client.post(url_for("root.signup_finish"))
             assert response.status_code == HTTPStatus.FOUND
@@ -558,15 +484,7 @@ def test_signup_finish_with_existing_user_in_db(app, mock_gitlab_oauth):
         with (
             app.test_client() as client,
         ):
-            with client.session_transaction() as sess:
-                sess["auth"] = {
-                    "version": TEST_GITLAB_SESSION_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_auth_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                    "refresh_token": TEST_TOKEN,
-                }
-                # no profile
+            set_session(client, build_test_session(include_rms=False))
             app.oauth = mock_gitlab_oauth
             response = client.post(url_for("root.signup_finish"))
             assert response.status_code == HTTPStatus.FOUND
@@ -590,15 +508,7 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
             patch.object(app.storage_api, "get_stored_user_by_auth_id") as mock_get_stored_user_by_auth_id,
             patch.object(app.storage_api, "update_or_create_user") as mock_update_or_create_user,
         ):
-            with client.session_transaction() as sess:
-                sess["auth"] = {
-                    "version": TEST_GITLAB_SESSION_VERSION,
-                    "username": TEST_USERNAME,
-                    "user_auth_id": TEST_USER_ID,
-                    "access_token": TEST_TOKEN,
-                    "refresh_token": TEST_TOKEN,
-                }
-                # no profile
+            set_session(client, build_test_session(include_rms=False))
             app.oauth = mock_gitlab_oauth
             mock_get_stored_user_by_auth_id.side_effect = [None, None, app.storage_api.stored_user]
 
