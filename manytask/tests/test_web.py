@@ -1,5 +1,4 @@
 import os
-from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
 from unittest.mock import patch
@@ -14,15 +13,12 @@ from flask_wtf import CSRFProtect
 from manytask.abstract import AuthenticatedUser
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus
-from manytask.database import TaskDisabledError
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
-    INVALID_TASK_NAME,
-    TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
     TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_EMAIL,
@@ -44,7 +40,7 @@ from tests.constants import (
     TEST_USERNAME,
     TEST_USERNAME_1,
 )
-from tests.helpers import MockCourseBase, MockStorageApiBase
+from tests.helpers import MockCourseBase, MockStorageApiBase, make_created_course_mock, raise_for_invalid_task
 
 
 @pytest.fixture
@@ -136,10 +132,7 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         @staticmethod
         def find_task(_course_name, task_name):
-            if task_name == INVALID_TASK_NAME:
-                raise KeyError("Task not found")
-            if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
-                raise TaskDisabledError(f"Task {task_name} is disabled")
+            raise_for_invalid_task(task_name)
             return None, None, None
 
         @staticmethod
@@ -214,12 +207,7 @@ def test_course_page_not_ready(app, mock_gitlab_oauth):
         app.test_request_context(),
         patch.object(app.storage_api, "get_course") as mock_get_course,
     ):
-
-        @dataclass
-        class Course:
-            status = CourseStatus.CREATED
-
-        mock_get_course.return_value = Course()
+        mock_get_course.return_value = make_created_course_mock()
         app.oauth = mock_gitlab_oauth
         response = app.test_client().get(f"/{TEST_COURSE_NAME}/")
         assert response.status_code == HTTPStatus.FOUND

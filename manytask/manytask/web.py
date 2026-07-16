@@ -11,7 +11,6 @@ from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
 from manytask.abstract import RmsApiException, RmsUser, StoredUser
-from manytask.course import ManytaskDeadlinesType
 
 from .abstract import ClientProfile
 from .auth import (
@@ -31,7 +30,12 @@ from .auth import (
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.flask import check_instance_admin, get_courses, has_role
-from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
+from .utils.generic import (
+    check_course_creation_namespace_permission,
+    generate_token_hex,
+    sanitize_log_data,
+    validate_name,
+)
 from .utils.sourcecraft import normalize_string
 
 SESSION_VERSION = 1.5
@@ -492,56 +496,17 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         username = session["manytask"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
-        namespace = None
-        role = None
-        if namespace_id == 0:
-            if not is_instance_admin:
-                logger.warning("User %s attempted to create course without namespace", username)
-                return render_template(
-                    app.create_course_template,
-                    generated_token=generate_token_hex(24),
-                    error_message="Only Instance Admin can create courses without namespace",
-                    rms=app.app_config.rms,
-                    labels=app.create_course_labels,
-                )
-        else:
-            try:
-                namespace, role = app.storage_api.get_namespace_by_id(namespace_id, username)
-            except PermissionError:
-                logger.warning(
-                    "User %s attempted to create course with namespace id=%s without access", username, namespace_id
-                )
-                return render_template(
-                    app.create_course_template,
-                    generated_token=generate_token_hex(24),
-                    error_message="Access denied to selected namespace",
-                    rms=app.app_config.rms,
-                    labels=app.create_course_labels,
-                )
-            except Exception as e:
-                logger.error("Error fetching namespace id=%s: %s", namespace_id, str(e))
-                return render_template(
-                    app.create_course_template,
-                    generated_token=generate_token_hex(24),
-                    error_message="Selected namespace not found",
-                    rms=app.app_config.rms,
-                    labels=app.create_course_labels,
-                )
-
-            if not is_instance_admin and role != "namespace_admin":
-                logger.warning(
-                    "User %s with role %s attempted to create course in namespace id=%s",
-                    username,
-                    role,
-                    namespace_id,
-                )
-                return render_template(
-                    app.create_course_template,
-                    generated_token=generate_token_hex(24),
-                    error_message="Only Instance Admin or Namespace Admin can create courses",
-                    rms=app.app_config.rms,
-                    labels=app.create_course_labels,
-                )
+        namespace, role, error, _ = check_course_creation_namespace_permission(
+            app.storage_api, namespace_id, username, is_instance_admin
+        )
+        if error is not None:
+            return render_template(
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message=error,
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
+            )
 
         course_name = request.form["unique_course_name"].strip()
         gitlab_course_group = request.form["course_group"].strip()
@@ -591,10 +556,6 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             registration_secret=request.form["registration_secret"],
             token=request.form["token"],
             show_allscores=request.form.get("show_allscores", "off") == "on",
-            status=CourseStatus.CREATED,
-            task_url_template="",
-            links={},
-            deadlines_type=ManytaskDeadlinesType.HARD,
         )
 
         if app.storage_api.create_course(settings):

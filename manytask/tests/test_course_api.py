@@ -17,7 +17,9 @@ from tests.helpers import (
     create_namespace,
     make_user,
     post_json,
+    post_json_as,
     register_rms_user,
+    set_session,
 )
 
 
@@ -65,8 +67,7 @@ def mock_session_regular(session):
 @pytest.fixture
 def test_namespace(session, client_with_db, mock_session_admin):
     """Create a test namespace."""
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     return create_namespace(
         client_with_db, name="Test University", slug="test-university", description="Test namespace"
@@ -76,13 +77,11 @@ def test_namespace(session, client_with_db, mock_session_admin):
 def test_create_course_as_instance_admin(client_with_db, session, mock_session_admin, test_namespace):
     """Test that Instance Admin can create a course in any namespace."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
     namespace_id = test_namespace["id"]
 
-    response = post_json(
+    response = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": namespace_id,
@@ -132,9 +131,7 @@ def test_create_course_as_namespace_admin_in_own_namespace(
     register_rms_user(client_with_db.application, ns_admin_user)
 
     # Switch to namespace admin
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_namespace_admin)
+    set_session(client_with_db, mock_session_namespace_admin, clear=True)
 
     response = post_json(
         client_with_db,
@@ -157,8 +154,7 @@ def test_create_course_as_namespace_admin_in_other_namespace(
     """Test that Namespace Admin cannot create course in another namespace."""
 
     # Create two namespaces
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response1 = post_json(client_with_db, "/api/namespaces", {"name": "Namespace 1", "slug": "ns1"})
     assert response1.status_code == HTTPStatus.CREATED
@@ -185,9 +181,7 @@ def test_create_course_as_namespace_admin_in_other_namespace(
     register_rms_user(client_with_db.application, ns_admin_user)
 
     # Try to create course in ns2
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_namespace_admin)
+    set_session(client_with_db, mock_session_namespace_admin, clear=True)
 
     response = post_json(
         client_with_db,
@@ -228,9 +222,7 @@ def test_create_course_as_program_manager_forbidden(
     register_rms_user(client_with_db.application, pm_user)
 
     # Try to create course
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_pm)
+    set_session(client_with_db, mock_session_pm, clear=True)
 
     response = post_json(
         client_with_db,
@@ -248,13 +240,11 @@ def test_create_course_as_program_manager_forbidden(
 def test_create_course_as_regular_user_forbidden(client_with_db, session, mock_session_regular, test_namespace):
     """Test that regular user without namespace role cannot create courses."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_regular)
-
     namespace_id = test_namespace["id"]
 
-    response = post_json(
+    response = post_json_as(
         client_with_db,
+        mock_session_regular,
         "/api/admin/courses",
         {
             "namespace_id": namespace_id,
@@ -288,11 +278,9 @@ def test_create_course_with_valid_owners(client_with_db, session, mock_session_a
     # Register in mock RMS
     register_rms_user(client_with_db.application, ns_admin_user)
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
-    response = post_json(
+    response = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": namespace_id,
@@ -326,11 +314,9 @@ def test_create_course_with_invalid_owners_not_in_namespace(
     # Register in mock RMS but don't add to namespace
     register_rms_user(client_with_db.application, regular_user)
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
-    response = post_json(
+    response = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": namespace_id,
@@ -367,11 +353,9 @@ def test_create_course_with_invalid_owners_not_namespace_admin(
     # Register in mock RMS
     register_rms_user(client_with_db.application, pm_user)
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
-    response = post_json(
+    response = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": namespace_id,
@@ -392,12 +376,10 @@ def test_create_course_duplicate_course_name(client_with_db, session, mock_sessi
 
     namespace_id = test_namespace["id"]
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
     # Create first course
-    response1 = post_json(
+    response1 = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": namespace_id,
@@ -428,12 +410,10 @@ def test_create_course_duplicate_slug(client_with_db, session, mock_session_admi
 
     namespace_id = test_namespace["id"]
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
     # Create first course
-    response1 = post_json(
+    response1 = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": namespace_id,
@@ -464,8 +444,7 @@ def test_create_course_invalid_slug(client_with_db, mock_session_admin, test_nam
 
     namespace_id = test_namespace["id"]
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     invalid_slugs = ["invalid..slug", "-invalid", "invalid-", "invalid slug", ""]
     assert_slugs_rejected(
@@ -479,12 +458,10 @@ def test_create_course_invalid_slug(client_with_db, mock_session_admin, test_nam
 def test_create_course_missing_fields(client_with_db, mock_session_admin):
     """Test that missing required fields returns 400 Bad Request."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
     # Missing course_name
-    response1 = post_json(
+    response1 = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": 1,
@@ -519,8 +496,7 @@ def test_create_course_missing_fields(client_with_db, mock_session_admin):
 def test_create_course_not_json(client_with_db, mock_session_admin):
     """Test that non-JSON request returns 400 Bad Request."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     assert_not_json_rejected(client_with_db, "/api/admin/courses")
 
@@ -528,11 +504,9 @@ def test_create_course_not_json(client_with_db, mock_session_admin):
 def test_create_course_nonexistent_namespace(client_with_db, mock_session_admin):
     """Test creating course in non-existent namespace returns 404."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
-    response = post_json(
+    response = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": 99999,
@@ -551,11 +525,9 @@ def test_create_course_with_nonexistent_owner(client_with_db, mock_session_admin
 
     namespace_id = test_namespace["id"]
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
-
-    response = post_json(
+    response = post_json_as(
         client_with_db,
+        mock_session_admin,
         "/api/admin/courses",
         {
             "namespace_id": namespace_id,

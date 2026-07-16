@@ -1,5 +1,4 @@
 import os
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Callable
@@ -16,8 +15,7 @@ from manytask.abstract import RmsUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
-from manytask.course import CourseStatus
-from manytask.database import DataBaseApi, TaskDisabledError
+from manytask.database import DataBaseApi
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, root_bp
@@ -43,7 +41,13 @@ from tests.constants import (
     TEST_USER_ID,
     TEST_USERNAME,
 )
-from tests.helpers import MockCourseBase, MockStorageApiBase, make_flask_app
+from tests.helpers import (
+    MockCourseBase,
+    MockStorageApiBase,
+    make_created_course_mock,
+    make_flask_app,
+    raise_for_invalid_task,
+)
 
 
 @pytest.fixture
@@ -189,10 +193,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
         @staticmethod
         def find_task(_course_name, task_name):
-            if task_name == INVALID_TASK_NAME:
-                raise KeyError("Task not found")
-            if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
-                raise TaskDisabledError(f"Task {task_name} is disabled")
+            raise_for_invalid_task(task_name)
             return mock_course, mock_group, mock_task
 
         @staticmethod
@@ -524,12 +525,7 @@ def test_update_database_unauthorized(app, mock_gitlab_oauth):
 
 def test_update_database_not_ready(app, authenticated_client):
     with patch.object(app.storage_api, "get_course") as mock_get_course:
-
-        @dataclass
-        class Course:
-            status = CourseStatus.CREATED
-
-        mock_get_course.return_value = Course()
+        mock_get_course.return_value = make_created_course_mock()
 
         test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
         response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
@@ -659,12 +655,7 @@ def test_get_database_unauthorized(app, mock_gitlab_oauth):
 
 def test_get_database_not_ready(app, mock_gitlab_oauth):
     with patch.object(app.storage_api, "get_course") as mock_get_course:
-
-        @dataclass
-        class Course:
-            status = CourseStatus.CREATED
-
-        mock_get_course.return_value = Course()
+        mock_get_course.return_value = make_created_course_mock()
         app.debug = False  # Disable debug mode to test auth
         app.oauth = mock_gitlab_oauth
         client = app.test_client()

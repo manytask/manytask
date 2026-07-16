@@ -26,6 +26,7 @@ from tests.helpers import (
     make_user,
     post_json,
     register_rms_user,
+    set_session,
 )
 
 
@@ -83,8 +84,7 @@ def test_create_namespace_as_instance_admin(client_with_db, session, mock_sessio
 
     admin_user = session.query(User).filter_by(username="admin").first()
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     data = create_namespace(
         client_with_db, name="HSE", slug="hse-namespace", description="Namespace for Higher School of Economics courses"
@@ -116,8 +116,7 @@ def test_create_namespace_as_instance_admin(client_with_db, session, mock_sessio
 def test_create_namespace_as_regular_user(client_with_db, mock_session_regular):
     """Test that regular user cannot create a namespace (403 Forbidden)."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular)
 
     response = post_json(
         client_with_db,
@@ -139,8 +138,7 @@ def test_create_namespace_duplicate_slug(client_with_db, session, mock_session_a
     """Test that creating namespace with existing slug returns 409 Conflict."""
 
     # Create first namespace
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response1 = post_json(
         client_with_db,
@@ -173,8 +171,7 @@ def test_create_namespace_duplicate_slug(client_with_db, session, mock_session_a
 def test_create_namespace_invalid_slug(client_with_db, mock_session_admin):
     """Test that invalid slug returns 400 Bad Request."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Test various invalid slugs
     invalid_slugs = ["invalid..slug", "-invalid", "invalid-", "invalid slug", "invalid/slug", ""]
@@ -189,8 +186,7 @@ def test_create_namespace_invalid_slug(client_with_db, mock_session_admin):
 def test_create_namespace_missing_fields(client_with_db, mock_session_admin):
     """Test that missing required fields returns 400 Bad Request."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Missing name
     response1 = post_json(
@@ -220,8 +216,7 @@ def test_create_namespace_missing_fields(client_with_db, mock_session_admin):
 def test_create_namespace_not_json(client_with_db, mock_session_admin):
     """Test that non-JSON request returns 400 Bad Request."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     assert_not_json_rejected(client_with_db, "/api/namespaces")
 
@@ -229,8 +224,7 @@ def test_create_namespace_not_json(client_with_db, mock_session_admin):
 def test_create_namespace_without_description(client_with_db, session, mock_session_admin):
     """Test that description is optional."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(
         client_with_db,
@@ -255,8 +249,7 @@ def test_create_namespace_without_description(client_with_db, session, mock_sess
 def test_create_namespace_valid_slugs(client_with_db, session, mock_session_admin):
     """Test that various valid slugs are accepted."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     valid_slugs = [
         "simple",
@@ -288,8 +281,7 @@ def test_create_namespace_valid_slugs(client_with_db, session, mock_session_admi
 def test_get_namespaces_as_instance_admin(client_with_db, session, mock_session_admin):
     """Test that Instance Admin sees all namespaces."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create multiple namespaces
     response1 = post_json(
@@ -331,8 +323,7 @@ def test_get_namespaces_as_regular_user_with_roles(client_with_db, session, mock
     """Test that regular user sees only namespaces where they have a role."""
 
     # Create namespaces as admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response1 = post_json(
         client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse", "description": "HSE namespace"}
@@ -358,9 +349,7 @@ def test_get_namespaces_as_regular_user_with_roles(client_with_db, session, mock
     )
 
     # Get namespaces as regular user
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     response = client_with_db.get("/api/namespaces")
 
@@ -387,16 +376,13 @@ def test_get_namespaces_as_regular_user_without_roles(
     """Test that regular user without roles sees empty list."""
 
     # Create namespaces as admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response1 = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse"})
     assert response1.status_code == HTTPStatus.CREATED
 
     # Get namespaces as regular user (without any roles)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     response = client_with_db.get("/api/namespaces")
 
@@ -410,8 +396,7 @@ def test_get_namespaces_as_regular_user_without_roles(
 def test_get_namespaces_empty_list(client_with_db, mock_session_admin):
     """Test that Instance Admin gets empty list when no namespaces exist."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = client_with_db.get("/api/namespaces")
 
@@ -426,8 +411,7 @@ def test_get_namespaces_empty_list(client_with_db, mock_session_admin):
 def test_get_namespace_by_id_as_instance_admin(client_with_db, session, mock_session_admin):
     """Test that Instance Admin can access any namespace without role field."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create a namespace
     response = post_json(
@@ -459,8 +443,7 @@ def test_get_namespace_by_id_as_regular_user_with_access(
     """Test that regular user can access namespace where they have a role."""
 
     # Create namespace as admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(
         client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse", "description": "HSE namespace"}
@@ -482,9 +465,7 @@ def test_get_namespace_by_id_as_regular_user_with_access(
     )
 
     # Get namespace as regular user
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     response = client_with_db.get(f"/api/namespaces/{namespace_id}")
 
@@ -506,8 +487,7 @@ def test_get_namespace_by_id_as_regular_user_without_access(
     """Test that regular user gets 403 for namespace where they don't have a role."""
 
     # Create namespace as admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse"})
     assert response.status_code == HTTPStatus.CREATED
@@ -515,9 +495,7 @@ def test_get_namespace_by_id_as_regular_user_without_access(
     namespace_id = namespace_data["id"]
 
     # Try to get namespace as regular user (without role)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     response = client_with_db.get(f"/api/namespaces/{namespace_id}")
 
@@ -530,8 +508,7 @@ def test_get_namespace_by_id_as_regular_user_without_access(
 def test_get_namespace_by_id_nonexistent(client_with_db, mock_session_admin):
     """Test that accessing non-existent namespace returns 403 (not 404)."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Try to access non-existent namespace
     response = client_with_db.get("/api/namespaces/99999")
@@ -546,8 +523,7 @@ def test_get_namespace_by_id_nonexistent(client_with_db, mock_session_admin):
 def test_add_user_to_namespace_as_instance_admin(client_with_db, session, mock_session_admin):
     """Test that Instance Admin can add a user to namespace."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create namespace
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
@@ -610,8 +586,7 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     """Test that Namespace Admin can add users to their namespace."""
 
     # Create namespace as instance admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
@@ -647,9 +622,7 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     register_rms_user(client_with_db.application, new_user)
 
     # Switch to regular_user (who is now namespace admin)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     # Add new user to namespace
     response = post_json(
@@ -669,8 +642,7 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
     """Test that Program Manager cannot add users (403 Forbidden)."""
 
     # Create namespace as instance admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
@@ -703,9 +675,7 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
     session.commit()
 
     # Switch to regular_user (who is program manager)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     # Try to add new user - should fail
     response = post_json(
@@ -722,8 +692,7 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
 def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_session_admin):
     """Test that adding user with existing role returns 409 Conflict."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create namespace
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
@@ -770,8 +739,7 @@ def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_sess
 def test_add_user_to_namespace_invalid_role(client_with_db, session, mock_session_admin):
     """Test that invalid role returns 400 Bad Request."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create namespace
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
@@ -807,8 +775,7 @@ def test_add_user_to_namespace_invalid_role(client_with_db, session, mock_sessio
 def test_add_user_to_namespace_missing_fields(client_with_db, mock_session_admin):
     """Test that missing required fields returns 400 Bad Request."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Missing user_id
     response = post_json(client_with_db, "/api/namespaces/1/users", {"role": ROLE_NAMESPACE_ADMIN})
@@ -826,8 +793,7 @@ def test_add_user_to_namespace_missing_fields(client_with_db, mock_session_admin
 def test_add_user_to_namespace_not_json(client_with_db, mock_session_admin):
     """Test that non-JSON request returns 400 Bad Request."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = client_with_db.post(
         "/api/namespaces/1/users",
@@ -844,8 +810,7 @@ def test_add_user_to_namespace_not_json(client_with_db, mock_session_admin):
 def test_add_user_to_namespace_nonexistent_user(client_with_db, session, mock_session_admin):
     """Test that adding non-existent user returns 404."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create namespace
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
@@ -866,8 +831,7 @@ def test_add_user_to_namespace_nonexistent_user(client_with_db, session, mock_se
 def test_add_user_to_namespace_nonexistent_namespace(client_with_db, session, mock_session_admin):
     """Test that adding user to non-existent namespace returns 404."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create user
     new_user = User(
@@ -897,8 +861,7 @@ def test_add_user_to_namespace_nonexistent_namespace(client_with_db, session, mo
 def test_get_namespace_users_as_instance_admin(client_with_db, session, mock_session_admin):
     """Test that Instance Admin can get list of users in any namespace."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create namespace
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
@@ -954,8 +917,7 @@ def test_get_namespace_users_as_namespace_admin(client_with_db, session, mock_se
     """Test that Namespace Admin can get list of users in their namespace."""
 
     # Create namespace as instance admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
@@ -976,9 +938,7 @@ def test_get_namespace_users_as_namespace_admin(client_with_db, session, mock_se
     )
 
     # Switch to regular_user (who is now namespace admin)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     # Get users list
     response = client_with_db.get(f"/api/namespaces/{namespace_id}/users")
@@ -1001,8 +961,7 @@ def test_get_namespace_users_as_program_manager_forbidden(
     """Test that Program Manager cannot view users list (403 Forbidden)."""
 
     # Create namespace as instance admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
@@ -1023,9 +982,7 @@ def test_get_namespace_users_as_program_manager_forbidden(
     )
 
     # Switch to regular_user (who is program manager)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     # Try to get users list - should fail
     response = client_with_db.get(f"/api/namespaces/{namespace_id}/users")
@@ -1037,8 +994,7 @@ def test_get_namespace_users_without_access(client_with_db, session, mock_sessio
     """Test that user without access gets 403 Forbidden."""
 
     # Create namespace as instance admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
@@ -1046,9 +1002,7 @@ def test_get_namespace_users_without_access(client_with_db, session, mock_sessio
     namespace_id = namespace_data["id"]
 
     # Switch to regular_user (who has no access)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     # Try to get users list - should fail
     response = client_with_db.get(f"/api/namespaces/{namespace_id}/users")
@@ -1062,8 +1016,7 @@ def test_get_namespace_users_without_access(client_with_db, session, mock_sessio
 def test_get_namespace_users_nonexistent_namespace(client_with_db, mock_session_admin):
     """Test that accessing non-existent namespace returns 403."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Try to get users from non-existent namespace
     response = client_with_db.get("/api/namespaces/99999/users")
@@ -1078,8 +1031,7 @@ def test_get_namespace_users_nonexistent_namespace(client_with_db, mock_session_
 def test_get_namespace_users_empty_list(client_with_db, session, mock_session_admin):
     """Test that namespace with only the creator returns just that user."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create namespace (admin becomes namespace_admin automatically)
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
@@ -1104,8 +1056,7 @@ def test_get_namespace_users_empty_list(client_with_db, session, mock_session_ad
 def test_remove_user_from_namespace_as_instance_admin(client_with_db, session, mock_session_admin):
     """Test that Instance Admin can remove a user from namespace."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create namespace
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
@@ -1155,8 +1106,7 @@ def test_remove_user_from_namespace_as_namespace_admin(
     """Test that Namespace Admin can remove users from their namespace."""
 
     # Create namespace as instance admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
@@ -1198,9 +1148,7 @@ def test_remove_user_from_namespace_as_namespace_admin(
     assert response.status_code == HTTPStatus.CREATED
 
     # Switch to regular_user (who is namespace admin)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     # Remove user from namespace
     response = client_with_db.delete(f"/api/namespaces/{namespace_id}/users/{new_user.id}")
@@ -1218,8 +1166,7 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     """Test that Program Manager cannot remove users (403 Forbidden)."""
 
     # Create namespace as instance admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
@@ -1261,9 +1208,7 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     assert response.status_code == HTTPStatus.CREATED
 
     # Switch to regular_user (who is program manager)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     # Try to remove user - should fail
     response = client_with_db.delete(f"/api/namespaces/{namespace_id}/users/{new_user.id}")
@@ -1274,8 +1219,7 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
 def test_remove_user_from_namespace_nonexistent_user(client_with_db, session, mock_session_admin):
     """Test that removing non-existent user returns 404 Not Found."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Create namespace
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
@@ -1296,8 +1240,7 @@ def test_remove_user_from_namespace_without_access(client_with_db, session, mock
     """Test that user without access gets 403 Forbidden."""
 
     # Create namespace as instance admin
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
     assert response.status_code == HTTPStatus.CREATED
@@ -1317,9 +1260,7 @@ def test_remove_user_from_namespace_without_access(client_with_db, session, mock
     session.commit()
 
     # Switch to regular_user (who has no access to namespace)
-    with client_with_db.session_transaction() as sess:
-        sess.clear()
-        sess.update(mock_session_regular)
+    set_session(client_with_db, mock_session_regular, clear=True)
 
     # Try to remove user - should fail
     response = client_with_db.delete(f"/api/namespaces/{namespace_id}/users/{new_user.id}")
@@ -1333,8 +1274,7 @@ def test_remove_user_from_namespace_without_access(client_with_db, session, mock
 def test_remove_user_from_namespace_nonexistent_namespace(client_with_db, mock_session_admin):
     """Test that accessing non-existent namespace returns 403."""
 
-    with client_with_db.session_transaction() as sess:
-        sess.update(mock_session_admin)
+    set_session(client_with_db, mock_session_admin)
 
     # Try to remove user from non-existent namespace
     response = client_with_db.delete("/api/namespaces/99999/users/1")

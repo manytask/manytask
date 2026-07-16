@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from http import HTTPStatus
 from unittest.mock import MagicMock
 
@@ -6,12 +7,14 @@ from flask import Flask, json
 from manytask.abstract import RmsUser, StoredUser
 from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
-from manytask.database import DataBaseApi, DatabaseConfig
+from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.mock_rms import MockRmsApi
 from manytask.models import User, UserOnNamespace
 from manytask.web import root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
+    INVALID_TASK_NAME,
+    TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
     TEST_AUTH_ID,
     TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
@@ -53,6 +56,20 @@ def build_mock_session(username, *, user_auth_id, rms_id, user_id):
 
 def post_json(client, url, payload):
     return client.post(url, json=payload, content_type="application/json")
+
+
+def set_session(client, session_data, *, clear=False):
+    """Set Flask session data for a test client."""
+    with client.session_transaction() as sess:
+        if clear:
+            sess.clear()
+        sess.update(session_data)
+
+
+def post_json_as(client, session_data, url, payload, *, clear=False):
+    """Set session data and POST JSON in one step."""
+    set_session(client, session_data, clear=clear)
+    return post_json(client, url, payload)
 
 
 def assert_error_response(response, status):
@@ -199,3 +216,20 @@ class MockStorageApiBase:
     @staticmethod
     def get_namespace_by_id(_namespace_id, _username):
         raise PermissionError("No access to namespace")
+
+
+def raise_for_invalid_task(task_name):
+    """Raise appropriate exceptions for invalid/disabled task names in mock find_task."""
+    if task_name == INVALID_TASK_NAME:
+        raise KeyError("Task not found")
+    if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
+        raise TaskDisabledError(f"Task {task_name} is disabled")
+
+
+def make_created_course_mock():
+    """Create a simple mock course object with CREATED status."""
+    @dataclass
+    class Course:
+        status = CourseStatus.CREATED
+
+    return Course()

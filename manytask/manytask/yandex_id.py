@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from http import HTTPStatus
 from typing import Any
 
 import requests
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import session
 from requests.exceptions import HTTPError
 
 from .abstract import AuthApi, AuthenticatedUser
+from .utils.generic import check_oauth_authenticated
 
 logger = logging.getLogger(__name__)
 
@@ -59,33 +58,13 @@ class YandexIDApi(AuthApi):
             logger.info("Dry run mode: skipping authentication check")
             return True
 
-        response = self._make_auth_request(oauth_access_token)
-
-        try:
-            response.raise_for_status()
-            return True
-        except HTTPError as e:
-            if e.response.status_code == HTTPStatus.UNAUTHORIZED:
-                try:
-                    logger.info("YandexID access token expired. Trying to refresh token.")
-                    new_tokens = self._refresh_token(oauth, oauth_refresh_token)
-                    if not new_tokens:
-                        return False
-
-                    new_access = new_tokens.get("access_token", "")
-                    new_refresh = new_tokens.get("refresh_token", oauth_refresh_token)
-                    response = self._make_auth_request(new_access)
-                    response.raise_for_status()
-
-                    session["auth"].update({"access_token": new_access, "refresh_token": new_refresh})
-                    logger.info("YandexID token refreshed successfully.")
-                    return True
-                except (HTTPError, OAuthError) as refresh_error:
-                    logger.error(f"Failed to validate refreshed YandexID token: {refresh_error}", exc_info=True)
-                    return False
-
-            logger.info(f"User is not logged to YandexID: {e}", exc_info=True)
-            return False
+        return check_oauth_authenticated(
+            self._make_auth_request,
+            lambda: self._refresh_token(oauth, oauth_refresh_token),
+            oauth_access_token,
+            oauth_refresh_token,
+            log_prefix="YandexID ",
+        )
 
     def get_authenticated_user(self, oauth_access_token: str) -> AuthenticatedUser:
         if self.dry_run:

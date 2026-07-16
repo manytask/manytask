@@ -35,6 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff==0.15.4",
+    "pylint==4.0.6",
     "mypy==1.20.0",
     "types-requests==2.33.0.20260327",
     "types-PyYAML==6.0.12.12",
@@ -147,6 +148,13 @@ max-args = 7
 
 [tool.ruff.lint.isort]
 known-first-party = ["manytask", "tests", "checker"]
+
+[tool.pylint."messages control"]
+disable = ["all"]
+enable = ["R0801"]
+
+[tool.pylint.reports]
+min-similarity-lines = 3
 
 [tool.setuptools]
 packages = ["manytask"]
