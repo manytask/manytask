@@ -23,15 +23,12 @@ from tests.constants import (
     GITLAB_BASE_URL,
     INVALID_TASK_NAME,
     TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
-    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_EMAIL,
     TEST_FIRST_NAME,
-    TEST_GITLAB_SESSION_VERSION,
     TEST_INVALID_USER_ID,
     TEST_INVALID_USERNAME,
     TEST_LAST_NAME,
-    TEST_MANYTASK_SESSION_VERSION,
     TEST_PASSWORD,
     TEST_PUBLIC_REPO,
     TEST_RMS_ID,
@@ -44,9 +41,11 @@ from tests.constants import (
 from tests.helpers import (
     MockCourseBase,
     MockStorageApiBase,
+    build_test_session,
     make_created_course_mock,
     make_flask_app,
     raise_for_invalid_task,
+    set_session,
 )
 
 
@@ -149,9 +148,6 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             self.course_admin = course_admin
             return course_admin
 
-        def check_user_on_course(self, *a, **k):
-            return True
-
         def max_score_started(self, _):
             return 0
 
@@ -195,10 +191,6 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def find_task(_course_name, task_name):
             raise_for_invalid_task(task_name)
             return mock_course, mock_group, mock_task
-
-        @staticmethod
-        def get_now_with_timezone(_course_name):
-            return datetime.now(tz=ZoneInfo("UTC"))
 
         def get_groups(self, _course_name, enabled=None, started=None, now=None):
             groups = getattr(self, "groups_override", None)
@@ -247,24 +239,10 @@ def authenticated_client(app, mock_gitlab_oauth):
             "access_token": "test_token",
             "refresh_token": "test_token",
         }
-        with client.session_transaction() as session:
-            session["auth"] = {
-                "version": TEST_GITLAB_SESSION_VERSION,
-                "username": TEST_USERNAME,
-                "user_auth_id": TEST_USER_ID,
-                "access_token": "",
-                "refresh_token": "",
-            }
-            session["rms"] = {
-                "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-                "rms_id": TEST_RMS_ID,
-                "username": TEST_USERNAME,
-            }
-            session["manytask"] = {
-                "version": TEST_MANYTASK_SESSION_VERSION,
-                "user_id": TEST_USER_ID,
-                "username": TEST_USERNAME,
-            }
+        set_session(
+            client,
+            build_test_session(include_manytask=True, access_token="", refresh_token=""),
+        )
         yield client
 
 

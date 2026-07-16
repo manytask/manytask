@@ -1,8 +1,6 @@
 import os
-from datetime import datetime
 from http import HTTPStatus
 from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 import pytest
 from authlib.integrations.base_client import OAuthError
@@ -76,10 +74,6 @@ def app(mock_storage_api):
 
 @pytest.fixture
 def mock_storage_api(mock_course):  # noqa: C901
-    class MockFinalGradeConfig:
-        def evaluate(self, *_args, **_kwargs):
-            return 5
-
     class MockStorageApi(MockStorageApiBase):
         @staticmethod
         def get_all_courses_names_with_statuses():
@@ -127,10 +121,6 @@ def mock_storage_api(mock_course):  # noqa: C901
             return []
 
         @staticmethod
-        def get_grades(*_args, **_kwargs):
-            return MockFinalGradeConfig()
-
-        @staticmethod
         def get_course(_name):
             return mock_course
 
@@ -139,28 +129,11 @@ def mock_storage_api(mock_course):  # noqa: C901
             raise_for_invalid_task(task_name)
             return None, None, None
 
-        @staticmethod
-        def get_now_with_timezone(_course_name):
-            return datetime.now(tz=ZoneInfo("UTC"))
-
-        def get_stored_user_by_username(self, _username):
-            return self.stored_user
-
-        def get_stored_user_by_rms_id(self, _rms_id):
-            return self.stored_user
-
-        def get_stored_user_by_auth_id(self, auth_id):
-            return self.stored_user
-
         def check_if_instance_admin(self, _username):
             return self.stored_user.instance_admin
 
         def check_if_course_admin(self, _course_name, _username):
             return self.course_admin
-
-        @staticmethod
-        def check_user_on_course(*a, **k):
-            return True
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.course_admin = self.course_admin or course_admin

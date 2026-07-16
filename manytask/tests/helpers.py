@@ -1,6 +1,8 @@
 from dataclasses import dataclass
+from datetime import datetime
 from http import HTTPStatus
 from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
 
 from flask import Flask, json
 
@@ -55,14 +57,14 @@ def build_mock_session(username, *, user_auth_id, rms_id, user_id):
     }
 
 
-def build_test_session(*, include_rms=True, include_manytask=False):
+def build_test_session(*, include_rms=True, include_manytask=False, access_token=TEST_TOKEN, refresh_token=TEST_TOKEN):
     session = {
         "auth": {
             "version": TEST_GITLAB_SESSION_VERSION,
             "username": TEST_USERNAME,
             "user_auth_id": TEST_USER_ID,
-            "access_token": TEST_TOKEN,
-            "refresh_token": TEST_TOKEN,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
         },
     }
     if include_rms:
@@ -221,6 +223,11 @@ class MockCourseBase:
         self.namespace_id = None
 
 
+class MockFinalGradeConfig:
+    def evaluate(self, *_args, **_kwargs):
+        return 5
+
+
 class MockStorageApiBase:
     def __init__(self):
         self.stored_user = make_test_stored_user()
@@ -242,6 +249,27 @@ class MockStorageApiBase:
     @staticmethod
     def get_namespace_by_id(_namespace_id, _username):
         raise PermissionError("No access to namespace")
+
+    @staticmethod
+    def get_now_with_timezone(_course_name):
+        return datetime.now(tz=ZoneInfo("UTC"))
+
+    @staticmethod
+    def check_user_on_course(*_args, **_kwargs):
+        return True
+
+    @staticmethod
+    def get_grades(*_args, **_kwargs):
+        return MockFinalGradeConfig()
+
+    def get_stored_user_by_username(self, _username):
+        return self.stored_user
+
+    def get_stored_user_by_rms_id(self, _rms_id):
+        return self.stored_user
+
+    def get_stored_user_by_auth_id(self, _auth_id):
+        return self.stored_user
 
 
 def raise_for_invalid_task(task_name):
