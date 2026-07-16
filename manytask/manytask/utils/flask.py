@@ -135,17 +135,17 @@ def get_user_roles(app: CustomFlask, username: str, course_name: str | None = No
     """
     roles = []
 
-    if app.storage_api.check_if_instance_admin(username):
-        roles.append("instance_admin")
+    if course_name:
+        if app.storage_api.check_if_instance_admin(username):
+            roles.append("instance_admin")
 
-    if check_if_namespace_admin(app, username):
-        roles.append("namespace_admin")
-
-    if course_name and app.storage_api.check_if_course_admin(course_name, username):
-        if "namespace_admin" not in roles:
+        if check_if_namespace_admin(app, course_name=course_name):
             roles.append("namespace_admin")
 
-    if course_name:
+        if app.storage_api.check_if_course_admin(course_name, username):
+            if "namespace_admin" not in roles:
+                roles.append("namespace_admin")
+
         roles.append("student")
 
     return roles
@@ -185,7 +185,7 @@ def can_access_course(app: CustomFlask, username: str, course_name: str) -> bool
     if app.storage_api.check_if_course_admin(course_name, username):
         return True
 
-    if check_if_namespace_admin(app, username):
+    if check_if_namespace_admin(app, course_name=course_name):
         course = app.storage_api.get_course(course_name)
         if course and course.namespace_id:
             namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
