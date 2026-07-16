@@ -616,34 +616,31 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     )
 
 
-def _handle_course_admin_action(app: CustomFlask, course_name: str, action: str) -> None:
+def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course_admin: bool) -> None:
     """Grant or revoke course admin status based on the submitted form action.
 
     Only instance admins or course admins of this course may perform this action.
     """
-    if not app.debug:
-        current_user = session["manytask"]["username"]
-        is_allowed = app.storage_api.check_if_instance_admin(current_user) or app.storage_api.check_if_course_admin(
-            course_name, current_user
-        )
-        if not is_allowed:
-            safe_course_name = sanitize_log_data(course_name)
-            logger.warning(
-                "User %s attempted to change course admin status in course %s without permission",
-                current_user,
-                safe_course_name,
-            )
-            abort(HTTPStatus.FORBIDDEN)
+    if app.debug:
+        current_user = "guest"
     else:
-        current_user = "debug"
+        current_user = session["manytask"]["username"]
+
+    if not check_if_course_admin(app, course_name):
+        safe_course_name = sanitize_log_data(course_name)
+        logger.warning(
+            "User %s attempted to change course admin status in course %s without permission",
+            current_user,
+            safe_course_name,
+        )
+        abort(HTTPStatus.FORBIDDEN)
 
     target_username = request.form.get("username", "")
-    is_admin = action == "grant_course_admin"
-    app.storage_api.set_course_admin_status(course_name, target_username, is_admin)
+    app.storage_api.set_course_admin_status(course_name, target_username, grant_course_admin)
     app.logger.warning(
         "User %s %s course admin status for %s in course %s",
         current_user,
-        "granted" if is_admin else "revoked",
+        "granted" if grant_course_admin else "revoked",
         target_username,
         course_name,
     )
@@ -697,7 +694,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 
         action = request.form.get("action", "")
         if action in ("grant_course_admin", "revoke_course_admin"):
-            _handle_course_admin_action(app, course_name, action)
+            _handle_course_admin_action(app, course_name, action == "grant_course_admin")
             return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         updated_settings = CourseConfig(

@@ -52,6 +52,14 @@ def check_instance_admin(app: CustomFlask) -> bool:
         username = session["manytask"]["username"]
         return app.storage_api.check_if_instance_admin(username)
 
+def check_if_course_admin(app: CustomFlask, course_name: str) -> bool:
+    if app.debug:
+        return True
+    else:
+        username = session["manytask"]["username"]
+        return app.storage_api.check_if_instance_admin(username) or app.storage_api.check_if_course_admin(
+            course_name, username)
+
 
 def is_namespace_admin(app: CustomFlask, username: str) -> bool:
     """Check if user is a Namespace Admin (Owner of any namespace or has Namespace Admin role).
