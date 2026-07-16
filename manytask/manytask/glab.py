@@ -30,7 +30,7 @@ def _validate_and_convert_user_id(user_id: str) -> int:
         raise ValueError(f"GitLab user ID must be convertible to integer, got: {user_id}")
 
 
-def _make_public_repo_params(project_name: str, namespace_id: int) -> dict:
+def _make_public_repo_params(project_name: str, namespace_id: int) -> dict[str, Any]:
     return {
         "name": project_name,
         "path": project_name,
@@ -42,7 +42,7 @@ def _make_public_repo_params(project_name: str, namespace_id: int) -> dict:
     }
 
 
-def _make_students_group_params(short_name: str) -> dict:
+def _make_students_group_params(short_name: str) -> dict[str, Any]:
     return {
         "name": short_name,
         "path": short_name,
@@ -160,9 +160,7 @@ class GitLabApi(RmsApi, AuthApi):
 
         project_name = course_public_repo.split("/")[-1]
 
-        self._gitlab.projects.create(
-            _make_public_repo_params(project_name, group.id)
-        )
+        self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)
 
     def create_students_group(

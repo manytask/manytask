@@ -71,9 +71,7 @@ def check_course_creation_namespace_permission(
         try:
             namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
         except (PermissionError, NoResultFound):
-            logger.warning(
-                "User %s attempted to create course in inaccessible namespace id=%s", username, namespace_id
-            )
+            logger.warning("User %s attempted to create course in inaccessible namespace id=%s", username, namespace_id)
             return None, None, "Namespace not found or access denied", HTTPStatus.NOT_FOUND
 
         if not is_instance_admin and role != "namespace_admin":
@@ -95,7 +93,7 @@ def check_course_creation_namespace_permission(
 
 def check_oauth_authenticated(
     make_auth_request: Callable[[str], Response],
-    refresh_token_fn: Callable[[], dict | None],
+    refresh_token_fn: Callable[[], dict[str, Any] | None],
     oauth_access_token: str,
     oauth_refresh_token: str,
     log_prefix: str = "",

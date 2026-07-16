@@ -582,13 +582,21 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     # Make regular_user a namespace admin
     get_user(session, "regular_user")
     assign_namespace_role_for_user(
-        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+        session,
+        username="regular_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Create another user to add
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="another_user", first_name="Another", last_name="User", rms_id="101", auth_id=101,
+        session,
+        client_with_db.application,
+        username="another_user",
+        first_name="Another",
+        last_name="User",
+        rms_id="101",
+        auth_id=101,
     )
 
     # Switch to regular_user (who is now namespace admin)
@@ -620,13 +628,21 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
     # Make regular_user a program manager
     get_user(session, "regular_user")
     assign_namespace_role_for_user(
-        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
+        session,
+        username="regular_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Create another user to add
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="another_user", first_name="Another", last_name="User", rms_id="102", auth_id=102,
+        session,
+        client_with_db.application,
+        username="another_user",
+        first_name="Another",
+        last_name="User",
+        rms_id="102",
+        auth_id=102,
         register_rms=False,
     )
 
@@ -656,8 +672,13 @@ def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_sess
 
     # Create user
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="new_user", first_name="New", last_name="User", rms_id="103", auth_id=103,
+        session,
+        client_with_db.application,
+        username="new_user",
+        first_name="New",
+        last_name="User",
+        rms_id="103",
+        auth_id=103,
     )
 
     # Add user first time
@@ -692,8 +713,13 @@ def test_add_user_to_namespace_invalid_role(client_with_db, session, mock_sessio
 
     # Create user
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="new_user", first_name="New", last_name="User", rms_id="104", auth_id=104,
+        session,
+        client_with_db.application,
+        username="new_user",
+        first_name="New",
+        last_name="User",
+        rms_id="104",
+        auth_id=104,
         register_rms=False,
     )
 
@@ -771,8 +797,13 @@ def test_add_user_to_namespace_nonexistent_namespace(client_with_db, session, mo
 
     # Create user
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="new_user", first_name="New", last_name="User", rms_id="105", auth_id=105,
+        session,
+        client_with_db.application,
+        username="new_user",
+        first_name="New",
+        last_name="User",
+        rms_id="105",
+        auth_id=105,
     )
 
     # Try to add user to non-existent namespace
@@ -796,8 +827,13 @@ def test_get_namespace_users_as_instance_admin(client_with_db, session, mock_ses
 
     # Create another user and add to namespace
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="test_user", first_name="Test", last_name="User", rms_id="200", auth_id=200,
+        session,
+        client_with_db.application,
+        username="test_user",
+        first_name="Test",
+        last_name="User",
+        rms_id="200",
+        auth_id=200,
     )
 
     # Add user to namespace
@@ -841,7 +877,10 @@ def test_get_namespace_users_as_namespace_admin(client_with_db, session, mock_se
     # Make regular_user a namespace admin
     regular_user = get_user(session, "regular_user")
     assign_namespace_role_for_user(
-        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+        session,
+        username="regular_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Switch to regular_user (who is now namespace admin)
@@ -876,7 +915,10 @@ def test_get_namespace_users_as_program_manager_forbidden(
     # Make regular_user a program manager
     get_user(session, "regular_user")
     assign_namespace_role_for_user(
-        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
+        session,
+        username="regular_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Switch to regular_user (who is program manager)
@@ -958,8 +1000,13 @@ def test_remove_user_from_namespace_as_instance_admin(client_with_db, session, m
 
     # Create a user and add to namespace
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="test_user", first_name="Test", last_name="User", rms_id="300", auth_id=300,
+        session,
+        client_with_db.application,
+        username="test_user",
+        first_name="Test",
+        last_name="User",
+        rms_id="300",
+        auth_id=300,
     )
 
     # Add user to namespace
@@ -997,13 +1044,21 @@ def test_remove_user_from_namespace_as_namespace_admin(
     # Make regular_user a namespace admin
     get_user(session, "regular_user")
     assign_namespace_role_for_user(
-        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+        session,
+        username="regular_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Create another user to remove
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="another_user", first_name="Another", last_name="User", rms_id="301", auth_id=301,
+        session,
+        client_with_db.application,
+        username="another_user",
+        first_name="Another",
+        last_name="User",
+        rms_id="301",
+        auth_id=301,
     )
 
     # Add user to namespace
@@ -1039,13 +1094,21 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     # Make regular_user a program manager
     get_user(session, "regular_user")
     assign_namespace_role_for_user(
-        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
+        session,
+        username="regular_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Create another user to try to remove
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="another_user", first_name="Another", last_name="User", rms_id="302", auth_id=302,
+        session,
+        client_with_db.application,
+        username="another_user",
+        first_name="Another",
+        last_name="User",
+        rms_id="302",
+        auth_id=302,
     )
 
     # Add user to namespace
@@ -1092,8 +1155,13 @@ def test_remove_user_from_namespace_without_access(client_with_db, session, mock
 
     # Create another user
     new_user = add_test_user(
-        session, client_with_db.application,
-        username="another_user", first_name="Another", last_name="User", rms_id="303", auth_id=303,
+        session,
+        client_with_db.application,
+        username="another_user",
+        first_name="Another",
+        last_name="User",
+        rms_id="303",
+        auth_id=303,
         register_rms=False,
     )
 

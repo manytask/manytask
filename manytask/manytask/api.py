@@ -593,15 +593,12 @@ def update_config(course_name: str) -> ResponseReturnValue:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
     except yaml.YAMLError as e:
-        return (
-            f"Invalid YAML in config for course={course_name}: {e}", 
-            HTTPStatus.BAD_REQUEST
-        )
+        return (f"Invalid YAML in config for course={course_name}: {e}", HTTPStatus.BAD_REQUEST)
 
     if not isinstance(config_data, dict):
         return (
             f"Invalid config for course={course_name}: expected a YAML mapping (object), got {type(config_data).__name__}",
-            HTTPStatus.BAD_REQUEST
+            HTTPStatus.BAD_REQUEST,
         )
 
     try:
@@ -609,10 +606,7 @@ def update_config(course_name: str) -> ResponseReturnValue:
         app.store_config(course_name, config_data)
         logger.info("Stored new config for course=%s", course_name)
     except ValidationError as e:
-        return (
-            _format_config_validation_error(course_name, e),
-            HTTPStatus.BAD_REQUEST
-        )
+        return (_format_config_validation_error(course_name, e), HTTPStatus.BAD_REQUEST)
     except Exception:
         logger.exception("Error while updating config for course=%s", course_name)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
@@ -1387,6 +1381,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             storage_api, namespace_id, username, is_instance_admin
         )
         if error is not None:
+            assert error_status is not None
             return jsonify(ErrorResponse(error=error).model_dump()), error_status
 
         if namespace_id == 0 and owner_rms_ids:

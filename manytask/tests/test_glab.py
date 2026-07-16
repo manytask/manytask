@@ -244,9 +244,7 @@ def test_create_students_group(gitlab, mock_gitlab_group):
     short_name = TEST_GROUP_NAME.split("/")[-1]
     gitlab_api.create_students_group(TEST_GROUP_NAME)
 
-    mock_gitlab_instance.groups.create.assert_called_once_with(
-        _make_students_group_params(short_name)
-    )
+    mock_gitlab_instance.groups.create.assert_called_once_with(_make_students_group_params(short_name))
 
 
 def test_get_group_by_name_success(gitlab, mock_gitlab_group):

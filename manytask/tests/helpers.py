@@ -308,6 +308,7 @@ def raise_for_invalid_task(task_name):
 
 def make_created_course_mock():
     """Create a simple mock course object with CREATED status."""
+
     @dataclass
     class Course:
         status = CourseStatus.CREATED

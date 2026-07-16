@@ -118,7 +118,10 @@ def test_create_course_as_namespace_admin_in_own_namespace(
     namespace_id = test_namespace["id"]
     ns_admin_user = get_user(session, "namespace_admin_user")
     assign_namespace_role_for_user(
-        session, username="namespace_admin_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+        session,
+        username="namespace_admin_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Register user in mock RMS
@@ -161,7 +164,10 @@ def test_create_course_as_namespace_admin_in_other_namespace(
     # Add user as namespace admin to ns1 only
     ns_admin_user = get_user(session, "namespace_admin_user")
     assign_namespace_role_for_user(
-        session, username="namespace_admin_user", namespace_id=ns1_data["id"], role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+        session,
+        username="namespace_admin_user",
+        namespace_id=ns1_data["id"],
+        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Register in mock RMS
@@ -195,7 +201,10 @@ def test_create_course_as_program_manager_forbidden(
     # Add pm_user as program manager
     pm_user = get_user(session, "pm_user")
     assign_namespace_role_for_user(
-        session, username="pm_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
+        session,
+        username="pm_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Register in mock RMS
@@ -246,7 +255,10 @@ def test_create_course_with_valid_owners(client_with_db, session, mock_session_a
 
     # Add namespace_admin_user as namespace admin
     assign_namespace_role_for_user(
-        session, username="namespace_admin_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+        session,
+        username="namespace_admin_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Register in mock RMS
@@ -315,7 +327,10 @@ def test_create_course_with_invalid_owners_not_namespace_admin(
 
     # Add pm_user as program manager (not namespace admin)
     assign_namespace_role_for_user(
-        session, username="pm_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
+        session,
+        username="pm_user",
+        namespace_id=namespace_id,
+        role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Register in mock RMS
