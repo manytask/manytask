@@ -30,7 +30,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import check_instance_admin, get_courses, has_role
+from .utils.flask import check_if_course_admin, check_instance_admin, get_courses, has_role
 from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
 from .utils.sourcecraft import normalize_string
 
@@ -155,7 +155,9 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         task_url_template=course.task_url_template,
-        task_url_username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
+        task_url_username=normalize_string(student_username)
+        if app.app_config.rms == "sourcecraft"
+        else student_username,
         links=course.links,
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
