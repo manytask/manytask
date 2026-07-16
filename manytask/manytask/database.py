@@ -1093,6 +1093,28 @@ class DataBaseApi(StorageApi):
             logger.info("Fetched all users: count=%s", len(users))
             return [self._to_stored_user(user) for user in users]
 
+    def get_course_users_with_admin_status(self, course_name: str) -> list[tuple[StoredUser, bool]]:
+        """Get all users enrolled on a course together with their course admin status
+
+        :param course_name: course name
+        :return: list of tuples (StoredUser, is_course_admin)
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+            except NoResultFound:
+                logger.warning("Course '%s' not found when fetching course users", course_name)
+                return []
+
+            users_on_courses = (
+                session.query(models.UserOnCourse)
+                .filter(models.UserOnCourse.course_id == course.id)
+                .options(joinedload(models.UserOnCourse.user))
+                .all()
+            )
+            logger.info("Fetched users for course '%s': count=%s", course_name, len(users_on_courses))
+            return [(self._to_stored_user(uoc.user), uoc.is_course_admin) for uoc in users_on_courses]
+
     def set_instance_admin_status(self, username: str, is_admin: bool) -> None:
         """Change user admin status
 
@@ -1115,6 +1137,41 @@ class DataBaseApi(StorageApi):
 
             except NoResultFound:
                 logger.error("Failed to set admin status: user '%s' not found in database", username)
+
+    def set_course_admin_status(self, course_name: str, username: str, is_admin: bool) -> None:
+        """Change user course admin status
+
+        :param course_name: course name
+        :param username: manytask username
+        :param is_admin: new course admin status
+        """
+        logger.info("Setting course admin status to %s for user '%s' in course '%s'", is_admin, username, course_name)
+
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user = self._get(session, models.User, username=username)
+
+                self._update(
+                    session,
+                    models.UserOnCourse,
+                    defaults={"is_course_admin": is_admin},
+                    user_id=user.id,
+                    course_id=course.id,
+                )
+                logger.info(
+                    "Successfully updated course admin status for user '%s' in course '%s' to %s",
+                    username,
+                    course_name,
+                    is_admin,
+                )
+
+            except NoResultFound:
+                logger.error(
+                    "Failed to set course admin status: user '%s' or course '%s' not found in database",
+                    username,
+                    course_name,
+                )
 
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
         """Update user profile information

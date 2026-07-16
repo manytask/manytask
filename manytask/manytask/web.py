@@ -30,7 +30,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import check_instance_admin, get_courses, has_role
+from .utils.flask import check_if_course_admin, check_instance_admin, get_courses, has_role
 from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
 from .utils.sourcecraft import normalize_string
 
@@ -155,7 +155,9 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         task_url_template=course.task_url_template,
-        task_url_username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
+        task_url_username=normalize_string(student_username)
+        if app.app_config.rms == "sourcecraft"
+        else student_username,
         links=course.links,
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
@@ -616,6 +618,36 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     )
 
 
+def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course_admin: bool) -> None:
+    """Grant or revoke course admin status based on the submitted form action.
+
+    Only instance admins or course admins of this course may perform this action.
+    """
+    if app.debug:
+        current_user = "guest"
+    else:
+        current_user = session["manytask"]["username"]
+
+    if not check_if_course_admin(app, course_name):
+        safe_course_name = sanitize_log_data(course_name)
+        logger.warning(
+            "User %s attempted to change course admin status in course %s without permission",
+            current_user,
+            safe_course_name,
+        )
+        abort(HTTPStatus.FORBIDDEN)
+
+    target_username = request.form.get("username", "")
+    app.storage_api.set_course_admin_status(course_name, target_username, grant_course_admin)
+    app.logger.warning(
+        "User %s %s course admin status for %s in course %s",
+        current_user,
+        "granted" if grant_course_admin else "revoked",
+        target_username,
+        course_name,
+    )
+
+
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
 @requires_instance_or_namespace_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
@@ -661,6 +693,12 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
             return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
+
+        action = request.form.get("action", "")
+        if action in ("grant_course_admin", "revoke_course_admin"):
+            _handle_course_admin_action(app, course_name, action == "grant_course_admin")
+            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
+
         updated_settings = CourseConfig(
             course_name=course_name,
             namespace_id=course.namespace_id,
@@ -683,7 +721,8 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 
         return render_template("edit_course.html", course=updated_settings, error_message="Error while updating course")
 
-    return render_template("edit_course.html", course=course)
+    course_users = app.storage_api.get_course_users_with_admin_status(course_name)
+    return render_template("edit_course.html", course=course, course_users=course_users)
 
 
 @instance_admin_bp.route("/", methods=["GET"])
