@@ -30,7 +30,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import check_if_course_admin, check_instance_admin, get_courses, has_role
+from .utils.flask import check_if_course_admin, check_if_instance_admin, get_courses, has_role
 from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
 from .utils.sourcecraft import normalize_string
 
@@ -51,26 +51,21 @@ def healthcheck() -> ResponseReturnValue:
 @root_bp.route("/", methods=["GET"])
 @requires_auth
 def index() -> ResponseReturnValue:
+
+    from .utils.flask import check_if_user_has_namespaces_to_admin
+
     app: CustomFlask = current_app  # type: ignore
 
     courses = get_courses(app)
-    is_instance_admin = check_instance_admin(app)
 
-    # Check if user is a namespace admin
-    if app.debug:
-        is_namespace_admin_flag = True
-    else:
-        from .utils.flask import is_namespace_admin
-
-        is_namespace_admin_flag = is_namespace_admin(app, session["manytask"]["username"])
+    can_create_courses = check_if_user_has_namespaces_to_admin(app)
 
     return render_template(
         "courses.html",
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
         courses=courses,
-        is_instance_admin=is_instance_admin,
-        is_namespace_admin=is_namespace_admin_flag,
+        can_create_courses=can_create_courses,
     )
 
 
@@ -384,7 +379,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     course = app.storage_api.get_course(course_name)
-    is_instance_admin = check_instance_admin(app)
+    is_instance_admin = check_if_instance_admin(app)
 
     if course is None:
         return redirect(url_for("root.index"))
@@ -733,23 +728,23 @@ def instance_admin_index() -> ResponseReturnValue:
     Instance Admin -> /instance_admin/panel
     Namespace Admin -> /instance_admin/namespaces
     """
+    from .utils.flask import check_if_instance_admin, check_if_user_has_namespaces_to_admin
+
     app: CustomFlask = current_app  # type: ignore
 
     if app.debug:
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
     username = session["manytask"]["username"]
-    is_instance_admin = app.storage_api.check_if_instance_admin(username)
+    is_instance_admin = check_if_instance_admin(app)
 
     if is_instance_admin:
         logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
-    from .utils.flask import is_namespace_admin
+    is_namespace_admin = check_if_user_has_namespaces_to_admin(app)
 
-    is_namespace_admin_flag = is_namespace_admin(app, username)
-
-    if is_namespace_admin_flag:
+    if is_namespace_admin:
         logger.info("Namespace Admin %s accessing instance admin root, redirecting to namespaces", username)
         return redirect(url_for("instance_admin.namespaces_list"))
 
