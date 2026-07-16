@@ -6,15 +6,16 @@ import pytest
 from flask import json
 
 from manytask.mock_auth import MockAuthApi
-from manytask.models import Course, Namespace, User, UserOnNamespaceRole
+from manytask.models import Course, User, UserOnNamespaceRole
 from tests.helpers import (
     assert_forbidden_admin_only,
     assert_not_json_rejected,
     assert_slugs_rejected,
-    assign_namespace_role,
+    assign_namespace_role_for_user,
     build_mock_session,
     build_namespace_app,
     create_namespace,
+    get_user,
     make_user,
     post_json,
     post_json_as,
@@ -115,16 +116,9 @@ def test_create_course_as_namespace_admin_in_own_namespace(
 
     # First add namespace_admin_user as namespace admin
     namespace_id = test_namespace["id"]
-    admin_user = session.query(User).filter_by(username="admin").first()
-    ns_admin_user = session.query(User).filter_by(username="namespace_admin_user").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
-
-    assign_namespace_role(
-        session,
-        user_id=ns_admin_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
-        assigned_by_id=admin_user.id,
+    ns_admin_user = get_user(session, "namespace_admin_user")
+    assign_namespace_role_for_user(
+        session, username="namespace_admin_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Register user in mock RMS
@@ -165,16 +159,9 @@ def test_create_course_as_namespace_admin_in_other_namespace(
     ns2_data = json.loads(response2.data)
 
     # Add user as namespace admin to ns1 only
-    admin_user = session.query(User).filter_by(username="admin").first()
-    ns_admin_user = session.query(User).filter_by(username="namespace_admin_user").first()
-    ns1 = session.query(Namespace).filter_by(id=ns1_data["id"]).first()
-
-    assign_namespace_role(
-        session,
-        user_id=ns_admin_user.id,
-        namespace_id=ns1.id,
-        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
-        assigned_by_id=admin_user.id,
+    ns_admin_user = get_user(session, "namespace_admin_user")
+    assign_namespace_role_for_user(
+        session, username="namespace_admin_user", namespace_id=ns1_data["id"], role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Register in mock RMS
@@ -206,16 +193,9 @@ def test_create_course_as_program_manager_forbidden(
     namespace_id = test_namespace["id"]
 
     # Add pm_user as program manager
-    admin_user = session.query(User).filter_by(username="admin").first()
-    pm_user = session.query(User).filter_by(username="pm_user").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
-
-    assign_namespace_role(
-        session,
-        user_id=pm_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.PROGRAM_MANAGER,
-        assigned_by_id=admin_user.id,
+    pm_user = get_user(session, "pm_user")
+    assign_namespace_role_for_user(
+        session, username="pm_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Register in mock RMS
@@ -262,17 +242,11 @@ def test_create_course_with_valid_owners(client_with_db, session, mock_session_a
     """Test creating course with valid owners (namespace admins)."""
 
     namespace_id = test_namespace["id"]
-    admin_user = session.query(User).filter_by(username="admin").first()
-    ns_admin_user = session.query(User).filter_by(username="namespace_admin_user").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
+    ns_admin_user = get_user(session, "namespace_admin_user")
 
     # Add namespace_admin_user as namespace admin
-    assign_namespace_role(
-        session,
-        user_id=ns_admin_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
-        assigned_by_id=admin_user.id,
+    assign_namespace_role_for_user(
+        session, username="namespace_admin_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Register in mock RMS
@@ -337,17 +311,11 @@ def test_create_course_with_invalid_owners_not_namespace_admin(
     """Test creating course with owners that have program_manager role instead of namespace_admin."""
 
     namespace_id = test_namespace["id"]
-    admin_user = session.query(User).filter_by(username="admin").first()
-    pm_user = session.query(User).filter_by(username="pm_user").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
+    pm_user = get_user(session, "pm_user")
 
     # Add pm_user as program manager (not namespace admin)
-    assign_namespace_role(
-        session,
-        user_id=pm_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.PROGRAM_MANAGER,
-        assigned_by_id=admin_user.id,
+    assign_namespace_role_for_user(
+        session, username="pm_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Register in mock RMS

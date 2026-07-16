@@ -11,7 +11,7 @@ from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.mock_rms import MockRmsApi
-from manytask.models import User, UserOnNamespace
+from manytask.models import Namespace, User, UserOnNamespace
 from manytask.web import root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
@@ -164,6 +164,23 @@ def assign_namespace_role(session, *, user_id, namespace_id, role, assigned_by_i
     session.add(user_on_namespace)
     session.commit()
     return user_on_namespace
+
+
+def get_user(session, username):
+    return session.query(User).filter_by(username=username).first()
+
+
+def assign_namespace_role_for_user(session, *, username, namespace_id, role, admin_username="admin"):
+    user = get_user(session, username)
+    admin = get_user(session, admin_username)
+    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
+    return assign_namespace_role(
+        session,
+        user_id=user.id,
+        namespace_id=namespace.id,
+        role=role,
+        assigned_by_id=admin.id,
+    )
 
 
 def register_rms_user(app, user):

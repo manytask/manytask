@@ -21,9 +21,11 @@ from tests.helpers import (
     assert_not_json_rejected,
     assert_slugs_rejected,
     assign_namespace_role,
+    assign_namespace_role_for_user,
     build_mock_session,
     build_namespace_app,
     create_namespace,
+    get_user,
     make_user,
     post_json,
     set_session,
@@ -82,7 +84,7 @@ def mock_session_regular(session):
 def test_create_namespace_as_instance_admin(client_with_db, session, mock_session_admin):
     """Test that Instance Admin can successfully create a namespace."""
 
-    admin_user = session.query(User).filter_by(username="admin").first()
+    admin_user = get_user(session, "admin")
 
     set_session(client_with_db, mock_session_admin)
 
@@ -578,16 +580,9 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     namespace_id = namespace_data["id"]
 
     # Make regular_user a namespace admin
-    regular_user = session.query(User).filter_by(username="regular_user").first()
-    admin_user = session.query(User).filter_by(username="admin").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
-
-    assign_namespace_role(
-        session,
-        user_id=regular_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
-        assigned_by_id=admin_user.id,
+    get_user(session, "regular_user")
+    assign_namespace_role_for_user(
+        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Create another user to add
@@ -623,16 +618,9 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
     namespace_id = namespace_data["id"]
 
     # Make regular_user a program manager
-    regular_user = session.query(User).filter_by(username="regular_user").first()
-    admin_user = session.query(User).filter_by(username="admin").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
-
-    assign_namespace_role(
-        session,
-        user_id=regular_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.PROGRAM_MANAGER,
-        assigned_by_id=admin_user.id,
+    get_user(session, "regular_user")
+    assign_namespace_role_for_user(
+        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Create another user to add
@@ -831,7 +819,7 @@ def test_get_namespace_users_as_instance_admin(client_with_db, session, mock_ses
 
     # Check that both users are present
     user_ids = {user["user_id"] for user in data["users"]}
-    admin_user = session.query(User).filter_by(username="admin").first()
+    admin_user = get_user(session, "admin")
     assert admin_user.id in user_ids
     assert new_user.id in user_ids
 
@@ -851,16 +839,9 @@ def test_get_namespace_users_as_namespace_admin(client_with_db, session, mock_se
     namespace_id = namespace_data["id"]
 
     # Make regular_user a namespace admin
-    regular_user = session.query(User).filter_by(username="regular_user").first()
-    admin_user = session.query(User).filter_by(username="admin").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
-
-    assign_namespace_role(
-        session,
-        user_id=regular_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
-        assigned_by_id=admin_user.id,
+    regular_user = get_user(session, "regular_user")
+    assign_namespace_role_for_user(
+        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Switch to regular_user (who is now namespace admin)
@@ -877,7 +858,7 @@ def test_get_namespace_users_as_namespace_admin(client_with_db, session, mock_se
 
     # Check that both users are present
     user_ids = {user["user_id"] for user in data["users"]}
-    assert admin_user.id in user_ids
+    assert get_user(session, "admin").id in user_ids
     assert regular_user.id in user_ids
 
 
@@ -893,16 +874,9 @@ def test_get_namespace_users_as_program_manager_forbidden(
     namespace_id = namespace_data["id"]
 
     # Make regular_user a program manager
-    regular_user = session.query(User).filter_by(username="regular_user").first()
-    admin_user = session.query(User).filter_by(username="admin").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
-
-    assign_namespace_role(
-        session,
-        user_id=regular_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.PROGRAM_MANAGER,
-        assigned_by_id=admin_user.id,
+    get_user(session, "regular_user")
+    assign_namespace_role_for_user(
+        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Switch to regular_user (who is program manager)
@@ -968,7 +942,7 @@ def test_get_namespace_users_empty_list(client_with_db, session, mock_session_ad
     assert "users" in data
     assert len(data["users"]) == 1  # Only admin
 
-    admin_user = session.query(User).filter_by(username="admin").first()
+    admin_user = get_user(session, "admin")
     assert data["users"][0]["user_id"] == admin_user.id
     assert data["users"][0]["role"] == "namespace_admin"
 
@@ -1021,16 +995,9 @@ def test_remove_user_from_namespace_as_namespace_admin(
     namespace_id = namespace_data["id"]
 
     # Make regular_user a namespace admin
-    regular_user = session.query(User).filter_by(username="regular_user").first()
-    admin_user = session.query(User).filter_by(username="admin").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
-
-    assign_namespace_role(
-        session,
-        user_id=regular_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
-        assigned_by_id=admin_user.id,
+    get_user(session, "regular_user")
+    assign_namespace_role_for_user(
+        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN,
     )
 
     # Create another user to remove
@@ -1070,16 +1037,9 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
     namespace_id = namespace_data["id"]
 
     # Make regular_user a program manager
-    regular_user = session.query(User).filter_by(username="regular_user").first()
-    admin_user = session.query(User).filter_by(username="admin").first()
-    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
-
-    assign_namespace_role(
-        session,
-        user_id=regular_user.id,
-        namespace_id=namespace.id,
-        role=UserOnNamespaceRole.PROGRAM_MANAGER,
-        assigned_by_id=admin_user.id,
+    get_user(session, "regular_user")
+    assign_namespace_role_for_user(
+        session, username="regular_user", namespace_id=namespace_id, role=UserOnNamespaceRole.PROGRAM_MANAGER,
     )
 
     # Create another user to try to remove
