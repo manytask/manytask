@@ -288,13 +288,13 @@ class MockStorageApiBase:
     def get_grades(*_args, **_kwargs):
         return MockFinalGradeConfig()
 
-    def get_stored_user_by_username(self, username):  # noqa: ARG002
+    def get_stored_user_by_username(self, username):
         return self.stored_user
 
-    def get_stored_user_by_rms_id(self, rms_id):  # noqa: ARG002
+    def get_stored_user_by_rms_id(self, rms_id):
         return self.stored_user
 
-    def get_stored_user_by_auth_id(self, auth_id):  # noqa: ARG002
+    def get_stored_user_by_auth_id(self, auth_id):
         return self.stored_user
 
 
