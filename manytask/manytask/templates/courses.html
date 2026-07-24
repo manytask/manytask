@@ -1,10 +1,20 @@
 {% extends "base.html" %}
 
 {% block additional_styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/user-menu.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/courses.css') }}">
 {% endblock %}
 
+{% block signout %}{% endblock %}
+
 {% block body %}
+    {% if username is defined %}
+        <div class="position-fixed top-0 end-0 p-3" style="z-index: 12">
+            {% include "_user_menu.html" %}
+        </div>
+        {% include "_user_menu_modal.html" %}
+    {% endif %}
+
     <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
         <h1 class="mt-4 mb-3">List of courses</h1>
         <button id="toggleFinishedBtn" class="btn btn-outline-secondary mt-2 mb-2">

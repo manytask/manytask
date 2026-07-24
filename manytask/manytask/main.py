@@ -145,9 +145,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
             app.app_config.yandex_id_client_secret,
             app.app_config.yandex_id_oauth_base,
         )
-        app.auth_api = yandex_id.YandexIDApi(
-            yandex_id.YandexIDConfig(oauth_base=app.app_config.yandex_id_oauth_base)
-        )
+        app.auth_api = yandex_id.YandexIDApi(yandex_id.YandexIDConfig(oauth_base=app.app_config.yandex_id_oauth_base))
         app.rms_api = sourcecraft.SourceCraftApi(
             sourcecraft.SourceCraftConfig(
                 base_url=app.app_config.sourcecraft_url,
@@ -358,9 +356,7 @@ def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id:
     return oauth
 
 
-def _create_yandex_id_oauth(
-    oauth: OAuth, client_id: str, client_secret: str, oauth_base: str
-) -> OAuth:
+def _create_yandex_id_oauth(oauth: OAuth, client_id: str, client_secret: str, oauth_base: str) -> OAuth:
     oauth.register(
         name="auth_provider",
         client_id=client_id,

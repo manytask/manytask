@@ -63,6 +63,8 @@ def index() -> ResponseReturnValue:
     courses = get_courses(app)
 
     can_create_courses = check_if_user_has_namespaces_to_admin(app)
+    is_instance_admin = check_if_instance_admin(app)
+    username = "guest" if app.debug else session["manytask"]["username"]
 
     return render_template(
         "courses.html",
@@ -70,6 +72,9 @@ def index() -> ResponseReturnValue:
         manytask_version=app.manytask_version,
         courses=courses,
         can_create_courses=can_create_courses,
+        is_instance_admin=is_instance_admin,
+        username=username,
+        gitlab_url=app.rms_api.base_url,
     )
 
 

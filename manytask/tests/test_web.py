@@ -17,6 +17,7 @@ from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
+    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_EMAIL,
     TEST_FIRST_NAME,
@@ -27,6 +28,7 @@ from tests.constants import (
     TEST_LAST_NAME_1,
     TEST_PASSWORD,
     TEST_PUBLIC_REPO,
+    TEST_RMS_ID,
     TEST_SECRET,
     TEST_SECRET_KEY,
     TEST_STUDENTS_GROUP,
@@ -255,6 +257,42 @@ def test_logout(app):
             assert response.headers["Location"] == "/"
             with client.session_transaction() as sess:
                 assert "auth" not in sess
+
+
+def test_index_shows_profile_menu(app, mock_gitlab_oauth):
+    """
+    The course list page should show the user menu
+    """
+    CSRFProtect(app)
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess["auth"] = {
+                    "version": TEST_GITLAB_SESSION_VERSION,
+                    "username": TEST_USERNAME,
+                    "user_auth_id": TEST_USER_ID,
+                    "access_token": TEST_TOKEN,
+                    "refresh_token": TEST_TOKEN,
+                }
+                sess["rms"] = {
+                    "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+                    "rms_id": TEST_RMS_ID,
+                    "username": TEST_USERNAME,
+                }
+                sess["manytask"] = {
+                    "version": 1.5,
+                    "user_id": TEST_USER_ID,
+                    "username": TEST_USERNAME,
+                }
+            app.oauth = mock_gitlab_oauth
+            response = client.get("/")
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            assert "nav-user-menu" in body
+            assert "Account Settings" in body
+            assert f"{GITLAB_BASE_URL}/-/user_settings/profile" in body
+            assert "changeUserInfoModal" in body
+            assert TEST_USERNAME in body
 
 
 def test_not_ready(app):
