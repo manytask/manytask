@@ -14,12 +14,10 @@ from flask import Flask, session
 from flask_wtf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from manytask.course import ManytaskDeadlinesType
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
-from .course import CourseStatus
 
 MAX_AGE_IN_SECONDS = 86400
 
@@ -234,10 +232,6 @@ def _create_debug_course(app: CustomFlask) -> None:
         registration_secret="registration_secret",
         token="token",
         show_allscores=True,
-        status=CourseStatus.CREATED,
-        task_url_template="",
-        links={},
-        deadlines_type=ManytaskDeadlinesType.HARD,
     )
     app.storage_api.create_course(course_config)
 

@@ -1918,10 +1918,10 @@ class DataBaseApi(StorageApi):
                 namespace = self._create(
                     session,
                     models.Namespace,
-                    name=name,
                     slug=slug,
-                    description=description,
+                    name=name,
                     gitlab_group_id=gitlab_group_id,
+                    description=description,
                     created_by_id=creator.id,
                 )
 

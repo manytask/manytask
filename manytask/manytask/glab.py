@@ -2,20 +2,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from http import HTTPStatus
 from typing import Any, Optional
 
 import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
-from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import session
 from gitlab.exceptions import GitlabAuthenticationError, GitlabCreateError, GitlabGetError
-from requests.exceptions import HTTPError
 
 from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsApiException, RmsUser
+from .utils.generic import check_oauth_authenticated
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +28,28 @@ def _validate_and_convert_user_id(user_id: str) -> int:
         return int(user_id)
     except ValueError:
         raise ValueError(f"GitLab user ID must be convertible to integer, got: {user_id}")
+
+
+def _make_public_repo_params(project_name: str, namespace_id: int) -> dict[str, Any]:
+    return {
+        "name": project_name,
+        "path": project_name,
+        "namespace_id": namespace_id,
+        "visibility": "public",
+        "shared_runners_enabled": True,
+        "auto_devops_enabled": False,
+        "initialize_with_readme": True,
+    }
+
+
+def _make_students_group_params(short_name: str) -> dict[str, Any]:
+    return {
+        "name": short_name,
+        "path": short_name,
+        "visibility": "private",
+        "lfs_enabled": True,
+        "shared_runners_enabled": True,
+    }
 
 
 @dataclass
@@ -141,17 +160,7 @@ class GitLabApi(RmsApi, AuthApi):
 
         project_name = course_public_repo.split("/")[-1]
 
-        self._gitlab.projects.create(
-            {
-                "name": project_name,
-                "path": project_name,
-                "namespace_id": group.id,
-                "visibility": "public",
-                "shared_runners_enabled": True,
-                "auto_devops_enabled": False,
-                "initialize_with_readme": True,
-            }
-        )
+        self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)
 
     def create_students_group(
@@ -171,13 +180,7 @@ class GitLabApi(RmsApi, AuthApi):
 
         short_name = course_students_group.split("/")[-1]
 
-        group_data = {
-            "name": short_name,
-            "path": short_name,
-            "visibility": "private",
-            "lfs_enabled": True,
-            "shared_runners_enabled": True,
-        }
+        group_data = _make_students_group_params(short_name)
 
         if parent_group_id:
             group_data["parent_id"] = parent_group_id
@@ -614,37 +617,15 @@ class GitLabApi(RmsApi, AuthApi):
         oauth_access_token: str,
         oauth_refresh_token: str,
     ) -> bool:
-        response = self._make_auth_request(oauth_access_token)
-
-        try:
-            response.raise_for_status()
-            return True
-        except HTTPError as e:
-            if e.response.status_code == HTTPStatus.UNAUTHORIZED:
-                try:
-                    logger.info("Access token expired. Trying to refresh token.")
-
-                    new_tokens = oauth.auth_provider.fetch_access_token(
-                        grant_type="refresh_token",
-                        refresh_token=oauth_refresh_token,
-                    )
-
-                    new_access = new_tokens.get("access_token")
-                    new_refresh = new_tokens.get("refresh_token", oauth_refresh_token)
-
-                    response = self._make_auth_request(new_access)
-                    response.raise_for_status()
-
-                    session["auth"].update({"access_token": new_access, "refresh_token": new_refresh})
-                    logger.info("Token refreshed successfully.")
-
-                    return True
-                except (HTTPError, OAuthError):
-                    logger.error("Failed to refresh token", exc_info=True)
-                    return False
-
-            logger.info("User is not logged to GitLab: %s", e, exc_info=True)
-            return False
+        return check_oauth_authenticated(
+            self._make_auth_request,
+            lambda: oauth.auth_provider.fetch_access_token(
+                grant_type="refresh_token",
+                refresh_token=oauth_refresh_token,
+            ),
+            oauth_access_token,
+            oauth_refresh_token,
+        )
 
     def get_authenticated_user(self, oauth_access_token: str) -> AuthenticatedUser:
         logger.debug("Fetching authenticated user via token")

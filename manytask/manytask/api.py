@@ -44,7 +44,7 @@ from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
-from .utils.generic import sanitize_and_validate_comment, sanitize_log_data
+from .utils.generic import check_course_creation_namespace_permission, sanitize_and_validate_comment, sanitize_log_data
 
 
 logger = logging.getLogger(__name__)
@@ -1377,35 +1377,12 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     try:
         is_instance_admin = storage_api.check_if_instance_admin(username)
 
-        namespace = None
-        role = None
-        if namespace_id == 0:
-            if not is_instance_admin:
-                logger.warning("User %s attempted to create course without namespace", username)
-                return jsonify(
-                    ErrorResponse(error="Only Instance Admin can create courses without namespace").model_dump()
-                ), HTTPStatus.FORBIDDEN
-        else:
-            try:
-                namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
-            except (PermissionError, NoResultFound):
-                logger.warning(
-                    "User %s attempted to create course in inaccessible namespace id=%s", username, namespace_id
-                )
-                return jsonify(
-                    ErrorResponse(error="Namespace not found or access denied").model_dump()
-                ), HTTPStatus.NOT_FOUND
-
-            if not is_instance_admin and role != "namespace_admin":
-                logger.warning(
-                    "User %s with role %s attempted to create course in namespace id=%s",
-                    username,
-                    role,
-                    namespace_id,
-                )
-                return jsonify(
-                    ErrorResponse(error="Only Instance Admin or Namespace Admin can create courses").model_dump()
-                ), HTTPStatus.FORBIDDEN
+        namespace, role, error, error_status = check_course_creation_namespace_permission(
+            storage_api, namespace_id, username, is_instance_admin
+        )
+        if error is not None:
+            assert error_status is not None
+            return jsonify(ErrorResponse(error=error).model_dump()), error_status
 
         if namespace_id == 0 and owner_rms_ids:
             return jsonify(
@@ -1492,7 +1469,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             ), HTTPStatus.INTERNAL_SERVER_ERROR
 
         try:
-            from .course import CourseConfig, CourseStatus, ManytaskDeadlinesType
+            from .course import CourseConfig
             from .utils.generic import generate_token_hex
 
             course_config = CourseConfig(
@@ -1505,10 +1482,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                 registration_secret=generate_token_hex(16),
                 token=generate_token_hex(24),
                 show_allscores=True,
-                status=CourseStatus.CREATED,
-                task_url_template="",
-                links={},
-                deadlines_type=ManytaskDeadlinesType.HARD,
             )
 
             success = storage_api.create_course(course_config)
