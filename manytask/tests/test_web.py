@@ -17,6 +17,7 @@ from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
+    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_EMAIL,
     TEST_FIRST_NAME,
@@ -27,6 +28,7 @@ from tests.constants import (
     TEST_LAST_NAME_1,
     TEST_PASSWORD,
     TEST_PUBLIC_REPO,
+    TEST_RMS_ID,
     TEST_SECRET,
     TEST_SECRET_KEY,
     TEST_STUDENTS_GROUP,
