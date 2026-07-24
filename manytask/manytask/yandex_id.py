@@ -22,6 +22,7 @@ class YandexIDApiException(Exception):
 @dataclass
 class YandexIDConfig:
     dry_run: bool = False
+    oauth_base: str = "https://oauth.yandex.com"
 
 
 class YandexIDApi(AuthApi):
@@ -30,7 +31,7 @@ class YandexIDApi(AuthApi):
 
         # Yandex OAuth API endpoints
         self.user_info_url = "https://login.yandex.ru/info"
-        self.token_info_url = "https://oauth.yandex.com/token"
+        self.token_info_url = f"{config.oauth_base}/token"
 
     def _make_auth_request(self, token: str) -> requests.Response:
         headers = {"Authorization": f"OAuth {token}"}
