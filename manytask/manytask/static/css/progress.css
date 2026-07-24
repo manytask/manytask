@@ -1,0 +1,148 @@
+.progress-list {
+    width: 100%;
+    max-width: 720px;
+    margin-top: 1rem;
+}
+
+.progress-item {
+    padding: 14px 20px 16px;
+}
+
+.progress-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.progress-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.progress-username {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.progress-course {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+.progress-value {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.progress-percent {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.progress-score {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+.progress-error {
+    font-size: 0.85rem;
+    color: var(--bs-danger-text-emphasis);
+}
+
+/* Track is gray, fill is colored per bucket */
+.progress-bar-track {
+    width: 100%;
+    height: 18px;
+    background-color: var(--bs-secondary-bg-subtle);
+    border: 1px solid var(--bs-secondary-border-subtle);
+    border-radius: 9px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    border-radius: 9px 0 0 9px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* Color buckets: gray -> red -> orange -> yellow -> green shades. */
+.progress-bar-fill.progress-bucket-0 {
+    background-color: var(--bs-secondary-bg-subtle);
+}
+
+.progress-bar-fill.progress-bucket-10 {
+    background-color: #f5b7b1;
+}
+
+.progress-bar-fill.progress-bucket-20 {
+    background-color: #f1948a;
+}
+
+.progress-bar-fill.progress-bucket-30 {
+    background-color: #ec7063;
+}
+
+.progress-bar-fill.progress-bucket-40 {
+    background-color: #f5b041;
+}
+
+.progress-bar-fill.progress-bucket-50 {
+    background-color: #f4d03f;
+}
+
+.progress-bar-fill.progress-bucket-60 {
+    background-color: #d4e157;
+}
+
+.progress-bar-fill.progress-bucket-70 {
+    background-color: #aed581;
+}
+
+.progress-bar-fill.progress-bucket-80 {
+    background-color: #7cb342;
+}
+
+.progress-bar-fill.progress-bucket-90 {
+    background-color: #43a047;
+}
+
+.progress-bar-fill.progress-bucket-100 {
+    background-color: #2e7d32;
+}
+
+/* Tint the surrounding card subtly to match the bucket as well */
+.progress-item.progress-bucket-0 {
+    background-color: transparent;
+}
+
+.progress-item.progress-bucket-10,
+.progress-item.progress-bucket-20,
+.progress-item.progress-bucket-30 {
+    background-color: var(--bs-danger-bg-subtle);
+    border-color: var(--bs-danger-border-subtle);
+}
+
+.progress-item.progress-bucket-40,
+.progress-item.progress-bucket-50 {
+    background-color: var(--bs-warning-bg-subtle);
+    border-color: var(--bs-warning-border-subtle);
+}
+
+.progress-item.progress-bucket-60,
+.progress-item.progress-bucket-70 {
+    background-color: var(--bs-info-bg-subtle);
+    border-color: var(--bs-info-border-subtle);
+}
+
+.progress-item.progress-bucket-80,
+.progress-item.progress-bucket-90,
+.progress-item.progress-bucket-100 {
+    background-color: var(--bs-success-bg-subtle);
+    border-color: var(--bs-success-border-subtle);
+}
