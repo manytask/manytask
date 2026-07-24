@@ -428,6 +428,41 @@ def named_scores(scores: dict, student: TestStudent = STUDENT) -> tuple:
     return (scores, (student.first_name, student.last_name), None, None, None)
 
 
+def assert_counts(  # noqa: PLR0913
+    session: Session,
+    *,
+    users: int | None = None,
+    user_on_course: int | None = None,
+    grades: int | None = None,
+    courses: int | None = None,
+) -> None:
+    if users is not None:
+        assert session.query(User).count() == users
+    if user_on_course is not None:
+        assert session.query(UserOnCourse).count() == user_on_course
+    if grades is not None:
+        assert session.query(Grade).count() == grades
+    if courses is not None:
+        assert session.query(Course).count() == courses
+
+
+def assert_user_results(  # noqa: PLR0913
+    db_api: DataBaseApi,
+    course_name: str,
+    username: str,
+    expected_keys: set[str],
+    nonzero_stats: dict[str, float],
+    expected_all_scores: dict,
+    expected_bonus: float,
+    expected_scores: dict,
+) -> None:
+    stats, all_scores, bonus_score, scores = get_user_results(db_api, course_name, username)
+    assert_stats(stats, expected_keys, nonzero_stats)
+    assert all_scores == expected_all_scores
+    assert bonus_score == expected_bonus
+    assert scores == expected_scores
+
+
 def assert_course(  # noqa: PLR0913
     course: Course,
     *,
@@ -698,13 +733,11 @@ def test_resync_with_changed_task_name(
 
 
 def test_store_score(db_api_with_initialized_first_course, session):
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=1, user_on_course=0)
 
     create_user(db_api_with_initialized_first_course)
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -713,8 +746,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
         == 0
     )
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1)
 
     user = session.query(User).all()[-1]
     assert user.username == TEST_USERNAME
@@ -730,34 +762,31 @@ def test_store_score(db_api_with_initialized_first_course, session):
         == 1
     )
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
-    assert session.query(Grade).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1, grades=1)
 
     grade = session.query(Grade).one()
     assert grade.user_on_course_id == user_on_course.id
     assert grade.task.name == "task_0_0"
     assert grade.score == 1
 
-    stats, all_scores, bonus_score, scores = get_user_results(
-        db_api_with_initialized_first_course, FIRST_COURSE_NAME, TEST_USERNAME
+    assert_user_results(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        TEST_USERNAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS,
+        {"task_0_0": 1.0},
+        {TEST_USERNAME: named_scores({"task_0_0": (1, False)})},
+        0,
+        {"task_0_0": 1},
     )
-
-    assert_stats(stats, FIRST_COURSE_EXPECTED_STATS_KEYS, {"task_0_0": 1.0})
-
-    assert all_scores == {TEST_USERNAME: named_scores({"task_0_0": (1, False)})}
-    assert bonus_score == 0
-    assert scores == {"task_0_0": 1}
 
 
 def test_store_bonus_score(db_api_with_initialized_first_course, session):
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=1, user_on_course=0)
 
     create_user(db_api_with_initialized_first_course)
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -790,23 +819,22 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
         == expected_score
     )
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
-    assert session.query(Grade).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1, grades=1)
 
     grade = session.query(Grade).join(Task).filter(Task.name == "task_1_3").one()
     assert grade.task.name == "task_1_3"
     assert grade.score == expected_score
 
-    stats, all_scores, bonus_score, scores = get_user_results(
-        db_api_with_initialized_first_course, FIRST_COURSE_NAME, TEST_USERNAME
+    assert_user_results(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        TEST_USERNAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS,
+        {"task_1_3": 1.0},
+        {TEST_USERNAME: named_scores({"task_1_3": (expected_score, False)})},
+        expected_score,
+        {"task_1_3": expected_score},
     )
-
-    assert_stats(stats, FIRST_COURSE_EXPECTED_STATS_KEYS, {"task_1_3": 1.0})
-
-    assert all_scores == {TEST_USERNAME: named_scores({"task_1_3": (expected_score, False)})}
-    assert bonus_score == expected_score
-    assert scores == {"task_1_3": expected_score}
 
 
 def test_store_score_with_changed_task_name(
@@ -829,23 +857,24 @@ def test_store_score_with_changed_task_name(
         first_course_deadlines_config_with_changed_task_name,
     )
 
-    stats, all_scores, bonus_score, scores = get_user_results(db_api, FIRST_COURSE_NAME, TEST_USERNAME)
-
-    assert_stats(stats, FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}, {})
-
-    assert all_scores == {TEST_USERNAME: named_scores({"task_0_0": (10, False)})}
-    assert bonus_score == 0
-    assert scores == {}
+    assert_user_results(
+        db_api,
+        FIRST_COURSE_NAME,
+        TEST_USERNAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"},
+        {},
+        {TEST_USERNAME: named_scores({"task_0_0": (10, False)})},
+        0,
+        {},
+    )
 
 
 def test_sync_user_on_course(db_api_with_initialized_first_course, session):
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=1, user_on_course=0)
 
     create_user(db_api_with_initialized_first_course)
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
     is_user_on_course = db_api_with_initialized_first_course.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
     assert not is_user_on_course
@@ -858,8 +887,7 @@ def test_sync_user_on_course(db_api_with_initialized_first_course, session):
     is_user_on_course = db_api_with_initialized_first_course.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
     assert is_user_on_course
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1)
 
     # admin in gitlab
     db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, True)
@@ -873,8 +901,7 @@ def test_sync_user_on_course(db_api_with_initialized_first_course, session):
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
     assert is_course_admin
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1)
 
 
 def _create_namespace_with_course(
@@ -991,9 +1018,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
         == expected_score_2
     )
 
-    assert session.query(User).count() == expected_users
-    assert session.query(UserOnCourse).count() == expected_user_on_course
-    assert session.query(Grade).count() == expected_grades
+    assert_counts(session, users=expected_users, user_on_course=expected_user_on_course, grades=expected_grades)
 
     stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
     all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
@@ -1019,36 +1044,31 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
 
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(30))
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, TEST_USERNAME, "task_1_3", update_func(40))
-    expected_users = 2
-    expected_user_on_course = 2
-    expected_grades = 2
 
-    assert session.query(User).count() == expected_users
-    assert session.query(UserOnCourse).count() == expected_user_on_course
-    assert session.query(Grade).count() == expected_grades
+    assert_counts(session, users=2, user_on_course=2, grades=2)
 
-    stats1 = db_api_with_two_initialized_courses.get_stats(FIRST_COURSE_NAME)
-    all_scores1 = db_api_with_two_initialized_courses.get_all_scores_with_names(FIRST_COURSE_NAME)
-    bonus_score_user1 = db_api_with_two_initialized_courses.get_bonus_score(FIRST_COURSE_NAME, TEST_USERNAME)
-    scores_user1 = db_api_with_two_initialized_courses.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
-
-    assert_stats(stats1, FIRST_COURSE_EXPECTED_STATS_KEYS, {"task_0_0": 1.0})
-
-    assert all_scores1 == {TEST_USERNAME: named_scores({"task_0_0": (30, False)})}
-    assert bonus_score_user1 == 0
-    assert scores_user1 == {"task_0_0": 30}
-
-    stats2 = db_api_with_two_initialized_courses.get_stats(SECOND_COURSE_NAME)
-    all_scores2 = db_api_with_two_initialized_courses.get_all_scores_with_names(SECOND_COURSE_NAME)
-    bonus_score_user2 = db_api_with_two_initialized_courses.get_bonus_score(SECOND_COURSE_NAME, TEST_USERNAME)
-    scores_user2 = db_api_with_two_initialized_courses.get_scores(SECOND_COURSE_NAME, TEST_USERNAME)
-
-    assert_stats(stats2, SECOND_COURSE_EXPECTED_STATS_KEYS, {"task_1_3": 1.0})
+    assert_user_results(
+        db_api_with_two_initialized_courses,
+        FIRST_COURSE_NAME,
+        TEST_USERNAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS,
+        {"task_0_0": 1.0},
+        {TEST_USERNAME: named_scores({"task_0_0": (30, False)})},
+        0,
+        {"task_0_0": 30},
+    )
 
     user2_score = 40
-    assert all_scores2 == {TEST_USERNAME: named_scores({"task_1_3": (user2_score, False)})}
-    assert bonus_score_user2 == user2_score
-    assert scores_user2 == {"task_1_3": user2_score}
+    assert_user_results(
+        db_api_with_two_initialized_courses,
+        SECOND_COURSE_NAME,
+        TEST_USERNAME,
+        SECOND_COURSE_EXPECTED_STATS_KEYS,
+        {"task_1_3": 1.0},
+        {TEST_USERNAME: named_scores({"task_1_3": (user2_score, False)})},
+        user2_score,
+        {"task_1_3": user2_score},
+    )
 
 
 def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
@@ -1073,9 +1093,7 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, TEST_USERNAME_1, "task_1_0", update_func(99))
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, TEST_USERNAME_2, "task_1_1", update_func(7))
 
-    assert session.query(User).count() == expected_users
-    assert session.query(UserOnCourse).count() == expected_user_on_course
-    assert session.query(Grade).count() == expected_grades
+    assert_counts(session, users=expected_users, user_on_course=expected_user_on_course, grades=expected_grades)
 
     stats1 = db_api_with_two_initialized_courses.get_stats(FIRST_COURSE_NAME)
     all_scores1 = db_api_with_two_initialized_courses.get_all_scores_with_names(FIRST_COURSE_NAME)
@@ -1151,9 +1169,7 @@ def test_bad_requests(db_api_with_two_initialized_courses, session):
     assert bonus_score == 0
     assert scores == {}
 
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 0
-    assert session.query(Grade).count() == 0
+    assert_counts(session, users=1, user_on_course=0, grades=0)
 
 
 def test_auto_tables_creation(engine, alembic_cfg, postgres_container, first_course_config):
@@ -1212,9 +1228,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     )
     assert score == 1
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
-    assert session.query(Grade).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1, grades=1)
 
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
@@ -1303,6 +1317,53 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
 
     updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
     assert updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_grant(db_api_with_two_initialized_courses, session):
+    user, _ = add_user_on_course(session, is_course_admin=False)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_revoke(db_api_with_two_initialized_courses, session):
+    user, _ = add_user_on_course(session, is_course_admin=True)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert not updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_can_revoke_last_admin(db_api_with_two_initialized_courses, session):
+    # a course may have zero course admins, unlike an instance
+    user, _ = add_user_on_course(session, is_course_admin=True)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert not updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_unknown_user(db_api_with_two_initialized_courses, session):
+    # should not raise, just log an error
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, "nonexistent_user", True)
+
+
+def test_get_course_users_with_admin_status(db_api_with_two_initialized_courses, session):
+    add_user_on_course(session, is_course_admin=True)
+    add_user_on_course(session, student=STUDENT_1, user_id=3, is_course_admin=False)
+
+    result = db_api_with_two_initialized_courses.get_course_users_with_admin_status(FIRST_COURSE_NAME)
+
+    result_map = {stored_user.username: is_admin for stored_user, is_admin in result}
+    assert result_map == {TEST_USERNAME: True, TEST_USERNAME_1: False}
+
+
+def test_get_course_users_with_admin_status_unknown_course(db_api_with_two_initialized_courses):
+    assert db_api_with_two_initialized_courses.get_course_users_with_admin_status("nonexistent_course") == []
 
 
 def test_check_user_on_course(db_api_with_two_initialized_courses, session):

@@ -65,11 +65,11 @@
             </div>
         </form>
 
-        {% if is_instance_admin or is_namespace_admin %}
+        {% if can_create_courses %}
             <a class="btn btn-success mt-3" href="{{ url_for('instance_admin.create_course') }}">Create course</a>
         {% endif %}
 
-        {% if is_instance_admin or is_namespace_admin %}
+        {% if can_create_courses %}
             <a class="btn btn-info mt-3" href="{{ url_for('instance_admin.namespaces_list') }}">
                 <i class="fas fa-folder me-1"></i>Namespaces
             </a>

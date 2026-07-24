@@ -1,17 +1,22 @@
+from dataclasses import dataclass
+from datetime import datetime
 from http import HTTPStatus
 from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
 
 from flask import Flask, json
 
 from manytask.abstract import RmsUser, StoredUser
 from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
-from manytask.database import DataBaseApi, DatabaseConfig
+from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.mock_rms import MockRmsApi
-from manytask.models import User, UserOnNamespace
+from manytask.models import Namespace, User, UserOnNamespace
 from manytask.web import root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
+    INVALID_TASK_NAME,
+    TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
     TEST_AUTH_ID,
     TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
@@ -21,6 +26,7 @@ from tests.constants import (
     TEST_MANYTASK_SESSION_VERSION,
     TEST_RMS_ID,
     TEST_SECRET_KEY,
+    TEST_TOKEN,
     TEST_USER_ID,
     TEST_USERNAME,
 )
@@ -51,8 +57,47 @@ def build_mock_session(username, *, user_auth_id, rms_id, user_id):
     }
 
 
+def build_test_session(*, include_rms=True, include_manytask=False, access_token=TEST_TOKEN, refresh_token=TEST_TOKEN):
+    session = {
+        "auth": {
+            "version": TEST_GITLAB_SESSION_VERSION,
+            "username": TEST_USERNAME,
+            "user_auth_id": TEST_USER_ID,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+        },
+    }
+    if include_rms:
+        session["rms"] = {
+            "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
+            "rms_id": TEST_RMS_ID,
+            "username": TEST_USERNAME,
+        }
+    if include_manytask:
+        session["manytask"] = {
+            "version": TEST_MANYTASK_SESSION_VERSION,
+            "user_id": TEST_USER_ID,
+            "username": TEST_USERNAME,
+        }
+    return session
+
+
 def post_json(client, url, payload):
     return client.post(url, json=payload, content_type="application/json")
+
+
+def set_session(client, session_data, *, clear=False):
+    """Set Flask session data for a test client."""
+    with client.session_transaction() as sess:
+        if clear:
+            sess.clear()
+        sess.update(session_data)
+
+
+def post_json_as(client, session_data, url, payload, *, clear=False):
+    """Set session data and POST JSON in one step."""
+    set_session(client, session_data, clear=clear)
+    return post_json(client, url, payload)
 
 
 def assert_error_response(response, status):
@@ -100,6 +145,15 @@ def make_user(username, first_name, last_name, rms_id, auth_id, *, is_instance_a
     )
 
 
+def add_test_user(session, app, *, username, first_name, last_name, rms_id, auth_id, register_rms=True):  # noqa: PLR0913
+    user = make_user(username, first_name, last_name, rms_id, auth_id)
+    session.add(user)
+    session.commit()
+    if register_rms:
+        register_rms_user(app, user)
+    return user
+
+
 def assign_namespace_role(session, *, user_id, namespace_id, role, assigned_by_id):
     user_on_namespace = UserOnNamespace(
         user_id=user_id,
@@ -110,6 +164,23 @@ def assign_namespace_role(session, *, user_id, namespace_id, role, assigned_by_i
     session.add(user_on_namespace)
     session.commit()
     return user_on_namespace
+
+
+def get_user(session, username):
+    return session.query(User).filter_by(username=username).first()
+
+
+def assign_namespace_role_for_user(session, *, username, namespace_id, role, admin_username="admin"):
+    user = get_user(session, username)
+    admin = get_user(session, admin_username)
+    namespace = session.query(Namespace).filter_by(id=namespace_id).first()
+    return assign_namespace_role(
+        session,
+        user_id=user.id,
+        namespace_id=namespace.id,
+        role=role,
+        assigned_by_id=admin.id,
+    )
 
 
 def register_rms_user(app, user):
@@ -178,6 +249,11 @@ class MockCourseBase:
         self.namespace_id = None
 
 
+class MockFinalGradeConfig:
+    def evaluate(self, *_args, **_kwargs):
+        return 5
+
+
 class MockStorageApiBase:
     def __init__(self):
         self.stored_user = make_test_stored_user()
@@ -199,3 +275,42 @@ class MockStorageApiBase:
     @staticmethod
     def get_namespace_by_id(_namespace_id, _username):
         raise PermissionError("No access to namespace")
+
+    @staticmethod
+    def get_now_with_timezone(_course_name):
+        return datetime.now(tz=ZoneInfo("UTC"))
+
+    @staticmethod
+    def check_user_on_course(*_args, **_kwargs):
+        return True
+
+    @staticmethod
+    def get_grades(*_args, **_kwargs):
+        return MockFinalGradeConfig()
+
+    def get_stored_user_by_username(self, username):
+        return self.stored_user
+
+    def get_stored_user_by_rms_id(self, rms_id):
+        return self.stored_user
+
+    def get_stored_user_by_auth_id(self, auth_id):
+        return self.stored_user
+
+
+def raise_for_invalid_task(task_name):
+    """Raise appropriate exceptions for invalid/disabled task names in mock find_task."""
+    if task_name == INVALID_TASK_NAME:
+        raise KeyError("Task not found")
+    if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
+        raise TaskDisabledError(f"Task {task_name} is disabled")
+
+
+def make_created_course_mock():
+    """Create a simple mock course object with CREATED status."""
+
+    @dataclass
+    class Course:
+        status = CourseStatus.CREATED
+
+    return Course()

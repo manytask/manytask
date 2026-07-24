@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Optional
@@ -64,11 +64,11 @@ class CourseConfig:
     token: str
     show_allscores: bool
 
-    status: CourseStatus
+    status: CourseStatus = CourseStatus.CREATED
 
-    task_url_template: str
-    links: dict[str, str]
-    deadlines_type: ManytaskDeadlinesType
+    task_url_template: str = ""
+    links: dict[str, str] = field(default_factory=dict)
+    deadlines_type: ManytaskDeadlinesType = ManytaskDeadlinesType.HARD
 
 
 class Course:

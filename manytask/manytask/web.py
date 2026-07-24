@@ -11,7 +11,6 @@ from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
 
 from manytask.abstract import RmsApiException, RmsUser, StoredUser
-from manytask.course import ManytaskDeadlinesType
 
 from .abstract import ClientProfile
 from .auth import (
@@ -30,8 +29,13 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import check_instance_admin, get_courses, has_role
-from .utils.generic import generate_token_hex, sanitize_log_data, validate_name
+from .utils.flask import check_if_course_admin, check_if_instance_admin, get_courses, has_role
+from .utils.generic import (
+    check_course_creation_namespace_permission,
+    generate_token_hex,
+    sanitize_log_data,
+    validate_name,
+)
 from .utils.sourcecraft import normalize_string
 
 SESSION_VERSION = 1.5
@@ -51,28 +55,24 @@ def healthcheck() -> ResponseReturnValue:
 @root_bp.route("/", methods=["GET"])
 @requires_auth
 def index() -> ResponseReturnValue:
+
+    from .utils.flask import check_if_user_has_namespaces_to_admin
+
     app: CustomFlask = current_app  # type: ignore
 
     courses = get_courses(app)
-    is_instance_admin = check_instance_admin(app)
 
+    can_create_courses = check_if_user_has_namespaces_to_admin(app)
+    is_instance_admin = check_if_instance_admin(app)
     username = "guest" if app.debug else session["manytask"]["username"]
-
-    # Check if user is a namespace admin
-    if app.debug:
-        is_namespace_admin_flag = True
-    else:
-        from .utils.flask import is_namespace_admin
-
-        is_namespace_admin_flag = is_namespace_admin(app, username)
 
     return render_template(
         "courses.html",
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
         courses=courses,
+        can_create_courses=can_create_courses,
         is_instance_admin=is_instance_admin,
-        is_namespace_admin=is_namespace_admin_flag,
         username=username,
         gitlab_url=app.rms_api.base_url,
     )
@@ -159,7 +159,9 @@ def course_page(course_name: str) -> ResponseReturnValue:
         student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
         task_url_template=course.task_url_template,
-        task_url_username=normalize_string(student_username) if app.app_config.rms == "sourcecraft" else student_username,
+        task_url_username=normalize_string(student_username)
+        if app.app_config.rms == "sourcecraft"
+        else student_username,
         links=course.links,
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
@@ -386,7 +388,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     course = app.storage_api.get_course(course_name)
-    is_instance_admin = check_instance_admin(app)
+    is_instance_admin = check_if_instance_admin(app)
 
     if course is None:
         return redirect(url_for("root.index"))
@@ -496,56 +498,17 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         username = session["manytask"]["username"]
         is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
-        namespace = None
-        role = None
-        if namespace_id == 0:
-            if not is_instance_admin:
-                logger.warning("User %s attempted to create course without namespace", username)
-                return render_template(
-                    app.create_course_template,
-                    generated_token=generate_token_hex(24),
-                    error_message="Only Instance Admin can create courses without namespace",
-                    rms=app.app_config.rms,
-                    labels=app.create_course_labels,
-                )
-        else:
-            try:
-                namespace, role = app.storage_api.get_namespace_by_id(namespace_id, username)
-            except PermissionError:
-                logger.warning(
-                    "User %s attempted to create course with namespace id=%s without access", username, namespace_id
-                )
-                return render_template(
-                    app.create_course_template,
-                    generated_token=generate_token_hex(24),
-                    error_message="Access denied to selected namespace",
-                    rms=app.app_config.rms,
-                    labels=app.create_course_labels,
-                )
-            except Exception as e:
-                logger.error("Error fetching namespace id=%s: %s", namespace_id, str(e))
-                return render_template(
-                    app.create_course_template,
-                    generated_token=generate_token_hex(24),
-                    error_message="Selected namespace not found",
-                    rms=app.app_config.rms,
-                    labels=app.create_course_labels,
-                )
-
-            if not is_instance_admin and role != "namespace_admin":
-                logger.warning(
-                    "User %s with role %s attempted to create course in namespace id=%s",
-                    username,
-                    role,
-                    namespace_id,
-                )
-                return render_template(
-                    app.create_course_template,
-                    generated_token=generate_token_hex(24),
-                    error_message="Only Instance Admin or Namespace Admin can create courses",
-                    rms=app.app_config.rms,
-                    labels=app.create_course_labels,
-                )
+        namespace, role, error, _ = check_course_creation_namespace_permission(
+            app.storage_api, namespace_id, username, is_instance_admin
+        )
+        if error is not None:
+            return render_template(
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message=error,
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
+            )
 
         course_name = request.form["unique_course_name"].strip()
         gitlab_course_group = request.form["course_group"].strip()
@@ -595,10 +558,6 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             registration_secret=request.form["registration_secret"],
             token=request.form["token"],
             show_allscores=request.form.get("show_allscores", "off") == "on",
-            status=CourseStatus.CREATED,
-            task_url_template="",
-            links={},
-            deadlines_type=ManytaskDeadlinesType.HARD,
         )
 
         if app.storage_api.create_course(settings):
@@ -617,6 +576,36 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         generated_token=generate_token_hex(24),
         rms=app.app_config.rms,
         labels=app.create_course_labels,
+    )
+
+
+def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course_admin: bool) -> None:
+    """Grant or revoke course admin status based on the submitted form action.
+
+    Only instance admins or course admins of this course may perform this action.
+    """
+    if app.debug:
+        current_user = "guest"
+    else:
+        current_user = session["manytask"]["username"]
+
+    if not check_if_course_admin(app, course_name):
+        safe_course_name = sanitize_log_data(course_name)
+        logger.warning(
+            "User %s attempted to change course admin status in course %s without permission",
+            current_user,
+            safe_course_name,
+        )
+        abort(HTTPStatus.FORBIDDEN)
+
+    target_username = request.form.get("username", "")
+    app.storage_api.set_course_admin_status(course_name, target_username, grant_course_admin)
+    app.logger.warning(
+        "User %s %s course admin status for %s in course %s",
+        current_user,
+        "granted" if grant_course_admin else "revoked",
+        target_username,
+        course_name,
     )
 
 
@@ -665,6 +654,12 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
             return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
+
+        action = request.form.get("action", "")
+        if action in ("grant_course_admin", "revoke_course_admin"):
+            _handle_course_admin_action(app, course_name, action == "grant_course_admin")
+            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
+
         updated_settings = CourseConfig(
             course_name=course_name,
             namespace_id=course.namespace_id,
@@ -687,7 +682,8 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 
         return render_template("edit_course.html", course=updated_settings, error_message="Error while updating course")
 
-    return render_template("edit_course.html", course=course)
+    course_users = app.storage_api.get_course_users_with_admin_status(course_name)
+    return render_template("edit_course.html", course=course, course_users=course_users)
 
 
 @instance_admin_bp.route("/", methods=["GET"])
@@ -698,23 +694,23 @@ def instance_admin_index() -> ResponseReturnValue:
     Instance Admin -> /instance_admin/panel
     Namespace Admin -> /instance_admin/namespaces
     """
+    from .utils.flask import check_if_instance_admin, check_if_user_has_namespaces_to_admin
+
     app: CustomFlask = current_app  # type: ignore
 
     if app.debug:
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
     username = session["manytask"]["username"]
-    is_instance_admin = app.storage_api.check_if_instance_admin(username)
+    is_instance_admin = check_if_instance_admin(app)
 
     if is_instance_admin:
         logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
-    from .utils.flask import is_namespace_admin
+    is_namespace_admin = check_if_user_has_namespaces_to_admin(app)
 
-    is_namespace_admin_flag = is_namespace_admin(app, username)
-
-    if is_namespace_admin_flag:
+    if is_namespace_admin:
         logger.info("Namespace Admin %s accessing instance admin root, redirecting to namespaces", username)
         return redirect(url_for("instance_admin.namespaces_list"))
 
