@@ -765,12 +765,14 @@ class Exporter:
             raise Exception(f"Git commit failed with code {r.returncode}: {r.stdout}")
 
         print_info("* git pushing...")
+        push_option_args: list[str] = []
+        for option in self.export_config.push_options:
+            push_option_args.extend(["-o", option])
         r = subprocess.run(
-            "git push -o ci.skip origin",
+            ["git", "push", *push_option_args, "origin"],
             encoding="utf-8",
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            shell=True,
             cwd=repo_dir,
         )
         print_info(r.stdout, color="grey")

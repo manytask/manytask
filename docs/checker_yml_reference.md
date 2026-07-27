@@ -108,6 +108,7 @@ export:
   default_branch: main
   commit_message: "chore(auto): export new tasks"
   templates: search
+  push_options: ["ci.skip"]
 ```
 
 | Field | Type | Required | Default | Description |
@@ -116,6 +117,7 @@ export:
 | `default_branch` | `str` | no  | `"main"` | Branch name to push to in the destination repository. |
 | `commit_message` | `str` | no  | `"chore(auto): export new tasks"` | Commit message used when pushing exported tasks. |
 | `templates` | `str` | no  | `"search"` | Template strategy for generating student-facing task files. One of `search`, `create`, `search_or_create`. |
+| `push_options` | `list[str]` | no | `["ci.skip"]` | Push options passed to `git push` as `-o <option>` flags on export. The default `"ci.skip"` tells GitLab to skip pipelines for the auto-export commit. Set to `[]` for git servers that do not support push options (e.g. SourceCraft), or override with any other list of options understood by the destination server. |
 
 ### `templates` strategies
 
