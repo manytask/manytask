@@ -680,10 +680,15 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             logger.info("Successfully updated course settings for: %s", sanitize_log_data(course_name))
             return redirect(url_for("course.course_page", course_name=course_name))
 
-        return render_template("edit_course.html", course=updated_settings, error_message="Error while updating course")
+        return render_template(
+            "edit_course.html",
+            course=updated_settings,
+            error_message="Error while updating course",
+            rms=app.app_config.rms,
+        )
 
     course_users = app.storage_api.get_course_users_with_admin_status(course_name)
-    return render_template("edit_course.html", course=course, course_users=course_users)
+    return render_template("edit_course.html", course=course, course_users=course_users, rms=app.app_config.rms)
 
 
 @instance_admin_bp.route("/", methods=["GET"])

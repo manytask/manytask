@@ -90,6 +90,7 @@
 
             <div class="col-md-6 mb-4">
                 <h4>GitLab Configuration</h4>
+                {% if rms == "gitlab" %}
                 <div class="mb-3">
                     <label for="gitlab_course_group" class="form-label">GitLab Course Group</label>
                     <input type="text" class="form-control" id="gitlab_course_group" name="gitlab_course_group" value="{{ course.gitlab_course_group }}" placeholder="test-course" required>
@@ -97,6 +98,11 @@
                         stored
                     </div>
                 </div>
+                {% else %}
+                {# gitlab_course_group is UNUSED for non-GitLab RMS backends (see sourcecraft.py: :param course_group: UNUSED). #}
+                {# Hidden input preserves the stored value so backend Pydantic validation stays happy (backward compatible). #}
+                <input type="hidden" name="gitlab_course_group" value="{{ course.gitlab_course_group or 'unused-non-gitlab' }}">
+                {% endif %}
                 <div class="mb-3">
                     <label for="gitlab_course_public_repo" class="form-label">GitLab Public Repo</label>
                     <input type="text" class="form-control" id="gitlab_course_public_repo" name="gitlab_course_public_repo" value="{{ course.gitlab_course_public_repo }}" placeholder="test-course/public-repo" required>
