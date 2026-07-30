@@ -29,7 +29,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import check_if_course_admin, check_if_instance_admin, get_courses, has_role
+from .utils.flask import check_if_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
     generate_token_hex,
@@ -589,14 +589,14 @@ def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course
     else:
         current_user = session["manytask"]["username"]
 
-    if not check_if_course_admin(app, course_name):
-        safe_course_name = sanitize_log_data(course_name)
-        logger.warning(
-            "User %s attempted to change course admin status in course %s without permission",
-            current_user,
-            safe_course_name,
-        )
-        abort(HTTPStatus.FORBIDDEN)
+        if not app.storage_api.check_if_course_admin(course_name, current_user):
+            safe_course_name = sanitize_log_data(course_name)
+            logger.warning(
+                "User %s attempted to change course admin status in course %s without permission",
+                current_user,
+                safe_course_name,
+            )
+            abort(HTTPStatus.FORBIDDEN)
 
     target_username = request.form.get("username", "")
     app.storage_api.set_course_admin_status(course_name, target_username, grant_course_admin)

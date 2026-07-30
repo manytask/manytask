@@ -83,26 +83,6 @@ def check_if_namespace_admin(app: CustomFlask, course_name: str) -> bool:
         return False
 
 
-def check_if_course_admin(app: CustomFlask, course_name: str) -> bool:
-    """Check if user is a course admin.
-    User is course admin if they are either
-    - Course admin
-    - An admin of the namespace this course belong to
-    - Instance admin
-    This is reflected in the underlying call to the database API function
-
-    :param app: Flask application instance
-    :param username: Manytask username
-    :param course_name: Course to check for
-    :return: True if user is a course admin
-    """
-    if app.debug:
-        return True
-    else:
-        username = session["manytask"]["username"]
-        return app.storage_api.check_if_course_admin(course_name, username)
-
-
 def check_if_user_has_namespaces_to_admin(app: CustomFlask) -> bool:
     """The user can create course only if:
     - They are instance admin
