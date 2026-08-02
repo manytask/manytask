@@ -115,10 +115,10 @@ def get_user_roles(app: CustomFlask, username: str, course_name: str | None = No
     """
     roles = []
 
-    if course_name:
-        if app.storage_api.check_if_instance_admin(username):
-            roles.append("instance_admin")
+    if app.storage_api.check_if_instance_admin(username):
+        roles.append("instance_admin")
 
+    if course_name:
         if check_if_namespace_admin(app, course_name=course_name):
             roles.append("namespace_admin")
 
