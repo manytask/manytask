@@ -130,7 +130,7 @@ class Tester:
             "task": None,
             "outputs": outputs,
             "parameters": self.default_params.__dict__.copy(),
-            "env": os.environ.__dict__,
+            "env": dict(os.environ),
         }
 
     def _get_group_config(self, task: FileSystemTask) -> CheckerSubConfig | None:
