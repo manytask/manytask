@@ -50,19 +50,6 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     return courses_list
 
 
-def check_if_instance_admin(app: CustomFlask) -> bool:
-    """Check if user is an instance admin
-
-    :param app: Flask application instance
-    :return: True if user is an instance admin
-    """
-    if app.debug:
-        return True
-    else:
-        username = session["manytask"]["username"]
-        return app.storage_api.check_if_instance_admin(username)
-
-
 def check_if_namespace_admin(app: CustomFlask, course_name: str) -> bool:
     """Check if user is a namespace admin for the given course
 

@@ -29,7 +29,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import check_if_instance_admin, get_courses, has_role
+from .utils.flask import get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
     generate_token_hex,
@@ -63,8 +63,8 @@ def index() -> ResponseReturnValue:
     courses = get_courses(app)
 
     can_create_courses = check_if_user_has_namespaces_to_admin(app)
-    is_instance_admin = check_if_instance_admin(app)
     username = "guest" if app.debug else session["manytask"]["username"]
+    is_instance_admin = True if app.debug else app.storage_api.check_if_instance_admin(username)
 
     return render_template(
         "courses.html",
@@ -388,7 +388,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
     course = app.storage_api.get_course(course_name)
-    is_instance_admin = check_if_instance_admin(app)
+    is_instance_admin = True if app.debug else app.storage_api.check_if_instance_admin(session["manytask"]["username"])
 
     if course is None:
         return redirect(url_for("root.index"))
@@ -699,7 +699,7 @@ def instance_admin_index() -> ResponseReturnValue:
     Instance Admin -> /instance_admin/panel
     Namespace Admin -> /instance_admin/namespaces
     """
-    from .utils.flask import check_if_instance_admin, check_if_user_has_namespaces_to_admin
+    from .utils.flask import check_if_user_has_namespaces_to_admin
 
     app: CustomFlask = current_app  # type: ignore
 
@@ -707,7 +707,7 @@ def instance_admin_index() -> ResponseReturnValue:
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
     username = session["manytask"]["username"]
-    is_instance_admin = check_if_instance_admin(app)
+    is_instance_admin = app.storage_api.check_if_instance_admin(username)
 
     if is_instance_admin:
         logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
