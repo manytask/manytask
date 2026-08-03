@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import logging
+import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote, urlparse, urlunparse
 
 import grpc
 import httpx
@@ -102,30 +106,92 @@ class SourceCraftApi(RmsApi):
     ) -> httpx.Response:
         return self._request("GET", f"repos/{self._org_slug}/{repo_slug}")
 
+    def _authenticated_clone_url(self, clone_url: str) -> str:
+        parsed = urlparse(clone_url)
+        if not parsed.hostname:
+            raise RmsApiException(f"Invalid clone URL: {clone_url}")
+        netloc = f"git:{quote(self.iam_token, safe='')}@{parsed.hostname}"
+        if parsed.port:
+            netloc = f"{netloc}:{parsed.port}"
+        return urlunparse((parsed.scheme, netloc, parsed.path, "", "", ""))
+
+    def _run_git(self, *args: str, cwd: str | Path | None = None) -> None:
+        try:
+            subprocess.run(
+                ["git", *args],
+                cwd=cwd,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            quoted_token = quote(self.iam_token, safe="")
+
+            def redact(s: str) -> str:
+                return s.replace(self.iam_token, "***").replace(quoted_token, "***")
+
+            cmd = " ".join(redact(arg) for arg in args)
+            stderr = redact(e.stderr or "")
+            raise RmsApiException(f"git {cmd} failed: {stderr}") from e
+
+    def _populate_repo_from_template(self, repo_data: dict[str, Any], template_slug: str) -> None:
+        template_resp = self._get_repo(template_slug)
+        if template_resp.status_code == HTTPStatus.NOT_FOUND:
+            raise RmsApiException(f"Project {template_slug} not found")
+        if template_resp.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get project: {template_resp.json()}")
+
+        template_data = template_resp.json()
+        new_clone_url = self._authenticated_clone_url(repo_data["clone_url"]["https"])
+        template_clone_url = self._authenticated_clone_url(template_data["clone_url"]["https"])
+        new_default_branch = repo_data["default_branch"]
+        template_default_branch = template_data["default_branch"]
+
+        logger.info(
+            "Copying template %s (%s) into new repo %s (%s)",
+            template_slug,
+            template_default_branch,
+            repo_data.get("slug"),
+            new_default_branch,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="manytask-sc-") as tmpdir:
+            repo_dir = Path(tmpdir) / "repo"
+            self._run_git("clone", new_clone_url, str(repo_dir))
+            self._run_git("remote", "add", "template", template_clone_url, cwd=repo_dir)
+            self._run_git("fetch", "template", template_default_branch, cwd=repo_dir)
+            self._run_git(
+                "push",
+                "origin",
+                f"refs/remotes/template/{template_default_branch}:refs/heads/{new_default_branch}",
+                cwd=repo_dir,
+            )
+
     def _create_repo(
         self,
         repo_slug: str,
         visibility: str,
         create_readme: bool = False,
         default_branch: str = "main",
-        template_id: int | None = None,
+        template_slug: str | None = None,
     ) -> None:
         payload: dict[str, Any] = {
             "name": repo_slug,
             "slug": repo_slug,
             "visibility": visibility,
             "init_settings": {
-                "create_readme": create_readme,
                 "default_branch": default_branch,
             },
         }
-        if template_id is not None:
-            payload["templating_options"] = {
-                "template_id": template_id,
-            }
+        if template_slug is None:
+            payload["init_settings"]["create_readme"] = True
+
         response = self._request("POST", f"orgs/{self._org_slug}/repos", json=payload)
         if response.status_code != HTTPStatus.CREATED:
             raise RmsApiException(f"Failed to create repo: {response.json()}")
+
+        if template_slug is not None:
+            self._populate_repo_from_template(response.json(), template_slug)
 
     def _update_repo(
         self,
@@ -210,8 +276,7 @@ class SourceCraftApi(RmsApi):
         self._create_repo(
             repo_slug=course_public_repo,
             visibility="public",
-            create_readme=True,
-            template_id=None,
+            template_slug=None,
         )
 
         self._update_repo(course_public_repo, {"template_type": "organizational"})
@@ -281,16 +346,10 @@ class SourceCraftApi(RmsApi):
 
         student_repo_slug = f"{course_students_group}-{normalize_string(rms_user.username)}"
 
-        response = self._get_repo(course_public_repo)
-        if response.status_code == HTTPStatus.NOT_FOUND:
-            raise RmsApiException(f"Project {course_public_repo} not found")
-        elif response.status_code != HTTPStatus.OK:
-            raise RmsApiException(f"Failed to get project: {response.json()}")
-
         self._create_repo(
             repo_slug=student_repo_slug,
             visibility="private",
-            template_id=response.json()["id"],
+            template_slug=course_public_repo,
         )
 
         self._add_repo_role(student_repo_slug, "developer", rms_user.id)
