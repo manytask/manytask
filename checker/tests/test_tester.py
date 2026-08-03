@@ -12,6 +12,7 @@ from checker.configs.checker import (
     PipelineStageConfig,
 )
 from checker.course import FileSystemTask
+from checker.pipeline import ParametersResolver
 from checker.tester import Tester
 
 # Test constants
@@ -151,6 +152,30 @@ class TestTester:
 
         context = tester._build_global_context(None, {})
         assert context["parameters"] == {"a": 1, "b": 2}
+
+    @typing.no_type_check
+    def test_global_context_env_exposes_environment_variables(self, mocker, monkeypatch):
+        """`env` in pipeline context must expose real environment variables so that
+        `${{ env.FOO }}` in .checker.yml resolves to the variable value.
+
+        Regression test for `os.environ.__dict__` (which returns internal attrs of
+        `os._Environ` like `_data`/`encodekey`) being used instead of `dict(os.environ)`.
+        """
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        monkeypatch.setenv("CHECKER_TEST_ENV_VAR", "hello")
+
+        tester = Tester(CourseMock(), CheckerConfigMock())
+        tester.default_params = CheckerParametersConfig(root={})
+
+        context = tester._build_global_context(None, {})
+
+        # direct check: env is the actual environment, not internals of os._Environ
+        assert context["env"].get("CHECKER_TEST_ENV_VAR") == "hello"
+        assert "_data" not in context["env"]
+
+        # end-to-end: jinja template `${{ env.CHECKER_TEST_ENV_VAR }}` resolves properly
+        resolver = ParametersResolver()
+        assert resolver.resolve("${{ env.CHECKER_TEST_ENV_VAR }}", context) == "hello"
 
     @typing.no_type_check
     @pytest.mark.parametrize(
