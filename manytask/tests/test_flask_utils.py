@@ -18,7 +18,7 @@ def app():
     storage_api.check_if_instance_admin.return_value = False
     storage_api.check_if_course_admin.return_value = False
     storage_api.get_namespace_admin_namespaces.return_value = []
-    # Course with no namespace so check_if_namespace_admin short-circuits to False.
+    # Course with no namespace so check_if_current_user_is_namespace_admin short-circuits to False.
     course = MagicMock()
     course.namespace_id = None
     storage_api.get_course.return_value = course
@@ -44,7 +44,7 @@ def test_get_user_roles_instance_admin_visibility(app, is_instance_admin, course
     app.storage_api.check_if_instance_admin.return_value = is_instance_admin
 
     with app.test_request_context():
-        # get_user_roles may reach into session via check_if_namespace_admin;
+        # get_user_roles may reach into session via check_if_current_user_is_namespace_admin;
         # only need to seed session when a course_name is supplied.
         if course_name is not None:
             from flask import session
