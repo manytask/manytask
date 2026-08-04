@@ -44,7 +44,12 @@ from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
-from .utils.generic import check_course_creation_namespace_permission, sanitize_and_validate_comment, sanitize_log_data
+from .utils.generic import (
+    calculate_percent,
+    check_course_creation_namespace_permission,
+    sanitize_and_validate_comment,
+    sanitize_log_data,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -449,7 +454,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
         max_score = app.storage_api.max_score_started(course.course_name)
 
         total_score = sum(student_scores.values()) + bonus_score
-        percent = total_score * 100 / max_score if max_score > 0 else 0
+        percent = calculate_percent(total_score, max_score)
 
         # Count large tasks solved
         large_count = 0
@@ -698,7 +703,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     try:
         row_data.total_score = total_score
         max_score = app.storage_api.max_score_started(course.course_name)
-        row_data.percent = total_score * 100 / max_score if max_score > 0 else 0
+        row_data.percent = calculate_percent(total_score, max_score)
 
         # Calculate and save grade (applies DORESHKA logic if needed)
         # This updates final_grade but does NOT touch final_grade_override

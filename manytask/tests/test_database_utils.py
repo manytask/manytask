@@ -1,12 +1,15 @@
 import datetime
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 from flask import Flask
 
+from manytask.config import ManytaskFinalGradeConfig
 from manytask.course import CourseStatus
 from manytask.mock_rms import MockRmsApi
 from manytask.utils.database import get_database_table_data
+from manytask.utils.generic import calculate_percent
 from tests.constants import MAX_SCORE, SCORES, STUDENT_1, STUDENT_2, STUDENT_DATA, TASK_1, TASK_2, TASK_3, TASK_LARGE
 
 
@@ -237,3 +240,37 @@ def test_get_database_table_data_no_scores(app):
         assert "students" in result
         assert len(result["tasks"]) == expected_tasks_count
         assert len(result["students"]) == 0
+
+
+def test_get_database_table_data_uses_displayed_percent_for_grade(app):
+    expected_percent = 75.0
+    expected_grade = 4
+    task = app.storage_api.groups[0].tasks[0]
+    task.score = 10_000
+    app.storage_api.groups[0].tasks = [task]
+    app.storage_api.grades_config = ManytaskFinalGradeConfig(
+        grades={
+            4: [{Path("percent"): 75}],
+            3: [{Path(""): 0}],
+        }
+    )
+    app.storage_api.get_all_scores_with_names = lambda _course_name: {
+        STUDENT_1: (
+            {TASK_1: (7_499, False)},
+            (STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]),
+            None,
+            None,
+            None,
+        )
+    }
+
+    with app.test_request_context():
+        test_course = app.storage_api.get_course("test_course")
+        result = get_database_table_data(app, test_course)
+
+    assert result["students"][0]["percent"] == expected_percent
+    assert result["students"][0]["grade"] == expected_grade
+
+
+def test_calculate_percent_handles_zero_max_score():
+    assert calculate_percent(total_score=10, max_score=0) == 0.0

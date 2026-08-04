@@ -39,6 +39,7 @@ from .models import (
     User,
     UserOnCourse,
 )
+from .utils.generic import calculate_percent
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -2521,7 +2522,7 @@ class DataBaseApi(StorageApi):
 
             row: dict[str, Any] = {
                 "total_score": total_score,
-                "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
+                "percent": calculate_percent(total_score, max_score),
                 "large_count": large_count,
             }
 

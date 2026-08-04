@@ -14,6 +14,13 @@ from sqlalchemy.exc import NoResultFound
 logger = logging.getLogger(__name__)
 
 
+def calculate_percent(total_score: float, max_score: float) -> float:
+    """Calculate the percentage at the precision shown in the grade table."""
+    if max_score <= 0:
+        return 0.0
+    return round(total_score * 100.0 / max_score, 1)
+
+
 def sanitize_log_data(data: str | None) -> str | None:
     """Sanitize form data."""
     if data is None:
