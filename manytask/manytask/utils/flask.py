@@ -50,11 +50,16 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     return courses_list
 
 
-def check_if_instance_admin(app: CustomFlask) -> bool:
-    """Check if user is an instance admin
+def check_if_current_user_is_instance_admin(app: CustomFlask) -> bool:
+    """Check whether the current session user is an instance admin.
+
+    Session-aware Flask helper: resolves the username from the session (and
+    returns ``True`` in debug mode), then delegates to the storage primitive
+    :meth:`StorageApi.check_if_instance_admin`. Do not confuse it with that
+    storage method, which takes an explicit ``username`` argument.
 
     :param app: Flask application instance
-    :return: True if user is an instance admin
+    :return: True if the current user is an instance admin
     """
     if app.debug:
         return True
@@ -63,7 +68,7 @@ def check_if_instance_admin(app: CustomFlask) -> bool:
         return app.storage_api.check_if_instance_admin(username)
 
 
-def check_if_namespace_admin(app: CustomFlask, course_name: str) -> bool:
+def check_if_current_user_is_namespace_admin(app: CustomFlask, course_name: str) -> bool:
     """Check if user is a namespace admin for the given course
 
     :param app: Flask application instance
@@ -119,7 +124,7 @@ def get_user_roles(app: CustomFlask, username: str, course_name: str | None = No
         roles.append("instance_admin")
 
     if course_name:
-        if check_if_namespace_admin(app, course_name=course_name):
+        if check_if_current_user_is_namespace_admin(app, course_name=course_name):
             roles.append("namespace_admin")
 
         if app.storage_api.check_if_course_admin(course_name, username):
@@ -165,7 +170,7 @@ def can_access_course(app: CustomFlask, username: str, course_name: str) -> bool
     if app.storage_api.check_if_course_admin(course_name, username):
         return True
 
-    if check_if_namespace_admin(app, course_name=course_name):
+    if check_if_current_user_is_namespace_admin(app, course_name=course_name):
         course = app.storage_api.get_course(course_name)
         if course and course.namespace_id:
             namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
