@@ -148,10 +148,6 @@ class Course:
                 tasks=group_tasks,
             )
 
-    @staticmethod
-    def _is_parent(path: Path, files: list[Any]) -> bool:
-        return any(Path(file).is_relative_to(path) for file in files)
-
     def _detect_by_branch_name(
         self,
         repo: git.Repo,
@@ -207,7 +203,10 @@ class Course:
             color="grey",
         )
         if not changed_tasks:
-            print_info(f"No active tasks/groups found for commit message {commit_message}", color="yellow")
+            print_info(
+                f"No active tasks/groups found for commit message {commit_message}",
+                color="yellow",
+            )
 
         return changed_tasks
 

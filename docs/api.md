@@ -2,8 +2,7 @@
 
 ## Checker script 
 
-There is already implemented python lib [manytask/checker](https://github.com/manytask/checker) for testing students' solutions with manytask integration. The basic idea: `checker` is a script running in a gitlab-ci that performs students' solutions testing and call `manytask` api to set scores achieved;
-More info in the [manytask/checker repo](https://github.com/manytask/checker);
+Please refer to Manytask plugin if you are using Checker (look for `plugins/manytask.py` in Checker folder).
 
 ## Custom script 
 
@@ -14,3 +13,6 @@ However, you can implement your own checker just use the Manytask api. Note that
 | POST   | `/api/<course_name>/report`               | set student's score (optionally save source code) | `task`, `username`, `user_id` (deprecated), `score` (if None - max score) | `check_deadline`, `allow_reduction`, `submit_time` (`%Y-%m-%d %H:%M:%S%z`), `commit_time` (deprecated), multipart/form-data source files | `user_id`, `username`, `task`, `score`, `commit_time`, `submit_time` |
 | GET    | `/api/<course_name>/score`                | get student's score                               | `task`, `username`, `user_id` (deprecated)                                | -                                                                                                                     | `user_id`, `username`, `task`, `score`                               |
 | POST   | `/api/<course_name>/update_config`        | update course to sent `config`                    | \*config yaml file\* (see examples)                                       | -                                                                                                                     | -                                                                    |
+| GET    | `/api/<course_name>/ping`                 | validate course-token without side effects        | -                                                                         | -                                                                                                                     | `course`, `ok`                                                       |
+| GET    | `/api/<course_name>/is_admin`             | check whether RMS user is a course admin          | `rms_username` (query string, RMS/GitLab login)                           | -                                                                                                                     | `rms_username`, `is_admin`                                           |
+| GET    | `/api/<course_name>/deadlines`            | machine-readable list of tasks with deadlines     | -                                                                         | -                                                                                                                     | `course`, `tasks` (list of `{task_name, group, deadline, score, is_bonus, is_large}`) |

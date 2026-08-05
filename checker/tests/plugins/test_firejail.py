@@ -133,7 +133,12 @@ class TestSafeRunScriptPlugin:
         "origin, paths_whitelist, access_file, expected_exception",
         [
             (Path("/tmp"), [], Path("/tmp/tmp.txt"), None),
-            (Path("/tmp"), [], in_home("tmp/tmp.txt"), None),  # this is a trick!!! origin /tmp is replaced by ~/tmp
+            (
+                Path("/tmp"),
+                [],
+                in_home("tmp/tmp.txt"),
+                None,
+            ),  # this is a trick!!! origin /tmp is replaced by ~/tmp
             (Path("/tmp"), [], in_home("tmp.txt"), PluginExecutionFailed),
             (Path("/tmp"), [HOME], in_home("tmp.txt"), None),
             (HOME, [], in_home("tmp.txt"), None),
@@ -149,9 +154,19 @@ class TestSafeRunScriptPlugin:
             (in_home("tmp"), [], in_home("tmp/tmp.txt"), None),
             (in_home("not_tmp"), [in_home("tmp")], in_home("tmp/tmp.txt"), None),
             (in_home("tmp"), [], in_home("tmp.txt"), PluginExecutionFailed),
-            (in_home("not_tmp"), [in_home("tmp")], in_home("tmp.txt"), PluginExecutionFailed),
+            (
+                in_home("not_tmp"),
+                [in_home("tmp")],
+                in_home("tmp.txt"),
+                PluginExecutionFailed,
+            ),
             (in_home("tmp"), [], in_home("not_tmp/tmp.txt"), PluginExecutionFailed),
-            (Path("/tmp"), [in_home("tmp")], in_home("not_tmp/tmp.txt"), PluginExecutionFailed),
+            (
+                Path("/tmp"),
+                [in_home("tmp")],
+                in_home("not_tmp/tmp.txt"),
+                PluginExecutionFailed,
+            ),
         ],
     )
     def test_file_system_access(
@@ -220,11 +235,17 @@ class TestSafeRunScriptPlugin:
     @pytest.mark.parametrize("env_whitelist", [[], ["A"], ["A", "C"]])
     @pytest.mark.parametrize("mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
     def test_run_with_environment_variable(
-        self, env_additional: dict[str, str], env_whitelist: list[str], mocked_env: dict[str, str]
+        self,
+        env_additional: dict[str, str],
+        env_whitelist: list[str],
+        mocked_env: dict[str, str],
     ) -> None:
         plugin = SafeRunScriptPlugin()
         args = SafeRunScriptPlugin.Args(
-            origin="/tmp", script="env", env_additional=env_additional, env_whitelist=env_whitelist
+            origin="/tmp",
+            script="env",
+            env_additional=env_additional,
+            env_whitelist=env_whitelist,
         )
 
         with patch.dict("os.environ", mocked_env, clear=True):

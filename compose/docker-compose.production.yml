@@ -1,0 +1,17 @@
+# Umbrella for the manytask production stand: web app + database + docs.
+#
+# A thin `include` of the per-component stacks, so each stays runnable on its own
+# while this file brings the whole stand up in one go. This is what the deploy
+# workflow runs.
+#
+# The shared edge proxy and the nginx-manytask-net network are owned by
+# docker-compose.proxy.yml and must be up first (once per host):
+#   docker compose -f compose/docker-compose.proxy.yml up -d
+#
+# Then the stand (interpolates ${APP_HOST}/${DOCS_HOST} from manytask/.env):
+#   docker compose --env-file manytask/.env \
+#     -f compose/docker-compose.production.yml up --build -d
+include:
+  - ../manytask/docker-compose.production.yml
+  - ../docs/docker-compose.production.yml
+  - ../mr-reviewer/docker-compose.production.yml

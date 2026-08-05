@@ -1,0 +1,96 @@
+networks:
+    manytask-dev-net:
+        name: manytask-dev-net
+        driver: bridge
+
+services:
+
+    manytask:
+        build:
+            context: ../..
+            dockerfile: manytask/Dockerfile
+            target: app
+        container_name: test-manytask
+        env_file: ../.env
+        environment:
+            VIRTUAL_HOST: localhost
+            VIRTUAL_PORT: 5050
+            LETSENCRYPT_HOST: localhost
+        ports:
+            - "8081:5050"
+        volumes:
+            - ../manytask:/app/manytask
+            - ../.tmp/cache:/cache
+        networks:
+            - manytask-dev-net
+
+    postgres:
+        image: postgres:17
+        container_name: manytask_postgres
+        env_file: ../.env
+        expose:
+            - "5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            - ../scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+        networks:
+            - manytask-dev-net
+
+    gitlab:
+        image: gitlab/gitlab-ce:latest
+        container_name: manytask_gitlab
+        restart: always
+        hostname: gitlab
+        environment:
+            GITLAB_ROOT_PASSWORD: "changeme123!"
+            GITLAB_OMNIBUS_CONFIG: |
+                external_url 'http://localhost:8929'
+                gitlab_rails['gitlab_shell_ssh_port'] = 8222
+                prometheus_monitoring['enable'] = false
+                alertmanager['enable'] = false
+                node_exporter['enable'] = false
+                redis_exporter['enable'] = false
+                postgres_exporter['enable'] = false
+                gitlab_exporter['enable'] = false
+                gitlab_kas['enable'] = false
+                puma['worker_processes'] = 0
+                sidekiq['concurrency'] = 10
+        ports:
+            - "8929:8929"    # HTTP web UI
+            - "8222:22"      # SSH (optional)
+        shm_size: '256m'
+        volumes:
+            - gitlab_config:/etc/gitlab
+            - gitlab_logs:/var/log/gitlab
+            - gitlab_data:/var/opt/gitlab
+        networks:
+            - manytask-dev-net
+
+    gitlab-runner:
+        image: gitlab/gitlab-runner:alpine
+        container_name: manytask_gitlab_runner
+        restart: always
+        volumes:
+            - gitlab_runner_config:/etc/gitlab-runner
+            - /var/run/docker.sock:/var/run/docker.sock
+        depends_on:
+            - gitlab
+        networks:
+            - manytask-dev-net
+
+volumes:
+    postgres_data:
+        name: manytask_postgres_data
+    gitlab_config:
+        name: manytask_gitlab_config
+    gitlab_logs:
+        name: manytask_gitlab_logs
+    gitlab_data:
+        name: manytask_gitlab_data
+    gitlab_runner_config:
+        name: manytask_gitlab_runner_config

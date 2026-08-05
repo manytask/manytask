@@ -81,6 +81,10 @@ class CppRunTestsPlugin(PluginABC):
             build_dir = args.root / f"build-{build_type.lower()}"
             with tempfile.TemporaryDirectory() as tmp_dir:
                 CppRunTestsPlugin._run_tests(
-                    args=args, tmp_dir=Path(tmp_dir), build_dir=build_dir, target=target, verbose=verbose
+                    args=args,
+                    tmp_dir=Path(tmp_dir),
+                    build_dir=build_dir,
+                    target=target,
+                    verbose=verbose,
                 )
         return PluginOutput(output="Tests are passed")

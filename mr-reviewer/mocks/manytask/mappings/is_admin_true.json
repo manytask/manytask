@@ -1,0 +1,18 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/api/[^/]+/is_admin",
+    "queryParameters": {
+      "rms_username": {"matches": ".*"}
+    },
+    "headers": {
+      "Authorization": {"matches": "Bearer .+"}
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {"Content-Type": "application/json"},
+    "jsonBody": {"rms_username": "teacher", "is_admin": true}
+  }
+}

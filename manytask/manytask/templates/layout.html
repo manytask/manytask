@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block signout %}{% endblock %}
+
+{% block body %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/user-menu.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    {% set solved_score = scores.values() | sum() %}
+    {% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
+    {% set solved_score_string = (solved_score - bonus_score) ~ bonus_score_string %}
+    {% set max_started = app.storage_api.max_score_started(course_name) %}
+    {% set solved_percent = "0.0" if max_started == 0 else (solved_score / max_started * 100) | round(1, 'common') %}
+
+    <nav class="navbar navbar-expand-lg bg-body fixed-top shadow-sm">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar"
+                    aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <a href="/" class="d-flex align-items-center text-decoration-none navbar-brand me-0">
+                <img class="d-none d-sm-block" src="{{ url_for('static', filename=course_favicon) }}" alt="favicon"
+                     width="32" height="32">
+                &nbsp;
+                <span class="fs-4 mb-0 ms-1 fw-bold text-gradient">Manytask</span>
+            </a>
+
+            <div class="collapse navbar-collapse ms-2" id="navbar">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'tasks' %}active fw-semibold{% endif %}"
+                           aria-current="{% if active_page == 'tasks' %}page{% endif %}"
+                           href="{{ url_for('course.course_page', course_name=course_name) }}">
+                            <i class="fas fa-tasks me-1"></i>Assignments
+                            {% if active_page == 'tasks' %}<span class="nav-active-indicator"></span>{% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3 position-relative nav-hover-underline" target="_blank"
+                           href="{{ student_repo_url }}">
+                            <i class="fas fa-code-branch me-1"></i>My&nbsp;Repo
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3 position-relative nav-hover-underline" target="_blank"
+                           href="{{ student_ci_url }}">
+                            <i class="fas fa-rocket me-1"></i>My&nbsp;Submits
+                        </a>
+                    </li>
+                    {% if show_allscores or has_role(username, ['instance_admin', 'namespace_admin'], app, course_name) %}
+                        <li class="nav-item">
+                            <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'database' %}active fw-semibold{% endif %}"
+                               aria-current="{% if active_page == 'database' %}page{% endif %}"
+                               href="{{ url_for('course.show_database', course_name=course_name) }}">
+                                <i class="fas fa-table me-1"></i>All&nbsp;Scores
+                                {% if active_page == 'database' %}<span class="nav-active-indicator"></span>{% endif %}
+                            </a>
+                        </li>
+                    {% endif %}
+                    {% if has_role(username, ['instance_admin', 'namespace_admin'], app, course_name) %}
+                        <li class="nav-item">
+                            <a class="nav-hover-underline nav-link px-3 position-relative {% if active_page == 'edit_course' %}active fw-semibold{% endif %}"
+                               aria-current="{% if active_page == 'edit_course' %}page{% endif %}"
+                               href="{{ url_for('instance_admin.edit_course', course_name=course_name) }}">
+                                <i class="fas fa-edit me-1"></i>Edit&nbsp;Course
+                                {% if active_page == 'edit_course' %}<span class="nav-active-indicator"></span>{% endif %}
+                            </a>
+                        </li>
+                    {% endif %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link px-3 position-relative nav-hover-underline" href="#" id="navbar_links"
+                           data-bs-toggle="dropdown"
+                           aria-expanded="false">
+                            <i class="fas fa-link me-1"></i>Links
+                            <i class="dropdown-chevron fas fa-chevron-down ms-1 fs-8 transition-transform"></i>
+                        </a>
+                        <ul class="dropdown-menu shadow-sm" aria-labelledby="navbar_links">
+                            {% set links = links | default({}) %}
+                            {% for link_name, link_url in links.items() %}
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center py-2" target="_blank"
+                                       href="{{ link_url }}">
+                                        <i class="fas fa-external-link-alt me-2 opacity-75"></i>
+                                        {{ link_name }}
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="d-flex align-items-center">
+                <div class="dropdown">
+                    <a href="#" class="nav-current-course text-decoration-none" data-bs-toggle="dropdown"
+                       aria-expanded="false">
+                        <i class="fas fa-book"></i>
+                        <span>{{ course_name }}</span>
+                    </a>
+                    <ul class="dropdown-menu shadow-sm" aria-labelledby="navbar_courses">
+                        {% set courses = courses | default([]) %}
+                        {% for course in courses %}
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center {% if course.name == course_name %}active{% endif %}"
+                                   href="{{ course.url }}">
+                                    <i class="fas fa-book me-2 opacity-75"></i>
+                                    {{ course.name }}
+                                    {% if course.name == course_name %}
+                                        <i class="fas fa-check ms-2 opacity-75"></i>
+                                    {% endif %}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <div class="nav-score-display d-flex flex-column align-items-center justify-content-center me-2 px-3 py-1 shadow-sm">
+                    <span class="fw-bold">{{ solved_percent }}%</span>
+                    <small class="text-muted">{{ solved_score_string }}/{{ max_started }}</small>
+                </div>
+
+                {% include "_user_menu.html" %}
+            </div>
+        </div>
+    </nav>
+
+    {% include "_user_menu_modal.html" %}
+
+    {# Floating form with ADMIN label if so #}
+    {% if is_course_admin %}
+        <div class="adm-badge">ADMIN</div>
+    {% endif %}
+
+    <div class="{% if active_page == 'database' %}px-0 w-100{% else %}px-3 container-lg{% endif %}">
+        {# Add bootstrap empty space for header #}
+        <div class="container-fluid" style="height: 80px;"></div>
+
+        {% block content %}
+        {% endblock %}
+
+        <div class="container-fluid" style="height: 10px;"></div>
+    </div>
+
+{% endblock %}

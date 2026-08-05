@@ -1,0 +1,61 @@
+# Shared edge: nginx-proxy + acme-companion and the network every stand joins.
+#
+# This file OWNS `nginx-manytask-net`: nginx-proxy and acme are attached to it
+# declaratively, so the wiring survives reboots and `restart: always` (no manual
+# `docker network connect` needed). nginx-proxy auto-discovers backends over the
+# docker socket and routes each by its VIRTUAL_HOST, so a single edge can front
+# many stands (manytask, docs, ...) at once.
+#
+# Bring this up ONCE per host, before the app/docs stacks:
+#   docker compose -f compose/docker-compose.proxy.yml up -d
+networks:
+  manytask-net:
+    name: nginx-manytask-net
+    driver: bridge
+
+volumes:
+  acme:
+    name: acme
+  certs:
+    name: certs
+  vhost:
+    name: vhost
+  html:
+    name: html
+  conf:
+    name: conf
+
+services:
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:1.7.0
+    container_name: nginx-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DHPARAM_SKIP: "true"
+    volumes:
+      - certs:/etc/nginx/certs:ro
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - conf:/etc/nginx/conf.d
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - manytask-net
+
+  acme-companion:
+    image: nginxproxy/acme-companion:2.5.2
+    container_name: nginx-proxy-acme
+    restart: always
+    environment:
+      DEFAULT_EMAIL: no-reply@manytask.org
+      NGINX_PROXY_CONTAINER: nginx-proxy
+    volumes:
+      - certs:/etc/nginx/certs:rw
+      - vhost:/etc/nginx/vhost.d:rw
+      - html:/usr/share/nginx/html:rw
+      - acme:/etc/acme.sh
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - manytask-net

@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=83.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "manytask-checker"
+dynamic = ["version"]
+description = "Manytask Checker - a framework to test students assignments and to create public repo with tasks but no solutions"
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+license = {text = "MIT"}
+authors = [
+    {name = "Manytask Team"}
+]
+dependencies = [
+    "click>=8.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "GitPython>=3.1",
+    "jinja2>=3.0",
+    "requests>=2.28",
+    "urllib3>=2.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-mock>=3.14",
+    "pytest-xdist>=3.8.0",
+    "python-dotenv>=1.0",
+    "requests-mock>=1.12",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "types-PyYAML",
+    "types-requests",
+]
+
+[project.scripts]
+checker = "checker.__main__:cli"
+
+[tool.setuptools]
+packages = ["checker", "checker.configs", "checker.plugins", "checker.plugins.cpp"]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.mypy]
+no_incremental = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_any_generics = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+allow_untyped_decorators = true
+exclude = [
+    "tests/",
+    ".venv/",
+]

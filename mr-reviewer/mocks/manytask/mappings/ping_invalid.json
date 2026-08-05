@@ -1,0 +1,12 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "GET",
+    "urlPattern": "/api/[^/]+/ping"
+  },
+  "response": {
+    "status": 403,
+    "headers": {"Content-Type": "application/json"},
+    "jsonBody": {"error": "forbidden"}
+  }
+}

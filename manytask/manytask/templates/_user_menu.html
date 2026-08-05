@@ -1,0 +1,58 @@
+{# Shared user/profile dropdown menu #}
+<div class="dropdown">
+    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle nav-user-menu"
+       data-bs-toggle="dropdown" aria-expanded="false">
+        <div class="nav-avatar-circle me-2">
+            {{ username[0] | upper }}
+        </div>
+        <span class="fw-semibold">{{ username }}</span>
+    </a>
+    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2">
+        <li>
+            <a class="dropdown-item d-flex align-items-center py-2" target="_blank"
+               href="{{ gitlab_url }}/-/user_settings/profile">
+                <i class="fas fa-user-cog me-2 opacity-75"></i>
+                Account Settings
+            </a>
+        </li>
+        <li>
+            <button type="button" class="btn dropdown-item d-flex align-items-center py-2" data-bs-toggle="modal"
+                    data-bs-target="#changeUserInfoModal">
+                <i class="fas fa-user-edit me-2 opacity-75"></i>
+                Change user info
+            </button>
+        </li>
+        <li>
+            <hr class="dropdown-divider my-1">
+        </li>
+        <li>
+            <a class="dropdown-item d-flex align-items-center py-2" href="#"
+               data-bs-theme-value="light">
+                <i class="fas fa-sun me-2 opacity-75"></i>
+                Light Theme
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item d-flex align-items-center py-2" href="#" data-bs-theme-value="dark">
+                <i class="fas fa-moon me-2 opacity-75"></i>
+                Dark Theme
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item d-flex align-items-center py-2" href="#" data-bs-theme-value="auto">
+                <i class="fas fa-magic me-2 opacity-75"></i>
+                Auto Theme
+            </a>
+        </li>
+        <li>
+            <hr class="dropdown-divider my-1">
+        </li>
+        <li>
+            <a class="dropdown-item d-flex align-items-center py-2 text-danger"
+               href="{{ url_for('root.logout') }}">
+                <i class="fas fa-sign-out-alt me-2"></i>
+                Sign out
+            </a>
+        </li>
+    </ul>
+</div>

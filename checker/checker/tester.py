@@ -74,7 +74,11 @@ class Tester:
         self.interpolation_window = (course.manytask_config.deadlines.window or 0) * 3600 * 24  # in seconds
 
     def _calc_interpolated_percent(
-        self, percent: float, timestamp: datetime, prev_percent: float, prev_timestamp: datetime
+        self,
+        percent: float,
+        timestamp: datetime,
+        prev_percent: float,
+        prev_timestamp: datetime,
     ) -> float:
         frac: float = (timestamp - prev_timestamp).total_seconds() / self.interpolation_window
         return percent if frac >= 1 else prev_percent - frac * (prev_percent - percent)
@@ -111,7 +115,9 @@ class Tester:
         score_percent: float,
     ) -> TaskPipelineVariables:
         return TaskPipelineVariables(
-            task_name=task.name, task_sub_path=task.relative_path, task_score_percent=score_percent
+            task_name=task.name,
+            task_sub_path=task.relative_path,
+            task_score_percent=score_percent,
         )
 
     def _build_global_context(
@@ -124,7 +130,7 @@ class Tester:
             "task": None,
             "outputs": outputs,
             "parameters": self.default_params.__dict__.copy(),
-            "env": os.environ.__dict__,
+            "env": dict(os.environ),
         }
 
     def _get_group_config(self, task: FileSystemTask) -> CheckerSubConfig | None:
@@ -224,6 +230,7 @@ class Tester:
                 raise TestingError("Global pipeline failed")
 
         failed_tasks = []
+        failed_reports = []
         for task in tasks:
             # run task pipeline
             print_header_info(f"Run <{task.name}> task pipeline:", color="pink")
@@ -251,6 +258,7 @@ class Tester:
                         print_info("->Reporting succeeded")
                     else:
                         print_info("->Reporting failed")
+                        failed_reports.append(task.name)
                 else:
                     _: PipelineResult = report_pipeline.run(context, dry_run=True)
                     print_info("->Reporting disabled (dry-run)")
@@ -260,3 +268,6 @@ class Tester:
 
         if failed_tasks:
             raise TestingError(f"Task pipelines failed: {failed_tasks}")
+
+        if failed_reports:
+            raise TestingError(f"Reporting score failed for: {failed_tasks}")

@@ -7,7 +7,7 @@
 [![docker](https://img.shields.io/docker/v/manytask/manytask?label=docker&logo=docker&sort=semver)](https://hub.docker.com/r/manytask/manytask)
 
 
-Small web application for managing courses: store students' grades, maintain [deadlines](docs/deadline_schedule.md), provide scoreboard etc.
+Small web application for managing courses: store students' grades, maintain deadlines, provide scoreboard etc.
 
 ---
 
@@ -27,6 +27,7 @@ The full `Manytask` setup includes:
 * CI/CD runners -  where students' solutions will be tested 
 * Manytask Checker script - some script to test students' solutions and send scores/grades to the Manytask web application
 * Manytask instance - web application managing students' grades and deadlines
+* **mr-reviewer/** - universal merge-request review bot for manytask courses.
 
 So the main aims of Manytask:
 * Store and manage students' grades (store, provide, show, edit, etc.)

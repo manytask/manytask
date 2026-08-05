@@ -1,1 +1,91 @@
-_extends: manytask/.github:.github/release-drafter.yml
+name-template: '$RESOLVED_VERSION'
+tag-template: '$RESOLVED_VERSION'
+
+change-template: '- $TITLE by @$AUTHOR in [#$NUMBER](https://github.com/$OWNER/$REPOSITORY/pull/$NUMBER)'
+no-changes-template: '- No changes'
+category-template: '### $TITLE'
+template: |
+  <TODO: summary of changes here>
+
+  $CHANGES
+
+  **Full Changelog**: [$PREVIOUS_TAG...$RESOLVED_VERSION](https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...$RESOLVED_VERSION)
+
+
+version-resolver:
+  major:
+    labels:
+      - 'breaking'
+    commit-message:
+      - '/.*!:.*/'
+  minor:
+    labels:
+      - 'feature'
+    commit-message:
+      - '/^feat(ure)?(\(.*\))?!?:/'
+  default: patch
+
+
+autolabeler:
+  - label: 'breaking'
+    commit-message:
+      - '/.*!:.*/'
+  - label: 'feature'
+    commit-message:
+      - '/^feat(ure)?(\(.*\))?:/'
+  - label: 'fix'
+    commit-message:
+      - '/^fix(\(.*\))?:/'
+      - '/^bug(\(.*\))?:/'
+  - label: 'test'
+    commit-message:
+      - '/^test(\(.*\))?:/'
+  - label: 'ci'
+    commit-message:
+      - '/^ci(\(.*\))?:/'
+  - label: 'refactor'
+    commit-message:
+      - '/^refactor(\(.*\))?:/'
+      - '/^ref(\(.*\))?:/'
+  - label: 'performance'
+    commit-message:
+      - '/^perf(ormance)?(\(.*\))?:/'
+  - label: 'style'
+    commit-message:
+      - '/^style(\(.*\))?:/'
+  - label: 'documentation'
+    commit-message:
+      - '/^docs?(\(.*\))?:/'
+      - '/^documentation(\(.*\))?:/'
+  - label: 'dependencies'
+    commit-message:
+      - '/^chore\(deps(-dev)?\):/'
+  - label: 'chore'
+    commit-message:
+      - '/^chore(\(.*\))?:/'
+
+
+exclude-labels:
+  - 'skip-changelog'
+
+exclude-contributors:
+  - 'manytask-bot'
+  - 'manytask-service'
+
+
+categories:
+  - title: 'Breaking'
+    label: 'breaking'
+  - title: 'Features'
+    label: 'feature'
+  - title: 'Fixes'
+    label: 'fix'
+  - title: 'Tests and CI/CD'
+    labels: ['test', 'ci']
+  - title: 'Enhancement'
+    labels: ['refactor', 'performance', 'style']
+  - title: 'Documentation'
+    label: 'documentation'
+  - title: 'Dependency Updates'
+    label: 'dependencies'
+  - title: 'Other changes'

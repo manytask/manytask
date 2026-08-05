@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/healthz"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "status": "ok",
+      "service": "mock-manytask"
+    }
+  }
+}

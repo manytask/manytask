@@ -28,7 +28,7 @@ class RunPytestPlugin(RunScriptPlugin):
 
         coverage: bool | int | None = None
         allow_failures: bool = False
-        report_percentage: bool = True
+        report_percentage: bool = False
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
         tests_cmd = self._build_pytest_cmd(args, verbose=verbose)
@@ -103,7 +103,7 @@ class RunPytestPlugin(RunScriptPlugin):
         # Use our secure plugin with pipe mode.
         tests_cmd += [
             "-p",
-            "checker.plugins.checker_reporter",
+            "checker.checker_reporter",
             "--checker-report",
             str(pipe_path),
             "--checker-use-pipe",

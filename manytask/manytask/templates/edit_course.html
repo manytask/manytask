@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Course: {{ course.course_name }}{% endblock %}
+
+{% block body %}
+<div class="container mt-4">
+    <h2>Edit Course: {{ course.course_name }}</h2>
+    {% if error_message %}
+    <div class="alert alert-danger" role="alert">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}" class="needs-validation" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <h4>Basic Course Information</h4>
+                <div class="mb-3">
+                    <label class="form-label">Unique Course Name</label>
+                    <input type="text" class="form-control" value="{{ course.course_name }}" readonly disabled>
+                    <div class="form-text">Course name cannot be changed</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Registration Secret</label>
+                    <input type="text" class="form-control" id="registration_secret" name="registration_secret" value="{{ course.registration_secret }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="token" class="form-label">Course Token</label>
+                    <input type="text" class="form-control" id="token" name="token" value="{{ course.token }}" readonly disabled>
+                    <div class="form-text">Token cannot be changed</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Course Status</label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_created" value="created"
+                                   {% if course.status.value == 'created' %}checked{% endif %}>
+                            <label class="btn btn-outline-info d-flex justify-content-center align-items-center" for="status_created">
+                                Created
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_hidden" value="hidden"
+                                   {% if course.status.value == 'hidden' %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary d-flex justify-content-center align-items-center" for="status_hidden">
+                                Hidden
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_in_progress" value="in_progress"
+                                   {% if course.status.value == 'in_progress' %}checked{% endif %}>
+                            <label class="btn btn-outline-success d-flex justify-content-center align-items-center" for="status_in_progress">
+                                In Progress
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_all_tasks_issued" value="all_tasks_issued"
+                                   {% if course.status.value == 'all_tasks_issued' %}checked{% endif %}>
+                            <label class="btn btn-outline-warning d-flex justify-content-center align-items-center" for="status_all_tasks_issued">
+                                All Tasks Issued
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_doreshka" value="doreshka"
+                                   {% if course.status.value == 'doreshka' %}checked{% endif %}>
+                            <label class="btn btn-outline-danger d-flex justify-content-center align-items-center" for="status_doreshka">
+                                 Doreshka
+                            </label>
+                        </div>
+                
+                        <div class="col-md-6">
+                            <input type="radio" class="btn-check" name="course_status" id="status_finished" value="finished"
+                                   {% if course.status.value == 'finished' %}checked{% endif %}>
+                            <label class="btn btn-outline-primary d-flex justify-content-center align-items-center" for="status_finished">
+                                Finished
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="show_allscores" name="show_allscores" {% if course.show_allscores %}checked{% endif %}>
+                    <label class="form-check-label" for="show_allscores">Show All Scores</label>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-4">
+                <h4>GitLab Configuration</h4>
+                {% if rms == "gitlab" %}
+                <div class="mb-3">
+                    <label for="gitlab_course_group" class="form-label">GitLab Course Group</label>
+                    <input type="text" class="form-control" id="gitlab_course_group" name="gitlab_course_group" value="{{ course.gitlab_course_group }}" placeholder="test-course" required>
+                    <div class="form-text">The general name of the GitLab group where all course materials will be
+                        stored
+                    </div>
+                </div>
+                {% else %}
+                {# gitlab_course_group is UNUSED for non-GitLab RMS backends (see sourcecraft.py: :param course_group: UNUSED). #}
+                {# Hidden input preserves the stored value so backend Pydantic validation stays happy (backward compatible). #}
+                <input type="hidden" name="gitlab_course_group" value="{{ course.gitlab_course_group or 'unused-non-gitlab' }}">
+                {% endif %}
+                <div class="mb-3">
+                    <label for="gitlab_course_public_repo" class="form-label">GitLab Public Repo</label>
+                    <input type="text" class="form-control" id="gitlab_course_public_repo" name="gitlab_course_public_repo" value="{{ course.gitlab_course_public_repo }}" placeholder="test-course/public-repo" required>
+                    <div class="invalid-feedback" id="public-repo-feedback">Public Repo should begin with the name
+                        of the course group
+                    </div>
+                    <div class="form-text">The name of the repository shared by students, where the assignment
+                        conditions are laid out
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="gitlab_course_students_group" class="form-label">GitLab Students Group</label>
+                    <input type="text" class="form-control" id="gitlab_course_students_group" name="gitlab_course_students_group" value="{{ course.gitlab_course_students_group }}" placeholder="test-course/private-repo" formnovalidate>
+                    <div class="invalid-feedback" id="students-group-feedback">Students Group should begin with the
+                        name of the course group
+                    </div>
+                    <div class="form-text">The name of the group where students' repositories are created
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="gitlab_default_branch" class="form-label">GitLab Default Branch</label>
+                    <input type="text" class="form-control" id="gitlab_default_branch" name="gitlab_default_branch" value="{{ course.gitlab_default_branch }}" required>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <button type="submit" class="btn btn-primary">Update Course</button>
+            <a href="{{ url_for('course.course_page', course_name=course.course_name) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+
+    <div class="action-group mt-4">
+        <h4><i class="fas fa-user-shield me-2"></i>Course Admin management</h4>
+        <div class="admin-actions">
+            <button type="button" class="btn btn-warning admin-btn" data-bs-toggle="modal"
+                    data-bs-target="#grantCourseAdminModal">
+                <i class="fas fa-user-shield"></i>
+                <span>Grant course admin rights</span>
+            </button>
+
+            <button type="button" class="btn btn-danger admin-btn" data-bs-toggle="modal"
+                    data-bs-target="#revokeCourseAdminModal">
+                <i class="fas fa-user-slash"></i>
+                <span>Revoke course admin rights</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="grantCourseAdminModal" tabindex="-1" aria-labelledby="grantCourseAdminModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="grantCourseAdminModalLabel">Grant Course Admin Rights</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="grantCourseAdminForm"
+                      action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}"
+                      method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="grant_course_admin">
+                    <div class="mb-3">
+                        <label for="userToGrant" class="form-label">Select new course admin</label>
+
+                        <div class="search-box">
+                            <label for="grantSearchInput"></label>
+                            <input type="text" class="form-control" placeholder="Search users..."
+                                   id="grantSearchInput" autocomplete="off">
+                        </div>
+
+                        <select class="form-select" id="userToGrant" name="username" required size="5">
+                            {% for stored_user, is_admin in course_users|default([]) %}
+                                {% if not is_admin %}
+                                    <option value="{{ stored_user.username }}">{{ stored_user.username }}
+                                        ({{ stored_user.first_name }} {{ stored_user.last_name }})
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="grantCourseAdminForm" class="btn btn-warning">Grant Rights</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="revokeCourseAdminModal" tabindex="-1" aria-labelledby="revokeCourseAdminModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="revokeCourseAdminModalLabel">Revoke Course Admin Rights</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="revokeCourseAdminForm"
+                      action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}"
+                      method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="revoke_course_admin">
+                    <div class="mb-3">
+                        <label for="userToRevoke" class="form-label">Remove the course admin</label>
+
+                        <div class="search-box">
+                            <label for="revokeSearchInput"></label>
+                            <input type="text" class="form-control" placeholder="Search admins..."
+                                   id="revokeSearchInput" autocomplete="off">
+                        </div>
+
+                        <select class="form-select" id="userToRevoke" name="username" required size="5">
+                            <option value="" disabled>Select a user</option>
+                            {% for stored_user, is_admin in course_users|default([]) %}
+                                {% if is_admin %}
+                                    <option value="{{ stored_user.username }}">{{ stored_user.username }}
+                                        ({{ stored_user.first_name }} {{ stored_user.last_name }})
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="revokeCourseAdminForm" class="btn btn-danger">Revoke Rights</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function filterUsers(type) {
+        const inputId = `${type}SearchInput`;
+        const selectId = `userTo${type.charAt(0).toUpperCase() + type.slice(1)}`;
+
+        const input = document.getElementById(inputId);
+        const filter = input.value.toLowerCase();
+        const select = document.getElementById(selectId);
+        const options = select.getElementsByTagName('option');
+
+        for (let i = 0; i < options.length; i++) {
+            const text = options[i].textContent || options[i].innerText;
+            options[i].style.display = text.toLowerCase().includes(filter) ? '' : 'none';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('grantSearchInput').addEventListener('input', () => filterUsers('grant'));
+        document.getElementById('revokeSearchInput').addEventListener('input', () => filterUsers('revoke'));
+    });
+</script>
+
+<script>
+(function () {
+    'use strict'
+    var forms = document.querySelectorAll('.needs-validation')
+    Array.prototype.slice.call(forms)
+        .forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                if (!form.checkValidity()) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                }
+                form.classList.add('was-validated')
+            }, false)
+        })
+})()
+</script>
+{% endblock %}

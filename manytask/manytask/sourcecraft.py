@@ -1,0 +1,421 @@
+from __future__ import annotations
+
+import logging
+import time
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from http import HTTPStatus
+from typing import Any
+
+import grpc
+import httpx
+from yandex.cloud.iam.v1.iam_token_service_pb2_grpc import IamTokenServiceStub
+from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2 import GetUserAccountByLoginRequest
+from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2_grpc import YandexPassportUserAccountServiceStub
+from yandexcloud._sdk import SDK
+
+from .abstract import RmsApi, RmsApiException, RmsUser
+from .utils.sourcecraft import normalize_string
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SourceCraftConfig:
+    """Configuration for Sourcecraft API connection and course settings."""
+
+    base_url: str
+    api_url: str
+    org_slug: str
+    service_account_key: dict[str, Any] | None = None
+    oauth_token: str | None = None
+    dry_run: bool = False
+
+    def __post_init__(self) -> None:
+        if self.service_account_key and self.oauth_token:
+            raise ValueError("SourceCraftConfig: specify either service_account_key or oauth_token, not both")
+        if not self.service_account_key and not self.oauth_token:
+            raise ValueError("SourceCraftConfig: either service_account_key or oauth_token must be provided")
+
+
+class SourceCraftApi(RmsApi):
+    def __init__(
+        self,
+        config: SourceCraftConfig,
+    ):
+        """Initialize Sourcecraft API client with configuration.
+
+        :param config: SourcecraftConfig instance containing all necessary settings
+        """
+        self.dry_run = config.dry_run
+        self._base_url = config.base_url
+        self._org_slug = config.org_slug
+
+        self._client = httpx.Client(
+            base_url=config.api_url,
+            timeout=30.0,
+        )
+        if config.service_account_key:
+            self._sdk = SDK(service_account_key=config.service_account_key)
+        else:
+            self._sdk = SDK(token=config.oauth_token)
+
+        self._iam_token: str | None = None
+        self._iam_token_last_issued: datetime | None = None
+
+        logger.info(f"Initializing SourcecraftApi with base_url: {self.base_url}")
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        kwargs.setdefault("headers", {}).update(self._request_headers)
+        return self._client.request(method, path, **kwargs)
+
+    @property
+    def iam_token(self) -> str:
+        if (
+            self._iam_token is None
+            or self._iam_token_last_issued is None
+            or self._iam_token_last_issued < datetime.now() - timedelta(hours=1)
+        ):
+            self._iam_token = self._get_iam_token()
+            self._iam_token_last_issued = datetime.now()
+        return self._iam_token
+
+    def _get_iam_token(self) -> str:
+        token_requester = self._sdk._channels._token_requester
+        client = self._sdk.client(IamTokenServiceStub)
+        try:
+            response = client.Create(token_requester.get_token_request())  # type: ignore
+        except grpc.RpcError as e:
+            raise RmsApiException(f"Failed to get IAM token: {e}") from e
+        return response.iam_token
+
+    @property
+    def _request_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.iam_token}",
+            "Content-Type": "application/json",
+        }
+
+    def _get_repo(
+        self,
+        repo_slug: str,
+    ) -> httpx.Response:
+        return self._request("GET", f"repos/{self._org_slug}/{repo_slug}")
+
+    def _create_repo(
+        self,
+        repo_slug: str,
+        visibility: str,
+        create_readme: bool = False,
+        default_branch: str = "main",
+        template_id: int | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "name": repo_slug,
+            "slug": repo_slug,
+            "visibility": visibility,
+            "init_settings": {
+                "create_readme": create_readme,
+                "default_branch": default_branch,
+            },
+        }
+        if template_id is not None:
+            payload["templating_options"] = {
+                "template_id": template_id,
+            }
+        response = self._request("POST", f"orgs/{self._org_slug}/repos", json=payload)
+        if response.status_code != HTTPStatus.CREATED:
+            raise RmsApiException(f"Failed to create repo: {response.json()}")
+
+    def _update_repo(
+        self,
+        repo_slug: str,
+        data: dict[str, Any],
+    ) -> None:
+        response = self._request("PATCH", f"{self._org_slug}/{repo_slug}", json=data)
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to update repo: {response.json()}")
+
+    def _add_repo_role(
+        self,
+        repo_slug: str,
+        role: str,
+        user_id: str,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "subject_roles": [
+                {
+                    "role": role,
+                    "subject": {
+                        "type": "user",
+                        "id": user_id,
+                    },
+                }
+            ]
+        }
+        response = self._request("POST", f"repos/{self._org_slug}/{repo_slug}/roles", json=payload)
+        if response.status_code != HTTPStatus.OK:
+            data = response.json()
+            if data.get("error_code", "") == "FailedPrecondition":
+                logger.info(f"User {user_id} not found in org {self._org_slug}, inviting them")
+                invitee_id = self._invite_user(user_id)
+                payload["subject_roles"][0]["subject"] = {
+                    "type": "invitee",
+                    "id": invitee_id,
+                }
+                response = self._request("POST", f"repos/{self._org_slug}/{repo_slug}/roles", json=payload)
+                if response.status_code != HTTPStatus.OK:
+                    raise RmsApiException(f"Failed to add repo role: {response.json()}")
+            else:
+                raise RmsApiException(f"Failed to add repo role: {response.json()}")
+
+    def _invite_user(self, user_id: str) -> str:
+        user = self.get_rms_user_by_id(user_id)
+        payload: dict[str, Any] = {
+            "invitees": [
+                {
+                    "slug": user.username,
+                }
+            ],
+        }
+        response = self._request("POST", f"orgs/{self._org_slug}/invites", json=payload)
+        if response.status_code != HTTPStatus.ACCEPTED:
+            raise RmsApiException(f"Failed to invite user: {response.json()}")
+        data = response.json()
+        while data["status"] in ["scheduled", "in_progress"]:
+            time.sleep(0.5)
+            response = self._request("GET", data["status_url"])
+            if response.status_code != HTTPStatus.OK:
+                raise RmsApiException(f"Failed to get invite: {response.json()}")
+            data = response.json()
+        if data["status"] != "success":
+            raise RmsApiException(f"Failed to invite user: {data['error']}")
+        invites = data["response"]["invites"]
+        if len(invites) == 0:
+            raise RmsApiException(f"Failed to invite user: {data['response']['errors'][0]['message']}")
+        return invites[0]["subject"]["id"]
+
+    def create_public_repo(
+        self,
+        course_group: str,
+        course_public_repo: str,
+    ) -> None:
+        """Create a public repository for course materials.
+
+        :param course_group: UNUSED
+        :param course_public_repo: public repo slug
+        """
+        logger.info(f"Creating public repo: {course_public_repo}")
+
+        self._create_repo(
+            repo_slug=course_public_repo,
+            visibility="public",
+            create_readme=True,
+            template_id=None,
+        )
+
+        self._update_repo(course_public_repo, {"template_type": "organizational"})
+
+    def create_students_group(
+        self,
+        course_students_group: str,
+        parent_group_id: int | None = None,
+    ) -> None:
+        """Do nothing.
+
+        :param course_students_group: UNUSED
+        """
+        logger.info("Will skip students group creation, SourceCraft doesn't have user groups yet")
+
+    def check_project_exists(
+        self,
+        project_name: str,
+        project_group: str,
+    ) -> bool:
+        """Check if a project exists in the given group.
+
+        :param project_name: repo slug suffix
+        :param project_group: repo slug prefix
+        :return: True if repo exists, False otherwise
+        """
+        response = self._get_repo(f"{project_group}-{normalize_string(project_name)}")
+
+        if response.status_code == HTTPStatus.OK:
+            return True
+        elif response.status_code == HTTPStatus.NOT_FOUND:
+            logger.info(f"Project {project_group}-{project_name} not found")
+            return False
+        else:
+            raise RmsApiException(f"Failed to check if project exists: {response.json()}")
+
+    def check_user_has_repo_access(
+        self,
+        rms_user_id: str,
+        project_name: str,
+        project_group: str,
+    ) -> bool:
+        """Return True if the user is an active member (accepted invitation) of their repo."""
+        repo_slug = f"{project_group}-{normalize_string(project_name)}"
+        response = self._request("GET", f"repos/{self._org_slug}/{repo_slug}/roles")
+        if response.status_code != HTTPStatus.OK:
+            return False  # don't block on API errors
+        for entry in response.json().get("subject_roles", []):
+            subject = entry.get("subject", {})
+            if subject.get("id") == rms_user_id and subject.get("type") == "user":
+                return True
+        return False
+
+    def create_project(
+        self,
+        rms_user: RmsUser,
+        course_students_group: str,
+        course_public_repo: str,
+    ) -> None:
+        """Create a personal repo for a student.
+
+        :param rms_user: User information
+        :param course_students_group: repo slug prefix
+        :param course_public_repo: public repo slug
+        """
+        logger.info(f"Creating repo for user {rms_user.username}")
+
+        student_repo_slug = f"{course_students_group}-{normalize_string(rms_user.username)}"
+
+        response = self._get_repo(course_public_repo)
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            raise RmsApiException(f"Project {course_public_repo} not found")
+        elif response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get project: {response.json()}")
+
+        self._create_repo(
+            repo_slug=student_repo_slug,
+            visibility="private",
+            template_id=response.json()["id"],
+        )
+
+        self._add_repo_role(student_repo_slug, "developer", rms_user.id)
+
+    def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
+        """Get URL for task base directory in the public repository.
+
+        :param course_public_repo: public repo slug
+        :param default_branch: default branch name
+        :return: URL to the task base directory
+        """
+        return f"{self._base_url}/{self._org_slug}/{course_public_repo}?ref={default_branch}"
+
+    def get_url_for_repo(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str:
+        """Get URL for a student's repository.
+
+        :param username: student's username
+        :param course_students_group: repo slug prefix
+        :return: URL to the student's repository
+        """
+        return f"{self._base_url}/{self._org_slug}/{course_students_group}-{normalize_string(username)}"
+
+    def get_url_for_piplines(
+        self,
+        username: str,
+        course_students_group: str,
+    ) -> str:
+        return f"{self.get_url_for_repo(username, course_students_group)}/cicd/runs"
+
+    def register_new_user(
+        self,
+        username: str,
+        firstname: str,
+        lastname: str,
+        email: str,
+        password: str,
+    ) -> RmsUser:
+        raise NotImplementedError("register_new_user method not implemented yet")
+
+    def get_rms_user_by_id(
+        self,
+        user_id: str,
+    ) -> RmsUser:
+        return self._get_user_profile(f"id:{user_id}")
+
+    def get_rms_user_by_username(
+        self,
+        username: str,
+    ) -> RmsUser:
+        # NOTE: yandex login is expected as username for now
+        return self._get_user_by_yandex_login(username)
+
+    def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:
+        cloud_id = self._get_cloud_id_by_yandex_login(auth_username)
+        return self._get_user_profile(f"cloud-id:{cloud_id}")
+
+    def _get_cloud_id_by_yandex_login(self, yandex_login: str) -> str:
+        client = self._sdk.client(YandexPassportUserAccountServiceStub)
+        try:
+            response = client.GetByLogin(GetUserAccountByLoginRequest(login=yandex_login))
+        except grpc.RpcError as e:
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {e}") from e
+        return response.id
+
+    def _get_user_profile(self, identity: str) -> RmsUser:
+        response = self._request("GET", f"users/{identity}")
+        if response.status_code != HTTPStatus.OK:
+            raise RmsApiException(f"Failed to get cloud id by yandex login: {response.json()}")
+        return self._unmarshal_user_profile(response.json())
+
+    def _unmarshal_user_profile(self, data: dict[str, Any]) -> RmsUser:
+        return RmsUser(
+            id=data["id"],
+            username=data["username"],
+            name=data["display_name"],
+        )
+
+    def create_namespace_group(
+        self,
+        name: str,
+        path: str,
+        description: str | None = None,
+    ) -> int:
+        """Do nothing. "Namespace" in SourceCraft is a Yandex.Cloud organization, we cannot create it via API.
+        :return: -1
+        TODO: check that org exists and return its UUID
+        """
+        return -1
+
+    def add_user_to_namespace_group(
+        self,
+        gitlab_group_id: int,
+        rms_id: str,
+    ) -> None:
+        # TODO: invite user to org?
+        return None
+
+    def remove_user_from_namespace_group(
+        self,
+        gitlab_group_id: int,
+        rms_id: str,
+    ) -> None:
+        raise NotImplementedError("remove_user_from_namespace_group method not implemented yet")
+
+    def create_course_group(
+        self,
+        parent_group_id: int | None,
+        course_name: str,
+        course_slug: str,
+    ) -> int:
+        # TODO: implement when SourceCraft supports groups of repos
+        return -1
+
+    def delete_group(self, group_id: int) -> None:
+        raise NotImplementedError("delete_group method not implemented yet")
+
+    def delete_project(self, project_id: int) -> None:
+        raise NotImplementedError("delete_project method not implemented yet")
+
+    def get_group_path_by_id(self, group_id: int) -> str | None:
+        if group_id == -1:
+            return ""
+        else:
+            raise NotImplementedError("get_group_path_by_id method not implemented yet")

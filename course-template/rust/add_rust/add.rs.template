@@ -1,0 +1,6 @@
+// Student stub — exported as add.rs. Implement `add` so it returns a + b.
+pub fn add(a: i64, b: i64) -> i64 {
+    // TODO: implement me
+    let _ = (a, b);
+    0
+}
