@@ -3,10 +3,6 @@
 {% block additional_styles %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/user-menu.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/courses.css') }}">
-    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
-          id="light-theme">
-    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
-          id="dark-theme" disabled>
 {% endblock %}
 
 {% block signout %}{% endblock %}
@@ -111,6 +107,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
+          id="light-theme">
+    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
+          id="dark-theme" disabled>
 
     <script>
         const coursesData = {{ courses | tojson }};
@@ -256,8 +256,6 @@
                 statusSelect.value = "";
                 window.tabulatorTable.clearFilter();
             });
-
-            initTabulatorTheme(() => window.tabulatorTable);
         }
 
         function applyView(view) {
@@ -266,10 +264,14 @@
             tableView.classList.toggle('hidden', !isTable);
 
             if (isTable) {
-                buildCoursesTable();
                 toggleViewLabel.textContent = 'List view';
                 toggleViewIcon.classList.remove('fa-table');
                 toggleViewIcon.classList.add('fa-list');
+                // The table was built into a hidden container; force a redraw
+                // (and re-layout) now that it is visible.
+                if (window.tabulatorTable) {
+                    window.tabulatorTable.redraw(true);
+                }
             } else {
                 toggleViewLabel.textContent = 'Table view';
                 toggleViewIcon.classList.remove('fa-list');
@@ -278,11 +280,24 @@
         }
 
         let currentView = localStorage.getItem(VIEW_STORAGE_KEY) === 'table' ? 'table' : 'list';
-        applyView(currentView);
 
         toggleViewBtn.addEventListener('click', () => {
             currentView = currentView === 'table' ? 'list' : 'table';
             localStorage.setItem(VIEW_STORAGE_KEY, currentView);
+            applyView(currentView);
+        });
+
+        // Build the table eagerly and wire up the theme sync at
+        // DOMContentLoaded, exactly like the database page (whose dark theme
+        // works). base.html has set data-bs-theme by this point, so the shared
+        // helper applies the correct Tabulator stylesheet immediately and keeps
+        // it in sync on later theme changes.
+        document.addEventListener('DOMContentLoaded', function () {
+            // Register the theme observer FIRST and independently, so a failure
+            // while building the table can never prevent theme sync (this is
+            // why the table previously stayed light on theme change).
+            initTabulatorTheme(() => window.tabulatorTable);
+            buildCoursesTable();
             applyView(currentView);
         });
     </script>
