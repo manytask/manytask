@@ -10,12 +10,19 @@
  *   <link id="dark-theme" ... disabled>
  *
  * Usage:
- *   initTabulatorTheme(() => window.tabulatorTable);
+ *   const applyTabulatorTheme = initTabulatorTheme(() => window.tabulatorTable);
+ *   // ... later, after lazily building a table:
+ *   applyTabulatorTheme();
  *
  * @param {function(): (object|undefined)} getTable
  *        Callback returning the current Tabulator instance (or a falsy value
  *        if the table is not built yet). Called on every theme change so lazily
  *        initialised tables are picked up automatically.
+ * @returns {function(): void}
+ *        A function that re-applies the current theme on demand. Call it right
+ *        after building a table that was created lazily (i.e. after the initial
+ *        theme was already set), since the MutationObserver only reacts to
+ *        subsequent attribute *changes*, not to a table appearing later.
  */
 function initTabulatorTheme(getTable) {
     function applyTheme() {
@@ -48,4 +55,6 @@ function initTabulatorTheme(getTable) {
         attributes: true,
         attributeFilter: ['data-bs-theme'],
     });
+
+    return applyTheme;
 }
