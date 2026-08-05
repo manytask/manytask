@@ -267,10 +267,17 @@
                 toggleViewLabel.textContent = 'List view';
                 toggleViewIcon.classList.remove('fa-table');
                 toggleViewIcon.classList.add('fa-list');
-                // The table was built into a hidden container; force a redraw
-                // (and re-layout) now that it is visible.
+                // Build the table only now that its container is visible, so
+                // Tabulator can measure a real (non-zero) width and fitColumns
+                // fills the container instead of collapsing to content width.
+                buildCoursesTable();
+                // Re-fit columns after the browser has laid out the now-visible
+                // container. A synchronous redraw here can still read a stale
+                // width, so defer to the next frame.
                 if (window.tabulatorTable) {
-                    window.tabulatorTable.redraw(true);
+                    requestAnimationFrame(function () {
+                        window.tabulatorTable.redraw(true);
+                    });
                 }
             } else {
                 toggleViewLabel.textContent = 'Table view';
@@ -287,17 +294,13 @@
             applyView(currentView);
         });
 
-        // Build the table eagerly and wire up the theme sync at
-        // DOMContentLoaded, exactly like the database page (whose dark theme
-        // works). base.html has set data-bs-theme by this point, so the shared
-        // helper applies the correct Tabulator stylesheet immediately and keeps
-        // it in sync on later theme changes.
+        // Register the theme observer at DOMContentLoaded (after base.html has
+        // set data-bs-theme) so the correct Tabulator stylesheet is applied and
+        // kept in sync on theme changes. The table itself is built lazily by
+        // applyView() once its container is visible, which is required for
+        // correct column widths.
         document.addEventListener('DOMContentLoaded', function () {
-            // Register the theme observer FIRST and independently, so a failure
-            // while building the table can never prevent theme sync (this is
-            // why the table previously stayed light on theme change).
             initTabulatorTheme(() => window.tabulatorTable);
-            buildCoursesTable();
             applyView(currentView);
         });
     </script>

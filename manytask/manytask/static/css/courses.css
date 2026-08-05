@@ -114,12 +114,12 @@
 /* ----- Table view ----- */
 .courses-table-view {
     width: 100%;
-    max-width: 800px;
+    max-width: 1100px;
 }
 
 .courses-filter-controls {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.5rem;
     align-items: center;
     width: 100%;
@@ -127,7 +127,8 @@
 
 .courses-search-input {
     position: relative;
-    flex: 1 1 220px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .courses-search-input .form-control {
@@ -144,8 +145,13 @@
 }
 
 .courses-status-select {
-    flex: 0 1 200px;
+    flex: 0 0 auto;
     width: auto;
+}
+
+.courses-filter-controls .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .courses-table-link {
