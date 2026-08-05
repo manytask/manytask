@@ -90,3 +90,8 @@ Before opening a PR, make sure the full check suite passes:
 ```bash
 make check
 ```
+
+## Relese checklist
+
+- Update VERSION file
+- Update CHANGELOG.md
