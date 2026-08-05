@@ -39,6 +39,8 @@ from .config import (
     PingResponse,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
+    UserSearchResponse,
+    UserSearchResult,
 )
 from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
@@ -774,6 +776,67 @@ def update_comment(course_name: str) -> ResponseReturnValue:
         return jsonify(
             {"success": False, "message": "Internal error when updating comment"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@namespace_bp.get("/users/search")
+@requires_auth
+def search_users() -> ResponseReturnValue:
+    """Search users by username, first name or last name.
+
+    Available to Instance Admins and Namespace Admins so they can find users to
+    assign roles without having to know the user's RMS (GitLab) id.
+
+    Query params:
+        q: search string (matched as a case-insensitive substring against
+           username, first name and last name)
+        limit: optional maximum number of results (default 20, capped at 50)
+
+    :returns: JSON response with status code and data:
+        - 200: List of matching users
+        - 403: Forbidden (not Instance Admin nor Namespace Admin)
+        - 500: Internal server error
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+
+    username = session["manytask"]["username"]
+
+    is_instance_admin = storage_api.check_if_instance_admin(username)
+    is_namespace_admin = len(storage_api.get_namespace_admin_namespaces(username)) > 0
+    if not is_instance_admin and not is_namespace_admin:
+        logger.warning("User %s attempted to search users without admin privileges", username)
+        return jsonify(ErrorResponse(error="Access denied").model_dump()), HTTPStatus.FORBIDDEN
+
+    query = request.args.get("q", "", type=str).strip()
+
+    try:
+        limit = request.args.get("limit", 20, type=int)
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, 50))
+
+    if not query:
+        return jsonify(UserSearchResponse(users=[]).model_dump()), HTTPStatus.OK
+
+    try:
+        matches = storage_api.search_users(query, limit=limit)
+        result = UserSearchResponse(
+            users=[
+                UserSearchResult(
+                    user_id=user.user_id,
+                    rms_id=user.rms_id,
+                    username=user.username,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                )
+                for user in matches
+            ]
+        )
+        logger.info("User %s searched users with query=%r, found %d", username, query, len(matches))
+        return jsonify(result.model_dump()), HTTPStatus.OK
+    except Exception as e:
+        logger.error("Error searching users for query=%r by user=%s: %s", query, username, str(e), exc_info=True)
+        return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @namespace_bp.post("/namespaces")

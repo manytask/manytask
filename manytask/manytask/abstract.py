@@ -186,6 +186,9 @@ class StorageApi(ABC):
     def get_all_users(self) -> list[StoredUser]: ...
 
     @abstractmethod
+    def search_users(self, query: str, limit: int = 20) -> list[StoredUser]: ...
+
+    @abstractmethod
     def get_course_users_with_admin_status(self, course_name: str) -> list[tuple[StoredUser, bool]]: ...
 
     @abstractmethod

@@ -92,6 +92,20 @@ class NamespaceUserItem(BaseModel):
     role: str
 
 
+class UserSearchResult(BaseModel):
+    """A single user returned by the user search endpoint."""
+
+    user_id: int
+    rms_id: str
+    username: str
+    first_name: str
+    last_name: str
+
+
+class UserSearchResponse(BaseModel):
+    users: list[UserSearchResult]
+
+
 class NamespaceUsersListResponse(BaseModel):
     users: list[NamespaceUserItem]
 

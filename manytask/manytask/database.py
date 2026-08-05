@@ -1094,6 +1094,35 @@ class DataBaseApi(StorageApi):
             logger.info("Fetched all users: count=%s", len(users))
             return [self._to_stored_user(user) for user in users]
 
+    def search_users(self, query: str, limit: int = 20) -> list[StoredUser]:
+        """Search users by username, first name or last name (case-insensitive substring match).
+
+        :param query: search string to match against username/first_name/last_name
+        :param limit: maximum number of results to return
+        :return: list of matching users (empty if the query is blank)
+        """
+        query = (query or "").strip()
+        if not query:
+            return []
+
+        pattern = f"%{query}%"
+        with self._session_create() as session:
+            users = (
+                session.query(models.User)
+                .filter(
+                    or_(
+                        models.User.username.ilike(pattern),
+                        models.User.first_name.ilike(pattern),
+                        models.User.last_name.ilike(pattern),
+                    )
+                )
+                .order_by(models.User.username)
+                .limit(limit)
+                .all()
+            )
+            logger.info("User search for query=%r returned count=%s", query, len(users))
+            return [self._to_stored_user(user) for user in users]
+
     def get_course_users_with_admin_status(self, course_name: str) -> list[tuple[StoredUser, bool]]:
         """Get all users enrolled on a course together with their course admin status
 

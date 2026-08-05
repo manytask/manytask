@@ -1190,3 +1190,114 @@ def test_remove_user_from_namespace_nonexistent_namespace(client_with_db, mock_s
     data = json.loads(response.data)
     assert "error" in data
     assert data["error"] == "Access denied"
+
+
+def _seed_search_users(session):
+    """Add a few users to the database for search tests."""
+    session.add(make_user("ivanov", "Ivan", "Ivanov", "100", 100))
+    session.add(make_user("petrov", "Petr", "Petrov", "101", 101))
+    session.add(make_user("sidorova", "Anna", "Sidorova", "102", 102))
+    session.commit()
+
+
+def test_search_users_as_instance_admin(client_with_db, session, mock_session_admin):
+    """Instance Admin can search users by name."""
+    _seed_search_users(session)
+    set_session(client_with_db, mock_session_admin)
+
+    response = client_with_db.get("/api/users/search?q=ivan")
+
+    assert response.status_code == HTTPStatus.OK
+    data = json.loads(response.data)
+    usernames = {user["username"] for user in data["users"]}
+    assert "ivanov" in usernames
+    for user in data["users"]:
+        assert "rms_id" in user
+        assert "user_id" in user
+        assert "first_name" in user
+        assert "last_name" in user
+
+
+def test_search_users_by_last_name(client_with_db, session, mock_session_admin):
+    """Search matches last name substrings."""
+    _seed_search_users(session)
+    set_session(client_with_db, mock_session_admin)
+
+    response = client_with_db.get("/api/users/search?q=sidorova")
+
+    assert response.status_code == HTTPStatus.OK
+    data = json.loads(response.data)
+    usernames = {user["username"] for user in data["users"]}
+    assert usernames == {"sidorova"}
+
+
+def test_search_users_by_username(client_with_db, session, mock_session_admin):
+    """Search matches username substrings."""
+    _seed_search_users(session)
+    set_session(client_with_db, mock_session_admin)
+
+    response = client_with_db.get("/api/users/search?q=petrov")
+
+    assert response.status_code == HTTPStatus.OK
+    data = json.loads(response.data)
+    usernames = {user["username"] for user in data["users"]}
+    assert "petrov" in usernames
+
+
+def test_search_users_empty_query_returns_empty(client_with_db, session, mock_session_admin):
+    """A blank query returns an empty list without error."""
+    _seed_search_users(session)
+    set_session(client_with_db, mock_session_admin)
+
+    response = client_with_db.get("/api/users/search?q=")
+
+    assert response.status_code == HTTPStatus.OK
+    data = json.loads(response.data)
+    assert data["users"] == []
+
+
+def test_search_users_no_match(client_with_db, session, mock_session_admin):
+    """A query with no matches returns an empty list."""
+    _seed_search_users(session)
+    set_session(client_with_db, mock_session_admin)
+
+    response = client_with_db.get("/api/users/search?q=zzznomatch")
+
+    assert response.status_code == HTTPStatus.OK
+    data = json.loads(response.data)
+    assert data["users"] == []
+
+
+def test_search_users_as_namespace_admin(client_with_db, session, mock_session_admin, mock_session_regular):
+    """A Namespace Admin can use the user search endpoint."""
+    _seed_search_users(session)
+
+    # Create namespace as instance admin and make regular_user a namespace admin
+    set_session(client_with_db, mock_session_admin)
+    namespace_data = create_namespace(client_with_db, name="HSE", slug="hse-namespace")
+    assign_namespace_role_for_user(
+        session,
+        username="regular_user",
+        namespace_id=namespace_data["id"],
+        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+    )
+
+    set_session(client_with_db, mock_session_regular)
+    response = client_with_db.get("/api/users/search?q=ivan")
+
+    assert response.status_code == HTTPStatus.OK
+    data = json.loads(response.data)
+    usernames = {user["username"] for user in data["users"]}
+    assert "ivanov" in usernames
+
+
+def test_search_users_forbidden_for_regular_user(client_with_db, session, mock_session_regular):
+    """A user without admin privileges cannot search users."""
+    _seed_search_users(session)
+    set_session(client_with_db, mock_session_regular)
+
+    response = client_with_db.get("/api/users/search?q=ivan")
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    data = json.loads(response.data)
+    assert data["error"] == "Access denied"
