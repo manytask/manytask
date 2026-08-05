@@ -196,83 +196,23 @@
         </div>
     </div>
 
+    <script src="{{ url_for('static', filename='js/user-search.js') }}"></script>
     <script>
         const namespaceId = {{ namespace.id }};
 
-        let userSearchTimeout = null;
-
-        function normalizeSearch(str) {
-            return (str || '').toLowerCase();
-        }
-
-        function renderSearchResults(users) {
-            const resultsDiv = document.getElementById('userSearchResults');
-            resultsDiv.innerHTML = '';
-
-            if (!users || users.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'list-group-item text-muted';
-                empty.textContent = 'No users found';
-                resultsDiv.appendChild(empty);
-                resultsDiv.classList.remove('d-none');
-                return;
-            }
-
-            users.forEach(user => {
-                const item = document.createElement('button');
-                item.type = 'button';
-                item.className = 'list-group-item list-group-item-action';
-                const fullName = `${user.first_name} ${user.last_name}`.trim();
-                item.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span><strong>${fullName || user.username}</strong>
-                            <span class="text-muted">@${user.username}</span></span>
-                        <span class="badge bg-secondary">ID: ${user.rms_id}</span>
-                    </div>`;
-                item.addEventListener('click', () => selectUser(user));
-                resultsDiv.appendChild(item);
-            });
-            resultsDiv.classList.remove('d-none');
-        }
-
-        function selectUser(user) {
-            document.getElementById('userRmsId').value = user.rms_id;
-            const fullName = `${user.first_name} ${user.last_name}`.trim();
-            document.getElementById('selectedUserName').textContent = fullName || user.username;
-            document.getElementById('selectedUserUsername').textContent = '@' + user.username;
-            document.getElementById('selectedUserRmsId').textContent = user.rms_id;
-            document.getElementById('selectedUserContainer').classList.remove('d-none');
-
-            const searchInput = document.getElementById('userSearch');
-            searchInput.value = '';
-            document.getElementById('userSearchResults').classList.add('d-none');
-        }
-
-        function clearSelectedUser() {
-            document.getElementById('userRmsId').value = '';
-            document.getElementById('selectedUserContainer').classList.add('d-none');
-        }
-
-        async function performUserSearch(query) {
-            const resultsDiv = document.getElementById('userSearchResults');
-            if (!query || query.trim().length === 0) {
-                resultsDiv.classList.add('d-none');
-                resultsDiv.innerHTML = '';
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/users/search?q=${encodeURIComponent(query.trim())}`);
-                if (!response.ok) {
-                    resultsDiv.classList.add('d-none');
-                    return;
-                }
-                const data = await response.json();
-                renderSearchResults(data.users || []);
-            } catch (error) {
-                resultsDiv.classList.add('d-none');
-            }
-        }
+        const userSearchWidget = initUserSearch({
+            searchInputId: 'userSearch',
+            resultsId: 'userSearchResults',
+            hiddenInputId: 'userRmsId',
+            selectedContainerId: 'selectedUserContainer',
+            selectedNameId: 'selectedUserName',
+            selectedUsernameId: 'selectedUserUsername',
+            selectedRmsId: 'selectedUserRmsId',
+            clearButtonId: 'clearSelectedUser',
+            modalId: 'addUserModal',
+            resetFormId: 'addUserForm',
+            resetElementIds: ['addUserError', 'addUserSuccess'],
+        });
 
         async function addUser() {
             const form = document.getElementById('addUserForm');
@@ -311,7 +251,7 @@
                     successDiv.textContent = `User with ID ${userId} added successfully!`;
                     successDiv.classList.remove('d-none');
                     form.reset();
-                    clearSelectedUser();
+                    userSearchWidget.clearSelected();
                     
                     setTimeout(() => {
                         location.reload();
@@ -413,47 +353,6 @@
                 }
             }, 5000);
         }
-
-        document.addEventListener('DOMContentLoaded', function () {
-            const searchInput = document.getElementById('userSearch');
-            const resultsDiv = document.getElementById('userSearchResults');
-            const clearBtn = document.getElementById('clearSelectedUser');
-
-            if (searchInput) {
-                searchInput.addEventListener('input', function () {
-                    const query = this.value;
-                    if (userSearchTimeout) {
-                        clearTimeout(userSearchTimeout);
-                    }
-                    userSearchTimeout = setTimeout(() => performUserSearch(query), 250);
-                });
-            }
-
-            if (clearBtn) {
-                clearBtn.addEventListener('click', clearSelectedUser);
-            }
-
-            // Hide the results dropdown when clicking outside of it
-            document.addEventListener('click', function (event) {
-                if (resultsDiv && searchInput &&
-                    !resultsDiv.contains(event.target) && event.target !== searchInput) {
-                    resultsDiv.classList.add('d-none');
-                }
-            });
-
-            // Reset the modal state each time it is opened
-            const addUserModal = document.getElementById('addUserModal');
-            if (addUserModal) {
-                addUserModal.addEventListener('hidden.bs.modal', function () {
-                    document.getElementById('addUserForm').reset();
-                    clearSelectedUser();
-                    resultsDiv.classList.add('d-none');
-                    resultsDiv.innerHTML = '';
-                    document.getElementById('addUserError').classList.add('d-none');
-                    document.getElementById('addUserSuccess').classList.add('d-none');
-                });
-            }
-        });
     </script>
 {% endblock %}
 
