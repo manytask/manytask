@@ -7,6 +7,10 @@
     <hr>
     <p>You can update the page once it ready</p>
     <a href="{{ url_for('course.course_page', course_name=course_name) }}" class="btn btn-warning">Refresh</a>
+    <a class="btn btn-secondary mt-3" href="{{ url_for('root.index') }}">Back to courses list</a>
+    {% if can_edit_course %}
+            <a class="btn btn-success mt-3" href="{{ url_for('instance_admin.edit_course', course_name=course_name) }}">Back to editing course</a>
+    {% endif %}
     {% if is_instance_admin %}
             <a class="btn btn-primary mt-3" href="{{ url_for('instance_admin.instance_admin_panel') }}">Instance Admin panel</a>
     {% endif %}
