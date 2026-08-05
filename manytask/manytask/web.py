@@ -74,7 +74,6 @@ def index() -> ResponseReturnValue:
         can_create_courses=can_create_courses,
         is_instance_admin=is_instance_admin,
         username=username,
-        gitlab_url=app.rms_api.base_url,
     )
 
 
@@ -152,7 +151,6 @@ def course_page(course_name: str) -> ResponseReturnValue:
         course_name=course.course_name,
         course_status=course.status,
         app=app,
-        gitlab_url=app.rms_api.base_url,
         allscores_url=allscores_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
@@ -446,7 +444,6 @@ def show_database(course_name: str) -> ResponseReturnValue:
         course_favicon=app.favicon,
         readonly_fields=["username", "total_score"],  # Cannot be edited in database web viewer
         links=course.links,
-        gitlab_url=app.rms_api.base_url,
         show_allscores=course.show_allscores,
         student_repo_url=student_repo,
         student_ci_url=student_ci_url,
