@@ -308,11 +308,29 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="mb-3">
-                            <label for="roleUserId" class="form-label">User ID (rms_id) *</label>
-                            <input type="number" class="form-control" id="roleUserId" name="user_id" required
-                                   placeholder="123">
-                            <small class="form-text text-muted">GitLab user ID</small>
+                        <div class="mb-3 position-relative">
+                            <label for="roleUserSearch" class="form-label">Find User *</label>
+                            <input type="text" class="form-control" id="roleUserSearch" autocomplete="off"
+                                   placeholder="Search by username, first or last name">
+                            <small class="form-text text-muted">Start typing to search registered users</small>
+                            <div id="roleUserSearchResults" class="list-group position-absolute w-100 shadow-sm d-none"
+                                 style="z-index: 1060; max-height: 240px; overflow-y: auto;"></div>
+                        </div>
+                        <div class="mb-3 d-none" id="roleSelectedUserContainer">
+                            <label class="form-label">Selected User</label>
+                            <div class="d-flex align-items-center justify-content-between border rounded p-2">
+                                <div>
+                                    <strong id="roleSelectedUserName"></strong>
+                                    <div class="text-muted small">
+                                        <span id="roleSelectedUserUsername"></span>
+                                        · GitLab ID: <span id="roleSelectedUserRmsId"></span>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="roleClearSelectedUser">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <input type="hidden" id="roleUserId" name="user_id">
                         </div>
                         <div class="mb-3">
                             <label for="userRole" class="form-label">Role *</label>
@@ -409,6 +427,76 @@
             }
         }
 
+        let roleUserSearchTimeout = null;
+
+        function renderRoleSearchResults(users) {
+            const resultsDiv = document.getElementById('roleUserSearchResults');
+            resultsDiv.innerHTML = '';
+
+            if (!users || users.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'list-group-item text-muted';
+                empty.textContent = 'No users found';
+                resultsDiv.appendChild(empty);
+                resultsDiv.classList.remove('d-none');
+                return;
+            }
+
+            users.forEach(user => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'list-group-item list-group-item-action';
+                const fullName = `${user.first_name} ${user.last_name}`.trim();
+                item.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><strong>${fullName || user.username}</strong>
+                            <span class="text-muted">@${user.username}</span></span>
+                        <span class="badge bg-secondary">ID: ${user.rms_id}</span>
+                    </div>`;
+                item.addEventListener('click', () => selectRoleUser(user));
+                resultsDiv.appendChild(item);
+            });
+            resultsDiv.classList.remove('d-none');
+        }
+
+        function selectRoleUser(user) {
+            document.getElementById('roleUserId').value = user.rms_id;
+            const fullName = `${user.first_name} ${user.last_name}`.trim();
+            document.getElementById('roleSelectedUserName').textContent = fullName || user.username;
+            document.getElementById('roleSelectedUserUsername').textContent = '@' + user.username;
+            document.getElementById('roleSelectedUserRmsId').textContent = user.rms_id;
+            document.getElementById('roleSelectedUserContainer').classList.remove('d-none');
+
+            document.getElementById('roleUserSearch').value = '';
+            document.getElementById('roleUserSearchResults').classList.add('d-none');
+        }
+
+        function clearRoleSelectedUser() {
+            document.getElementById('roleUserId').value = '';
+            document.getElementById('roleSelectedUserContainer').classList.add('d-none');
+        }
+
+        async function performRoleUserSearch(query) {
+            const resultsDiv = document.getElementById('roleUserSearchResults');
+            if (!query || query.trim().length === 0) {
+                resultsDiv.classList.add('d-none');
+                resultsDiv.innerHTML = '';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/users/search?q=${encodeURIComponent(query.trim())}`);
+                if (!response.ok) {
+                    resultsDiv.classList.add('d-none');
+                    return;
+                }
+                const data = await response.json();
+                renderRoleSearchResults(data.users || []);
+            } catch (error) {
+                resultsDiv.classList.add('d-none');
+            }
+        }
+
         async function assignRoleInNamespace() {
             const form = document.getElementById('assignRoleForm');
             const errorDiv = document.getElementById('assignRoleError');
@@ -422,7 +510,7 @@
             const role = form.querySelector('[name="role"]').value;
 
             if (!namespaceId || !userId || !role) {
-                errorDiv.textContent = 'All fields are required';
+                errorDiv.textContent = 'Please select a namespace, a user and a role';
                 errorDiv.classList.remove('d-none');
                 return;
             }
@@ -447,6 +535,7 @@
                     successDiv.textContent = `Role "${role}" assigned successfully to user ${userId}!`;
                     successDiv.classList.remove('d-none');
                     form.reset();
+                    clearRoleSelectedUser();
                     
                     setTimeout(() => {
                         location.reload();
@@ -472,6 +561,46 @@
                     window.location.href = this.dataset.href;
                 });
             });
+
+            // Live user search for the "Assign role in namespace" modal
+            const roleSearchInput = document.getElementById('roleUserSearch');
+            const roleResultsDiv = document.getElementById('roleUserSearchResults');
+            const roleClearBtn = document.getElementById('roleClearSelectedUser');
+
+            if (roleSearchInput) {
+                roleSearchInput.addEventListener('input', function () {
+                    const query = this.value;
+                    if (roleUserSearchTimeout) {
+                        clearTimeout(roleUserSearchTimeout);
+                    }
+                    roleUserSearchTimeout = setTimeout(() => performRoleUserSearch(query), 250);
+                });
+            }
+
+            if (roleClearBtn) {
+                roleClearBtn.addEventListener('click', clearRoleSelectedUser);
+            }
+
+            // Hide the results dropdown when clicking outside of it
+            document.addEventListener('click', function (event) {
+                if (roleResultsDiv && roleSearchInput &&
+                    !roleResultsDiv.contains(event.target) && event.target !== roleSearchInput) {
+                    roleResultsDiv.classList.add('d-none');
+                }
+            });
+
+            // Reset the assign-role modal state each time it is opened/closed
+            const assignRoleModal = document.getElementById('assignRoleModal');
+            if (assignRoleModal) {
+                assignRoleModal.addEventListener('hidden.bs.modal', function () {
+                    document.getElementById('assignRoleForm').reset();
+                    clearRoleSelectedUser();
+                    roleResultsDiv.classList.add('d-none');
+                    roleResultsDiv.innerHTML = '';
+                    document.getElementById('assignRoleError').classList.add('d-none');
+                    document.getElementById('assignRoleSuccess').classList.add('d-none');
+                });
+            }
         });
     </script>
 {% endblock %}
