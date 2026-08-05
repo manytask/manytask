@@ -107,6 +107,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
           id="light-theme">
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
@@ -235,18 +236,25 @@
             // Combined search + status filter.
             const valueEl = document.getElementById("courses-filter-value");
 
+            // Transliteration-aware search (shared normalizeForSearch helper),
+            // matching the course database page: searches course name and
+            // namespace, combined with the status dropdown filter.
             function coursesFilter(data) {
                 const selectedStatus = statusSelect.value;
                 if (selectedStatus && data.status !== selectedStatus) {
                     return false;
                 }
-                const term = valueEl.value.trim().toLowerCase();
+                const term = normalizeForSearch(valueEl.value.trim());
                 if (!term) {
                     return true;
                 }
-                const name = (data.name || "").toLowerCase();
-                const namespace = (data.namespace_slug || "").toLowerCase();
-                return name.includes(term) || namespace.includes(term);
+                if (normalizeForSearch(data.name).includes(term)) {
+                    return true;
+                }
+                if (normalizeForSearch(data.namespace_slug).includes(term)) {
+                    return true;
+                }
+                return false;
             }
 
             valueEl.addEventListener("keyup", function () {
