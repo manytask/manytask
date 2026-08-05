@@ -360,8 +360,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
     rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
     # Set user to be course admin if they provided course token as a secret
-    is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
-    if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
+    is_course_admin: bool = secrets.compare_digest(request.form["secret"].encode(), course.token.encode())
+    if not is_course_admin and not secrets.compare_digest(request.form["secret"].encode(), course.registration_secret.encode()):
         return render_template(
             "create_project.html",
             error_message="Invalid secret",
