@@ -9,7 +9,7 @@ import pytest
 from flask import Flask, Response, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import AuthenticatedUser, StoredUser
+from manytask.abstract import AuthenticatedUser
 from manytask.auth import (
     requires_auth,
     requires_instance_admin,
@@ -22,12 +22,9 @@ from manytask.course import CourseStatus
 from manytask.mock_auth import MockAuthApi
 from manytask.web import course_bp, root_bp
 from tests.constants import (
-    TEST_AUTH_ID,
     TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
-    TEST_FIRST_NAME,
     TEST_GITLAB_SESSION_VERSION,
-    TEST_LAST_NAME,
     TEST_MANYTASK_SESSION_VERSION,
     TEST_RMS_ID,
     TEST_SECRET,
@@ -35,6 +32,7 @@ from tests.constants import (
     TEST_USER_ID,
     TEST_USERNAME,
 )
+from tests.helpers import MockStorageApiBase
 
 
 @pytest.fixture
@@ -55,20 +53,7 @@ def app(mock_storage_api):
 
 @pytest.fixture
 def mock_storage_api(mock_course):  # noqa: C901
-    class MockStorageApi:
-        def __init__(self):
-            self.stored_user = StoredUser(
-                username=TEST_USERNAME,
-                first_name=TEST_FIRST_NAME,
-                last_name=TEST_LAST_NAME,
-                rms_id=TEST_RMS_ID,
-                auth_id=TEST_AUTH_ID,
-                user_id=TEST_USER_ID,
-                instance_admin=False,
-            )
-            self.course_name = TEST_COURSE_NAME
-            self.course_admin = False
-
+    class MockStorageApi(MockStorageApiBase):
         @staticmethod
         def get_scores(_username):
             return {"task1": 100, "task2": 90}
@@ -122,22 +107,6 @@ def mock_storage_api(mock_course):  # noqa: C901
         @property
         def max_score_started(self):
             return 100  # Mock value for testing
-
-        @staticmethod
-        def get_namespace_admin_namespaces(_username):
-            return []
-
-        @staticmethod
-        def get_courses_by_namespace_ids(_namespace_ids):
-            return []
-
-        @staticmethod
-        def get_courses_where_course_admin(_username):
-            return []
-
-        @staticmethod
-        def get_namespace_by_id(_namespace_id, _username):
-            raise PermissionError("No access to namespace")
 
     return MockStorageApi()
 

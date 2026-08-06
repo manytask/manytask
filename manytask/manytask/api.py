@@ -44,7 +44,12 @@ from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
-from .utils.generic import sanitize_and_validate_comment, sanitize_log_data
+from .utils.generic import (
+    calculate_percent,
+    check_course_creation_namespace_permission,
+    sanitize_and_validate_comment,
+    sanitize_log_data,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -449,7 +454,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
         max_score = app.storage_api.max_score_started(course.course_name)
 
         total_score = sum(student_scores.values()) + bonus_score
-        percent = total_score * 100 / max_score if max_score > 0 else 0
+        percent = calculate_percent(total_score, max_score)
 
         # Count large tasks solved
         large_count = 0
@@ -568,6 +573,15 @@ def get_deadlines(course_name: str) -> ResponseReturnValue:
     )
 
 
+def _format_config_validation_error(course_name: str, exc: ValidationError) -> str:
+    details = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error["loc"]) or "config"
+        details.append(f"{location}: {error['msg']}")
+    summary = "; ".join(details) if details else str(exc)
+    return f"Invalid config for course={course_name}: {summary}"
+
+
 @bp.post("/update_config")
 @requires_token
 def update_config(course_name: str) -> ResponseReturnValue:
@@ -583,12 +597,23 @@ def update_config(course_name: str) -> ResponseReturnValue:
     try:
         config_raw_data = request.get_data()
         config_data = yaml.load(config_raw_data, Loader=yaml.SafeLoader)
+    except yaml.YAMLError as e:
+        return (f"Invalid YAML in config for course={course_name}: {e}", HTTPStatus.BAD_REQUEST)
 
+    if not isinstance(config_data, dict):
+        return (
+            f"Invalid config for course={course_name}: expected a YAML mapping (object), got {type(config_data).__name__}",
+            HTTPStatus.BAD_REQUEST,
+        )
+
+    try:
         # Store the new config
         app.store_config(course_name, config_data)
         logger.info("Stored new config for course=%s", course_name)
+    except ValidationError as e:
+        return (_format_config_validation_error(course_name, e), HTTPStatus.BAD_REQUEST)
     except Exception:
-        logger.exception("Error while updating config for course=%s", course_name, exc_info=True)
+        logger.exception("Error while updating config for course=%s", course_name)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
     # Recalculate grades for all students using the new config
@@ -678,7 +703,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     try:
         row_data.total_score = total_score
         max_score = app.storage_api.max_score_started(course.course_name)
-        row_data.percent = total_score * 100 / max_score if max_score > 0 else 0
+        row_data.percent = calculate_percent(total_score, max_score)
 
         # Calculate and save grade (applies DORESHKA logic if needed)
         # This updates final_grade but does NOT touch final_grade_override
@@ -1357,35 +1382,12 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     try:
         is_instance_admin = storage_api.check_if_instance_admin(username)
 
-        namespace = None
-        role = None
-        if namespace_id == 0:
-            if not is_instance_admin:
-                logger.warning("User %s attempted to create course without namespace", username)
-                return jsonify(
-                    ErrorResponse(error="Only Instance Admin can create courses without namespace").model_dump()
-                ), HTTPStatus.FORBIDDEN
-        else:
-            try:
-                namespace, role = storage_api.get_namespace_by_id(namespace_id, username)
-            except (PermissionError, NoResultFound):
-                logger.warning(
-                    "User %s attempted to create course in inaccessible namespace id=%s", username, namespace_id
-                )
-                return jsonify(
-                    ErrorResponse(error="Namespace not found or access denied").model_dump()
-                ), HTTPStatus.NOT_FOUND
-
-            if not is_instance_admin and role != "namespace_admin":
-                logger.warning(
-                    "User %s with role %s attempted to create course in namespace id=%s",
-                    username,
-                    role,
-                    namespace_id,
-                )
-                return jsonify(
-                    ErrorResponse(error="Only Instance Admin or Namespace Admin can create courses").model_dump()
-                ), HTTPStatus.FORBIDDEN
+        namespace, role, error, error_status = check_course_creation_namespace_permission(
+            storage_api, namespace_id, username, is_instance_admin
+        )
+        if error is not None:
+            assert error_status is not None
+            return jsonify(ErrorResponse(error=error).model_dump()), error_status
 
         if namespace_id == 0 and owner_rms_ids:
             return jsonify(
@@ -1472,7 +1474,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             ), HTTPStatus.INTERNAL_SERVER_ERROR
 
         try:
-            from .course import CourseConfig, CourseStatus, ManytaskDeadlinesType
+            from .course import CourseConfig
             from .utils.generic import generate_token_hex
 
             course_config = CourseConfig(
@@ -1485,10 +1487,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                 registration_secret=generate_token_hex(16),
                 token=generate_token_hex(24),
                 show_allscores=True,
-                status=CourseStatus.CREATED,
-                task_url_template="",
-                links={},
-                deadlines_type=ManytaskDeadlinesType.HARD,
             )
 
             success = storage_api.create_course(course_config)

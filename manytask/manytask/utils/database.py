@@ -3,6 +3,7 @@ from typing import Any
 from manytask.course import Course
 from manytask.database import calculate_effective_grade
 from manytask.main import CustomFlask
+from manytask.utils.generic import calculate_percent
 
 
 def get_database_table_data(
@@ -54,7 +55,7 @@ def get_database_table_data(
             "username": username,
             "scores": student_scores,
             "total_score": total_score,
-            "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
+            "percent": calculate_percent(total_score, max_score),
             "large_count": large_count,
         }
 

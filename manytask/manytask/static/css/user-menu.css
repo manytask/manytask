@@ -1,0 +1,39 @@
+/* Shared styles for the user/profile dropdown menu */
+
+.nav-avatar-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--bs-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.dropdown-menu {
+    border-radius: 0.5rem;
+    border: none;
+    padding: 0.5rem;
+}
+
+.dropdown-item {
+    border-radius: 0.35rem;
+    margin: 0.15rem 0;
+    transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+    background-color: var(--bs-primary-bg-subtle);
+}
+
+.nav-user-menu {
+    transition: all 0.2s ease;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+}
+
+.nav-user-menu:hover {
+    background-color: var(--bs-tertiary-bg);
+}

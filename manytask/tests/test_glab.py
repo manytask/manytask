@@ -6,7 +6,7 @@ from gitlab import GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 
 from manytask.abstract import RmsApiException
-from manytask.glab import GitLabApi, GitLabConfig, RmsUser
+from manytask.glab import GitLabApi, GitLabConfig, RmsUser, _make_public_repo_params, _make_students_group_params
 from tests.constants import (
     TEST_FORK_ID,
     TEST_GROUP_ID,
@@ -218,15 +218,7 @@ def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
     mock_gitlab_instance.projects.create.assert_called_once_with(
-        {
-            "name": TEST_GROUP_PUBLIC_NAME_SHORT,
-            "path": TEST_GROUP_PUBLIC_NAME_SHORT,
-            "namespace_id": mock_gitlab_group.id,
-            "visibility": "public",
-            "shared_runners_enabled": True,
-            "auto_devops_enabled": False,
-            "initialize_with_readme": True,
-        }
+        _make_public_repo_params(TEST_GROUP_PUBLIC_NAME_SHORT, mock_gitlab_group.id)
     )
 
 
@@ -252,15 +244,7 @@ def test_create_students_group(gitlab, mock_gitlab_group):
     short_name = TEST_GROUP_NAME.split("/")[-1]
     gitlab_api.create_students_group(TEST_GROUP_NAME)
 
-    mock_gitlab_instance.groups.create.assert_called_once_with(
-        {
-            "name": short_name,
-            "path": short_name,
-            "visibility": "private",
-            "lfs_enabled": True,
-            "shared_runners_enabled": True,
-        }
-    )
+    mock_gitlab_instance.groups.create.assert_called_once_with(_make_students_group_params(short_name))
 
 
 def test_get_group_by_name_success(gitlab, mock_gitlab_group):

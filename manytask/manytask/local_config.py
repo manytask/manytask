@@ -28,6 +28,7 @@ class LocalConfig:
     # yandex_id
     yandex_id_client_id: str
     yandex_id_client_secret: str
+    yandex_id_oauth_base: str
 
     @classmethod
     def from_env(cls) -> LocalConfig:
@@ -51,6 +52,7 @@ class LocalConfig:
             # yandex_id
             yandex_id_client_id=os.environ.get("YANDEX_ID_CLIENT_ID", ""),
             yandex_id_client_secret=os.environ.get("YANDEX_ID_CLIENT_SECRET", ""),
+            yandex_id_oauth_base=os.environ.get("YANDEX_ID_OAUTH_BASE", "https://oauth.yandex.com"),
         )
 
 
@@ -77,6 +79,7 @@ class DebugLocalConfig(LocalConfig):
     # yandex_id
     yandex_id_client_id: str = ""
     yandex_id_client_secret: str = ""
+    yandex_id_oauth_base: str = "https://oauth.yandex.com"
 
     show_allscores: bool = True
 

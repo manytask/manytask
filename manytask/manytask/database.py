@@ -39,6 +39,7 @@ from .models import (
     User,
     UserOnCourse,
 )
+from .utils.generic import calculate_percent
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -311,6 +312,12 @@ class DataBaseApi(StorageApi):
     ) -> bool:
         """Method for checking user's admin status
 
+        A user is considered a course admin if any of the following holds:
+        - the user is an instance admin;
+        - the user is a namespace admin (namespace owner or user with the
+          namespace_admin role) for the namespace the course belongs to;
+        - the user has the course admin flag set for this course.
+
         :param course_name: course name
         :param username: user name
 
@@ -328,11 +335,62 @@ class DataBaseApi(StorageApi):
                     return True
 
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+
+                if self._is_user_namespace_admin(session, user.id, course.namespace_id):
+                    return True
+
+                try:
+                    user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+                except NoResultFound:
+                    return False
                 return user_on_course.is_course_admin
             except NoResultFound as e:
                 logger.info("No user found with username '%s' when checking admin status: %s", username, e)
                 return False
+
+    @staticmethod
+    def _is_user_namespace_admin(session: Session, user_id: int, namespace_id: int | None) -> bool:
+        """Check if a user is a namespace admin for the given namespace.
+
+        A user is a namespace admin if they are the namespace owner (creator) or
+        have the namespace_admin role in it. This matches the definition used in
+        ``get_namespace_admin_namespaces``.
+
+        :param session: SQLAlchemy session
+        :param user_id: Database User.id
+        :param namespace_id: Namespace id (may be None if the course has no namespace)
+        :return: True if the user is a namespace admin for the given namespace
+        """
+        if namespace_id is None:
+            return False
+
+        is_owner = (
+            session.query(models.Namespace)
+            .filter(
+                and_(
+                    models.Namespace.id == namespace_id,
+                    models.Namespace.created_by_id == user_id,
+                )
+            )
+            .first()
+            is not None
+        )
+        if is_owner:
+            return True
+
+        is_admin = (
+            session.query(models.UserOnNamespace)
+            .filter(
+                and_(
+                    models.UserOnNamespace.user_id == user_id,
+                    models.UserOnNamespace.namespace_id == namespace_id,
+                    models.UserOnNamespace.role == models.UserOnNamespaceRole.NAMESPACE_ADMIN,
+                )
+            )
+            .first()
+            is not None
+        )
+        return is_admin
 
     def check_if_program_manager(
         self,
@@ -1036,6 +1094,28 @@ class DataBaseApi(StorageApi):
             logger.info("Fetched all users: count=%s", len(users))
             return [self._to_stored_user(user) for user in users]
 
+    def get_course_users_with_admin_status(self, course_name: str) -> list[tuple[StoredUser, bool]]:
+        """Get all users enrolled on a course together with their course admin status
+
+        :param course_name: course name
+        :return: list of tuples (StoredUser, is_course_admin)
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+            except NoResultFound:
+                logger.warning("Course '%s' not found when fetching course users", course_name)
+                return []
+
+            users_on_courses = (
+                session.query(models.UserOnCourse)
+                .filter(models.UserOnCourse.course_id == course.id)
+                .options(joinedload(models.UserOnCourse.user))
+                .all()
+            )
+            logger.info("Fetched users for course '%s': count=%s", course_name, len(users_on_courses))
+            return [(self._to_stored_user(uoc.user), uoc.is_course_admin) for uoc in users_on_courses]
+
     def set_instance_admin_status(self, username: str, is_admin: bool) -> None:
         """Change user admin status
 
@@ -1058,6 +1138,41 @@ class DataBaseApi(StorageApi):
 
             except NoResultFound:
                 logger.error("Failed to set admin status: user '%s' not found in database", username)
+
+    def set_course_admin_status(self, course_name: str, username: str, is_admin: bool) -> None:
+        """Change user course admin status
+
+        :param course_name: course name
+        :param username: manytask username
+        :param is_admin: new course admin status
+        """
+        logger.info("Setting course admin status to %s for user '%s' in course '%s'", is_admin, username, course_name)
+
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user = self._get(session, models.User, username=username)
+
+                self._update(
+                    session,
+                    models.UserOnCourse,
+                    defaults={"is_course_admin": is_admin},
+                    user_id=user.id,
+                    course_id=course.id,
+                )
+                logger.info(
+                    "Successfully updated course admin status for user '%s' in course '%s' to %s",
+                    username,
+                    course_name,
+                    is_admin,
+                )
+
+            except NoResultFound:
+                logger.error(
+                    "Failed to set course admin status: user '%s' or course '%s' not found in database",
+                    username,
+                    course_name,
+                )
 
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
         """Update user profile information
@@ -1804,10 +1919,10 @@ class DataBaseApi(StorageApi):
                 namespace = self._create(
                     session,
                     models.Namespace,
-                    name=name,
                     slug=slug,
-                    description=description,
+                    name=name,
                     gitlab_group_id=gitlab_group_id,
+                    description=description,
                     created_by_id=creator.id,
                 )
 
@@ -2407,7 +2522,7 @@ class DataBaseApi(StorageApi):
 
             row: dict[str, Any] = {
                 "total_score": total_score,
-                "percent": 0 if max_score == 0 else total_score * 100.0 / max_score,
+                "percent": calculate_percent(total_score, max_score),
                 "large_count": large_count,
             }
 

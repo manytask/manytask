@@ -1,0 +1,15 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/api/[^/]+/report",
+    "headers": {
+      "Authorization": {"matches": "Bearer .+"}
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {"Content-Type": "application/json"},
+    "jsonBody": {"user_id": 1, "username": "student", "task": "task-1", "score": 350}
+  }
+}

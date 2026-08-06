@@ -1,4 +1,3 @@
-import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -10,7 +9,6 @@ import pytest
 import yaml
 from alembic import command
 from alembic.script import ScriptDirectory
-from dotenv import load_dotenv
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
@@ -26,7 +24,18 @@ from manytask.config import (
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
-from manytask.models import Course, Deadline, Grade, Task, TaskGroup, User, UserOnCourse
+from manytask.models import (
+    Course,
+    Deadline,
+    Grade,
+    Namespace,
+    Task,
+    TaskGroup,
+    User,
+    UserOnCourse,
+    UserOnNamespace,
+    UserOnNamespaceRole,
+)
 from tests.constants import (
     BONUS_GROUP,
     BONUS_SCORE,
@@ -69,6 +78,11 @@ def _make_full_name(first_name: str, last_name: str) -> str:
     return f"{first_name} {last_name}"
 
 
+def _load_yaml(path: str) -> dict:
+    with open(path, "r") as f:
+        return yaml.load(f, Loader=yaml.SafeLoader)
+
+
 @pytest.fixture(autouse=True)
 def mock_current_time():
     with patch("manytask.database.DataBaseApi.get_now_with_timezone") as mock:
@@ -93,16 +107,14 @@ def db_api(tables, postgres_container, session):
 
 @pytest.fixture
 def first_course_grade_config():
-    with open(GRADE_CONFIG_FILES[0], "r") as f:
-        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    grade_config_data = _load_yaml(GRADE_CONFIG_FILES[0])
 
     return ManytaskFinalGradeConfig(**grade_config_data["grades"])
 
 
 @pytest.fixture
 def first_course_grade_config_with_changed_numbers():
-    with open(GRADE_CONFIG_FILES[0], "r") as f:
-        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    grade_config_data = _load_yaml(GRADE_CONFIG_FILES[0])
 
     grade_config_data_changed_numbers = dict()
     grade_config_data_changed_numbers["grades"] = dict()
@@ -114,16 +126,14 @@ def first_course_grade_config_with_changed_numbers():
 
 @pytest.fixture
 def second_course_grade_config():
-    with open(GRADE_CONFIG_FILES[1], "r") as f:
-        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    grade_config_data = _load_yaml(GRADE_CONFIG_FILES[1])
 
     return ManytaskFinalGradeConfig(**grade_config_data["grades"])
 
 
 @pytest.fixture
 def second_course_grade_config_with_additional_grade():
-    with open(GRADE_CONFIG_FILES[1], "r") as f:
-        grade_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    grade_config_data = _load_yaml(GRADE_CONFIG_FILES[1])
 
     grade_config_data["grades"]["grades"][3] = [
         {
@@ -172,8 +182,8 @@ def edited_first_course_config(first_course_config):
 @pytest.fixture
 def first_course_updated_ui_config():
     return ManytaskUiConfig(
-        task_url_template="https://gitlab.test.com/test_updated/$GROUP_NAME/$TASK_NAME",
-        links={"TG Channel": "https://t.me/joinchat_updated/", "TG Chat": "https://t.me/joinchat_updated/"},
+        task_url_template=UPDATED_TASK_URL_TEMPLATE,
+        links=UPDATED_LINKS,
     )
 
 
@@ -206,22 +216,19 @@ def edited_second_course_config(second_course_config):
 
 @pytest.fixture
 def first_course_deadlines_config():
-    with open(DEADLINES_CONFIG_FILES[0], "r") as f:
-        deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    deadlines_config_data = _load_yaml(DEADLINES_CONFIG_FILES[0])
     return ManytaskDeadlinesConfig(**deadlines_config_data["deadlines"])
 
 
 @pytest.fixture
 def second_course_deadlines_config():
-    with open(DEADLINES_CONFIG_FILES[1], "r") as f:
-        deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    deadlines_config_data = _load_yaml(DEADLINES_CONFIG_FILES[1])
     return ManytaskDeadlinesConfig(**deadlines_config_data["deadlines"])
 
 
 @pytest.fixture
 def first_course_deadlines_config_with_changed_task_name():
-    with open(DEADLINES_CONFIG_FILES[0], "r") as f:
-        deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    deadlines_config_data = _load_yaml(DEADLINES_CONFIG_FILES[0])
 
     # change task name: task_0_0 -> task_0_0_changed
     deadlines_config_data["deadlines"]["schedule"][0]["tasks"][0]["task"] += "_changed"
@@ -231,8 +238,7 @@ def first_course_deadlines_config_with_changed_task_name():
 
 @pytest.fixture
 def first_course_deadlines_config_with_changed_order_of_groups():
-    with open(DEADLINES_CONFIG_FILES[0], "r") as f:
-        deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    deadlines_config_data = _load_yaml(DEADLINES_CONFIG_FILES[0])
 
     # reverse order of the groups
     deadlines_config_data["deadlines"]["schedule"] = list(reversed(deadlines_config_data["deadlines"]["schedule"]))
@@ -242,8 +248,7 @@ def first_course_deadlines_config_with_changed_order_of_groups():
 
 @pytest.fixture
 def first_course_deadlines_config_with_changed_order_of_tasks():
-    with open(DEADLINES_CONFIG_FILES[0], "r") as f:
-        deadlines_config_data = yaml.load(f, Loader=yaml.SafeLoader)
+    deadlines_config_data = _load_yaml(DEADLINES_CONFIG_FILES[0])
 
     # reverse order of the tasks of the first group
     deadlines_config_data["deadlines"]["schedule"][0]["tasks"] = list(
@@ -314,16 +319,6 @@ def db_api_with_two_initialized_courses(
     return db_api
 
 
-@pytest.fixture(autouse=True)
-def setup_environment(monkeypatch):
-    load_dotenv()
-    if not os.getenv("MANYTASK_COURSE_TOKEN"):
-        monkeypatch.setenv("MANYTASK_COURSE_TOKEN", "test_token")
-    monkeypatch.setenv("FLASK_SECRET_KEY", "test_key")
-    monkeypatch.setenv("TESTING", "true")
-    yield
-
-
 def update_func(add: int):
     def _update_func(_, score):
         return score + add
@@ -359,8 +354,196 @@ class TestStudent:
     auth_id: int
 
 
+STUDENT = TestStudent(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
 STUDENT_1 = TestStudent(TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1, TEST_AUTH_ID_1)
 STUDENT_2 = TestStudent(TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2, TEST_AUTH_ID_2)
+
+DEFAULT_LINKS = {"TG Channel": "https://t.me/joinchat/", "TG Chat": "https://t.me/joinchat/"}
+UPDATED_LINKS = {"TG Channel": "https://t.me/joinchat_updated/", "TG Chat": "https://t.me/joinchat_updated/"}
+UPDATED_TASK_URL_TEMPLATE = "https://gitlab.test.com/test_updated/$GROUP_NAME/$TASK_NAME"
+
+
+def create_user(db_api: DataBaseApi, student: TestStudent = STUDENT):
+    return db_api.update_or_create_user(
+        student.username, student.first_name, student.last_name, student.rms_id, student.auth_id
+    )
+
+
+def make_user(student: TestStudent = STUDENT, **kwargs) -> User:
+    return User(
+        username=student.username,
+        first_name=student.first_name,
+        last_name=student.last_name,
+        rms_id=student.rms_id,
+        auth_id=student.auth_id,
+        **kwargs,
+    )
+
+
+def add_user_on_course(
+    session: Session,
+    *,
+    student: TestStudent = STUDENT,
+    user_id: int = 2,
+    course_id: int = 1,
+    is_course_admin: bool,
+) -> tuple[User, UserOnCourse]:
+    user = make_user(student, id=user_id)
+    user_on_course = UserOnCourse(user_id=user.id, course_id=course_id, is_course_admin=is_course_admin)
+    session.add(user)
+    session.add(user_on_course)
+    session.commit()
+    return user, user_on_course
+
+
+def get_user_results(db_api: DataBaseApi, course_name: str, username: str):
+    return (
+        db_api.get_stats(course_name),
+        db_api.get_all_scores_with_names(course_name),
+        db_api.get_bonus_score(course_name, username),
+        db_api.get_scores(course_name, username),
+    )
+
+
+def assert_empty_stats(
+    db_api: DataBaseApi,
+    course_name: str,
+    expected_keys: set[str],
+    expected_max_score: int,
+) -> None:
+    stats = db_api.get_stats(course_name)
+    assert set(stats.keys()) == expected_keys
+    assert all(v == 0 for v in stats.values())
+    assert db_api.max_score_started(course_name) == expected_max_score
+
+
+def assert_stats(stats: dict, expected_keys: set[str], nonzero: dict[str, float]) -> None:
+    assert set(stats.keys()) == expected_keys
+    for name, ratio in nonzero.items():
+        assert stats[name] == ratio
+    assert all(v == 0.0 for k, v in stats.items() if k not in nonzero)
+
+
+def named_scores(scores: dict, student: TestStudent = STUDENT) -> tuple:
+    return (scores, (student.first_name, student.last_name), None, None, None)
+
+
+def assert_counts(  # noqa: PLR0913
+    session: Session,
+    *,
+    users: int | None = None,
+    user_on_course: int | None = None,
+    grades: int | None = None,
+    courses: int | None = None,
+) -> None:
+    if users is not None:
+        assert session.query(User).count() == users
+    if user_on_course is not None:
+        assert session.query(UserOnCourse).count() == user_on_course
+    if grades is not None:
+        assert session.query(Grade).count() == grades
+    if courses is not None:
+        assert session.query(Course).count() == courses
+
+
+def assert_user_results(  # noqa: PLR0913
+    db_api: DataBaseApi,
+    course_name: str,
+    username: str,
+    expected_keys: set[str],
+    nonzero_stats: dict[str, float],
+    expected_all_scores: dict,
+    expected_bonus: float,
+    expected_scores: dict,
+) -> None:
+    stats, all_scores, bonus_score, scores = get_user_results(db_api, course_name, username)
+    assert_stats(stats, expected_keys, nonzero_stats)
+    assert all_scores == expected_all_scores
+    assert bonus_score == expected_bonus
+    assert scores == expected_scores
+
+
+def assert_course(  # noqa: PLR0913
+    course: Course,
+    *,
+    name: str = FIRST_COURSE_NAME,
+    registration_secret: str = "secret",
+    token: str = "test_token",
+    show_allscores: bool = True,
+    gitlab_course_group: str = "test_course_group",
+    gitlab_course_public_repo: str = "test_course_public_repo",
+    gitlab_course_students_group: str = "test_course_students_group",
+    gitlab_default_branch: str = "test_default_branch",
+    task_url_template: str = "https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME",
+    links: dict | None = None,
+    timezone: str,
+    max_submissions: int | None,
+    submission_penalty: float,
+    status: CourseStatus | None = None,
+) -> None:
+    """
+    Assert that a Course row matches the expected attributes.
+    """
+    expected = {
+        "name": name,
+        "registration_secret": registration_secret,
+        "token": token,
+        "show_allscores": show_allscores,
+        "gitlab_course_group": gitlab_course_group,
+        "gitlab_course_public_repo": gitlab_course_public_repo,
+        "gitlab_course_students_group": gitlab_course_students_group,
+        "gitlab_default_branch": gitlab_default_branch,
+        "task_url_template": task_url_template,
+        "links": DEFAULT_LINKS if links is None else links,
+        "timezone": timezone,
+        "max_submissions": max_submissions,
+        "submission_penalty": submission_penalty,
+    }
+    assert {field: getattr(course, field) for field in expected} == expected
+    # ``status=None`` only checks the value is set; otherwise require an exact match.
+    assert course.status if status is None else course.status == status
+
+
+def assert_tasks(
+    session: Session,
+    *,
+    bonus_tasks: tuple[str, ...],
+    large_tasks,
+    special_tasks: tuple[str, ...],
+    disabled_groups: tuple[str, ...],
+    disabled_tasks: tuple[str, ...],
+) -> None:
+    tasks = session.query(Task).all()
+    for task in tasks:
+        if task.group.name == BONUS_GROUP:
+            assert task.name == BONUS_SCORE
+            continue
+
+        # for convenience task score relates to its name (exception is group_0, it has multiplier "1")
+        # for example for task_1_3 score is 10, task_3_0 score is 30
+        score_multiplier = int(task.name.split("_")[1]) or 1
+
+        actual = {
+            "name": task.name,
+            "group_name": task.group.name,
+            "is_bonus": task.is_bonus,
+            "is_large": task.is_large,
+            "is_special": task.is_special,
+            "group_enabled": task.group.enabled,
+            "enabled": task.enabled,
+            "score": task.score,
+        }
+        expected = {
+            "name": task.name,
+            "group_name": "group_" + task.name[len("task_")],
+            "is_bonus": task.name in bonus_tasks,
+            "is_large": task.name in large_tasks,
+            "is_special": task.name in special_tasks,
+            "group_enabled": task.group.name not in disabled_groups,
+            "enabled": task.name not in disabled_tasks,
+            "score": score_multiplier * 10,
+        }
+        assert actual == expected
 
 
 def test_not_initialized_course(session, db_api, first_course_config):
@@ -370,28 +553,15 @@ def test_not_initialized_course(session, db_api, first_course_config):
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
 
-    assert course.name == FIRST_COURSE_NAME
-    assert course.registration_secret == "secret"
-    assert course.token == "test_token"
-    assert course.show_allscores
-    assert course.status == CourseStatus.CREATED
+    assert_course(
+        course,
+        status=CourseStatus.CREATED,
+        timezone="UTC",
+        max_submissions=None,
+        submission_penalty=0,
+    )
 
-    assert course.gitlab_course_group == "test_course_group"
-    assert course.gitlab_course_public_repo == "test_course_public_repo"
-    assert course.gitlab_course_students_group == "test_course_students_group"
-    assert course.gitlab_default_branch == "test_default_branch"
-
-    assert course.task_url_template == "https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME"
-    assert course.links == {"TG Channel": "https://t.me/joinchat/", "TG Chat": "https://t.me/joinchat/"}
-
-    assert course.timezone == "UTC"
-    assert course.max_submissions is None
-    assert course.submission_penalty == 0
-
-    stats = db_api.get_stats(course_name)
-    all_scores = db_api.get_all_scores_with_names(course_name)
-    bonus_score = db_api.get_bonus_score(course_name, "unknown_user")
-    scores = db_api.get_scores(course_name, "unknown_user")
+    stats, all_scores, bonus_score, scores = get_user_results(db_api, course_name, "unknown_user")
     max_score_started = db_api.max_score_started(course_name)
 
     assert stats == {}
@@ -417,55 +587,31 @@ def test_initialized_course(db_api_with_initialized_first_course, session):  # n
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
 
-    assert course.name == FIRST_COURSE_NAME
-    assert course.registration_secret == "secret"
-    assert course.token == "test_token"
-    assert course.show_allscores
-    assert course.status
+    assert_course(
+        course,
+        timezone="Europe/Berlin",
+        max_submissions=10,
+        submission_penalty=0.1,
+    )
 
-    assert course.gitlab_course_group == "test_course_group"
-    assert course.gitlab_course_public_repo == "test_course_public_repo"
-    assert course.gitlab_course_students_group == "test_course_students_group"
-    assert course.gitlab_default_branch == "test_default_branch"
-
-    assert course.task_url_template == "https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME"
-    assert course.links == {"TG Channel": "https://t.me/joinchat/", "TG Chat": "https://t.me/joinchat/"}
-
-    assert course.timezone == "Europe/Berlin"
-    assert course.max_submissions == 10  # noqa: PLR2004
-    assert course.submission_penalty == 0.1  # noqa: PLR2004
-
-    stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
-    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
-    assert all(v == 0 for v in stats.values())
-    assert (
-        db_api_with_initialized_first_course.max_score_started(FIRST_COURSE_NAME)
-        == FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED
+    assert_empty_stats(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS,
+        FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED,
     )
 
     assert session.query(TaskGroup).count() == expected_task_groups
     assert session.query(Task).count() == expected_tasks
 
-    tasks = session.query(Task).all()
-    for task in tasks:
-        if task.group.name == BONUS_GROUP:
-            assert task.name == BONUS_SCORE
-            continue
-        assert task.group.name == "group_" + task.name[len("task_")]
-
-        assert task.is_bonus == (task.name in bonus_tasks)
-        assert task.is_large == (task.name in large_tasks)
-        assert task.is_special == (task.name in special_tasks)
-        assert task.group.enabled != (task.group.name in disabled_groups)
-        assert task.enabled != (task.name in disabled_tasks)
-
-        # for convenience task score related to its name(exception is group_0, it has multiplier "1")
-        # for example for task_1_3 score is 10, task_3_0 score is 30
-        score_multiplier = int(task.name.split("_")[1])
-        score_multiplier = 1 if score_multiplier == 0 else score_multiplier
-        expected_task_score = score_multiplier * 10
-
-        assert task.score == expected_task_score
+    assert_tasks(
+        session,
+        bonus_tasks=bonus_tasks,
+        large_tasks=large_tasks,
+        special_tasks=special_tasks,
+        disabled_groups=disabled_groups,
+        disabled_tasks=disabled_tasks,
+    )
 
     final_grade_config = db_api_with_initialized_first_course.get_grades(FIRST_COURSE_NAME)
     assert final_grade_config.grades_order == grades_order
@@ -515,52 +661,33 @@ def test_updating_course(
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
 
-    assert course.name == FIRST_COURSE_NAME
-    assert course.registration_secret == "secret"
-    assert course.token == "test_token"
-    assert course.show_allscores
-    assert course.status
+    assert_course(
+        course,
+        task_url_template=UPDATED_TASK_URL_TEMPLATE,
+        links=UPDATED_LINKS,
+        timezone="Europe/Moscow",
+        max_submissions=20,
+        submission_penalty=0.2,
+    )
 
-    assert course.gitlab_course_group == "test_course_group"
-    assert course.gitlab_course_public_repo == "test_course_public_repo"
-    assert course.gitlab_course_students_group == "test_course_students_group"
-    assert course.gitlab_default_branch == "test_default_branch"
-
-    assert course.task_url_template == "https://gitlab.test.com/test_updated/$GROUP_NAME/$TASK_NAME"
-    assert course.links == {"TG Channel": "https://t.me/joinchat_updated/", "TG Chat": "https://t.me/joinchat_updated/"}
-
-    assert course.timezone == "Europe/Moscow"
-    assert course.max_submissions == 20  # noqa: PLR2004
-    assert course.submission_penalty == 0.2  # noqa: PLR2004
-
-    stats = db_api.get_stats(FIRST_COURSE_NAME)
-    assert set(stats.keys()) == SECOND_COURSE_EXPECTED_STATS_KEYS
-    assert all(v == 0 for v in stats.values())
-    assert db_api.max_score_started(FIRST_COURSE_NAME) == SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED
+    assert_empty_stats(
+        db_api,
+        FIRST_COURSE_NAME,
+        SECOND_COURSE_EXPECTED_STATS_KEYS,
+        SECOND_COURSE_EXPECTED_MAX_SCORE_STARTED,
+    )
 
     assert session.query(TaskGroup).count() == expected_task_groups
     assert session.query(Task).count() == expected_tasks
 
-    tasks = session.query(Task).all()
-    for task in tasks:
-        if task.group.name == BONUS_GROUP:
-            assert task.name == "bonus_score"
-            continue
-        assert task.group.name == "group_" + task.name[len("task_")]
-
-        assert task.is_bonus == (task.name in bonus_tasks)
-        assert task.is_large == (task.name in large_tasks)
-        assert task.is_special == (task.name in special_tasks)
-        assert task.group.enabled != (task.group.name in disabled_groups)
-        assert task.enabled != (task.name in disabled_tasks)
-
-        # for convenience task score related to its name(exception is group_0, it has multiplier "1")
-        # for example for task_1_3 score is 10, task_3_0 score is 30
-        score_multiplier = int(task.name.split("_")[1])
-        score_multiplier = 1 if score_multiplier == 0 else score_multiplier
-        expected_task_score = score_multiplier * 10
-
-        assert task.score == expected_task_score
+    assert_tasks(
+        session,
+        bonus_tasks=bonus_tasks,
+        large_tasks=large_tasks,
+        special_tasks=special_tasks,
+        disabled_groups=disabled_groups,
+        disabled_tasks=disabled_tasks,
+    )
 
 
 def test_resync_with_changed_task_name(
@@ -585,10 +712,12 @@ def test_resync_with_changed_task_name(
         first_course_grade_config,
     )
 
-    stats = db_api.get_stats(FIRST_COURSE_NAME)
-    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
-    assert all(v == 0 for v in stats.values())
-    assert db_api.max_score_started(FIRST_COURSE_NAME) == FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED
+    assert_empty_stats(
+        db_api,
+        FIRST_COURSE_NAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"},
+        FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED,
+    )
 
     assert session.query(TaskGroup).count() == expected_task_groups
     assert session.query(Task).count() == expected_tasks
@@ -596,7 +725,7 @@ def test_resync_with_changed_task_name(
     tasks = session.query(Task).all()
     for task in tasks:
         if task.group.name == BONUS_GROUP:
-            assert task.name == "bonus_score"
+            assert task.name == BONUS_SCORE
         else:
             assert task.group.name == "group_" + task.name[len("task_")]
 
@@ -604,15 +733,11 @@ def test_resync_with_changed_task_name(
 
 
 def test_store_score(db_api_with_initialized_first_course, session):
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=1, user_on_course=0)
 
-    db_api_with_initialized_first_course.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_initialized_first_course)
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -621,8 +746,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
         == 0
     )
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1)
 
     user = session.query(User).all()[-1]
     assert user.username == TEST_USERNAME
@@ -638,41 +762,31 @@ def test_store_score(db_api_with_initialized_first_course, session):
         == 1
     )
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
-    assert session.query(Grade).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1, grades=1)
 
     grade = session.query(Grade).one()
     assert grade.user_on_course_id == user_on_course.id
     assert grade.task.name == "task_0_0"
     assert grade.score == 1
 
-    stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
-    all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
-    bonus_score = db_api_with_initialized_first_course.get_bonus_score(FIRST_COURSE_NAME, TEST_USERNAME)
-    scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
-
-    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
-    assert stats["task_0_0"] == 1.0
-    assert all(v == 0.0 for k, v in stats.items() if k != "task_0_0")
-
-    assert all_scores == {
-        TEST_USERNAME: ({"task_0_0": (1, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
-    }
-    assert bonus_score == 0
-    assert scores == {"task_0_0": 1}
+    assert_user_results(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        TEST_USERNAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS,
+        {"task_0_0": 1.0},
+        {TEST_USERNAME: named_scores({"task_0_0": (1, False)})},
+        0,
+        {"task_0_0": 1},
+    )
 
 
 def test_store_bonus_score(db_api_with_initialized_first_course, session):
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=1, user_on_course=0)
 
-    db_api_with_initialized_first_course.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_initialized_first_course)
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -689,24 +803,14 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
     all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
     scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
 
-    assert all_scores == {
-        TEST_USERNAME: (
-            {"bonus_score": (1, False), "task_0_0": (1, False)},
-            (TEST_FIRST_NAME, TEST_LAST_NAME),
-            None,
-            None,
-            None,
-        )
-    }
+    assert all_scores == {TEST_USERNAME: named_scores({"bonus_score": (1, False), "task_0_0": (1, False)})}
     assert scores == {"bonus_score": 1, "task_0_0": 1}
 
 
 def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
 
-    db_api_with_initialized_first_course.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_initialized_first_course)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -715,28 +819,22 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
         == expected_score
     )
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
-    assert session.query(Grade).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1, grades=1)
 
     grade = session.query(Grade).join(Task).filter(Task.name == "task_1_3").one()
     assert grade.task.name == "task_1_3"
     assert grade.score == expected_score
 
-    stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
-    all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
-    bonus_score = db_api_with_initialized_first_course.get_bonus_score(FIRST_COURSE_NAME, TEST_USERNAME)
-    scores = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
-
-    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
-    assert stats["task_1_3"] == 1.0
-    assert all(v == 0.0 for k, v in stats.items() if k != "task_1_3")
-
-    assert all_scores == {
-        TEST_USERNAME: ({"task_1_3": (expected_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
-    }
-    assert bonus_score == expected_score
-    assert scores == {"task_1_3": expected_score}
+    assert_user_results(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        TEST_USERNAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS,
+        {"task_1_3": 1.0},
+        {TEST_USERNAME: named_scores({"task_1_3": (expected_score, False)})},
+        expected_score,
+        {"task_1_3": expected_score},
+    )
 
 
 def test_store_score_with_changed_task_name(
@@ -748,7 +846,7 @@ def test_store_score_with_changed_task_name(
 ):
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
-    db_api.update_or_create_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
+    create_user(db_api)
 
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(10))
 
@@ -759,31 +857,24 @@ def test_store_score_with_changed_task_name(
         first_course_deadlines_config_with_changed_task_name,
     )
 
-    stats = db_api.get_stats(FIRST_COURSE_NAME)
-    all_scores = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)
-    bonus_score = db_api.get_bonus_score(FIRST_COURSE_NAME, TEST_USERNAME)
-    scores = db_api.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
-
-    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"}
-    assert all(v == 0.0 for k, v in stats.items())
-
-    assert all_scores == {
-        TEST_USERNAME: ({"task_0_0": (10, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
-    }
-    assert bonus_score == 0
-    assert scores == {}
+    assert_user_results(
+        db_api,
+        FIRST_COURSE_NAME,
+        TEST_USERNAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS - {"task_0_0"} | {"task_0_0_changed"},
+        {},
+        {TEST_USERNAME: named_scores({"task_0_0": (10, False)})},
+        0,
+        {},
+    )
 
 
 def test_sync_user_on_course(db_api_with_initialized_first_course, session):
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=1, user_on_course=0)
 
-    db_api_with_initialized_first_course.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_initialized_first_course)
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 0
+    assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
     is_user_on_course = db_api_with_initialized_first_course.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
     assert not is_user_on_course
@@ -796,8 +887,7 @@ def test_sync_user_on_course(db_api_with_initialized_first_course, session):
     is_user_on_course = db_api_with_initialized_first_course.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
     assert is_user_on_course
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1)
 
     # admin in gitlab
     db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, True)
@@ -811,8 +901,97 @@ def test_sync_user_on_course(db_api_with_initialized_first_course, session):
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
     assert is_course_admin
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1)
+
+
+def _create_namespace_with_course(
+    session: Session,
+    *,
+    created_by_id: int,
+    course_id: int = 1,
+    namespace_id: int = 1,
+) -> Namespace:
+    """Create a namespace and attach the given course to it."""
+    namespace = Namespace(
+        id=namespace_id,
+        name="Test Namespace",
+        slug="test-namespace",
+        description=None,
+        gitlab_group_id=namespace_id,
+        created_by_id=created_by_id,
+    )
+    session.add(namespace)
+    course = session.query(Course).filter_by(id=course_id).one()
+    course.namespace_id = namespace_id
+    session.commit()
+    return namespace
+
+
+def test_check_if_course_admin_namespace_owner(db_api_with_initialized_first_course, session):
+    """Namespace owner (creator) must be treated as a course admin."""
+    instance_admin_id = session.query(User).filter_by(username="instance_admin").one().id
+    create_user(db_api_with_initialized_first_course)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+
+    _create_namespace_with_course(session, created_by_id=user.id)
+
+    # user is the namespace owner, so it is a course admin even without UserOnCourse
+    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    # unrelated user (instance admin excluded from this check via a non-owner) is not
+    assert instance_admin_id != user.id
+
+
+def test_check_if_course_admin_namespace_admin_role(db_api_with_initialized_first_course, session):
+    """User with namespace_admin role must be treated as a course admin."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    create_user(db_api_with_initialized_first_course)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+
+    _create_namespace_with_course(session, created_by_id=owner_id)
+
+    session.add(
+        UserOnNamespace(
+            user_id=user.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+
+
+def test_check_if_course_admin_namespace_program_manager_is_not_admin(db_api_with_initialized_first_course, session):
+    """User with only program_manager role in the namespace is not a course admin."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    create_user(db_api_with_initialized_first_course)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+
+    _create_namespace_with_course(session, created_by_id=owner_id)
+
+    session.add(
+        UserOnNamespace(
+            user_id=user.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.PROGRAM_MANAGER,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+
+
+def test_check_if_course_admin_no_namespace_uses_course_flag(db_api_with_initialized_first_course, session):
+    """When the course has no namespace, only the per-course admin flag matters."""
+    create_user(db_api_with_initialized_first_course)
+
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, True)
+    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
 
 
 def test_many_users(db_api_with_initialized_first_course, session):
@@ -823,18 +1002,14 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_grades = 3
     expected_stats_ratio = 0.5
 
-    db_api_with_initialized_first_course.update_or_create_user(
-        TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1, TEST_AUTH_ID_1
-    )
+    create_user(db_api_with_initialized_first_course, STUDENT_1)
 
     db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", update_func(1))
     db_api_with_initialized_first_course.store_score(
         FIRST_COURSE_NAME, TEST_USERNAME_1, "task_1_3", update_func(expected_score_1)
     )
 
-    db_api_with_initialized_first_course.update_or_create_user(
-        TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2, TEST_AUTH_ID_2
-    )
+    create_user(db_api_with_initialized_first_course, STUDENT_2)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -843,9 +1018,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
         == expected_score_2
     )
 
-    assert session.query(User).count() == expected_users
-    assert session.query(UserOnCourse).count() == expected_user_on_course
-    assert session.query(Grade).count() == expected_grades
+    assert_counts(session, users=expected_users, user_on_course=expected_user_on_course, grades=expected_grades)
 
     stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
     all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
@@ -854,26 +1027,11 @@ def test_many_users(db_api_with_initialized_first_course, session):
     bonus_score_user2 = db_api_with_initialized_first_course.get_bonus_score(FIRST_COURSE_NAME, TEST_USERNAME_2)
     scores_user2 = db_api_with_initialized_first_course.get_scores(FIRST_COURSE_NAME, TEST_USERNAME_2)
 
-    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
-    assert stats["task_0_0"] == 1.0
-    assert stats["task_1_3"] == expected_stats_ratio
-    assert all(v == 0.0 for k, v in stats.items() if k not in ["task_0_0", "task_1_3"])
+    assert_stats(stats, FIRST_COURSE_EXPECTED_STATS_KEYS, {"task_0_0": 1.0, "task_1_3": expected_stats_ratio})
 
     assert all_scores == {
-        TEST_USERNAME_1: (
-            {"task_0_0": (1, False), "task_1_3": (expected_score_1, False)},
-            (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
-            None,
-            None,
-            None,
-        ),
-        TEST_USERNAME_2: (
-            {"task_0_0": (expected_score_2, False)},
-            (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
-            None,
-            None,
-            None,
-        ),
+        TEST_USERNAME_1: named_scores({"task_0_0": (1, False), "task_1_3": (expected_score_1, False)}, STUDENT_1),
+        TEST_USERNAME_2: named_scores({"task_0_0": (expected_score_2, False)}, STUDENT_2),
     }
     assert bonus_score_user1 == expected_score_1
     assert scores_user1 == {"task_0_0": 1, "task_1_3": expected_score_1}
@@ -882,50 +1040,35 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
-    db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_two_initialized_courses)
 
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(30))
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, TEST_USERNAME, "task_1_3", update_func(40))
-    expected_users = 2
-    expected_user_on_course = 2
-    expected_grades = 2
 
-    assert session.query(User).count() == expected_users
-    assert session.query(UserOnCourse).count() == expected_user_on_course
-    assert session.query(Grade).count() == expected_grades
+    assert_counts(session, users=2, user_on_course=2, grades=2)
 
-    stats1 = db_api_with_two_initialized_courses.get_stats(FIRST_COURSE_NAME)
-    all_scores1 = db_api_with_two_initialized_courses.get_all_scores_with_names(FIRST_COURSE_NAME)
-    bonus_score_user1 = db_api_with_two_initialized_courses.get_bonus_score(FIRST_COURSE_NAME, TEST_USERNAME)
-    scores_user1 = db_api_with_two_initialized_courses.get_scores(FIRST_COURSE_NAME, TEST_USERNAME)
-
-    assert set(stats1.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
-    assert stats1["task_0_0"] == 1.0
-    assert all(v == 0.0 for k, v in stats1.items() if k != "task_0_0")
-
-    assert all_scores1 == {
-        TEST_USERNAME: ({"task_0_0": (30, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
-    }
-    assert bonus_score_user1 == 0
-    assert scores_user1 == {"task_0_0": 30}
-
-    stats2 = db_api_with_two_initialized_courses.get_stats(SECOND_COURSE_NAME)
-    all_scores2 = db_api_with_two_initialized_courses.get_all_scores_with_names(SECOND_COURSE_NAME)
-    bonus_score_user2 = db_api_with_two_initialized_courses.get_bonus_score(SECOND_COURSE_NAME, TEST_USERNAME)
-    scores_user2 = db_api_with_two_initialized_courses.get_scores(SECOND_COURSE_NAME, TEST_USERNAME)
-
-    assert set(stats2.keys()) == SECOND_COURSE_EXPECTED_STATS_KEYS
-    assert stats2["task_1_3"] == 1.0
-    assert all(v == 0.0 for k, v in stats2.items() if k != "task_1_3")
+    assert_user_results(
+        db_api_with_two_initialized_courses,
+        FIRST_COURSE_NAME,
+        TEST_USERNAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS,
+        {"task_0_0": 1.0},
+        {TEST_USERNAME: named_scores({"task_0_0": (30, False)})},
+        0,
+        {"task_0_0": 30},
+    )
 
     user2_score = 40
-    assert all_scores2 == {
-        TEST_USERNAME: ({"task_1_3": (user2_score, False)}, (TEST_FIRST_NAME, TEST_LAST_NAME), None, None, None)
-    }
-    assert bonus_score_user2 == user2_score
-    assert scores_user2 == {"task_1_3": user2_score}
+    assert_user_results(
+        db_api_with_two_initialized_courses,
+        SECOND_COURSE_NAME,
+        TEST_USERNAME,
+        SECOND_COURSE_EXPECTED_STATS_KEYS,
+        {"task_1_3": 1.0},
+        {TEST_USERNAME: named_scores({"task_1_3": (user2_score, False)})},
+        user2_score,
+        {"task_1_3": user2_score},
+    )
 
 
 def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
@@ -936,12 +1079,8 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_grades = 5
     expected_stats_ratio = 0.5
 
-    db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME_1, TEST_FIRST_NAME_1, TEST_LAST_NAME_1, TEST_RMS_ID_1, TEST_AUTH_ID_1
-    )
-    db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME_2, TEST_FIRST_NAME_2, TEST_LAST_NAME_2, TEST_RMS_ID_2, TEST_AUTH_ID_2
-    )
+    create_user(db_api_with_two_initialized_courses, STUDENT_1)
+    create_user(db_api_with_two_initialized_courses, STUDENT_2)
 
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", update_func(1))
     db_api_with_two_initialized_courses.store_score(
@@ -954,9 +1093,7 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, TEST_USERNAME_1, "task_1_0", update_func(99))
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, TEST_USERNAME_2, "task_1_1", update_func(7))
 
-    assert session.query(User).count() == expected_users
-    assert session.query(UserOnCourse).count() == expected_user_on_course
-    assert session.query(Grade).count() == expected_grades
+    assert_counts(session, users=expected_users, user_on_course=expected_user_on_course, grades=expected_grades)
 
     stats1 = db_api_with_two_initialized_courses.get_stats(FIRST_COURSE_NAME)
     all_scores1 = db_api_with_two_initialized_courses.get_all_scores_with_names(FIRST_COURSE_NAME)
@@ -965,26 +1102,11 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     bonus_score1_user2 = db_api_with_two_initialized_courses.get_bonus_score(FIRST_COURSE_NAME, TEST_USERNAME_2)
     scores1_user2 = db_api_with_two_initialized_courses.get_scores(FIRST_COURSE_NAME, TEST_USERNAME_2)
 
-    assert set(stats1.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
-    assert stats1["task_0_0"] == 1.0
-    assert stats1["task_1_3"] == expected_stats_ratio
-    assert all(v == 0.0 for k, v in stats1.items() if k not in ["task_0_0", "task_1_3"])
+    assert_stats(stats1, FIRST_COURSE_EXPECTED_STATS_KEYS, {"task_0_0": 1.0, "task_1_3": expected_stats_ratio})
 
     assert all_scores1 == {
-        TEST_USERNAME_1: (
-            {"task_0_0": (1, False), "task_1_3": (expected_score_1, False)},
-            (TEST_FIRST_NAME_1, TEST_LAST_NAME_1),
-            None,
-            None,
-            None,
-        ),
-        TEST_USERNAME_2: (
-            {"task_0_0": (expected_score_2, False)},
-            (TEST_FIRST_NAME_2, TEST_LAST_NAME_2),
-            None,
-            None,
-            None,
-        ),
+        TEST_USERNAME_1: named_scores({"task_0_0": (1, False), "task_1_3": (expected_score_1, False)}, STUDENT_1),
+        TEST_USERNAME_2: named_scores({"task_0_0": (expected_score_2, False)}, STUDENT_2),
     }
     assert bonus_score1_user1 == expected_score_1
     assert scores1_user1 == {"task_0_0": 1, "task_1_3": expected_score_1}
@@ -998,14 +1120,13 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     bonus_score2_user2 = db_api_with_two_initialized_courses.get_bonus_score(SECOND_COURSE_NAME, TEST_USERNAME_2)
     scores2_user2 = db_api_with_two_initialized_courses.get_scores(SECOND_COURSE_NAME, TEST_USERNAME_2)
 
-    assert set(stats2.keys()) == SECOND_COURSE_EXPECTED_STATS_KEYS
-    assert stats2["task_1_0"] == expected_stats_ratio
-    assert stats2["task_1_1"] == expected_stats_ratio
-    assert all(v == 0.0 for k, v in stats2.items() if k not in ["task_1_0", "task_1_1"])
+    assert_stats(
+        stats2, SECOND_COURSE_EXPECTED_STATS_KEYS, {"task_1_0": expected_stats_ratio, "task_1_1": expected_stats_ratio}
+    )
 
     assert all_scores2 == {
-        TEST_USERNAME_1: ({"task_1_0": (99, False)}, (TEST_FIRST_NAME_1, TEST_LAST_NAME_1), None, None, None),
-        TEST_USERNAME_2: ({"task_1_1": (7, False)}, (TEST_FIRST_NAME_2, TEST_LAST_NAME_2), None, None, None),
+        TEST_USERNAME_1: named_scores({"task_1_0": (99, False)}, STUDENT_1),
+        TEST_USERNAME_2: named_scores({"task_1_1": (7, False)}, STUDENT_2),
     }
     assert bonus_score2_user1 == 0
     assert scores2_user1 == {"task_1_0": 99}
@@ -1048,9 +1169,7 @@ def test_bad_requests(db_api_with_two_initialized_courses, session):
     assert bonus_score == 0
     assert scores == {}
 
-    assert session.query(User).count() == 1
-    assert session.query(UserOnCourse).count() == 0
-    assert session.query(Grade).count() == 0
+    assert_counts(session, users=1, user_on_course=0, grades=0)
 
 
 def test_auto_tables_creation(engine, alembic_cfg, postgres_container, first_course_config):
@@ -1097,35 +1216,23 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container, first_
 
 
 def test_store_score_integrity_error(db_api_with_two_initialized_courses, session):
-    user = User(
-        username=TEST_USERNAME,
-        first_name=TEST_FIRST_NAME,
-        last_name=TEST_LAST_NAME,
-        rms_id=TEST_RMS_ID,
-        auth_id=TEST_AUTH_ID,
-    )
+    user = make_user()
 
     session.add(user)
     session.commit()
 
-    db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_two_initialized_courses)
 
     score = db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(1)
     )
     assert score == 1
 
-    assert session.query(User).count() == USER_EXPECTED
-    assert session.query(UserOnCourse).count() == 1
-    assert session.query(Grade).count() == 1
+    assert_counts(session, users=USER_EXPECTED, user_on_course=1, grades=1)
 
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
-    db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_two_initialized_courses)
 
     def failing_update(_, score):
         raise ValueError("Update failed")
@@ -1195,19 +1302,7 @@ def test_apply_migrations_exceptions(db_api_with_two_initialized_courses, postgr
 
 
 def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_courses, session):
-    user = User(
-        id=2,
-        username=TEST_USERNAME,
-        first_name=TEST_FIRST_NAME,
-        last_name=TEST_LAST_NAME,
-        rms_id=TEST_RMS_ID,
-        auth_id=TEST_AUTH_ID,
-    )
-    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=False)
-
-    session.add(user)
-    session.add(user_on_course)
-    session.commit()
+    user, _ = add_user_on_course(session, is_course_admin=False)
 
     db_api_with_two_initialized_courses.sync_and_get_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
 
@@ -1216,19 +1311,7 @@ def test_sync_and_get_admin_status_admin_update(db_api_with_two_initialized_cour
 
 
 def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_courses, session):
-    user = User(
-        id=2,
-        username=TEST_USERNAME,
-        first_name=TEST_FIRST_NAME,
-        last_name=TEST_LAST_NAME,
-        rms_id=TEST_RMS_ID,
-        auth_id=TEST_AUTH_ID,
-    )
-    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=True)
-
-    session.add(user)
-    session.add(user_on_course)
-    session.commit()
+    user, _ = add_user_on_course(session, is_course_admin=True)
 
     db_api_with_two_initialized_courses.sync_and_get_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
@@ -1236,48 +1319,72 @@ def test_sync_and_get_admin_status_admin_no_update(db_api_with_two_initialized_c
     assert updated_user_on_course.is_course_admin
 
 
-def test_check_user_on_course(db_api_with_two_initialized_courses, session):
-    user = User(
-        id=2,
-        username=TEST_USERNAME,
-        first_name=TEST_FIRST_NAME,
-        last_name=TEST_LAST_NAME,
-        rms_id=TEST_RMS_ID,
-        auth_id=TEST_AUTH_ID,
-    )
-    user_on_course = UserOnCourse(user_id=user.id, course_id=1, is_course_admin=True)
+def test_set_course_admin_status_grant(db_api_with_two_initialized_courses, session):
+    user, _ = add_user_on_course(session, is_course_admin=False)
 
-    session.add(user)
-    session.add(user_on_course)
-    session.commit()
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_revoke(db_api_with_two_initialized_courses, session):
+    user, _ = add_user_on_course(session, is_course_admin=True)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert not updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_can_revoke_last_admin(db_api_with_two_initialized_courses, session):
+    # a course may have zero course admins, unlike an instance
+    user, _ = add_user_on_course(session, is_course_admin=True)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    updated_user_on_course = session.query(UserOnCourse).filter_by(user_id=user.id, course_id=1).one()
+    assert not updated_user_on_course.is_course_admin
+
+
+def test_set_course_admin_status_unknown_user(db_api_with_two_initialized_courses, session):
+    # should not raise, just log an error
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, "nonexistent_user", True)
+
+
+def test_get_course_users_with_admin_status(db_api_with_two_initialized_courses, session):
+    add_user_on_course(session, is_course_admin=True)
+    add_user_on_course(session, student=STUDENT_1, user_id=3, is_course_admin=False)
+
+    result = db_api_with_two_initialized_courses.get_course_users_with_admin_status(FIRST_COURSE_NAME)
+
+    result_map = {stored_user.username: is_admin for stored_user, is_admin in result}
+    assert result_map == {TEST_USERNAME: True, TEST_USERNAME_1: False}
+
+
+def test_get_course_users_with_admin_status_unknown_course(db_api_with_two_initialized_courses):
+    assert db_api_with_two_initialized_courses.get_course_users_with_admin_status("nonexistent_course") == []
+
+
+def test_check_user_on_course(db_api_with_two_initialized_courses, session):
+    add_user_on_course(session, is_course_admin=True)
 
     assert db_api_with_two_initialized_courses.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
 
 
 def test_update_or_create_user_existing(db_api_with_two_initialized_courses, session):
-    user = User(
-        id=2,
-        username=TEST_USERNAME,
-        first_name=TEST_FIRST_NAME,
-        last_name=TEST_LAST_NAME,
-        rms_id=TEST_RMS_ID,
-        auth_id=TEST_AUTH_ID,
-    )
+    user = make_user(id=2)
     session.add(user)
     session.commit()
 
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
-    db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_two_initialized_courses)
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
 
 
 def test_update_or_create_user_nonexisting(db_api_with_two_initialized_courses, session):
     assert session.query(User).filter_by(username=TEST_USERNAME).one_or_none() is None
-    db_api_with_two_initialized_courses.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_two_initialized_courses)
     assert session.query(User).filter_by(username=TEST_USERNAME).one()
 
 
@@ -1460,30 +1567,25 @@ def test_edit_course(db_api_with_initialized_first_course, edited_first_course_c
     assert session.query(Course).count() == 1
     course = session.query(Course).one()
 
-    assert course.name == FIRST_COURSE_NAME
-    assert course.registration_secret == edited_first_course_config.registration_secret
-    assert course.token == "test_token"
-    assert not course.show_allscores
-    assert course.status == CourseStatus.IN_PROGRESS
+    assert_course(
+        course,
+        registration_secret=edited_first_course_config.registration_secret,
+        show_allscores=False,
+        status=CourseStatus.IN_PROGRESS,
+        gitlab_course_group=edited_first_course_config.gitlab_course_group,
+        gitlab_course_public_repo=edited_first_course_config.gitlab_course_public_repo,
+        gitlab_course_students_group=edited_first_course_config.gitlab_course_students_group,
+        gitlab_default_branch=edited_first_course_config.gitlab_default_branch,
+        timezone="Europe/Berlin",
+        max_submissions=10,
+        submission_penalty=0.1,
+    )
 
-    assert course.gitlab_course_group == edited_first_course_config.gitlab_course_group
-    assert course.gitlab_course_public_repo == edited_first_course_config.gitlab_course_public_repo
-    assert course.gitlab_course_students_group == edited_first_course_config.gitlab_course_students_group
-    assert course.gitlab_default_branch == edited_first_course_config.gitlab_default_branch
-
-    assert course.task_url_template == "https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME"
-    assert course.links == {"TG Channel": "https://t.me/joinchat/", "TG Chat": "https://t.me/joinchat/"}
-
-    assert course.timezone == "Europe/Berlin"
-    assert course.max_submissions == 10  # noqa: PLR2004
-    assert course.submission_penalty == 0.1  # noqa: PLR2004
-
-    stats = db_api_with_initialized_first_course.get_stats(FIRST_COURSE_NAME)
-    assert set(stats.keys()) == FIRST_COURSE_EXPECTED_STATS_KEYS
-    assert all(v == 0 for v in stats.values())
-    assert (
-        db_api_with_initialized_first_course.max_score_started(FIRST_COURSE_NAME)
-        == FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED
+    assert_empty_stats(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        FIRST_COURSE_EXPECTED_STATS_KEYS,
+        FIRST_COURSE_EXPECTED_MAX_SCORE_STARTED,
     )
 
 
@@ -1494,13 +1596,7 @@ def test_zero_instance_admin_is_in_db_and_set_admin_status(db_api, session):
     db_api.set_instance_admin_status(session.query(User).one().username, False)
     assert session.query(User).one().is_instance_admin  # should not be possible to remove last admin
 
-    db_api.update_or_create_user(
-        username=TEST_USERNAME,
-        first_name=TEST_FIRST_NAME,
-        last_name=TEST_LAST_NAME,
-        rms_id=TEST_RMS_ID,
-        auth_id=TEST_AUTH_ID,
-    )
+    create_user(db_api)
 
     assert not session.query(User).filter_by(username=TEST_USERNAME).one().is_instance_admin
     db_api.set_instance_admin_status(TEST_USERNAME, True)
@@ -1510,13 +1606,7 @@ def test_zero_instance_admin_is_in_db_and_set_admin_status(db_api, session):
 
 
 def test_update_user_profile(db_api, session):
-    db_api.update_or_create_user(
-        username=TEST_USERNAME,
-        first_name=TEST_FIRST_NAME,
-        last_name=TEST_LAST_NAME,
-        rms_id=TEST_RMS_ID,
-        auth_id=TEST_AUTH_ID,
-    )
+    create_user(db_api)
 
     db_api.update_user_profile(TEST_USERNAME, "NewFirstName", "NewLastName")
     updated_user = session.query(User).filter_by(username=TEST_USERNAME).populate_existing().one()
@@ -1580,9 +1670,7 @@ def test_calculate_and_save_grade_allows_downgrade_in_progress(
     course.status = CourseStatus.IN_PROGRESS
     session.commit()
 
-    db_api_with_initialized_first_course.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_initialized_first_course)
     db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     user_on_course = (
@@ -1609,9 +1697,7 @@ def test_calculate_and_save_grade_no_downgrade_in_doreshka_and_all_tasks_issued(
     db_api_with_initialized_first_course,
     session,
 ):
-    db_api_with_initialized_first_course.update_or_create_user(
-        TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID
-    )
+    create_user(db_api_with_initialized_first_course)
     db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
@@ -1711,9 +1797,7 @@ def test_constant_queries(  # noqa: PLR0913
     course1.status = CourseStatus.IN_PROGRESS
     session.commit()
 
-    db_api.update_or_create_user(
-        STUDENT_1.username, STUDENT_1.first_name, STUDENT_1.last_name, STUDENT_1.rms_id, STUDENT_1.auth_id
-    )
+    create_user(db_api, STUDENT_1)
     db_api.store_score(FIRST_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_1, True)
 
@@ -1732,9 +1816,7 @@ def test_constant_queries(  # noqa: PLR0913
     db_api.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_1, True)
 
     # Setup 2nd student and register on both courses
-    db_api.update_or_create_user(
-        STUDENT_2.username, STUDENT_2.first_name, STUDENT_2.last_name, STUDENT_2.rms_id, STUDENT_2.auth_id
-    )
+    create_user(db_api, STUDENT_2)
     db_api.store_score(FIRST_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_2, True)
     db_api.store_score(SECOND_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))

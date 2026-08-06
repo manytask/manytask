@@ -428,14 +428,49 @@
 
             const valueEl = document.getElementById("filter-value");
 
+            // Transliteration-aware search:
+            // normalize both the search term and the searchable fields to a
+            // common Latin form before substring matching, so that typing
+            // "Ivan" matches "Иван" and typing "Иван" also matches "Ivan".
+            const CYRILLIC_TO_LATIN = {
+                'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh',
+                'з':'z','и':'i','й':'i','к':'k','л':'l','м':'m','н':'n','о':'o',
+                'п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'c',
+                'ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu',
+                'я':'ya',
+                // Ukrainian / Belarusian extras
+                'ї':'i','і':'i','є':'e','ґ':'g','ў':'u'
+            };
+
+            function normalizeForSearch(str) {
+                if (!str) return "";
+                const lower = str.toLowerCase();
+                let out = "";
+                for (let i = 0; i < lower.length; i++) {
+                    const ch = lower[i];
+                    out += Object.prototype.hasOwnProperty.call(CYRILLIC_TO_LATIN, ch)
+                        ? CYRILLIC_TO_LATIN[ch]
+                        : ch;
+                }
+                return out;
+            }
+
             function customFilter(data) {
-                const searchTerm = valueEl.value.toLowerCase();
-                if (data.username.toLowerCase().includes(searchTerm)) {
+                const searchTerm = normalizeForSearch(valueEl.value);
+                if (!searchTerm) return true;
+                if (normalizeForSearch(data.username).includes(searchTerm)) {
                     return true;
                 }
-                if (data.first_name && data.last_name) {
-                    const full_name = `${data.first_name} ${data.last_name}`.toLowerCase();
-                    return full_name.includes(searchTerm);
+                // Normally we would search for match in first and last name independently,
+                // which would cover most of the cases. But the approach below allows one
+                // to be more specific by typing both name and last name in the search box
+                // in any order (e.g. "Ivanov Iv" will match Иван Иванов, but not Илья Иванов).
+                const first_name = data.first_name ? data.first_name : "";
+                const last_name = data.last_name ? data.last_name : "";
+                const the_very_full_name = `${first_name} ${last_name} ${first_name}`;
+                
+                if (normalizeForSearch(the_very_full_name).includes(searchTerm)) {
+                    return true;
                 }
                 return false;
             }

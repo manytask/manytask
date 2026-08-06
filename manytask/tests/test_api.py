@@ -1,5 +1,4 @@
 import os
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Callable
@@ -8,17 +7,15 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import yaml
-from dotenv import load_dotenv
-from flask import Flask, json, url_for
+from flask import json, url_for
 from pytest import approx
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import RmsUser, StoredUser
+from manytask.abstract import RmsUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
-from manytask.config import ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
-from manytask.course import CourseStatus
-from manytask.database import DataBaseApi, TaskDisabledError
+from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.database import DataBaseApi
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 from manytask.web import course_bp, root_bp
@@ -26,47 +23,35 @@ from tests.constants import (
     GITLAB_BASE_URL,
     INVALID_TASK_NAME,
     TASK_NAME_WITH_DISABLED_TASK_OR_GROUP,
-    TEST_AUTH_ID,
-    TEST_CLIENT_PROFILE_SESSION_VERSION,
     TEST_COURSE_NAME,
     TEST_EMAIL,
     TEST_FIRST_NAME,
-    TEST_GITLAB_SESSION_VERSION,
     TEST_INVALID_USER_ID,
     TEST_INVALID_USERNAME,
     TEST_LAST_NAME,
-    TEST_MANYTASK_SESSION_VERSION,
     TEST_PASSWORD,
     TEST_PUBLIC_REPO,
     TEST_RMS_ID,
-    TEST_SECRET_KEY,
     TEST_STUDENTS_GROUP,
     TEST_TASK_GROUP_NAME,
     TEST_TASK_NAME,
     TEST_USER_ID,
     TEST_USERNAME,
 )
-
-
-@pytest.fixture(autouse=True)
-def setup_environment(monkeypatch):
-    load_dotenv()
-    if not os.getenv("MANYTASK_COURSE_TOKEN"):
-        monkeypatch.setenv("MANYTASK_COURSE_TOKEN", "test_token")
-    monkeypatch.setenv("FLASK_SECRET_KEY", "test_key")
-    monkeypatch.setenv("TESTING", "true")
-    yield
+from tests.helpers import (
+    MockCourseBase,
+    MockStorageApiBase,
+    build_test_session,
+    make_created_course_mock,
+    make_flask_app,
+    raise_for_invalid_task,
+    set_session,
+)
 
 
 @pytest.fixture
 def app(mock_storage_api):
-    app = Flask(__name__)
-    app.config["DEBUG"] = False
-    app.config["TESTING"] = True
-    app.secret_key = TEST_SECRET_KEY
-    app.register_blueprint(root_bp)
-    app.register_blueprint(course_bp)
-    app.register_blueprint(api_bp)
+    app = make_flask_app(root_bp, course_bp, api_bp)
     app.storage_api = mock_storage_api
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     app.auth_api = MockAuthApi()
@@ -110,20 +95,10 @@ def mock_group(mock_task):
 
 @pytest.fixture
 def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
-    class MockStorageApi:
+    class MockStorageApi(MockStorageApiBase):
         def __init__(self):
+            super().__init__()
             self.scores = {}
-            self.stored_user = StoredUser(
-                username=TEST_USERNAME,
-                first_name=TEST_FIRST_NAME,
-                last_name=TEST_LAST_NAME,
-                rms_id=TEST_RMS_ID,
-                auth_id=TEST_AUTH_ID,
-                user_id=TEST_USER_ID,
-                instance_admin=False,
-            )
-            self.course_name = TEST_COURSE_NAME
-            self.course_admin = False
             self.non_admin_users: set[str] = set()
 
         def store_score(self, _course_name, username, task_name, update_fn):
@@ -173,9 +148,6 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             self.course_admin = course_admin
             return course_admin
 
-        def check_user_on_course(self, *a, **k):
-            return True
-
         def max_score_started(self, _):
             return 0
 
@@ -217,15 +189,8 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
         @staticmethod
         def find_task(_course_name, task_name):
-            if task_name == INVALID_TASK_NAME:
-                raise KeyError("Task not found")
-            if task_name == TASK_NAME_WITH_DISABLED_TASK_OR_GROUP:
-                raise TaskDisabledError(f"Task {task_name} is disabled")
+            raise_for_invalid_task(task_name)
             return mock_course, mock_group, mock_task
-
-        @staticmethod
-        def get_now_with_timezone(_course_name):
-            return datetime.now(tz=ZoneInfo("UTC"))
 
         def get_groups(self, _course_name, enabled=None, started=None, now=None):
             groups = getattr(self, "groups_override", None)
@@ -237,40 +202,19 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
                 groups = [g for g in groups if not getattr(g, "enabled", True)]
             return groups
 
-        @staticmethod
-        def get_namespace_admin_namespaces(_username):
-            return []
-
-        @staticmethod
-        def get_courses_by_namespace_ids(_namespace_ids):
-            return []
-
-        @staticmethod
-        def get_courses_where_course_admin(_username):
-            return []
-
-        @staticmethod
-        def get_namespace_by_id(_namespace_id, _username):
-            raise PermissionError("No access to namespace")
-
     return MockStorageApi()
 
 
 @pytest.fixture
 def mock_course():
-    class MockCourse:
+    class MockCourse(MockCourseBase):
         def __init__(self):
-            self.course_name = TEST_COURSE_NAME
-            self.status = CourseStatus.IN_PROGRESS
-            self.show_allscores = True
+            super().__init__()
             self.registration_secret = "test_secret"
             self.token = os.environ["MANYTASK_COURSE_TOKEN"]
             self.gitlab_course_group = "test_group"
             self.gitlab_course_public_repo = "public_2025_spring"
             self.gitlab_course_students_group = "students_2025_spring"
-            self.gitlab_default_branch = "main"
-            self.deadlines_type = ManytaskDeadlinesType.HARD
-            self.namespace_id = None
 
     return MockCourse()
 
@@ -295,24 +239,10 @@ def authenticated_client(app, mock_gitlab_oauth):
             "access_token": "test_token",
             "refresh_token": "test_token",
         }
-        with client.session_transaction() as session:
-            session["auth"] = {
-                "version": TEST_GITLAB_SESSION_VERSION,
-                "username": TEST_USERNAME,
-                "user_auth_id": TEST_USER_ID,
-                "access_token": "",
-                "refresh_token": "",
-            }
-            session["rms"] = {
-                "version": TEST_CLIENT_PROFILE_SESSION_VERSION,
-                "rms_id": TEST_RMS_ID,
-                "username": TEST_USERNAME,
-            }
-            session["manytask"] = {
-                "version": TEST_MANYTASK_SESSION_VERSION,
-                "user_id": TEST_USER_ID,
-                "username": TEST_USERNAME,
-            }
+        set_session(
+            client,
+            build_test_session(include_manytask=True, access_token="", refresh_token=""),
+        )
         yield client
 
 
@@ -573,12 +503,7 @@ def test_update_database_unauthorized(app, mock_gitlab_oauth):
 
 def test_update_database_not_ready(app, authenticated_client):
     with patch.object(app.storage_api, "get_course") as mock_get_course:
-
-        @dataclass
-        class Course:
-            status = CourseStatus.CREATED
-
-        mock_get_course.return_value = Course()
+        mock_get_course.return_value = make_created_course_mock()
 
         test_data = {"username": TEST_USERNAME, "scores": {"task1": 90, "task2": 85}}
         response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
@@ -625,6 +550,79 @@ def test_update_config_success(app):
     assert response.status_code == HTTPStatus.OK
 
 
+def test_update_config_reports_invalid_yaml(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
+
+    # Unterminated flow sequence -> yaml.YAMLError
+    malformed_yaml = b"version: 1\nui: [unclosed"
+    response = client.post(f"/api/{TEST_COURSE_NAME}/update_config", data=malformed_yaml, headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    body = response.get_data(as_text=True)
+    assert "YAML" in body
+    # The underlying parser error should be surfaced to the caller.
+    assert "expected" in body.lower() or "found" in body.lower()
+
+
+def test_update_config_reports_duplicate_task_names(app):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
+
+    # Route store_config through the real validation so a real ValidationError is raised.
+    def real_store_config(course_name, content):
+        ManytaskConfig(**content)
+
+    app.store_config = real_store_config
+
+    config_dict = {
+        "version": 1,
+        "ui": {"task_url_template": "https://example.org/$GROUP_NAME/$USER_NAME/$TASK_NAME"},
+        "deadlines": {
+            "timezone": "Europe/Moscow",
+            "schedule": [
+                {
+                    "group": "week_1",
+                    "start": "2025-01-01 10:00",
+                    "end": "2025-01-15 23:59",
+                    "tasks": [
+                        {"task": "dup_task", "score": 10},
+                        {"task": "dup_task", "score": 10},
+                    ],
+                }
+            ],
+        },
+    }
+    response = client.post(f"/api/{TEST_COURSE_NAME}/update_config", data=yaml.dump(config_dict), headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    body = response.get_data(as_text=True)
+    # The specific reason must reach the caller, not a generic "Bad request".
+    assert "Task names should be unique" in body
+    assert "dup_task" in body
+
+
+@pytest.mark.parametrize(
+    "raw_body",
+    [
+        b"",  # empty file -> parses to None
+        b"   \n",  # whitespace only -> parses to None
+        b"version",  # bare scalar -> parses to str
+        b"- a\n- b\n",  # top-level list -> parses to list
+    ],
+)
+def test_update_config_reports_non_mapping(app, raw_body):
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
+
+    response = client.post(f"/api/{TEST_COURSE_NAME}/update_config", data=raw_body, headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    body = response.get_data(as_text=True)
+    # A non-mapping config must report a clear reason, not the opaque generic message.
+    assert "mapping" in body.lower() or "object" in body.lower()
+
+
 def test_get_database_unauthorized(app, mock_gitlab_oauth):
     app.debug = False  # Disable debug mode to test auth
     app.oauth = mock_gitlab_oauth
@@ -635,12 +633,7 @@ def test_get_database_unauthorized(app, mock_gitlab_oauth):
 
 def test_get_database_not_ready(app, mock_gitlab_oauth):
     with patch.object(app.storage_api, "get_course") as mock_get_course:
-
-        @dataclass
-        class Course:
-            status = CourseStatus.CREATED
-
-        mock_get_course.return_value = Course()
+        mock_get_course.return_value = make_created_course_mock()
         app.debug = False  # Disable debug mode to test auth
         app.oauth = mock_gitlab_oauth
         client = app.test_client()

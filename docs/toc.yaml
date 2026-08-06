@@ -36,14 +36,18 @@ items:
     items:
       - name: Course as code
         href: course_as_code.md
+      - name: The basic example
+        href: basic_example.md
+      - name: Course template
+        href: course_template.md
       - name: Private repository
         href: private_repo.md
       - name: Checker configuration
         href: checker_config.md
       - name: Manytask configuration
         href: manytask_config.md
-      - name: Course statuses
-        href: course_statuses.md
+      - name: Running the course
+        href: running_course.md
       - name: Checker pipelines and plugins
         href: checker_pipelines_and_plugins.md
   - name: For system administrators
@@ -56,8 +60,6 @@ items:
         href: deploy_guide.md
   - name: For developers
     items:
-      - name: Local Development
-        href: local_development.md
       - name: Development
         href: dev.md
   - name: References

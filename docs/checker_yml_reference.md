@@ -64,8 +64,9 @@ This section controls which files are copied, hidden, or ignored when exporting 
 ```yaml
 structure:
   ignore_patterns: [".git", ".idea", "__pycache__", "*.pyc"]
-  public_patterns: ["*", ".gitignore", ".gitlab-ci-students.yml"]
-  private_patterns: [".*", "test_private.py", "data_private"]
+  # List only the specific dotfiles students need — do NOT use a bare "*".
+  public_patterns: [".gitignore", ".gitlab-ci-students.yml"]
+  private_patterns: [".*", "*private*", "data_private"]
 ```
 
 | Field | Type | Required | Description |
@@ -74,7 +75,25 @@ structure:
 | `public_patterns` | `list[str]` | no | Glob patterns for files/dirs to **include in the public export** and overwrite during testing. |
 | `private_patterns` | `list[str]` | no | Glob patterns for files/dirs to **keep private** (excluded from export, overwritten from reference during testing). |
 
-> **Warning:** `**` (double-star recursive glob) is **not allowed** in any pattern. Patterns are applied at each directory level individually.  
+> **Warning:** `**` (double-star recursive glob) is **not allowed** in any pattern. Patterns are applied at each directory level individually.
+
+> **Warning — never put a bare `"*"` in `public_patterns`.** The exporter
+> classifies a file as *public* before it considers `private_patterns`, and a
+> public match permanently disables private classification for that file
+> (`is_private = not is_public and ...` in
+> [`exporter.py`](../checker/checker/exporter.py) `_should_skip_path`). Python's
+> `Path.match("*")` matches **every** file — including `test_private.py` and even
+> dotfiles — so `public_patterns: ["*"]` marks your private tests as public and
+> **leaks them into the student repository**.
+>
+> You don't need `"*"` to publish ordinary files: during a public export the
+> checker runs with `copy_other=True`, which already copies any file that isn't
+> matched by `public_patterns` or `private_patterns`. So `public_patterns` only
+> needs to list the specific **dotfiles** students require (dotfiles are private
+> by default via the `".*"` rule), and `private_patterns` can safely use
+> `"*private*"` to hide every language's hidden tests. See
+> [`course-template/.checker.yml`](https://github.com/manytask/manytask/blob/main/course-template/.checker.yml) for a
+> worked example.
 
 Pattern precedence: `ignore_patterns` > `private_patterns` > `public_patterns`
 
@@ -89,6 +108,7 @@ export:
   default_branch: main
   commit_message: "chore(auto): export new tasks"
   templates: search
+  push_options: ["ci.skip"]
 ```
 
 | Field | Type | Required | Default | Description |
@@ -97,6 +117,7 @@ export:
 | `default_branch` | `str` | no  | `"main"` | Branch name to push to in the destination repository. |
 | `commit_message` | `str` | no  | `"chore(auto): export new tasks"` | Commit message used when pushing exported tasks. |
 | `templates` | `str` | no  | `"search"` | Template strategy for generating student-facing task files. One of `search`, `create`, `search_or_create`. |
+| `push_options` | `list[str]` | no | `["ci.skip"]` | Push options passed to `git push` as `-o <option>` flags on export. The default `"ci.skip"` tells GitLab to skip pipelines for the auto-export commit. Set to `[]` for git servers that do not support push options (e.g. SourceCraft), or override with any other list of options understood by the destination server. |
 
 ### `templates` strategies
 
@@ -356,11 +377,12 @@ structure:
     - ".*_cache"
     - "*.pyc"
   public_patterns:
-    - "*"
+    # Only the dotfiles students need — never a bare "*" (see structure section).
     - ".gitignore"
     - ".gitlab-ci-students.yml"
   private_patterns:
     - ".*"
+    - "*private*"
 
 default_parameters:
   run_testing: true

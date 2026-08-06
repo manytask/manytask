@@ -277,13 +277,14 @@ def requires_instance_admin(f: Callable[..., Any]) -> Callable[..., Any]:
     @requires_auth
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
+        from .utils.flask import check_if_current_user_is_instance_admin
+
         app: CustomFlask = current_app  # type: ignore
 
         if app.debug:
             return f(*args, **kwargs)
 
-        username = session["manytask"]["username"]
-        if not app.storage_api.check_if_instance_admin(username):
+        if not check_if_current_user_is_instance_admin(app):
             abort(HTTPStatus.FORBIDDEN)
 
         return f(*args, **kwargs)
@@ -297,7 +298,7 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
     @requires_auth
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        from .utils.flask import is_namespace_admin
+        from .utils.flask import check_if_current_user_is_instance_admin, check_if_user_has_namespaces_to_admin
 
         app: CustomFlask = current_app  # type: ignore
 
@@ -305,10 +306,10 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
             return f(*args, **kwargs)
 
         username = session["manytask"]["username"]
-        is_instance_admin = app.storage_api.check_if_instance_admin(username)
-        is_namespace_admin_user = is_namespace_admin(app, username)
+        is_instance_admin = check_if_current_user_is_instance_admin(app)
+        is_some_namespace_admin = check_if_user_has_namespaces_to_admin(app)
 
-        if not is_instance_admin and not is_namespace_admin_user:
+        if not is_instance_admin and not is_some_namespace_admin:
             logger.warning(
                 "User %s attempted to access %s without instance admin or namespace admin privileges",
                 username,

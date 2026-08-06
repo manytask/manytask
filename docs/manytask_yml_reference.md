@@ -16,6 +16,9 @@ deadlines:
 
 grades:               # optional
   ...
+
+mr_review:            # optional
+  ...
 ```
 
 | Field | Type | Required | Description |
@@ -25,6 +28,7 @@ grades:               # optional
 | `ui` | object | yes | UI display settings. See [`ui`](#ui). |
 | `deadlines` | object | yes | Deadline schedule and submission rules. See [`deadlines`](#deadlines). |
 | `grades` | object | no | Final grade computation rules. See [`grades`](#grades). |
+| `mr_review` | object | no | Merge-request review bot settings. See [`mr_review`](#mr_review). |
 
 
 ## `status`
@@ -233,6 +237,52 @@ Use an empty key `""` with value `0` to create a condition that always matches �
 2:
   - { "": 0 }
 ```
+
+## `mr_review`
+
+Optional section consumed by the **mr-reviewer bot**, not by the Manytask web app. When a course opts into manual code review through merge requests, the bot reads this subsection from the same `.manytask.yml` (delivered by the `deploy-mr-review` CI job). If the section is absent, the bot does not scan the course.
+
+```yaml
+mr_review:
+  gitlab_group: my-course/students-2026
+  score_comment_pattern: "Score: {score}"
+  tasks:
+    - name: compgraph
+      manual_review: true
+      checklist:
+        - type: pipeline_passed
+        - type: forbidden_files
+          extensions: [csv, json, txt]
+        - type: folder_structure
+          required_path: "week_1/compgraph"
+```
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `gitlab_group` | string | yes | — | GitLab group path the bot scans for open student merge requests. |
+| `score_comment_pattern` | string | no | `Score: {score}` | Template a teacher's grade comment must match. Must contain exactly one `{score}` placeholder. |
+| `tasks` | list | yes | — | Tasks the bot handles. See [`mr_review` task](#mr_review-task). |
+
+### `mr_review` task
+
+Each entry ties a task (by name) to the checklist run on its merge requests. The task `name` must match the label put on the MR.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes | — | Task identifier; also the GitLab label that routes an MR to this task's checklist. |
+| `manual_review` | boolean | no | `true` | Whether the polling worker processes this task. Set `false` to skip it. |
+| `checklist` | list | yes | — | Ordered checklist steps. See [checklist steps](#checklist-steps). |
+
+### Checklist steps
+
+Each step is a mapping discriminated by `type`. Steps run in order and the summary is posted back to the MR as a single bot comment.
+
+| `type` | Extra fields | Description |
+|---|---|---|
+| `pipeline_passed` | — | The MR head pipeline must be `success`. |
+| `forbidden_files` | `extensions: [str]` (≥1) | The MR must not add files with any of these extensions. |
+| `folder_structure` | `required_path: str` | Every change in the MR must live under this path. |
+| `run` | `command: str` | Runs `<command>` in a sandboxed shallow checkout of the MR. **Trusted code** — only enable for staff you trust. |
 
 ## Validation rules
 
