@@ -394,11 +394,15 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     if course.status != CourseStatus.CREATED:
         return redirect(url_for("course.course_page", course_name=course_name))
 
+    username = "guest" if app.debug else session["manytask"]["username"]
+    can_edit_course = has_role(username, ["instance_admin", "namespace_admin"], app, course_name=course_name)
+
     return render_template(
         "not_ready.html",
         course_name=course.course_name,
         manytask_version=app.manytask_version,
         is_instance_admin=is_instance_admin,
+        can_edit_course=can_edit_course,
     )
 
 
