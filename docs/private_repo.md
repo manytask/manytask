@@ -267,3 +267,39 @@ And test all tasks, separate task group or a single task:
   (.venv) checker check --group 00_Setup
   (.venv) checker check --task 01_HelloWorld
   ```
+
+### Inspecting the merged tree
+
+When grading, the checker does not test the student repository directly. It builds a **merged
+tree**: the student's own files are copied first, then the public and private files (tests,
+configs) from the private repository are overlaid on top — so a student cannot pass by editing
+the tests. Normally this tree lives in a temporary directory and is deleted when the run ends.
+
+Use `checker merge` to write that same tree to a real directory and keep it:
+
+  ```shell
+  (.venv) checker merge STUDENT_REPO PRIVATE_REPO ./merged
+  ```
+
+This is useful when a student reports "it works locally but fails in CI" — you can look at
+exactly what the grader saw. To grade the result, commit inside it and run:
+
+  ```shell
+  (.venv) checker grade ./merged PRIVATE_REPO
+  ```
+
+Note `checker check` is not usable on a merged tree: it runs `validate`, which expects the
+`.template` files that the merge deliberately strips out.
+
+`OUTPUT_DIR` is created if missing. If it already contains files the command refuses to run;
+pass `--force` to clear it first (an existing `.git` folder is preserved). Use `--dry-run` to
+see what would happen without writing anything.
+
+Alternatively, keep the tree from a normal run with `--merge-dir`:
+
+  ```shell
+  (.venv) checker grade . PRIVATE_REPO --merge-dir ./merged
+  (.venv) checker check . PRIVATE_REPO --merge-dir ./merged
+  ```
+
+The directory given to `--merge-dir` is never deleted automatically, even with cleanup enabled.
