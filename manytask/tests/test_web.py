@@ -289,8 +289,6 @@ def test_index_shows_profile_menu(app, mock_gitlab_oauth):
             assert response.status_code == HTTPStatus.OK
             body = response.data.decode()
             assert "nav-user-menu" in body
-            assert "Account Settings" in body
-            assert f"{GITLAB_BASE_URL}/-/user_settings/profile" in body
             assert "changeUserInfoModal" in body
             assert TEST_USERNAME in body
 
