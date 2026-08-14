@@ -86,9 +86,10 @@ class CppForbiddenPlugin(PluginABC):
         files = list(set(files))
 
         forbidden: list[str] = []
-        # Workaround for firejail limit of 128 cli arguments
-        # Some problems have ~100 forbidden features,
-        # which results in ~200 cli arguments
+        # Workaround for firejail limit of 128 cli arguments.
+        # Some problems have ~50 forbidden features,
+        # which results in ~100 cli arguments from forbidden
+        # features list alone if passed separately.
         if args.forbidden:
             forbidden += ["-f", ';'.join(args.forbidden)]
         if args.forbidden_files:
