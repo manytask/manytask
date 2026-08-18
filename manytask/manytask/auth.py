@@ -322,6 +322,38 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
     return decorated
 
 
+def requires_course_admin(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Check user authentication and admin access to the course from the route.
+
+    Access is granted to instance admins, namespace admins of the namespace the
+    course belongs to, and course admins of the course itself.
+    """
+
+    @requires_auth
+    @wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        app: CustomFlask = current_app  # type: ignore
+
+        if app.debug:
+            return f(*args, **kwargs)
+
+        username = session["manytask"]["username"]
+        course_name = kwargs["course_name"]
+
+        if not app.storage_api.check_if_course_admin(course_name, username):
+            logger.warning(
+                "User %s attempted to access %s for course %s without admin privileges",
+                username,
+                f.__name__,
+                course_name,
+            )
+            abort(HTTPStatus.FORBIDDEN)
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
 def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to check if user has at least one of the required roles.
 
