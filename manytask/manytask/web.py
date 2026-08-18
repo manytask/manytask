@@ -29,7 +29,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
+from .utils.flask import can_edit_course, check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
     generate_token_hex,
@@ -619,30 +619,44 @@ def edit_course(course_name: str) -> ResponseReturnValue:
     if not app.debug:
         username = session["manytask"]["username"]
         is_instance_admin = check_if_current_user_is_instance_admin(app)
+        safe_username = sanitize_log_data(username)
+        safe_course_name = sanitize_log_data(course_name)
 
+        namespace_role: str | None = None
         if not is_instance_admin:
             if course.namespace_id:
                 try:
-                    namespace, role = app.storage_api.get_namespace_by_id(course.namespace_id, username)
-                    if role != "namespace_admin":
-                        logger.warning(
-                            "User %s with role %s attempted to edit course %s in namespace %d",
-                            username,
-                            role,
-                            course_name,
-                            course.namespace_id,
-                        )
-                        abort(HTTPStatus.FORBIDDEN)
+                    _, namespace_role = app.storage_api.get_namespace_by_id(course.namespace_id, username)
                 except PermissionError:
                     logger.warning(
                         "User %s attempted to edit course %s without access to namespace %d",
-                        username,
-                        course_name,
+                        safe_username,
+                        safe_course_name,
                         course.namespace_id,
                     )
                     abort(HTTPStatus.FORBIDDEN)
             else:
-                logger.warning("User %s attempted to edit course %s without namespace", username, course_name)
+                logger.warning(
+                    "User %s attempted to edit course %s without namespace",
+                    safe_username,
+                    safe_course_name,
+                )
+                abort(HTTPStatus.FORBIDDEN)
+
+            if not can_edit_course(
+                app,
+                is_instance_admin=is_instance_admin,
+                namespace_id=course.namespace_id,
+                namespace_role=namespace_role,
+            ):
+                safe_namespace_role = sanitize_log_data(namespace_role) if namespace_role is not None else None
+                logger.warning(
+                    "User %s with role %s attempted to edit course %s in namespace %s",
+                    safe_username,
+                    safe_namespace_role,
+                    safe_course_name,
+                    course.namespace_id,
+                )
                 abort(HTTPStatus.FORBIDDEN)
 
     if request.method == "POST":
