@@ -6,6 +6,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Any, Type
 
 import pytest
+import requests
 from pydantic import HttpUrl, ValidationError
 from pytest_mock import MockFixture
 from requests_mock import Mocker
@@ -106,7 +107,9 @@ class TestManytaskPlugin:
             ({"report_url": "invalidurl"}, ValidationError),
         ],
     )
-    def test_plugin_args(self, parameters: dict[str, Any], expected_exception: Type[BaseException] | None) -> None:
+    def test_plugin_args(
+        self, parameters: dict[str, Any], expected_exception: Type[BaseException] | None
+    ) -> None:
         args = self.get_default_args_dict()
         args.update(parameters)
         if expected_exception:
@@ -174,7 +177,9 @@ class TestManytaskPlugin:
 
             assert result is not None, "Didn't collect files"
             assert len(result) == taken_files_num, "Wrong file quantity are collected"
-            assert sorted(result.keys()) == sorted(expected_filenames), "Wrong files are collected"
+            assert sorted(result.keys()) == sorted(expected_filenames), (
+                "Wrong files are collected"
+            )
 
             if taken_files_num:
                 open.assert_called_with(mocker.ANY, "rb")  # type: ignore[attr-defined]
@@ -202,16 +207,30 @@ class TestManytaskPlugin:
 
             if expected_exception:
                 with pytest.raises(expected_exception) as exc:
-                    ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
-                assert str(response_status_code) in str(exc.value), "Status code wasn't provided in exception message"
-                assert response_text in str(exc.value), "Error text wasn't provided in exception message"
+                    ManytaskPlugin._post_with_retries(
+                        self.REPORT_URL, {"key": "value"}, None
+                    )
+                assert str(response_status_code) in str(exc.value), (
+                    "Status code wasn't provided in exception message"
+                )
+                assert response_text in str(exc.value), (
+                    "Error text wasn't provided in exception message"
+                )
                 # The full response body must also be stored in `output` so the pipeline
                 # prints it unconditionally (not just in verbose mode).
-                assert exc.value.output is not None, "Response body wasn't propagated to PluginExecutionFailed.output"
-                assert response_text in exc.value.output, "Response body missing from PluginExecutionFailed.output"
-                assert str(response_status_code) in exc.value.output, "Status code missing from output"
+                assert exc.value.output is not None, (
+                    "Response body wasn't propagated to PluginExecutionFailed.output"
+                )
+                assert response_text in exc.value.output, (
+                    "Response body missing from PluginExecutionFailed.output"
+                )
+                assert str(response_status_code) in exc.value.output, (
+                    "Status code missing from output"
+                )
             else:
-                result = ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
+                result = ManytaskPlugin._post_with_retries(
+                    self.REPORT_URL, {"key": "value"}, None
+                )
                 assert result.status_code == HTTP_OK
                 assert result.text == "Success"
 
@@ -231,7 +250,9 @@ class TestManytaskPlugin:
         mocker.patch.object(ManytaskPlugin, "_collect_files_to_send")
         ManytaskPlugin._collect_files_to_send.return_value = expected_files  # type: ignore[attr-defined]
         mocker.patch.object(ManytaskPlugin, "_post_with_retries")
-        ManytaskPlugin._post_with_retries.return_value.json.return_value = {"score": result_score}  # type: ignore[attr-defined]
+        ManytaskPlugin._post_with_retries.return_value.json.return_value = {
+            "score": result_score
+        }  # type: ignore[attr-defined]
         result = ManytaskPlugin().run(args_dict)
 
         assert result.output == (
@@ -239,7 +260,9 @@ class TestManytaskPlugin:
             f"requested score: {self.TEST_SCORE}, result score: {result_score}"
         )
 
-        ManytaskPlugin._post_with_retries.assert_called_once_with(self.REPORT_URL, expected_data, expected_files)  # type: ignore[attr-defined]
+        ManytaskPlugin._post_with_retries.assert_called_once_with(
+            self.REPORT_URL, expected_data, expected_files
+        )  # type: ignore[attr-defined]
 
     def test_verbose(self, mocker: MockFixture) -> None:
         args_dict = self.get_default_full_args_dict()
@@ -249,7 +272,9 @@ class TestManytaskPlugin:
         mocker.patch.object(ManytaskPlugin, "_collect_files_to_send")
         ManytaskPlugin._collect_files_to_send.return_value = expected_files  # type: ignore[attr-defined]
         mocker.patch.object(ManytaskPlugin, "_post_with_retries")
-        ManytaskPlugin._post_with_retries.return_value.json.return_value = {"score": result_score}  # type: ignore[attr-defined]
+        ManytaskPlugin._post_with_retries.return_value.json.return_value = {
+            "score": result_score
+        }  # type: ignore[attr-defined]
         result = ManytaskPlugin().run(args_dict, verbose=True)
 
         assert str(expected_files) in result.output
@@ -263,4 +288,125 @@ class TestManytaskPlugin:
         with pytest.raises(PluginExecutionFailed) as exc:
             ManytaskPlugin().run(args_dict)
 
-        assert str(exc.value) == "Unable to decode response"
+        # The message must say *what* could not be decoded and *where from*,
+        # and must reach `output` so the pipeline prints it non-verbosely.
+        assert "Unable to decode response" in exc.value.message
+        assert str(self.REPORT_URL) in exc.value.message
+        assert "report_url" in exc.value.message
+        assert exc.value.output == exc.value.message
+
+    @pytest.mark.parametrize(
+        "status_code, body, expected_hint",
+        [
+            (401, "Invalid course token", "report_token"),
+            (403, "Invalid course token", "report_token"),
+            (404, "Task 'x' not found", "report_url"),
+            (409, "course is already finished", "already finished"),
+            (400, "Cannot parse `score`", "score"),
+            (500, "Internal Server Error", "server-side"),
+        ],
+    )
+    def test_http_error_explains_the_cause(
+        self, status_code: int, body: str, expected_hint: str
+    ) -> None:
+        """Every error response must name the status, the body and a likely cause."""
+        with Mocker() as mocker:
+            mocker.post(f"{self.REPORT_URL}", status_code=status_code, text=body)
+
+            with pytest.raises(PluginExecutionFailed) as exc:
+                ManytaskPlugin._post_with_retries(
+                    self.REPORT_URL, {"key": "value"}, None
+                )
+
+        output = exc.value.output or ""
+        assert str(status_code) in output
+        assert body in output
+        assert expected_hint in output
+        assert str(self.REPORT_URL) in output
+
+    def test_html_error_page_is_stripped_of_markup(self) -> None:
+        """Flask renders abort(403, "msg") as HTML; the message must stay readable."""
+        html = (
+            "<!DOCTYPE HTML><html><head><title>403 Forbidden</title></head>"
+            "<body><h1>Forbidden</h1><p>Invalid course token</p></body></html>"
+        )
+        with Mocker() as mocker:
+            mocker.post(
+                f"{self.REPORT_URL}",
+                status_code=403,
+                text=html,
+                headers={"Content-Type": "text/html; charset=utf-8"},
+            )
+
+            with pytest.raises(PluginExecutionFailed) as exc:
+                ManytaskPlugin._post_with_retries(
+                    self.REPORT_URL, {"key": "value"}, None
+                )
+
+        output = exc.value.output or ""
+        assert "Invalid course token" in output
+        assert "<h1>" not in output
+        assert "<html" not in output
+
+    def test_json_error_body_is_unwrapped(self) -> None:
+        """A JSON {"error": ...} body must be shown as the message, not as raw JSON."""
+        with Mocker() as mocker:
+            mocker.post(
+                f"{self.REPORT_URL}",
+                status_code=404,
+                json={"error": "Task 'nonexistent' not found in course 'test'"},
+            )
+
+            with pytest.raises(PluginExecutionFailed) as exc:
+                ManytaskPlugin._post_with_retries(
+                    self.REPORT_URL, {"key": "value"}, None
+                )
+
+        output = exc.value.output or ""
+        assert "Task 'nonexistent' not found in course 'test'" in output
+
+    def test_connection_error_is_reported_not_raised_raw(self) -> None:
+        """A wrong host must fail the stage with a hint, not with a bare traceback."""
+        with Mocker() as mocker:
+            mocker.post(
+                f"{self.REPORT_URL}",
+                exc=requests.exceptions.ConnectionError("nodename nor servname"),
+            )
+
+            with pytest.raises(PluginExecutionFailed) as exc:
+                ManytaskPlugin._post_with_retries(
+                    self.REPORT_URL, {"key": "value"}, None
+                )
+
+        output = exc.value.output or ""
+        assert str(self.REPORT_URL) in output
+        assert "Could not connect" in output
+        assert "ConnectionError" in output
+        assert "report_url" in output
+
+    def test_timeout_is_reported(self) -> None:
+        with Mocker() as mocker:
+            mocker.post(
+                f"{self.REPORT_URL}",
+                exc=requests.exceptions.ConnectTimeout("timed out"),
+            )
+
+            with pytest.raises(PluginExecutionFailed) as exc:
+                ManytaskPlugin._post_with_retries(
+                    self.REPORT_URL, {"key": "value"}, None
+                )
+
+        assert "Timed out while connecting" in (exc.value.output or "")
+
+    def test_long_error_body_is_truncated(self) -> None:
+        with Mocker() as mocker:
+            mocker.post(f"{self.REPORT_URL}", status_code=500, text="x" * 5000)
+
+            with pytest.raises(PluginExecutionFailed) as exc:
+                ManytaskPlugin._post_with_retries(
+                    self.REPORT_URL, {"key": "value"}, None
+                )
+
+        output = exc.value.output or ""
+        assert "(truncated)" in output
+        assert len(output) < 2000

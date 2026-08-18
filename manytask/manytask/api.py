@@ -13,6 +13,7 @@ from flask.typing import ResponseReturnValue
 from enum import Enum
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
+from werkzeug.exceptions import HTTPException
 
 from manytask.abstract import RmsApiException, StorageApi, StoredUser
 from manytask.database import TaskDisabledError
@@ -55,6 +56,53 @@ from .utils.generic import (
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
 namespace_bp = Blueprint("namespace_api", __name__, url_prefix="/api")
+
+
+# Hints appended to API errors, so a failing CI job says what to fix instead of
+# just which status code came back.
+_ERROR_HINTS: dict[int, str] = {
+    HTTPStatus.UNAUTHORIZED: (
+        "Provide the course token via the 'Authorization: Bearer <token>' header or the 'token' form field."
+    ),
+    HTTPStatus.FORBIDDEN: (
+        "The course token was not accepted. Check that it belongs to this exact course "
+        "(in the checker it is the `report_token` argument, usually the MANYTASK_TOKEN CI secret)."
+    ),
+    HTTPStatus.NOT_FOUND: (
+        "Check the request URL ('/api/<course_name>/report'), and that the course, task and user exist. "
+        "The task must also be enabled and started in the course config."
+    ),
+    HTTPStatus.METHOD_NOT_ALLOWED: "Check the HTTP method: /report expects POST.",
+    HTTPStatus.CONFLICT: "The course is finished, so scores can no longer be changed.",
+}
+
+
+@bp.app_errorhandler(HTTPException)
+def handle_api_error(error: HTTPException) -> ResponseReturnValue:
+    """Render API errors as JSON with an actionable hint.
+
+    Flask serves ``abort(code, "msg")`` as an HTML page by default, which is
+    unreadable in CI logs and impossible to parse by API clients. Under ``/api/``
+    we answer with ``{"error": ..., "hint": ...}`` instead.
+
+    Registered app-wide (not per-blueprint) on purpose: routing errors such as
+    404 on an unknown URL and 405 on a wrong method are raised before blueprint
+    dispatch, so a blueprint-scoped handler would never see them — and those are
+    exactly the errors a misconfigured `report_url` produces.
+    """
+    if not request.path.startswith("/api/"):
+        # Web pages keep the regular HTML error pages.
+        return error.get_response()
+
+    status = error.code or HTTPStatus.INTERNAL_SERVER_ERROR
+    message = error.description or getattr(error, "name", "Error")
+
+    payload: dict[str, Any] = {"error": message}
+    hint = _ERROR_HINTS.get(status)
+    if hint:
+        payload["hint"] = hint
+
+    return jsonify(payload), status
 
 
 def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Course:

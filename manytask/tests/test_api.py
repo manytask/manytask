@@ -1034,9 +1034,9 @@ def test_get_requests_invalid_or_disabled_task(app, path, task_name):
 
 # ----- Detailed error responses for /report (and shared helpers) -----
 #
-# Following the project pattern, abort(STATUS, "msg") returns Flask's HTML error page
-# with the message embedded in the body. Tests check status code + a distinguishing
-# substring in response.data (same approach as test_report_score_missing_task above).
+# API blueprints render aborts as JSON ({"error": ..., "hint": ...}) instead of Flask's
+# default HTML page, so failures are readable in CI logs and parsable by clients.
+# Tests check the status code + a distinguishing substring in response.data.
 
 
 def _valid_token_headers():
@@ -1134,6 +1134,72 @@ def test_report_unknown_task_detailed_404(app):
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert INVALID_TASK_NAME.encode() in response.data
     assert TEST_COURSE_NAME.encode() in response.data
+
+
+def test_report_errors_are_json_with_hint(app):
+    """Errors must be machine-readable JSON, not an HTML page."""
+    response = _post_report(app, headers={"Authorization": "Bearer wrong_token"})
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.is_json, "API errors must be JSON so clients can parse them"
+
+    data = json.loads(response.data)
+    assert "Invalid course token" in data["error"]
+    # The hint must point at the actual misconfiguration.
+    assert "report_token" in data["hint"]
+
+
+def test_report_not_found_error_hint_mentions_url_and_task(app):
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    response = _post_report(
+        app,
+        data={"user_id": TEST_RMS_ID, "task": INVALID_TASK_NAME},
+        headers=_valid_token_headers(),
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    data = json.loads(response.data)
+    assert INVALID_TASK_NAME in data["error"]
+    assert "/api/<course_name>/report" in data["hint"]
+
+
+def test_report_wrong_method_is_json(app):
+    """A GET on /report (a common URL mistake) must explain the method mismatch."""
+    response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/report", headers=_valid_token_headers())
+
+    assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+    data = json.loads(response.data)
+    assert "POST" in data["hint"]
+
+
+def test_wrong_api_endpoint_is_json_with_hint(app):
+    """A misspelled `report_url` must produce a parsable error, not an HTML 404 page."""
+    response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/repot", headers=_valid_token_headers())
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.is_json
+    assert "/api/<course_name>/report" in json.loads(response.data)["hint"]
+
+
+def test_non_api_404_stays_html(app):
+    """Only /api/ errors become JSON; web pages keep their HTML error pages."""
+    response = app.test_client().get("/no_such_page/deeper/still", follow_redirects=True)
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert not response.is_json
+
+
+def test_report_bad_score_error_is_json(app):
+    app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    response = _post_report(
+        app,
+        data={"user_id": TEST_RMS_ID, "task": TEST_TASK_NAME, "score": "not_a_number"},
+        headers=_valid_token_headers(),
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    data = json.loads(response.data)
+    assert "score" in data["error"]
 
 
 def test_score_endpoint_invalid_token_detailed_403(app):
