@@ -45,7 +45,7 @@ class ManytaskPlugin(PluginABC):
         try:
             send_time_formatted = args.send_time.strftime(self.DEFAULT_TIME_FORMAT)
         except ValueError as e:
-            raise PluginExecutionFailed(str(e))
+            raise PluginExecutionFailed(f"Failed to format send_time: {e}")
 
         # Do not expose token in logs.
         data = {
