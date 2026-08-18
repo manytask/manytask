@@ -18,6 +18,7 @@ from .auth import (
     redirect_to_login_with_bad_session,
     requires_auth,
     requires_course_access,
+    requires_course_admin,
     requires_instance_or_namespace_admin,
     requires_ready,
     role_required,
@@ -394,11 +395,15 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     if course.status != CourseStatus.CREATED:
         return redirect(url_for("course.course_page", course_name=course_name))
 
+    username = "guest" if app.debug else session["manytask"]["username"]
+    can_edit_course = has_role(username, ["instance_admin", "namespace_admin"], app, course_name=course_name)
+
     return render_template(
         "not_ready.html",
         course_name=course.course_name,
         manytask_version=app.manytask_version,
         is_instance_admin=is_instance_admin,
+        can_edit_course=can_edit_course,
     )
 
 
@@ -607,7 +612,7 @@ def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course
 
 
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
-@requires_instance_or_namespace_admin
+@requires_course_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course = app.storage_api.get_course(course_name)
@@ -615,49 +620,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
     if not course:
         flash("course not found!", category="course_not_found")
         return redirect(url_for("root.index"))
-
-    if not app.debug:
-        username = session["manytask"]["username"]
-        is_instance_admin = check_if_current_user_is_instance_admin(app)
-        safe_username = sanitize_log_data(username)
-        safe_course_name = sanitize_log_data(course_name)
-
-        namespace_role: str | None = None
-        if not is_instance_admin:
-            if course.namespace_id:
-                try:
-                    _, namespace_role = app.storage_api.get_namespace_by_id(course.namespace_id, username)
-                except PermissionError:
-                    logger.warning(
-                        "User %s attempted to edit course %s without access to namespace %d",
-                        safe_username,
-                        safe_course_name,
-                        course.namespace_id,
-                    )
-                    abort(HTTPStatus.FORBIDDEN)
-            else:
-                logger.warning(
-                    "User %s attempted to edit course %s without namespace",
-                    safe_username,
-                    safe_course_name,
-                )
-                abort(HTTPStatus.FORBIDDEN)
-
-            if not can_edit_course(
-                app,
-                is_instance_admin=is_instance_admin,
-                namespace_id=course.namespace_id,
-                namespace_role=namespace_role,
-            ):
-                safe_namespace_role = sanitize_log_data(namespace_role) if namespace_role is not None else None
-                logger.warning(
-                    "User %s with role %s attempted to edit course %s in namespace %s",
-                    safe_username,
-                    safe_namespace_role,
-                    safe_course_name,
-                    course.namespace_id,
-                )
-                abort(HTTPStatus.FORBIDDEN)
 
     if request.method == "POST":
         try:
