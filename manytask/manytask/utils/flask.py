@@ -4,7 +4,7 @@ from manytask.course import CourseStatus
 from manytask.main import CustomFlask
 
 
-def get_courses(app: CustomFlask) -> list[dict[str, str]]:
+def get_courses(app: CustomFlask) -> list[dict[str, str | bool]]:
     username = "guest" if app.debug else session["manytask"]["username"]
     if app.debug or app.storage_api.check_if_instance_admin(username):
         courses_names = app.storage_api.get_all_courses_names_with_statuses()
@@ -27,13 +27,17 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
     else:
         courses_names = app.storage_api.get_user_courses_names_with_statuses(username)
 
+    is_instance_admin = app.debug or app.storage_api.check_if_instance_admin(username)
+
     courses_list = []
     for course_name, status in courses_names:
         course_obj = app.storage_api.get_course(course_name)
         namespace_slug = ""
-        if course_obj and course_obj.namespace_id:
+        namespace_role: str | None = None
+        namespace_id = course_obj.namespace_id if course_obj else None
+        if namespace_id:
             try:
-                namespace, _ = app.storage_api.get_namespace_by_id(course_obj.namespace_id, username)
+                namespace, namespace_role = app.storage_api.get_namespace_by_id(namespace_id, username)
                 namespace_slug = namespace.slug
             except Exception:
                 pass  # Namespace not found or no access
@@ -44,10 +48,47 @@ def get_courses(app: CustomFlask) -> list[dict[str, str]]:
                 "status": status.value,
                 "url": url_for("course.course_page", course_name=course_name),
                 "namespace_slug": namespace_slug,
+                "can_edit": can_edit_course(
+                    app,
+                    is_instance_admin=is_instance_admin,
+                    namespace_id=namespace_id,
+                    namespace_role=namespace_role,
+                ),
+                "edit_url": url_for("instance_admin.edit_course", course_name=course_name),
             }
         )
 
     return courses_list
+
+
+def can_edit_course(
+    app: CustomFlask,
+    *,
+    is_instance_admin: bool,
+    namespace_id: int | None,
+    namespace_role: str | None,
+) -> bool:
+    """Decide whether the current user may edit a course's settings.
+
+    Pure decision function that mirrors the authorization enforced by the
+    :func:`manytask.web.edit_course` route, so the Edit control shown in the UI
+    never links to a page that would return HTTP 403. Being a *course* admin is
+    intentionally not sufficient: a non-instance-admin may edit only a course
+    that belongs to a namespace where they are a *namespace admin*.
+
+    :param app: Flask application instance (debug mode grants edit access)
+    :param is_instance_admin: whether the current user is an instance admin
+    :param namespace_id: id of the course's namespace, or ``None``
+    :param namespace_role: the user's role in that namespace, as returned by
+        :meth:`StorageApi.get_namespace_by_id` (``None`` for instance admins or
+        no access)
+    :return: True if the user may edit the course
+    """
+    if app.debug:
+        return True
+    if is_instance_admin:
+        return True
+    return bool(namespace_id) and namespace_role == "namespace_admin"
 
 
 def check_if_current_user_is_instance_admin(app: CustomFlask) -> bool:

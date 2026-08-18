@@ -60,6 +60,7 @@ Current developers:
 * [Dmitrii Kiselev](https://github.com/kanmir)
 * [Ivan Komarov](https://github.com/gagarinkomar)
 * [Alexander Kostrikov](https://github.com/akostrikov)
+* [Ivan Luchsh](https://github.com/Ch0p1k3)
 * [Daniil Maslov](https://github.com/dmasloff)
 * [Ivan Samsonov](https://github.com/D1sney)
 * [Alexey Seliverstov](https://github.com/prawwtocol)
