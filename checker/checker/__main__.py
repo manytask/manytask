@@ -127,12 +127,22 @@ def _select_tasks(
     """
     selected: dict[str, FileSystemTask] = dict()
 
+    if not tasks and not groups:
+        return selected
+
+    # tasks enabled in the manytask config and present in the filesystem;
+    # groups on the filesystem also contain disabled tasks, so they must be filtered
+    enabled_tasks = {
+        filesystem_task.name: filesystem_task
+        for filesystem_task in course.get_tasks(enabled=True)
+    }
+
     if tasks:
         task_dict = dict.fromkeys(tasks)
-        for filesystem_task in course.get_tasks(enabled=True):
-            if filesystem_task.name in task_dict:
-                selected[filesystem_task.name] = filesystem_task
-                del task_dict[filesystem_task.name]
+        for task_name in list(task_dict.keys()):
+            if task_name in enabled_tasks:
+                selected[task_name] = enabled_tasks[task_name]
+                del task_dict[task_name]
         if task_dict:
             print_info(f"Can't find the tasks: {list(task_dict.keys())}", color="red")
             sys.exit(1)
@@ -142,7 +152,10 @@ def _select_tasks(
         for filesystem_group in course.get_groups(enabled=True):
             if filesystem_group.name in group_dict:
                 for filesystem_task in filesystem_group.tasks:
-                    selected[filesystem_task.name] = filesystem_task
+                    if filesystem_task.name in enabled_tasks:
+                        selected[filesystem_task.name] = enabled_tasks[
+                            filesystem_task.name
+                        ]
                 del group_dict[filesystem_group.name]
         if group_dict:
             print_info(f"Can't find the groups: {list(group_dict.keys())}", color="red")

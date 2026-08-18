@@ -52,6 +52,9 @@ deadlines:
           score: 10
         - task: task1_2
           score: 20
+        - task: task1_3
+          score: 30
+          enabled: false
     - group: group2
       start: 2020-10-10 00:00:00
       end: 3000d
@@ -68,7 +71,9 @@ deadlines:
           score: 40
 """
 
-# task3_1 exists on disk but its group is disabled in .manytask.yml
+# task3_1 exists on disk but its group is disabled in .manytask.yml,
+# task1_3 exists on disk inside an enabled group but is disabled itself,
+# task1_4 exists on disk but is not mentioned in .manytask.yml at all
 ALL_ENABLED_TASKS = {"task1_1", "task1_2", "task2_1"}
 
 
@@ -82,7 +87,7 @@ def course_root(tmp_path: Path) -> Path:
     (root / MANYTASK_YML_NAME).write_text(MANYTASK_YML)
 
     for group, tasks in (
-        ("group1", ("task1_1", "task1_2")),
+        ("group1", ("task1_1", "task1_2", "task1_3", "task1_4")),
         ("group2", ("task2_1",)),
         ("group3", ("task3_1",)),
     ):
@@ -172,6 +177,30 @@ class TestGradeTaskSelection:
 
         assert result.exit_code == 0, result.output
         assert captured_run["tasks"] == ["task1_1", "task1_2"]
+
+    def test_group_selection_skips_disabled_task_of_enabled_group(
+        self, course_root: Path, captured_run: dict[str, Any]
+    ) -> None:
+        result = run_grade(course_root, "-g", "group1")
+
+        assert result.exit_code == 0, result.output
+        assert "task1_3" not in captured_run["tasks"]
+
+    def test_group_selection_skips_task_missing_from_config(
+        self, course_root: Path, captured_run: dict[str, Any]
+    ) -> None:
+        result = run_grade(course_root, "-g", "group1")
+
+        assert result.exit_code == 0, result.output
+        assert "task1_4" not in captured_run["tasks"]
+
+    def test_group_selection_never_grades_more_than_enabled_tasks(
+        self, course_root: Path, captured_run: dict[str, Any]
+    ) -> None:
+        result = run_grade(course_root, "-g", "group1", "-g", "group2")
+
+        assert result.exit_code == 0, result.output
+        assert set(captured_run["tasks"]) == ALL_ENABLED_TASKS
 
     def test_task_and_group_selection_are_combined(
         self, course_root: Path, captured_run: dict[str, Any]
