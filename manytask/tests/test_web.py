@@ -293,6 +293,60 @@ def test_index_shows_profile_menu(app, mock_gitlab_oauth):
             assert TEST_USERNAME in body
 
 
+def test_index_renders_list_and_table_views(app, mock_gitlab_oauth):
+    """The course list page should offer both the list and the table view."""
+    CSRFProtect(app)
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+            response = client.get("/")
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+
+            # Both view containers and the toggle button are present.
+            assert 'id="coursesListView"' in body
+            assert 'id="coursesTableView"' in body
+            assert 'id="toggleViewBtn"' in body
+            assert 'id="courses-table"' in body
+            # Tabulator assets are loaded.
+            assert "tabulator" in body
+            assert "tabulator-theme.js" in body
+
+
+def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
+    """A regular user must not receive an editable course in the table data."""
+    CSRFProtect(app)
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+            response = client.get("/")
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            # can_edit is serialized into the embedded courses JSON; a regular
+            # user (no namespace access) can never edit.
+            assert '"can_edit": true' not in body
+
+
+def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
+    """An instance admin sees an editable course in the table data."""
+    CSRFProtect(app)
+    app.storage_api.stored_user.instance_admin = True
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+            response = client.get("/")
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            assert '"can_edit": true' in body
+            assert "/instance_admin/courses/test_course_names/edit" in body
+
+
 def test_not_ready(app):
     with app.test_request_context():
         with (

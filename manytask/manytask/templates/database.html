@@ -118,6 +118,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
+    <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
           id="light-theme">
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
@@ -370,25 +371,6 @@
                 });
         }
 
-        function updateTheme() {
-            const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-
-            const lightTheme = document.getElementById('light-theme');
-            const darkTheme = document.getElementById('dark-theme');
-
-            if (isDark) {
-                lightTheme.disabled = true;
-                darkTheme.disabled = false;
-            } else {
-                lightTheme.disabled = false;
-                darkTheme.disabled = true;
-            }
-
-            if (window.tabulatorTable) {
-                window.tabulatorTable.redraw(true);
-            }
-        }
-
         document.addEventListener('DOMContentLoaded', function () {
             {% if is_course_admin %}
                 editModal = new bootstrap.Modal(document.getElementById('editModal'));
@@ -411,19 +393,8 @@
                 });
             {% endif %}
 
-            // Watch theme changes for database viewer
-            updateTheme();
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.attributeName === 'data-bs-theme') {
-                        updateTheme();
-                    }
-                });
-            });
-            observer.observe(document.documentElement, {
-                attributes: true,
-                attributeFilter: ['data-bs-theme']
-            });
+            // Watch theme changes for database viewer (shared helper)
+            initTabulatorTheme(() => window.tabulatorTable);
 
 
             const valueEl = document.getElementById("filter-value");
