@@ -178,7 +178,11 @@
                     formatter: function (cell) {
                         const data = cell.getRow().getData();
                         const name = cell.getValue();
-                        return `<a href="${data.url}" class="courses-table-link">${name}</a>`;
+                        const link = document.createElement('a');
+                        link.href = data.url;
+                        link.className = 'courses-table-link';
+                        link.textContent = name;
+                        return link;
                     }
                 },
                 {
