@@ -18,6 +18,7 @@ from .auth import (
     redirect_to_login_with_bad_session,
     requires_auth,
     requires_course_access,
+    requires_course_admin,
     requires_instance_or_namespace_admin,
     requires_ready,
     role_required,
@@ -611,7 +612,7 @@ def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course
 
 
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
-@requires_instance_or_namespace_admin
+@requires_course_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course = app.storage_api.get_course(course_name)
@@ -619,35 +620,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
     if not course:
         flash("course not found!", category="course_not_found")
         return redirect(url_for("root.index"))
-
-    if not app.debug:
-        username = session["manytask"]["username"]
-        is_instance_admin = check_if_current_user_is_instance_admin(app)
-
-        if not is_instance_admin:
-            if course.namespace_id:
-                try:
-                    namespace, role = app.storage_api.get_namespace_by_id(course.namespace_id, username)
-                    if role != "namespace_admin":
-                        logger.warning(
-                            "User %s with role %s attempted to edit course %s in namespace %d",
-                            username,
-                            role,
-                            course_name,
-                            course.namespace_id,
-                        )
-                        abort(HTTPStatus.FORBIDDEN)
-                except PermissionError:
-                    logger.warning(
-                        "User %s attempted to edit course %s without access to namespace %d",
-                        username,
-                        course_name,
-                        course.namespace_id,
-                    )
-                    abort(HTTPStatus.FORBIDDEN)
-            else:
-                logger.warning("User %s attempted to edit course %s without namespace", username, course_name)
-                abort(HTTPStatus.FORBIDDEN)
 
     if request.method == "POST":
         try:
