@@ -33,7 +33,7 @@ below and suggests the likely misconfiguration.
 
 | status | typical cause for `/report` |
 |---|---|
-| `400 Bad Request` | `score` is not a number in `[0.0, 2.0]`, or a required field (`task`, `username`/`user_id`) is missing. |
+| `400 Bad Request` | `score` is not a number, or is a non-integer above `2.0`, or a required field (`task`, `username`/`user_id`) is missing. |
 | `403 Forbidden` | Token missing, empty or not matching the course token. |
 | `404 Not Found` | Wrong URL, or unknown course, task or user. The task must exist and be enabled in `.manytask.yml`, and the student must be signed up for the course. |
 | `405 Method Not Allowed` | `/report` was called with something other than `POST`. |
