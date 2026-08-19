@@ -1034,8 +1034,8 @@ def test_get_requests_invalid_or_disabled_task(app, path, task_name):
 
 # ----- Detailed error responses for /report (and shared helpers) -----
 #
-# API blueprints render aborts as JSON ({"error": ..., "hint": ...}) instead of Flask's
-# default HTML page, so failures are readable in CI logs and parsable by clients.
+# /api/ errors are plain text: the message itself, plus an optional "Hint:" line.
+# No HTML wrapper, so the body is readable as-is in CI logs.
 # Tests check the status code + a distinguishing substring in response.data.
 
 
@@ -1136,17 +1136,18 @@ def test_report_unknown_task_detailed_404(app):
     assert TEST_COURSE_NAME.encode() in response.data
 
 
-def test_report_errors_are_json_with_hint(app):
-    """Errors must be machine-readable JSON, not an HTML page."""
+def test_report_error_is_plain_text_with_hint(app):
+    """The body must be the message itself, with no HTML wrapper to dig through."""
     response = _post_report(app, headers={"Authorization": "Bearer wrong_token"})
 
     assert response.status_code == HTTPStatus.FORBIDDEN
-    assert response.is_json, "API errors must be JSON so clients can parse them"
+    assert response.mimetype == "text/plain"
 
-    data = json.loads(response.data)
-    assert "Invalid course token" in data["error"]
+    body = response.get_data(as_text=True)
+    assert body.startswith("Invalid course token")
+    assert "<html" not in body.lower()
     # The hint must point at the actual misconfiguration.
-    assert "report_token" in data["hint"]
+    assert "report_token" in body
 
 
 def test_report_not_found_error_hint_mentions_url_and_task(app):
@@ -1158,38 +1159,37 @@ def test_report_not_found_error_hint_mentions_url_and_task(app):
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
-    data = json.loads(response.data)
-    assert INVALID_TASK_NAME in data["error"]
-    assert "/api/<course_name>/report" in data["hint"]
+    body = response.get_data(as_text=True)
+    assert INVALID_TASK_NAME in body
+    assert "/api/<course_name>/report" in body
 
 
-def test_report_wrong_method_is_json(app):
+def test_report_wrong_method_is_plain_text(app):
     """A GET on /report (a common URL mistake) must explain the method mismatch."""
     response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/report", headers=_valid_token_headers())
 
     assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
-    data = json.loads(response.data)
-    assert "POST" in data["hint"]
+    assert "POST" in response.get_data(as_text=True)
 
 
-def test_wrong_api_endpoint_is_json_with_hint(app):
-    """A misspelled `report_url` must produce a parsable error, not an HTML 404 page."""
+def test_wrong_api_endpoint_explains_the_endpoint(app):
+    """A misspelled `report_url` must say what the right endpoint looks like."""
     response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/repot", headers=_valid_token_headers())
 
     assert response.status_code == HTTPStatus.NOT_FOUND
-    assert response.is_json
-    assert "/api/<course_name>/report" in json.loads(response.data)["hint"]
+    assert response.mimetype == "text/plain"
+    assert "/api/<course_name>/report" in response.get_data(as_text=True)
 
 
 def test_non_api_404_stays_html(app):
-    """Only /api/ errors become JSON; web pages keep their HTML error pages."""
+    """Only /api/ errors become plain text; web pages keep their HTML error pages."""
     response = app.test_client().get("/no_such_page/deeper/still", follow_redirects=True)
 
     assert response.status_code == HTTPStatus.NOT_FOUND
-    assert not response.is_json
+    assert response.mimetype == "text/html"
 
 
-def test_report_bad_score_error_is_json(app):
+def test_report_bad_score_error_is_plain_text(app):
     app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     response = _post_report(
         app,
@@ -1198,8 +1198,7 @@ def test_report_bad_score_error_is_json(app):
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    data = json.loads(response.data)
-    assert "score" in data["error"]
+    assert "score" in response.get_data(as_text=True)
 
 
 def test_score_endpoint_invalid_token_detailed_403(app):

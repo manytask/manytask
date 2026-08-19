@@ -283,7 +283,13 @@ class TestManytaskPlugin:
         args_dict = self.get_default_args_dict()
 
         mocker.patch.object(ManytaskPlugin, "_post_with_retries")
-        ManytaskPlugin._post_with_retries.return_value.json.return_value = {}  # type: ignore[attr-defined]
+        response = ManytaskPlugin._post_with_retries.return_value  # type: ignore[attr-defined]
+        response.json.return_value = {}
+        # A real Response always has a str body and real headers; keep the mock
+        # faithful so the body formatting is exercised rather than mocked away.
+        response.status_code = 200
+        response.text = "score is missing"
+        response.headers = {"Content-Type": "application/json"}
 
         with pytest.raises(PluginExecutionFailed) as exc:
             ManytaskPlugin().run(args_dict)
@@ -296,20 +302,19 @@ class TestManytaskPlugin:
         assert exc.value.output == exc.value.message
 
     @pytest.mark.parametrize(
-        "status_code, body, expected_hint",
+        "status_code, body",
         [
-            (401, "Invalid course token", "report_token"),
-            (403, "Invalid course token", "report_token"),
-            (404, "Task 'x' not found", "report_url"),
-            (409, "course is already finished", "already finished"),
-            (400, "Cannot parse `score`", "score"),
-            (500, "Internal Server Error", "server-side"),
+            (403, "Invalid course token\nHint: check `report_token`."),
+            (404, "Task 'x' not found in course 'test'"),
+            (409, "Cannot update score: course is already finished."),
+            (400, "Cannot parse `score` <abc> to a number"),
+            (500, "Internal Server Error"),
         ],
     )
-    def test_http_error_explains_the_cause(
-        self, status_code: int, body: str, expected_hint: str
+    def test_http_error_reports_status_url_and_server_message(
+        self, status_code: int, body: str
     ) -> None:
-        """Every error response must name the status, the body and a likely cause."""
+        """Manytask answers in plain text, so its message is passed through as-is."""
         with Mocker() as mocker:
             mocker.post(f"{self.REPORT_URL}", status_code=status_code, text=body)
 
@@ -321,19 +326,36 @@ class TestManytaskPlugin:
         output = exc.value.output or ""
         assert str(status_code) in output
         assert body in output
-        assert expected_hint in output
         assert str(self.REPORT_URL) in output
 
+    def test_angle_bracketed_values_survive(self) -> None:
+        """Manytask quotes bad values in <>; markup stripping must not eat them."""
+        body = "Reported `score` <9.5> is too large. Should be between 0.0 and 2.0."
+        with Mocker() as mocker:
+            mocker.post(
+                f"{self.REPORT_URL}",
+                status_code=400,
+                text=body,
+                headers={"Content-Type": "text/plain; charset=utf-8"},
+            )
+
+            with pytest.raises(PluginExecutionFailed) as exc:
+                ManytaskPlugin._post_with_retries(
+                    self.REPORT_URL, {"key": "value"}, None
+                )
+
+        assert "<9.5>" in (exc.value.output or "")
+
     def test_html_error_page_is_stripped_of_markup(self) -> None:
-        """Flask renders abort(403, "msg") as HTML; the message must stay readable."""
+        """A proxy or gateway may still answer HTML; keep the message readable."""
         html = (
-            "<!DOCTYPE HTML><html><head><title>403 Forbidden</title></head>"
-            "<body><h1>Forbidden</h1><p>Invalid course token</p></body></html>"
+            "<!DOCTYPE HTML><html><head><title>502 Bad Gateway</title></head>"
+            "<body><h1>Bad Gateway</h1><p>nginx could not reach the backend</p></body></html>"
         )
         with Mocker() as mocker:
             mocker.post(
                 f"{self.REPORT_URL}",
-                status_code=403,
+                status_code=502,
                 text=html,
                 headers={"Content-Type": "text/html; charset=utf-8"},
             )
@@ -344,26 +366,9 @@ class TestManytaskPlugin:
                 )
 
         output = exc.value.output or ""
-        assert "Invalid course token" in output
+        assert "nginx could not reach the backend" in output
         assert "<h1>" not in output
         assert "<html" not in output
-
-    def test_json_error_body_is_unwrapped(self) -> None:
-        """A JSON {"error": ...} body must be shown as the message, not as raw JSON."""
-        with Mocker() as mocker:
-            mocker.post(
-                f"{self.REPORT_URL}",
-                status_code=404,
-                json={"error": "Task 'nonexistent' not found in course 'test'"},
-            )
-
-            with pytest.raises(PluginExecutionFailed) as exc:
-                ManytaskPlugin._post_with_retries(
-                    self.REPORT_URL, {"key": "value"}, None
-                )
-
-        output = exc.value.output or ""
-        assert "Task 'nonexistent' not found in course 'test'" in output
 
     def test_connection_error_is_reported_not_raised_raw(self) -> None:
         """A wrong host must fail the stage with a hint, not with a bare traceback."""

@@ -19,18 +19,17 @@ However, you can implement your own checker just use the Manytask api. Note that
 
 ## Errors
 
-Every endpoint under `/api/` reports failures as JSON, so a failing CI job says what
-actually went wrong instead of returning an HTML error page:
+Every endpoint under `/api/` reports failures as plain text, so a failing CI job says
+what actually went wrong instead of returning an HTML error page. The body is the
+message itself, optionally followed by a `Hint:` line:
 
-```json
-{
-  "error": "Invalid course token",
-  "hint": "The course token was not accepted. Check that it belongs to this exact course (in the checker it is the `report_token` argument, usually the MANYTASK_TOKEN CI secret)."
-}
+```
+Invalid course token
+Hint: The course token was not accepted. Check that it belongs to this exact course (in the checker it is the `report_token` argument, usually the MANYTASK_TOKEN CI secret).
 ```
 
-`error` is always present and holds the specific reason; `hint` is added for the
-statuses below and suggests the likely misconfiguration.
+The first line is the specific reason; the `Hint:` line is added for the statuses
+below and suggests the likely misconfiguration.
 
 | status | typical cause for `/report` |
 |---|---|

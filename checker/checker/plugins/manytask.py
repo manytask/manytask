@@ -188,72 +188,37 @@ class ManytaskPlugin(PluginABC):
         except ValueError:
             reason = response.reason or "Unknown"
 
-        parts = [
-            f"Manytask rejected the report: HTTP {status} {reason} (from '{report_url}').",
-            f"Server said: {ManytaskPlugin._describe_response_body(response)}",
-        ]
-
-        hint = ManytaskPlugin._hint_for_status(status)
-        if hint:
-            parts.append(f"Hint: {hint}")
-
-        return "\n".join(parts)
-
-    @staticmethod
-    def _hint_for_status(status: int) -> str:
-        """Map a status code onto the most likely misconfiguration."""
-        if status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
-            return (
-                "the course token was not accepted. Check that `report_token` "
-                "holds the token of this exact course (usually the "
-                "MANYTASK_TOKEN secret of the CI job)."
-            )
-        if status == HTTPStatus.NOT_FOUND:
-            return (
-                "Manytask has no such endpoint, course, task or user. Check "
-                "that `report_url` is "
-                "'https://<manytask-host>/api/<course_name>/report', that the "
-                "task exists and is enabled in .manytask.yml, and that the "
-                "student is signed up for the course."
-            )
-        if status == HTTPStatus.CONFLICT:
-            return "the course is already finished, so scores cannot be changed."
-        if status == HTTPStatus.BAD_REQUEST:
-            return (
-                "Manytask could not parse the submission. Check `score` "
-                "(must be a number in [0.0, 2.0]) and `task_name`."
-            )
-        if status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE:
-            return "the attached files are too big; narrow down `patterns`."
-        if status >= HTTPStatus.INTERNAL_SERVER_ERROR:
-            return "this is a server-side failure; check the Manytask instance logs."
-        return ""
+        return (
+            f"Manytask rejected the report: HTTP {status} {reason} (from '{report_url}').\n"
+            f"Server said: {ManytaskPlugin._describe_response_body(response)}"
+        )
 
     @staticmethod
     def _describe_response_body(response: requests.Response) -> str:
-        """Extract the message from a JSON or HTML error body."""
-        content_type = response.headers.get("Content-Type", "")
+        """Clean up an error body for display.
+
+        Manytask answers API errors with plain text (the message, plus a 'Hint:'
+        line), so it is shown as-is. Only a genuine HTML document - a proxy or
+        gateway page - gets its markup stripped.
+
+        The HTML check is deliberately narrow: Manytask quotes offending values
+        in angle brackets ("Cannot parse `score` <abc>"), and a looser test would
+        strip those as if they were tags, deleting the very detail being reported.
+        """
         text = response.text or ""
 
-        if "json" in content_type.lower():
-            try:
-                payload = response.json()
-            except (json.JSONDecodeError, ValueError):
-                payload = None
-            if isinstance(payload, dict):
-                for key in ("error", "message", "description"):
-                    value = payload.get(key)
-                    if isinstance(value, str) and value.strip():
-                        return value.strip()
+        content_type = response.headers.get("Content-Type", "").lower()
+        looks_like_html = "html" in content_type or re.match(
+            r"\s*(<!doctype\s+html|<html\b)", text, re.IGNORECASE
+        )
 
-        if "html" in content_type.lower() or "<html" in text.lower():
-            # Flask renders abort(code, "msg") as an HTML page; drop the markup
-            # so the actual message stays visible.
+        if looks_like_html:
             text = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", text)
             text = re.sub(r"(?s)<[^>]+>", " ", text)
             text = unescape(text)
+            text = " ".join(text.split())
 
-        text = " ".join(text.split())
+        text = text.strip()
         if len(text) > MAX_ERROR_BODY_LEN:
             text = f"{text[:MAX_ERROR_BODY_LEN]}... (truncated)"
         return text or "<empty response body>"

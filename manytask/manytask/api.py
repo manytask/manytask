@@ -79,11 +79,11 @@ _ERROR_HINTS: dict[int, str] = {
 
 @bp.app_errorhandler(HTTPException)
 def handle_api_error(error: HTTPException) -> ResponseReturnValue:
-    """Render API errors as JSON with an actionable hint.
+    """Render API errors as plain text, so the body is the message itself.
 
-    Flask serves ``abort(code, "msg")`` as an HTML page by default, which is
-    unreadable in CI logs and impossible to parse by API clients. Under ``/api/``
-    we answer with ``{"error": ..., "hint": ...}`` instead.
+    Flask serves ``abort(code, "msg")`` as an HTML page by default, which buries
+    the reason in markup. Under ``/api/`` the body is just the message plus an
+    optional hint, readable as-is in CI logs and needing no parsing by clients.
 
     Registered app-wide (not per-blueprint) on purpose: routing errors such as
     404 on an unknown URL and 405 on a wrong method are raised before blueprint
@@ -95,14 +95,12 @@ def handle_api_error(error: HTTPException) -> ResponseReturnValue:
         return error.get_response()
 
     status = error.code or HTTPStatus.INTERNAL_SERVER_ERROR
-    message = error.description or getattr(error, "name", "Error")
+    message: str = error.description or getattr(error, "name", None) or "Error"
 
-    payload: dict[str, Any] = {"error": message}
     hint = _ERROR_HINTS.get(status)
-    if hint:
-        payload["hint"] = hint
+    body = f"{message}\nHint: {hint}" if hint else message
 
-    return jsonify(payload), status
+    return body, status, {"Content-Type": "text/plain; charset=utf-8"}
 
 
 def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Course:
