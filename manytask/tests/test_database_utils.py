@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from flask import Flask
 
+from manytask.abstract import StudentCourseScores, TaskScore
 from manytask.config import ManytaskFinalGradeConfig
 from manytask.course import CourseStatus
 from manytask.mock_rms import MockRmsApi
@@ -97,27 +98,28 @@ def app():  # noqa: C901
         @staticmethod
         def get_all_scores_with_names(_course_name):
             return {
-                STUDENT_1: (
-                    {
-                        TASK_1: (SCORES[STUDENT_1][TASK_1], False),
-                        TASK_2: (SCORES[STUDENT_1][TASK_2], False),
-                        TASK_LARGE: (SCORES[STUDENT_1][TASK_LARGE], True),
+                STUDENT_1: StudentCourseScores(
+                    username=STUDENT_1,
+                    first_name=STUDENT_DATA[STUDENT_1][0],
+                    last_name=STUDENT_DATA[STUDENT_1][1],
+                    task_scores={
+                        TASK_1: TaskScore(SCORES[STUDENT_1][TASK_1], False),
+                        TASK_2: TaskScore(SCORES[STUDENT_1][TASK_2], False),
+                        TASK_LARGE: TaskScore(SCORES[STUDENT_1][TASK_LARGE], True),
                     },
-                    (STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]),
-                    5,  # final_grade
-                    3,  # final_grade_override — calculated would be 5
-                    None,  # comment
+                    final_grade=5,
+                    final_grade_override=3,  # calculated would be 5
                 ),
-                STUDENT_2: (
-                    {
-                        TASK_1: (SCORES[STUDENT_2][TASK_1], False),
-                        TASK_2: (SCORES[STUDENT_2][TASK_2], False),
-                        TASK_LARGE: (SCORES[STUDENT_2][TASK_LARGE], False),
+                STUDENT_2: StudentCourseScores(
+                    username=STUDENT_2,
+                    first_name=STUDENT_DATA[STUDENT_2][0],
+                    last_name=STUDENT_DATA[STUDENT_2][1],
+                    task_scores={
+                        TASK_1: TaskScore(SCORES[STUDENT_2][TASK_1], False),
+                        TASK_2: TaskScore(SCORES[STUDENT_2][TASK_2], False),
+                        TASK_LARGE: TaskScore(SCORES[STUDENT_2][TASK_LARGE], False),
                     },
-                    (STUDENT_DATA[STUDENT_2][0], STUDENT_DATA[STUDENT_2][1]),
-                    None,  # final_grade
-                    None,  # final_grade_override
-                    "needs review",  # comment
+                    comment="needs review",
                 ),
             }
 
@@ -255,12 +257,11 @@ def test_get_database_table_data_uses_displayed_percent_for_grade(app):
         }
     )
     app.storage_api.get_all_scores_with_names = lambda _course_name: {
-        STUDENT_1: (
-            {TASK_1: (7_499, False)},
-            (STUDENT_DATA[STUDENT_1][0], STUDENT_DATA[STUDENT_1][1]),
-            None,
-            None,
-            None,
+        STUDENT_1: StudentCourseScores(
+            username=STUDENT_1,
+            first_name=STUDENT_DATA[STUDENT_1][0],
+            last_name=STUDENT_DATA[STUDENT_1][1],
+            task_scores={TASK_1: TaskScore(7_499, False)},
         )
     }
 
