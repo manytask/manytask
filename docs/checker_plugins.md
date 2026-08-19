@@ -138,7 +138,7 @@ Send the final score to the Manytask platform via its [REST API](./api.md). Used
 | `username` | `str` | yes | — | Student's username in RMS. |
 | `task_name` | `str` | yes | — | Task identifier as registered in `.manytask.yml`. |
 | `score` | `float \| int \| null` | yes | — | Score to report, in `[0.0, 1.0]` (bonus scores may exceed `1.0` but float larger than `2.0` will not be accepted). |
-| `report_url` | `AnyUrl` | yes | — | Base URL of the Manytask instance. |
+| `report_url` | `AnyUrl` | yes | — | Full URL of the report endpoint: `https://<manytask-host>/api/<course_name>/report`. |
 | `report_token` | `str` | yes | — | Authentication token for the Manytask API. |
 | `check_deadline` | `bool` | yes | — | Whether Manytask should apply deadline penalties server-side. |
 | `origin` | `str \| null` | no | `null` | If set, collect files matching `patterns` from this directory and attach them to the report. |
