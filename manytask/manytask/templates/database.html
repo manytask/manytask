@@ -118,6 +118,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
+    <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
           id="light-theme">
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
@@ -370,25 +372,6 @@
                 });
         }
 
-        function updateTheme() {
-            const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-
-            const lightTheme = document.getElementById('light-theme');
-            const darkTheme = document.getElementById('dark-theme');
-
-            if (isDark) {
-                lightTheme.disabled = true;
-                darkTheme.disabled = false;
-            } else {
-                lightTheme.disabled = false;
-                darkTheme.disabled = true;
-            }
-
-            if (window.tabulatorTable) {
-                window.tabulatorTable.redraw(true);
-            }
-        }
-
         document.addEventListener('DOMContentLoaded', function () {
             {% if is_course_admin %}
                 editModal = new bootstrap.Modal(document.getElementById('editModal'));
@@ -411,50 +394,14 @@
                 });
             {% endif %}
 
-            // Watch theme changes for database viewer
-            updateTheme();
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.attributeName === 'data-bs-theme') {
-                        updateTheme();
-                    }
-                });
-            });
-            observer.observe(document.documentElement, {
-                attributes: true,
-                attributeFilter: ['data-bs-theme']
-            });
+            // Watch theme changes for database viewer (shared helper)
+            initTabulatorTheme(() => window.tabulatorTable);
 
 
             const valueEl = document.getElementById("filter-value");
 
-            // Transliteration-aware search:
-            // normalize both the search term and the searchable fields to a
-            // common Latin form before substring matching, so that typing
-            // "Ivan" matches "Иван" and typing "Иван" also matches "Ivan".
-            const CYRILLIC_TO_LATIN = {
-                'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh',
-                'з':'z','и':'i','й':'i','к':'k','л':'l','м':'m','н':'n','о':'o',
-                'п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'c',
-                'ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu',
-                'я':'ya',
-                // Ukrainian / Belarusian extras
-                'ї':'i','і':'i','є':'e','ґ':'g','ў':'u'
-            };
-
-            function normalizeForSearch(str) {
-                if (!str) return "";
-                const lower = str.toLowerCase();
-                let out = "";
-                for (let i = 0; i < lower.length; i++) {
-                    const ch = lower[i];
-                    out += Object.prototype.hasOwnProperty.call(CYRILLIC_TO_LATIN, ch)
-                        ? CYRILLIC_TO_LATIN[ch]
-                        : ch;
-                }
-                return out;
-            }
-
+            // Transliteration-aware search uses the shared normalizeForSearch()
+            // helper (static/js/search-normalize.js).
             function customFilter(data) {
                 const searchTerm = normalizeForSearch(valueEl.value);
                 if (!searchTerm) return true;

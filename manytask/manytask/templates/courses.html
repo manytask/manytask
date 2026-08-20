@@ -17,43 +17,68 @@
 
     <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
         <h1 class="mt-4 mb-3">List of courses</h1>
-        <button id="toggleFinishedBtn" class="btn btn-outline-secondary mt-2 mb-2">
-            Show completed courses
+
+        <button id="toggleViewBtn" class="btn btn-outline-secondary btn-sm mb-3" title="Switch between list and table view">
+            <i class="fas fa-table me-1"></i><span id="toggleViewLabel">Table view</span>
         </button>
 
-        <div id="finishedWrapper" class="hidden mb-2">
+        {# ----- List view (default) ----- #}
+        <div id="coursesListView">
+            <button id="toggleFinishedBtn" class="btn btn-outline-secondary mt-2 mb-2">
+                Show completed courses
+            </button>
+
+            <div id="finishedWrapper" class="hidden mb-2">
+                <ul class="course-list">
+                    {% if not courses | selectattr('status', 'equalto', 'finished') | list %}
+                        No finished courses yet.
+                    {% endif %}
+                    {% for course in courses if course.status == 'finished' %}
+                        <li class="course-item">
+                            <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
+                            <div class="status-container status-{{ course.status }}">
+                        <span class="status-badge status-{{ course.status }}">
+                            {{ course.status|replace('_', ' ') }}
+                        </span>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+
             <ul class="course-list">
-                {% if not courses | selectattr('status', 'equalto', 'finished') | list %}
-                    No finished courses yet.
-                {% endif %}
-                {% for course in courses if course.status == 'finished' %}
+                {% for course in courses if course.status != 'finished' %}
                     <li class="course-item">
                         <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
                         <div class="status-container status-{{ course.status }}">
-                    <span class="status-badge status-{{ course.status }}">
-                        {{ course.status|replace('_', ' ') }}
-                    </span>
+                        <span class="status-badge status-{{ course.status }}">
+                            {{ course.status|replace('_', ' ') }}
+                        </span>
                         </div>
                     </li>
+                {% else %}
+                    Unfortunately, there are no courses yet.
                 {% endfor %}
             </ul>
         </div>
 
-
-        <ul class="course-list">
-            {% for course in courses if course.status != 'finished' %}
-                <li class="course-item">
-                    <a href="{{ course.url }}" class="course-link">{{ course.name }}</a>
-                    <div class="status-container status-{{ course.status }}">
-                    <span class="status-badge status-{{ course.status }}">
-                        {{ course.status|replace('_', ' ') }}
-                    </span>
-                    </div>
-                </li>
-            {% else %}
-                Unfortunately, there are no courses yet.
-            {% endfor %}
-        </ul>
+        {# ----- Table view (alternative) ----- #}
+        <div id="coursesTableView" class="hidden courses-table-view">
+            <div class="courses-filter-controls mb-3">
+                <div class="courses-search-input">
+                    <input id="courses-filter-value" type="text" class="form-control" placeholder="Search courses...">
+                    <i class="fas fa-search courses-search-icon"></i>
+                </div>
+                <select id="courses-status-filter" class="form-select courses-status-select">
+                    <option value="">All statuses</option>
+                </select>
+                <button id="courses-filter-clear" class="btn btn-outline-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+            </div>
+            <div id="courses-table"></div>
+        </div>
 
         <form class="course-search-form" id="registerCourseForm" style="padding-top: 3.5rem">
             <div class="d-flex flex-column align-items-center" style="gap: 0.8rem;">
@@ -80,13 +105,32 @@
         {% endif %}
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
+    <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
+          id="light-theme">
+    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
+          id="dark-theme" disabled>
+
     <script>
+        const coursesData = {{ courses | tojson }};
+        // Canonical status order, taken from the CourseStatus enum on the
+        // backend, so the filter dropdown and the Status column sort follow the
+        // course lifecycle rather than alphabetical order.
+        const statusOrder = {{ status_order | tojson }};
+        const statusRank = status => {
+            const idx = statusOrder.indexOf(status);
+            return idx === -1 ? statusOrder.length : idx;
+        };
+
         document.getElementById('registerCourseForm').addEventListener('submit', function (e) {
             e.preventDefault();
             const course = document.getElementById('courseInput').value.trim()
             window.location.href = `/${course}`;
         });
 
+        // ----- "Show completed courses" toggle (list view only) ----- //
         const toggleBtn = document.getElementById('toggleFinishedBtn');
         const finishedWrapper = document.getElementById('finishedWrapper');
         let finishedVisible = false;
@@ -97,5 +141,192 @@
             toggleBtn.textContent = finishedVisible ? 'Hide completed courses' : 'Show completed courses';
         });
 
+        // ----- List / Table view toggle ----- //
+        const VIEW_STORAGE_KEY = 'manytask.coursesView';
+        const listView = document.getElementById('coursesListView');
+        const tableView = document.getElementById('coursesTableView');
+        const toggleViewBtn = document.getElementById('toggleViewBtn');
+        const toggleViewLabel = document.getElementById('toggleViewLabel');
+        const toggleViewIcon = toggleViewBtn.querySelector('i');
+        let coursesTableBuilt = false;
+
+        function humanizeStatus(status) {
+            return status.replace(/_/g, ' ');
+        }
+
+        function buildCoursesTable() {
+            if (coursesTableBuilt) {
+                return;
+            }
+            coursesTableBuilt = true;
+
+            // Populate the status filter with the statuses actually present,
+            // ordered by the CourseStatus enum.
+            const statuses = Array.from(new Set(coursesData.map(c => c.status)))
+                .sort((a, b) => statusRank(a) - statusRank(b));
+            const statusSelect = document.getElementById('courses-status-filter');
+            statuses.forEach(status => {
+                const opt = document.createElement('option');
+                opt.value = status;
+                opt.textContent = humanizeStatus(status);
+                statusSelect.appendChild(opt);
+            });
+
+            // Blank-last string sorter so empty namespaces sink to the bottom.
+            const blankLastSorter = function (a, b) {
+                if (!a && !b) return 0;
+                if (!a) return 1;
+                if (!b) return -1;
+                return a.toLowerCase().localeCompare(b.toLowerCase());
+            };
+
+            const columns = [
+                {
+                    title: "Name",
+                    field: "name",
+                    sorter: "string",
+                    headerTooltip: "Course name",
+                    formatter: function (cell) {
+                        const data = cell.getRow().getData();
+                        const name = cell.getValue();
+                        const link = document.createElement('a');
+                        link.href = data.url;
+                        link.className = 'courses-table-link';
+                        link.textContent = name;
+                        return link;
+                    }
+                },
+                {
+                    title: "Namespace",
+                    field: "namespace_slug",
+                    sorter: blankLastSorter,
+                    headerTooltip: "Namespace",
+                    formatter: function (cell) {
+                        const value = cell.getValue();
+                        return value ? value : '<em class="courses-table-muted">—</em>';
+                    }
+                },
+                {
+                    title: "Status",
+                    field: "status",
+                    // Sort by CourseStatus enum order, not alphabetically.
+                    sorter: function (a, b) {
+                        return statusRank(a) - statusRank(b);
+                    },
+                    headerTooltip: "Course status",
+                    formatter: function (cell) {
+                        const status = cell.getValue();
+                        return `<span class="status-badge status-${status}">${humanizeStatus(status)}</span>`;
+                    }
+                },
+                {
+                    title: "Edit",
+                    field: "can_edit",
+                    headerSort: false,
+                    hozAlign: "center",
+                    width: 80,
+                    headerTooltip: "Edit course settings",
+                    formatter: function (cell) {
+                        const data = cell.getRow().getData();
+                        if (!data.can_edit) {
+                            return "";
+                        }
+                        return `<a href="${data.edit_url}" class="courses-table-edit" title="Edit course">`
+                            + `<i class="fas fa-pen"></i></a>`;
+                    }
+                }
+            ];
+
+            window.tabulatorTable = new Tabulator("#courses-table", {
+                data: coursesData,
+                columns: columns,
+                layout: "fitColumns",
+                initialSort: [{column: "name", dir: "asc"}],
+                pagination: false,
+                placeholder: "Unfortunately, there are no courses yet.",
+            });
+
+            // Combined search + status filter.
+            const valueEl = document.getElementById("courses-filter-value");
+
+            // Transliteration-aware search (shared normalizeForSearch helper),
+            // matching the course database page: searches course name and
+            // namespace, combined with the status dropdown filter.
+            function coursesFilter(data) {
+                const selectedStatus = statusSelect.value;
+                if (selectedStatus && data.status !== selectedStatus) {
+                    return false;
+                }
+                const term = normalizeForSearch(valueEl.value.trim());
+                if (!term) {
+                    return true;
+                }
+                if (normalizeForSearch(data.name).includes(term)) {
+                    return true;
+                }
+                if (normalizeForSearch(data.namespace_slug).includes(term)) {
+                    return true;
+                }
+                return false;
+            }
+
+            valueEl.addEventListener("keyup", function () {
+                window.tabulatorTable.setFilter(coursesFilter);
+            });
+            statusSelect.addEventListener("change", function () {
+                window.tabulatorTable.setFilter(coursesFilter);
+            });
+            document.getElementById("courses-filter-clear").addEventListener("click", function () {
+                valueEl.value = "";
+                statusSelect.value = "";
+                window.tabulatorTable.clearFilter();
+            });
+        }
+
+        function applyView(view) {
+            const isTable = view === 'table';
+            listView.classList.toggle('hidden', isTable);
+            tableView.classList.toggle('hidden', !isTable);
+
+            if (isTable) {
+                toggleViewLabel.textContent = 'List view';
+                toggleViewIcon.classList.remove('fa-table');
+                toggleViewIcon.classList.add('fa-list');
+                // Build the table only now that its container is visible, so
+                // Tabulator can measure a real (non-zero) width and fitColumns
+                // fills the container instead of collapsing to content width.
+                buildCoursesTable();
+                // Re-fit columns after the browser has laid out the now-visible
+                // container. A synchronous redraw here can still read a stale
+                // width, so defer to the next frame.
+                if (window.tabulatorTable) {
+                    requestAnimationFrame(function () {
+                        window.tabulatorTable.redraw(true);
+                    });
+                }
+            } else {
+                toggleViewLabel.textContent = 'Table view';
+                toggleViewIcon.classList.remove('fa-list');
+                toggleViewIcon.classList.add('fa-table');
+            }
+        }
+
+        let currentView = localStorage.getItem(VIEW_STORAGE_KEY) === 'table' ? 'table' : 'list';
+
+        toggleViewBtn.addEventListener('click', () => {
+            currentView = currentView === 'table' ? 'list' : 'table';
+            localStorage.setItem(VIEW_STORAGE_KEY, currentView);
+            applyView(currentView);
+        });
+
+        // Register the theme observer at DOMContentLoaded (after base.html has
+        // set data-bs-theme) so the correct Tabulator stylesheet is applied and
+        // kept in sync on theme changes. The table itself is built lazily by
+        // applyView() once its container is visible, which is required for
+        // correct column widths.
+        document.addEventListener('DOMContentLoaded', function () {
+            initTabulatorTheme(() => window.tabulatorTable);
+            applyView(currentView);
+        });
     </script>
 {% endblock %}
