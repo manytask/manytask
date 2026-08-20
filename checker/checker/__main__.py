@@ -18,8 +18,12 @@ from .exporter import Exporter
 from .tester import Tester
 from .utils import print_ascii_tag, print_info
 
-ClickReadableFile = click.Path(exists=True, file_okay=True, readable=True, path_type=Path)
-ClickReadableDirectory = click.Path(exists=True, file_okay=False, readable=True, path_type=Path)
+ClickReadableFile = click.Path(
+    exists=True, file_okay=True, readable=True, path_type=Path
+)
+ClickReadableDirectory = click.Path(
+    exists=True, file_okay=False, readable=True, path_type=Path
+)
 ClickWritableDirectory = click.Path(file_okay=False, writable=True, path_type=Path)
 
 CHECKER_CONFIG = ".checker.yml"
@@ -40,7 +44,9 @@ def cli(
 
 @cli.command()
 @click.argument("root", type=ClickReadableDirectory, default=".")
-@click.option("-v/-s", "--verbose/--silent", is_flag=True, default=True, help="Verbose output")
+@click.option(
+    "-v/-s", "--verbose/--silent", is_flag=True, default=True, help="Verbose output"
+)
 @click.pass_context
 def validate(
     ctx: click.Context,
@@ -104,6 +110,60 @@ def validate(
     print_info("Ok", color="green")
 
 
+def _select_tasks(
+    course: Course,
+    tasks: list[str] | tuple[str, ...] | None,
+    groups: list[str] | tuple[str, ...] | None,
+) -> dict[str, FileSystemTask]:
+    """Resolve task and group names to filesystem tasks.
+
+    Only enabled tasks (present both in the filesystem and in the manytask config) are
+    considered. Exits with code 1 if any of the requested names can not be resolved.
+
+    :param course: course to look the names up in
+    :param tasks: task names to select
+    :param groups: group names to select, all their tasks are selected
+    :return: mapping of task name to task, empty if no names were requested
+    """
+    selected: dict[str, FileSystemTask] = dict()
+
+    if not tasks and not groups:
+        return selected
+
+    # tasks enabled in the manytask config and present in the filesystem;
+    # groups on the filesystem also contain disabled tasks, so they must be filtered
+    enabled_tasks = {
+        filesystem_task.name: filesystem_task
+        for filesystem_task in course.get_tasks(enabled=True)
+    }
+
+    if tasks:
+        task_dict = dict.fromkeys(tasks)
+        for task_name in list(task_dict.keys()):
+            if task_name in enabled_tasks:
+                selected[task_name] = enabled_tasks[task_name]
+                del task_dict[task_name]
+        if task_dict:
+            print_info(f"Can't find the tasks: {list(task_dict.keys())}", color="red")
+            sys.exit(1)
+
+    if groups:
+        group_dict = dict.fromkeys(groups)
+        for filesystem_group in course.get_groups(enabled=True):
+            if filesystem_group.name in group_dict:
+                for filesystem_task in filesystem_group.tasks:
+                    if filesystem_task.name in enabled_tasks:
+                        selected[filesystem_task.name] = enabled_tasks[
+                            filesystem_task.name
+                        ]
+                del group_dict[filesystem_group.name]
+        if group_dict:
+            print_info(f"Can't find the groups: {list(group_dict.keys())}", color="red")
+            sys.exit(1)
+
+    return selected
+
+
 @cli.command()
 @click.argument("root", type=ClickReadableDirectory, default=".")
 @click.argument("reference_root", type=ClickReadableDirectory, default=".")
@@ -145,7 +205,9 @@ def validate(
     default=True,
     help="Verbose tests output",
 )
-@click.option("--dry-run", is_flag=True, help="Do not execute anything, only log actions")
+@click.option(
+    "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
+)
 @click.pass_context
 def check(  # noqa: PLR0913
     ctx: click.Context,
@@ -192,26 +254,7 @@ def check(  # noqa: PLR0913
     exporter.export_for_testing(exporter.temporary_dir)
 
     # validate tasks and groups if passed
-    filesystem_tasks: dict[str, FileSystemTask] = dict()
-    if task:
-        task_dict = dict.fromkeys(task)
-        for filesystem_task in course.get_tasks(enabled=True):
-            if filesystem_task.name in task_dict:
-                filesystem_tasks[filesystem_task.name] = filesystem_task
-                del task_dict[filesystem_task.name]
-        if task_dict:
-            print_info(f"Can't find the tasks: {list(task_dict.keys())}", color="red")
-            sys.exit(1)
-    if group:
-        group_dict = dict.fromkeys(group)
-        for filesystem_group in course.get_groups(enabled=True):
-            if filesystem_group.name in group_dict:
-                for filesystem_task in filesystem_group.tasks:
-                    filesystem_tasks[filesystem_task.name] = filesystem_task
-                del group_dict[filesystem_group.name]
-        if group_dict:
-            print_info(f"Can't find the groups: {list(group_dict.keys())}", color="red")
-            sys.exit(1)
+    filesystem_tasks = _select_tasks(course, task, group)
     if filesystem_tasks:
         print_info(f"Checking tasks: {', '.join(filesystem_tasks.keys())}")
 
@@ -249,13 +292,38 @@ def _parse_timestamp(
     try:
         return datetime.fromisoformat(value)
     except ValueError as e:
-        raise click.BadParameter("Use ISO 8601, e.g. 2025-09-08T13:39:13 or 2025-09-08T13:39:13Z") from e
+        raise click.BadParameter(
+            "Use ISO 8601, e.g. 2025-09-08T13:39:13 or 2025-09-08T13:39:13Z"
+        ) from e
 
 
 @cli.command()
 @click.argument("root", type=ClickReadableDirectory, default=".")
 @click.argument("reference_root", type=ClickReadableDirectory, default=".")
-@click.option("--submit-score", is_flag=True, help="Submit score to the Manytask server")
+@click.option(
+    "--submit-score", is_flag=True, help="Submit score to the Manytask server"
+)
+@click.option(
+    "--all-tasks",
+    is_flag=True,
+    help="Grade all enabled tasks, ignoring changes detection (local grading)",
+)
+@click.option(
+    "-t",
+    "--task",
+    type=str,
+    multiple=True,
+    default=None,
+    help="Task name to grade, ignoring changes detection (multiple possible)",
+)
+@click.option(
+    "-g",
+    "--group",
+    type=str,
+    multiple=True,
+    default=None,
+    help="Group name to grade, ignoring changes detection (multiple possible)",
+)
 @click.option(
     "--timestamp",
     type=str,
@@ -264,8 +332,12 @@ def _parse_timestamp(
     show_default="current time in Europe/Moscow",
     help="Timestamp to use for the submission",
 )
-@click.option("--username", type=str, default=None, help="Username to use for the submission")
-@click.option("--branch", type=str, default=None, help="Rewrite branch name for the submission")
+@click.option(
+    "--username", type=str, default=None, help="Username to use for the submission"
+)
+@click.option(
+    "--branch", type=str, default=None, help="Rewrite branch name for the submission"
+)
 @click.option("--no-clean", is_flag=True, help="Clean or not check tmp folders")
 @click.option(
     "-v/-s",
@@ -274,13 +346,18 @@ def _parse_timestamp(
     default=False,
     help="Verbose tests output",
 )
-@click.option("--dry-run", is_flag=True, help="Do not execute anything, only log actions")
+@click.option(
+    "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
+)
 @click.pass_context
 def grade(  # noqa: PLR0913
     ctx: click.Context,
     root: Path,
     reference_root: Path,
     submit_score: bool,
+    all_tasks: bool,
+    task: list[str] | None,
+    group: list[str] | None,
     timestamp: datetime | None,
     username: str | None,
     branch: str | None,
@@ -290,11 +367,18 @@ def grade(  # noqa: PLR0913
 ) -> None:
     """Process the configuration file and grade the tasks.
 
-    1. Detect changes to test.
+    1. Detect changes to test (unless the selection is overridden).
     2. Export tasks to temporary directory for testing.
     3. Run pipelines: global, tasks and report.
     4. Cleanup temporary directory.
+
+    By default the tasks to grade are detected from git (see `changes_detection` in
+    .checker.yml). Pass --all-tasks to grade every enabled task, or -t/-g to grade
+    specific tasks/groups; both skip changes detection, so no git repository is needed.
+    Overridden runs do not report scores unless --submit-score is passed.
     """
+    if all_tasks and (task or group):
+        raise click.UsageError("--all-tasks can not be combined with --task/--group")
     # get configs paths
     course_config_path = reference_root / CHECKER_CONFIG
     manytask_config_path = reference_root / MANYTASK_CONFIG
@@ -317,17 +401,42 @@ def grade(  # noqa: PLR0913
     )
     exporter.export_for_testing(exporter.temporary_dir)
 
-    # detect changes to test
-    try:
-        changed_tasks = course.detect_changes(checker_config.testing.changes_detection)
-    except Exception as e:
-        print_info("DETECT CHANGES FAILED", color="red")
-        print_info(e)
-        sys.exit(1)
+    # select tasks to test: explicit override or changes detection
+    override = all_tasks or bool(task) or bool(group)
+    if all_tasks:
+        tasks_to_grade = course.get_tasks(enabled=True)
+        print_info(
+            f"Grading all {len(tasks_to_grade)} enabled tasks "
+            f"(changes detection skipped; disabled tasks and tasks missing "
+            f"from {MANYTASK_CONFIG} are not graded)",
+        )
+    elif task or group:
+        tasks_to_grade = list(_select_tasks(course, task, group).values())
+        print_info(
+            f"Grading tasks: {', '.join(t.name for t in tasks_to_grade)} (changes detection skipped)"
+        )
+    else:
+        try:
+            tasks_to_grade = course.detect_changes(
+                checker_config.testing.changes_detection
+            )
+        except Exception as e:
+            print_info("DETECT CHANGES FAILED", color="red")
+            print_info(e)
+            sys.exit(1)
 
-    if not changed_tasks:
+    if not tasks_to_grade:
         print_info("No tasks to test", color="orange")
         return
+
+    # never report from an overridden (local) run unless explicitly asked to
+    report = submit_score or not override
+    print_info(
+        "Reporting scores to Manytask"
+        if report
+        else "Reporting scores disabled (pass --submit-score to enable)",
+        color="grey",
+    )
 
     # create tester to... to test =)
     tester = Tester(course, checker_config, verbose=verbose, dry_run=dry_run)
@@ -337,8 +446,8 @@ def grade(  # noqa: PLR0913
     try:
         tester.run(
             exporter.temporary_dir,
-            changed_tasks,
-            report=True,
+            tasks_to_grade,
+            report=report,
             timestamp=timestamp,
         )
     except TestingError as e:
@@ -355,8 +464,12 @@ def grade(  # noqa: PLR0913
 @cli.command()
 @click.argument("reference_root", type=ClickReadableDirectory, default=".")
 @click.argument("export_root", type=ClickWritableDirectory, default="./export")
-@click.option("--commit", is_flag=True, help="Commit and push changes to the repository")
-@click.option("--dry-run", is_flag=True, help="Do not execute anything, only log actions")
+@click.option(
+    "--commit", is_flag=True, help="Commit and push changes to the repository"
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
+)
 @click.pass_context
 def export(
     ctx: click.Context,
@@ -396,13 +509,17 @@ def export(
         dry_run=dry_run,
     )
     export_root.mkdir(exist_ok=True, parents=True)
-    exporter.export_public(export_root, commit=commit, commit_message=checker_config.export.commit_message)
+    exporter.export_public(
+        export_root, commit=commit, commit_message=checker_config.export.commit_message
+    )
 
 
 @cli.command()
 @click.argument("reference_root", type=ClickReadableDirectory, default=".")
 @click.argument("export_root", type=ClickWritableDirectory, default="./export")
-@click.option("--dry-run", is_flag=True, help="Do not execute anything, only log actions")
+@click.option(
+    "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
+)
 @click.pass_context
 def export_private(
     ctx: click.Context,
