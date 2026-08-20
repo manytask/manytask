@@ -115,6 +115,14 @@
 
     <script>
         const coursesData = {{ courses | tojson }};
+        // Canonical status order, taken from the CourseStatus enum on the
+        // backend, so the filter dropdown and the Status column sort follow the
+        // course lifecycle rather than alphabetical order.
+        const statusOrder = {{ status_order | tojson }};
+        const statusRank = status => {
+            const idx = statusOrder.indexOf(status);
+            return idx === -1 ? statusOrder.length : idx;
+        };
 
         document.getElementById('registerCourseForm').addEventListener('submit', function (e) {
             e.preventDefault();
@@ -152,8 +160,10 @@
             }
             coursesTableBuilt = true;
 
-            // Populate the status filter with the statuses actually present.
-            const statuses = Array.from(new Set(coursesData.map(c => c.status))).sort();
+            // Populate the status filter with the statuses actually present,
+            // ordered by the CourseStatus enum.
+            const statuses = Array.from(new Set(coursesData.map(c => c.status)))
+                .sort((a, b) => statusRank(a) - statusRank(b));
             const statusSelect = document.getElementById('courses-status-filter');
             statuses.forEach(status => {
                 const opt = document.createElement('option');
@@ -199,7 +209,10 @@
                 {
                     title: "Status",
                     field: "status",
-                    sorter: "string",
+                    // Sort by CourseStatus enum order, not alphabetically.
+                    sorter: function (a, b) {
+                        return statusRank(a) - statusRank(b);
+                    },
                     headerTooltip: "Course status",
                     formatter: function (cell) {
                         const status = cell.getValue();

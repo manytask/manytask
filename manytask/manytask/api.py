@@ -284,7 +284,7 @@ def _update_score(
         f"Update score: task={task.name}, old_score={old_score}, new_score={score}, "
         f"flags={flags}, submit_time={submit_time}, check_deadline={check_deadline}"
     )
-    if old_score < 0:
+    if old_score < 0 and not allow_reduction:
         return old_score
 
     if check_deadline:
@@ -373,7 +373,7 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
     try:
         min_score = 0.0
         max_score = 2.0
-        if score_str.isdigit():
+        if score_str.lstrip("+-").isdigit():
             return int(score_str)
         elif float(score_str) < min_score:
             return 0

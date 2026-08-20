@@ -72,6 +72,7 @@ def index() -> ResponseReturnValue:
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
         courses=courses,
+        status_order=[status.value for status in CourseStatus],
         can_create_courses=can_create_courses,
         is_instance_admin=is_instance_admin,
         username=username,
