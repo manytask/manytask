@@ -278,6 +278,40 @@ def test_update_score_with_old_score(app):
     assert score == old_score  # Should keep higher old score
 
 
+def test_update_score_allows_negative_score(app):
+    course, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
+    negative_score = -42
+    score = _update_score(
+        course,
+        group,
+        task,
+        negative_score,
+        "",
+        0,
+        datetime.now(tz=ZoneInfo("UTC")),
+        check_deadline=False,
+        allow_reduction=True,
+    )
+    assert score == negative_score
+
+
+def test_update_score_can_replace_negative_score_when_reduction_is_allowed(app):
+    course, group, task = app.storage_api.find_task(TEST_COURSE_NAME, "test_task")
+    updated_score = -17
+    score = _update_score(
+        course,
+        group,
+        task,
+        updated_score,
+        "",
+        -42,
+        datetime.now(tz=ZoneInfo("UTC")),
+        check_deadline=False,
+        allow_reduction=True,
+    )
+    assert score == updated_score
+
+
 def create_percent_multiplier_calculator(
     start: datetime,
     duration: timedelta,
@@ -404,6 +438,26 @@ def test_report_score_success(app):
         data = json.loads(response.data)
         assert data["username"] == expected_data["username"]
         assert data["score"] == expected_data["score"]
+
+
+def test_report_negative_integer_score(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
+    negative_score = -42
+    with app.test_request_context():
+        data = {
+            "task": TEST_TASK_NAME,
+            "user_id": rms_user.id,
+            "score": str(negative_score),
+            "check_deadline": "False",
+            "allow_reduction": "True",
+        }
+        headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
+
+        assert response.status_code == HTTPStatus.OK
+        assert json.loads(response.data)["score"] == negative_score
 
 
 def test_get_score_success(app):
@@ -859,11 +913,19 @@ def test_process_score_zero():
     assert _process_score(form_data, task_score) == 0
 
 
-def test_process_score_negative():
-    """Test when score is negative"""
+def test_process_score_negative_float_is_clamped():
+    """Test when a fractional score is negative"""
     form_data = {"score": "-0.5"}
     task_score = 100
     assert _process_score(form_data, task_score) == 0
+
+
+def test_process_score_negative_integer():
+    """Test when a final integer score is negative"""
+    negative_score = -42
+    form_data = {"score": str(negative_score)}
+    task_score = 100
+    assert _process_score(form_data, task_score) == negative_score
 
 
 def test_process_score_too_large():
