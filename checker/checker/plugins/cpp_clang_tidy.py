@@ -16,7 +16,7 @@ class CppClangTidyPlugin(PluginABC):
     class Args(PluginABC.Args):
         executable: str = "clang-tidy"
         reference_root: Path
-        build_dir: Path = Path("build")
+        build_dir: Path = Path("build-asan")
         task_path: Path
         lint_patterns: list[str]
 
