@@ -119,6 +119,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
           id="light-theme">
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
@@ -399,33 +400,8 @@
 
             const valueEl = document.getElementById("filter-value");
 
-            // Transliteration-aware search:
-            // normalize both the search term and the searchable fields to a
-            // common Latin form before substring matching, so that typing
-            // "Ivan" matches "Иван" and typing "Иван" also matches "Ivan".
-            const CYRILLIC_TO_LATIN = {
-                'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh',
-                'з':'z','и':'i','й':'i','к':'k','л':'l','м':'m','н':'n','о':'o',
-                'п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'c',
-                'ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu',
-                'я':'ya',
-                // Ukrainian / Belarusian extras
-                'ї':'i','і':'i','є':'e','ґ':'g','ў':'u'
-            };
-
-            function normalizeForSearch(str) {
-                if (!str) return "";
-                const lower = str.toLowerCase();
-                let out = "";
-                for (let i = 0; i < lower.length; i++) {
-                    const ch = lower[i];
-                    out += Object.prototype.hasOwnProperty.call(CYRILLIC_TO_LATIN, ch)
-                        ? CYRILLIC_TO_LATIN[ch]
-                        : ch;
-                }
-                return out;
-            }
-
+            // Transliteration-aware search uses the shared normalizeForSearch()
+            // helper (static/js/search-normalize.js).
             function customFilter(data) {
                 const searchTerm = normalizeForSearch(valueEl.value);
                 if (!searchTerm) return true;
