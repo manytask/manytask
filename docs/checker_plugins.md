@@ -141,6 +141,7 @@ Send the final score to the Manytask platform via its [REST API](./api.md). Used
 | `report_url` | `AnyUrl` | yes | — | Base URL of the Manytask instance. |
 | `report_token` | `str` | yes | — | Authentication token for the Manytask API. |
 | `check_deadline` | `bool` | yes | — | Whether Manytask should apply deadline penalties server-side. |
+| `allow_reduction` | `bool` | no | `false` | Allow replacing an existing score with a lower value. Must be enabled when reporting a negative integer. |
 | `origin` | `str \| null` | no | `null` | If set, collect files matching `patterns` from this directory and attach them to the report. |
 | `patterns` | `list[str]` | no | `["*"]` | Glob patterns for files to attach (only used when `origin` is set). |
 | `send_time` | `datetime` | no | now | Submission timestamp. Defaults to the current time with local timezone. |
@@ -150,7 +151,7 @@ Send the final score to the Manytask platform via its [REST API](./api.md). Used
 | Value | Description |
 |---|---|
 | `float` | A percentage of the score in `[0.0, 1.0]`, with an ability to give bonus up to `2.0`. Number below `0.0` will be clamped to `0.0`, number over `2.0` will return HTTP Bad Request. The number will be multiplied by the max number of points set to the task. |
-| `int` | If the reported number is integer, it is taken as a final score. Can be any integer number, even if larger than max score for the task. |
+| `int` | If the reported number is an integer, including a negative integer, it is taken as a final score. It can be larger than the task maximum. Persisting a negative value requires `allow_reduction: true`. |
 | `null` | Task is considered fully solved, max points are issued. |
 
 
