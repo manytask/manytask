@@ -816,6 +816,64 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
     assert scores == {"bonus_score": 1, "task_0_0": 1}
 
 
+def test_hidden_student_excluded_from_scores_and_stats(db_api_with_initialized_first_course):
+    """Hidden students disappear from listings and stats, but remain visible to admins."""
+    # One of the two counted students solved the task
+    half_solved = 0.5
+    db_api = db_api_with_initialized_first_course
+
+    create_user(db_api, STUDENT_1)
+    create_user(db_api, STUDENT_2)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_1, course_admin=False)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_2, course_admin=False)
+
+    # Only student 1 solved the task, so the mean is 1/2 while both are visible.
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", update_func(1))
+
+    assert set(db_api.get_all_scores_with_names(FIRST_COURSE_NAME)) == {TEST_USERNAME_1, TEST_USERNAME_2}
+    assert db_api.get_stats(FIRST_COURSE_NAME)["task_0_0"] == half_solved
+
+    db_api.update_student_hidden(FIRST_COURSE_NAME, TEST_USERNAME_2, True)
+
+    # Default listing hides the student; admins can still request them.
+    visible = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)
+    assert set(visible) == {TEST_USERNAME_1}
+
+    with_hidden = db_api.get_all_scores_with_names(FIRST_COURSE_NAME, include_hidden=True)
+    assert set(with_hidden) == {TEST_USERNAME_1, TEST_USERNAME_2}
+    assert with_hidden[TEST_USERNAME_2].hidden is True
+    assert with_hidden[TEST_USERNAME_1].hidden is False
+
+    # The hidden student leaves the denominator entirely: 1 solver of 1 counted student.
+    assert db_api.get_stats(FIRST_COURSE_NAME)["task_0_0"] == 1.0
+
+    # Unhiding restores the previous state.
+    db_api.update_student_hidden(FIRST_COURSE_NAME, TEST_USERNAME_2, False)
+    assert set(db_api.get_all_scores_with_names(FIRST_COURSE_NAME)) == {TEST_USERNAME_1, TEST_USERNAME_2}
+    assert db_api.get_stats(FIRST_COURSE_NAME)["task_0_0"] == half_solved
+
+
+def test_hidden_student_excluded_from_stats_numerator(db_api_with_initialized_first_course):
+    """A hidden student's own submits must not count towards task statistics."""
+    # One of the two counted students solved the task
+    half_solved = 0.5
+    db_api = db_api_with_initialized_first_course
+
+    create_user(db_api, STUDENT_1)
+    create_user(db_api, STUDENT_2)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_1, course_admin=False)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_2, course_admin=False)
+
+    # Only the soon-to-be-hidden student has a grade for this task.
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_2, "task_0_0", update_func(1))
+    assert db_api.get_stats(FIRST_COURSE_NAME)["task_0_0"] == half_solved
+
+    db_api.update_student_hidden(FIRST_COURSE_NAME, TEST_USERNAME_2, True)
+
+    # Their submit is dropped from the numerator too, leaving 0 of 1.
+    assert db_api.get_stats(FIRST_COURSE_NAME)["task_0_0"] == 0.0
+
+
 def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
 

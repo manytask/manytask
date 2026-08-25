@@ -431,13 +431,16 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]:
+    def get_all_scores_with_names(
+        self, course_name: str, include_hidden: bool = False
+    ) -> dict[str, StudentCourseScores]:
         """Get all users' scores with names and grade data for the given course.
 
         Returns:
             dict mapping username to a StudentCourseScores object.
 
         Excludes users with PROGRAM_MANAGER role in the course's namespace.
+        Excludes students hidden by a course admin unless ``include_hidden`` is set.
         """
 
         with self._session_create() as session:
@@ -462,6 +465,7 @@ class DataBaseApi(StorageApi):
                     UserOnCourse.final_grade,
                     UserOnCourse.final_grade_override,
                     UserOnCourse.comment,
+                    UserOnCourse.hidden,
                 )
                 .join(UserOnCourse, UserOnCourse.user_id == User.id)
                 .join(Course, Course.id == UserOnCourse.course_id)
@@ -475,6 +479,9 @@ class DataBaseApi(StorageApi):
 
             if program_managers_subquery is not None:
                 statement = statement.where(~User.id.in_(program_managers_subquery))
+
+            if not include_hidden:
+                statement = statement.where(UserOnCourse.hidden.is_(False))
 
             rows = session.execute(statement).all()
 
@@ -490,6 +497,7 @@ class DataBaseApi(StorageApi):
                         final_grade=row.final_grade,
                         final_grade_override=row.final_grade_override,
                         comment=row.comment,
+                        hidden=row.hidden,
                     )
                     scores_and_names[row.username] = student
                 if row.task_name is not None:
@@ -526,7 +534,7 @@ class DataBaseApi(StorageApi):
     def get_stats(self, course_name: str) -> dict[str, float]:
         """Method for getting stats of all tasks
 
-        Excludes users with PROGRAM_MANAGER role from statistics.
+        Excludes users with PROGRAM_MANAGER role and hidden students from statistics.
 
         :param course_name: course name
 
@@ -547,7 +555,7 @@ class DataBaseApi(StorageApi):
             users_count_query = (
                 session.query(func.count(UserOnCourse.id))
                 .join(Course, Course.id == UserOnCourse.course_id)
-                .filter(Course.name == course_name)
+                .filter(Course.name == course_name, UserOnCourse.hidden.is_(False))
             )
             if program_managers_subquery is not None:
                 users_count_query = users_count_query.filter(~UserOnCourse.user_id.in_(program_managers_subquery))
@@ -1824,25 +1832,24 @@ class DataBaseApi(StorageApi):
         course_name: str,
         program_managers_subquery: Select[tuple[int]] | None = None,
     ) -> list[Row[tuple[int, str, int]]]:
-        """Get count of task submits, optionally excluding program managers.
+        """Get count of task submits, excluding hidden students and optionally program managers.
 
         :param session: Database session
         :param course_name: Name of the course
         :param program_managers_subquery: Subquery to select user IDs to exclude (program managers)
         :return: List of (task_id, task_name, submits_count) tuples
         """
-        join_conditions = [Grade.task_id == Task.id]
+        counted_users_conditions = [
+            UserOnCourse.course_id == Course.id,
+            UserOnCourse.hidden.is_(False),
+        ]
         if program_managers_subquery is not None:
-            join_conditions.append(
-                Grade.user_on_course_id.in_(
-                    select(UserOnCourse.id).where(
-                        and_(
-                            UserOnCourse.course_id == Course.id,
-                            ~UserOnCourse.user_id.in_(program_managers_subquery),
-                        )
-                    )
-                )
-            )
+            counted_users_conditions.append(~UserOnCourse.user_id.in_(program_managers_subquery))
+
+        join_conditions = [
+            Grade.task_id == Task.id,
+            Grade.user_on_course_id.in_(select(UserOnCourse.id).where(and_(*counted_users_conditions))),
+        ]
 
         query = (
             session.query(
@@ -1877,6 +1884,25 @@ class DataBaseApi(StorageApi):
                 session.commit()
 
                 logger.info(f"Updated comment for user {username} in course {course_name}: -> '{comment}'")
+            except NoResultFound:
+                logger.error(f"User {username} not found in course {course_name}")
+                raise
+
+    def update_student_hidden(self, course_name: str, username: str, hidden: bool) -> None:
+        """Hide or unhide a student on a course.
+
+        Hidden students are excluded from scores listings and statistics for everyone
+        except course admins.
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+
+                user_on_course.hidden = hidden
+                session.commit()
+
+                logger.info(f"Updated hidden flag for user {username} in course {course_name}: -> {hidden}")
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
@@ -2476,8 +2502,11 @@ class DataBaseApi(StorageApi):
 
         Call after changing grade configuration to keep saved grades in sync.
         Skips students with final_grade_override.
+
+        Includes hidden students: hiding a student must not stop their own grade
+        from being kept up to date.
         """
-        scores_and_names = self.get_all_scores_with_names(course_name)
+        scores_and_names = self.get_all_scores_with_names(course_name, include_hidden=True)
         grades_config = self.get_grades(course_name)
         course = self.get_course(course_name)
         if course is None:

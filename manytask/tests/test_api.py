@@ -524,6 +524,48 @@ def test_update_database_success(app, authenticated_client):
     assert data["success"]
 
 
+def test_update_database_sets_hidden_for_admin(app, authenticated_client):
+    """Course admins can flip the hidden flag through /database/update."""
+    test_data = {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+            "hidden": True,
+        },
+        "new_scores": {},
+    }
+    with patch.object(app.storage_api, "update_student_hidden", create=True) as mock_hidden:
+        response = authenticated_client.patch(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["success"]
+    mock_hidden.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME, True)
+
+
+def test_update_database_hidden_omitted_leaves_flag_untouched(app, authenticated_client):
+    """A plain score update must not change the hidden flag."""
+    test_data = {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {"task1": 90},
+    }
+    with patch.object(app.storage_api, "update_student_hidden", create=True) as mock_hidden:
+        response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
+
+    assert response.status_code == HTTPStatus.OK
+    mock_hidden.assert_not_called()
+
+
 def test_update_database_invalid_score_type(app, authenticated_client):
     test_data = {
         "row_data": {

@@ -21,10 +21,12 @@ class RowData(BaseModel):
     grade: int
     scores: dict[str, int]
     grade_is_override: bool = False  # Indicates if grade is manually overridden by admin
+    # None means "leave unchanged"; only course admins may set it
+    hidden: Optional[bool] = None
 
 
 class ManytaskUpdateDatabasePayload(BaseModel):
-    new_scores: dict[str, Any] = Field(...)
+    new_scores: dict[str, Any] = Field(default_factory=dict)
     row_data: RowData
 
 

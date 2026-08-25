@@ -11,9 +11,15 @@
             <h2 class="mb-0">Course Database</h2>
             
             {% if is_course_admin %}
-            <button id="toggle-personal-info" class="btn btn-outline-secondary btn-sm" title="Toggle personal info columns">
-                <i class="fas fa-eye"></i> Toggle Personal Info
-            </button>
+            <div class="d-flex gap-2">
+                <button id="toggle-hidden-students" class="btn btn-outline-secondary btn-sm"
+                        title="Show or hide students hidden by an admin" aria-pressed="true">
+                    <i class="fas fa-eye"></i> Toggle Hidden Students
+                </button>
+                <button id="toggle-personal-info" class="btn btn-outline-secondary btn-sm" title="Toggle personal info columns">
+                    <i class="fas fa-eye"></i> Toggle Personal Info
+                </button>
+            </div>
             {% endif %}
         </div>
 
@@ -264,6 +270,40 @@
                 });
         }
 
+        // Hide/unhide a student (course admins only).
+        function toggleHidden(cell, hidden) {
+            const row = cell.getRow();
+            const rowData = row.getData();
+
+            fetch('{{ url_for("api.update_database", course_name=course_name) }}', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    new_scores: {},
+                    row_data: Object.assign({}, rowData, {hidden: hidden})
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        row.update({hidden: hidden});
+                        row.reformat();
+                        window.tabulatorTable.setFilter(window.customFilter);
+                    } else {
+                        alert('Failed to update hidden flag: ' + data.message);
+                        cell.getElement().querySelector('.hide-student-checkbox').checked = !hidden;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating hidden flag:', error);
+                    alert('Failed to update hidden flag');
+                    cell.getElement().querySelector('.hide-student-checkbox').checked = !hidden;
+                });
+        }
+
         function editGrade(cell) {
             const isAdmin = {{ is_course_admin|tojson }};
             if (!isAdmin) {
@@ -400,9 +440,21 @@
 
             const valueEl = document.getElementById("filter-value");
 
-            // Transliteration-aware search uses the shared normalizeForSearch()
-            // helper (static/js/search-normalize.js).
+            {% if is_course_admin %}
+            // Admins see hidden students by default; the toggle above the table flips this.
+            window.showHiddenStudents = true;
+            {% endif %}
+
+            // Exposed on window so handlers defined outside this scope (e.g. toggleHidden)
+            // can re-apply the active filter.
+            window.customFilter = customFilter;
+
             function customFilter(data) {
+                {% if is_course_admin %}
+                if (data.hidden && !window.showHiddenStudents) return false;
+                {% endif %}
+                // Transliteration-aware search uses the shared normalizeForSearch()
+                // helper (static/js/search-normalize.js).
                 const searchTerm = normalizeForSearch(valueEl.value);
                 if (!searchTerm) return true;
                 if (normalizeForSearch(data.username).includes(searchTerm)) {
@@ -436,7 +488,12 @@
 
             document.getElementById("filter-clear").addEventListener('click', function (event) {
                 valueEl.value = "";
+                {% if is_course_admin %}
+                // Keep the hidden-students rule applied when clearing the text search.
+                window.tabulatorTable.setFilter(customFilter);
+                {% else %}
                 window.tabulatorTable.clearFilter();
+                {% endif %}
             })
 
             fetch('{{ url_for("api.get_database", course_name=course_name) }}')
@@ -558,8 +615,29 @@
                         }
                     ];
 
-                    // Add comment column only for course admins
+                    // Add hide/unhide + comment columns only for course admins
                     {% if is_course_admin %}
+                    columns.push({
+                        title: "Hide",
+                        field: "hidden",
+                        frozen: true,
+                        minWidth: 1,
+                        width: 60,
+                        hozAlign: "center",
+                        headerSort: false,
+                        headerTooltip: "Hide this student from non-admins",
+                        formatter: function (cell) {
+                            const checked = cell.getValue() ? "checked" : "";
+                            const username = cell.getRow().getData().username;
+                            return `<input type="checkbox" class="form-check-input hide-student-checkbox" ${checked}`
+                                + ` aria-label="Hide ${username}" title="${cell.getValue() ? "Unhide" : "Hide"} ${username}">`;
+                        },
+                        cellClick: function (e, cell) {
+                            // Only react to the checkbox itself, so clicking the cell padding does nothing.
+                            if (!e.target.classList.contains('hide-student-checkbox')) return;
+                            toggleHidden(cell, e.target.checked);
+                        }
+                    });
                     columns.push({
                         title: "Comment",
                         field: "comment",
@@ -710,6 +788,8 @@
 
                             const data = row.getData();
 
+                            row.getElement().classList.toggle('row-hidden', !!data.hidden);
+
                             // Add individual task scores and group totals
                             const groupColumns = window.tabulatorTable.getColumns().filter(col => col.getDefinition().columns);
                             groupColumns.forEach(groupCol => {
@@ -775,6 +855,26 @@
 
                     window.tabulatorTable.on("tableBuilt", function () {
                         document.getElementById("loader").style.display = "none"
+
+                        {% if is_course_admin %}
+                        // Admins see hidden students by default.
+                        window.tabulatorTable.setFilter(customFilter);
+
+                        const hiddenToggle = document.getElementById('toggle-hidden-students');
+                        if (hiddenToggle) {
+                            hiddenToggle.addEventListener('click', function () {
+                                window.showHiddenStudents = !window.showHiddenStudents;
+
+                                hiddenToggle.setAttribute('aria-pressed', String(window.showHiddenStudents));
+                                // Swap only the icon; the label lives in the button markup.
+                                const hiddenIcon = hiddenToggle.querySelector('i');
+                                hiddenIcon.classList.toggle('fa-eye', window.showHiddenStudents);
+                                hiddenIcon.classList.toggle('fa-eye-slash', !window.showHiddenStudents);
+
+                                window.tabulatorTable.setFilter(customFilter);
+                            });
+                        }
+                        {% endif %}
                     });
 
                     // Wait for a short delay to ensure table is rendered

@@ -90,7 +90,7 @@ def mock_storage_api(mock_course):  # noqa: C901
             return {"task1": 100, "task2": 90}
 
         @staticmethod
-        def get_all_scores_with_names(_course_name):
+        def get_all_scores_with_names(_course_name, include_hidden=False):
             return {
                 TEST_USERNAME: StudentCourseScores(
                     username=TEST_USERNAME,

@@ -96,7 +96,7 @@ def app():  # noqa: C901
             return datetime.datetime.now() + datetime.timedelta(hours=1)
 
         @staticmethod
-        def get_all_scores_with_names(_course_name):
+        def get_all_scores_with_names(_course_name, include_hidden=False):
             return {
                 STUDENT_1: StudentCourseScores(
                     username=STUDENT_1,
@@ -184,6 +184,33 @@ def test_get_database_table_data(app):
             assert student["grade_is_override"] is expected_overrides[student_id]
 
 
+def test_get_database_table_data_hidden_only_requested_by_admins(app):
+    """Hidden students are only fetched for admin views, and `hidden` is admin-only data."""
+    calls = []
+    original = app.storage_api.get_all_scores_with_names
+
+    def recording_get_all_scores_with_names(course_name, include_hidden=False):
+        calls.append(include_hidden)
+        students = original(course_name)
+        students[STUDENT_2].hidden = True
+        return students
+
+    app.storage_api.get_all_scores_with_names = recording_get_all_scores_with_names
+
+    with app.test_request_context():
+        test_course = app.storage_api.get_course("test_course")
+
+        non_admin = get_database_table_data(app, test_course, include_admin_data=False)
+        # Non-admins must not ask for hidden students, nor see the flag
+        assert calls == [False]
+        assert all("hidden" not in student for student in non_admin["students"])
+
+        admin = get_database_table_data(app, test_course, include_admin_data=True)
+        assert calls == [False, True]
+        hidden_flags = {student["username"]: student["hidden"] for student in admin["students"]}
+        assert hidden_flags == {STUDENT_1: False, STUDENT_2: True}
+
+
 def test_get_database_table_data_with_admin_data(app):
     """Test database table data with admin data (admin view)"""
     expected_tasks_count = 3
@@ -233,7 +260,7 @@ def test_get_database_table_data_no_scores(app):
     expected_tasks_count = 3
 
     with app.test_request_context():
-        app.storage_api.get_all_scores_with_names = lambda _course_name: {}
+        app.storage_api.get_all_scores_with_names = lambda _course_name, include_hidden=False: {}
         test_course = app.storage_api.get_course("test_course")
         result = get_database_table_data(app, test_course)
 
@@ -256,7 +283,7 @@ def test_get_database_table_data_uses_displayed_percent_for_grade(app):
             3: [{Path(""): 0}],
         }
     )
-    app.storage_api.get_all_scores_with_names = lambda _course_name: {
+    app.storage_api.get_all_scores_with_names = lambda _course_name, include_hidden=False: {
         STUDENT_1: StudentCourseScores(
             username=STUDENT_1,
             first_name=STUDENT_DATA[STUDENT_1][0],

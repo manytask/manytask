@@ -645,24 +645,28 @@ def get_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnVal
     return jsonify(table_data)
 
 
-@bp.post("/database/update")
+@bp.route("/database/update", methods=["POST", "PATCH"])
 @requires_auth_or_token
 @requires_ready
 def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturnValue:
     """
     Update student scores in the database via API endpoint and recalculate grade.
+
+    Course admins may additionally set the ``hidden`` flag on the student, which
+    removes them from score listings and statistics for non-admins.
     """
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     storage_api = app.storage_api
 
+    is_course_admin = True
     if auth_method == AuthMethod.SESSION:
         username = session["manytask"]["username"]
         logger.info("Request by user=%s for course=%s", username, course_name)
-        student_course_admin = storage_api.check_if_course_admin(course_name, username)
+        is_course_admin = storage_api.check_if_course_admin(course_name, username)
 
-        if not student_course_admin:
+        if not is_course_admin:
             return jsonify({"success": False, "message": "Only course admins can update scores"}), HTTPStatus.FORBIDDEN
 
     if not request.is_json:
@@ -682,6 +686,19 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     student_username = row_data.username
     total_score = row_data.total_score
     logger.info("Updating scores for user=%s: %s", sanitize_log_data(student_username), new_scores)
+
+    if row_data.hidden is not None:
+        if not is_course_admin:
+            return jsonify({"success": False, "message": "Only course admins can hide students"}), HTTPStatus.FORBIDDEN
+
+        try:
+            storage_api.update_student_hidden(course.course_name, student_username, row_data.hidden)
+            logger.info("Set hidden=%s for user=%s", row_data.hidden, sanitize_log_data(student_username))
+        except Exception as e:
+            logger.error("Error updating hidden flag: %s", str(e))
+            return jsonify(
+                {"success": False, "message": "Internal error when updating hidden flag"}
+            ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     try:
         for task_name, new_score in new_scores.items():
