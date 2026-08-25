@@ -399,3 +399,48 @@ def test_get_url_for_repo(gitlab):
     url = gitlab_api.get_url_for_repo(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert url == f"{gitlab_api.base_url}/{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}"
+
+
+def test_set_student_report_token_creates_variable(gitlab):
+    gitlab_api, mock_gitlab_instance = gitlab
+    project = MagicMock()
+    project.variables.get.side_effect = GitlabGetError("Variable not found")
+    mock_gitlab_instance.projects.get.return_value = project
+
+    created = gitlab_api.set_student_report_token(TEST_USERNAME, TEST_GROUP_STUDENT_NAME, "student-token")
+
+    assert created
+    mock_gitlab_instance.projects.get.assert_called_once_with(f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
+    project.variables.create.assert_called_once_with(
+        {
+            "key": "MANYTASK_TOKEN",
+            "value": "student-token",
+            "masked": True,
+            "protected": False,
+            "variable_type": "env_var",
+        }
+    )
+
+
+def test_set_student_report_token_updates_existing_variable(gitlab):
+    gitlab_api, mock_gitlab_instance = gitlab
+    variable = MagicMock()
+    project = MagicMock()
+    project.variables.get.return_value = variable
+    mock_gitlab_instance.projects.get.return_value = project
+
+    updated = gitlab_api.set_student_report_token(TEST_USERNAME, TEST_GROUP_STUDENT_NAME, "rotated-token")
+
+    assert updated
+    project.variables.create.assert_not_called()
+    assert variable.value == "rotated-token"
+    assert variable.masked is True
+    assert variable.protected is False
+    variable.save.assert_called_once()
+
+
+def test_set_student_report_token_without_project(gitlab):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("Project not found")
+
+    assert not gitlab_api.set_student_report_token(TEST_USERNAME, TEST_GROUP_STUDENT_NAME, "student-token")

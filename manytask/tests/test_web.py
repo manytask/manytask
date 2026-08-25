@@ -161,6 +161,7 @@ def mock_course():
             self.gitlab_course_students_group = TEST_STUDENTS_GROUP
             self.task_url_template = "https://gitlab.example.com/$GROUP_NAME/$USER_NAME/$TASK_NAME"
             self.links = {}
+            self.token = TEST_TOKEN
 
     return MockCourse()
 
@@ -595,3 +596,44 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
                 rms_id=rms_id,
                 auth_id=TEST_USER_ID,
             )
+
+
+def test_course_page_renders_student_token_panel(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    with app.test_request_context(), app.test_client() as client:
+        set_session(client, build_test_session())
+        app.oauth = mock_gitlab_oauth
+
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+
+        assert response.status_code == HTTPStatus.OK
+        soup = BeautifulSoup(response.data, "html.parser")
+        panel = soup.find(id="studentTokenPanel")
+        assert panel is not None
+        assert panel["data-token-url"] == f"/api/{TEST_COURSE_NAME}/student_token"
+        assert panel["data-rotate-url"] == f"/api/{TEST_COURSE_NAME}/student_token/rotate"
+        assert response.data.count(b"studentTokenValue") > 0
+        assert (
+            app.storage_api.get_or_create_student_token(TEST_COURSE_NAME, TEST_USERNAME).encode() not in response.data
+        )
+
+
+def test_create_project_publishes_student_token(app, mock_gitlab_oauth, mock_course):
+    CSRFProtect(app)
+    with app.test_request_context(), app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        app.oauth = mock_gitlab_oauth
+
+        response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        soup = BeautifulSoup(response.data, "html.parser")
+        csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+        response = client.post(
+            f"/{TEST_COURSE_NAME}/create_project",
+            data={"csrf_token": csrf_token, "secret": mock_course.registration_secret},
+        )
+
+        assert response.status_code == HTTPStatus.FOUND
+        project = app.rms_api.projects[f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"]
+        expected = app.storage_api.get_or_create_student_token(TEST_COURSE_NAME, TEST_USERNAME)
+        assert project.ci_variables["MANYTASK_TOKEN"] == expected

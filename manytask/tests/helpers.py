@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from http import HTTPStatus
 from unittest.mock import MagicMock
@@ -259,6 +259,21 @@ class MockStorageApiBase:
         self.stored_user = make_test_stored_user()
         self.course_name = TEST_COURSE_NAME
         self.course_admin = False
+        self.student_tokens = {}
+
+    def get_or_create_student_token(self, course_name, username):
+        return self.student_tokens.setdefault((course_name, username), f"student_token_{course_name}_{username}")
+
+    def rotate_student_token(self, course_name, username):
+        token = f"rotated_token_{course_name}_{username}_{len(self.student_tokens)}"
+        self.student_tokens[(course_name, username)] = token
+        return token
+
+    def get_student_by_token(self, course_name, token):
+        for (stored_course, username), stored_token in self.student_tokens.items():
+            if stored_course == course_name and stored_token == token:
+                return replace(self.stored_user, username=username)
+        return None
 
     @staticmethod
     def get_namespace_admin_namespaces(_username):

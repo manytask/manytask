@@ -139,7 +139,7 @@ Send the final score to the Manytask platform via its [REST API](./api.md). Used
 | `task_name` | `str` | yes | — | Task identifier as registered in `.manytask.yml`. |
 | `score` | `float \| int \| null` | yes | — | Score to report, in `[0.0, 1.0]` (bonus scores may exceed `1.0` but float larger than `2.0` will not be accepted). |
 | `report_url` | `AnyUrl` | yes | — | Base URL of the Manytask instance. |
-| `report_token` | `str` | yes | — | Authentication token for the Manytask API. |
+| `report_token` | `str` | yes | — | Authentication token for the Manytask API. In student pipelines this is the student's personal `MANYTASK_TOKEN`, which Manytask writes into their repository and which can only report scores for that student. |
 | `check_deadline` | `bool` | yes | — | Whether Manytask should apply deadline penalties server-side. |
 | `allow_reduction` | `bool` | no | `false` | Allow replacing an existing score with a lower value. Must be enabled when reporting a negative integer. |
 | `origin` | `str \| null` | no | `null` | If set, collect files matching `patterns` from this directory and attach them to the report. |

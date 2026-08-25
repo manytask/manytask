@@ -294,8 +294,12 @@ class UserOnCourse(Base):
     comment: Mapped[Optional[str]] = mapped_column(default=None)
     final_grade: Mapped[Optional[int]] = mapped_column(default=None)
     final_grade_override: Mapped[Optional[int]] = mapped_column(default=None)
+    token: Mapped[Optional[str]] = mapped_column(default=None)
 
-    __table_args__ = (UniqueConstraint("user_id", "course_id", name="_user_course_uc"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "course_id", name="_user_course_uc"),
+        UniqueConstraint("token", name="uq_users_on_courses_token"),
+    )
 
     # relationships
     user: Mapped["User"] = relationship(back_populates="users_on_courses")

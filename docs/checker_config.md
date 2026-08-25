@@ -171,7 +171,12 @@ deploy-public:
 |----------|-------------|-----------------|
 | `GITLAB_API_TOKEN` | Token for push to public repo | Project Settings → CI/CD → Variables |
 | `DOCKER_AUTH_CONFIG` | Docker Registry authentication | Group Settings → CI/CD → Variables |
-| `TESTER_TOKEN` | Manytask API token | Group Settings → CI/CD → Variables |
+| `MANYTASK_COURSE_TOKEN` | Course-wide Manytask API token | Private **Project** Settings → CI/CD → Variables |
+
+`MANYTASK_COURSE_TOKEN` can grade every student in the course, so keep it on the private
+project. A group variable is inherited by the students subgroup and would leak it into
+student pipelines. Score reporting does not need it: Manytask provisions a personal
+`MANYTASK_TOKEN` in each student's repository, and that token only works for its owner.
 
 ### Creating GITLAB_API_TOKEN
 

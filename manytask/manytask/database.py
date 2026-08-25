@@ -39,9 +39,11 @@ from .models import (
     User,
     UserOnCourse,
 )
-from .utils.generic import calculate_percent
+from .utils.generic import calculate_percent, generate_token_hex
 
 ModelType = TypeVar("ModelType", bound=models.Base)
+
+STUDENT_TOKEN_BYTES = 24
 
 logger = logging.getLogger(__name__)
 
@@ -430,6 +432,87 @@ class DataBaseApi(StorageApi):
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
+
+    def get_or_create_student_token(self, course_name: str, username: str) -> str:
+        """Method for getting a student's personal token for the course
+
+        The token is created lazily, so students registered before personal tokens
+        existed get one the first time they (or the UI) ask for it.
+
+        :param course_name: course name
+        :param username: student username
+
+        :return: the student's personal course token
+        """
+
+        with self._session_create() as session:
+            user_on_course = self._get_user_on_course_for_update(session, course_name, username)
+
+            if user_on_course.token is None:
+                user_on_course.token = generate_token_hex(STUDENT_TOKEN_BYTES)
+                logger.info("Created personal token for user=%s on course=%s", username, course_name)
+                session.commit()
+
+            return user_on_course.token
+
+    def rotate_student_token(self, course_name: str, username: str) -> str:
+        """Method for replacing a student's personal token for the course
+
+        :param course_name: course name
+        :param username: student username
+
+        :return: the new personal course token
+        """
+
+        with self._session_create() as session:
+            user_on_course = self._get_user_on_course_for_update(session, course_name, username)
+
+            user_on_course.token = generate_token_hex(STUDENT_TOKEN_BYTES)
+            logger.info("Rotated personal token for user=%s on course=%s", username, course_name)
+            session.commit()
+
+            return user_on_course.token
+
+    def get_student_by_token(self, course_name: str, token: str) -> StoredUser | None:
+        """Method for resolving a personal student token to its owner
+
+        :param course_name: course name
+        :param token: personal student token
+
+        :return: StoredUser object if some student of the course owns the token else None
+        """
+
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+            except NoResultFound:
+                return None
+
+            user_on_course = (
+                session.query(models.UserOnCourse).filter_by(course_id=course.id, token=token).one_or_none()
+            )
+
+            if user_on_course is None:
+                return None
+
+            return self._to_stored_user(user_on_course.user)
+
+    def _get_user_on_course_for_update(self, session: Session, course_name: str, username: str) -> models.UserOnCourse:
+        """Lock the student's course membership row so concurrent token writes cannot race
+
+        :param session: SQLAlchemy session
+        :param course_name: course name
+        :param username: student username
+
+        :return: locked UserOnCourse row
+        """
+        course = self._get(session, models.Course, name=course_name)
+        user = self._get(session, models.User, username=username)
+
+        user_on_course = self._query_with_for_update(
+            session, models.UserOnCourse, allow_none=False, user_id=user.id, course_id=course.id
+        )
+        return cast(models.UserOnCourse, user_on_course)
 
     def get_all_scores_with_names(
         self, course_name: str

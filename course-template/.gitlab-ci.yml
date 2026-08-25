@@ -32,9 +32,10 @@ grade:
   #
   # Score reporting: `checker grade` always runs the report_pipeline, which is
   # commented out in .checker.yml by default. To report scores back to the
-  # manytask web app, uncomment that report_pipeline (report_score_manytask) and
-  # provide a MANYTASK_TOKEN CI variable — NOT a `--submit-score` flag (that grade
-  # option is currently a no-op in checker).
+  # manytask web app, uncomment that report_pipeline (report_score_manytask) —
+  # NOT a `--submit-score` flag (that grade option is currently a no-op in checker).
+  # MANYTASK_TOKEN is provisioned per student by manytask itself, so nothing has to
+  # be configured here; that token can only report scores for its own owner.
   image: "$TESTENV_IMAGE"
   stage: grade
   rules:

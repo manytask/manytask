@@ -1221,7 +1221,7 @@ def test_ping_success(app):
 
     assert response.status_code == HTTPStatus.OK
     body = json.loads(response.data)
-    assert body == {"course": TEST_COURSE_NAME, "ok": True}
+    assert body == {"course": TEST_COURSE_NAME, "ok": True, "scope": "course", "username": None}
 
 
 def test_ping_invalid_token(app):
@@ -1483,5 +1483,234 @@ def test_deadlines_invalid_token(app):
     headers = {"Authorization": "Bearer wrong_token"}
 
     response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+# ----- Personal student tokens -----
+
+
+OTHER_STUDENT = "other_student"
+REPORTED_SCORE = 90
+DEFAULTED_SCORE = 70
+EXISTING_SCORE = 80
+OVER_SOLVE_MULTIPLIER = 2
+
+
+def _student_token(app, username=TEST_USERNAME, course_name=TEST_COURSE_NAME):
+    return app.storage_api.get_or_create_student_token(course_name, username)
+
+
+def _student_headers(app, username=TEST_USERNAME):
+    return {"Authorization": f"Bearer {_student_token(app, username)}"}
+
+
+@pytest.fixture
+def registered_student(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
+    return rms_user
+
+
+def test_report_with_student_token_for_self(app, registered_student):
+    data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME, "score": str(REPORTED_SCORE), "check_deadline": "True"}
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["username"] == TEST_USERNAME
+    assert body["score"] == REPORTED_SCORE
+
+
+def test_report_with_student_token_defaults_to_owner(app, registered_student):
+    data = {"task": TEST_TASK_NAME, "score": str(DEFAULTED_SCORE)}
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["username"] == TEST_USERNAME
+    assert body["score"] == DEFAULTED_SCORE
+
+
+def test_report_with_student_token_for_another_student_forbidden(app, registered_student):
+    data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME, "score": "100"}
+
+    response = _post_report(app, data=data, headers=_student_headers(app, OTHER_STUDENT))
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"personal student token" in response.data
+
+
+def test_report_with_student_token_ignores_deadline_bypass(app, registered_student, mock_group):
+    reduced_multiplier = 0.5
+    mock_group.get_current_percent_multiplier = lambda now, deadlines_type: reduced_multiplier
+    data = {
+        "task": TEST_TASK_NAME,
+        "score": "100",
+        "check_deadline": "False",
+        "submit_time": "2000-01-01 00:00:00+0000",
+    }
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["score"] == int(100 * reduced_multiplier)
+
+
+def test_report_with_student_token_cannot_reduce_score(app, registered_student):
+    app.storage_api.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] = EXISTING_SCORE
+    data = {"task": TEST_TASK_NAME, "score": "-42", "allow_reduction": "True", "check_deadline": "False"}
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["score"] == EXISTING_SCORE
+
+
+def test_report_with_student_token_caps_score(app, registered_student, mock_task):
+    data = {"task": TEST_TASK_NAME, "score": "999999", "check_deadline": "False"}
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["score"] == mock_task.score * OVER_SOLVE_MULTIPLIER
+
+
+def test_report_with_course_token_keeps_privileged_options(app, registered_student):
+    app.storage_api.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] = EXISTING_SCORE
+    negative_score = -42
+    data = {
+        "task": TEST_TASK_NAME,
+        "username": TEST_USERNAME,
+        "score": str(negative_score),
+        "allow_reduction": "True",
+        "check_deadline": "False",
+    }
+
+    response = _post_report(app, data=data, headers=_valid_token_headers())
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["score"] == negative_score
+
+
+def test_get_score_with_student_token_for_self(app, registered_student):
+    client = app.test_client()
+    data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/score", data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["username"] == TEST_USERNAME
+
+
+def test_get_score_with_student_token_for_another_student_forbidden(app, registered_student):
+    client = app.test_client()
+    data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/score", data=data, headers=_student_headers(app, OTHER_STUDENT))
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_ping_with_student_token_reports_scope(app):
+    client = app.test_client()
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/ping", headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data) == {
+        "course": TEST_COURSE_NAME,
+        "ok": True,
+        "scope": "student",
+        "username": TEST_USERNAME,
+    }
+
+
+def test_deadlines_allow_student_token(app):
+    app.storage_api.groups_override = []
+    client = app.test_client()
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+
+
+@pytest.mark.parametrize(
+    "method, path",
+    [
+        ("post", "update_config"),
+        ("get", "is_admin?rms_username=" + TEST_USERNAME),
+        ("get", "database"),
+        ("post", "database/update"),
+    ],
+)
+def test_course_wide_endpoints_reject_student_token(app, method, path):
+    client = app.test_client()
+
+    response = getattr(client, method)(f"/api/{TEST_COURSE_NAME}/{path}", headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"requires the course token" in response.data
+
+
+def test_student_token_from_another_course_is_rejected(app):
+    app.storage_api.get_or_create_student_token("another_course", TEST_USERNAME)
+    headers = {"Authorization": f"Bearer {_student_token(app, TEST_USERNAME, 'another_course')}"}
+
+    response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/ping", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"Invalid course token" in response.data
+
+
+def test_get_student_token_endpoint(app, authenticated_client):
+    response = authenticated_client.get(f"/api/{TEST_COURSE_NAME}/student_token")
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["username"] == TEST_USERNAME
+    assert body["course"] == TEST_COURSE_NAME
+    assert body["ci_variable"] == "MANYTASK_TOKEN"
+    assert body["token"] == _student_token(app)
+
+
+def test_publish_student_token_writes_ci_variable(app, authenticated_client, mock_course):
+    rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
+    app.rms_api.create_project(rms_user, mock_course.gitlab_course_students_group, TEST_PUBLIC_REPO)
+
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/publish")
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["published_to_repo"] is True
+    project = app.rms_api.projects[f"{mock_course.gitlab_course_students_group}/{TEST_USERNAME}"]
+    assert project.ci_variables["MANYTASK_TOKEN"] == body["token"]
+
+
+def test_publish_student_token_reports_missing_repo(app, authenticated_client):
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/publish")
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["published_to_repo"] is False
+
+
+def test_rotate_student_token_invalidates_the_old_one(app, authenticated_client):
+    old_token = _student_token(app)
+
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/rotate")
+
+    assert response.status_code == HTTPStatus.OK
+    new_token = json.loads(response.data)["token"]
+    assert new_token != old_token
+
+    stale = app.test_client().get(f"/api/{TEST_COURSE_NAME}/ping", headers={"Authorization": f"Bearer {old_token}"})
+    assert stale.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_student_token_requires_course_membership(app, authenticated_client):
+    with patch.object(app.storage_api, "check_user_on_course", return_value=False):
+        response = authenticated_client.get(f"/api/{TEST_COURSE_NAME}/student_token")
 
     assert response.status_code == HTTPStatus.FORBIDDEN
