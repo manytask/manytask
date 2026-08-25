@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from authlib.integrations.flask_client import OAuth
 
@@ -35,6 +35,48 @@ class StoredUser:
     @property
     def rms_identity(self) -> RmsUser:
         return RmsUser(id=self.rms_id, username=self.username, name=f"{self.first_name} {self.last_name}")
+
+
+@dataclass
+class TaskScore:
+    """Score of a single task of a single student."""
+
+    score: int
+    is_solved: bool
+
+
+@dataclass
+class StudentCourseScores:
+    """Scores, name and grade data of a single student on a single course."""
+
+    username: str
+    first_name: str
+    last_name: str
+    task_scores: dict[str, TaskScore] = field(default_factory=dict)
+    final_grade: int | None = None
+    final_grade_override: int | None = None
+    comment: str | None = None
+
+    def __repr__(self) -> str:
+        return f"StudentCourseScores(username={self.username}, tasks={len(self.task_scores)})"
+
+    @property
+    def scores(self) -> dict[str, int]:
+        """Task name to score mapping, without the `is_solved` flag."""
+        return {task_name: task_score.score for task_name, task_score in self.task_scores.items()}
+
+    @property
+    def total_score(self) -> int:
+        """Sum of the scores of all the tasks."""
+        return sum(task_score.score for task_score in self.task_scores.values())
+
+    def count_solved_large_tasks(self, large_tasks: Iterable[tuple[str, int]]) -> int:
+        """Count large tasks where the student reached the required minimal score.
+
+        :param large_tasks: iterable of (task_name, min_score) pairs
+        """
+        scores = self.scores
+        return sum(1 for task_name, min_score in large_tasks if scores.get(task_name, 0) >= min_score)
 
 
 class StorageApi(ABC):
@@ -94,9 +136,7 @@ class StorageApi(ABC):
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
-    def get_all_scores_with_names(
-        self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None, str | None]]: ...
+    def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]: ...
 
     @abstractmethod
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...

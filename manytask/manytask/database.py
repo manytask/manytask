@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
 
 from . import models
-from .abstract import StorageApi, StoredUser
+from .abstract import StorageApi, StoredUser, StudentCourseScores, TaskScore
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -431,14 +431,11 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def get_all_scores_with_names(
-        self, course_name: str
-    ) -> dict[str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None, str | None]]:
+    def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]:
         """Get all users' scores with names and grade data for the given course.
 
         Returns:
-            dict mapping username to (scores_dict, (first_name, last_name), final_grade, final_grade_override, comment).
-        scores_dict maps task_name to (score, is_solved) tuple.
+            dict mapping username to a StudentCourseScores object.
 
         Excludes users with PROGRAM_MANAGER role in the course's namespace.
         """
@@ -481,30 +478,22 @@ class DataBaseApi(StorageApi):
 
             rows = session.execute(statement).all()
 
-            scores_and_names: dict[
-                str, tuple[dict[str, tuple[int, bool]], tuple[str, str], int | None, int | None, str | None]
-            ] = {}
+            scores_and_names: dict[str, StudentCourseScores] = {}
 
             for row in rows:
-                username = row.username
-                first_name = row.first_name
-                last_name = row.last_name
-                task_name = row.task_name
-                score = row.score
-                is_solved = row.is_solved
-                final_grade = row.final_grade
-                final_grade_override = row.final_grade_override
-                comment = row.comment
-                if username not in scores_and_names:
-                    scores_and_names[username] = (
-                        {},
-                        (first_name, last_name),
-                        final_grade,
-                        final_grade_override,
-                        comment,
+                student = scores_and_names.get(row.username)
+                if student is None:
+                    student = StudentCourseScores(
+                        username=row.username,
+                        first_name=row.first_name,
+                        last_name=row.last_name,
+                        final_grade=row.final_grade,
+                        final_grade_override=row.final_grade_override,
+                        comment=row.comment,
                     )
-                if task_name is not None:
-                    scores_and_names[username][0][task_name] = (score, is_solved)
+                    scores_and_names[row.username] = student
+                if row.task_name is not None:
+                    student.task_scores[row.task_name] = TaskScore(score=row.score, is_solved=row.is_solved)
 
             return scores_and_names
 
@@ -2506,31 +2495,23 @@ class DataBaseApi(StorageApi):
 
         grades_to_save: dict[str, int] = {}
 
-        for username, (
-            student_scores_with_solved,
-            _name,
-            final_grade,
-            final_grade_override,
-            _comment,
-        ) in scores_and_names.items():
-            if final_grade_override is not None:
+        for username, student in scores_and_names.items():
+            if student.final_grade_override is not None:
                 continue
 
-            student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
-            total_score = sum(student_scores.values())
-            large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
+            total_score = student.total_score
 
             row: dict[str, Any] = {
                 "total_score": total_score,
                 "percent": calculate_percent(total_score, max_score),
-                "large_count": large_count,
+                "large_count": student.count_solved_large_tasks(large_tasks),
             }
 
             grades_to_save[username] = calculate_effective_grade(
                 course.status,
                 grades_config,
                 row,
-                final_grade,
+                student.final_grade,
             )
 
         self._batch_update_grades(course_name, grades_to_save)
