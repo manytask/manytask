@@ -32,11 +32,11 @@ const CYRILLIC_TO_LATIN = {
 };
 
 /**
- * Physical key positions: US QWERTY character -> Russian ЙЦУКЕН character
+ * Physical key positions: QWERTY character -> Russian ЙЦУКЕН character
  * produced by the same key. Lower-case/unshifted keys only, which is all the
  * search needs since everything is lower-cased before matching.
  */
-const QWERTY_TO_JCUKEN = {
+const QWERTY_TO_YTSUKEN = {
     'q':'й','w':'ц','e':'у','r':'к','t':'е','y':'н','u':'г','i':'ш',
     'o':'щ','p':'з','[':'х',']':'ъ',
     'a':'ф','s':'ы','d':'в','f':'а','g':'п','h':'р','j':'о','k':'л',
@@ -45,10 +45,10 @@ const QWERTY_TO_JCUKEN = {
     ',':'б','.':'ю','/':'.','`':'ё'
 };
 
-/** Inverse of QWERTY_TO_JCUKEN: ЙЦУКЕН character -> US QWERTY character. */
-const JCUKEN_TO_QWERTY = (() => {
+/** Inverse of QWERTY_TO_YTSUKEN: ЙЦУКЕН character -> QWERTY character. */
+const YTSUKEN_TO_QWERTY = (() => {
     const inverse = {};
-    for (const [latin, cyrillic] of Object.entries(QWERTY_TO_JCUKEN)) {
+    for (const [latin, cyrillic] of Object.entries(QWERTY_TO_YTSUKEN)) {
         inverse[cyrillic] = latin;
     }
     return inverse;
@@ -116,8 +116,8 @@ function searchTermVariants(term) {
 
     const candidates = [lower];
     if (lower.length >= MIN_LAYOUT_SWAP_LENGTH) {
-        candidates.push(remapLayout(lower, QWERTY_TO_JCUKEN));
-        candidates.push(remapLayout(lower, JCUKEN_TO_QWERTY));
+        candidates.push(remapLayout(lower, QWERTY_TO_YTSUKEN));
+        candidates.push(remapLayout(lower, YTSUKEN_TO_QWERTY));
     }
 
     const variants = [];
