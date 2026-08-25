@@ -11,9 +11,11 @@ from typing import Any, Callable, TypeVar
 import yaml
 from flask import Blueprint, abort, current_app, g, jsonify, request, session
 from flask.typing import ResponseReturnValue
+from flask_wtf.csrf import validate_csrf
 from enum import Enum
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
+from wtforms import ValidationError as CsrfValidationError
 
 from manytask.abstract import RmsApiException, StorageApi, StoredUser
 from manytask.database import TaskDisabledError
@@ -59,6 +61,10 @@ bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
 namespace_bp = Blueprint("namespace_api", __name__, url_prefix="/api")
 
 STUDENT_TOKEN_MAX_SCORE_MULTIPLIER = 2
+
+CSRF_PROTECTED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+CSRF_HEADERS = ("X-CSRFToken", "X-CSRF-Token")
+CSRF_FIELD_NAME = "csrf_token"
 
 
 def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Course:
@@ -120,6 +126,50 @@ def requires_json_validation(model_class: type[BaseModel]) -> Callable[[Callable
         return decorated
 
     return decorator
+
+
+def _submitted_csrf_token() -> str | None:
+    """Read the CSRF token the browser sent, from a form field or from a header."""
+    field_name = current_app.config.get("WTF_CSRF_FIELD_NAME", CSRF_FIELD_NAME)
+
+    form_token = request.form.get(field_name)
+    if form_token:
+        return form_token
+
+    for header_name in current_app.config.get("WTF_CSRF_HEADERS", CSRF_HEADERS):
+        header_token = request.headers.get(header_name)
+        if header_token:
+            return header_token
+
+    return None
+
+
+def requires_csrf(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Validate the CSRF token of a state changing request that trusts the browser session.
+
+    Both API blueprints are exempt from the global CSRFProtect, because most of their
+    endpoints authenticate with an API token, where CSRF does not apply. Endpoints that
+    instead act on behalf of the signed in user have to check the token themselves, or a
+    cross-site page could invoke them with the victim's cookies.
+
+    Safe methods are let through, and so is a request to an app that switched CSRF off
+    via the standard ``WTF_CSRF_ENABLED`` flag.
+    """
+
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        needs_csrf = request.method in CSRF_PROTECTED_METHODS and current_app.config.get("WTF_CSRF_ENABLED", True)
+
+        if needs_csrf:
+            try:
+                validate_csrf(_submitted_csrf_token())
+            except CsrfValidationError as e:
+                logger.warning("CSRF validation failed for %s: %s", request.path, e)
+                return jsonify(ErrorResponse(error=f"CSRF validation failed: {e}").model_dump()), HTTPStatus.BAD_REQUEST
+
+        return f(*args, **kwargs)
+
+    return decorated
 
 
 def requires_namespace_admin(
@@ -328,7 +378,7 @@ def requires_auth_or_token(f: Callable[..., Any]) -> Callable[..., Any]:
         if "Authorization" in request.headers:
             return requires_token(requires_course_token(f))(*args, **kwargs, auth_method=AuthMethod.COURSE_TOKEN)
         else:
-            return requires_auth(f)(*args, **kwargs, auth_method=AuthMethod.SESSION)
+            return requires_auth(requires_csrf(f))(*args, **kwargs, auth_method=AuthMethod.SESSION)
 
     return decorated
 
@@ -744,6 +794,7 @@ def get_student_token(course_name: str) -> ResponseReturnValue:
 
 @bp.post("/student_token/publish")
 @requires_auth
+@requires_csrf
 @requires_ready
 def publish_student_token(course_name: str) -> ResponseReturnValue:
     """Write the student's personal token into the CI/CD variables of their repository."""
@@ -756,6 +807,7 @@ def publish_student_token(course_name: str) -> ResponseReturnValue:
 
 @bp.post("/student_token/rotate")
 @requires_auth
+@requires_csrf
 @requires_ready
 def rotate_student_token(course_name: str) -> ResponseReturnValue:
     """Issue a new personal token for the student, invalidating the previous one."""
@@ -927,6 +979,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
 
 @bp.post("/comment/update")
 @requires_auth
+@requires_csrf
 @requires_ready
 def update_comment(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
@@ -972,6 +1025,7 @@ def update_comment(course_name: str) -> ResponseReturnValue:
 
 @namespace_bp.post("/namespaces")
 @requires_auth
+@requires_csrf
 def create_namespace() -> ResponseReturnValue:
     """Create a new namespace.
 
@@ -1189,6 +1243,7 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
 
 @namespace_bp.post("/namespaces/<int:namespace_id>/users")
 @requires_auth
+@requires_csrf
 @requires_json_validation(AddUserToNamespaceRequest)
 @requires_namespace_admin(return_404_if_not_found=True)
 def add_user_to_namespace(
@@ -1341,6 +1396,7 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
 
 @namespace_bp.delete("/namespaces/<int:namespace_id>/users/<int:user_id>")
 @requires_auth
+@requires_csrf
 @requires_namespace_admin()
 def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) -> ResponseReturnValue:
     """Remove a user from a namespace.
@@ -1417,6 +1473,7 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
 
 @namespace_bp.patch("/namespaces/<int:namespace_id>/users/<int:user_id>")
 @requires_auth
+@requires_csrf
 @requires_json_validation(UpdateUserRoleRequest)
 @requires_namespace_admin()
 def update_user_role_in_namespace(
@@ -1524,6 +1581,7 @@ def update_user_role_in_namespace(
 
 @namespace_bp.post("/admin/courses")
 @requires_auth
+@requires_csrf
 @requires_json_validation(CreateCourseRequest)
 def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValue:
     """Create a new course in a namespace with owners.
@@ -1784,6 +1842,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
 
 @bp.post("/grade/override")
 @requires_auth
+@requires_csrf
 @requires_ready
 def override_grade(course_name: str) -> ResponseReturnValue:
     """Set manual grade override for a student."""
@@ -1841,6 +1900,7 @@ def override_grade(course_name: str) -> ResponseReturnValue:
 
 @bp.post("/grade/clear_override")
 @requires_auth
+@requires_csrf
 @requires_ready
 def clear_grade_override(course_name: str) -> ResponseReturnValue:
     """Clear manual grade override for a student."""

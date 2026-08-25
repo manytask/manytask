@@ -42,6 +42,8 @@ from tests.helpers import (
     MockCourseBase,
     MockStorageApiBase,
     build_test_session,
+    csrf_headers,
+    enable_csrf,
     make_created_course_mock,
     make_flask_app,
     raise_for_invalid_task,
@@ -1714,3 +1716,86 @@ def test_student_token_requires_course_membership(app, authenticated_client):
         response = authenticated_client.get(f"/api/{TEST_COURSE_NAME}/student_token")
 
     assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+# ----- CSRF protection of session authenticated endpoints -----
+
+
+SESSION_MUTATING_ROUTES = [
+    ("post", "database/update"),
+    ("post", "comment/update"),
+    ("post", "grade/override"),
+    ("post", "grade/clear_override"),
+    ("post", "student_token/publish"),
+    ("post", "student_token/rotate"),
+]
+
+
+@pytest.mark.parametrize("method, path", SESSION_MUTATING_ROUTES)
+def test_session_endpoints_reject_missing_csrf_token(app, authenticated_client, method, path):
+    enable_csrf(app)
+
+    response = getattr(authenticated_client, method)(f"/api/{TEST_COURSE_NAME}/{path}", json={})
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "CSRF" in json.loads(response.data)["error"]
+
+
+@pytest.mark.parametrize("method, path", SESSION_MUTATING_ROUTES)
+def test_session_endpoints_reject_forged_csrf_token(app, authenticated_client, method, path):
+    enable_csrf(app)
+    headers = csrf_headers(authenticated_client, app)
+    headers["X-CSRFToken"] = headers["X-CSRFToken"][:-4] + "beef"
+
+    response = getattr(authenticated_client, method)(f"/api/{TEST_COURSE_NAME}/{path}", json={}, headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "CSRF" in json.loads(response.data)["error"]
+
+
+def test_session_endpoint_accepts_valid_csrf_token(app, authenticated_client):
+    enable_csrf(app)
+    headers = csrf_headers(authenticated_client, app)
+
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/rotate", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["token"]
+
+
+def test_csrf_token_is_also_accepted_from_a_form_field(app, authenticated_client):
+    enable_csrf(app)
+    token = csrf_headers(authenticated_client, app)["X-CSRFToken"]
+
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/rotate", data={"csrf_token": token})
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_get_endpoints_do_not_need_csrf(app, authenticated_client):
+    enable_csrf(app)
+
+    response = authenticated_client.get(f"/api/{TEST_COURSE_NAME}/student_token")
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_course_token_requests_do_not_need_csrf(app):
+    enable_csrf(app)
+    payload = {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {"task1": 90},
+    }
+
+    response = app.test_client().post(
+        f"/api/{TEST_COURSE_NAME}/database/update", json=payload, headers=_valid_token_headers()
+    )
+
+    assert response.status_code == HTTPStatus.OK

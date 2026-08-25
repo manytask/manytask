@@ -5,9 +5,11 @@ from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 from flask import Flask, json
+from flask import session as flask_session
+from flask_wtf.csrf import generate_csrf
 
 from manytask.abstract import RmsUser, StoredUser
-from manytask.api import namespace_bp
+from manytask.api import CSRF_FIELD_NAME, namespace_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.mock_rms import MockRmsApi
@@ -194,14 +196,35 @@ def register_rms_user(app, user):
 def make_flask_app(*blueprints, secret_key=TEST_SECRET_KEY):
     """
     Create a Flask app (common low level test helper)
+
+    CSRF validation is off by default so that endpoint tests can post without a token;
+    tests that exercise the CSRF path itself turn it back on with `enable_csrf`.
     """
     app = Flask(__name__)
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
     app.secret_key = secret_key
     for blueprint in blueprints:
         app.register_blueprint(blueprint)
     return app
+
+
+def enable_csrf(app):
+    """Turn CSRF validation back on for a test app."""
+    app.config["WTF_CSRF_ENABLED"] = True
+
+
+def csrf_headers(client, app):
+    """Seed the client session with a CSRF secret and return matching request headers."""
+    with app.test_request_context():
+        token = generate_csrf()
+        session_secret = flask_session[CSRF_FIELD_NAME]
+
+    with client.session_transaction() as sess:
+        sess[CSRF_FIELD_NAME] = session_secret
+
+    return {"X-CSRFToken": token}
 
 
 def build_namespace_app(session, postgres_container, *, apply_migrations, auth_api):

@@ -29,7 +29,11 @@
     async function request(url, method) {
         setBusy(true);
         try {
-            const response = await fetch(url, {method: method, credentials: 'same-origin'});
+            const response = await fetch(url, {
+                method: method,
+                credentials: 'same-origin',
+                headers: window.csrfHeaders(),
+            });
             if (!response.ok) {
                 throw new Error('HTTP ' + response.status);
             }

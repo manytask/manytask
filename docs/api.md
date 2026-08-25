@@ -45,7 +45,14 @@ of the course.
 
 ### Personal token management
 
-These endpoints are for the signed-in student in the browser, they use the session and not a token.
+These endpoints are for the signed-in student in the browser: they authenticate with the session
+cookie instead of a token, so the state-changing ones also require a CSRF token, sent either as an
+`X-CSRFToken` header or as a `csrf_token` form field. Pages expose the current token in the
+`<meta name="csrf-token">` tag; front-end code gets it via the `window.csrfHeaders()` helper. The
+same requirement applies to the other session-authenticated API endpoints —
+`/database/update`, `/comment/update`, `/grade/override`, `/grade/clear_override` and the
+`/api/namespaces*` and `/api/admin/courses` routes. Requests authenticated with a course token are
+not affected.
 
 | method | api endpoint                                    | description                                                        | return                                                            |
 |--------|-------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------|

@@ -54,6 +54,7 @@ def app(mock_storage_api):
     )
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
     app.secret_key = "test_key"
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
@@ -637,3 +638,19 @@ def test_create_project_publishes_student_token(app, mock_gitlab_oauth, mock_cou
         project = app.rms_api.projects[f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"]
         expected = app.storage_api.get_or_create_student_token(TEST_COURSE_NAME, TEST_USERNAME)
         assert project.ci_variables["MANYTASK_TOKEN"] == expected
+
+
+def test_pages_expose_a_csrf_token_to_the_front_end(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    with app.test_request_context(), app.test_client() as client:
+        set_session(client, build_test_session())
+        app.oauth = mock_gitlab_oauth
+
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+
+        assert response.status_code == HTTPStatus.OK
+        soup = BeautifulSoup(response.data, "html.parser")
+        meta = soup.find("meta", {"name": "csrf-token"})
+        assert meta is not None
+        assert meta["content"]
+        assert soup.find("script", {"src": "/static/js/csrf.js"}) is not None
