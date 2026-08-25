@@ -56,6 +56,7 @@ class StudentCourseScores:
     final_grade: int | None = None
     final_grade_override: int | None = None
     comment: str | None = None
+    hidden: bool = False
 
     def __repr__(self) -> str:
         return f"StudentCourseScores(username={self.username}, tasks={len(self.task_scores)})"
@@ -136,10 +137,15 @@ class StorageApi(ABC):
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]: ...
+    def get_all_scores_with_names(
+        self, course_name: str, include_hidden: bool = False
+    ) -> dict[str, StudentCourseScores]: ...
 
     @abstractmethod
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
+
+    @abstractmethod
+    def update_student_hidden(self, course_name: str, username: str, hidden: bool) -> None: ...
 
     @abstractmethod
     def get_grades(self, course_name: str) -> ManytaskFinalGradeConfig: ...

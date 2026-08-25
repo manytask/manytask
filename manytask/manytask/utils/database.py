@@ -16,11 +16,13 @@ def get_database_table_data(
 
     Set include_admin_data=True to include per-student repo URLs, comments, and full names (for admins-only views).
     Set is_program_manager=True to include student full names (for program managers).
+
+    Students hidden by a course admin are only returned when include_admin_data is set.
     """
 
     course_name = course.course_name
     storage_api = app.storage_api
-    scores_and_names = storage_api.get_all_scores_with_names(course_name)
+    scores_and_names = storage_api.get_all_scores_with_names(course_name, include_hidden=include_admin_data)
     grades_config = storage_api.get_grades(course_name)
 
     all_tasks = []
@@ -60,6 +62,7 @@ def get_database_table_data(
                         course_students_group=course.gitlab_course_students_group,
                     ),
                     "comment": student.comment,
+                    "hidden": student.hidden,
                 }
             )
 

@@ -24,6 +24,21 @@
     pointer-events: none;
 }
 
+.tabulator-row.row-hidden,
+.tabulator-row.row-hidden .tabulator-cell {
+    color: #8a8a8a;
+}
+
+.tabulator-row.row-hidden .tabulator-cell a {
+    color: #8a8a8a;
+}
+
+[data-bs-theme="dark"] .tabulator-row.row-hidden,
+[data-bs-theme="dark"] .tabulator-row.row-hidden .tabulator-cell,
+[data-bs-theme="dark"] .tabulator-row.row-hidden .tabulator-cell a {
+    color: #7a7a7a;
+}
+
 .db-filter-clear {
   transition: all 0.3s ease;
 }
