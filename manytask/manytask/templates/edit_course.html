@@ -158,6 +158,7 @@
             </button>
         </div>
 
+        <div id="course-access-error" class="alert alert-danger d-none" role="alert"></div>
         <div id="course-access-table"></div>
 
         <div class="admin-actions mt-3">
@@ -275,12 +276,24 @@
 
     function loadAccessUsers() {
         return fetch(accessUsersUrl)
-            .then(response => response.json())
-            .then(data => {
-                if (window.accessTable) {
-                    window.accessTable.setData(data.users || []);
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`${accessUsersUrl} returned HTTP ${response.status}`);
                 }
-                return data.users || [];
+                return response.json();
+            })
+            .then(data => {
+                const users = data.users || [];
+                if (window.accessTable) {
+                    window.accessTable.setData(users);
+                }
+                return users;
+            })
+            .catch(error => {
+                // Surface the failure instead of leaving a silently empty table,
+                // which is indistinguishable from "nobody has access".
+                showAccessError(`Could not load the access list: ${error.message}`);
+                return [];
             });
     }
 
@@ -302,8 +315,27 @@
         errorDiv.classList.remove('d-none');
     }
 
+    function showAccessError(message) {
+        console.error('Course access table:', message);
+        const container = document.getElementById('course-access-error');
+        if (container) {
+            container.textContent = message;
+            container.classList.remove('d-none');
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         filterSelectOptions('grantSearchInput', 'userToGrant');
+
+        // Tabulator comes from a CDN; without it the table cannot be built, and
+        // failing silently here would look identical to "nobody has access".
+        if (typeof Tabulator === 'undefined') {
+            showAccessError(
+                'Could not load the table library (Tabulator) from the CDN, '
+                + 'so the access list cannot be displayed. Check your network connection.'
+            );
+            return;
+        }
 
         const columns = [
             {
@@ -382,8 +414,13 @@
             placeholder: "Nobody has admin access to this course yet.",
         });
 
-        initTabulatorTheme(() => window.accessTable);
-        loadAccessUsers();
+        // Tabulator builds asynchronously. initTabulatorTheme() redraws the table
+        // immediately, and setData() on a table that is not built yet throws, so
+        // both must wait for `tableBuilt` - otherwise the rows never arrive.
+        window.accessTable.on("tableBuilt", function () {
+            initTabulatorTheme(() => window.accessTable);
+            loadAccessUsers();
+        });
 
         // Transliteration-aware search over login and full name, matching the
         // course database page.
