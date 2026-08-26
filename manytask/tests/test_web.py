@@ -625,28 +625,15 @@ def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
     assert soup.find(id="access-filter-clear") is not None
 
 
-def test_edit_course_renders_access_modals(app, mock_gitlab_oauth):
+def test_edit_course_renders_grant_course_admin_modal(app, mock_gitlab_oauth):
     soup = _get_edit_course_page(app, mock_gitlab_oauth)
 
     assert soup.find(id="grantCourseAdminModal") is not None
-    assert soup.find(id="assignProgramManagerModal") is not None
 
 
-def test_edit_course_program_manager_disabled_without_namespace(app, mock_gitlab_oauth, mock_course):
-    """A course outside a namespace has no program managers, so the control is disabled."""
-    assert mock_course.namespace_id is None
-
+def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
+    """Program managers are managed on the namespace panel, not from the course page."""
     soup = _get_edit_course_page(app, mock_gitlab_oauth)
 
-    button = soup.find("button", {"data-bs-target": "#assignProgramManagerModal"})
-    assert button.has_attr("disabled")
-
-
-def test_edit_course_program_manager_enabled_for_namespace_admin(app, mock_gitlab_oauth, mock_course):
-    mock_course.namespace_id = 1
-    app.storage_api.get_namespace_admin_namespaces = lambda _username: [1]
-
-    soup = _get_edit_course_page(app, mock_gitlab_oauth)
-
-    button = soup.find("button", {"data-bs-target": "#assignProgramManagerModal"})
-    assert not button.has_attr("disabled")
+    assert soup.find(id="assignProgramManagerModal") is None
+    assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None

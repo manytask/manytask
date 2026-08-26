@@ -582,29 +582,6 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     )
 
 
-def _can_assign_namespace_roles(app: CustomFlask, namespace_id: int | None) -> bool:
-    """Whether the current user may grant namespace-scoped roles for this course.
-
-    Program manager is a namespace-level role, so being a course admin is not enough:
-    only instance admins and admins of the course's own namespace may assign it.
-    Mirrors the authorization enforced by :func:`manytask.api.assign_program_manager`,
-    so the UI never offers a control that the endpoint would reject.
-
-    :param app: Flask application instance (debug mode grants access)
-    :param namespace_id: id of the course's namespace, or ``None``
-    :return: True if the current user may assign program managers
-    """
-    if app.debug:
-        return True
-    if namespace_id is None:
-        return False
-
-    username = session["manytask"]["username"]
-    if app.storage_api.check_if_instance_admin(username):
-        return True
-    return namespace_id in app.storage_api.get_namespace_admin_namespaces(username)
-
-
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
 @requires_course_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
@@ -655,8 +632,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         course=course,
         course_users=course_users,
         rms=app.app_config.rms,
-        namespace_id=course.namespace_id,
-        can_assign_namespace_roles=_can_assign_namespace_roles(app, course.namespace_id),
     )
 
 
