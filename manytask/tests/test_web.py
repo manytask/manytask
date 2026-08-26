@@ -597,3 +597,56 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
                 rms_id=rms_id,
                 auth_id=TEST_USER_ID,
             )
+
+
+# ----- Course access table on the edit page -----
+
+
+def _get_edit_course_page(app, mock_gitlab_oauth):
+    """Open the course edit page as an instance admin and return the parsed HTML."""
+    CSRFProtect(app)  # the settings form renders a csrf_token
+    app.storage_api.stored_user.instance_admin = True
+    app.storage_api.course_admin = True  # required by the requires_course_admin guard
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+
+    with app.test_request_context(), app.test_client() as client:
+        app.oauth = mock_gitlab_oauth
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(url_for("instance_admin.edit_course", course_name=TEST_COURSE_NAME))
+        assert response.status_code == HTTPStatus.OK
+        return BeautifulSoup(response.data, "html.parser")
+
+
+def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    assert soup.find(id="course-access-table") is not None
+    assert soup.find(id="access-filter-value") is not None
+    assert soup.find(id="access-filter-clear") is not None
+
+
+def test_edit_course_renders_access_modals(app, mock_gitlab_oauth):
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    assert soup.find(id="grantCourseAdminModal") is not None
+    assert soup.find(id="assignProgramManagerModal") is not None
+
+
+def test_edit_course_program_manager_disabled_without_namespace(app, mock_gitlab_oauth, mock_course):
+    """A course outside a namespace has no program managers, so the control is disabled."""
+    assert mock_course.namespace_id is None
+
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    button = soup.find("button", {"data-bs-target": "#assignProgramManagerModal"})
+    assert button.has_attr("disabled")
+
+
+def test_edit_course_program_manager_enabled_for_namespace_admin(app, mock_gitlab_oauth, mock_course):
+    mock_course.namespace_id = 1
+    app.storage_api.get_namespace_admin_namespaces = lambda _username: [1]
+
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    button = soup.find("button", {"data-bs-target": "#assignProgramManagerModal"})
+    assert not button.has_attr("disabled")

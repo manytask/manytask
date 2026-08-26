@@ -2,6 +2,10 @@
 
 {% block title %}Edit Course: {{ course.course_name }}{% endblock %}
 
+{% block additional_styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/course_access.css') }}">
+{% endblock %}
+
 {% block body %}
 <div class="container mt-4">
     <h2>Edit Course: {{ course.course_name }}</h2>
@@ -137,18 +141,42 @@
     </form>
 
     <div class="action-group mt-4">
-        <h4><i class="fas fa-user-shield me-2"></i>Course Admin management</h4>
-        <div class="admin-actions">
+        <h4><i class="fas fa-user-shield me-2"></i>Course Access</h4>
+        <p class="text-muted course-access-hint">
+            Everyone who can administer this course, whether their access comes from the instance,
+            from the namespace, or from the course itself. Instance and namespace access is managed
+            elsewhere and is shown here read-only.
+        </p>
+
+        <div class="course-access-controls mb-3">
+            <div class="course-access-search">
+                <input id="access-filter-value" type="text" class="form-control" placeholder="Search users...">
+                <i class="fas fa-search course-access-search-icon"></i>
+            </div>
+            <button id="access-filter-clear" type="button" class="btn btn-outline-secondary">
+                <i class="fas fa-times"></i> Clear
+            </button>
+        </div>
+
+        <div id="course-access-table"></div>
+
+        <div class="admin-actions mt-3">
             <button type="button" class="btn btn-warning admin-btn" data-bs-toggle="modal"
                     data-bs-target="#grantCourseAdminModal">
                 <i class="fas fa-user-shield"></i>
                 <span>Grant course admin rights</span>
             </button>
 
-            <button type="button" class="btn btn-danger admin-btn" data-bs-toggle="modal"
-                    data-bs-target="#revokeCourseAdminModal">
-                <i class="fas fa-user-slash"></i>
-                <span>Revoke course admin rights</span>
+            <button type="button" class="btn btn-info admin-btn" data-bs-toggle="modal"
+                    data-bs-target="#assignProgramManagerModal"
+                    {% if not can_assign_namespace_roles %}disabled{% endif %}
+                    {% if not namespace_id %}
+                        title="This course does not belong to a namespace, so it has no program managers"
+                    {% elif not can_assign_namespace_roles %}
+                        title="Only Instance Admin or Namespace Admin can assign program managers"
+                    {% endif %}>
+                <i class="fas fa-user-tie"></i>
+                <span>Assign program manager</span>
             </button>
         </div>
     </div>
@@ -163,103 +191,311 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="grantCourseAdminForm"
-                      action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}"
-                      method="POST">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="grant_course_admin">
-                    <div class="mb-3">
-                        <label for="userToGrant" class="form-label">Select new course admin</label>
+                <div class="mb-3">
+                    <label for="userToGrant" class="form-label">Select new course admin</label>
+                    <div class="form-text mb-2">Only users enrolled on this course can be made course admins.</div>
 
-                        <div class="search-box">
-                            <label for="grantSearchInput"></label>
-                            <input type="text" class="form-control" placeholder="Search users..."
-                                   id="grantSearchInput" autocomplete="off">
-                        </div>
-
-                        <select class="form-select" id="userToGrant" name="username" required size="5">
-                            {% for stored_user, is_admin in course_users|default([]) %}
-                                {% if not is_admin %}
-                                    <option value="{{ stored_user.username }}">{{ stored_user.username }}
-                                        ({{ stored_user.first_name }} {{ stored_user.last_name }})
-                                    </option>
-                                {% endif %}
-                            {% endfor %}
-                        </select>
+                    <div class="search-box">
+                        <label for="grantSearchInput"></label>
+                        <input type="text" class="form-control" placeholder="Search users..."
+                               id="grantSearchInput" autocomplete="off">
                     </div>
-                </form>
+
+                    <select class="form-select" id="userToGrant" required size="5">
+                        {% for stored_user, is_admin in course_users|default([]) %}
+                            {% if not is_admin %}
+                                <option value="{{ stored_user.username }}">{{ stored_user.username }}
+                                    ({{ stored_user.first_name }} {{ stored_user.last_name }})
+                                </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div id="grantCourseAdminError" class="alert alert-danger d-none" role="alert"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="grantCourseAdminForm" class="btn btn-warning">Grant Rights</button>
+                <button type="button" id="grantCourseAdminSubmit" class="btn btn-warning">Grant Rights</button>
             </div>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="revokeCourseAdminModal" tabindex="-1" aria-labelledby="revokeCourseAdminModalLabel"
+<div class="modal fade" id="assignProgramManagerModal" tabindex="-1" aria-labelledby="assignProgramManagerModalLabel"
      aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="revokeCourseAdminModalLabel">Revoke Course Admin Rights</h5>
+                <h5 class="modal-title" id="assignProgramManagerModalLabel">Assign Program Manager</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="revokeCourseAdminForm"
-                      action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}"
-                      method="POST">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="revoke_course_admin">
-                    <div class="mb-3">
-                        <label for="userToRevoke" class="form-label">Remove the course admin</label>
-
-                        <div class="search-box">
-                            <label for="revokeSearchInput"></label>
-                            <input type="text" class="form-control" placeholder="Search admins..."
-                                   id="revokeSearchInput" autocomplete="off">
-                        </div>
-
-                        <select class="form-select" id="userToRevoke" name="username" required size="5">
-                            <option value="" disabled>Select a user</option>
-                            {% for stored_user, is_admin in course_users|default([]) %}
-                                {% if is_admin %}
-                                    <option value="{{ stored_user.username }}">{{ stored_user.username }}
-                                        ({{ stored_user.first_name }} {{ stored_user.last_name }})
-                                    </option>
-                                {% endif %}
-                            {% endfor %}
-                        </select>
+                <div class="mb-3">
+                    <label for="userToAssign" class="form-label">Select new program manager</label>
+                    <div class="form-text mb-2">
+                        Program manager is a namespace-level role: the user is added to this course's
+                        namespace and gains the role on every course in it.
                     </div>
-                </form>
+
+                    <div class="search-box">
+                        <label for="assignSearchInput"></label>
+                        <input type="text" class="form-control" placeholder="Search users..."
+                               id="assignSearchInput" autocomplete="off">
+                    </div>
+
+                    <select class="form-select" id="userToAssign" required size="5">
+                        {% for stored_user, is_admin in course_users|default([]) %}
+                            <option value="{{ stored_user.username }}">{{ stored_user.username }}
+                                ({{ stored_user.first_name }} {{ stored_user.last_name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div id="assignProgramManagerError" class="alert alert-danger d-none" role="alert"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="revokeCourseAdminForm" class="btn btn-danger">Revoke Rights</button>
+                <button type="button" id="assignProgramManagerSubmit" class="btn btn-info">Assign</button>
             </div>
         </div>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
+<script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
+<script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
+<link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
+      id="light-theme">
+<link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
+      id="dark-theme" disabled>
+
 <script>
-    function filterUsers(type) {
-        const inputId = `${type}SearchInput`;
-        const selectId = `userTo${type.charAt(0).toUpperCase() + type.slice(1)}`;
+    const accessUsersUrl = '{{ url_for("api.get_course_access_users", course_name=course.course_name) }}';
+    const setCourseAdminUrl = '{{ url_for("api.set_course_admin", course_name=course.course_name) }}';
+    const assignProgramManagerUrl = '{{ url_for("api.assign_program_manager", course_name=course.course_name) }}';
 
+    // Privilege order, widest scope first, so the Access column sorts by reach
+    // rather than alphabetically.
+    const ACCESS_ORDER = ['instance_admin', 'namespace_admin', 'program_manager', 'course_admin'];
+    const ACCESS_LABELS = {
+        instance_admin: 'Instance',
+        namespace_admin: 'Namespace',
+        program_manager: 'Program Manager',
+        course_admin: 'Course'
+    };
+    const ACCESS_BADGES = {
+        instance_admin: 'bg-danger',
+        namespace_admin: 'bg-warning',
+        program_manager: 'bg-info',
+        course_admin: 'bg-primary'
+    };
+
+    function accessRank(levels) {
+        // Rank a row by its widest access level.
+        let best = ACCESS_ORDER.length;
+        (levels || []).forEach(level => {
+            const idx = ACCESS_ORDER.indexOf(level);
+            if (idx !== -1 && idx < best) {
+                best = idx;
+            }
+        });
+        return best;
+    }
+
+    // Blank-last string sorter, so users without a name sink to the bottom.
+    function blankLastSorter(a, b) {
+        if (!a && !b) return 0;
+        if (!a) return 1;
+        if (!b) return -1;
+        return a.toLowerCase().localeCompare(b.toLowerCase());
+    }
+
+    function filterSelectOptions(inputId, selectId) {
         const input = document.getElementById(inputId);
-        const filter = input.value.toLowerCase();
         const select = document.getElementById(selectId);
-        const options = select.getElementsByTagName('option');
-
-        for (let i = 0; i < options.length; i++) {
-            const text = options[i].textContent || options[i].innerText;
-            options[i].style.display = text.toLowerCase().includes(filter) ? '' : 'none';
+        if (!input || !select) {
+            return;
         }
+        input.addEventListener('input', () => {
+            const filter = input.value.toLowerCase();
+            const options = select.getElementsByTagName('option');
+            for (let i = 0; i < options.length; i++) {
+                const text = options[i].textContent || options[i].innerText;
+                options[i].style.display = text.toLowerCase().includes(filter) ? '' : 'none';
+            }
+        });
+    }
+
+    function loadAccessUsers() {
+        return fetch(accessUsersUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (window.accessTable) {
+                    window.accessTable.setData(data.users || []);
+                }
+                return data.users || [];
+            });
+    }
+
+    function postJson(url, payload) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        }).then(response => response.json().then(data => ({ok: response.ok, data})));
+    }
+
+    function setCourseAdmin(username, isAdmin) {
+        return postJson(setCourseAdminUrl, {username: username, is_admin: isAdmin});
+    }
+
+    function showModalError(elementId, message) {
+        const errorDiv = document.getElementById(elementId);
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('d-none');
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        document.getElementById('grantSearchInput').addEventListener('input', () => filterUsers('grant'));
-        document.getElementById('revokeSearchInput').addEventListener('input', () => filterUsers('revoke'));
+        filterSelectOptions('grantSearchInput', 'userToGrant');
+        filterSelectOptions('assignSearchInput', 'userToAssign');
+
+        const columns = [
+            {
+                title: "Login",
+                field: "username",
+                sorter: "string",
+                headerTooltip: "Manytask login"
+            },
+            {
+                title: "First Name",
+                field: "first_name",
+                sorter: blankLastSorter,
+                headerTooltip: "First name"
+            },
+            {
+                title: "Last Name",
+                field: "last_name",
+                sorter: blankLastSorter,
+                headerTooltip: "Last name"
+            },
+            {
+                title: "Access",
+                field: "access_levels",
+                headerTooltip: "Where this user's access comes from",
+                sorter: function (a, b) {
+                    return accessRank(a) - accessRank(b);
+                },
+                formatter: function (cell) {
+                    const levels = cell.getValue() || [];
+                    return ACCESS_ORDER
+                        .filter(level => levels.includes(level))
+                        .map(level => `<span class="badge ${ACCESS_BADGES[level]} me-1">${ACCESS_LABELS[level]}</span>`)
+                        .join('');
+                }
+            },
+            {
+                title: "Actions",
+                field: "actions",
+                headerSort: false,
+                hozAlign: "center",
+                width: 110,
+                headerTooltip: "Revoke course admin rights",
+                formatter: function (cell) {
+                    const data = cell.getRow().getData();
+                    if (!(data.access_levels || []).includes('course_admin')) {
+                        return "";
+                    }
+                    return `<button type="button" class="btn btn-sm btn-outline-danger course-access-revoke"`
+                        + ` title="Revoke course admin rights"><i class="fas fa-user-slash"></i></button>`;
+                },
+                cellClick: function (e, cell) {
+                    if (!e.target.closest('.course-access-revoke')) {
+                        return;
+                    }
+                    const data = cell.getRow().getData();
+                    if (!confirm(`Revoke course admin rights from "${data.username}"?`)) {
+                        return;
+                    }
+                    setCourseAdmin(data.username, false).then(({ok, data: body}) => {
+                        if (ok) {
+                            loadAccessUsers();
+                        } else {
+                            alert(body.error || 'Failed to revoke course admin rights');
+                        }
+                    });
+                }
+            }
+        ];
+
+        window.accessTable = new Tabulator("#course-access-table", {
+            data: [],
+            columns: columns,
+            layout: "fitColumns",
+            initialSort: [{column: "username", dir: "asc"}],
+            pagination: false,
+            placeholder: "Nobody has admin access to this course yet.",
+        });
+
+        initTabulatorTheme(() => window.accessTable);
+        loadAccessUsers();
+
+        // Transliteration-aware search over login and full name, matching the
+        // course database page.
+        const valueEl = document.getElementById("access-filter-value");
+
+        function accessFilter(data) {
+            const term = normalizeForSearch(valueEl.value.trim());
+            if (!term) {
+                return true;
+            }
+            if (normalizeForSearch(data.username).includes(term)) {
+                return true;
+            }
+            const firstName = data.first_name ? data.first_name : "";
+            const lastName = data.last_name ? data.last_name : "";
+            const theVeryFullName = `${firstName} ${lastName} ${firstName}`;
+            return normalizeForSearch(theVeryFullName).includes(term);
+        }
+
+        valueEl.addEventListener("keyup", function () {
+            window.accessTable.setFilter(accessFilter);
+        });
+        document.getElementById("access-filter-clear").addEventListener("click", function () {
+            valueEl.value = "";
+            window.accessTable.clearFilter();
+        });
+
+        document.getElementById('grantCourseAdminSubmit').addEventListener('click', function () {
+            const username = document.getElementById('userToGrant').value;
+            if (!username) {
+                showModalError('grantCourseAdminError', 'Select a user first');
+                return;
+            }
+            setCourseAdmin(username, true).then(({ok, data}) => {
+                if (ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('grantCourseAdminModal')).hide();
+                    location.reload();
+                } else {
+                    showModalError('grantCourseAdminError', data.error || 'Failed to grant course admin rights');
+                }
+            });
+        });
+
+        document.getElementById('assignProgramManagerSubmit').addEventListener('click', function () {
+            const username = document.getElementById('userToAssign').value;
+            if (!username) {
+                showModalError('assignProgramManagerError', 'Select a user first');
+                return;
+            }
+            postJson(assignProgramManagerUrl, {username: username}).then(({ok, data}) => {
+                if (ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('assignProgramManagerModal')).hide();
+                    loadAccessUsers();
+                } else {
+                    showModalError('assignProgramManagerError', data.error || 'Failed to assign program manager');
+                }
+            });
+        });
     });
 </script>
 
