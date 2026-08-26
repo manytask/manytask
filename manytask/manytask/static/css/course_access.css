@@ -3,18 +3,12 @@
    same; colors come from Bootstrap variables and therefore follow the active
    light/dark theme automatically. */
 
-.course-access-hint {
-    max-width: 60rem;
-    font-size: 0.9rem;
-}
-
 .course-access-controls {
     display: flex;
     flex-wrap: nowrap;
     gap: 0.5rem;
     align-items: center;
     width: 100%;
-    max-width: 1100px;
 }
 
 .course-access-search {
@@ -38,10 +32,21 @@
 
 #course-access-table {
     width: 100%;
-    max-width: 1100px;
+    margin-bottom: 2rem;
 }
 
 .course-access-revoke {
+    background: none;
+    border: none;
+    padding: 0 0 0 0.2em;
     line-height: 1;
-    padding: 0.15rem 0.4rem;
+    color: inherit;
+    opacity: 0.75;
+    cursor: pointer;
+    font-size: 1em;
+    vertical-align: middle;
+}
+
+.course-access-revoke:hover {
+    opacity: 1;
 }

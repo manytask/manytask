@@ -141,12 +141,7 @@
     </form>
 
     <div class="action-group mt-4">
-        <h4><i class="fas fa-user-shield me-2"></i>Course Access</h4>
-        <p class="text-muted course-access-hint">
-            Everyone who can administer this course, whether their access comes from the instance,
-            from the namespace, or from the course itself. Instance and namespace access is managed
-            elsewhere and is shown here read-only.
-        </p>
+        <h4>Course Access</h4>
 
         <div class="course-access-controls mb-3">
             <div class="course-access-search">
@@ -156,18 +151,15 @@
             <button id="access-filter-clear" type="button" class="btn btn-outline-secondary">
                 <i class="fas fa-times"></i> Clear
             </button>
-        </div>
-
-        <div id="course-access-error" class="alert alert-danger d-none" role="alert"></div>
-        <div id="course-access-table"></div>
-
-        <div class="admin-actions mt-3">
             <button type="button" class="btn btn-warning admin-btn" data-bs-toggle="modal"
                     data-bs-target="#grantCourseAdminModal">
                 <i class="fas fa-user-shield"></i>
                 <span>Grant course admin rights</span>
             </button>
         </div>
+
+        <div id="course-access-error" class="alert alert-danger d-none" role="alert"></div>
+        <div id="course-access-table"></div>
     </div>
 </div>
 
@@ -365,36 +357,33 @@
                 },
                 formatter: function (cell) {
                     const levels = cell.getValue() || [];
+                    const row = cell.getRow();
                     return ACCESS_ORDER
                         .filter(level => levels.includes(level))
-                        .map(level => `<span class="badge ${ACCESS_BADGES[level]} me-1">${ACCESS_LABELS[level]}</span>`)
+                        .map(level => {
+                            if (level === 'course_admin') {
+                                const username = row.getData().username;
+                                return `<span class="badge ${ACCESS_BADGES[level]} me-1">`
+                                    + `${ACCESS_LABELS[level]}`
+                                    + `<button type="button" class="course-access-revoke ms-1"`
+                                    + ` data-username="${username}"`
+                                    + ` title="Revoke course admin rights">&times;</button>`
+                                    + `</span>`;
+                            }
+                            return `<span class="badge ${ACCESS_BADGES[level]} me-1">${ACCESS_LABELS[level]}</span>`;
+                        })
                         .join('');
-                }
-            },
-            {
-                title: "Actions",
-                field: "actions",
-                headerSort: false,
-                hozAlign: "center",
-                width: 110,
-                headerTooltip: "Revoke course admin rights",
-                formatter: function (cell) {
-                    const data = cell.getRow().getData();
-                    if (!(data.access_levels || []).includes('course_admin')) {
-                        return "";
-                    }
-                    return `<button type="button" class="btn btn-sm btn-outline-danger course-access-revoke"`
-                        + ` title="Revoke course admin rights"><i class="fas fa-user-slash"></i></button>`;
                 },
                 cellClick: function (e, cell) {
-                    if (!e.target.closest('.course-access-revoke')) {
+                    const btn = e.target.closest('.course-access-revoke');
+                    if (!btn) {
                         return;
                     }
-                    const data = cell.getRow().getData();
-                    if (!confirm(`Revoke course admin rights from "${data.username}"?`)) {
+                    const username = btn.dataset.username;
+                    if (!confirm(`Revoke course admin rights from "${username}"?`)) {
                         return;
                     }
-                    setCourseAdmin(data.username, false).then(({ok, data: body}) => {
+                    setCourseAdmin(username, false).then(({ok, data: body}) => {
                         if (ok) {
                             loadAccessUsers();
                         } else {
