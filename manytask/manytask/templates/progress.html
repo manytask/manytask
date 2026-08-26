@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title or "Students progress" }}{% endblock %}
+
+{% block additional_styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/courses.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/progress.css') }}">
+{% endblock %}
+
+{% block body %}
+    <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
+        <h1 class="mt-4 mb-3">{{ page_title or "Students progress" }}</h1>
+
+        <div id="progress-status" class="progress-status text-muted small mb-2">
+            Auto-refreshing every 15 s.
+        </div>
+
+        {% if not entries %}
+            <p class="text-muted">
+                No students provided. Use query parameters like
+                <code>?n=2&amp;username1=student1&amp;course1=python-2026-spring&amp;username2=vasya123&amp;course2=cpp-2026-spring</code>.
+            </p>
+        {% endif %}
+
+        <ul class="course-list progress-list" id="progress-list">
+            {% for entry in entries %}
+                {% set bucket = (entry.percent // 10) * 10 %}
+                <li class="course-item progress-item progress-bucket-{{ bucket }}"
+                    data-index="{{ loop.index0 }}">
+                    <div class="progress-row">
+                        <div class="progress-info">
+                            <span class="progress-username">{{ entry.username or '—' }}</span>
+                            <span class="progress-course">{{ entry.course or '—' }}</span>
+                        </div>
+                        <div class="progress-value">
+                            {% if entry.error %}
+                                <span class="progress-error">{{ entry.error }}</span>
+                            {% else %}
+                                <span class="progress-percent">{{ entry.percent }}%</span>
+                                <span class="progress-score">({{ entry.score }}/{{ entry.max_score }})</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill progress-bucket-{{ bucket }}"
+                             style="width: {{ entry.percent }}%"></div>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <script>
+        (() => {
+            const REFRESH_MS = 15000;
+            const list = document.getElementById('progress-list');
+            const status = document.getElementById('progress-status');
+            if (!list) return;
+
+            const bucketOf = (p) => Math.max(0, Math.min(100, Math.floor((p || 0) / 10) * 10));
+
+            const setBucketClass = (el, bucket) => {
+                [...el.classList].forEach((cls) => {
+                    if (cls.startsWith('progress-bucket-')) el.classList.remove(cls);
+                });
+                el.classList.add('progress-bucket-' + bucket);
+            };
+
+            const setStatus = (ok) => {
+                if (!status) return;
+                const ts = new Date().toLocaleTimeString();
+                status.textContent = ok
+                    ? `Auto-refreshing every 15 s. Last update: ${ts}.`
+                    : `Auto-refreshing every 15 s. Last update failed at ${ts}.`;
+            };
+
+            const updateItem = (item, entry) => {
+                const bucket = bucketOf(entry.percent);
+                setBucketClass(item, bucket);
+
+                const valueBox = item.querySelector('.progress-value');
+                if (valueBox) {
+                    valueBox.innerHTML = '';
+                    if (entry.error) {
+                        const err = document.createElement('span');
+                        err.className = 'progress-error';
+                        err.textContent = entry.error;
+                        valueBox.appendChild(err);
+                    } else {
+                        const pct = document.createElement('span');
+                        pct.className = 'progress-percent';
+                        pct.textContent = (entry.percent || 0) + '%';
+                        const sc = document.createElement('span');
+                        sc.className = 'progress-score';
+                        sc.textContent = '(' + (entry.score || 0) + '/' + (entry.max_score || 0) + ')';
+                        valueBox.appendChild(pct);
+                        valueBox.appendChild(sc);
+                    }
+                }
+
+                const fill = item.querySelector('.progress-bar-fill');
+                if (fill) {
+                    setBucketClass(fill, bucket);
+                    fill.style.width = (entry.percent || 0) + '%';
+                }
+            };
+
+            const refresh = async () => {
+                try {
+                    const url = '/progress.json' + window.location.search;
+                    const resp = await fetch(url, {
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                    });
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const data = await resp.json();
+                    const entries = (data && data.entries) || [];
+                    const items = list.querySelectorAll('.progress-item');
+                    items.forEach((item, i) => {
+                        if (i < entries.length) updateItem(item, entries[i]);
+                    });
+                    setStatus(true);
+                } catch (e) {
+                    setStatus(false);
+                }
+            };
+
+            setInterval(refresh, REFRESH_MS);
+        })();
+    </script>
+{% endblock %}
