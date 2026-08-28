@@ -6,18 +6,21 @@
 
     <div class="d-flex align-items-center justify-content-center bg-body-tertiary container-fluid p-3">
         <div class="d-flex flex-column align-items-center justify-content-center form-signin px-4 py-4 rounded m-auto container-sm" style="background-color: var(--bs-body-bg); max-width: 400px;">
-            <form method="post">
+            <form method="post" class="w-100">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 {% if error_message %}
                     <div class="alert alert-danger" role="alert">
                         {{ error_message }}
                     </div>
                 {% endif %}
-                <div class="form-floating my-2">
+                <div class="form-floating">
                     <input type="text" name="secret" class="form-control" id="floatingCode" placeholder="Code" required>
                     <label for="floatingCode">Secret Code</label>
                 </div>
-                <button class="btn btn-primary w-100 py-2 mt-2" type="submit" value="CreateRepo">Join course</button>
+                <button class="btn btn-primary w-100 py-2 mt-3" type="submit" value="CreateRepo">Join course</button>
+                <a href="{{ url_for('root.index') }}" class="btn btn-outline-secondary w-100 py-2 mt-2">
+                    <i class="fas fa-arrow-left me-1"></i>Back to courses
+                </a>
             </form>
             <script>
                 document.querySelector('form').addEventListener('submit', function() {

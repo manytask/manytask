@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
 
-from manytask.abstract import AuthenticatedUser
+from manytask.abstract import AuthenticatedUser, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus
 from manytask.local_config import LocalConfig
@@ -93,12 +93,14 @@ def mock_storage_api(mock_course):  # noqa: C901
         @staticmethod
         def get_all_scores_with_names(_course_name):
             return {
-                TEST_USERNAME: (
-                    {"task1": 100, "task2": 90},
-                    (TEST_FIRST_NAME, TEST_LAST_NAME),
-                    None,  # final_grade
-                    None,  # final_grade_override
-                    None,  # comment
+                TEST_USERNAME: StudentCourseScores(
+                    username=TEST_USERNAME,
+                    first_name=TEST_FIRST_NAME,
+                    last_name=TEST_LAST_NAME,
+                    task_scores={
+                        "task1": TaskScore(100, False),
+                        "task2": TaskScore(90, False),
+                    },
                 )
             }
 
