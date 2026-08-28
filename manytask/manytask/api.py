@@ -164,7 +164,7 @@ def requires_csrf(f: Callable[..., Any]) -> Callable[..., Any]:
             try:
                 validate_csrf(_submitted_csrf_token())
             except CsrfValidationError as e:
-                logger.warning("CSRF validation failed for %s: %s", request.path, e)
+                logger.warning("CSRF validation failed for %s: %s", sanitize_log_data(request.path), e)
                 return jsonify(ErrorResponse(error=f"CSRF validation failed: {e}").model_dump()), HTTPStatus.BAD_REQUEST
 
         return f(*args, **kwargs)
