@@ -3,21 +3,24 @@ from __future__ import annotations
 import functools
 import logging
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any, Callable, TypeVar
 
 import yaml
-from flask import Blueprint, abort, current_app, jsonify, request, session
+from flask import Blueprint, abort, current_app, g, jsonify, request, session
 from flask.typing import ResponseReturnValue
+from flask_wtf.csrf import validate_csrf
 from enum import Enum
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
+from wtforms import ValidationError as CsrfValidationError
 
 from manytask.abstract import RmsApiException, StorageApi, StoredUser
 from manytask.database import TaskDisabledError
 
-from .abstract import RmsApi, RmsUser
+from .abstract import REPORT_TOKEN_CI_VARIABLE, RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
 from .config import (
     AddUserToNamespaceRequest,
@@ -37,6 +40,7 @@ from .config import (
     NamespaceUsersListResponse,
     NamespaceWithRoleResponse,
     PingResponse,
+    StudentTokenResponse,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
@@ -55,6 +59,12 @@ from .utils.generic import (
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api/<course_name>")
 namespace_bp = Blueprint("namespace_api", __name__, url_prefix="/api")
+
+STUDENT_TOKEN_MAX_SCORE_MULTIPLIER = 2
+
+CSRF_PROTECTED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+CSRF_HEADERS = ("X-CSRFToken", "X-CSRF-Token")
+CSRF_FIELD_NAME = "csrf_token"
 
 
 def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Course:
@@ -116,6 +126,50 @@ def requires_json_validation(model_class: type[BaseModel]) -> Callable[[Callable
         return decorated
 
     return decorator
+
+
+def _submitted_csrf_token() -> str | None:
+    """Read the CSRF token the browser sent, from a form field or from a header."""
+    field_name = current_app.config.get("WTF_CSRF_FIELD_NAME", CSRF_FIELD_NAME)
+
+    form_token = request.form.get(field_name)
+    if form_token:
+        return form_token
+
+    for header_name in current_app.config.get("WTF_CSRF_HEADERS", CSRF_HEADERS):
+        header_token = request.headers.get(header_name)
+        if header_token:
+            return header_token
+
+    return None
+
+
+def requires_csrf(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Validate the CSRF token of a state changing request that trusts the browser session.
+
+    Both API blueprints are exempt from the global CSRFProtect, because most of their
+    endpoints authenticate with an API token, where CSRF does not apply. Endpoints that
+    instead act on behalf of the signed in user have to check the token themselves, or a
+    cross-site page could invoke them with the victim's cookies.
+
+    Safe methods are let through, and so is a request to an app that switched CSRF off
+    via the standard ``WTF_CSRF_ENABLED`` flag.
+    """
+
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        needs_csrf = request.method in CSRF_PROTECTED_METHODS and current_app.config.get("WTF_CSRF_ENABLED", True)
+
+        if needs_csrf:
+            try:
+                validate_csrf(_submitted_csrf_token())
+            except CsrfValidationError as e:
+                logger.warning("CSRF validation failed for %s: %s", sanitize_log_data(request.path), e)
+                return jsonify(ErrorResponse(error=f"CSRF validation failed: {e}").model_dump()), HTTPStatus.BAD_REQUEST
+
+        return f(*args, **kwargs)
+
+    return decorated
 
 
 def requires_namespace_admin(
@@ -183,7 +237,43 @@ def requires_namespace_admin(
     return decorator
 
 
+@dataclass(frozen=True)
+class TokenScope:
+    """What a validated API token is allowed to do.
+
+    The course token grants full course-wide access. A personal student token acts on
+    behalf of exactly one student, so ``username`` is set and every course-wide or
+    other-student operation must be refused.
+    """
+
+    is_course_token: bool
+    username: str | None = None
+
+
+def get_token_scope() -> TokenScope | None:
+    return g.get("token_scope")
+
+
+def get_token_owner() -> str | None:
+    """Return the student a personal token belongs to, or None for the course token."""
+    scope = get_token_scope()
+    return scope.username if scope is not None else None
+
+
+def _resolve_token_scope(storage_api: StorageApi, course: Course, submitted_token: str) -> TokenScope | None:
+    if course.token and secrets.compare_digest(submitted_token, course.token):
+        return TokenScope(is_course_token=True)
+
+    stored_user = storage_api.get_student_by_token(course.course_name, submitted_token)
+    if stored_user is not None:
+        return TokenScope(is_course_token=False, username=stored_user.username)
+
+    return None
+
+
 def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Accept either the course token or a personal student token of the same course."""
+
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         app: CustomFlask = current_app  # type: ignore
@@ -193,7 +283,6 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         logger.debug("Checking token for course=%s", course_name)
 
         course = __get_course_or_not_found(app.storage_api, course_name)
-        course_token = course.token
 
         form_token = request.form.get("token")
         auth_header = request.headers.get("Authorization")
@@ -215,21 +304,67 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
             logger.warning("Empty authorization token for course=%s", course_name)
             abort(HTTPStatus.FORBIDDEN, "Empty authorization token")
 
-        if not course_token:
-            logger.error("Course=%s has no API token configured", course_name)
-            abort(
-                HTTPStatus.FORBIDDEN,
-                f"Course '{sanitize_log_data(course_name)}' has no API token configured",
-            )
+        scope = _resolve_token_scope(app.storage_api, course, submitted_token)
 
-        if not secrets.compare_digest(submitted_token, course_token):
+        if scope is None:
+            if not course.token:
+                logger.error("Course=%s has no API token configured", course_name)
+                abort(
+                    HTTPStatus.FORBIDDEN,
+                    f"Course '{sanitize_log_data(course_name)}' has no API token configured",
+                )
+
             logger.warning("Invalid token for course=%s", course_name)
             abort(HTTPStatus.FORBIDDEN, "Invalid course token")
 
-        logger.debug("Token validated for course=%s", course_name)
+        g.token_scope = scope
+        logger.debug(
+            "Token validated for course=%s, scope=%s",
+            course_name,
+            "course" if scope.is_course_token else f"student:{scope.username}",
+        )
         return f(*args, **kwargs)
 
     return decorated
+
+
+def requires_course_token(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Refuse personal student tokens, the endpoint reads or writes course-wide data."""
+
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        scope = get_token_scope()
+        if scope is None or not scope.is_course_token:
+            owner = scope.username if scope is not None else None
+            logger.warning(
+                "Personal token of user=%s used on a course-token-only endpoint %s",
+                owner,
+                sanitize_log_data(request.path),
+            )
+            abort(HTTPStatus.FORBIDDEN, "This endpoint requires the course token")
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def _abort_unless_token_owner(username: str) -> None:
+    """Refuse a personal student token that acts on behalf of somebody else."""
+    token_owner = get_token_owner()
+    if token_owner is not None and token_owner != username:
+        logger.warning(
+            "Personal token of user=%s used for user=%s",
+            token_owner,
+            sanitize_log_data(username),
+        )
+        abort(HTTPStatus.FORBIDDEN, "A personal student token can only be used for its own owner")
+
+
+def _form_with_token_owner_default(form_data: Any) -> Any:
+    """Let a personal token omit the student, there is only one student it can act for."""
+    token_owner = get_token_owner()
+    if token_owner is None or "user_id" in form_data or "username" in form_data:
+        return form_data
+    return {**form_data.to_dict(), "username": token_owner}
 
 
 class AuthMethod(Enum):
@@ -241,9 +376,9 @@ def requires_auth_or_token(f: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
         if "Authorization" in request.headers:
-            return requires_token(f)(*args, **kwargs, auth_method=AuthMethod.COURSE_TOKEN)
+            return requires_token(requires_course_token(f))(*args, **kwargs, auth_method=AuthMethod.COURSE_TOKEN)
         else:
-            return requires_auth(f)(*args, **kwargs, auth_method=AuthMethod.SESSION)
+            return requires_auth(requires_csrf(f))(*args, **kwargs, auth_method=AuthMethod.SESSION)
 
     return decorated
 
@@ -389,6 +524,11 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         abort(HTTPStatus.BAD_REQUEST, f"Cannot parse `score` <{sanitize_log_data(score_str)}> to a number")
 
 
+def _clamp_student_token_score(score: int, task_score: int) -> int:
+    """Cap what a personal student token can award to the maximum a trusted checker could."""
+    return max(0, min(score, task_score * STUDENT_TOKEN_MAX_SCORE_MULTIPLIER))
+
+
 @bp.post("/report")
 @requires_token
 @requires_ready
@@ -402,8 +542,10 @@ def report_score(course_name: str) -> ResponseReturnValue:
             f"Cannot update score: course '{sanitize_log_data(course_name)}' is already finished.",
         )
 
+    token_owner = get_token_owner()
+
     rms_user, course, task, group = _validate_and_extract_params(
-        request.form, app.rms_api, app.storage_api, course.course_name
+        _form_with_token_owner_default(request.form), app.rms_api, app.storage_api, course.course_name
     )
 
     reported_score = _process_score(request.form, task.score)
@@ -420,12 +562,26 @@ def report_score(course_name: str) -> ResponseReturnValue:
         allow_reduction = request.form["allow_reduction"] is True or request.form["allow_reduction"] == "True"
 
     submit_time_str = request.form.get("submit_time")
+
+    if token_owner is not None:
+        if not check_deadline or allow_reduction or submit_time_str:
+            logger.warning(
+                "Ignoring check_deadline/allow_reduction/submit_time from the personal token of user=%s",
+                token_owner,
+            )
+        check_deadline = True
+        allow_reduction = False
+        submit_time_str = None
+        reported_score = _clamp_student_token_score(reported_score, task.score)
+
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone(course.course_name))
 
     # Log with sanitized values
     logger.info("Use submit_time: %s", submit_time)
     stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
     manytask_username = stored_user.username
+
+    _abort_unless_token_owner(manytask_username)
 
     logger.info(
         f"user={manytask_username} (rms_id={rms_user.id}), task={task.name}, "
@@ -497,11 +653,14 @@ def get_score(course_name: str) -> ResponseReturnValue:
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     rms_user, _, task, group = _validate_and_extract_params(
-        request.form, app.rms_api, app.storage_api, course.course_name
+        _form_with_token_owner_default(request.form), app.rms_api, app.storage_api, course.course_name
     )
 
     stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
     manytask_username = stored_user.username
+
+    _abort_unless_token_owner(manytask_username)
+
     student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
 
     try:
@@ -521,11 +680,19 @@ def get_score(course_name: str) -> ResponseReturnValue:
 @bp.get("/ping")
 @requires_token
 def ping(course_name: str) -> ResponseReturnValue:
-    return jsonify(PingResponse(course=course_name, ok=True).model_dump()), HTTPStatus.OK
+    token_owner = get_token_owner()
+    response = PingResponse(
+        course=course_name,
+        ok=True,
+        scope="course" if token_owner is None else "student",
+        username=token_owner,
+    )
+    return jsonify(response.model_dump()), HTTPStatus.OK
 
 
 @bp.get("/is_admin")
 @requires_token
+@requires_course_token
 def is_admin(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     rms_username = request.args.get("rms_username")
@@ -573,6 +740,84 @@ def get_deadlines(course_name: str) -> ResponseReturnValue:
     )
 
 
+def _get_student_token_context(course_name: str) -> tuple[CustomFlask, Course, str]:
+    """Resolve the signed-in student and their course, refusing users outside the course."""
+    app: CustomFlask = current_app  # type: ignore
+
+    course = __get_course_or_not_found(app.storage_api, course_name)
+    username = session["manytask"]["username"]
+
+    if not app.storage_api.check_user_on_course(course.course_name, username):
+        logger.warning(
+            "User %s asked for a personal token of course=%s they are not registered on",
+            username,
+            course_name,
+        )
+        abort(HTTPStatus.FORBIDDEN, "You are not registered on this course")
+
+    return app, course, username
+
+
+def _publish_student_token(app: CustomFlask, course: Course, username: str, token: str) -> bool:
+    try:
+        return app.rms_api.set_student_report_token(
+            username=username,
+            course_students_group=course.gitlab_course_students_group,
+            token=token,
+        )
+    except Exception as e:
+        logger.error("Failed to publish personal token of user=%s to their repo: %s", username, str(e))
+        return False
+
+
+def _student_token_response(course: Course, username: str, token: str, published: bool) -> ResponseReturnValue:
+    response = StudentTokenResponse(
+        course=course.course_name,
+        username=username,
+        token=token,
+        ci_variable=REPORT_TOKEN_CI_VARIABLE,
+        published_to_repo=published,
+    )
+    return jsonify(response.model_dump()), HTTPStatus.OK
+
+
+@bp.get("/student_token")
+@requires_auth
+@requires_ready
+def get_student_token(course_name: str) -> ResponseReturnValue:
+    """Return the signed-in student's personal API token for the course."""
+    app, course, username = _get_student_token_context(course_name)
+
+    token = app.storage_api.get_or_create_student_token(course.course_name, username)
+    return _student_token_response(course, username, token, published=False)
+
+
+@bp.post("/student_token/publish")
+@requires_auth
+@requires_csrf
+@requires_ready
+def publish_student_token(course_name: str) -> ResponseReturnValue:
+    """Write the student's personal token into the CI/CD variables of their repository."""
+    app, course, username = _get_student_token_context(course_name)
+
+    token = app.storage_api.get_or_create_student_token(course.course_name, username)
+    published = _publish_student_token(app, course, username, token)
+    return _student_token_response(course, username, token, published=published)
+
+
+@bp.post("/student_token/rotate")
+@requires_auth
+@requires_csrf
+@requires_ready
+def rotate_student_token(course_name: str) -> ResponseReturnValue:
+    """Issue a new personal token for the student, invalidating the previous one."""
+    app, course, username = _get_student_token_context(course_name)
+
+    token = app.storage_api.rotate_student_token(course.course_name, username)
+    published = _publish_student_token(app, course, username, token)
+    return _student_token_response(course, username, token, published=published)
+
+
 def _format_config_validation_error(course_name: str, exc: ValidationError) -> str:
     details = []
     for error in exc.errors():
@@ -584,6 +829,7 @@ def _format_config_validation_error(course_name: str, exc: ValidationError) -> s
 
 @bp.post("/update_config")
 @requires_token
+@requires_course_token
 def update_config(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
@@ -733,6 +979,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
 
 @bp.post("/comment/update")
 @requires_auth
+@requires_csrf
 @requires_ready
 def update_comment(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
@@ -778,6 +1025,7 @@ def update_comment(course_name: str) -> ResponseReturnValue:
 
 @namespace_bp.post("/namespaces")
 @requires_auth
+@requires_csrf
 def create_namespace() -> ResponseReturnValue:
     """Create a new namespace.
 
@@ -995,6 +1243,7 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
 
 @namespace_bp.post("/namespaces/<int:namespace_id>/users")
 @requires_auth
+@requires_csrf
 @requires_json_validation(AddUserToNamespaceRequest)
 @requires_namespace_admin(return_404_if_not_found=True)
 def add_user_to_namespace(
@@ -1147,6 +1396,7 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
 
 @namespace_bp.delete("/namespaces/<int:namespace_id>/users/<int:user_id>")
 @requires_auth
+@requires_csrf
 @requires_namespace_admin()
 def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) -> ResponseReturnValue:
     """Remove a user from a namespace.
@@ -1223,6 +1473,7 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
 
 @namespace_bp.patch("/namespaces/<int:namespace_id>/users/<int:user_id>")
 @requires_auth
+@requires_csrf
 @requires_json_validation(UpdateUserRoleRequest)
 @requires_namespace_admin()
 def update_user_role_in_namespace(
@@ -1330,6 +1581,7 @@ def update_user_role_in_namespace(
 
 @namespace_bp.post("/admin/courses")
 @requires_auth
+@requires_csrf
 @requires_json_validation(CreateCourseRequest)
 def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValue:
     """Create a new course in a namespace with owners.
@@ -1590,6 +1842,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
 
 @bp.post("/grade/override")
 @requires_auth
+@requires_csrf
 @requires_ready
 def override_grade(course_name: str) -> ResponseReturnValue:
     """Set manual grade override for a student."""
@@ -1647,6 +1900,7 @@ def override_grade(course_name: str) -> ResponseReturnValue:
 
 @bp.post("/grade/clear_override")
 @requires_auth
+@requires_csrf
 @requires_ready
 def clear_grade_override(course_name: str) -> ResponseReturnValue:
     """Clear manual grade override for a student."""

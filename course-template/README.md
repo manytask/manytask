@@ -92,8 +92,18 @@ In **Group -> Settings -> CI/CD -> Variables**:
 | Variable | Where to get it | Used for |
 |---|---|---|
 | `GITLAB_API_TOKEN` | Group access token, role `Maintainer`, scope `write_repository` | `checker export --commit` push to public |
-| `MANYTASK_TOKEN` | from your Manytask admin panel | reporting scores |
-| `TESTER_TOKEN` | same as `MANYTASK_TOKEN` | grading job auth |
+
+In **the private project -> Settings -> CI/CD -> Variables** (project level, not group level):
+
+| Variable | Where to get it | Used for |
+|---|---|---|
+| `MANYTASK_COURSE_TOKEN` | from your Manytask admin panel | pushing the course config, course-wide API calls |
+
+The course token grants full control over every student's grades. Keeping it on the private
+project means the students subgroup never inherits it.
+
+You do **not** configure a token for score reporting: manytask writes each student's personal
+`MANYTASK_TOKEN` into their own repository, and that token can only change their own scores.
 
 ### 5. Register the course on manytask2.org
 

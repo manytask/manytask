@@ -29,9 +29,54 @@
            {% endif %} me-2"></i>
         {{ course_status.value.replace("_", " ").title() }}
     </span>
-    <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
-        Show past deadlines
-    </button>
+    <div class="d-flex gap-2">
+        <button id="studentTokenBtn" class="btn btn-outline-secondary btn-sm" type="button"
+                data-bs-toggle="collapse" data-bs-target="#studentTokenPanel"
+                aria-expanded="false" aria-controls="studentTokenPanel">
+            <i class="fas fa-key me-1"></i>My API token
+        </button>
+        <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
+            Show past deadlines
+        </button>
+    </div>
+</div>
+
+<div class="collapse mb-3" id="studentTokenPanel"
+     data-token-url="{{ url_for('api.get_student_token', course_name=course_name) }}"
+     data-publish-url="{{ url_for('api.publish_student_token', course_name=course_name) }}"
+     data-rotate-url="{{ url_for('api.rotate_student_token', course_name=course_name) }}">
+    <div class="card">
+        <div class="card-body">
+            <p class="mb-2">
+                This token is yours alone. It reports scores only for
+                <strong>{{ username }}</strong> and cannot touch anybody else's grades, so a leak
+                costs you nothing but your own results. Keep it out of your repository files.
+            </p>
+            <p class="text-muted small mb-3">
+                Your pipelines read it from the <code id="studentTokenVariable">MANYTASK_TOKEN</code>
+                CI/CD variable of <a href="{{ student_repo_url }}" target="_blank">your repository</a>.
+            </p>
+            <div class="input-group mb-2">
+                <input type="password" class="form-control font-monospace" id="studentTokenValue"
+                       value="" readonly aria-label="Personal manytask token">
+                <button class="btn btn-outline-secondary" type="button" id="studentTokenReveal">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-outline-secondary" type="button" id="studentTokenCopy">
+                    <i class="fas fa-copy me-1"></i>Copy
+                </button>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-primary btn-sm" type="button" id="studentTokenPublish">
+                    <i class="fas fa-cloud-upload-alt me-1"></i>Set it in my repo
+                </button>
+                <button class="btn btn-outline-danger btn-sm" type="button" id="studentTokenRotate">
+                    <i class="fas fa-sync me-1"></i>Regenerate
+                </button>
+            </div>
+            <div class="small mt-2" id="studentTokenStatus" role="status"></div>
+        </div>
+    </div>
 </div>
     {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True)[::-1] %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
@@ -147,6 +192,7 @@
 
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
+    <script src="{{ url_for('static', filename='js/student-token.js') }}" defer></script>
     <script>
         tippy('.card-tooltip', {
             arrow: false,

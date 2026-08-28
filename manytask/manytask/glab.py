@@ -11,7 +11,7 @@ import requests
 from authlib.integrations.flask_client import OAuth
 from gitlab.exceptions import GitlabAuthenticationError, GitlabCreateError, GitlabGetError
 
-from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsApiException, RmsUser
+from .abstract import REPORT_TOKEN_CI_VARIABLE, AuthApi, AuthenticatedUser, RmsApi, RmsApiException, RmsUser
 from .utils.generic import check_oauth_authenticated
 
 logger = logging.getLogger(__name__)
@@ -546,6 +546,47 @@ class GitLabApi(RmsApi, AuthApi):
             logger.info("Access granted for forked project user=%s", member.username)
         except gitlab.GitlabCreateError:
             logger.warning("Access already granted or conflict on forked project user=%s", rms_user.username)
+
+    def set_student_report_token(self, username: str, course_students_group: str, token: str) -> bool:
+        """Store the student's personal manytask token as a masked CI/CD variable of their repo.
+
+        Students are Developers in their own project, so they cannot read or overwrite
+        project level CI/CD variables through the GitLab UI, but their pipelines get the
+        variable in the environment and can report scores with it.
+
+        :param username: RMS username, the student project is named after it
+        :param course_students_group: full path of the course students group
+        :param token: personal manytask token of the student
+        :return: True if the variable was written
+        """
+        gitlab_project_path = f"{course_students_group}/{username}"
+        logger.info("Setting %s CI variable for project=%s", REPORT_TOKEN_CI_VARIABLE, gitlab_project_path)
+
+        try:
+            project = self._gitlab.projects.get(gitlab_project_path)
+        except GitlabGetError:
+            logger.warning("Cannot set %s: project %s not found", REPORT_TOKEN_CI_VARIABLE, gitlab_project_path)
+            return False
+
+        variable_params = {
+            "value": token,
+            "masked": True,
+            "protected": False,
+            "variable_type": "env_var",
+        }
+
+        try:
+            variable = project.variables.get(REPORT_TOKEN_CI_VARIABLE)
+        except GitlabGetError:
+            project.variables.create({"key": REPORT_TOKEN_CI_VARIABLE, **variable_params})
+            logger.info("Created %s CI variable for project=%s", REPORT_TOKEN_CI_VARIABLE, gitlab_project_path)
+            return True
+
+        for attribute, value in variable_params.items():
+            setattr(variable, attribute, value)
+        variable.save()
+        logger.info("Updated %s CI variable for project=%s", REPORT_TOKEN_CI_VARIABLE, gitlab_project_path)
+        return True
 
     def _construct_rms_user(
         self,

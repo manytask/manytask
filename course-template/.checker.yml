@@ -74,9 +74,11 @@ testing:
         report_percentage: true
 
   # report_pipeline reports the score back to the Manytask web app.
-  # It requires the MANYTASK_TOKEN env var (set as a CI/CD secret variable
-  # in your private repository) and is only meant to run inside CI.
-  # Uncomment after configuring the secret AND choosing a working report_url.
+  # It requires the MANYTASK_TOKEN env var, which manytask writes into every student
+  # project as a masked CI/CD variable — it is that student's personal token and can
+  # only change that student's own scores. Never put the course-wide token in a
+  # variable student pipelines can read.
+  # Uncomment after choosing a working report_url.
   # See README.md -> "Required CI/CD variables".
   #
   # report_pipeline:

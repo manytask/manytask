@@ -104,8 +104,10 @@ The template wires this in two pipelines:
    the student's solution comes from the checkout (`.`), the hidden tests come from the
    baked `/opt/course`. To report the score to the web app, enable the
    `report_pipeline` (`report_score_manytask`) in `.checker.yml` — `checker grade`
-   always runs it — and provide a `MANYTASK_TOKEN` CI variable. (The grade
-   `--submit-score` flag is currently a no-op in checker, so it does not report.)
+   always runs it. The `MANYTASK_TOKEN` CI variable it reads is provisioned by manytask
+   itself, per student project: it is that student's personal token and can only change
+   that student's own scores. (The grade `--submit-score` flag is currently a no-op in
+   checker, so it does not report.)
 
 Because the image lives in the **private** project's registry but student repos are
 forks of the **public** project, students pull it across projects via a
@@ -150,8 +152,10 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
     | `GITLAB_API_TOKEN` | Lets `checker export --commit` push to the public repo. Group access token, role `Maintainer`, scope `write_repository`. |
     | `DOCKER_AUTH_CONFIG` | Lets student repos pull the testenv image from the private project's registry. Set as a **group** variable holding creds for a deploy/group token with `read_registry` scope on the private project. |
     | `TESTENV_IMAGE` | Absolute registry path to the testenv image used by the student `grade` job; host must match the private project's `CI_REGISTRY` (e.g. `gitlab.manytask2.org:5050/<course>/private/testenv:latest`). Defaults to the sandbox path in `.gitlab-ci.yml`; override for your course. |
-    | `MANYTASK_TOKEN` | Course token for the Manytask web app: `.releaser-ci.yml` uses it to push `.manytask.yml` to `/api/<course>/update_config`, and (once the `report_pipeline` is enabled in `.checker.yml`) the grader uses it to report scores. |
-    | `TESTER_TOKEN` | Authentication for the grading job. |
+    | `MANYTASK_COURSE_TOKEN` | Course token for the Manytask web app: `.releaser-ci.yml` uses it to push `.manytask.yml` to `/api/<course>/update_config`. Set it on the **private project**, not on the group — a group variable is inherited by the students subgroup and would give every student a course-wide token. |
+
+    Score reporting needs no variable of yours: manytask writes each student's personal
+    `MANYTASK_TOKEN` into their own repository, and that token only works for its owner.
 
 5. Create a **deploy token** so `build-testenv` can push the image. On the **private**
    project: **Settings → Repository → Deploy tokens**, name it exactly

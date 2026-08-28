@@ -1,13 +1,15 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from http import HTTPStatus
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 from flask import Flask, json
+from flask import session as flask_session
+from flask_wtf.csrf import generate_csrf
 
 from manytask.abstract import RmsUser, StoredUser
-from manytask.api import namespace_bp
+from manytask.api import CSRF_FIELD_NAME, namespace_bp
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.mock_rms import MockRmsApi
@@ -194,14 +196,35 @@ def register_rms_user(app, user):
 def make_flask_app(*blueprints, secret_key=TEST_SECRET_KEY):
     """
     Create a Flask app (common low level test helper)
+
+    CSRF validation is off by default so that endpoint tests can post without a token;
+    tests that exercise the CSRF path itself turn it back on with `enable_csrf`.
     """
     app = Flask(__name__)
     app.config["DEBUG"] = False
     app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
     app.secret_key = secret_key
     for blueprint in blueprints:
         app.register_blueprint(blueprint)
     return app
+
+
+def enable_csrf(app):
+    """Turn CSRF validation back on for a test app."""
+    app.config["WTF_CSRF_ENABLED"] = True
+
+
+def csrf_headers(client, app):
+    """Seed the client session with a CSRF secret and return matching request headers."""
+    with app.test_request_context():
+        token = generate_csrf()
+        session_secret = flask_session[CSRF_FIELD_NAME]
+
+    with client.session_transaction() as sess:
+        sess[CSRF_FIELD_NAME] = session_secret
+
+    return {"X-CSRFToken": token}
 
 
 def build_namespace_app(session, postgres_container, *, apply_migrations, auth_api):
@@ -259,6 +282,21 @@ class MockStorageApiBase:
         self.stored_user = make_test_stored_user()
         self.course_name = TEST_COURSE_NAME
         self.course_admin = False
+        self.student_tokens = {}
+
+    def get_or_create_student_token(self, course_name, username):
+        return self.student_tokens.setdefault((course_name, username), f"student_token_{course_name}_{username}")
+
+    def rotate_student_token(self, course_name, username):
+        token = f"rotated_token_{course_name}_{username}_{len(self.student_tokens)}"
+        self.student_tokens[(course_name, username)] = token
+        return token
+
+    def get_student_by_token(self, course_name, token):
+        for (stored_course, username), stored_token in self.student_tokens.items():
+            if stored_course == course_name and stored_token == token:
+                return replace(self.stored_user, username=username)
+        return None
 
     @staticmethod
     def get_namespace_admin_namespaces(_username):

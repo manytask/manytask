@@ -35,8 +35,31 @@ class TestPingSuccess:
         sent_auth = route.calls.last.request.headers.get("authorization")
         assert sent_auth == "Bearer tok-good"
 
+    @respx.mock
+    async def test_ping_200_accepts_explicit_course_scope(self, client: ManytaskClient) -> None:
+        respx.get("http://manytask.test/api/python-101/ping").mock(
+            return_value=httpx.Response(
+                200,
+                json={"course": "python-101", "ok": True, "scope": "course", "username": None},
+            )
+        )
+
+        await client.ping("python-101", token="tok-good")
+
 
 class TestPingErrors:
+    @respx.mock
+    async def test_student_scope_raises_forbidden(self, client: ManytaskClient) -> None:
+        respx.get("http://manytask.test/api/python-101/ping").mock(
+            return_value=httpx.Response(
+                200,
+                json={"course": "python-101", "ok": True, "scope": "student", "username": "student1"},
+            )
+        )
+
+        with pytest.raises(ManytaskTokenForbidden):
+            await client.ping("python-101", token="tok-student")
+
     @respx.mock
     async def test_403_raises_forbidden(self, client: ManytaskClient) -> None:
         respx.get("http://manytask.test/api/python-101/ping").mock(return_value=httpx.Response(403))

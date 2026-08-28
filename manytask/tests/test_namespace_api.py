@@ -25,6 +25,8 @@ from tests.helpers import (
     build_mock_session,
     build_namespace_app,
     create_namespace,
+    csrf_headers,
+    enable_csrf,
     get_user,
     make_user,
     post_json,
@@ -1190,3 +1192,28 @@ def test_remove_user_from_namespace_nonexistent_namespace(client_with_db, mock_s
     data = json.loads(response.data)
     assert "error" in data
     assert data["error"] == "Access denied"
+
+
+def test_create_namespace_requires_csrf_token(app_with_db, client_with_db, mock_session_admin):
+    """A cross-site POST without a CSRF token must not create a namespace."""
+    enable_csrf(app_with_db)
+    set_session(client_with_db, mock_session_admin)
+
+    response = post_json(client_with_db, "/api/namespaces", {"name": "HSE", "slug": "hse-namespace"})
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "CSRF" in json.loads(response.data)["error"]
+
+
+def test_create_namespace_accepts_valid_csrf_token(app_with_db, client_with_db, mock_session_admin):
+    enable_csrf(app_with_db)
+    set_session(client_with_db, mock_session_admin)
+    headers = csrf_headers(client_with_db, app_with_db)
+
+    response = client_with_db.post(
+        "/api/namespaces",
+        json={"name": "HSE", "slug": "hse-namespace"},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.CREATED

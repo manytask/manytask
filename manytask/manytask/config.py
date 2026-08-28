@@ -134,6 +134,16 @@ class CourseResponse(BaseModel):
 class PingResponse(BaseModel):
     course: str
     ok: bool
+    scope: str = "course"
+    username: Optional[str] = None
+
+
+class StudentTokenResponse(BaseModel):
+    course: str
+    username: str
+    token: str
+    ci_variable: str
+    published_to_repo: bool = False
 
 
 class IsAdminResponse(BaseModel):

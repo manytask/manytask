@@ -122,27 +122,33 @@ deploy-public:
     # subcommand for this (checker only exports files). See docs/deploy_guide.md
     # §9.1 "Send Course Configuration".
     #
-    # MANYTASK_TOKEN here is the per-course token (Group/Project -> Settings ->
-    # CI/CD -> Variables). MANYTASK_URL / MANYTASK_COURSE default to the sandbox
-    # dev instance; override them for your course.
+    # MANYTASK_COURSE_TOKEN is the course-wide token. Set it on the PRIVATE project
+    # only (Project -> Settings -> CI/CD -> Variables): a group level variable is
+    # inherited by the students subgroup, which would hand every student a token that
+    # can grade the whole course. Students use their own MANYTASK_TOKEN instead, which
+    # manytask writes into each student project. MANYTASK_TOKEN is still accepted here
+    # for courses configured before per-student tokens existed.
+    # MANYTASK_URL / MANYTASK_COURSE default to the sandbox dev instance; override
+    # them for your course.
     - |
-      if [ -n "$MANYTASK_TOKEN" ]; then
+      COURSE_TOKEN="${MANYTASK_COURSE_TOKEN:-$MANYTASK_TOKEN}"
+      if [ -n "$COURSE_TOKEN" ]; then
         curl -fsSL -X POST \
           "${MANYTASK_URL:-https://app.manytask2.org}/api/${MANYTASK_COURSE:-sandbox}/update_config" \
-          -H "Authorization: Bearer $MANYTASK_TOKEN" \
+          -H "Authorization: Bearer $COURSE_TOKEN" \
           -H "Content-Type: application/x-yaml" \
           --data-binary @.manytask.yml
       else
-        echo "Skipping course-config update — MANYTASK_TOKEN not set (app.manytask2.org currently down)"
+        echo "Skipping course-config update — MANYTASK_COURSE_TOKEN not set (app.manytask2.org currently down)"
       fi
 
 # Deliver the mr-reviewer config to the review bot. The bot reads the SAME
 # .manytask.yml and picks up its `mr_review:` subsection; without that section
 # the course is not scanned, so this job self-skips when it is absent.
 #
-# The bot authenticates the push by replaying MANYTASK_TOKEN against manytask's
-# per-course /ping — it is the same course token used for update_config above,
-# so no extra secret is needed. Set BOT_URL (group/project CI/CD variable) to
+# The bot authenticates the push by replaying MANYTASK_COURSE_TOKEN against
+# manytask's per-course /ping — it is the same course token used for update_config
+# above, so no extra secret is needed. Set BOT_URL (group/project CI/CD variable) to
 # the reviewer bot's base URL, e.g. https://bot.manytask.org. When BOT_URL is
 # unset the job is a no-op, keeping the template runnable on courses without a
 # bot.
@@ -157,8 +163,9 @@ deploy-mr-review:
     - apt-get update -qq && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
   script:
     - |
-      if [ -z "$BOT_URL" ] || [ -z "$MANYTASK_TOKEN" ]; then
-        echo "Skipping mr-reviewer config push — BOT_URL or MANYTASK_TOKEN not set"
+      COURSE_TOKEN="${MANYTASK_COURSE_TOKEN:-$MANYTASK_TOKEN}"
+      if [ -z "$BOT_URL" ] || [ -z "$COURSE_TOKEN" ]; then
+        echo "Skipping mr-reviewer config push — BOT_URL or MANYTASK_COURSE_TOKEN not set"
         exit 0
       fi
       # No section -> nothing to scan. A top-level `mr_review:` key is required.
@@ -168,6 +175,6 @@ deploy-mr-review:
       fi
       curl -fsSL -X POST \
         "${BOT_URL}/courses/${MANYTASK_COURSE:-sandbox}" \
-        -H "Authorization: Bearer $MANYTASK_TOKEN" \
+        -H "Authorization: Bearer $COURSE_TOKEN" \
         -H "Content-Type: application/x-yaml" \
         --data-binary @.manytask.yml

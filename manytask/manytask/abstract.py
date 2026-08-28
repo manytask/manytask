@@ -8,6 +8,8 @@ from authlib.integrations.flask_client import OAuth
 from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig, CourseStatus
 
+REPORT_TOKEN_CI_VARIABLE = "MANYTASK_TOKEN"
+
 
 @dataclass
 class RmsUser:
@@ -134,6 +136,21 @@ class StorageApi(ABC):
 
     @abstractmethod
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
+
+    @abstractmethod
+    def get_or_create_student_token(self, course_name: str, username: str) -> str:
+        """Return the personal API token of a student on a course, creating it on first use."""
+        ...
+
+    @abstractmethod
+    def rotate_student_token(self, course_name: str, username: str) -> str:
+        """Replace the personal API token of a student on a course and return the new one."""
+        ...
+
+    @abstractmethod
+    def get_student_by_token(self, course_name: str, token: str) -> StoredUser | None:
+        """Resolve a personal student token to its owner, or None if no student on the course owns it."""
+        ...
 
     @abstractmethod
     def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]: ...
@@ -414,6 +431,21 @@ class RmsApi(ABC):
         course_students_group: str,
         course_public_repo: str,
     ) -> None: ...
+
+    def set_student_report_token(
+        self,
+        username: str,
+        course_students_group: str,
+        token: str,
+    ) -> bool:
+        """Publish the student's personal manytask token as a CI/CD variable of their repository.
+
+        Not every RMS exposes CI/CD variables, so the base implementation is a no-op and
+        callers must treat a ``False`` result as "the student has to set the variable manually".
+
+        :returns: True if the variable was written
+        """
+        return False
 
     @abstractmethod
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str: ...
