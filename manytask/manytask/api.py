@@ -339,7 +339,7 @@ def requires_course_token(f: Callable[..., Any]) -> Callable[..., Any]:
             logger.warning(
                 "Personal token of user=%s used on a course-token-only endpoint %s",
                 owner,
-                request.path,
+                sanitize_log_data(request.path),
             )
             abort(HTTPStatus.FORBIDDEN, "This endpoint requires the course token")
         return f(*args, **kwargs)
