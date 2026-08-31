@@ -180,6 +180,9 @@ def course_page(course_name: str) -> ResponseReturnValue:
 def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
+    if app.app_config.disable_signup:
+        return redirect(url_for("root.login"))
+
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
