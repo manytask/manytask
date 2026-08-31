@@ -547,6 +547,17 @@ class GitLabApi(RmsApi, AuthApi):
         except gitlab.GitlabCreateError:
             logger.warning("Access already granted or conflict on forked project user=%s", rms_user.username)
 
+        try:
+            member = course_public_project.members.create(
+                {
+                    "user_id": _validate_and_convert_user_id(rms_user.id),
+                    "access_level": gitlab.const.AccessLevel.REPORTER,
+                }
+            )
+            logger.info("Access granted for course public project user=%s", member.username)
+        except gitlab.GitlabCreateError:
+            logger.warning("Access already granted or conflict on course public project user=%s", rms_user.username)
+
     def _construct_rms_user(
         self,
         user: dict[str, Any],
