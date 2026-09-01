@@ -225,6 +225,15 @@ def test_signup_get(app):
         assert response.status_code == HTTPStatus.OK
 
 
+def test_signup_get_disabled_redirects_to_login(app):
+    CSRFProtect(app)
+    app.app_config.disable_signup = True
+    with app.test_request_context():
+        response = app.test_client().get("/signup")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == url_for("root.login")
+
+
 def test_signup_post_password_mismatch(app, mock_course):
     CSRFProtect(app)
     with app.test_client() as client:
