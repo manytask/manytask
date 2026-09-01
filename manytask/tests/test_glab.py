@@ -325,6 +325,9 @@ def test_create_project_no_existing_project_creates_fork(
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
     rms_api._get_project_by_name.assert_called_with(TEST_GROUP_PUBLIC_NAME)
     rms_api._get_group_by_name.assert_called_with(TEST_GROUP_STUDENT_NAME)
+    mock_gitlab_student_project.members.create.assert_called_once_with(
+        {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.REPORTER}
+    )
 
 
 def test_construct_rms_user(gitlab, mock_rms_user):
