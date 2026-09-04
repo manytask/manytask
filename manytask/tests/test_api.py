@@ -14,7 +14,13 @@ from werkzeug.exceptions import HTTPException
 from manytask.abstract import RmsUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
-from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.config import (
+    DEFAULT_TIMEZONE,
+    ManytaskConfig,
+    ManytaskDeadlinesType,
+    ManytaskGroupConfig,
+    ManytaskTaskConfig,
+)
 from manytask.database import DataBaseApi
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -82,6 +88,7 @@ def mock_group(mock_task):
         def __init__(self):
             self.name = TEST_TASK_GROUP_NAME
             self.tasks = [mock_task]
+            self.run_penalty = 0
 
         @staticmethod
         def get_current_percent_multiplier(now, deadlines_type):
@@ -100,12 +107,38 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             super().__init__()
             self.scores = {}
             self.non_admin_users: set[str] = set()
+            self.submissions: list[dict] = []
 
         def store_score(self, _course_name, username, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
             self.scores[f"{username}_{task_name}"] = new_score
             return new_score
+
+        def store_submission(  # noqa: PLR0913
+            self,
+            _course_name,
+            username,
+            task_name,
+            raw_score,
+            submit_time,
+            check_deadline,
+            flags,
+            commit_sha,
+            job_id,
+        ):
+            self.submissions.append(
+                {
+                    "username": username,
+                    "task_name": task_name,
+                    "raw_score": raw_score,
+                    "submit_time": submit_time,
+                    "check_deadline": check_deadline,
+                    "flags": flags,
+                    "commit_sha": commit_sha,
+                    "job_id": job_id,
+                }
+            )
 
         @staticmethod
         def get_scores(_course_name, _username):
@@ -192,6 +225,15 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             raise_for_invalid_task(task_name)
             return mock_course, mock_group, mock_task
 
+        def recalculate_grade_score(self, _course_name, username, task_name):
+            submissions = [s for s in self.submissions if s["username"] == username and s["task_name"] == task_name]
+            submission_scores = [int(s["raw_score"] * mock_task.score) for s in submissions]
+            score = max(submission_scores)
+            if mock_group.run_penalty > 0:
+                score = max(0, score - (len(submission_scores) - 1) * mock_group.run_penalty)
+            self.scores[f"{username}_{task_name}"] = score
+            return score
+
         def get_groups(self, _course_name, enabled=None, started=None, now=None):
             groups = getattr(self, "groups_override", None)
             if groups is None:
@@ -247,20 +289,30 @@ def authenticated_client(app, mock_gitlab_oauth):
 
 
 def test_parse_flags_no_flags():
-    assert _parse_flags(None) == timedelta()
-    assert _parse_flags("") == timedelta()
+    now = datetime.now(DEFAULT_TIMEZONE)
+    assert _parse_flags(None, now) == timedelta()
+    assert _parse_flags("", now) == timedelta()
 
 
 def test_parse_flags_valid():
-    future_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    submit_time = datetime.now(DEFAULT_TIMEZONE)
+    future_date = (submit_time + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
     flags = f"flag:3:{future_date}"
-    assert _parse_flags(flags) == timedelta(days=3)
+    assert _parse_flags(flags, submit_time) == timedelta(days=3)
 
 
 def test_parse_flags_past_date():
-    past_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    submit_time = datetime.now(DEFAULT_TIMEZONE)
+    past_date = (submit_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
     flags = f"flag:3:{past_date}"
-    assert _parse_flags(flags) == timedelta()
+    assert _parse_flags(flags, submit_time) == timedelta()
+
+
+def test_parse_flags_valid_relative_to_submit_time_not_now():
+    submit_time = datetime.now(DEFAULT_TIMEZONE) - timedelta(days=30)
+    flag_valid_until = (submit_time + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    flags = f"flag:3:{flag_valid_until}"
+    assert _parse_flags(flags, submit_time) == timedelta(days=3)
 
 
 def test_update_score_basic(app):
@@ -440,6 +492,67 @@ def test_report_score_success(app):
         assert data["score"] == expected_data["score"]
 
 
+def test_report_score_records_submission_with_commit_sha(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
+    with app.test_request_context():
+        data = {
+            "task": TEST_TASK_NAME,
+            "user_id": rms_user.id,
+            "score": "0.9",
+            "check_deadline": "True",
+            "commit_sha": "abc123",
+        }
+        headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
+        assert response.status_code == HTTPStatus.OK
+
+    assert len(app.storage_api.submissions) == 1
+    submission = app.storage_api.submissions[0]
+    assert submission["username"] == TEST_USERNAME
+    assert submission["task_name"] == TEST_TASK_NAME
+    assert submission["raw_score"] == pytest.approx(0.9)
+    assert submission["commit_sha"] == "abc123"
+
+
+def test_report_score_without_commit_sha(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
+    with app.test_request_context():
+        data = {
+            "task": TEST_TASK_NAME,
+            "user_id": rms_user.id,
+            "score": "0.5",
+            "check_deadline": "True",
+        }
+        headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
+        assert response.status_code == HTTPStatus.OK
+
+    assert len(app.storage_api.submissions) == 1
+    assert app.storage_api.submissions[0]["commit_sha"] is None
+
+
+def test_report_score_twice_keeps_both_submissions(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+    with app.test_request_context():
+        for score in ("0.5", "0.9"):
+            data = {
+                "task": TEST_TASK_NAME,
+                "user_id": rms_user.id,
+                "score": score,
+                "check_deadline": "True",
+            }
+            response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
+            assert response.status_code == HTTPStatus.OK
+
+    assert [s["raw_score"] for s in app.storage_api.submissions] == [pytest.approx(0.5), pytest.approx(0.9)]
+
+
 def test_report_negative_integer_score(app):
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     app.storage_api.stored_user.rms_id = rms_user.id
@@ -458,6 +571,30 @@ def test_report_negative_integer_score(app):
 
         assert response.status_code == HTTPStatus.OK
         assert json.loads(response.data)["score"] == negative_score
+
+
+def test_report_score_with_run_penalty_uses_recalculated_history(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
+    _, group, task = app.storage_api.find_task(TEST_COURSE_NAME, TEST_TASK_NAME)
+    group.run_penalty = 10
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+    with app.test_request_context():
+        for score in ("1.0", "1.0"):
+            data = {
+                "task": TEST_TASK_NAME,
+                "user_id": rms_user.id,
+                "score": score,
+                "check_deadline": "True",
+            }
+            response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
+            assert response.status_code == HTTPStatus.OK
+
+    # task.score=100, run_penalty=10, 2 submissions (1st free): 100 - 1*10 = 90
+    expected_score = task.score - group.run_penalty
+    assert json.loads(response.data)["score"] == expected_score
+    assert app.storage_api.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] == expected_score
 
 
 def test_get_score_success(app):
@@ -579,7 +716,7 @@ def test_requires_token_missing_token(app):
 
 
 def test_parse_flags_invalid_date(app):
-    result = _parse_flags("flag:2024-13-45T25:99:99")  # Invalid date format
+    result = _parse_flags("flag:2024-13-45T25:99:99", datetime.now())  # Invalid date format
     assert result == timedelta()
 
 

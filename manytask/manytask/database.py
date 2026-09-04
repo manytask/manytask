@@ -25,9 +25,10 @@ from .config import (
     ManytaskGroupConfig,
     ManytaskTaskConfig,
 )
+from .config import parse_flags as _parse_flags
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
-from .course import CourseStatus
+from .course import CourseStatus, ManytaskDeadlinesType
 from .models import (
     ROLE_NAMESPACE_ADMIN,
     ROLE_PROGRAM_MANAGER,
@@ -89,6 +90,39 @@ def calculate_effective_grade(
     return calculated_grade
 
 
+def _compute_grade_score(
+    submissions: Iterable[models.GradeSubmission],
+    task_score: int,
+    group_config: ManytaskGroupConfig,
+    deadlines_type: ManytaskDeadlinesType,
+) -> int:
+    """Compute a grade's score over its non-ignored submissions. Pure function, no DB access.
+
+    Score is the max over non-ignored submissions of int(raw_score * task_score * deadline_multiplier),
+    minus (n_submissions - 1) * group_config.run_penalty when run_penalty is set, floored at 0.
+    Returns 0 when there are no non-ignored submissions.
+    """
+    non_ignored = [submission for submission in submissions if not submission.ignored]
+    if not non_ignored:
+        return 0
+
+    submission_scores = []
+    for submission in non_ignored:
+        if submission.check_deadline:
+            multiplier = group_config.get_current_percent_multiplier(
+                now=submission.submit_time - _parse_flags(submission.flags, submission.submit_time),
+                deadlines_type=deadlines_type,
+            )
+        else:
+            multiplier = 1.0
+        submission_scores.append(int(submission.raw_score * task_score * multiplier))
+
+    score = max(submission_scores)
+    if group_config.run_penalty > 0:
+        score = max(0, score - (len(submission_scores) - 1) * group_config.run_penalty)
+    return score
+
+
 @dataclass
 class DatabaseConfig:
     """Configuration for Database connection and settings."""
@@ -97,6 +131,19 @@ class DatabaseConfig:
     instance_admin_username: str
     apply_migrations: bool = False
     session_factory: Optional[Callable[[], Session]] = None
+
+
+@dataclass
+class SubmissionIgnoreChange:
+    """One grade_submissions row affected by an ignore/unignore operation."""
+
+    course_name: str
+    username: str
+    task_name: str
+    raw_score: float
+    submit_time: datetime
+    ignored_before: bool
+    ignored_after: bool
 
 
 class DataBaseApi(StorageApi):
@@ -611,6 +658,102 @@ class DataBaseApi(StorageApi):
                 logger.error("Failed to update score for '%s' on '%s': %s", username, task_name, str(e))
                 raise
 
+    def store_submission(  # noqa: PLR0913
+        self,
+        course_name: str,
+        username: str,
+        task_name: str,
+        raw_score: float,
+        submit_time: datetime,
+        check_deadline: bool,
+        flags: str | None,
+        commit_sha: str | None,
+        job_id: int | None,
+    ) -> None:
+        """Persist a single submission report for a (student, task) pair.
+
+        :param course_name: course name
+        :param username: user name
+        :param task_name: task name
+        :param raw_score: score ratio as reported by the checker, before scaling
+        :param submit_time: submit time used for deadline multiplier calculation
+        :param check_deadline: whether the deadline multiplier applies to this submission
+        :param flags: raw flags string from the report
+        :param commit_sha: commit sha of the submitted commit, if provided
+        :param job_id: GitLab CI job id that produced this submission, if provided
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                session.commit()
+
+                try:
+                    task = self._get_task_by_name_and_course_id(session, task_name, course.id)
+                except NoResultFound:
+                    logger.warning("Task '%s' not found in course '%s'", task_name, course_name)
+                    return
+
+                grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
+
+                self._create(
+                    session,
+                    models.GradeSubmission,
+                    grade_id=grade.id,
+                    raw_score=raw_score,
+                    submit_time=submit_time,
+                    check_deadline=check_deadline,
+                    flags=flags,
+                    commit_sha=commit_sha,
+                    job_id=job_id,
+                )
+            except Exception as e:
+                session.rollback()
+                logger.error("Failed to store submission for '%s' on '%s': %s", username, task_name, str(e))
+                raise
+
+    def set_submissions_ignored_by_job_id(self, job_id: int, ignored: bool) -> list[SubmissionIgnoreChange]:
+        """Flip the `ignored` flag on every grade_submissions row reported by a given CI job.
+
+        :param job_id: GitLab CI job id the submissions were reported from
+        :param ignored: new value of the `ignored` flag
+        :return: one SubmissionIgnoreChange per affected row, in no particular order
+        """
+        with self._session_create() as session:
+            submissions = (
+                session.query(models.GradeSubmission)
+                .filter(models.GradeSubmission.job_id == job_id)
+                .options(
+                    joinedload(models.GradeSubmission.grade).joinedload(models.Grade.task),
+                    joinedload(models.GradeSubmission.grade)
+                    .joinedload(models.Grade.user_on_course)
+                    .joinedload(models.UserOnCourse.user),
+                    joinedload(models.GradeSubmission.grade)
+                    .joinedload(models.Grade.user_on_course)
+                    .joinedload(models.UserOnCourse.course),
+                )
+                .all()
+            )
+
+            changes = []
+            for submission in submissions:
+                user_on_course = submission.grade.user_on_course
+                changes.append(
+                    SubmissionIgnoreChange(
+                        course_name=user_on_course.course.name,
+                        username=user_on_course.user.username,
+                        task_name=submission.grade.task.name,
+                        raw_score=submission.raw_score,
+                        submit_time=submission.submit_time,
+                        ignored_before=submission.ignored,
+                        ignored_after=ignored,
+                    )
+                )
+                submission.ignored = ignored
+
+            session.commit()
+            return changes
+
     def get_course(
         self,
         course_name: str,
@@ -771,6 +914,7 @@ class DataBaseApi(StorageApi):
             start=group_deadlines.start,
             steps=cast(dict[float, datetime | timedelta], group_deadlines.steps),
             end=group_deadlines.end,
+            run_penalty=group.run_penalty,
             tasks=[
                 ManytaskTaskConfig(
                     task=group_task.name,
@@ -874,6 +1018,7 @@ class DataBaseApi(StorageApi):
                         start=group.deadline.start,
                         steps=cast(dict[float, datetime | timedelta], group.deadline.steps),
                         end=group.deadline.end,
+                        run_penalty=group.run_penalty,
                         tasks=tasks,
                     )
                 )
@@ -1316,7 +1461,7 @@ class DataBaseApi(StorageApi):
                 task_group = DataBaseApi._update_or_create(
                     session,
                     models.TaskGroup,
-                    defaults={"enabled": group.enabled, "position": group_pos},
+                    defaults={"enabled": group.enabled, "position": group_pos, "run_penalty": group.run_penalty},
                     name=group.name,
                     course_id=course.id,
                 )
@@ -2516,6 +2661,93 @@ class DataBaseApi(StorageApi):
 
         self._batch_update_grades(course_name, grades_to_save)
         logger.info(f"Recalculated all grades for {course_name} ({len(grades_to_save)} students)")
+
+    def recalculate_all_scores(self, course_name: str) -> None:
+        """Recalculate and save task scores from the full submission history.
+
+        Call after changing course config (deadlines, task scores) to make the
+        change apply retroactively. Grades without any recorded submissions
+        are left untouched. Ignored submissions do not count towards the
+        score; a grade whose submissions are all ignored scores 0. Writes the
+        recomputed score directly, without the max(old, new) ratchet used by
+        store_score, so reductions apply too.
+        """
+        with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+
+            grades = (
+                session.query(models.Grade)
+                .join(models.UserOnCourse, models.Grade.user_on_course_id == models.UserOnCourse.id)
+                .filter(models.UserOnCourse.course_id == course.id)
+                .options(
+                    joinedload(models.Grade.submissions),
+                    joinedload(models.Grade.task).joinedload(models.Task.group).joinedload(models.TaskGroup.deadline),
+                )
+                .all()
+            )
+
+            group_configs: dict[int, ManytaskGroupConfig] = {}
+            updated_count = 0
+
+            for grade in grades:
+                if not grade.submissions:
+                    continue
+
+                task = grade.task
+                task_group = task.group
+                deadline = task_group.deadline
+
+                group_config = group_configs.get(task_group.id)
+                if group_config is None:
+                    group_config = ManytaskGroupConfig(
+                        group=task_group.name,
+                        enabled=task_group.enabled,
+                        start=deadline.start,
+                        steps=cast(dict[float, datetime | timedelta], deadline.steps),
+                        end=deadline.end,
+                        run_penalty=task_group.run_penalty,
+                        tasks=[],
+                    )
+                    group_configs[task_group.id] = group_config
+
+                grade.score = _compute_grade_score(grade.submissions, task.score, group_config, course.deadlines_type)
+                updated_count += 1
+
+            session.commit()
+            logger.info(f"Recalculated scores for {updated_count} grades in {course_name}")
+
+    def recalculate_grade_score(self, course_name: str, username: str, task_name: str) -> int:
+        """Recompute and store one grade's score from its full submission history.
+
+        Used for the live report path when the task's group has run_penalty > 0, where
+        additional attempts must be able to lower the stored score, bypassing the
+        max(old, new) ratchet used by store_score.
+
+        :return: the recomputed and stored score
+        """
+        with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+            user_on_course = self._get_or_create_user_on_course(session, username, course)
+            session.commit()
+
+            task = self._get_task_by_name_and_course_id(session, task_name, course.id)
+            grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
+
+            task_group = task.group
+            deadline = task_group.deadline
+            group_config = ManytaskGroupConfig(
+                group=task_group.name,
+                enabled=task_group.enabled,
+                start=deadline.start,
+                steps=cast(dict[float, datetime | timedelta], deadline.steps),
+                end=deadline.end,
+                run_penalty=task_group.run_penalty,
+                tasks=[],
+            )
+
+            grade.score = _compute_grade_score(grade.submissions, task.score, group_config, course.deadlines_type)
+            session.commit()
+            return grade.score
 
     def _batch_update_grades(self, course_name: str, grades: dict[str, int]) -> None:
         """Batch update final_grade for multiple students in a single transaction.

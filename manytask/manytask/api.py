@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime
 from http import HTTPStatus
 from typing import Any, Callable, TypeVar
 
@@ -40,8 +40,9 @@ from .config import (
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
+from .config import parse_flags as _parse_flags
 from pydantic import BaseModel
-from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
+from .course import Course, CourseStatus
 from .main import CustomFlask
 from .utils.database import get_database_table_data
 from .utils.generic import (
@@ -248,26 +249,6 @@ def requires_auth_or_token(f: Callable[..., Any]) -> Callable[..., Any]:
     return decorated
 
 
-def _parse_flags(flags: str | None) -> timedelta:
-    flags = flags or ""
-
-    extra_time = timedelta()
-    left_colon = flags.find(":")
-    right_colon = flags.find(":", left_colon + 1)
-    if right_colon > -1 and left_colon > 0:
-        parsed = None
-        date_string = flags[right_colon + 1 :]
-        try:
-            parsed = datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=DEFAULT_TIMEZONE)
-        except ValueError:
-            logger.error("Could not parse date from flag %s", flags)
-        if parsed is not None and get_current_time() <= parsed:
-            days = int(flags[left_colon + 1 : right_colon])
-            extra_time = timedelta(days=days)
-            logger.debug("Parsed extra_time=%s from flags=%s", extra_time, flags)
-    return extra_time
-
-
 # ruff: noqa PLR0913
 def _update_score(
     course: Course,
@@ -288,7 +269,7 @@ def _update_score(
         return old_score
 
     if check_deadline:
-        extra_time = _parse_flags(flags)
+        extra_time = _parse_flags(flags, submit_time)
 
         multiplier = group.get_current_percent_multiplier(
             now=submit_time - extra_time,
@@ -409,7 +390,10 @@ def report_score(course_name: str) -> ResponseReturnValue:
     reported_score = _process_score(request.form, task.score)
     if reported_score is None:
         reported_score = task.score
+        raw_score = 1.0
         logger.info("Got score=None; set max score for %s of %s", task.name, task.score)
+    else:
+        raw_score = float(request.form["score"])
 
     check_deadline = True
     if "check_deadline" in request.form:
@@ -418,6 +402,14 @@ def report_score(course_name: str) -> ResponseReturnValue:
     allow_reduction = False
     if "allow_reduction" in request.form:
         allow_reduction = request.form["allow_reduction"] is True or request.form["allow_reduction"] == "True"
+
+    flags = request.form.get("flags")
+    commit_sha = request.form.get("commit_sha")
+    job_id_str = request.form.get("job_id")
+    try:
+        job_id = int(job_id_str) if job_id_str is not None else None
+    except ValueError:
+        job_id = None
 
     submit_time_str = request.form.get("submit_time")
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone(course.course_name))
@@ -432,17 +424,32 @@ def report_score(course_name: str) -> ResponseReturnValue:
         f"reported_score={reported_score}, submit_time={submit_time}, check_deadline={check_deadline}"
     )
 
-    update_function = functools.partial(
-        _update_score,
-        course,
-        group,
-        task,
-        reported_score,
-        submit_time=submit_time,
-        check_deadline=check_deadline,
-        allow_reduction=allow_reduction,
+    app.storage_api.store_submission(
+        course.course_name,
+        manytask_username,
+        task.name,
+        raw_score,
+        submit_time,
+        check_deadline,
+        flags,
+        commit_sha,
+        job_id,
     )
-    final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
+
+    if group.run_penalty > 0:
+        final_score = app.storage_api.recalculate_grade_score(course.course_name, manytask_username, task.name)
+    else:
+        update_function = functools.partial(
+            _update_score,
+            course,
+            group,
+            task,
+            reported_score,
+            submit_time=submit_time,
+            check_deadline=check_deadline,
+            allow_reduction=allow_reduction,
+        )
+        final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
 
     logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
 
@@ -616,7 +623,11 @@ def update_config(course_name: str) -> ResponseReturnValue:
         logger.exception("Error while updating config for course=%s", course_name)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
-    # Recalculate grades for all students using the new config
+    try:
+        app.storage_api.recalculate_all_scores(course_name)
+    except Exception:
+        logger.exception("Failed to recalculate scores after config update for course=%s", course_name)
+
     try:
         app.storage_api.recalculate_all_grades(course_name)
     except Exception:

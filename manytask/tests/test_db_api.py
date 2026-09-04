@@ -10,6 +10,7 @@ import yaml
 from alembic import command
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
+from pydantic import ValidationError
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
@@ -29,6 +30,7 @@ from manytask.models import (
     Course,
     Deadline,
     Grade,
+    GradeSubmission,
     Namespace,
     Task,
     TaskGroup,
@@ -37,6 +39,7 @@ from manytask.models import (
     UserOnNamespace,
     UserOnNamespaceRole,
 )
+from manytask.scripts.ignore_submission import ignore_submissions_by_job_id
 from tests.constants import (
     BONUS_GROUP,
     BONUS_SCORE,
@@ -69,6 +72,8 @@ from tests.constants import (
     TEST_USERNAME_2,
     USER_EXPECTED,
 )
+
+TEST_JOB_ID = 12345
 
 
 class TestException(Exception):
@@ -1251,6 +1256,344 @@ def test_store_score_update_error(db_api_with_two_initialized_courses, session):
     assert "Update failed" in str(exc_info.value)
 
     assert session.query(Grade).count() == 0
+
+
+def test_store_submission_creates_row(db_api_with_initialized_first_course, session):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    submit_time = datetime(2000, 2, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(
+        FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 0.8, submit_time, True, "some_flags", "sha1", TEST_JOB_ID
+    )
+
+    submissions = session.query(GradeSubmission).all()
+    assert len(submissions) == 1
+
+    submission = submissions[0]
+    assert submission.raw_score == pytest.approx(0.8)
+    assert submission.submit_time == submit_time
+    assert submission.check_deadline is True
+    assert submission.flags == "some_flags"
+    assert submission.commit_sha == "sha1"
+    assert submission.job_id == TEST_JOB_ID
+    assert submission.ignored is False
+
+    grade = session.query(Grade).one()
+    assert submission.grade_id == grade.id
+    assert grade.score == 0
+
+
+def test_store_submission_keeps_all_rows(db_api_with_initialized_first_course, session):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    submit_time = datetime(2000, 2, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 0.5, submit_time, True, None, None, None)
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 0.9, submit_time, True, None, None, None)
+
+    submissions = session.query(GradeSubmission).order_by(GradeSubmission.id).all()
+    assert [s.raw_score for s in submissions] == [pytest.approx(0.5), pytest.approx(0.9)]
+    assert len({s.grade_id for s in submissions}) == 1
+
+
+def test_group_config_run_penalty_defaults_to_zero(first_course_deadlines_config):
+    assert first_course_deadlines_config.schedule[0].run_penalty == 0
+
+
+def test_group_config_run_penalty_rejects_negative():
+    with pytest.raises(ValidationError):
+        ManytaskGroupConfig(
+            group="group_0",
+            start=datetime(2000, 1, 1, tzinfo=ZoneInfo("UTC")),
+            end=datetime(2000, 2, 1, tzinfo=ZoneInfo("UTC")),
+            run_penalty=-1,
+        )
+
+
+def test_recalculate_all_scores_applies_run_penalty(db_api_with_initialized_first_course, first_course_config, session):
+    task_0_0_full_score = 10
+    run_penalty = 3
+
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    def set_group_0_run_penalty(penalty):
+        deadlines_data = _load_yaml(DEADLINES_CONFIG_FILES[0])["deadlines"]
+        deadlines_data["schedule"][0]["run_penalty"] = penalty
+        update_course(
+            db_api,
+            FIRST_COURSE_NAME,
+            ManytaskUiConfig(task_url_template=first_course_config.task_url_template, links=first_course_config.links),
+            ManytaskDeadlinesConfig(**deadlines_data),
+        )
+
+    def task_0_0_score():
+        return session.query(Grade).join(Task).filter(Task.name == "task_0_0").one().score
+
+    submit_time = datetime(2000, 2, 15, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    set_group_0_run_penalty(run_penalty)
+
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_full_score  # first submission is free
+
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_full_score - run_penalty
+
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_full_score - 2 * run_penalty
+
+
+def test_recalculate_all_scores_clamps_run_penalty_at_zero(
+    db_api_with_initialized_first_course, first_course_config, session
+):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    deadlines_data = _load_yaml(DEADLINES_CONFIG_FILES[0])["deadlines"]
+    deadlines_data["schedule"][0]["run_penalty"] = 100
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template=first_course_config.task_url_template, links=first_course_config.links),
+        ManytaskDeadlinesConfig(**deadlines_data),
+    )
+
+    submit_time = datetime(2000, 2, 15, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    for _ in range(5):
+        db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+
+    grade = session.query(Grade).join(Task).filter(Task.name == "task_0_0").one()
+    assert grade.score == 0
+
+
+def test_recalculate_all_scores_zero_run_penalty_keeps_previous_behavior(
+    db_api_with_initialized_first_course, first_course_config, session
+):
+    task_0_0_full_score = 10
+
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    submit_time = datetime(2000, 2, 15, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 0.5, submit_time, True, None, None, None)
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 0.8, submit_time, True, None, None, None)
+
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+
+    grade = session.query(Grade).join(Task).filter(Task.name == "task_0_0").one()
+    assert grade.score == task_0_0_full_score
+
+
+def test_recalculate_grade_score_applies_run_penalty_from_history(
+    db_api_with_initialized_first_course, first_course_config, session
+):
+    task_0_0_full_score = 10
+    run_penalty = 4
+
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    deadlines_data = _load_yaml(DEADLINES_CONFIG_FILES[0])["deadlines"]
+    deadlines_data["schedule"][0]["run_penalty"] = run_penalty
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template=first_course_config.task_url_template, links=first_course_config.links),
+        ManytaskDeadlinesConfig(**deadlines_data),
+    )
+
+    submit_time = datetime(2000, 2, 15, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+    score = db_api.recalculate_grade_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0")
+    assert score == task_0_0_full_score
+
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+    score = db_api.recalculate_grade_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0")
+    assert score == task_0_0_full_score - run_penalty
+
+    grade = session.query(Grade).join(Task).filter(Task.name == "task_0_0").one()
+    assert grade.score == task_0_0_full_score - run_penalty
+
+
+def test_recalculate_all_scores_applies_deadline_changes(
+    db_api_with_initialized_first_course, first_course_config, session
+):
+    task_0_0_full_score = 10
+    task_0_0_half_score = 5
+
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    submit_time = datetime(2000, 2, 15, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+
+    def task_0_0_score():
+        return session.query(Grade).join(Task).filter(Task.name == "task_0_0").one().score
+
+    def set_group_0_step(step_date):
+        deadlines_data = _load_yaml(DEADLINES_CONFIG_FILES[0])["deadlines"]
+        deadlines_data["schedule"][0]["steps"] = {0.5: step_date}
+        update_course(
+            db_api,
+            FIRST_COURSE_NAME,
+            ManytaskUiConfig(task_url_template=first_course_config.task_url_template, links=first_course_config.links),
+            ManytaskDeadlinesConfig(**deadlines_data),
+        )
+
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_full_score
+
+    set_group_0_step(datetime(2000, 1, 15, 18, 0))
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_half_score
+
+    set_group_0_step(datetime(2000, 4, 1, 18, 0))
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_full_score
+
+
+def test_recalculate_all_scores_honors_flag_valid_at_submit_time(
+    db_api_with_initialized_first_course, first_course_config, session
+):
+    task_0_0_full_score = 10
+
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    step_date = datetime(2000, 3, 1, 18, 0)
+    deadlines_data = _load_yaml(DEADLINES_CONFIG_FILES[0])["deadlines"]
+    deadlines_data["schedule"][0]["steps"] = {0.5: step_date}
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template=first_course_config.task_url_template, links=first_course_config.links),
+        ManytaskDeadlinesConfig(**deadlines_data),
+    )
+
+    submit_time = datetime(2000, 3, 15, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    flag_valid_until = "2000-03-20T00:00:00"
+    flags = f"flag:20:{flag_valid_until}"
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, flags, None, None)
+
+    def task_0_0_score():
+        return session.query(Grade).join(Task).filter(Task.name == "task_0_0").one().score
+
+    # Without the fix, the flag's validity is checked against real wall-clock time (long after
+    # this test's year-2000 dates), so the extension is silently dropped and only half score applies.
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_full_score
+
+
+def test_recalculate_all_scores_skips_grades_without_submissions(db_api_with_initialized_first_course, session):
+    manual_score = 7
+
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(manual_score))
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+
+    grade = session.query(Grade).join(Task).filter(Task.name == "task_0_0").one()
+    assert grade.score == manual_score
+
+
+def test_recalculate_all_scores_skips_ignored_submissions(db_api_with_initialized_first_course, session):
+    task_0_0_full_score = 10
+    task_0_0_half_score = 5
+
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    submit_time = datetime(2000, 2, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 0.5, submit_time, True, None, None, None)
+
+    session.query(GradeSubmission).filter(GradeSubmission.raw_score == 1.0).update({GradeSubmission.ignored: True})
+    session.commit()
+
+    def task_0_0_score():
+        return session.query(Grade).join(Task).filter(Task.name == "task_0_0").one().score
+
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_half_score
+
+    session.query(GradeSubmission).filter(GradeSubmission.raw_score == 1.0).update({GradeSubmission.ignored: False})
+    session.commit()
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert task_0_0_score() == task_0_0_full_score
+
+
+def test_recalculate_all_scores_all_submissions_ignored_scores_zero(db_api_with_initialized_first_course, session):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    submit_time = datetime(2000, 2, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, None)
+
+    session.query(GradeSubmission).update({GradeSubmission.ignored: True})
+    session.commit()
+
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+
+    grade = session.query(Grade).join(Task).filter(Task.name == "task_0_0").one()
+    assert grade.score == 0
+
+
+def test_ignore_submissions_by_job_id_marks_rows_and_recalculates(db_api_with_initialized_first_course, session):
+    task_full_score = 10
+
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    submit_time = datetime(2000, 2, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(
+        FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, TEST_JOB_ID
+    )
+    db_api.store_submission(
+        FIRST_COURSE_NAME, TEST_USERNAME, "task_0_1", 1.0, submit_time, True, None, None, TEST_JOB_ID
+    )
+    db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_2", 1.0, submit_time, True, None, None, None)
+
+    def score(task_name):
+        return session.query(Grade).join(Task).filter(Task.name == task_name).one().score
+
+    db_api.recalculate_all_scores(FIRST_COURSE_NAME)
+    assert score("task_0_0") == task_full_score
+    assert score("task_0_1") == task_full_score
+    assert score("task_0_2") == task_full_score
+
+    changes = ignore_submissions_by_job_id(db_api, TEST_JOB_ID, True)
+
+    assert {(c.task_name, c.ignored_before, c.ignored_after) for c in changes} == {
+        ("task_0_0", False, True),
+        ("task_0_1", False, True),
+    }
+    assert all(c.course_name == FIRST_COURSE_NAME and c.username == TEST_USERNAME for c in changes)
+
+    assert score("task_0_0") == 0
+    assert score("task_0_1") == 0
+    assert score("task_0_2") == task_full_score
+
+    changes = ignore_submissions_by_job_id(db_api, TEST_JOB_ID, False)
+    assert {(c.task_name, c.ignored_before, c.ignored_after) for c in changes} == {
+        ("task_0_0", True, False),
+        ("task_0_1", True, False),
+    }
+
+    assert score("task_0_0") == task_full_score
+    assert score("task_0_1") == task_full_score
+
+
+def test_ignore_submissions_by_job_id_no_match_returns_empty(db_api_with_initialized_first_course):
+    changes = ignore_submissions_by_job_id(db_api_with_initialized_first_course, 999999, True)
+    assert changes == []
 
 
 def test_get_course_success(db_api_with_two_initialized_courses, first_course_config, second_course_config):
