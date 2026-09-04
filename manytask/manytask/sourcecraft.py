@@ -234,7 +234,11 @@ class SourceCraftApi(RmsApi):
     ) -> bool:
         """Check if a project exists in the given group.
 
-        :param project_name: repo slug suffix
+        :param project_name: repo slug suffix; MUST be the RMS-native username
+            (``RmsUser.username``) rather than the auth-provider login, because
+            :meth:`create_project` derives the slug from ``rms_user.username``
+            and on SourceCraft the two may differ (e.g. fallback slug ``ps5-1``
+            for a Yandex login ``Ps5`` when ``ps5`` is taken).
         :param project_group: repo slug prefix
         :return: True if repo exists, False otherwise
         """
