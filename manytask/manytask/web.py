@@ -598,36 +598,6 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     )
 
 
-def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course_admin: bool) -> None:
-    """Grant or revoke course admin status based on the submitted form action.
-
-    Only instance admins or course admins of this course may perform this action.
-    """
-    if app.debug:
-        current_user = "guest"
-    else:
-        current_user = session["manytask"]["username"]
-
-        if not app.storage_api.check_if_course_admin(course_name, current_user):
-            safe_course_name = sanitize_log_data(course_name)
-            logger.warning(
-                "User %s attempted to change course admin status in course %s without permission",
-                current_user,
-                safe_course_name,
-            )
-            abort(HTTPStatus.FORBIDDEN)
-
-    target_username = request.form.get("username", "")
-    app.storage_api.set_course_admin_status(course_name, target_username, grant_course_admin)
-    app.logger.warning(
-        "User %s %s course admin status for %s in course %s",
-        current_user,
-        "granted" if grant_course_admin else "revoked",
-        target_username,
-        course_name,
-    )
-
-
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
 @requires_course_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
@@ -644,11 +614,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
             return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
-
-        action = request.form.get("action", "")
-        if action in ("grant_course_admin", "revoke_course_admin"):
-            _handle_course_admin_action(app, course_name, action == "grant_course_admin")
-            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         updated_settings = CourseConfig(
             course_name=course_name,
@@ -678,7 +643,12 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         )
 
     course_users = app.storage_api.get_course_users_with_admin_status(course_name)
-    return render_template("edit_course.html", course=course, course_users=course_users, rms=app.app_config.rms)
+    return render_template(
+        "edit_course.html",
+        course=course,
+        course_users=course_users,
+        rms=app.app_config.rms,
+    )
 
 
 @instance_admin_bp.route("/", methods=["GET"])
