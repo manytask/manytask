@@ -218,11 +218,58 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             assert response.location == f"/{TEST_COURSE_NAME}/create_project"
 
 
+def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
+    """Regression for the SourceCraft ``SlugIsNotAvailable`` 500 on enrollment.
+
+    ``check_project_exists`` must be called with the RMS-native username (as stored in
+    ``session['rms']['username']``), not the auth-provider login (``session['auth']['username']``).
+    Otherwise, for users whose SC username differs from their Yandex login (e.g. Yandex ``Ps5``
+    -> SC ``ps5-1``), the existence check produces a false negative and the flow redirects to
+    ``create_project``, which 500s trying to re-create the already-existing repo.
+    """
+    CSRFProtect(app)
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(app.rms_api, "check_project_exists", return_value=False) as mock_check,
+        ):
+            # Simulate divergent identities: auth session has Yandex login, RMS session has SC username.
+            session_data = build_test_session()
+            session_data["rms"]["username"] = "ps5-1"
+            session_data["auth"]["username"] = "Ps5"
+            session_data["manytask"] = {
+                "version": 1.0,
+                "user_id": TEST_USER_ID,
+                "username": "Ps5",  # stored username is auth login
+            }
+            with client.session_transaction() as sess:
+                sess.update(session_data)
+            app.oauth = mock_gitlab_oauth
+
+            client.get(f"/{TEST_COURSE_NAME}/")
+
+            mock_check.assert_called_once()
+            call_kwargs = mock_check.call_args.kwargs
+            assert call_kwargs["project_name"] == "ps5-1", (
+                "Existence check must use the RMS-native username so the slug matches what "
+                "create_project builds; got the auth login instead, which is the reported bug."
+            )
+
+
 def test_signup_get(app):
     CSRFProtect(app)
     with app.test_request_context():
         response = app.test_client().get("/signup")
         assert response.status_code == HTTPStatus.OK
+
+
+def test_signup_get_disabled_redirects_to_login(app):
+    CSRFProtect(app)
+    app.app_config.disable_signup = True
+    with app.test_request_context():
+        response = app.test_client().get("/signup")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == url_for("root.login")
 
 
 def test_signup_post_password_mismatch(app, mock_course):
@@ -558,6 +605,34 @@ def test_signup_finish_with_existing_user_in_db(app, mock_gitlab_oauth):
             with client.session_transaction() as sess:
                 assert "version" in sess["rms"]
                 assert sess["rms"]["username"] == TEST_USERNAME
+
+
+def test_signup_finish_existing_user_uses_rms_username_not_auth_login(app, mock_gitlab_oauth):
+    """Regression: on stale-session restoration, ``session['rms']['username']`` must be the
+    RMS-native username (fetched from the RMS API by ``rms_id``), not the auth-provider login.
+
+    On SourceCraft the two can differ (e.g. Yandex login ``Ps5`` vs SC username ``ps5-1`` when
+    the natural slug is taken). Aliasing the auth login here poisons downstream slug lookups
+    such as ``check_project_exists`` and eventually surfaces as a 500 ``SlugIsNotAvailable``
+    from ``create_project``.
+    """
+    from manytask.abstract import RmsUser as _RmsUser
+    from tests.constants import TEST_RMS_ID as _TEST_RMS_ID
+
+    # Simulate SourceCraft assigning a fallback slug: auth login differs from RMS username.
+    app.rms_api.users[_TEST_RMS_ID] = _RmsUser(id=_TEST_RMS_ID, username="ps5-1", name="Test User")
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            set_session(client, build_test_session(include_rms=False))
+            app.oauth = mock_gitlab_oauth
+            response = client.post(url_for("root.signup_finish"))
+            assert response.status_code == HTTPStatus.FOUND
+
+            with client.session_transaction() as sess:
+                # RMS-native username was fetched from the API, not aliased from auth session.
+                assert sess["rms"]["username"] == "ps5-1"
+                assert sess["auth"]["username"] == TEST_USERNAME  # sanity: auth login unchanged
 
 
 def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):

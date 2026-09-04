@@ -43,7 +43,7 @@ The only currently supported value is `1`. The checker will raise a validation e
 
 ## `default_parameters`
 
-A flat key/value map of parameters available in all pipeline stage templates as `${{ parameters.<key> }}`.  
+A flat key/value map of parameters available in all pipeline stage templates as `${{ parameters.<key> }}`.
 Values can be `bool`, `int`, `float`, `str`, a list of scalars, or `null`. Example:
 
 ```yaml
@@ -55,6 +55,13 @@ default_parameters:
 ```
 
 These defaults can be overridden per-task or per-group in `.task.yml` / `.group.yml` files, more parameters can be added for task group or individual tasks (see [sub-configs](#taskymltaskgroupyml-sub-configs)).
+
+Parameter names are entirely up to you — the checker never interprets them, it only substitutes
+them into stage `args` and `run_if`. The widely used `allow_change` convention is just such a
+user-defined parameter: it becomes meaningful only when a stage consumes it, e.g.
+`patterns: ${{ parameters.allow_change }}` in [`copy_files`](./checker_plugins.md#copy_files) or
+[`check_regexps`](./checker_plugins.md#check_regexps). See
+[the configuration guide](./checker_config.md#optional-an-explicit-allow-list-with-allow_change).
 
 
 ## `structure`
@@ -74,6 +81,44 @@ structure:
 | `ignore_patterns` | `list[str]` | no | Glob patterns for files/dirs to **exclude entirely** — not exported, not copied during testing. |
 | `public_patterns` | `list[str]` | no | Glob patterns for files/dirs to **include in the public export** and overwrite during testing. |
 | `private_patterns` | `list[str]` | no | Glob patterns for files/dirs to **keep private** (excluded from export, overwritten from reference during testing). |
+
+### The fourth, implicit class: student-editable files
+
+A file that matches **none** of the three lists belongs to an unnamed fourth class — "other" — and
+that class is what students are allowed to change. Solution files must land here.
+
+| Class | Exported to public repo? | At grading time taken from |
+|---|---|---|
+| ignored | no | nowhere |
+| public | yes | the **reference** (private) repo |
+| private | no | the **reference** (private) repo |
+| **other** | yes | the **student's** repo |
+
+`checker check` / `checker grade` never test the student checkout in place. They build a merged
+tree in two passes ([`Exporter.export_for_testing`](../checker/checker/exporter.py)):
+
+```text
+pass 1 — student repo:    other files only        → the solution
+pass 2 — reference repo:  public + private files  → overwrite pass 1
+```
+
+Consequences worth remembering:
+
+- Marking a file public or private is what makes it **tamper-proof** — pass 2 overwrites the
+  student's copy. A visible test that is *not* listed in `public_patterns` is an "other" file, so
+  the student's edited version is what runs. Export and tamper-protection are separate concerns:
+  ordinary files are exported without being listed, but only listed files are restored.
+- Listing a solution file in `public_patterns` means every student is graded against **your**
+  reference solution.
+- Reference solutions do not leak into the merged tree: on export they are replaced via
+  [`templates`](#templates-strategies), and during grading the solution path is an "other" file
+  taken from the student.
+
+### Directories match as a whole
+
+When a **directory** matches `public_patterns` or `private_patterns`, it is copied entirely and the
+pattern lists are not re-applied to its contents. `public_patterns: ["tools"]` therefore publishes
+`tools/test_private.py` as well. Match individual files when a folder holds a mix.
 
 > **Warning:** `**` (double-star recursive glob) is **not allowed** in any pattern. Patterns are applied at each directory level individually.
 
@@ -354,6 +399,14 @@ report_pipeline:     # optional — replaces testing.report_pipeline for this ta
 | `parameters` | object | Merged on top of `default_parameters`. Task-level values take precedence. |
 | `task_pipeline` | `list[stage]` | Replaces `testing.tasks_pipeline` for this task. Note "task", not "tasks".|
 | `report_pipeline` | `list[stage]` | Replaces `testing.report_pipeline` for this task. |
+
+> **`structure` replaces, `parameters` merge.** Each `structure` list you set in a sub-config
+> discards the root list for that folder — if you override `private_patterns`, repeat every entry
+> you still need, including `".*"`. Parameters, by contrast, are merged
+> (`default_parameters` < `.group.yml` < `.task.yml`), so a sub-config can set a single key.
+
+> Sub-configs are only loaded for **enabled** groups and tasks — those present in `.manytask.yml`
+> with `enabled: true`.
 
 If the pipeline is defined for the smaller scope, this definition overrides larger scope. The priority is then:
 

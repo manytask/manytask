@@ -180,6 +180,9 @@ def course_page(course_name: str) -> ResponseReturnValue:
 def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
+    if app.app_config.disable_signup:
+        return redirect(url_for("root.login"))
+
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
@@ -259,8 +262,21 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         auth_id=session["auth"]["user_auth_id"],
     )
     if stored_user_or_none is not None:
+        # Resolve the RMS-native username from the RMS API. It may differ from the auth-provider
+        # login (e.g. on SourceCraft, when the desired slug is taken, the platform issues a fallback
+        # like "ps5-1" for the Yandex login "Ps5"). Storing the auth login here poisons downstream
+        # slug lookups (existence checks, repo URLs) that expect the RMS-native username.
+        try:
+            rms_username = app.rms_api.get_rms_user_by_id(stored_user_or_none.rms_id).username
+        except RmsApiException as e:
+            logger.warning(
+                "Failed to resolve RMS user for rms_id=%s (%s); falling back to auth username",
+                stored_user_or_none.rms_id,
+                e,
+            )
+            rms_username = session["auth"]["username"]
         session.setdefault("rms", {}).update(
-            set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=session["auth"]["username"]))
+            set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=rms_username))
         )
         session.setdefault("manytask", {}).update(
             set_manytask_session(user_id=stored_user_or_none.user_id, username=stored_user_or_none.username)
