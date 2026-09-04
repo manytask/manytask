@@ -444,6 +444,17 @@
                 .then(data => {
                     let columns = [
                         {
+                            title: "#",
+                            field: "rownum",
+                            frozen: true,
+                            formatter: "rownum",
+                            hozAlign: "center",
+                            width: 50,
+                            minWidth: 40,
+                            headerSort: false,
+                            headerTooltip: "Row number",
+                        },
+                        {
                             title: "Username",
                             field: "username",
                             frozen: true,
