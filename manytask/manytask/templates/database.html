@@ -400,12 +400,13 @@
 
             const valueEl = document.getElementById("filter-value");
 
-            // Transliteration-aware search uses the shared normalizeForSearch()
-            // helper (static/js/search-normalize.js).
+            // Transliteration- and keyboard-layout-aware search uses the shared
+            // helpers in static/js/search-normalize.js. Variants are computed once
+            // per filter call and reused for every field.
             function customFilter(data) {
-                const searchTerm = normalizeForSearch(valueEl.value);
-                if (!searchTerm) return true;
-                if (normalizeForSearch(data.username).includes(searchTerm)) {
+                const searchVariants = searchTermVariants(valueEl.value);
+                if (searchVariants.length === 0) return true;
+                if (matchesSearchVariants(data.username, searchVariants)) {
                     return true;
                 }
                 // Normally we would search for match in first and last name independently,
@@ -415,8 +416,8 @@
                 const first_name = data.first_name ? data.first_name : "";
                 const last_name = data.last_name ? data.last_name : "";
                 const the_very_full_name = `${first_name} ${last_name} ${first_name}`;
-                
-                if (normalizeForSearch(the_very_full_name).includes(searchTerm)) {
+
+                if (matchesSearchVariants(the_very_full_name, searchVariants)) {
                     return true;
                 }
                 return false;
