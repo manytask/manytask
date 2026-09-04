@@ -36,23 +36,19 @@ const CYRILLIC_TO_LATIN = {
  * produced by the same key. Lower-case/unshifted keys only, which is all the
  * search needs since everything is lower-cased before matching.
  */
-const QWERTY_TO_YTSUKEN = {
-    'q':'й','w':'ц','e':'у','r':'к','t':'е','y':'н','u':'г','i':'ш',
-    'o':'щ','p':'з','[':'х',']':'ъ',
-    'a':'ф','s':'ы','d':'в','f':'а','g':'п','h':'р','j':'о','k':'л',
-    'l':'д',';':'ж','\'':'э',
-    'z':'я','x':'ч','c':'с','v':'м','b':'и','n':'т','m':'ь',
-    ',':'б','.':'ю','/':'.','`':'ё'
-};
+const QWERTY_TO_YTSUKEN = new Map([
+    ['q','й'],['w','ц'],['e','у'],['r','к'],['t','е'],['y','н'],['u','г'],['i','ш'],
+    ['o','щ'],['p','з'],['[','х'],[']','ъ'],
+    ['a','ф'],['s','ы'],['d','в'],['f','а'],['g','п'],['h','р'],['j','о'],['k','л'],
+    ['l','д'],[';','ж'],["'",'э'],
+    ['z','я'],['x','ч'],['c','с'],['v','м'],['b','и'],['n','т'],['m','ь'],
+    [',','б'],['.',  'ю'],['/','.'],['`','ё']
+]);
 
 /** Inverse of QWERTY_TO_YTSUKEN: ЙЦУКЕН character -> QWERTY character. */
-const YTSUKEN_TO_QWERTY = (() => {
-    const inverse = {};
-    for (const [latin, cyrillic] of Object.entries(QWERTY_TO_YTSUKEN)) {
-        inverse[cyrillic] = latin;
-    }
-    return inverse;
-})();
+const YTSUKEN_TO_QWERTY = new Map(
+    Array.from(QWERTY_TO_YTSUKEN, ([latin, cyrillic]) => [cyrillic, latin])
+);
 
 /**
  * Terms shorter than this are not expanded into wrong-layout variants: a
@@ -74,7 +70,7 @@ const MIN_LAYOUT_SWAP_LENGTH = 2;
 function remapLayout(str, keyMap) {
     let out = "";
     for (const ch of str) {
-        out += Object.prototype.hasOwnProperty.call(keyMap, ch) ? keyMap[ch] : ch;
+        out += keyMap.has(ch) ? keyMap.get(ch) : ch;
     }
     return out;
 }
