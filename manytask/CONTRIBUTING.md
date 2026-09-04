@@ -93,6 +93,6 @@ make check
 
 ## Relese checklist
 
-- Update VERSION file
-- Update CHANGELOG.md
-- Change version of the checker that is installed in `course-tamplate/testenv.docker` and `course-template/.releaser-ci.yml`.
+- [ ] Update VERSION file
+- [ ] Update CHANGELOG.md
+- [ ] Change version of the checker that is installed in `course-tamplate/testenv.docker` and `course-template/.releaser-ci.yml`.
