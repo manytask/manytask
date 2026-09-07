@@ -38,8 +38,15 @@ def lerp(p1: tuple[float, float], p2: tuple[float, float], x: float) -> float:
     return p1[1] * (1 - t) + p2[1] * t
 
 
+MAX_NAME_LENGTH = 50
+
+
 def validate_name(name: str) -> str | None:
-    return name if (re.match(r"^[a-zA-Zа-яА-Я-]{1,50}$", name) is not None) else None
+    # Letters (incl. ё/Ё), hyphen, apostrophe and single spaces inside the string
+    # (not leading/trailing, not doubled) to allow double names/surnames ("Анна Мария").
+    if re.match(r"^[a-zA-Zа-яА-ЯёЁ'-]+( [a-zA-Zа-яА-ЯёЁ'-]+)*$", name) is None:
+        return None
+    return name if len(name) <= MAX_NAME_LENGTH else None
 
 
 def sanitize_and_validate_comment(comment: str | None, max_length: int = 1000) -> tuple[str | None, str | None]:
