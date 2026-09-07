@@ -9,15 +9,19 @@ import pytest
 import yaml
 from flask import json, url_for
 from pytest import approx
+from sqlalchemy.exc import NoResultFound
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import RmsUser
-from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
+from manytask.abstract import RmsUser, StoredUser
+from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params, namespace_bp
 from manytask.api import bp as api_bp
 from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.course import CourseStatus
 from manytask.database import DataBaseApi
+from manytask.local_config import TestConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
+from manytask.utils.generic import validate_name
 from manytask.web import course_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
@@ -26,6 +30,7 @@ from tests.constants import (
     TEST_COURSE_NAME,
     TEST_EMAIL,
     TEST_FIRST_NAME,
+    TEST_INSTANCE_TOKEN,
     TEST_INVALID_USER_ID,
     TEST_INVALID_USERNAME,
     TEST_LAST_NAME,
@@ -51,12 +56,14 @@ from tests.helpers import (
 
 @pytest.fixture
 def app(mock_storage_api):
-    app = make_flask_app(root_bp, course_bp, api_bp)
+    app = make_flask_app(root_bp, course_bp, api_bp, namespace_bp)
     app.storage_api = mock_storage_api
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     app.auth_api = MockAuthApi()
     app.manytask_version = "1.0.0"
     app.favicon = "test_favicon"
+    app.app_config = TestConfig()
+    app.app_config.api_token = TEST_INSTANCE_TOKEN
 
     def store_config(course_name, content):
         pass
@@ -100,6 +107,11 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             super().__init__()
             self.scores = {}
             self.non_admin_users: set[str] = set()
+            self.users_by_username: dict[str, StoredUser] = {self.stored_user.username: self.stored_user}
+            self.users_by_rms_id: dict[str, StoredUser] = {self.stored_user.rms_id: self.stored_user}
+            self._next_user_id = TEST_USER_ID + 1
+            self.course_admins: dict[tuple[str, str], bool] = {}
+            self.enrolled: set[tuple[str, str]] = set()
 
         def store_score(self, _course_name, username, task_name, update_fn):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
@@ -119,21 +131,55 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             return {"test_user": self.get_scores(course_name, "test_user")}
 
         def get_stored_user_by_auth_id(self, auth_id):
-            if auth_id == self.stored_user.auth_id:
-                return self.stored_user
+            for user in self.users_by_username.values():
+                if user.auth_id == auth_id:
+                    return user
             return None
 
         def get_stored_user_by_rms_id(self, rms_id):
-            if rms_id == self.stored_user.rms_id:
-                return self.stored_user
-            return None
+            return self.users_by_rms_id.get(rms_id)
 
         def get_stored_user_by_username(self, username):
-            if username == self.stored_user.username:
-                return self.stored_user
-            return None
+            user = self.users_by_username.get(username)
+            if user is None:
+                raise NoResultFound(f"User not found with username={username}")
+            return user
 
-        def check_if_course_admin(self, _course_name, username):
+        def update_or_create_user(  # noqa: PLR0913
+            self, username, first_name, last_name, rms_id, auth_id, update_names=False
+        ):
+            existing = self.users_by_rms_id.get(rms_id) or self.users_by_username.get(username)
+            if existing is not None:
+                if update_names:
+                    existing.first_name = first_name
+                    existing.last_name = last_name
+                existing.rms_id = rms_id
+                existing.auth_id = auth_id
+                self.users_by_username[existing.username] = existing
+                self.users_by_rms_id[existing.rms_id] = existing
+                return
+
+            new_user = StoredUser(
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
+                rms_id=rms_id,
+                auth_id=auth_id,
+                user_id=self._next_user_id,
+            )
+            self._next_user_id += 1
+            self.users_by_username[username] = new_user
+            self.users_by_rms_id[rms_id] = new_user
+
+        def sync_user_on_course(self, course_name, username, course_admin):
+            key = (course_name, username)
+            self.enrolled.add(key)
+            self.course_admins[key] = self.course_admins.get(key, False) or course_admin
+
+        def check_if_course_admin(self, course_name, username):
+            key = (course_name, username)
+            if key in self.course_admins:
+                return self.course_admins[key]
             if username in self.non_admin_users:
                 return False
             return True
@@ -1485,3 +1531,251 @@ def test_deadlines_invalid_token(app):
     response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
 
     assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+# ---- validate_name ----
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Ivanov",
+        "Anna Maria",
+        "Jean-Pierre",
+        "O'Brien",
+        "Иванов",
+        "Пётр",
+        "Гарсиа Лопес",
+        "ё" * 50,
+    ],
+)
+def test_validate_name_accepts(name):
+    assert validate_name(name) == name
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        " Ivanov",
+        "Ivanov ",
+        "Anna  Maria",
+        "Ivanov1",
+        "a" * 51,
+        "Иванов_Петров",
+    ],
+)
+def test_validate_name_rejects(name):
+    assert validate_name(name) is None
+
+
+# ---- POST /api/users and POST /api/<course_name>/enroll ----
+
+
+def _instance_token_headers():
+    return {"Authorization": f"Bearer {TEST_INSTANCE_TOKEN}"}
+
+
+def _course_token_headers():
+    return {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+
+
+def _register_rms_user(app, *, rms_id, username, name):
+    user = RmsUser(id=rms_id, username=username, name=name)
+    app.rms_api.users[rms_id] = user
+    app.rms_api.users_by_username[username] = user
+    return user
+
+
+def _create_user(app, payload, *, headers=None):
+    return app.test_client().post(
+        "/api/users", json=payload, headers=headers if headers is not None else _instance_token_headers()
+    )
+
+
+def _enroll(app, course_name, payload, *, headers=None):
+    return app.test_client().post(
+        f"/api/{course_name}/enroll",
+        json=payload,
+        headers=headers if headers is not None else _instance_token_headers(),
+    )
+
+
+def test_create_user_missing_token(app):
+    response = app.test_client().post("/api/users", json={"rms_id": "42"})
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_create_user_invalid_token(app):
+    response = _create_user(app, {"rms_id": "42"}, headers={"Authorization": "Bearer wrong_token"})
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_create_user_token_not_configured(app):
+    app.app_config.api_token = ""
+    response = _create_user(app, {"rms_id": "42"})
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_create_user_new_user_by_rms_id(app):
+    _register_rms_user(app, rms_id="42", username="new_student", name="New Student")
+
+    response = _create_user(app, {"rms_id": "42", "first_name": "New", "last_name": "Student"})
+
+    assert response.status_code == HTTPStatus.CREATED
+    body = json.loads(response.data)
+    assert body == {"user_id": body["user_id"], "username": "new_student", "rms_id": "42", "created": True}
+
+    stored = app.storage_api.get_stored_user_by_rms_id("42")
+    assert stored.first_name == "New"
+    assert stored.last_name == "Student"
+
+
+def test_create_user_new_user_by_username(app):
+    _register_rms_user(app, rms_id="43", username="other_student", name="Other Student")
+
+    response = _create_user(app, {"username": "other_student", "first_name": "Other", "last_name": "Student"})
+
+    assert response.status_code == HTTPStatus.CREATED
+    body = json.loads(response.data)
+    assert body["username"] == "other_student"
+    assert body["rms_id"] == "43"
+    assert body["created"] is True
+
+
+def test_create_user_updates_existing_names(app):
+    _register_rms_user(app, rms_id=TEST_RMS_ID, username=TEST_USERNAME, name="Doesn't Matter")
+
+    response = _create_user(app, {"rms_id": TEST_RMS_ID, "first_name": "Updated", "last_name": "Name"})
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["created"] is False
+    assert body["username"] == TEST_USERNAME
+
+    stored = app.storage_api.get_stored_user_by_rms_id(TEST_RMS_ID)
+    assert stored.first_name == "Updated"
+    assert stored.last_name == "Name"
+
+
+def test_create_user_both_rms_id_and_username_rejected(app):
+    response = _create_user(app, {"rms_id": "42", "username": "new_student"})
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_create_user_neither_rms_id_nor_username_rejected(app):
+    response = _create_user(app, {"first_name": "New", "last_name": "Student"})
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_create_user_unknown_rms_user(app):
+    response = _create_user(app, {"rms_id": "9999"})
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_create_user_names_derived_from_rms_name(app):
+    _register_rms_user(app, rms_id="44", username="anna", name="Anna Maria")
+
+    response = _create_user(app, {"rms_id": "44"})
+
+    assert response.status_code == HTTPStatus.CREATED
+    stored = app.storage_api.get_stored_user_by_rms_id("44")
+    assert stored.first_name == "Anna"
+    assert stored.last_name == "Maria"
+
+
+def test_create_user_single_word_rms_name_requires_explicit_names(app):
+    _register_rms_user(app, rms_id="45", username="ivan", name="Ivan")
+
+    response = _create_user(app, {"rms_id": "45"})
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_enroll_no_users_row(app):
+    response = _enroll(app, TEST_COURSE_NAME, {"username": "unregistered_user"})
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert b"POST /api/users" in response.data
+
+
+def test_enroll_success(app):
+    _register_rms_user(app, rms_id="46", username="enroll_student", name="Enroll Student")
+    create_response = _create_user(app, {"rms_id": "46", "first_name": "Enroll", "last_name": "Student"})
+    assert create_response.status_code == HTTPStatus.CREATED
+
+    response = _enroll(app, TEST_COURSE_NAME, {"username": "enroll_student"})
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body == {
+        "username": "enroll_student",
+        "course": TEST_COURSE_NAME,
+        "is_course_admin": False,
+        "project": "students_2025_spring/enroll_student",
+    }
+    assert app.rms_api.check_project_exists("enroll_student", "students_2025_spring")
+
+
+def test_enroll_idempotent(app):
+    _register_rms_user(app, rms_id="47", username="idempotent_student", name="Idempotent Student")
+    _create_user(app, {"rms_id": "47", "first_name": "Idempotent", "last_name": "Student"})
+
+    first = _enroll(app, TEST_COURSE_NAME, {"username": "idempotent_student"})
+    second = _enroll(app, TEST_COURSE_NAME, {"username": "idempotent_student"})
+
+    assert first.status_code == HTTPStatus.OK
+    assert second.status_code == HTTPStatus.OK
+
+
+def test_enroll_course_admin(app):
+    _register_rms_user(app, rms_id="48", username="admin_student", name="Admin Student")
+    _create_user(app, {"rms_id": "48", "first_name": "Admin", "last_name": "Student"})
+
+    response = _enroll(app, TEST_COURSE_NAME, {"username": "admin_student", "course_admin": True})
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["is_course_admin"] is True
+
+
+def test_enroll_via_course_token(app):
+    _register_rms_user(app, rms_id="49", username="course_token_student", name="Course Token Student")
+    _create_user(app, {"rms_id": "49", "first_name": "Course", "last_name": "Token"})
+
+    response = _enroll(app, TEST_COURSE_NAME, {"username": "course_token_student"}, headers=_course_token_headers())
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_enroll_wrong_token(app):
+    response = _enroll(app, TEST_COURSE_NAME, {"username": TEST_USERNAME}, headers={"Authorization": "Bearer wrong"})
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_enroll_unknown_course(app):
+    with patch.object(app.storage_api, "get_course", return_value=None):
+        response = _enroll(app, "no-such-course", {"username": TEST_USERNAME})
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_enroll_works_for_created_course(app, mock_course):
+    mock_course.status = CourseStatus.CREATED
+    _register_rms_user(app, rms_id="50", username="created_course_student", name="Created Course Student")
+    _create_user(app, {"rms_id": "50", "first_name": "Created", "last_name": "Course"})
+
+    response = _enroll(app, TEST_COURSE_NAME, {"username": "created_course_student"})
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_enroll_rms_error_returns_bad_gateway(app):
+    _register_rms_user(app, rms_id="51", username="failing_student", name="Failing Student")
+    _create_user(app, {"rms_id": "51", "first_name": "Failing", "last_name": "Student"})
+
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError("gitlab is down")
+
+    with patch.object(app.rms_api, "create_project", side_effect=_raise):
+        response = _enroll(app, TEST_COURSE_NAME, {"username": "failing_student"})
+
+    assert response.status_code == HTTPStatus.BAD_GATEWAY

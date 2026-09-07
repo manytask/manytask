@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any, Callable, TypeVar
 
+import gitlab
 import yaml
 from flask import Blueprint, abort, current_app, jsonify, request, session
 from flask.typing import ResponseReturnValue
@@ -24,8 +25,10 @@ from .config import (
     CourseResponse,
     CreateCourseRequest,
     CreateNamespaceRequest,
+    CreateUserRequest,
     DeadlineItem,
     DeadlinesResponse,
+    EnrollUserRequest,
     ErrorResponse,
     IsAdminResponse,
     ManytaskGroupConfig,
@@ -39,16 +42,19 @@ from .config import (
     PingResponse,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
+    UserResponse,
 )
 from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
 from .utils.database import get_database_table_data
+from .utils.enrollment import enroll_user_on_course
 from .utils.generic import (
     calculate_percent,
     check_course_creation_namespace_permission,
     sanitize_and_validate_comment,
     sanitize_log_data,
+    validate_name,
 )
 
 
@@ -228,6 +234,69 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
 
         logger.debug("Token validated for course=%s", course_name)
         return f(*args, **kwargs)
+
+    return decorated
+
+
+def requires_instance_token(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator to check the instance-scoped API token (MANYTASK_API_TOKEN / app.app_config.api_token)."""
+
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        app: CustomFlask = current_app  # type: ignore
+
+        instance_token = app.app_config.api_token
+
+        auth_header = request.headers.get("Authorization")
+        if auth_header is None:
+            logger.warning("Missing Authorization header for instance-token-protected endpoint")
+            abort(HTTPStatus.FORBIDDEN, "Missing authorization: provide instance token via 'Authorization' header")
+
+        # Support "Authorization: Bearer <token>" by taking the trailing component.
+        token_parts = auth_header.split()
+        submitted_token = token_parts[-1] if token_parts else ""
+
+        if not submitted_token:
+            logger.warning("Empty authorization token")
+            abort(HTTPStatus.FORBIDDEN, "Empty authorization token")
+
+        if not instance_token:
+            logger.error("Instance API token (MANYTASK_API_TOKEN) is not configured")
+            abort(HTTPStatus.FORBIDDEN, "Instance API token is not configured")
+
+        if not secrets.compare_digest(submitted_token, instance_token):
+            logger.warning("Invalid instance token")
+            abort(HTTPStatus.FORBIDDEN, "Invalid instance token")
+
+        logger.debug("Instance token validated")
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def requires_instance_or_course_token(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator for course-scoped routes accepting either the instance token or the course token.
+
+    The instance token is checked first; if it is not configured, missing, or doesn't match, this
+    falls through to the regular course-token check (`requires_token`), so a wrong token still
+    yields 403 and an unknown course still yields 404.
+    """
+
+    @functools.wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        app: CustomFlask = current_app  # type: ignore
+
+        instance_token = app.app_config.api_token
+        auth_header = request.headers.get("Authorization")
+
+        if instance_token and auth_header:
+            token_parts = auth_header.split()
+            submitted_token = token_parts[-1] if token_parts else ""
+            if submitted_token and secrets.compare_digest(submitted_token, instance_token):
+                logger.debug("Instance token validated for course=%s", kwargs.get("course_name"))
+                return f(*args, **kwargs)
+
+        return requires_token(f)(*args, **kwargs)
 
     return decorated
 
@@ -1693,3 +1762,188 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
         return jsonify(
             {"success": False, "message": "Internal error when clearing grade override"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@namespace_bp.post("/users")
+@requires_instance_token
+@requires_json_validation(CreateUserRequest)
+def create_user_api(validated_data: CreateUserRequest) -> ResponseReturnValue:
+    """Create or update a manytask user from an RMS user, without an OAuth login.
+
+    Used by external registration flows (e.g. a Telegram bot) to pre-create manytask users right
+    after the RMS account is created, so that `/signup_finish` skips the name form on first login.
+
+    Request JSON:
+    {
+        "rms_id": "1234",         // exactly one of rms_id/username is required
+        "username": "hse_ivanov",
+        "first_name": "Иван",     // optional, derived from the RMS user's name if omitted
+        "last_name": "Иванов",    // optional
+        "auth_id": 1234           // optional, defaults to int(rms_id) when rms == "gitlab"
+    }
+
+    Returns:
+        201: user created, body {user_id, username, rms_id, created: true}
+        200: user already existed (names updated), body {..., created: false}
+        400: invalid request (both/neither of rms_id+username, names that can't be derived/validated,
+             auth_id required for non-gitlab RMS)
+        403: missing/invalid instance token
+        404: no such RMS user
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+    rms_api = app.rms_api
+
+    try:
+        if validated_data.rms_id is not None:
+            rms_user = rms_api.get_rms_user_by_id(validated_data.rms_id)
+        else:
+            assert validated_data.username is not None
+            rms_user = rms_api.get_rms_user_by_username(validated_data.username)
+    except (RmsApiException, gitlab.GitlabError) as e:
+        identifier = sanitize_log_data(str(validated_data.rms_id or validated_data.username))
+        logger.warning("RMS user not found for identifier=%s: %s", identifier, str(e))
+        return jsonify(
+            ErrorResponse(error=f"There is no RMS user with rms_id/username={identifier}").model_dump()
+        ), HTTPStatus.NOT_FOUND
+
+    first_name = validated_data.first_name
+    last_name = validated_data.last_name
+    if first_name is None or last_name is None:
+        name_parts = rms_user.name.split(" ", 1)
+        if len(name_parts) < 2:
+            return jsonify(
+                ErrorResponse(
+                    error=f"Cannot derive first_name/last_name from RMS user name "
+                    f"'{sanitize_log_data(rms_user.name)}'; provide first_name and last_name explicitly"
+                ).model_dump()
+            ), HTTPStatus.BAD_REQUEST
+        first_name = first_name if first_name is not None else name_parts[0]
+        last_name = last_name if last_name is not None else name_parts[1]
+
+    validated_first_name = validate_name(first_name)
+    validated_last_name = validate_name(last_name)
+    if validated_first_name is None or validated_last_name is None:
+        return jsonify(
+            ErrorResponse(
+                error="first_name and last_name must be 1-50 characters and contain only letters, "
+                "hyphens, apostrophes or single spaces."
+            ).model_dump()
+        ), HTTPStatus.BAD_REQUEST
+
+    if validated_data.auth_id is not None:
+        auth_id = validated_data.auth_id
+    elif app.app_config.rms == "gitlab":
+        auth_id = int(rms_user.id)
+    else:
+        return jsonify(
+            ErrorResponse(error="auth_id is required when the instance RMS is not gitlab").model_dump()
+        ), HTTPStatus.BAD_REQUEST
+
+    created = storage_api.get_stored_user_by_rms_id(rms_user.id) is None
+
+    storage_api.update_or_create_user(
+        username=rms_user.username,
+        first_name=validated_first_name,
+        last_name=validated_last_name,
+        rms_id=rms_user.id,
+        auth_id=auth_id,
+        update_names=True,
+    )
+
+    stored_user = storage_api.get_stored_user_by_rms_id(rms_user.id)
+    assert stored_user is not None
+
+    logger.info(
+        "User '%s' (rms_id=%s) %s via instance API",
+        stored_user.username,
+        rms_user.id,
+        "created" if created else "updated",
+    )
+
+    response = UserResponse(
+        user_id=stored_user.user_id,
+        username=stored_user.username,
+        rms_id=stored_user.rms_id,
+        created=created,
+    )
+    return jsonify(response.model_dump()), HTTPStatus.CREATED if created else HTTPStatus.OK
+
+
+@bp.post("/enroll")
+@requires_instance_or_course_token
+@requires_json_validation(EnrollUserRequest)
+def enroll_user(course_name: str, validated_data: EnrollUserRequest) -> ResponseReturnValue:
+    """Enroll an already-registered manytask user on a course.
+
+    Records them in users_on_courses and creates/forks their RMS project. Does not create the
+    manytask user itself — call `POST /api/users` first.
+
+    Deliberately not gated behind course readiness (no `@requires_ready`/status check): enrolling
+    students must work while the course is still CREATED/HIDDEN, before it is opened.
+
+    Request JSON:
+    {
+        "username": "hse_ivanov",
+        "course_admin": false
+    }
+
+    Returns:
+        200: {username, course, is_course_admin, project: "<students_group>/<username>"}
+        400: invalid request
+        403: missing/invalid token
+        404: unknown course, or user not registered in manytask (call POST /api/users first)
+        502: RMS (GitLab) error while creating the project
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+    rms_api = app.rms_api
+
+    course = __get_course_or_not_found(storage_api, course_name)
+
+    username = validated_data.username
+    course_admin = validated_data.course_admin
+
+    try:
+        stored_user = storage_api.get_stored_user_by_username(username)
+    except NoResultFound:
+        stored_user = None
+    if stored_user is None:
+        logger.warning(
+            "User '%s' not registered in manytask, cannot enroll on course=%s", sanitize_log_data(username), course_name
+        )
+        return jsonify(
+            ErrorResponse(
+                error=f"User '{sanitize_log_data(username)}' is not registered in manytask. Call POST /api/users first."
+            ).model_dump()
+        ), HTTPStatus.NOT_FOUND
+
+    try:
+        rms_user = rms_api.get_rms_user_by_id(stored_user.rms_id)
+    except (RmsApiException, gitlab.GitlabError) as e:
+        logger.error(
+            "RMS user not found for username=%s rms_id=%s: %s", sanitize_log_data(username), stored_user.rms_id, str(e)
+        )
+        return jsonify(
+            ErrorResponse(error=f"There is no RMS user with id={stored_user.rms_id}").model_dump()
+        ), HTTPStatus.NOT_FOUND
+
+    try:
+        enroll_user_on_course(storage_api, rms_api, rms_user, course, username, course_admin)
+    except (RuntimeError, gitlab.GitlabError) as e:
+        message = getattr(e, "error_message", None) or str(e)
+        logger.error("Failed to enroll user=%s on course=%s: %s", sanitize_log_data(username), course_name, message)
+        return jsonify(ErrorResponse(error=str(message)).model_dump()), HTTPStatus.BAD_GATEWAY
+
+    is_course_admin = storage_api.check_if_course_admin(course.course_name, username)
+
+    logger.info("Enrolled user=%s on course=%s (course_admin=%s)", username, course.course_name, is_course_admin)
+
+    return jsonify(
+        {
+            "username": username,
+            "course": course.course_name,
+            "is_course_admin": is_course_admin,
+            "project": f"{course.gitlab_course_students_group}/{username}",
+        }
+    ), HTTPStatus.OK

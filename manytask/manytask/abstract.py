@@ -204,7 +204,7 @@ class StorageApi(ABC):
 
     @abstractmethod
     def update_or_create_user(
-        self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int
+        self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int, update_names: bool = False
     ) -> None: ...
 
     @abstractmethod
