@@ -49,7 +49,7 @@
                     <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
                 </div>
 
-                <div class="task-deadlines">
+                <div class="task-deadlines {% if deadlines_type.value == 'interpolate' %}task-deadlines--graph{% endif %}">
                     {% if group.end < now %}
                         <div class="task-deadline task-group__expired-notice expired-tooltip"
                              data-tippy-content="{{ group.end.strftime('%Z') }}" id="expiredNotice-{{ loop.index }}">
@@ -57,41 +57,59 @@
                             <span>Expired: {{ group.end.strftime('%d.%m.%Y %H:%M') }}</span>
                         </div>
                     {% endif %}
-                    {% set last = namespace(start=group.start) %}
-                    {% for deadline, percent in group.get_displayed_deadlines(deadlines_type) %}
-                        {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
-                        {% set is_expired = deadline < now %}
-                        <div class="task-deadline {% if deadline < now %}passed-deadline{% endif %}"
-                             {% if deadline < now %}style="display: none;"{% endif %}>
-                            <div class="deadline-header">
-                                <span class="deadline-percent">{{ (percent*100)|round|int }}%</span>
-                                <span class="task-deadline__status {{ 'expired' if is_expired else ('urgent' if is_less_than_day else 'active') }}">
-                                    {{ 'Expired' if is_expired else ('Urgent' if is_less_than_day else 'Active') }}
-                                </span>
-                            </div>
-                            <div class="task-deadline__progress">
-                                <div class="task-deadline__progress-bar {{ 'expired' if is_expired else ('urgent' if is_less_than_day else '') }}"
-                                     style="width: {{ 100 if deadline < now else (0 if last.start > now else ((now.timestamp() - last.start.timestamp()) / (deadline.timestamp() - last.start.timestamp()) * 100) | abs | int) }}%">
+
+                    {% if deadlines_type.value == 'interpolate' %}
+                        {# Build graph points: start(100%) → each step → end(0%) #}
+                        {% set graph_pts = [] %}
+                        {% set end_dt = group.get_deadline(group.end) %}
+                        {% set _ = graph_pts.append({'ts': group.start.timestamp(), 'pct': 1.0, 'label': group.start.strftime('%d.%m %H:%M')}) %}
+                        {% for percent, date_or_delta in group.steps.items() %}
+                            {% set step_dt = group.get_deadline(date_or_delta) %}
+                            {% set _ = graph_pts.append({'ts': step_dt.timestamp(), 'pct': percent, 'label': step_dt.strftime('%d.%m %H:%M')}) %}
+                        {% endfor %}
+                        {% set _ = graph_pts.append({'ts': end_dt.timestamp(), 'pct': 0.0, 'label': end_dt.strftime('%d.%m %H:%M')}) %}
+                        <canvas class="deadline-graph-canvas"
+                                data-points='{{ graph_pts | tojson }}'
+                                data-now="{{ now.timestamp() }}"
+                                data-score="{{ total_group_score }}"
+                                data-expired="{{ 'true' if end_dt < now else 'false' }}"></canvas>
+                    {% else %}
+                        {% set last = namespace(start=group.start) %}
+                        {% for deadline, percent in group.get_displayed_deadlines(deadlines_type) %}
+                            {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
+                            {% set is_expired = deadline < now %}
+                            <div class="task-deadline {% if deadline < now %}passed-deadline{% endif %}"
+                                 {% if deadline < now %}style="display: none;"{% endif %}>
+                                <div class="deadline-header">
+                                    <span class="deadline-percent">{{ (percent*100)|round|int }}%</span>
+                                    <span class="task-deadline__status {{ 'expired' if is_expired else ('urgent' if is_less_than_day else 'active') }}">
+                                        {{ 'Expired' if is_expired else ('Urgent' if is_less_than_day else 'Active') }}
+                                    </span>
+                                </div>
+                                <div class="task-deadline__progress">
+                                    <div class="task-deadline__progress-bar {{ 'expired' if is_expired else ('urgent' if is_less_than_day else '') }}"
+                                         style="width: {{ 100 if deadline < now else (0 if last.start > now else ((now.timestamp() - last.start.timestamp()) / (deadline.timestamp() - last.start.timestamp()) * 100) | abs | int) }}%">
+                                    </div>
+                                </div>
+
+                                <div class="task-deadline__deadline-time card-tooltip"
+                                     data-tippy-content="{{ deadline.strftime('%Z') }}">
+                                    <span><i class="far fa-calendar"></i>
+                                    <span>{{ deadline.strftime('%d.%m.%Y') }}</span></span>
+                                    <span>
+                                    <i class="far fa-clock"></i>
+                                    <span>{{ deadline.strftime('%H:%M') }}</span>
+                                    </span>
+                                </div>
+
+                                <div class="task-deadline__deadline-hint">
+                                    {% set remained = (((deadline - now).seconds / 3600)|int|string + ' h.') if is_less_than_day else ((deadline - now).days|string + ' d.') %}
+                                    {{ '' if deadline < now else 'Deadline expires in: ' + remained }}
                                 </div>
                             </div>
-
-                            <div class="task-deadline__deadline-time card-tooltip"
-                                 data-tippy-content="{{ deadline.strftime('%Z') }}">
-                                <span><i class="far fa-calendar"></i>
-                                <span>{{ deadline.strftime('%d.%m.%Y') }}</span></span>
-                                <span>
-                                <i class="far fa-clock"></i>
-                                <span>{{ deadline.strftime('%H:%M') }}</span>
-                                </span>
-                            </div>
-
-                            <div class="task-deadline__deadline-hint">
-                                {% set remained = (((deadline - now).seconds / 3600)|int|string + ' h.') if is_less_than_day else ((deadline - now).days|string + ' d.') %}
-                                {{ '' if deadline < now else 'Deadline expires in: ' + remained }}
-                            </div>
-                        </div>
-                        {% set last.start = deadline %}
-                    {% endfor %}
+                            {% set last.start = deadline %}
+                        {% endfor %}
+                    {% endif %}
                 </div>
             </div>
             <hr class="dashed mt-1">
@@ -147,6 +165,7 @@
 
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
+    <script src="{{ url_for('static', filename='js/deadline-graph.js') }}"></script>
     <script>
         tippy('.card-tooltip', {
             arrow: false,
