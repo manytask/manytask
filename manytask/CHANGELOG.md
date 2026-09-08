@@ -1,5 +1,13 @@
 # Changelog
 
+Housekeeping with minor UI improvements
+
+## [26.0.4](https://github.com/manytask/manytask/releases/tag/26.0.5) - 2026-09-08
+
+- feat: show interpolate deadlines as a graph by @zhmurov in [#1074](https://github.com/manytask/manytask/pull/1074)
+- feat: do not show the secret info on course editing page by default by @zhmurov in [#1076](https://github.com/manytask/manytask/pull/1076)
+- docs: note that checker version should be updated on release by @zhmurov in [#1078](https://github.com/manytask/manytask/pull/1078)
+
 ## [26.0.4](https://github.com/manytask/manytask/releases/tag/26.0.4) - 2026-09-04
 
 Bug fix and updates to release procedure
