@@ -248,10 +248,18 @@ class Tester:
             print_info(str(task_pipeline_result), color="pink")
             print_separator("-")
 
-            # Report score if task pipeline succeeded
-            if task_pipeline_result:
+            if not task_pipeline_result:
+                failed_tasks.append(task.name)
+
+            if task_pipeline_result or self.testing_config.report_on_failure:
                 report_pipeline = self._get_task_report_pipeline_runner(task)
-                print_info(f"Reporting <{task.name}> task tests:", color="pink")
+                if task_pipeline_result:
+                    print_info(f"Reporting <{task.name}> task tests:", color="pink")
+                else:
+                    print_info(
+                        f"Reporting <{task.name}> task tests (task failed, report_on_failure enabled):",
+                        color="pink",
+                    )
                 if report:
                     task_report_result: PipelineResult = report_pipeline.run(context, dry_run=self.dry_run)
                     if task_report_result:
@@ -263,11 +271,9 @@ class Tester:
                     _: PipelineResult = report_pipeline.run(context, dry_run=True)
                     print_info("->Reporting disabled (dry-run)")
                 print_separator("-")
-            else:
-                failed_tasks.append(task.name)
 
         if failed_tasks:
             raise TestingError(f"Task pipelines failed: {failed_tasks}")
 
         if failed_reports:
-            raise TestingError(f"Reporting score failed for: {failed_tasks}")
+            raise TestingError(f"Reporting score failed for: {failed_reports}")

@@ -113,6 +113,8 @@ class CheckerTestingConfig(CustomBaseModel):
 
     search_plugins: list[str] = Field(default_factory=list)
 
+    report_on_failure: bool = False
+
     global_pipeline: list[PipelineStageConfig] = Field(default_factory=list)
     tasks_pipeline: list[PipelineStageConfig] = Field(default_factory=list)
     report_pipeline: list[PipelineStageConfig] = Field(default_factory=list)
