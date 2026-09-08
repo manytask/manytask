@@ -198,6 +198,7 @@ This section controlls how the checker runs tests, the general structure is:
 testing:
   changes_detection: last_commit_changes
   search_plugins: ["tools/plugins"]
+  report_on_failure: false
 
   global_pipeline:
     - ...
@@ -213,9 +214,10 @@ testing:
 |---|---|---|---|---|
 | `changes_detection` | `str` | ➖ | `last_commit_changes` | Strategy for detecting which tasks changed. The full list of options are `branch_name`, `commit_message`, `last_commit_changes`, `files_changed`. See details [below](#changes_detection). |
 | `search_plugins` | `list[str]` | ➖ | `[]` | Paths (relative to repo root) to search for custom plugin Python files. |
+| `report_on_failure` | `bool` | ➖ | `false` | If `true`, `report_pipeline` also runs for tasks whose `tasks_pipeline` failed (failed stages expose `percentage: 0.0` in `outputs`), so failed submissions are reported too. The task is still considered failed. |
 | `global_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once** per checker run, before any task pipeline. |
 | `tasks_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**. Can be overridden in `.task.yml`. |
-| `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task** only if `tasks_pipeline` succeeded. Can be overridden in `.task.yml`. |
+| `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**, only if `tasks_pipeline` succeeded (unless `report_on_failure` is set). Can be overridden in `.task.yml`. |
 
 ### `changes_detection`
 

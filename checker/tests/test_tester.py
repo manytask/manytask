@@ -1,5 +1,6 @@
 import typing
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -12,7 +13,8 @@ from checker.configs.checker import (
     PipelineStageConfig,
 )
 from checker.course import FileSystemTask
-from checker.pipeline import ParametersResolver
+from checker.exceptions import TestingError
+from checker.pipeline import ParametersResolver, PipelineResult
 from checker.tester import Tester
 
 # Test constants
@@ -68,8 +70,8 @@ class CourseMock:
 
 
 class CheckerConfigMock:
-    def __init__(self):
-        pass
+    def __init__(self, testing_config: CheckerTestingConfig | None = None):
+        self._testing_config = testing_config or CheckerTestingConfig()
 
     @property
     def structure(self):
@@ -81,7 +83,7 @@ class CheckerConfigMock:
 
     @property
     def testing(self):
-        return CheckerTestingConfig()
+        return self._testing_config
 
 
 def _get_timestamp(ts: str) -> datetime:
@@ -216,3 +218,41 @@ class TestTester:
             expected = global_pipeline
 
         assert mock_runner.call_args[0][0] == expected
+
+    @typing.no_type_check
+    @pytest.mark.parametrize(
+        "task_pipeline_failed, report_on_failure, report_runner_called",
+        [
+            (True, False, False),
+            (True, True, True),
+            (False, False, True),
+        ],
+    )
+    def test_run_reports_on_failure_flag(self, mocker, task_pipeline_failed, report_on_failure, report_runner_called):
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        testing_config = CheckerTestingConfig(report_on_failure=report_on_failure)
+        tester = Tester(CourseMock(), CheckerConfigMock(testing_config))
+        mocker.patch.object(tester, "_get_group_config", return_value=None)
+        tester.reference_dir = Path(".")
+        tester.repository_dir = Path(".")
+        tester.default_params = CheckerParametersConfig(root={})
+
+        task_pipeline_runner = mocker.Mock()
+        task_pipeline_runner.run.return_value = PipelineResult(failed=task_pipeline_failed, stage_results=[])
+        mocker.patch.object(tester, "_get_task_pipeline_runner", return_value=task_pipeline_runner)
+
+        report_pipeline_runner = mocker.Mock()
+        report_pipeline_runner.run.return_value = PipelineResult(failed=False, stage_results=[])
+        mocker.patch.object(tester, "_get_task_report_pipeline_runner", return_value=report_pipeline_runner)
+
+        task = FileSystemTask(name="task1_1", relative_path="group1/task1_1", config=CheckerSubConfig(version=1))
+
+        if task_pipeline_failed:
+            with pytest.raises(TestingError, match="task1_1"):
+                tester.run(Path(), tasks=[task])
+        else:
+            tester.run(Path(), tasks=[task])
+
+        assert report_pipeline_runner.run.called == report_runner_called
+        if report_runner_called:
+            assert report_pipeline_runner.run.call_args.kwargs["dry_run"] is False

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
@@ -7,10 +8,32 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
-from manytask.course import CourseStatus, ManytaskDeadlinesType
+from manytask.course import DEFAULT_TIMEZONE, CourseStatus, ManytaskDeadlinesType
 from manytask.utils.generic import lerp
 
+logger = logging.getLogger(__name__)
+
 MAX_COURSE_NAME_LENGTH = 100
+
+
+def parse_flags(flags: str | None, submit_time: datetime) -> timedelta:
+    flags = flags or ""
+
+    extra_time = timedelta()
+    left_colon = flags.find(":")
+    right_colon = flags.find(":", left_colon + 1)
+    if right_colon > -1 and left_colon > 0:
+        parsed = None
+        date_string = flags[right_colon + 1 :]
+        try:
+            parsed = datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=DEFAULT_TIMEZONE)
+        except ValueError:
+            logger.error("Could not parse date from flag %s", flags)
+        if parsed is not None and submit_time <= parsed:
+            days = int(flags[left_colon + 1 : right_colon])
+            extra_time = timedelta(days=days)
+            logger.debug("Parsed extra_time=%s from flags=%s", extra_time, flags)
+    return extra_time
 
 
 class RowData(BaseModel):
@@ -201,11 +224,20 @@ class ManytaskGroupConfig(BaseModel):
     steps: dict[float, Union[datetime, timedelta]] = Field(default_factory=dict)
     end: Union[datetime, timedelta]
 
+    run_penalty: int = 0
+
     tasks: list[ManytaskTaskConfig] = Field(default_factory=list)
 
     @property
     def name(self) -> str:
         return self.group
+
+    @field_validator("run_penalty")
+    @classmethod
+    def check_run_penalty(cls, data: int) -> int:
+        if data < 0:
+            raise ValueError("run_penalty should be non-negative")
+        return data
 
     def get_percents_before_deadline(self) -> list[tuple[datetime, float]]:
         return list(zip(map(self.get_deadline, [*self.steps.values(), self.end]), [1.0, *self.steps.keys()]))

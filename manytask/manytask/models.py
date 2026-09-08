@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
+from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, MetaData, String, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship, validates
 from sqlalchemy.types import TypeDecorator
@@ -324,6 +324,7 @@ class TaskGroup(Base):
     deadline_id: Mapped[Optional[int]] = mapped_column(ForeignKey(Deadline.id))
     enabled: Mapped[bool] = mapped_column(server_default="true", default=True)
     position: Mapped[int] = mapped_column(server_default="0", default=0)  # order number
+    run_penalty: Mapped[int] = mapped_column(server_default="0", default=0)
 
     # relationships
     course: Mapped["Course"] = relationship(back_populates="task_groups")
@@ -370,6 +371,25 @@ class Grade(Base):
     # relationships
     user_on_course: Mapped["UserOnCourse"] = relationship(back_populates="grades")
     task: Mapped["Task"] = relationship(back_populates="grades")
+    submissions: Mapped[List["GradeSubmission"]] = relationship(back_populates="grade", cascade="all, delete-orphan")
+
+
+class GradeSubmission(Base):
+    __tablename__ = "grade_submissions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    grade_id: Mapped[int] = mapped_column(ForeignKey(Grade.id, ondelete="CASCADE"), index=True)
+    raw_score: Mapped[float]
+    submit_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    check_deadline: Mapped[bool]
+    flags: Mapped[Optional[str]]
+    commit_sha: Mapped[Optional[str]] = mapped_column(String(64))
+    job_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True)
+    ignored: Mapped[bool] = mapped_column(default=False, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # relationships
+    grade: Mapped["Grade"] = relationship(back_populates="submissions")
 
 
 class ComplexFormula(Base):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import IO, Any, Optional
@@ -57,6 +58,14 @@ class ManytaskPlugin(PluginABC):
             "allow_reduction": args.allow_reduction,
             "submit_time": send_time_formatted,
         }
+
+        commit_sha = os.environ.get("CI_COMMIT_SHA")
+        if commit_sha:
+            data["commit_sha"] = commit_sha
+
+        job_id = os.environ.get("CI_JOB_ID")
+        if job_id:
+            data["job_id"] = job_id
 
         files = None
         if args.origin is not None:

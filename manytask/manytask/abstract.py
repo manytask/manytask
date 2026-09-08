@@ -151,6 +151,20 @@ class StorageApi(ABC):
     def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
 
     @abstractmethod
+    def store_submission(  # noqa: PLR0913
+        self,
+        course_name: str,
+        username: str,
+        task_name: str,
+        raw_score: float,
+        submit_time: datetime,
+        check_deadline: bool,
+        flags: str | None,
+        commit_sha: str | None,
+        job_id: int | None,
+    ) -> None: ...
+
+    @abstractmethod
     def create_course(
         self,
         settings_config: CourseConfig,
@@ -309,6 +323,12 @@ class StorageApi(ABC):
 
     @abstractmethod
     def recalculate_all_grades(self, course_name: str) -> None: ...
+
+    @abstractmethod
+    def recalculate_all_scores(self, course_name: str) -> None: ...
+
+    @abstractmethod
+    def recalculate_grade_score(self, course_name: str, username: str, task_name: str) -> int: ...
 
     @abstractmethod
     def calculate_and_save_grade(
