@@ -32,8 +32,27 @@ function drawDeadlineGraph(canvas) {
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'
-                || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // Detect dark mode from the page theme attribute first; fall back to the
+    // canvas's actual background luminance so OS preference never overrides the
+    // explicit Bootstrap theme setting.
+    const bsTheme = document.documentElement.getAttribute('data-bs-theme');
+    let isDark;
+    if (bsTheme === 'dark') {
+        isDark = true;
+    } else if (bsTheme === 'light') {
+        isDark = false;
+    } else {
+        // No explicit theme — read the canvas background colour to decide.
+        const bg = getComputedStyle(canvas).backgroundColor;
+        const m  = bg.match(/\d+/g);
+        if (m && m.length >= 3) {
+            // Perceived luminance (rec. 709)
+            const lum = 0.2126 * parseInt(m[0]) + 0.7152 * parseInt(m[1]) + 0.0722 * parseInt(m[2]);
+            isDark = lum < 128;
+        } else {
+            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+    }
 
     const textColor = isDark ? '#adb5bd' : '#555';
     const axisColor = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)';
@@ -188,17 +207,41 @@ function drawDeadlineGraph(canvas) {
         ctx.fill();
     });
 
-    // "Next deadline in" hint — drawn inside the bottom-right of the plot area
-    const next = points.find(function (pt) { return pt.ts > nowTs; });
-    if (next) {
-        const diffSec = next.ts - nowTs;
-        const isUrgent = diffSec < 86400;
-        const hintText = 'Next deadline in: ' + _formatRemaining(diffSec);
-        ctx.font = 'italic 10px system-ui, -apple-system, sans-serif';
+    // Current percentage + "Next deadline in" — top-right corner of the plot area
+    if (nowTs >= minTs && nowTs <= maxTs) {
+        // Compute currently achievable percentage
+        let curPctLabel = 0;
+        for (let i = 0; i < points.length - 1; i++) {
+            if (nowTs >= points[i].ts && nowTs <= points[i + 1].ts) {
+                const t = (nowTs - points[i].ts) / (points[i + 1].ts - points[i].ts);
+                curPctLabel = points[i].pct + t * (points[i + 1].pct - points[i].pct);
+                break;
+            }
+        }
+
+        const pctDisplay = Math.round(curPctLabel * 100) + '%';
+
         ctx.textAlign = 'right';
         ctx.textBaseline = 'top';
-        ctx.fillStyle = isUrgent ? nowColor : textColor;
-        ctx.fillText(hintText, mL + pW, mT + 4);
+
+        // Percent label — mirrors .deadline-percent: font-weight:700, font-size:1rem
+        // color: var(--bs-body) = #212529 light / #dee2e6 dark
+        const bodyColor = isDark ? '#dee2e6' : '#212529';
+        ctx.font = 'bold 16px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = bodyColor;
+        ctx.fillText(pctDisplay, mL + pW, mT + 4);
+
+        // "Next deadline in" hint — mirrors .task-deadline__deadline-hint:
+        // font-size:0.75rem, font-style:italic, color:var(--bs-secondary-color)
+        // urgent overrides to .task-deadline__status.urgent color: #ef6c00
+        const next = points.find(function (pt) { return pt.ts > nowTs; });
+        if (next) {
+            const diffSec = next.ts - nowTs;
+            const isUrgent = diffSec < 86400;
+            ctx.font = 'italic 12px system-ui, -apple-system, sans-serif';
+            ctx.fillStyle = isUrgent ? '#ef6c00' : textColor;  // textColor = var(--bs-secondary-color)
+            ctx.fillText('Next deadline in: ' + _formatRemaining(diffSec), mL + pW, mT + 22);
+        }
     }
 }
 
