@@ -154,51 +154,50 @@ function drawDeadlineGraph(canvas) {
         ctx.fillText(fmtPct(pct), mL - 4, cy);
     });
 
-    // X-axis date labels at each critical point.
+    // X-axis labels. Each carries a time only when the deadline is not at the
+    // end of the day (see the template), so widths are mixed and collisions are
+    // resolved from the measured extents rather than one global gap.
     // The final point is the vertical drop to 0 % and shares its timestamp with
     // the previous one, so it carries no label of its own.
     ctx.textBaseline = 'top';
     const labelled = points.filter(function (pt) { return pt.label; });
+    const PAD = 4;
 
-    // Use the full "DD.MM HH:MM" form only if every label would still fit,
-    // otherwise fall back to the compact "DD.MM".
-    const widest = Math.max.apply(null, labelled.map(function (pt) {
-        return ctx.measureText(pt.full || pt.label).width;
-    }));
-    const useFull = labelled.length > 1
-        && widest * labelled.length <= pW
-        && labelled.every(function (pt) { return pt.full; });
-    const textOf = function (pt) { return useFull ? pt.full : pt.label; };
+    // Resolve each label's drawing position and horizontal extent up front.
+    const boxes = labelled.map(function (pt, i) {
+        const x     = xOf(pt.ts);
+        const w     = ctx.measureText(pt.label).width;
+        const first = (i === 0);
+        const last  = (i === labelled.length - 1);
+        const align = first ? 'left' : (last ? 'right' : 'center');
+        const drawX = first ? mL : (last ? mL + pW : x);
+        const left  = align === 'left' ? drawX : (align === 'right' ? drawX - w : drawX - w / 2);
+        return { pt: pt, x: x, align: align, drawX: drawX, left: left, right: left + w, first: first, last: last };
+    });
 
-    const minGap = Math.max.apply(null, labelled.map(function (pt) {
-        return ctx.measureText(textOf(pt)).width;
-    })) + 6;
+    // The first and last labels anchor the axis and are always drawn; drop any
+    // intermediate label that would overlap an already-placed neighbour.
+    const placed = boxes.filter(function (b) { return b.first || b.last; });
+    boxes.forEach(function (b) {
+        if (b.first || b.last) return;
+        const clash = placed.some(function (p) {
+            return b.left - PAD < p.right && b.right + PAD > p.left;
+        });
+        if (!clash) placed.push(b);
+    });
 
-    let lastLabelX = -Infinity;
-    labelled.forEach(function (pt, i) {
-        const x       = xOf(pt.ts);
-        const isFirst = (i === 0);
-        const isLast  = (i === labelled.length - 1);
-
-        // Enforce spacing; always show first and last
-        if (!isFirst && !isLast && x - lastLabelX < minGap) return;
-        // Skip intermediate labels that would crowd the final label
-        if (!isLast && (xOf(labelled[labelled.length - 1].ts) - x) < minGap && !isFirst) return;
-
-        ctx.textAlign = isFirst ? 'left' : (isLast ? 'right' : 'center');
-        const labelX  = isFirst ? mL : (isLast ? mL + pW : x);
+    placed.forEach(function (b) {
+        ctx.textAlign = b.align;
         ctx.fillStyle = color.text;
-        ctx.fillText(textOf(pt), labelX, mT + pH + 2);
+        ctx.fillText(b.pt.label, b.drawX, mT + pH + 2);
 
         // Tick mark
         ctx.strokeStyle = color.axis;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(x, mT + pH);
-        ctx.lineTo(x, mT + pH + 3);
+        ctx.moveTo(b.x, mT + pH);
+        ctx.lineTo(b.x, mT + pH + 3);
         ctx.stroke();
-
-        lastLabelX = x;
     });
 
     // "Now" dashed marker — only while the deadline window is open
@@ -236,13 +235,94 @@ function drawDeadlineGraph(canvas) {
         ctx.fill();
     }
 
-    // Dots at key breakpoints
+    // Dots at key breakpoints. Their positions are cached on the element so the
+    // hover handler can map a cursor position back to a deadline.
     ctx.fillStyle = color.dot;
+    const hotspots = [];
     points.forEach(function (pt) {
+        const cx = xOf(pt.ts), cy = yOf(pt.pct);
         ctx.beginPath();
-        ctx.arc(xOf(pt.ts), yOf(pt.pct), 3, 0, Math.PI * 2);
+        ctx.arc(cx, cy, 3, 0, Math.PI * 2);
         ctx.fill();
+        if (pt.date) hotspots.push({ x: cx, y: cy, pt: pt });
     });
+    canvas._deadlineHotspots = hotspots;
+
+    attachDeadlineTooltip(canvas);
+}
+
+/**
+ * Shows a tippy tooltip with the full date/time when the cursor is over one of
+ * the breakpoint dots. Mirrors the calendar/clock icon markup used by
+ * .task-deadline__deadline-time on the non-interpolated planks.
+ */
+function attachDeadlineTooltip(canvas) {
+    if (typeof tippy !== 'function') return;
+
+    // Create the singleton instance once per canvas; later redraws (resize)
+    // only refresh the cached hotspot coordinates.
+    if (!canvas._deadlineTippy) {
+        canvas._deadlineTippy = tippy(canvas, {
+            trigger: 'manual',
+            arrow: false,
+            allowHTML: true,
+            placement: 'top',
+            offset: [0, 8],
+            content: ''
+        });
+
+        const HIT_RADIUS = 7;
+
+        canvas.addEventListener('mousemove', function (event) {
+            const spots = canvas._deadlineHotspots || [];
+            const rect  = canvas.getBoundingClientRect();
+            const mx    = event.clientX - rect.left;
+            const my    = event.clientY - rect.top;
+
+            let hit = null;
+            let bestDist = Infinity;
+            spots.forEach(function (s) {
+                const d = Math.hypot(s.x - mx, s.y - my);
+                if (d <= HIT_RADIUS && d < bestDist) {
+                    bestDist = d;
+                    hit = s;
+                }
+            });
+
+            const tip = canvas._deadlineTippy;
+            if (!hit) {
+                tip.hide();
+                canvas.style.cursor = '';
+                return;
+            }
+
+            canvas.style.cursor = 'pointer';
+            tip.setContent(
+                '<span class="deadline-graph-tip">' +
+                    '<span><i class="far fa-calendar"></i> ' + hit.pt.date + '</span>' +
+                    '<span><i class="far fa-clock"></i> ' + hit.pt.time +
+                        (hit.pt.tz ? ' ' + hit.pt.tz : '') + '</span>' +
+                '</span>'
+            );
+            // Anchor the tooltip to the dot rather than the cursor.
+            tip.setProps({
+                getReferenceClientRect: function () {
+                    const r = canvas.getBoundingClientRect();
+                    return {
+                        width: 0, height: 0,
+                        top: r.top + hit.y, bottom: r.top + hit.y,
+                        left: r.left + hit.x, right: r.left + hit.x
+                    };
+                }
+            });
+            tip.show();
+        });
+
+        canvas.addEventListener('mouseleave', function () {
+            canvas._deadlineTippy.hide();
+            canvas.style.cursor = '';
+        });
+    }
 }
 
 function initDeadlineGraphs() {

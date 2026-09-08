@@ -69,18 +69,29 @@
                         {% set end_dt = group.get_deadline(group.end) %}
                         {% set graph_pts = [] %}
                         {% set crit_dates = [] %}
-                        {% set _ = graph_pts.append({'ts': group.start.timestamp(), 'pct': 1.0, 'label': group.start.strftime('%d.%m'), 'full': group.start.strftime('%d.%m %H:%M')}) %}
+                        {#
+                          `label` is the axis text, `date` / `time` / `tz` feed the
+                          hover tooltip on each dot.
+
+                          The axis label carries the time only when it is not the
+                          end of the day — a 23:59 deadline means "that date", so
+                          printing the time just adds clutter. The first point (the
+                          group start) never shows a time: it is not a deadline.
+                        #}
+                        {% set _ = graph_pts.append({'ts': group.start.timestamp(), 'pct': 1.0, 'label': group.start.strftime('%d.%m'), 'date': group.start.strftime('%d.%m.%Y'), 'time': group.start.strftime('%H:%M'), 'tz': group.start.strftime('%Z')}) %}
                         {% set _ = crit_dates.append(group.start) %}
                         {% set lastpct = namespace(v=1.0) %}
                         {% for percent, date_or_delta in group.steps.items() %}
                             {% set step_dt = group.get_deadline(date_or_delta) %}
-                            {% set _ = graph_pts.append({'ts': step_dt.timestamp(), 'pct': percent, 'label': step_dt.strftime('%d.%m'), 'full': step_dt.strftime('%d.%m %H:%M')}) %}
+                            {% set step_label = step_dt.strftime('%d.%m') if step_dt.strftime('%H:%M') == '23:59' else step_dt.strftime('%d.%m %H:%M') %}
+                            {% set _ = graph_pts.append({'ts': step_dt.timestamp(), 'pct': percent, 'label': step_label, 'date': step_dt.strftime('%d.%m.%Y'), 'time': step_dt.strftime('%H:%M'), 'tz': step_dt.strftime('%Z')}) %}
                             {% set _ = crit_dates.append(step_dt) %}
                             {% set lastpct.v = percent %}
                         {% endfor %}
                         {# flat plateau up to `end`, then the vertical drop to zero #}
-                        {% set _ = graph_pts.append({'ts': end_dt.timestamp(), 'pct': lastpct.v, 'label': end_dt.strftime('%d.%m'), 'full': end_dt.strftime('%d.%m %H:%M')}) %}
-                        {% set _ = graph_pts.append({'ts': end_dt.timestamp(), 'pct': 0.0, 'label': ''}) %}
+                        {% set end_label = end_dt.strftime('%d.%m') if end_dt.strftime('%H:%M') == '23:59' else end_dt.strftime('%d.%m %H:%M') %}
+                        {% set _ = graph_pts.append({'ts': end_dt.timestamp(), 'pct': lastpct.v, 'label': end_label, 'date': end_dt.strftime('%d.%m.%Y'), 'time': end_dt.strftime('%H:%M'), 'tz': end_dt.strftime('%Z')}) %}
+                        {% set _ = graph_pts.append({'ts': end_dt.timestamp(), 'pct': 0.0, 'label': '', 'date': end_dt.strftime('%d.%m.%Y'), 'time': end_dt.strftime('%H:%M'), 'tz': end_dt.strftime('%Z')}) %}
                         {% set _ = crit_dates.append(end_dt) %}
 
                         {# Next upcoming critical date, and derived status — same semantics as the cards #}

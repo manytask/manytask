@@ -366,6 +366,23 @@
 }
 
 /*
+ * Hover tooltip on the graph's breakpoint dots. Mirrors the icon + text layout
+ * of .task-deadline__deadline-time on the non-interpolated planks.
+ */
+.deadline-graph-tip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.deadline-graph-tip i {
+    margin-right: 2px;
+    opacity: 0.75;
+}
+
+/*
  * Palette + geometry for the canvas renderer. deadline-graph.js reads these
  * custom properties, so all graph styling stays here in CSS.
  */
