@@ -44,12 +44,12 @@ RUN apk add --no-cache \
         git \
         tzdata
 
-# checker is installed from the manytask monorepo at a pinned commit, not PyPI
+# checker is installed from the manytask monorepo at a pinned version, not PyPI
 # (the latest PyPI release lacks the monorepo commands). CI overrides this via
 # --build-arg CHECKER_PIP_SPEC=$CHECKER_PIP_SPEC; keep this default in sync with
 # the CHECKER_PIP_SPEC variable in .releaser-ci.yml / .gitlab-ci.yml.
 # checker does not bundle a test runner (it is runner-agnostic), so install pytest.
-ARG CHECKER_PIP_SPEC="git+https://github.com/manytask/manytask.git@eca1874f39d0e379485cecfa4f653d87ff79d1bb#subdirectory=checker"
+ARG CHECKER_PIP_SPEC="git+https://github.com/manytask/manytask.git@26.0.4#subdirectory=checker"
 # Alpine's system Python is PEP 668 "externally managed"; this image is
 # single-purpose and disposable, so install globally with --break-system-packages
 # instead of provisioning a venv. checker pulls pydantic-core (a Rust extension):

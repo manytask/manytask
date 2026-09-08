@@ -17,7 +17,7 @@ variables:
   #
   # The jobs below run `pip install "$CHECKER_PIP_SPEC" pytest`: checker does not
   # bundle a test runner (it is runner-agnostic), so the course provides pytest.
-  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@eca1874f39d0e379485cecfa4f653d87ff79d1bb#subdirectory=checker"
+  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@26.0.4#subdirectory=checker"
 
 validate:
   image: python:3.12-slim
