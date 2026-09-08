@@ -90,6 +90,9 @@ def calculate_effective_grade(
     return calculated_grade
 
 
+_PASSING_RAW_SCORE = 1.0
+
+
 def _compute_grade_score(
     submissions: Iterable[models.GradeSubmission],
     task_score: int,
@@ -98,15 +101,18 @@ def _compute_grade_score(
 ) -> int:
     """Compute a grade's score over its non-ignored submissions. Pure function, no DB access.
 
-    Score is the max over non-ignored submissions of int(raw_score * task_score * deadline_multiplier),
-    minus (n_submissions - 1) * group_config.run_penalty when run_penalty is set, floored at 0.
-    Returns 0 when there are no non-ignored submissions.
+    Max over submissions of their deadline-adjusted score minus run_penalty for each
+    unsuccessful submission before it, floored at 0.
     """
-    non_ignored = [submission for submission in submissions if not submission.ignored]
+    non_ignored = sorted(
+        (submission for submission in submissions if not submission.ignored),
+        key=lambda submission: (submission.submit_time, submission.id),
+    )
     if not non_ignored:
         return 0
 
-    submission_scores = []
+    best = 0
+    prior_failures = 0
     for submission in non_ignored:
         if submission.check_deadline:
             multiplier = group_config.get_current_percent_multiplier(
@@ -115,12 +121,14 @@ def _compute_grade_score(
             )
         else:
             multiplier = 1.0
-        submission_scores.append(int(submission.raw_score * task_score * multiplier))
+        submission_score = int(submission.raw_score * task_score * multiplier)
+        effective_score = submission_score - prior_failures * group_config.run_penalty
+        best = max(best, effective_score)
 
-    score = max(submission_scores)
-    if group_config.run_penalty > 0:
-        score = max(0, score - (len(submission_scores) - 1) * group_config.run_penalty)
-    return score
+        if submission.raw_score < _PASSING_RAW_SCORE:
+            prior_failures += 1
+
+    return max(0, best)
 
 
 @dataclass

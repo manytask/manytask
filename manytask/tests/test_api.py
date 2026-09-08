@@ -227,10 +227,14 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
 
         def recalculate_grade_score(self, _course_name, username, task_name):
             submissions = [s for s in self.submissions if s["username"] == username and s["task_name"] == task_name]
-            submission_scores = [int(s["raw_score"] * mock_task.score) for s in submissions]
-            score = max(submission_scores)
-            if mock_group.run_penalty > 0:
-                score = max(0, score - (len(submission_scores) - 1) * mock_group.run_penalty)
+            best = 0
+            prior_failures = 0
+            for s in submissions:
+                submission_score = int(s["raw_score"] * mock_task.score)
+                best = max(best, submission_score - prior_failures * mock_group.run_penalty)
+                if s["raw_score"] < 1.0:
+                    prior_failures += 1
+            score = max(0, best)
             self.scores[f"{username}_{task_name}"] = score
             return score
 
@@ -581,7 +585,7 @@ def test_report_score_with_run_penalty_uses_recalculated_history(app):
     headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
 
     with app.test_request_context():
-        for score in ("1.0", "1.0"):
+        for score in ("0.0", "1.0"):
             data = {
                 "task": TEST_TASK_NAME,
                 "user_id": rms_user.id,
@@ -591,7 +595,6 @@ def test_report_score_with_run_penalty_uses_recalculated_history(app):
             response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
             assert response.status_code == HTTPStatus.OK
 
-    # task.score=100, run_penalty=10, 2 submissions (1st free): 100 - 1*10 = 90
     expected_score = task.score - group.run_penalty
     assert json.loads(response.data)["score"] == expected_score
     assert app.storage_api.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] == expected_score
