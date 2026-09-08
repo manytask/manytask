@@ -329,22 +329,81 @@
     font-weight: 500;
 }
 
+/* ── Interpolated deadline graph ──────────────────────────────────────────── */
+
 .task-deadlines--graph {
     flex-direction: column;
     align-items: flex-end;
-    min-width: 260px;
-    max-width: 400px;
+    min-width: 280px;
+    max-width: 420px;
     width: 100%;
 }
 
+/* The graph lives inside a regular .task-deadline plank, so it inherits the
+   plank's background, border, radius and padding for free. */
+.task-deadline--graph {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/*
+ * Palette + geometry for the canvas renderer. deadline-graph.js reads these
+ * custom properties, so all graph styling stays here in CSS.
+ */
 .deadline-graph-canvas {
     display: block;
     width: 100%;
-    border-radius: 8px;
-    border: 1px solid var(--bs-border-color-translucent);
-    background: var(--bs-body-bg);
-    padding: 4px 2px 2px 2px;
-    box-sizing: border-box;
+    margin: 4px 0 2px 0;
+
+    /* geometry (px, unitless values are fine — JS parses with parseFloat) */
+    --graph-height: 110;
+    --graph-margin-left: 46;
+    --graph-margin-right: 8;
+    --graph-margin-top: 6;
+    --graph-margin-bottom: 30;
+    --graph-font-size: 10;
+
+    /* palette — mirrors the plank tokens */
+    --graph-text: var(--bs-secondary-color);
+    --graph-axis: color-mix(in srgb, var(--bs-body-color) 18%, transparent);
+    --graph-grid: color-mix(in srgb, var(--bs-body-color) 7%, transparent);
+    --graph-now: #ef6c00;
+
+    /* default (active) curve colours — match .task-deadline__progress-bar */
+    --graph-line: #4caf50;
+    --graph-dot: #388e3c;
+    --graph-fill: color-mix(in srgb, #4caf50 14%, transparent);
+}
+
+/* Urgent — mirrors .task-deadline__progress-bar.urgent gradient endpoints */
+.task-deadline--graph.urgent .deadline-graph-canvas {
+    --graph-line: #fd3e04;
+    --graph-dot: #ff8f00;
+    --graph-fill: color-mix(in srgb, #ff8f00 14%, transparent);
+}
+
+/* Expired — mirrors .task-deadline__progress-bar.expired */
+.task-deadline--graph.expired .deadline-graph-canvas {
+    --graph-line: #9e9e9e;
+    --graph-dot: #9e9e9e;
+    --graph-fill: color-mix(in srgb, #9e9e9e 12%, transparent);
+}
+
+/* Fallback for browsers without color-mix() */
+@supports not (color: color-mix(in srgb, red 50%, transparent)) {
+    .deadline-graph-canvas {
+        --graph-axis: rgba(128, 128, 128, 0.35);
+        --graph-grid: rgba(128, 128, 128, 0.12);
+        --graph-fill: rgba(76, 175, 80, 0.14);
+    }
+
+    .task-deadline--graph.urgent .deadline-graph-canvas {
+        --graph-fill: rgba(255, 143, 0, 0.14);
+    }
+
+    .task-deadline--graph.expired .deadline-graph-canvas {
+        --graph-fill: rgba(158, 158, 158, 0.12);
+    }
 }
 
 @media (max-width: 767px) {

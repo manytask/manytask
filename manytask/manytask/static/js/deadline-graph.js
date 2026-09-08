@@ -1,29 +1,66 @@
 'use strict';
 
-function _formatRemaining(diffSec) {
-    if (diffSec < 3600) {
-        const m = Math.ceil(diffSec / 60);
-        return m + ' min.';
-    }
-    if (diffSec < 86400) {
-        const h = Math.floor(diffSec / 3600);
-        return h + ' h.';
-    }
-    const d = Math.floor(diffSec / 86400);
-    return d + ' d.';
+/**
+ * Renders the interpolated-deadline score curve onto a <canvas>.
+ *
+ * All colours come from CSS custom properties declared on the canvas element
+ * (see .deadline-graph-canvas in tasks.css), so the graph automatically follows
+ * the light/dark theme and any restyling of the deadline planks. Nothing about
+ * the palette is hard-coded here.
+ */
+
+// CSS custom property -> internal name. Values are resolved per canvas so that
+// the `.expired` / `.urgent` / `.active` modifier on the parent plank can change
+// them via normal CSS cascade.
+const GRAPH_COLOR_VARS = {
+    text: '--graph-text',
+    axis: '--graph-axis',
+    grid: '--graph-grid',
+    line: '--graph-line',
+    fill: '--graph-fill',
+    dot:  '--graph-dot',
+    now:  '--graph-now'
+};
+
+function _readGraphColors(canvas) {
+    const cs = getComputedStyle(canvas);
+    const colors = {};
+    Object.keys(GRAPH_COLOR_VARS).forEach(function (key) {
+        colors[key] = cs.getPropertyValue(GRAPH_COLOR_VARS[key]).trim();
+    });
+    return colors;
+}
+
+function _readGraphMetrics(canvas) {
+    const cs = getComputedStyle(canvas);
+    const num = function (prop, fallback) {
+        const v = parseFloat(cs.getPropertyValue(prop));
+        return isNaN(v) ? fallback : v;
+    };
+    return {
+        height:   num('--graph-height', 110),
+        marginL:  num('--graph-margin-left', 46),
+        marginR:  num('--graph-margin-right', 8),
+        marginT:  num('--graph-margin-top', 6),
+        marginB:  num('--graph-margin-bottom', 30),
+        fontSize: num('--graph-font-size', 10),
+        fontFamily: cs.fontFamily || 'system-ui, sans-serif'
+    };
 }
 
 function drawDeadlineGraph(canvas) {
     const points = JSON.parse(canvas.dataset.points);
     const nowTs = parseFloat(canvas.dataset.now);
     const totalScore = parseInt(canvas.dataset.score) || 0;
-    const isExpired = canvas.dataset.expired === 'true';
 
     if (!points || points.length < 2) return;
 
+    const color = _readGraphColors(canvas);
+    const m = _readGraphMetrics(canvas);
+
     const dpr = window.devicePixelRatio || 1;
     const cssWidth = canvas.getBoundingClientRect().width || canvas.parentElement.clientWidth || 300;
-    const cssHeight = 130;
+    const cssHeight = m.height;
 
     canvas.style.height = cssHeight + 'px';
     canvas.width = Math.round(cssWidth * dpr);
@@ -32,41 +69,10 @@ function drawDeadlineGraph(canvas) {
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    // Detect dark mode from the page theme attribute first; fall back to the
-    // canvas's actual background luminance so OS preference never overrides the
-    // explicit Bootstrap theme setting.
-    const bsTheme = document.documentElement.getAttribute('data-bs-theme');
-    let isDark;
-    if (bsTheme === 'dark') {
-        isDark = true;
-    } else if (bsTheme === 'light') {
-        isDark = false;
-    } else {
-        // No explicit theme — read the canvas background colour to decide.
-        const bg = getComputedStyle(canvas).backgroundColor;
-        const m  = bg.match(/\d+/g);
-        if (m && m.length >= 3) {
-            // Perceived luminance (rec. 709)
-            const lum = 0.2126 * parseInt(m[0]) + 0.7152 * parseInt(m[1]) + 0.0722 * parseInt(m[2]);
-            isDark = lum < 128;
-        } else {
-            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        }
-    }
-
-    const textColor = isDark ? '#adb5bd' : '#555';
-    const axisColor = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)';
-    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
-    const lineColor = isExpired ? '#9e9e9e'
-                    : (isDark   ? '#66cda3' : '#2e7d32');
-    const fillColor = isExpired ? 'rgba(158,158,158,0.12)'
-                    : (isDark   ? 'rgba(102,205,163,0.15)' : 'rgba(46,125,50,0.12)');
-    const nowColor  = '#ef6c00';
-    const dotColor  = isExpired ? '#9e9e9e' : (isDark ? '#66cda3' : '#388e3c');
-
-    const mL = 46, mR = 8, mT = 10, mB = 34;
+    const mL = m.marginL, mR = m.marginR, mT = m.marginT, mB = m.marginB;
     const pW = cssWidth - mL - mR;
     const pH = cssHeight - mT - mB;
+    const labelFont = m.fontSize + 'px ' + m.fontFamily;
 
     const minTs   = points[0].ts;
     const maxTs   = points[points.length - 1].ts;
@@ -77,8 +83,8 @@ function drawDeadlineGraph(canvas) {
 
     ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-    // Horizontal grid lines at 0%, 50%, 100%
-    ctx.strokeStyle = gridColor;
+    // Horizontal grid lines at 0 %, 50 %, 100 %
+    ctx.strokeStyle = color.grid;
     ctx.lineWidth = 1;
     [0, 0.5, 1.0].forEach(function (p) {
         const y = yOf(p);
@@ -97,7 +103,7 @@ function drawDeadlineGraph(canvas) {
     ctx.lineTo(xOf(points[points.length - 1].ts), yOf(0));
     ctx.lineTo(xOf(points[0].ts), yOf(0));
     ctx.closePath();
-    ctx.fillStyle = fillColor;
+    ctx.fillStyle = color.fill;
     ctx.fill();
 
     // Piecewise line
@@ -106,13 +112,13 @@ function drawDeadlineGraph(canvas) {
     for (let i = 1; i < points.length; i++) {
         ctx.lineTo(xOf(points[i].ts), yOf(points[i].pct));
     }
-    ctx.strokeStyle = lineColor;
+    ctx.strokeStyle = color.line;
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.stroke();
 
     // Axes
-    ctx.strokeStyle = axisColor;
+    ctx.strokeStyle = color.axis;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(mL, mT);
@@ -121,7 +127,8 @@ function drawDeadlineGraph(canvas) {
     ctx.stroke();
 
     // Y-axis labels at each unique percentage breakpoint
-    ctx.font = '10px system-ui, -apple-system, sans-serif';
+    ctx.font = labelFont;
+    ctx.fillStyle = color.text;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     const allPcts    = [1.0, ...points.slice(1, -1).map(function (p) { return p.pct; }), 0.0];
@@ -130,9 +137,8 @@ function drawDeadlineGraph(canvas) {
     uniquePcts.forEach(function (pct) {
         const y = yOf(pct);
         // Always draw endpoints; skip middle ones if too close
-        if (pct !== 1.0 && pct !== 0.0 && y - lastLabelY < 14) return;
+        if (pct !== 1.0 && pct !== 0.0 && y - lastLabelY < m.fontSize + 4) return;
         lastLabelY = y;
-        ctx.fillStyle = textColor;
         const label = totalScore > 0
             ? (Math.round(pct * totalScore) + 'pt')
             : (Math.round(pct * 100) + '%');
@@ -142,24 +148,27 @@ function drawDeadlineGraph(canvas) {
     // X-axis date labels at each critical point
     ctx.textBaseline = 'top';
     let lastLabelX = -Infinity;
-    const minGap   = 52;
-    points.forEach(function (pt, i) {
+    const minGap   = m.fontSize * 5.2;
+    // The final point is the vertical drop to 0 % and shares its timestamp with
+    // the previous one, so it carries no label of its own.
+    const labelled = points.filter(function (pt) { return pt.label; });
+    labelled.forEach(function (pt, i) {
         const x       = xOf(pt.ts);
         const isFirst = (i === 0);
-        const isLast  = (i === points.length - 1);
+        const isLast  = (i === labelled.length - 1);
 
         // Enforce spacing; always show first and last
         if (!isFirst && !isLast && x - lastLabelX < minGap) return;
         // Skip intermediate labels that would crowd the final label
-        if (!isLast && (xOf(points[points.length - 1].ts) - x) < minGap && !isFirst) return;
+        if (!isLast && (xOf(labelled[labelled.length - 1].ts) - x) < minGap && !isFirst) return;
 
         ctx.textAlign = isFirst ? 'left' : (isLast ? 'right' : 'center');
         const labelX  = isFirst ? mL : (isLast ? mL + pW : x);
-        ctx.fillStyle = textColor;
+        ctx.fillStyle = color.text;
         ctx.fillText(pt.label, labelX, mT + pH + 5);
 
         // Tick mark
-        ctx.strokeStyle = axisColor;
+        ctx.strokeStyle = color.axis;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(x, mT + pH);
@@ -169,21 +178,26 @@ function drawDeadlineGraph(canvas) {
         lastLabelX = x;
     });
 
-    // "Now" dashed marker — only shown while the deadline window is open
+    // "Now" dashed marker — only while the deadline window is open
     if (nowTs > minTs && nowTs < maxTs) {
         const nx = xOf(nowTs);
 
-        // Interpolate the currently achievable percentage
+        // Interpolate the currently achievable percentage. The last segment is
+        // the vertical cliff at `end` (zero width), so skip it to avoid /0.
+        // Uses a half-open interval [ts, nextTs) so that at the exact `end`
+        // instant the value is 0 %, matching get_current_percent_multiplier().
         let curPct = 0;
         for (let i = 0; i < points.length - 1; i++) {
-            if (nowTs >= points[i].ts && nowTs <= points[i + 1].ts) {
-                const t = (nowTs - points[i].ts) / (points[i + 1].ts - points[i].ts);
+            const span = points[i + 1].ts - points[i].ts;
+            if (span <= 0) continue;
+            if (nowTs >= points[i].ts && nowTs < points[i + 1].ts) {
+                const t = (nowTs - points[i].ts) / span;
                 curPct = points[i].pct + t * (points[i + 1].pct - points[i].pct);
                 break;
             }
         }
 
-        ctx.strokeStyle = nowColor;
+        ctx.strokeStyle = color.now;
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 3]);
         ctx.beginPath();
@@ -193,56 +207,19 @@ function drawDeadlineGraph(canvas) {
         ctx.setLineDash([]);
 
         // Dot at current achievable score on the curve
-        ctx.fillStyle = nowColor;
+        ctx.fillStyle = color.now;
         ctx.beginPath();
         ctx.arc(nx, yOf(curPct), 4, 0, Math.PI * 2);
         ctx.fill();
     }
 
     // Dots at key breakpoints
-    ctx.fillStyle = dotColor;
+    ctx.fillStyle = color.dot;
     points.forEach(function (pt) {
         ctx.beginPath();
         ctx.arc(xOf(pt.ts), yOf(pt.pct), 3, 0, Math.PI * 2);
         ctx.fill();
     });
-
-    // Current percentage + "Next deadline in" — top-right corner of the plot area
-    if (nowTs >= minTs && nowTs <= maxTs) {
-        // Compute currently achievable percentage
-        let curPctLabel = 0;
-        for (let i = 0; i < points.length - 1; i++) {
-            if (nowTs >= points[i].ts && nowTs <= points[i + 1].ts) {
-                const t = (nowTs - points[i].ts) / (points[i + 1].ts - points[i].ts);
-                curPctLabel = points[i].pct + t * (points[i + 1].pct - points[i].pct);
-                break;
-            }
-        }
-
-        const pctDisplay = Math.round(curPctLabel * 100) + '%';
-
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'top';
-
-        // Percent label — mirrors .deadline-percent: font-weight:700, font-size:1rem
-        // color: var(--bs-body) = #212529 light / #dee2e6 dark
-        const bodyColor = isDark ? '#dee2e6' : '#212529';
-        ctx.font = 'bold 16px system-ui, -apple-system, sans-serif';
-        ctx.fillStyle = bodyColor;
-        ctx.fillText(pctDisplay, mL + pW, mT + 4);
-
-        // "Next deadline in" hint — mirrors .task-deadline__deadline-hint:
-        // font-size:0.75rem, font-style:italic, color:var(--bs-secondary-color)
-        // urgent overrides to .task-deadline__status.urgent color: #ef6c00
-        const next = points.find(function (pt) { return pt.ts > nowTs; });
-        if (next) {
-            const diffSec = next.ts - nowTs;
-            const isUrgent = diffSec < 86400;
-            ctx.font = 'italic 12px system-ui, -apple-system, sans-serif';
-            ctx.fillStyle = isUrgent ? '#ef6c00' : textColor;  // textColor = var(--bs-secondary-color)
-            ctx.fillText('Next deadline in: ' + _formatRemaining(diffSec), mL + pW, mT + 22);
-        }
-    }
 }
 
 function initDeadlineGraphs() {
