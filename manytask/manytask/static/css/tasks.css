@@ -347,21 +347,50 @@
 }
 
 /*
+ * The "next deadline in" hint shares the header row with the percent and the
+ * status pill. .deadline-header is `justify-content: space-between`, so the
+ * hint is pushed to fill the gap and right-aligned against the pill; it is
+ * shorter than the pill, so the row height is unchanged.
+ */
+.task-deadline--graph .deadline-header {
+    align-items: baseline;
+    gap: 8px;
+}
+
+.task-deadline--graph .deadline-header .task-deadline__deadline-hint {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/*
  * Palette + geometry for the canvas renderer. deadline-graph.js reads these
  * custom properties, so all graph styling stays here in CSS.
  */
 .deadline-graph-canvas {
     display: block;
     width: 100%;
-    margin: 4px 0 2px 0;
+    margin: 2px 0 0 0;
 
-    /* geometry (px, unitless values are fine — JS parses with parseFloat) */
-    --graph-height: 110;
-    --graph-margin-left: 46;
-    --graph-margin-right: 8;
-    --graph-margin-top: 6;
-    --graph-margin-bottom: 30;
-    --graph-font-size: 10;
+    /*
+     * Geometry (px, unitless — JS parses with parseFloat).
+     *
+     * Tuned so .task-deadline--graph is the same height as a regular deadline
+     * plank (~101px). Because the "next deadline in" hint moved up into
+     * .deadline-header, the canvas gets that row's height too: it now spans the
+     * progress-bar, date/time AND hint rows (2 + 50 = 52px vs ~52px replaced).
+     *
+     * --graph-margin-bottom must stay >= 14 so the X-axis date labels
+     * (font-size 9px, ~11px line box + 3px gap) are not clipped.
+     */
+    --graph-height: 50;
+    --graph-margin-left: 30;
+    --graph-margin-right: 6;
+    --graph-margin-top: 4;
+    --graph-margin-bottom: 14;
+    --graph-font-size: 9;
 
     /* palette — mirrors the plank tokens */
     --graph-text: var(--bs-secondary-color);

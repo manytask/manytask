@@ -51,7 +51,6 @@ function _readGraphMetrics(canvas) {
 function drawDeadlineGraph(canvas) {
     const points = JSON.parse(canvas.dataset.points);
     const nowTs = parseFloat(canvas.dataset.now);
-    const totalScore = parseInt(canvas.dataset.score) || 0;
 
     if (!points || points.length < 2) return;
 
@@ -126,32 +125,52 @@ function drawDeadlineGraph(canvas) {
     ctx.lineTo(mL + pW, mT + pH);
     ctx.stroke();
 
-    // Y-axis labels at each unique percentage breakpoint
+    // Y-axis labels. The plank is short, so only draw the breakpoints that fit;
+    // the 100 % / 0 % endpoints always win over intermediate steps.
+    // Percentages (not absolute points) keep the labels narrow enough for the
+    // left margin — the exact score is already shown in .deadline-percent.
     ctx.font = labelFont;
     ctx.fillStyle = color.text;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    const allPcts    = [1.0, ...points.slice(1, -1).map(function (p) { return p.pct; }), 0.0];
-    const uniquePcts = [...new Set(allPcts)].sort(function (a, b) { return b - a; });
-    let lastLabelY   = -Infinity;
-    uniquePcts.forEach(function (pct) {
+    const fmtPct = function (pct) {
+        return Math.round(pct * 100) + '%';
+    };
+    const minYGap = m.fontSize + 3;
+    const drawnY  = [];
+    // endpoints first, then intermediates in descending order
+    const midPcts = [...new Set(points.slice(1, -1).map(function (p) { return p.pct; }))]
+        .filter(function (p) { return p !== 1.0 && p !== 0.0; })
+        .sort(function (a, b) { return b - a; });
+    [1.0, 0.0].concat(midPcts).forEach(function (pct) {
         const y = yOf(pct);
-        // Always draw endpoints; skip middle ones if too close
-        if (pct !== 1.0 && pct !== 0.0 && y - lastLabelY < m.fontSize + 4) return;
-        lastLabelY = y;
-        const label = totalScore > 0
-            ? (Math.round(pct * totalScore) + 'pt')
-            : (Math.round(pct * 100) + '%');
-        ctx.fillText(label, mL - 4, y);
+        const clash = drawnY.some(function (dy) { return Math.abs(dy - y) < minYGap; });
+        if (clash) return;
+        drawnY.push(y);
+        ctx.fillText(fmtPct(pct), mL - 4, y);
     });
 
-    // X-axis date labels at each critical point
-    ctx.textBaseline = 'top';
-    let lastLabelX = -Infinity;
-    const minGap   = m.fontSize * 5.2;
+    // X-axis date labels at each critical point.
     // The final point is the vertical drop to 0 % and shares its timestamp with
     // the previous one, so it carries no label of its own.
+    ctx.textBaseline = 'top';
     const labelled = points.filter(function (pt) { return pt.label; });
+
+    // Use the full "DD.MM HH:MM" form only if every label would still fit,
+    // otherwise fall back to the compact "DD.MM".
+    const widest = Math.max.apply(null, labelled.map(function (pt) {
+        return ctx.measureText(pt.full || pt.label).width;
+    }));
+    const useFull = labelled.length > 1
+        && widest * labelled.length <= pW
+        && labelled.every(function (pt) { return pt.full; });
+    const textOf = function (pt) { return useFull ? pt.full : pt.label; };
+
+    const minGap = Math.max.apply(null, labelled.map(function (pt) {
+        return ctx.measureText(textOf(pt)).width;
+    })) + 6;
+
+    let lastLabelX = -Infinity;
     labelled.forEach(function (pt, i) {
         const x       = xOf(pt.ts);
         const isFirst = (i === 0);
@@ -165,7 +184,7 @@ function drawDeadlineGraph(canvas) {
         ctx.textAlign = isFirst ? 'left' : (isLast ? 'right' : 'center');
         const labelX  = isFirst ? mL : (isLast ? mL + pW : x);
         ctx.fillStyle = color.text;
-        ctx.fillText(pt.label, labelX, mT + pH + 5);
+        ctx.fillText(textOf(pt), labelX, mT + pH + 4);
 
         // Tick mark
         ctx.strokeStyle = color.axis;
