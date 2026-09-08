@@ -337,3 +337,20 @@ window.addEventListener('resize', function () {
     clearTimeout(_deadlineGraphResizeTimer);
     _deadlineGraphResizeTimer = setTimeout(initDeadlineGraphs, 120);
 });
+
+/*
+ * Canvas pixels are static once painted: they don't follow CSS variable
+ * changes the way normal DOM elements do. Colours are read once via
+ * getComputedStyle() in drawDeadlineGraph(), so switching the light/dark
+ * theme (base.html toggles `data-bs-theme` on <html>, possibly after this
+ * script's initial run) leaves stale colours baked into the canvas — most
+ * noticeably dark axis/grid text left over from the light theme. Watch the
+ * attribute and repaint whenever it changes so the graph always matches the
+ * active theme.
+ */
+new MutationObserver(function () {
+    initDeadlineGraphs();
+}).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-bs-theme']
+});
