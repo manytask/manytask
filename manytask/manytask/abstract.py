@@ -56,6 +56,12 @@ class StudentCourseScores:
     final_grade: int | None = None
     final_grade_override: int | None = None
     comment: str | None = None
+    is_admin: bool = False
+    """True if the user is a course admin, namespace admin, instance admin, or program manager.
+
+    Used to hide admin/staff accounts from the all-scores table when viewed by regular
+    students, while still allowing admin viewers to see them (typically grayed out).
+    """
 
     def __repr__(self) -> str:
         return f"StudentCourseScores(username={self.username}, tasks={len(self.task_scores)})"

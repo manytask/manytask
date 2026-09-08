@@ -711,6 +711,15 @@
 
                             const data = row.getData();
 
+                            // Gray out admin/staff rows (course/namespace/instance admin, program manager)
+                            // so admin viewers can distinguish them from real students.
+                            const rowElement = row.getElement();
+                            if (data.is_admin) {
+                                rowElement.classList.add("db-admin-row");
+                            } else {
+                                rowElement.classList.remove("db-admin-row");
+                            }
+
                             // Add individual task scores and group totals
                             const groupColumns = window.tabulatorTable.getColumns().filter(col => col.getDefinition().columns);
                             groupColumns.forEach(groupCol => {
