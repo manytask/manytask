@@ -249,22 +249,22 @@
             // Combined search + status filter.
             const valueEl = document.getElementById("courses-filter-value");
 
-            // Transliteration-aware search (shared normalizeForSearch helper),
-            // matching the course database page: searches course name and
-            // namespace, combined with the status dropdown filter.
+            // Transliteration- and keyboard-layout-aware search (shared helpers in
+            // static/js/search-normalize.js), matching the course database page:
+            // searches course name and namespace, combined with the status filter.
             function coursesFilter(data) {
                 const selectedStatus = statusSelect.value;
                 if (selectedStatus && data.status !== selectedStatus) {
                     return false;
                 }
-                const term = normalizeForSearch(valueEl.value.trim());
-                if (!term) {
+                const variants = searchTermVariants(valueEl.value);
+                if (variants.length === 0) {
                     return true;
                 }
-                if (normalizeForSearch(data.name).includes(term)) {
+                if (matchesSearchVariants(data.name, variants)) {
                     return true;
                 }
-                if (normalizeForSearch(data.namespace_slug).includes(term)) {
+                if (matchesSearchVariants(data.namespace_slug, variants)) {
                     return true;
                 }
                 return false;

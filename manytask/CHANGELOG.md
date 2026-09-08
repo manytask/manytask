@@ -1,5 +1,47 @@
 # Changelog
 
+## [26.0.4](https://github.com/manytask/manytask/releases/tag/26.0.4) - 2026-09-04
+
+Bug fix and updates to release procedure
+
+### Other changes
+
+- feat: Make search bar working even when typing in wrong layout by @zhmurov in [#1051](https://github.com/manytask/manytask/pull/1051)
+- fix(sourcecraft): resolve RMS user by slug when passport lookup fails by @DanielShinoda in [#1065](https://github.com/manytask/manytask/pull/1065)
+
+## [26.0.3](https://github.com/manytask/manytask/releases/tag/26.0.3) - 2026-09-02
+
+This release includes bug fixes, updates to doc and minor UI improvements.
+
+### Dependency Updates
+
+- chore(deps): bump gitpython from 3.1.45 to 3.1.58 in /checker in the uv group across 1 directory by @[dependabot[bot]](https://github.com/apps/dependabot) in [#1052](https://github.com/manytask/manytask/pull/1052)
+- chore(deps): bump astral-sh/setup-uv from 9.0.0 to 10.0.1 by @[dependabot[bot]](https://github.com/apps/dependabot) in [#1047](https://github.com/manytask/manytask/pull/1047)
+- chore(deps): bump cryptography from 48.0.1 to 50.0.0 in /manytask in the uv group across 1 directory by @[dependabot[bot]](https://github.com/apps/dependabot) in [#1038](https://github.com/manytask/manytask/pull/1038)
+
+### Other changes
+
+- docs: fix the guide for checker config file by @zhmurov in [#1054](https://github.com/manytask/manytask/pull/1054)
+- fix(sourcecraft): use RMS-native username for project existence check by @Ch0p1k3 in [#1059](https://github.com/manytask/manytask/pull/1059)
+- feat: allow disabling self-signup via MANYTASK_DISABLE_SIGNUP by @ObjatieGroba in [#1061](https://github.com/manytask/manytask/pull/1061)
+- feat(gitlab): grant students reporter access to the course public repo by @ObjatieGroba in [#1060](https://github.com/manytask/manytask/pull/1060)
+- refactor: Add datastructure that holds the scores table data by @zhmurov in [#1050](https://github.com/manytask/manytask/pull/1050)
+- feat: add an option to run tests on all tasks with checker by @zhmurov in [#1044](https://github.com/manytask/manytask/pull/1044)
+- feat: add back button to the page where course secret is entered by @zhmurov in [#1035](https://github.com/manytask/manytask/pull/1035)
+- feat: Add search bar to the list of courses by @zhmurov in [#1031](https://github.com/manytask/manytask/pull/1031)
+- feat: sort courses by status enum order, not by their alphabetical order by @zhmurov in [#1033](https://github.com/manytask/manytask/pull/1033)
+- feat: support negative scores by @KaurkerDevourer in [#1045](https://github.com/manytask/manytask/pull/1045)
+- feat: transfer changes from checker repo by @zhmurov in [#1042](https://github.com/manytask/manytask/pull/1042)
+- feat: Add navigation buttons to course is not ready page by @zhmurov in [#1036](https://github.com/manytask/manytask/pull/1036)
+- feat: Implement table view for the list of courses by @zhmurov in [#1028](https://github.com/manytask/manytask/pull/1028)
+- fix: Adapt cpp checker to new test environment by @domwst in [#1046](https://github.com/manytask/manytask/pull/1046)
+- docs: update contributing by @zhmurov in [#1030](https://github.com/manytask/manytask/pull/1030)
+- docs: Update changelog with last several releases by @zhmurov in [#1029](https://github.com/manytask/manytask/pull/1029)
+- Add Vanya Luchsh to the list of developers by @zhmurov in [#1043](https://github.com/manytask/manytask/pull/1043)
+- fix: remove link to GitLab account from the drop-down menu by @zhmurov in [#1034](https://github.com/manytask/manytask/pull/1034)
+- fix: align grade calculation with displayed percent by @kudala-bharani in [#1019](https://github.com/manytask/manytask/pull/1019)
+
+
 ## [26.0.2](https://github.com/manytask/manytask/releases/tag/26.0.2) - 2026-08-04
 
 Release 26.0.2 fixes the bug that prevented creating new course from the interface.
