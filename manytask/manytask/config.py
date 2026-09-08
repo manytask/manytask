@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 
 from manytask.course import CourseStatus, ManytaskDeadlinesType
-from manytask.utils.generic import lerp
+from manytask.utils.generic import SECONDS_PER_DAY, format_remaining, lerp
 
 MAX_COURSE_NAME_LENGTH = 100
 
@@ -244,6 +244,61 @@ class ManytaskGroupConfig(BaseModel):
 
         # None if now is before start, ok if last_point[1] is zero
         return (last_point and last_point[1]) or 0.0
+
+    @staticmethod
+    def _axis_label(dt: datetime, *, date_only: bool = False) -> str:
+        # 23:59 deadlines mean "that date"; showing the time just adds clutter.
+        if date_only or dt.strftime("%H:%M") == "23:59":
+            return dt.strftime("%d.%m")
+        return dt.strftime("%d.%m %H:%M")
+
+    @staticmethod
+    def _graph_point(dt: datetime, pct: float, label: str) -> dict[str, Any]:
+        return {
+            "ts": dt.timestamp(),
+            "pct": pct,
+            "label": label,
+            "date": dt.strftime("%d.%m.%Y"),
+            "time": dt.strftime("%H:%M"),
+            "tz": dt.strftime("%Z"),
+        }
+
+    def get_graph_data(self, now: datetime, deadlines_type: ManytaskDeadlinesType) -> dict[str, Any]:
+        """Build everything the interpolated-deadline graph (tasks.html) needs to render.
+
+        Mirrors get_current_percent_multiplier(): linear interpolation between (start,
+        100%) and each step, a flat plateau after the last step, then a vertical drop
+        to 0% at `end`. The returned "points" are start -> steps... -> (end, last_pct)
+        -> (end, 0), ready to be dumped as JSON for the canvas renderer.
+        """
+        end_dt = self.get_deadline(self.end)
+
+        points = [self._graph_point(self.start, 1.0, self._axis_label(self.start, date_only=True))]
+        critical_dates = [self.start]
+        last_pct = 1.0
+        for percent, date_or_delta in self.steps.items():
+            step_dt = self.get_deadline(date_or_delta)
+            points.append(self._graph_point(step_dt, percent, self._axis_label(step_dt)))
+            critical_dates.append(step_dt)
+            last_pct = percent
+        points.append(self._graph_point(end_dt, last_pct, self._axis_label(end_dt)))
+        points.append(self._graph_point(end_dt, 0.0, ""))
+        critical_dates.append(end_dt)
+
+        next_deadline = next((d for d in critical_dates if d > now), None)
+        is_expired = end_dt < now
+        is_urgent = next_deadline is not None and (next_deadline - now).total_seconds() < SECONDS_PER_DAY
+        status = "expired" if is_expired else ("urgent" if is_urgent else "active")
+
+        percent = 1.0 if now < self.start else self.get_current_percent_multiplier(now, deadlines_type)
+        hint = f"Next deadline in: {format_remaining(next_deadline, now)}" if next_deadline is not None else ""
+
+        return {
+            "points": points,
+            "status": status,
+            "percent": percent,
+            "hint": hint,
+        }
 
     def replace_timezone(self, timezone: ZoneInfo) -> None:
         self.start = self.start.replace(tzinfo=timezone)

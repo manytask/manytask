@@ -2,6 +2,7 @@ import html
 import logging
 import re
 import secrets
+from datetime import datetime
 from http import HTTPStatus
 from typing import Any, Callable
 
@@ -19,6 +20,17 @@ def calculate_percent(total_score: float, max_score: float) -> float:
     if max_score <= 0:
         return 0.0
     return round(total_score * 100.0 / max_score, 1)
+
+
+SECONDS_PER_DAY = 86400
+
+
+def format_remaining(deadline: datetime, now: datetime) -> str:
+    """Format the time left until `deadline` as e.g. '5 h.' or '3 d.' (used by tasks.html)."""
+    delta = deadline - now
+    if delta.total_seconds() < SECONDS_PER_DAY:
+        return f"{int(delta.seconds / 3600)} h."
+    return f"{delta.days} d."
 
 
 def sanitize_log_data(data: str | None) -> str | None:
