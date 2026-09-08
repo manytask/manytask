@@ -23,6 +23,8 @@ TEST_PUBLIC_REPO = "public-2026-fall"
 YANDEX_LOGIN = "Ps5"
 SOURCECRAFT_USERNAME = "ps5-1"
 TEST_RMS_ID = "rms-uuid-1"
+DOMAIN_LOGIN = "anna@example.org"
+DOMAIN_SLUG = "anna-example-org"
 
 
 @pytest.fixture
@@ -140,3 +142,57 @@ def test_get_url_for_repo_uses_passed_username(sourcecraft_api):
     """
     url = sourcecraft_api.get_url_for_repo(username=SOURCECRAFT_USERNAME, course_students_group=TEST_STUDENTS_GROUP)
     assert url.endswith(f"{TEST_STUDENTS_GROUP}-{SOURCECRAFT_USERNAME}")
+
+
+def test_get_rms_user_by_username_falls_back_to_sourcecraft_lookup(sourcecraft_api):
+    """Regression: CI reports the repo slug ('anna-example-org'), which Passport does not know.
+
+    Normalization is not invertible, so the lookup must ask SourceCraft for that name
+    instead of giving up, otherwise /report answers 404 for every domain login.
+    """
+    profile = {"id": TEST_RMS_ID, "username": DOMAIN_SLUG, "display_name": "Anna Example"}
+
+    with patch.object(sourcecraft_api, "_get_cloud_id_by_yandex_login", side_effect=RmsApiException("no such login")):
+        with patch.object(
+            sourcecraft_api, "_request", return_value=_make_response(HTTPStatus.OK, profile)
+        ) as mock_request:
+            rms_user = sourcecraft_api.get_rms_user_by_username(DOMAIN_SLUG)
+
+    assert rms_user == RmsUser(id=TEST_RMS_ID, username=DOMAIN_SLUG, name="Anna Example")
+    mock_request.assert_called_once_with("GET", f"users/{DOMAIN_SLUG}")
+
+
+def test_get_rms_user_by_username_normalizes_before_sourcecraft_lookup(sourcecraft_api):
+    """The fallback queries GET /users/{user_slug}, so a raw login must be normalized first."""
+    profile = {"id": TEST_RMS_ID, "username": DOMAIN_SLUG, "display_name": "Anna Example"}
+
+    with patch.object(sourcecraft_api, "_get_cloud_id_by_yandex_login", side_effect=RmsApiException("passport down")):
+        with patch.object(
+            sourcecraft_api, "_request", return_value=_make_response(HTTPStatus.OK, profile)
+        ) as mock_request:
+            sourcecraft_api.get_rms_user_by_username(DOMAIN_LOGIN)
+
+    mock_request.assert_called_once_with("GET", f"users/{DOMAIN_SLUG}")
+
+
+def test_get_rms_user_by_username_raises_when_both_lookups_fail(sourcecraft_api):
+    """Unknown to Passport and to SourceCraft: the caller must still get an RmsApiException."""
+    with patch.object(sourcecraft_api, "_get_cloud_id_by_yandex_login", side_effect=RmsApiException("no such login")):
+        with patch.object(sourcecraft_api, "_request", return_value=_make_response(HTTPStatus.NOT_FOUND)):
+            with pytest.raises(RmsApiException):
+                sourcecraft_api.get_rms_user_by_username(DOMAIN_SLUG)
+
+
+def test_get_rms_user_by_username_prefers_yandex_login(sourcecraft_api):
+    """The yandex login stays the primary path: resolving it must not query by the raw name."""
+    cloud_id = "cloud-id-1"
+    profile = {"id": TEST_RMS_ID, "username": SOURCECRAFT_USERNAME, "display_name": "Test User"}
+
+    with patch.object(sourcecraft_api, "_get_cloud_id_by_yandex_login", return_value=cloud_id):
+        with patch.object(
+            sourcecraft_api, "_request", return_value=_make_response(HTTPStatus.OK, profile)
+        ) as mock_request:
+            rms_user = sourcecraft_api.get_rms_user_by_username(YANDEX_LOGIN)
+
+    assert rms_user.username == SOURCECRAFT_USERNAME
+    mock_request.assert_called_once_with("GET", f"users/cloud-id:{cloud_id}")
