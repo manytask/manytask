@@ -93,12 +93,18 @@ function drawDeadlineGraph(canvas) {
         ctx.stroke();
     });
 
+    // Helper: traces the piecewise line through all points (shared by the fill
+    // and the stroke below, since both draw the same path).
+    function tracePiecewiseLine() {
+        ctx.moveTo(xOf(points[0].ts), yOf(points[0].pct));
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(xOf(points[i].ts), yOf(points[i].pct));
+        }
+    }
+
     // Filled area under the piecewise line
     ctx.beginPath();
-    ctx.moveTo(xOf(points[0].ts), yOf(points[0].pct));
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(xOf(points[i].ts), yOf(points[i].pct));
-    }
+    tracePiecewiseLine();
     ctx.lineTo(xOf(points[points.length - 1].ts), yOf(0));
     ctx.lineTo(xOf(points[0].ts), yOf(0));
     ctx.closePath();
@@ -107,10 +113,7 @@ function drawDeadlineGraph(canvas) {
 
     // Piecewise line
     ctx.beginPath();
-    ctx.moveTo(xOf(points[0].ts), yOf(points[0].pct));
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(xOf(points[i].ts), yOf(points[i].pct));
-    }
+    tracePiecewiseLine();
     ctx.strokeStyle = color.line;
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';

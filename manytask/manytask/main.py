@@ -195,9 +195,11 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app.register_blueprint(web.instance_admin_bp)
 
     from .utils.flask import get_user_roles, has_role
+    from .utils.generic import format_remaining
 
     app.jinja_env.globals["get_user_roles"] = get_user_roles
     app.jinja_env.globals["has_role"] = has_role
+    app.jinja_env.globals["format_remaining"] = format_remaining
 
     @app.context_processor
     def inject_rms_id() -> dict[str, int | None]:
