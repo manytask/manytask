@@ -132,7 +132,6 @@ function drawDeadlineGraph(canvas) {
     ctx.font = labelFont;
     ctx.fillStyle = color.text;
     ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
     const fmtPct = function (pct) {
         return Math.round(pct * 100) + '%';
     };
@@ -142,12 +141,17 @@ function drawDeadlineGraph(canvas) {
     const midPcts = [...new Set(points.slice(1, -1).map(function (p) { return p.pct; }))]
         .filter(function (p) { return p !== 1.0 && p !== 0.0; })
         .sort(function (a, b) { return b - a; });
+    ctx.textBaseline = 'middle';
     [1.0, 0.0].concat(midPcts).forEach(function (pct) {
         const y = yOf(pct);
         const clash = drawnY.some(function (dy) { return Math.abs(dy - y) < minYGap; });
         if (clash) return;
         drawnY.push(y);
-        ctx.fillText(fmtPct(pct), mL - 4, y);
+        // Clamp into the canvas so the outermost labels are never cut off by
+        // the top/bottom edge, while staying centred on their gridline.
+        const half = m.fontSize * 0.5;
+        const cy = Math.min(Math.max(y, half), cssHeight - half);
+        ctx.fillText(fmtPct(pct), mL - 4, cy);
     });
 
     // X-axis date labels at each critical point.
@@ -184,7 +188,7 @@ function drawDeadlineGraph(canvas) {
         ctx.textAlign = isFirst ? 'left' : (isLast ? 'right' : 'center');
         const labelX  = isFirst ? mL : (isLast ? mL + pW : x);
         ctx.fillStyle = color.text;
-        ctx.fillText(textOf(pt), labelX, mT + pH + 4);
+        ctx.fillText(textOf(pt), labelX, mT + pH + 2);
 
         // Tick mark
         ctx.strokeStyle = color.axis;

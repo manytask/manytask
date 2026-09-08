@@ -382,14 +382,19 @@
      * .deadline-header, the canvas gets that row's height too: it now spans the
      * progress-bar, date/time AND hint rows (2 + 50 = 52px vs ~52px replaced).
      *
-     * --graph-margin-bottom must stay >= 14 so the X-axis date labels
-     * (font-size 9px, ~11px line box + 3px gap) are not clipped.
+     * Margin floors, both enforced by the renderer's label placement:
+     *   --graph-margin-top    >= 5  half of the 100 % label, which is centred
+     *                              on the top gridline (it is clamped into the
+     *                              canvas, so a smaller value only crowds it)
+     *   --graph-margin-bottom >= 10 the X-axis dates: 2px gap + ~7px glyph ink
+     *                              (9 puts the ink exactly on the canvas edge)
+     * Going below those crowds or clips the labels.
      */
-    --graph-height: 50;
+    --graph-height: 51;
     --graph-margin-left: 30;
     --graph-margin-right: 6;
-    --graph-margin-top: 4;
-    --graph-margin-bottom: 14;
+    --graph-margin-top: 5;
+    --graph-margin-bottom: 10;
     --graph-font-size: 9;
 
     /* palette — mirrors the plank tokens */
