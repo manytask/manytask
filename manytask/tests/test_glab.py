@@ -296,11 +296,14 @@ def test_check_project_not_exists(gitlab):
     mock_gitlab_instance.projects.get.assert_called_with(f"{TEST_GROUP_NAME}/{TEST_USERNAME}")
 
 
-def test_create_project_existing_project(gitlab, mock_rms_user, mock_gitlab_student_project, mock_gitlab_group_member):
+def test_create_project_existing_project(
+    gitlab, mock_rms_user, mock_gitlab_student_project, mock_gitlab_public_project, mock_gitlab_group_member
+):
     rms_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_student_project]
     mock_gitlab_instance.projects.get.return_value = mock_gitlab_student_project
     mock_gitlab_student_project.members.create.return_value = mock_gitlab_group_member
+    rms_api._get_project_by_name = MagicMock(return_value=mock_gitlab_public_project)
 
     rms_api.create_project(mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
 
@@ -308,6 +311,10 @@ def test_create_project_existing_project(gitlab, mock_rms_user, mock_gitlab_stud
     mock_gitlab_instance.projects.get.assert_called_with(mock_gitlab_student_project.id)
     mock_gitlab_student_project.members.create.assert_called_once_with(
         {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.DEVELOPER}
+    )
+    # a re-enroll must also (re)grant read access to the course public repo
+    mock_gitlab_public_project.members.create.assert_called_once_with(
+        {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.REPORTER}
     )
 
 
