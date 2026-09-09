@@ -37,6 +37,7 @@ TEST_TASK_NAME = "test_task"
 TEST_TASK_GROUP_NAME = "test_task_group"
 TEST_INVALID_USER_ID = 321
 TEST_INVALID_USERNAME = "invalid_user"
+TEST_INSTANCE_TOKEN = "test_instance_token"
 
 
 # test_auth
