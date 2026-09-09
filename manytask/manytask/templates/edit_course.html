@@ -27,11 +27,25 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Registration Secret</label>
-                    <input type="text" class="form-control" id="registration_secret" name="registration_secret" value="{{ course.registration_secret }}" required>
+                    <div class="position-relative">
+                        <input type="password" class="form-control pe-5" id="registration_secret" name="registration_secret" value="{{ course.registration_secret }}" required autocomplete="off">
+                        <button class="btn btn-link text-secondary position-absolute top-50 end-0 translate-middle-y me-2 p-0 border-0"
+                                type="button" aria-label="Toggle registration secret visibility"
+                                onclick="toggleSecret('registration_secret', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="token" class="form-label">Course Token</label>
-                    <input type="text" class="form-control" id="token" name="token" value="{{ course.token }}" readonly disabled>
+                    <div class="position-relative">
+                        <input type="password" class="form-control pe-5" id="token" name="token" value="{{ course.token }}" readonly disabled autocomplete="off">
+                        <button class="btn btn-link text-secondary position-absolute top-50 end-0 translate-middle-y me-2 p-0 border-0"
+                                type="button" aria-label="Toggle token visibility"
+                                onclick="toggleSecret('token', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                     <div class="form-text">Token cannot be changed</div>
                 </div>
                 <div class="mb-3">
@@ -211,9 +225,23 @@
       id="dark-theme" disabled>
 
 <script>
-    const accessUsersUrl = '{{ url_for("api.get_course_access_users", course_name=course.course_name) }}';
-    const setCourseAdminUrl = '{{ url_for("api.set_course_admin", course_name=course.course_name) }}';
 
+    function toggleSecret(fieldId, btn) {
+        const input = document.getElementById(fieldId);
+        const icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.replace('fa-eye', 'fa-eye-slash');
+            btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace('Toggle', 'Hide'));
+        } else {
+            input.type = 'password';
+            icon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    }
+
+  
+    const accessUsersUrl = '{{ url_for("api.get_course_access_users", course_name=course.course_name`) }}';
+    const setCourseAdminUrl = '{{ url_for("api.set_course_admin", course_name=course.course_name) }}';
     // Privilege order, widest scope first, so the Access column sorts by reach
     // rather than alphabetically.
     const ACCESS_ORDER = ['instance_admin', 'namespace_admin', 'program_manager', 'course_admin'];
