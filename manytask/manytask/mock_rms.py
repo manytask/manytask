@@ -1,9 +1,10 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
 from authlib.integrations.flask_client import OAuth
 
 from .abstract import RmsApi, RmsApiException, RmsUser
+from .course import ProtectedBranchSettings
 
 
 @dataclass
@@ -31,6 +32,7 @@ class MockRmsApi(RmsApi):
         self.namespace_groups: Dict[str, int] = {}  # path -> group_id
         self.last_user: str = "-1"
         self.last_group_id: int = 0
+        self.project_settings: Dict[str, Dict[str, Any]] = {}  # project_path -> {ci_config_path, protected_branches}
 
     @property
     def base_url(self) -> str:
@@ -152,12 +154,15 @@ class MockRmsApi(RmsApi):
         rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
+        ci_config_path: str,
+        protected_branches: List[ProtectedBranchSettings],
     ) -> None:
         project_path = f"{course_students_group}/{rms_user.username}"
         if project_path in self.projects:
             # Add user as member if not already
             if rms_user.id not in self.projects[project_path].members:
                 self.projects[project_path].members.append(rms_user.id)
+            self.ensure_project_settings(project_path, ci_config_path, protected_branches)
             return
 
         # Create project if it doesn't exist
@@ -169,6 +174,30 @@ class MockRmsApi(RmsApi):
         if course_students_group not in self.groups:
             self.groups[course_students_group] = MockRmsGroup(name=course_students_group)
         self.groups[course_students_group].projects[rms_user.username] = project
+
+        self.ensure_project_settings(project_path, ci_config_path, protected_branches)
+
+    def list_group_projects(self, group_path: str) -> List[str]:
+        group = self.groups.get(group_path)
+        if group is None:
+            return []
+        return [f"{group_path}/{name}" for name in group.projects]
+
+    def ensure_project_settings(
+        self,
+        project: Any,
+        ci_config_path: str,
+        protected_branches: List[ProtectedBranchSettings],
+    ) -> bool:
+        project_path = project if isinstance(project, str) else f"{project.group}/{project.name}"
+        desired = {
+            "ci_config_path": ci_config_path,
+            "protected_branches": [asdict(branch) for branch in protected_branches],
+        }
+        if self.project_settings.get(project_path) == desired:
+            return False
+        self.project_settings[project_path] = desired
+        return True
 
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"
