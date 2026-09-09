@@ -2,7 +2,7 @@ from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
-from gitlab import GitlabGetError, const
+from gitlab import GitlabCreateError, GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 
 from manytask.abstract import RmsApiException
@@ -329,6 +329,7 @@ def test_create_project_no_existing_project_creates_fork(
     rms_api._get_group_by_name = MagicMock(return_value=mock_gitlab_group)
     rms_api._get_project_by_name = MagicMock(return_value=mock_gitlab_student_project)
     mock_gitlab_student_project.forks.create.return_value = mock_gitlab_fork
+    mock_gitlab_instance.projects.get.return_value.import_status = "finished"
 
     rms_api.create_project(
         mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES
@@ -514,3 +515,74 @@ def test_list_group_projects(gitlab):
 
     assert paths == ["group/a", "group/b"]
     group.projects.list.assert_called_once_with(get_all=True)
+
+
+def _already_exists_error():
+    return GitlabCreateError(error_message="Protected branch 'main' already exists", response_code=409)
+
+
+@patch("manytask.glab.time.sleep")
+def test_ensure_project_settings_retries_when_branch_appears_after_listing(mock_sleep, gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+    project.protectedbranches.create.side_effect = [_already_exists_error(), MagicMock()]
+    appeared = _mock_protected_branch("main", const.AccessLevel.MAINTAINER, const.AccessLevel.MAINTAINER, False)
+    project.protectedbranches.get.return_value = appeared
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is True
+    mock_sleep.assert_called_once()
+    project.protectedbranches.get.assert_called_once_with("main")
+    appeared.delete.assert_called_once()
+    assert project.protectedbranches.create.call_args_list == [mock.call(mock.ANY), mock.call(mock.ANY)]
+
+
+@patch("manytask.glab.time.sleep")
+def test_ensure_project_settings_keeps_branch_that_appeared_matching(mock_sleep, gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+    project.protectedbranches.create.side_effect = _already_exists_error()
+    appeared = _mock_protected_branch("main", const.AccessLevel.DEVELOPER, const.AccessLevel.DEVELOPER, True)
+    project.protectedbranches.get.return_value = appeared
+
+    rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    appeared.delete.assert_not_called()
+    assert project.protectedbranches.create.call_count == 1
+
+
+@patch("manytask.glab.time.sleep")
+def test_ensure_project_settings_gives_up_after_retries(mock_sleep, gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+    project.protectedbranches.create.side_effect = _already_exists_error()
+    project.protectedbranches.get.return_value = _mock_protected_branch(
+        "main", const.AccessLevel.MAINTAINER, const.AccessLevel.MAINTAINER, False
+    )
+
+    with pytest.raises(GitlabCreateError):
+        rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+
+def test_ensure_project_settings_reraises_other_create_errors(gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+    project.protectedbranches.create.side_effect = GitlabCreateError(error_message="forbidden", response_code=403)
+
+    with pytest.raises(GitlabCreateError):
+        rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+    project.protectedbranches.get.assert_not_called()
+
+
+@patch("manytask.glab.time.sleep")
+def test_wait_fork_imported_polls_until_finished(mock_sleep, gitlab):
+    rms_api, mock_gitlab_instance = gitlab
+    importing = MagicMock(id=7, import_status="started")
+    finished = MagicMock(id=7, import_status="finished")
+    mock_gitlab_instance.projects.get.side_effect = [importing, finished]
+
+    result = rms_api._wait_fork_imported(importing)
+
+    assert result is finished
+    assert mock_sleep.call_args_list == [mock.call(1), mock.call(1)]
