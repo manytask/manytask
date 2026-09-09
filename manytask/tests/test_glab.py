@@ -6,6 +6,7 @@ from gitlab import GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 
 from manytask.abstract import RmsApiException
+from manytask.course import ProtectedBranchSettings
 from manytask.glab import GitLabApi, GitLabConfig, RmsUser, _make_public_repo_params, _make_students_group_params
 from tests.constants import (
     TEST_FORK_ID,
@@ -33,6 +34,13 @@ from tests.constants import (
     TEST_USER_URL,
     TEST_USERNAME,
 )
+
+TEST_CI_CONFIG_PATH = f".gitlab-ci.yml@{TEST_GROUP_PUBLIC_NAME}"
+TEST_PROTECTED_BRANCHES = [
+    ProtectedBranchSettings(
+        name="main", push_access_level="developer", merge_access_level="developer", allow_force_push=True
+    )
+]
 
 
 # Shared fixture logic
@@ -302,7 +310,9 @@ def test_create_project_existing_project(gitlab, mock_rms_user, mock_gitlab_stud
     mock_gitlab_instance.projects.get.return_value = mock_gitlab_student_project
     mock_gitlab_student_project.members.create.return_value = mock_gitlab_group_member
 
-    rms_api.create_project(mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
+    rms_api.create_project(
+        mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES
+    )
 
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
     mock_gitlab_instance.projects.get.assert_called_with(mock_gitlab_student_project.id)
@@ -320,7 +330,9 @@ def test_create_project_no_existing_project_creates_fork(
     rms_api._get_project_by_name = MagicMock(return_value=mock_gitlab_student_project)
     mock_gitlab_student_project.forks.create.return_value = mock_gitlab_fork
 
-    rms_api.create_project(mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
+    rms_api.create_project(
+        mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES
+    )
 
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
     rms_api._get_project_by_name.assert_called_with(TEST_GROUP_PUBLIC_NAME)
@@ -402,3 +414,103 @@ def test_get_url_for_repo(gitlab):
     url = gitlab_api.get_url_for_repo(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert url == f"{gitlab_api.base_url}/{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}"
+
+
+def _mock_protected_branch(name, push_level, merge_level, allow_force_push):
+    branch = MagicMock()
+    branch.name = name
+    branch.push_access_levels = [{"access_level": push_level}]
+    branch.merge_access_levels = [{"access_level": merge_level}]
+    branch.allow_force_push = allow_force_push
+    return branch
+
+
+def _mock_project(ci_config_path, existing_branches):
+    project = MagicMock()
+    project.ci_config_path = ci_config_path
+    project.path_with_namespace = "group/project"
+    project.protectedbranches.list.return_value = existing_branches
+    return project
+
+
+def test_ensure_project_settings_no_writes_when_matching(gitlab):
+    rms_api, _ = gitlab
+    existing_branch = _mock_protected_branch("main", const.AccessLevel.DEVELOPER, const.AccessLevel.DEVELOPER, True)
+    project = _mock_project(TEST_CI_CONFIG_PATH, [existing_branch])
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is False
+    project.save.assert_not_called()
+    existing_branch.delete.assert_not_called()
+    project.protectedbranches.create.assert_not_called()
+
+
+def test_ensure_project_settings_fixes_ci_config_path(gitlab):
+    rms_api, _ = gitlab
+    existing_branch = _mock_protected_branch("main", const.AccessLevel.DEVELOPER, const.AccessLevel.DEVELOPER, True)
+    project = _mock_project("stale/path", [existing_branch])
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is True
+    assert project.ci_config_path == TEST_CI_CONFIG_PATH
+    project.save.assert_called_once()
+    existing_branch.delete.assert_not_called()
+    project.protectedbranches.create.assert_not_called()
+
+
+def test_ensure_project_settings_fixes_mismatched_protected_branch(gitlab):
+    rms_api, _ = gitlab
+    existing_branch = _mock_protected_branch("main", const.AccessLevel.MAINTAINER, const.AccessLevel.DEVELOPER, True)
+    project = _mock_project(TEST_CI_CONFIG_PATH, [existing_branch])
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is True
+    project.save.assert_not_called()
+    existing_branch.delete.assert_called_once()
+    project.protectedbranches.create.assert_called_once_with(
+        {
+            "name": "main",
+            "push_access_level": const.AccessLevel.DEVELOPER,
+            "merge_access_level": const.AccessLevel.DEVELOPER,
+            "allow_force_push": True,
+        }
+    )
+
+
+def test_ensure_project_settings_creates_missing_branch(gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is True
+    project.protectedbranches.create.assert_called_once()
+
+
+def test_ensure_project_settings_accepts_project_path(gitlab):
+    rms_api, mock_gitlab_instance = gitlab
+    existing_branch = _mock_protected_branch("main", const.AccessLevel.DEVELOPER, const.AccessLevel.DEVELOPER, True)
+    project = _mock_project(TEST_CI_CONFIG_PATH, [existing_branch])
+    mock_gitlab_instance.projects.get.return_value = project
+
+    changed = rms_api.ensure_project_settings("group/project", TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is False
+    mock_gitlab_instance.projects.get.assert_called_with("group/project")
+
+
+def test_list_group_projects(gitlab):
+    rms_api, _ = gitlab
+    group = MagicMock()
+    project_a = MagicMock(path_with_namespace="group/a")
+    project_b = MagicMock(path_with_namespace="group/b")
+    group.projects.list.return_value = [project_a, project_b]
+    rms_api._get_group_by_name = MagicMock(return_value=group)
+
+    paths = rms_api.list_group_projects("group")
+
+    assert paths == ["group/a", "group/b"]
+    group.projects.list.assert_called_once_with(get_all=True)

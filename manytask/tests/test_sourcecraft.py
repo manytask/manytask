@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from manytask.abstract import RmsApiException, RmsUser
+from manytask.course import ProtectedBranchSettings
 from manytask.sourcecraft import SourceCraftApi, SourceCraftConfig
 
 TEST_ORG = "hsemanytask"
@@ -23,6 +24,13 @@ TEST_PUBLIC_REPO = "public-2026-fall"
 YANDEX_LOGIN = "Ps5"
 SOURCECRAFT_USERNAME = "ps5-1"
 TEST_RMS_ID = "rms-uuid-1"
+# SourceCraft ignores these; passed to satisfy create_project's signature.
+TEST_CI_CONFIG_PATH = f".gitlab-ci.yml@{TEST_PUBLIC_REPO}"
+TEST_PROTECTED_BRANCHES = [
+    ProtectedBranchSettings(
+        name="main", push_access_level="developer", merge_access_level="developer", allow_force_push=True
+    )
+]
 DOMAIN_LOGIN = "anna@example.org"
 DOMAIN_SLUG = "anna-example-org"
 
@@ -86,7 +94,9 @@ def test_create_project_slug_derives_from_rms_user_username(sourcecraft_api):
         raise AssertionError(f"unexpected request {method} {path}")
 
     with patch.object(sourcecraft_api, "_request", side_effect=request_side_effect) as mock_request:
-        sourcecraft_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+        sourcecraft_api.create_project(
+            rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES
+        )
 
     create_calls = [call for call in mock_request.call_args_list if call.args == ("POST", f"orgs/{TEST_ORG}/repos")]
     assert len(create_calls) == 1
@@ -120,7 +130,9 @@ def test_existence_check_and_create_use_matching_slug(sourcecraft_api):
 
     with patch.object(sourcecraft_api, "_request", side_effect=record_request):
         # Simulate what create_project (using rms_user.username) would create ...
-        sourcecraft_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+        sourcecraft_api.create_project(
+            rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES
+        )
         # ... and then verify that a subsequent existence check with the SAME
         # (SC-native) username hits the same slug.
         assert (

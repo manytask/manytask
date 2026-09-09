@@ -2,7 +2,7 @@ import enum
 import logging
 import re
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
@@ -11,7 +11,7 @@ from sqlalchemy.types import TypeDecorator
 
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
-from .course import CourseStatus, ManytaskDeadlinesType
+from .course import CourseStatus, ManytaskDeadlinesType, ProtectedBranchSettings
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +246,11 @@ class Course(Base):
         server_default="HARD",
     )
 
+    # rms (CI config / protected branches) parameters
+    ci_config_path: Mapped[Optional[str]]
+    protected_branches: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    rms_settings_pending: Mapped[bool] = mapped_column(default=False, server_default="false")
+
     __table_args__ = (
         UniqueConstraint("name", name="uq_courses_name"),
         UniqueConstraint("token", name="uq_courses_token"),
@@ -279,6 +284,10 @@ class Course(Base):
                 task_url_template=self.task_url_template,
                 links=self.links,
                 deadlines_type=self.deadlines_type,
+                ci_config_path=self.ci_config_path,
+                protected_branches=[ProtectedBranchSettings(**branch) for branch in self.protected_branches]
+                if self.protected_branches
+                else None,
             )
         )
 
