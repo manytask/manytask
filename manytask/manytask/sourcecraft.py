@@ -15,6 +15,7 @@ from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2_grpc import Ya
 from yandexcloud._sdk import SDK
 
 from .abstract import RmsApi, RmsApiException, RmsUser
+from .course import ProtectedBranchSettings
 from .utils.sourcecraft import normalize_string
 
 logger = logging.getLogger(__name__)
@@ -269,17 +270,34 @@ class SourceCraftApi(RmsApi):
                 return True
         return False
 
+    def list_group_projects(self, group_path: str) -> list[str]:
+        logger.debug("SourceCraft does not support listing group projects yet")
+        return []
+
+    def ensure_project_settings(
+        self,
+        project: Any,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
+    ) -> bool:
+        logger.debug("SourceCraft does not support project CI/protected-branch settings yet")
+        return False
+
     def create_project(
         self,
         rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
     ) -> None:
         """Create a personal repo for a student.
 
         :param rms_user: User information
         :param course_students_group: repo slug prefix
         :param course_public_repo: public repo slug
+        :param ci_config_path: UNUSED, SourceCraft has no equivalent setting yet
+        :param protected_branches: UNUSED, SourceCraft has no equivalent setting yet
         """
         logger.info(f"Creating repo for user {rms_user.username}")
 

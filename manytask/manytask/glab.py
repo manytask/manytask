@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import gitlab
 import gitlab.const
@@ -12,9 +13,20 @@ from authlib.integrations.flask_client import OAuth
 from gitlab.exceptions import GitlabAuthenticationError, GitlabCreateError, GitlabGetError
 
 from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsApiException, RmsUser
+from .course import ProtectedBranchSettings
 from .utils.generic import check_oauth_authenticated
 
 logger = logging.getLogger(__name__)
+
+_PROTECTED_BRANCH_ATTEMPTS = 3
+_PROTECTED_BRANCH_RETRY_DELAY = 5.0
+_FORK_IMPORT_TIMEOUT = 60.0
+
+_ACCESS_LEVEL_MAP: dict[str, int] = {
+    "no_access": gitlab.const.AccessLevel.NO_ACCESS,
+    "developer": gitlab.const.AccessLevel.DEVELOPER,
+    "maintainer": gitlab.const.AccessLevel.MAINTAINER,
+}
 
 
 def _validate_and_convert_user_id(user_id: str) -> int:
@@ -456,7 +468,104 @@ class GitLabApi(RmsApi, AuthApi):
         except GitlabGetError:
             return False
 
-    def create_project(self, rms_user: RmsUser, course_students_group: str, course_public_repo: str) -> None:
+    def list_group_projects(self, group_path: str) -> list[str]:
+        group = self._get_group_by_name(group_path)
+        return [project.path_with_namespace for project in group.projects.list(get_all=True)]
+
+    def _protected_branch_matches(
+        self, protected_branch: gitlab.v4.objects.ProjectProtectedBranch, desired: ProtectedBranchSettings
+    ) -> bool:
+        push_access_levels = protected_branch.push_access_levels or []
+        merge_access_levels = protected_branch.merge_access_levels or []
+        push_level = push_access_levels[0]["access_level"] if push_access_levels else None
+        merge_level = merge_access_levels[0]["access_level"] if merge_access_levels else None
+        return (
+            push_level == _ACCESS_LEVEL_MAP[desired.push_access_level]
+            and merge_level == _ACCESS_LEVEL_MAP[desired.merge_access_level]
+            and bool(getattr(protected_branch, "allow_force_push", False)) == desired.allow_force_push
+        )
+
+    def _create_protected_branch(self, project: gitlab.v4.objects.Project, desired: ProtectedBranchSettings) -> None:
+        data = {
+            "name": desired.name,
+            "push_access_level": _ACCESS_LEVEL_MAP[desired.push_access_level],
+            "merge_access_level": _ACCESS_LEVEL_MAP[desired.merge_access_level],
+            "allow_force_push": desired.allow_force_push,
+        }
+        # GitLab protects the default branch asynchronously after a fork, so it can appear between our
+        # list and create; re-read and re-apply after a pause instead of failing the whole enrollment
+        for attempt in range(_PROTECTED_BRANCH_ATTEMPTS):
+            try:
+                project.protectedbranches.create(data)
+                return
+            except GitlabCreateError as e:
+                if "already exists" not in str(e) or attempt == _PROTECTED_BRANCH_ATTEMPTS - 1:
+                    raise
+            time.sleep(_PROTECTED_BRANCH_RETRY_DELAY)
+            existing = project.protectedbranches.get(desired.name)
+            if self._protected_branch_matches(existing, desired):
+                return
+            existing.delete()
+
+    @staticmethod
+    def _fork_imported(project: gitlab.v4.objects.Project) -> bool:
+        return getattr(project, "import_status", "none") in ("finished", "none")
+
+    def _wait_fork_imported(
+        self, project: gitlab.v4.objects.Project, timeout: float = _FORK_IMPORT_TIMEOUT
+    ) -> gitlab.v4.objects.Project:
+        deadline = time.monotonic() + timeout
+        while not self._fork_imported(project) and time.monotonic() < deadline:
+            time.sleep(1)
+            project = self._gitlab.projects.get(project.id)
+        if not self._fork_imported(project):
+            logger.warning(
+                "Fork import of %s still %s after %ss", project.path_with_namespace, project.import_status, timeout
+            )
+        return project
+
+    def ensure_project_settings(
+        self,
+        project: Union[str, gitlab.v4.objects.Project],
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
+    ) -> bool:
+        if isinstance(project, str):
+            project = self._gitlab.projects.get(project)
+
+        changed = False
+
+        if project.ci_config_path != ci_config_path:
+            project.ci_config_path = ci_config_path
+            project.save()
+            changed = True
+
+        existing_by_name = {branch.name: branch for branch in project.protectedbranches.list(get_all=True)}
+        desired_by_name = {branch.name: branch for branch in protected_branches}
+
+        for name, existing_branch in existing_by_name.items():
+            desired = desired_by_name.get(name)
+            if desired is None or not self._protected_branch_matches(existing_branch, desired):
+                existing_branch.delete()
+                changed = True
+
+        for name, desired in desired_by_name.items():
+            matching_existing = existing_by_name.get(name)
+            if matching_existing is None or not self._protected_branch_matches(matching_existing, desired):
+                self._create_protected_branch(project, desired)
+                changed = True
+
+        logger.info("Ensured RMS settings for project=%s changed=%s", project.path_with_namespace, changed)
+        return changed
+
+    def create_project(
+        self,
+        rms_user: RmsUser,
+        course_students_group: str,
+        course_public_repo: str,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
+    ) -> None:
         logger.info("Creating project for user=%s in group=%s", rms_user.username, course_students_group)
 
         course_group_path = "/".join(course_students_group.split("/")[:-1])
@@ -505,6 +614,7 @@ class GitLabApi(RmsApi, AuthApi):
                 except gitlab.GitlabCreateError:
                     logger.warning("Access already granted or conflict user=%s", rms_user.username)
 
+                self.ensure_project_settings(project, ci_config_path, protected_branches)
                 return
 
         course_public_project = self._get_project_by_name(course_public_repo)
@@ -521,19 +631,14 @@ class GitLabApi(RmsApi, AuthApi):
                 # TODO: Relay on groups runners
                 # "shared_runners_enabled": students_group.shared_runners_setting == "enabled",
                 # Set external gitlab-ci config from public repo
-                "ci_config_path": f".gitlab-ci.yml@{course_public_project.path_with_namespace}",
+                "ci_config_path": ci_config_path,
                 # Merge method to squash
                 "merge_method": "squash",
                 # Disable AutoDevOps
                 "auto_devops_enabled": False,
             }
         )
-        project = self._gitlab.projects.get(fork.id)
-        # TODO: think .evn config value
-        # Unprotect all branches
-        for protected_branch in project.protectedbranches.list(get_all=True):
-            protected_branch.delete()
-        project.save()
+        project = self._wait_fork_imported(self._gitlab.projects.get(fork.id))
 
         logger.info("Forked project created for user=%s repo=%s", rms_user.username, project.path_with_namespace)
         try:
@@ -557,6 +662,8 @@ class GitLabApi(RmsApi, AuthApi):
             logger.info("Access granted for course public project user=%s", member.username)
         except gitlab.GitlabCreateError:
             logger.warning("Access already granted or conflict on course public project user=%s", rms_user.username)
+
+        self.ensure_project_settings(project, ci_config_path, protected_branches)
 
     def _construct_rms_user(
         self,

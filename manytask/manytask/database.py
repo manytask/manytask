@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
@@ -27,7 +27,12 @@ from .config import (
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
-from .course import CourseStatus
+from .course import (
+    CourseStatus,
+    ProtectedBranchSettings,
+    resolve_effective_ci_config_path,
+    resolve_effective_protected_branches,
+)
 from .models import (
     ROLE_NAMESPACE_ADMIN,
     ROLE_PROGRAM_MANAGER,
@@ -87,6 +92,32 @@ def calculate_effective_grade(
         return capped_grade
 
     return calculated_grade
+
+
+def _protected_branches_key(branches: Iterable[Any]) -> dict[str, tuple[Any, Any, Any]]:
+    """Order-insensitive comparison key: branch name -> (push, merge, allow_force_push)."""
+    result = {}
+    for branch in branches:
+        if isinstance(branch, dict):
+            result[branch["name"]] = (
+                branch["push_access_level"],
+                branch["merge_access_level"],
+                branch["allow_force_push"],
+            )
+        else:
+            result[branch.name] = (branch.push_access_level, branch.merge_access_level, branch.allow_force_push)
+    return result
+
+
+def _rms_settings_changed(
+    stored_ci_config_path: Optional[str],
+    stored_protected_branches: Optional[list[dict[str, Any]]],
+    new_ci_config_path: str,
+    new_protected_branches: list[ProtectedBranchSettings],
+) -> bool:
+    if stored_ci_config_path != new_ci_config_path:
+        return True
+    return _protected_branches_key(stored_protected_branches or []) != _protected_branches_key(new_protected_branches)
 
 
 @dataclass
@@ -717,6 +748,33 @@ class DataBaseApi(StorageApi):
         logger.info("Updating course settings for course '%s'", course_name)
 
         with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+
+            configured_branches = (
+                [
+                    ProtectedBranchSettings(
+                        name=branch.name,
+                        push_access_level=branch.push_access_level,
+                        merge_access_level=branch.merge_access_level,
+                        allow_force_push=branch.allow_force_push,
+                    )
+                    for branch in config.rms.protected_branches
+                ]
+                if config.rms and config.rms.protected_branches
+                else None
+            )
+            new_ci_config_path = resolve_effective_ci_config_path(
+                config.rms.ci_config_path if config.rms else None,
+                course.gitlab_course_public_repo,
+            )
+            new_protected_branches = resolve_effective_protected_branches(
+                configured_branches,
+                course.gitlab_default_branch,
+            )
+            rms_settings_changed = _rms_settings_changed(
+                course.ci_config_path, course.protected_branches, new_ci_config_path, new_protected_branches
+            )
+
             self._update(
                 session,
                 models.Course,
@@ -724,6 +782,9 @@ class DataBaseApi(StorageApi):
                     "task_url_template": config.ui.task_url_template,
                     "links": config.ui.links,
                     "deadlines_type": config.deadlines.deadlines,
+                    "ci_config_path": new_ci_config_path,
+                    "protected_branches": [asdict(branch) for branch in new_protected_branches],
+                    "rms_settings_pending": course.rms_settings_pending or rms_settings_changed,
                 },
                 name=course_name,
             )
@@ -733,6 +794,15 @@ class DataBaseApi(StorageApi):
         self._sync_grades_config(course_name, config.grades)
 
         logger.info("Successfully updated course '%s'", course_name)
+
+    def rms_settings_reconcile_needed(self, course_name: str) -> bool:
+        with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+            return bool(course.rms_settings_pending)
+
+    def clear_rms_settings_pending(self, course_name: str) -> None:
+        with self._session_create() as session:
+            self._update(session, models.Course, defaults={"rms_settings_pending": False}, name=course_name)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[AppCourse, ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.

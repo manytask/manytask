@@ -480,6 +480,36 @@ class ManytaskFinalGradeConfig(BaseModel):
         return False
 
 
+class ProtectedBranchConfig(BaseModel):
+    name: str
+    push_access_level: Literal["no_access", "developer", "maintainer"] = "developer"
+    merge_access_level: Literal["no_access", "developer", "maintainer"] = "developer"
+    allow_force_push: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, data: str) -> str:
+        if not data.strip():
+            raise ValueError("protected branch name cannot be empty")
+        return data
+
+
+class ManytaskRmsConfig(BaseModel):
+    ci_config_path: Optional[str] = None
+    protected_branches: Optional[list[ProtectedBranchConfig]] = None
+
+    @field_validator("protected_branches")
+    @classmethod
+    def check_branch_names_unique(cls, data: list[ProtectedBranchConfig] | None) -> list[ProtectedBranchConfig] | None:
+        if data is None:
+            return data
+        names = [branch.name for branch in data]
+        duplicates = [name for name in names if names.count(name) > 1]
+        if duplicates:
+            raise ValueError(f"Protected branch names should be unique, duplicates: {duplicates}")
+        return data
+
+
 class ManytaskConfig(BaseModel):
     """Manytask configuration."""
 
@@ -489,6 +519,7 @@ class ManytaskConfig(BaseModel):
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
     grades: Optional[ManytaskFinalGradeConfig] = None
+    rms: Optional[ManytaskRmsConfig] = None
 
     @field_validator("version")
     @classmethod

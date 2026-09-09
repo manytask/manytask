@@ -6,7 +6,7 @@ from typing import Any, Callable, Iterable
 from authlib.integrations.flask_client import OAuth
 
 from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
-from .course import Course, CourseConfig, CourseStatus
+from .course import Course, CourseConfig, CourseStatus, ProtectedBranchSettings
 
 
 @dataclass
@@ -168,6 +168,12 @@ class StorageApi(ABC):
         course_name: str,
         config: ManytaskConfig,
     ) -> None: ...
+
+    @abstractmethod
+    def rms_settings_reconcile_needed(self, course_name: str) -> bool: ...
+
+    @abstractmethod
+    def clear_rms_settings_pending(self, course_name: str) -> None: ...
 
     @abstractmethod
     def get_course(
@@ -413,7 +419,26 @@ class RmsApi(ABC):
         rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
     ) -> None: ...
+
+    @abstractmethod
+    def list_group_projects(self, group_path: str) -> list[str]: ...
+
+    @abstractmethod
+    def ensure_project_settings(
+        self,
+        project: Any,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
+    ) -> bool:
+        """Apply ci_config_path/protected_branches to a project, writing only what differs.
+
+        :param project: project path (str) or an already-fetched RMS project object
+        :returns: whether anything was changed
+        """
+        ...
 
     @abstractmethod
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str: ...

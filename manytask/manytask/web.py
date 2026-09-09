@@ -390,7 +390,13 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     # Create use if needed
     try:
-        app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        app.rms_api.create_project(
+            rms_user,
+            course.gitlab_course_students_group,
+            course.gitlab_course_public_repo,
+            course.ci_config_path,
+            course.protected_branches,
+        )
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
         logger.error("Project creation failed: %s", ex.error_message)
