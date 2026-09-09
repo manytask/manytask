@@ -240,7 +240,7 @@
     }
 
   
-    const accessUsersUrl = '{{ url_for("api.get_course_access_users", course_name=course.course_name`) }}';
+    const accessUsersUrl = '{{ url_for("api.get_course_access_users", course_name=course.course_name) }}';
     const setCourseAdminUrl = '{{ url_for("api.set_course_admin", course_name=course.course_name) }}';
     // Privilege order, widest scope first, so the Access column sorts by reach
     // rather than alphabetically.
