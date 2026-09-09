@@ -96,6 +96,36 @@ class NamespaceUsersListResponse(BaseModel):
     users: list[NamespaceUserItem]
 
 
+class CourseAccessUserItem(BaseModel):
+    """A single row of the course access table.
+
+    ``access_levels`` may hold several entries at once, because the scopes overlap:
+    an instance admin can also be a course admin of the same course.
+    """
+
+    username: str
+    first_name: str
+    last_name: str
+    access_levels: list[str]
+
+
+class CourseAccessUsersResponse(BaseModel):
+    users: list[CourseAccessUserItem]
+
+
+class SetCourseAdminRequest(BaseModel):
+    """Request to grant or revoke course admin rights for a course member."""
+
+    username: str
+    is_admin: bool
+
+
+class AssignProgramManagerRequest(BaseModel):
+    """Request to assign a user as program manager of the course's namespace."""
+
+    username: str
+
+
 class CreateCourseRequest(BaseModel):
     namespace_id: int
     course_name: str

@@ -45,6 +45,13 @@ def _validate_gitlab_slug(slug: str) -> str:
 ROLE_NAMESPACE_ADMIN = "namespace_admin"
 ROLE_PROGRAM_MANAGER = "program_manager"
 
+# Access levels that are not stored in UserOnNamespace.role, but are still
+# reported as "access to a course" by StorageApi.get_course_access_users().
+# Kept next to the namespace roles so all access-level strings have a single
+# definition shared by the backend, the templates and the tests.
+ROLE_INSTANCE_ADMIN = "instance_admin"
+ROLE_COURSE_ADMIN = "course_admin"
+
 
 class UserOnNamespaceRole(enum.Enum):
     NAMESPACE_ADMIN = ROLE_NAMESPACE_ADMIN
