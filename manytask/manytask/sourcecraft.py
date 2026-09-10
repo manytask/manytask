@@ -193,17 +193,10 @@ class SourceCraftApi(RmsApi):
         role: str,
         user_id: str,
     ) -> None:
-        # Idempotency: if the user already has any role on this repo, skip the
-        # POST entirely. create_project can be safely re-invoked to recover a
-        # partial setup (repo created, role assignment failed on previous run).
-        get_response = self._request("GET", f"repos/{self._org_slug}/{repo_slug}/roles")
-        if get_response.status_code == HTTPStatus.OK:
-            for entry in get_response.json().get("subject_roles", []):
-                subject = entry.get("subject", {})
-                if subject.get("id") == user_id and subject.get("type") == "user":
-                    logger.info(f"User {user_id} already has role on {repo_slug}, skipping")
-                    return
-
+        # POST /roles is idempotent on the SourceCraft side: re-posting a role
+        # that already exists returns 200 OK. That means create_project can be
+        # safely re-invoked to recover a partial setup (repo created, role
+        # assignment failed on a previous run) without extra pre-flight checks.
         payload: dict[str, Any] = {
             "subject_roles": [
                 {

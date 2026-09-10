@@ -81,9 +81,6 @@ def test_create_project_slug_derives_from_rms_user_username(sourcecraft_api):
             return _make_response(HTTPStatus.OK, {"id": 42})
         if method == "POST" and path == f"orgs/{TEST_ORG}/repos":
             return _make_response(HTTPStatus.CREATED)
-        if method == "GET" and path.endswith("/roles"):
-            # _add_repo_role does a pre-flight GET to check for existing role.
-            return _make_response(HTTPStatus.OK, {"subject_roles": []})
         if method == "POST" and path.endswith("/roles"):
             return _make_response(HTTPStatus.OK)
         raise AssertionError(f"unexpected request {method} {path}")
@@ -115,8 +112,6 @@ def test_existence_check_and_create_use_matching_slug(sourcecraft_api):
             return _make_response(HTTPStatus.OK, {"id": 42})
         if method == "POST" and path == f"orgs/{TEST_ORG}/repos":
             return _make_response(HTTPStatus.CREATED)
-        if method == "GET" and path.endswith("/roles"):
-            return _make_response(HTTPStatus.OK, {"subject_roles": []})
         if method == "POST" and path.endswith("/roles"):
             return _make_response(HTTPStatus.OK)
         if method == "GET" and path.startswith(f"repos/{TEST_ORG}/{TEST_STUDENTS_GROUP}-"):
@@ -228,8 +223,6 @@ def test_create_project_is_idempotent_when_repo_already_exists(sourcecraft_api):
                 HTTPStatus.CONFLICT,
                 {"error_code": "SlugIsNotAvailable", "message": "slug taken"},
             )
-        if method == "GET" and path.endswith("/roles"):
-            return _make_response(HTTPStatus.OK, {"subject_roles": []})
         if method == "POST" and path.endswith("/roles"):
             return _make_response(HTTPStatus.OK)
         raise AssertionError(f"unexpected request {method} {path}")
@@ -238,35 +231,22 @@ def test_create_project_is_idempotent_when_repo_already_exists(sourcecraft_api):
         sourcecraft_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
 
 
-def test_add_repo_role_skips_post_when_user_already_has_role(sourcecraft_api):
-    """If the user is already an active member of the repo, do not re-POST /roles.
-
-    This makes create_project safe to call multiple times without racing on
-    duplicate-role errors, and lets a recovery hook re-run setup as a no-op.
+def test_add_repo_role_when_role_already_exists_is_a_noop(sourcecraft_api):
+    """POST /roles is idempotent on the SourceCraft side: posting a role that
+    already exists returns 200 OK, not a duplicate-role error. This lets
+    create_project be safely re-invoked (e.g. after a partial setup) without
+    a pre-flight GET or duplicate-error handling.
     """
     repo_slug = f"{TEST_STUDENTS_GROUP}-{SOURCECRAFT_USERNAME}"
 
-    seen_posts = []
-
     def side_effect(method, path, **kwargs):
-        if method == "GET" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
-            return _make_response(
-                HTTPStatus.OK,
-                {
-                    "subject_roles": [
-                        {"role": "developer", "subject": {"type": "user", "id": TEST_RMS_ID}}
-                    ]
-                },
-            )
-        if method == "POST" and path.endswith("/roles"):
-            seen_posts.append(path)
+        if method == "POST" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
             return _make_response(HTTPStatus.OK)
         raise AssertionError(f"unexpected request {method} {path}")
 
     with patch.object(sourcecraft_api, "_request", side_effect=side_effect):
+        # Must not raise even when role already exists on SC side.
         sourcecraft_api._add_repo_role(repo_slug, "developer", TEST_RMS_ID)
-
-    assert seen_posts == [], "POST /roles must be skipped when role already present"
 
 
 def test_add_repo_role_retries_on_gateway_timeout(sourcecraft_api):
@@ -286,8 +266,6 @@ def test_add_repo_role_retries_on_gateway_timeout(sourcecraft_api):
     )
 
     def side_effect(method, path, **kwargs):
-        if method == "GET" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
-            return _make_response(HTTPStatus.OK, {"subject_roles": []})
         if method == "POST" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
             return next(responses)
         raise AssertionError(f"unexpected request {method} {path}")
@@ -310,8 +288,6 @@ def test_add_repo_role_does_not_retry_on_client_error(sourcecraft_api):
     call_count = {"n": 0}
 
     def side_effect(method, path, **kwargs):
-        if method == "GET" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
-            return _make_response(HTTPStatus.OK, {"subject_roles": []})
         if method == "POST" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
             call_count["n"] += 1
             return _make_response(HTTPStatus.BAD_REQUEST, {"error_code": "BadRequest"})
