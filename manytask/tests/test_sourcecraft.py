@@ -294,7 +294,7 @@ def test_add_repo_role_retries_on_gateway_timeout(sourcecraft_api):
 
     with (
         patch.object(sourcecraft_api, "_request", side_effect=side_effect),
-        patch("manytask.sourcecraft.time.sleep"),  # no real sleep in tests
+        patch("tenacity.nap.sleep"),  # no real sleep in tests
     ):
         # Must not raise — second attempt succeeds.
         sourcecraft_api._add_repo_role(repo_slug, "developer", TEST_RMS_ID)
@@ -319,7 +319,7 @@ def test_add_repo_role_does_not_retry_on_client_error(sourcecraft_api):
 
     with (
         patch.object(sourcecraft_api, "_request", side_effect=side_effect),
-        patch("manytask.sourcecraft.time.sleep"),
+        patch("tenacity.nap.sleep"),
     ):
         with pytest.raises(RmsApiException):
             sourcecraft_api._add_repo_role(repo_slug, "developer", TEST_RMS_ID)

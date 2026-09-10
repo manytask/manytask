@@ -9,6 +9,14 @@ from typing import Any
 
 import grpc
 import httpx
+from tenacity import (
+    RetryCallState,
+    before_sleep_log,
+    retry,
+    retry_if_result,
+    stop_after_attempt,
+    wait_exponential,
+)
 from yandex.cloud.iam.v1.iam_token_service_pb2_grpc import IamTokenServiceStub
 from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2 import GetUserAccountByLoginRequest
 from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2_grpc import YandexPassportUserAccountServiceStub
@@ -18,6 +26,28 @@ from .abstract import RmsApi, RmsApiException, RmsUser
 from .utils.sourcecraft import normalize_string
 
 logger = logging.getLogger(__name__)
+
+
+# HTTP statuses for which POST /roles is retried. 429 = rate limit; 502/503/504
+# = transient gateway errors (observed in prod - one push had 400 then 504,
+# leaving the role assignment broken). 4xx (other than 429) is a client bug
+# - retrying won't help.
+_RETRY_STATUSES = frozenset(
+    {HTTPStatus.TOO_MANY_REQUESTS, HTTPStatus.BAD_GATEWAY, HTTPStatus.SERVICE_UNAVAILABLE, HTTPStatus.GATEWAY_TIMEOUT}
+)
+
+
+def _is_transient(response: httpx.Response) -> bool:
+    return response.status_code in _RETRY_STATUSES
+
+
+def _return_last_response(retry_state: RetryCallState) -> httpx.Response:
+    """After exhausting retries, return the last response instead of raising RetryError.
+
+    Caller inspects response.status_code / body to build a meaningful error.
+    """
+    assert retry_state.outcome is not None
+    return retry_state.outcome.result()
 
 
 @dataclass
@@ -146,44 +176,16 @@ class SourceCraftApi(RmsApi):
         if response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to update repo: {response.json()}")
 
-    # HTTP status codes for which _add_repo_role should transparently retry
-    # the POST /roles request. 502/503/504 are transient gateway errors seen
-    # in practice; a fresh call within a few seconds usually succeeds. 429 is
-    # included so we back off politely on rate limiting.
-    _RETRY_STATUSES = frozenset({
-        HTTPStatus.TOO_MANY_REQUESTS,
-        HTTPStatus.BAD_GATEWAY,
-        HTTPStatus.SERVICE_UNAVAILABLE,
-        HTTPStatus.GATEWAY_TIMEOUT,
-    })
-    _RETRY_MAX_ATTEMPTS = 3
-    _RETRY_BACKOFF_SECONDS = 1.0
-
-    def _post_repo_role(
-        self,
-        repo_slug: str,
-        payload: dict[str, Any],
-    ) -> httpx.Response:
+    @retry(
+        retry=retry_if_result(_is_transient),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=4),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        retry_error_callback=_return_last_response,
+    )
+    def _post_repo_role(self, repo_slug: str, payload: dict[str, Any]) -> httpx.Response:
         """POST /roles with retry on transient gateway/rate-limit errors."""
-        last_response: httpx.Response | None = None
-        for attempt in range(self._RETRY_MAX_ATTEMPTS):
-            response = self._request("POST", f"repos/{self._org_slug}/{repo_slug}/roles", json=payload)
-            last_response = response
-            if response.status_code not in self._RETRY_STATUSES:
-                return response
-            if attempt < self._RETRY_MAX_ATTEMPTS - 1:
-                sleep_for = self._RETRY_BACKOFF_SECONDS * (2**attempt)
-                logger.warning(
-                    "POST %s roles got %s, retrying in %.1fs (attempt %d/%d)",
-                    repo_slug,
-                    response.status_code,
-                    sleep_for,
-                    attempt + 1,
-                    self._RETRY_MAX_ATTEMPTS,
-                )
-                time.sleep(sleep_for)
-        assert last_response is not None
-        return last_response
+        return self._request("POST", f"repos/{self._org_slug}/{repo_slug}/roles", json=payload)
 
     def _add_repo_role(
         self,
