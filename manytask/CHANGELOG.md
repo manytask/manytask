@@ -1,5 +1,25 @@
 # Changelog
 
+## [26.0.5](https://github.com/manytask/manytask/releases/tag/26.0.5) - 2026-09-11
+
+UI updates, bug fixes and minor optimizations.
+
+### Dependency Updates
+
+- chore(deps): bump gitpython from 3.1.58 to 3.1.59 in /manytask in the uv group across 1 directory by @[dependabot[bot]](https://github.com/apps/dependabot) in [#1083](https://github.com/manytask/manytask/pull/1083)
+
+### Other changes
+
+- sourcecraft: idempotent create_project + retry on transient errors by @Ch0p1k3 in [#1087](https://github.com/manytask/manytask/pull/1087)
+- Dockerfile: order layers so code changes reuse the dependency cache by @ObjatieGroba in [#1086](https://github.com/manytask/manytask/pull/1086)
+- fix(gitlab): grant public repo access on re-enroll too by @ObjatieGroba in [#1085](https://github.com/manytask/manytask/pull/1085)
+- feat: add line numbers to database table by @zhmurov in [#1067](https://github.com/manytask/manytask/pull/1067)
+- docs: add note on how to restart manytask test container in local dev script by @zhmurov in [#1081](https://github.com/manytask/manytask/pull/1081)
+- fix: align "Show completed courses" button by center if there are no courses by @zhmurov in [#1082](https://github.com/manytask/manytask/pull/1082)
+- feat: show interpolate deadlines as a graph by @zhmurov in [#1074](https://github.com/manytask/manytask/pull/1074)
+- feat: do not show the secret info on course editing page by default by @zhmurov in [#1076](https://github.com/manytask/manytask/pull/1076)
+- docs: note that checker version should be updated on release by @zhmurov in [#1078](https://github.com/manytask/manytask/pull/1078)
+
 ## [26.0.4](https://github.com/manytask/manytask/releases/tag/26.0.4) - 2026-09-04
 
 Bug fix and updates to release procedure
