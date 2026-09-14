@@ -113,6 +113,10 @@ class CheckerTestingConfig(CustomBaseModel):
 
     search_plugins: list[str] = Field(default_factory=list)
 
+    # name of the task parameter holding glob patterns of student-editable files (e.g. "allow_change");
+    # None disables skipping tasks unchanged since the published version
+    skip_unchanged_tasks: Optional[str] = None
+
     global_pipeline: list[PipelineStageConfig] = Field(default_factory=list)
     tasks_pipeline: list[PipelineStageConfig] = Field(default_factory=list)
     report_pipeline: list[PipelineStageConfig] = Field(default_factory=list)

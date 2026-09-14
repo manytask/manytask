@@ -579,6 +579,210 @@ class TestExporterOnSimple:
         ) == "print('Hello LOL this too')\n"
 
 
+class TestExporterIsTaskUnchanged:
+    @pytest.fixture()
+    def deadlines(self) -> ManytaskConfig:
+        return ManytaskConfig(
+            version=1,
+            settings={
+                "course_name": "test",
+                "gitlab_base_url": "https://google.com",
+                "public_repo": "public",
+                "students_group": "students",
+            },
+            ui={"task_url_template": "https://example.com/$GROUP_NAME/$TASK_NAME"},
+            deadlines={"timezone": "Europe/Berlin", "schedule": []},
+        )
+
+    def _make_exporter(
+        self,
+        tmpdir: Path,
+        generate_file_structure: T_GENERATE_FILE_STRUCTURE,
+        deadlines: ManytaskConfig,
+        reference_layout: dict[str, Any],
+        student_layout: dict[str, Any],
+        templates: CheckerExportConfig.TemplateType,
+    ) -> Exporter:
+        reference_root = Path(tmpdir / "reference")
+        student_root = Path(tmpdir / "student")
+        generate_file_structure(reference_layout, reference_root)
+        generate_file_structure(student_layout, student_root)
+        course = Course(
+            manytask_config=deadlines,
+            repository_root=student_root,
+            reference_root=reference_root,
+        )
+        structure = CheckerStructureConfig(ignore_patterns=[], private_patterns=[], public_patterns=["*"])
+        export_config = CheckerExportConfig(destination="https://example.com", templates=templates)
+        return Exporter(course, structure, export_config, verbose=True)
+
+    def test_empty_patterns_is_always_changed(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.c": "int main() {}", "solution.c.template": "TODO"}},
+            student_layout={"task1": {"solution.c": "TODO"}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        assert exporter.is_task_unchanged("task1", []) is False
+
+    def test_no_matched_student_files_is_changed(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.c": "int main() {}", "solution.c.template": "TODO"}},
+            student_layout={"task1": {"solution.c": "TODO"}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        # pattern matches nothing in the student dir - nothing to compare
+        assert exporter.is_task_unchanged("task1", ["not_here.txt"]) is False
+
+    def test_search_mode_template_file_identical(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.c": "int main() {}", "solution.c.template": "TODO"}},
+            student_layout={"task1": {"solution.c": "TODO"}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["solution.c"]) is True
+
+    def test_search_mode_template_file_differs(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.c": "int main() {}", "solution.c.template": "TODO"}},
+            student_layout={"task1": {"solution.c": "int main() { return 1; }"}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["solution.c"]) is False
+
+    def test_search_mode_template_directory_identical(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={
+                "task1": {
+                    "src": {"x.c": "original"},
+                    "src.template": {"x.c": "TEMPLATE X"},
+                }
+            },
+            student_layout={"task1": {"src": {"x.c": "TEMPLATE X"}}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["src"]) is True
+
+    def test_search_mode_template_directory_differs(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={
+                "task1": {
+                    "src": {"x.c": "original"},
+                    "src.template": {"x.c": "TEMPLATE X"},
+                }
+            },
+            student_layout={"task1": {"src": {"x.c": "Student changed it"}}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["src"]) is False
+
+    def test_create_mode_template_comments_identical(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.py": "Some SOLUTION BEGIN\nHello\nSOLUTION END\n"}},
+            student_layout={"task1": {"solution.py": "Some TODO: Your solution\n"}},
+            templates=CheckerExportConfig.TemplateType.CREATE,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["solution.py"]) is True
+
+    def test_create_mode_template_comments_differ(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.py": "Some SOLUTION BEGIN\nHello\nSOLUTION END\n"}},
+            student_layout={"task1": {"solution.py": "Some Changes\n"}},
+            templates=CheckerExportConfig.TemplateType.CREATE,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["solution.py"]) is False
+
+    def test_no_template_compares_with_reference_file_identical(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        # reference_root already holds published content directly, e.g. output of `checker export-private`
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.c": "TODO"}},
+            student_layout={"task1": {"solution.c": "TODO"}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["solution.c"]) is True
+
+    def test_no_template_compares_with_reference_file_differs(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.c": "TODO"}},
+            student_layout={"task1": {"solution.c": "Changed"}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["solution.c"]) is False
+
+    def test_extra_student_file_with_no_published_counterpart_is_changed(
+        self, tmpdir: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE, deadlines: ManytaskConfig
+    ) -> None:
+        exporter = self._make_exporter(
+            tmpdir,
+            generate_file_structure,
+            deadlines,
+            reference_layout={"task1": {"solution.c": "int main() {}", "solution.c.template": "TODO"}},
+            student_layout={"task1": {"solution.c": "TODO", "extra.txt": "new file"}},
+            templates=CheckerExportConfig.TemplateType.SEARCH,
+        )
+
+        assert exporter.is_task_unchanged("task1", ["*"]) is False
+
+
 class _TestExporter:
     SAMPLE_TEST_DEADLINES_CONFIG = ManytaskConfig(
         version=1,
