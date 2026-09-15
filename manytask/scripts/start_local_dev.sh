@@ -121,6 +121,8 @@ show_success_message() {
     echo "  Check status: docker compose -f ${COMPOSE_FILE} ps"
     echo "  View logs:    docker logs -f test-manytask"
     echo "                docker logs -f manytask_gitlab"
+    echo "  Restart Manytask:"
+    echo "                docker restart test-manytask"
     echo "  Rebuild and restart Manytask:"
     echo "                docker compose -f ${COMPOSE_FILE} up --build --no-deps -d manytask"
     echo "  Stop all:     docker compose -f ${COMPOSE_FILE} down"

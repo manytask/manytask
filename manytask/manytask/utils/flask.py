@@ -105,7 +105,9 @@ def check_if_current_user_is_instance_admin(app: CustomFlask) -> bool:
     if app.debug:
         return True
     else:
-        username = session["manytask"]["username"]
+        username = session.get("manytask", {}).get("username")
+        if username is None:
+            return False
         return app.storage_api.check_if_instance_admin(username)
 
 
@@ -120,7 +122,9 @@ def check_if_current_user_is_namespace_admin(app: CustomFlask, course_name: str)
     if app.debug:
         return True
     else:
-        username = session["manytask"]["username"]
+        username = session.get("manytask", {}).get("username")
+        if username is None:
+            return False
         course = app.storage_api.get_course(course_name)
         if course and course.namespace_id:
             namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)

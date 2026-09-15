@@ -9,6 +9,14 @@ from typing import Any
 
 import grpc
 import httpx
+from tenacity import (
+    RetryCallState,
+    before_sleep_log,
+    retry,
+    retry_if_result,
+    stop_after_attempt,
+    wait_exponential,
+)
 from yandex.cloud.iam.v1.iam_token_service_pb2_grpc import IamTokenServiceStub
 from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2 import GetUserAccountByLoginRequest
 from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2_grpc import YandexPassportUserAccountServiceStub
@@ -18,6 +26,28 @@ from .abstract import RmsApi, RmsApiException, RmsUser
 from .utils.sourcecraft import normalize_string
 
 logger = logging.getLogger(__name__)
+
+
+# HTTP statuses for which POST /roles is retried. 429 = rate limit; 502/503/504
+# = transient gateway errors (observed in prod - one push had 400 then 504,
+# leaving the role assignment broken). 4xx (other than 429) is a client bug
+# - retrying won't help.
+_RETRY_STATUSES = frozenset(
+    {HTTPStatus.TOO_MANY_REQUESTS, HTTPStatus.BAD_GATEWAY, HTTPStatus.SERVICE_UNAVAILABLE, HTTPStatus.GATEWAY_TIMEOUT}
+)
+
+
+def _is_transient(response: httpx.Response) -> bool:
+    return response.status_code in _RETRY_STATUSES
+
+
+def _return_last_response(retry_state: RetryCallState) -> httpx.Response:
+    """After exhausting retries, return the last response instead of raising RetryError.
+
+    Caller inspects response.status_code / body to build a meaningful error.
+    """
+    assert retry_state.outcome is not None
+    return retry_state.outcome.result()
 
 
 @dataclass
@@ -124,8 +154,18 @@ class SourceCraftApi(RmsApi):
                 "template_id": template_id,
             }
         response = self._request("POST", f"orgs/{self._org_slug}/repos", json=payload)
-        if response.status_code != HTTPStatus.CREATED:
-            raise RmsApiException(f"Failed to create repo: {response.json()}")
+        if response.status_code == HTTPStatus.CREATED:
+            return
+        # Idempotency: SC returns 409 with error_code=SlugIsNotAvailable when the
+        # repo already exists. This happens on any retry of create_project (e.g.
+        # after a previous run failed at _add_repo_role). Treat as success so
+        # create_project can be safely re-invoked to recover a partial setup.
+        if response.status_code == HTTPStatus.CONFLICT:
+            data = response.json()
+            if data.get("error_code") == "SlugIsNotAvailable":
+                logger.info(f"Repo {repo_slug} already exists, skipping creation")
+                return
+        raise RmsApiException(f"Failed to create repo: {response.json()}")
 
     def _update_repo(
         self,
@@ -136,12 +176,27 @@ class SourceCraftApi(RmsApi):
         if response.status_code != HTTPStatus.OK:
             raise RmsApiException(f"Failed to update repo: {response.json()}")
 
+    @retry(
+        retry=retry_if_result(_is_transient),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=4),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        retry_error_callback=_return_last_response,
+    )
+    def _post_repo_role(self, repo_slug: str, payload: dict[str, Any]) -> httpx.Response:
+        """POST /roles with retry on transient gateway/rate-limit errors."""
+        return self._request("POST", f"repos/{self._org_slug}/{repo_slug}/roles", json=payload)
+
     def _add_repo_role(
         self,
         repo_slug: str,
         role: str,
         user_id: str,
     ) -> None:
+        # POST /roles is idempotent on the SourceCraft side: re-posting a role
+        # that already exists returns 200 OK. That means create_project can be
+        # safely re-invoked to recover a partial setup (repo created, role
+        # assignment failed on a previous run) without extra pre-flight checks.
         payload: dict[str, Any] = {
             "subject_roles": [
                 {
@@ -153,7 +208,7 @@ class SourceCraftApi(RmsApi):
                 }
             ]
         }
-        response = self._request("POST", f"repos/{self._org_slug}/{repo_slug}/roles", json=payload)
+        response = self._post_repo_role(repo_slug, payload)
         if response.status_code != HTTPStatus.OK:
             data = response.json()
             if data.get("error_code", "") == "FailedPrecondition":
@@ -163,7 +218,7 @@ class SourceCraftApi(RmsApi):
                     "type": "invitee",
                     "id": invitee_id,
                 }
-                response = self._request("POST", f"repos/{self._org_slug}/{repo_slug}/roles", json=payload)
+                response = self._post_repo_role(repo_slug, payload)
                 if response.status_code != HTTPStatus.OK:
                     raise RmsApiException(f"Failed to add repo role: {response.json()}")
             else:
