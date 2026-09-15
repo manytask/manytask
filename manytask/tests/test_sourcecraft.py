@@ -196,3 +196,108 @@ def test_get_rms_user_by_username_prefers_yandex_login(sourcecraft_api):
 
     assert rms_user.username == SOURCECRAFT_USERNAME
     mock_request.assert_called_once_with("GET", f"users/cloud-id:{cloud_id}")
+
+
+# ---------------------------------------------------------------------------
+# Recovery from partial setup: create_project is idempotent and _add_repo_role
+# retries on transient errors. See fix/create-project-recovery.
+# ---------------------------------------------------------------------------
+
+
+def test_create_project_is_idempotent_when_repo_already_exists(sourcecraft_api):
+    """A repeated create_project call after a partial setup must not raise.
+
+    Real-world scenario: first attempt created the repo but the follow-up
+    POST /roles failed with 504. On the next call, POST /orgs/.../repos
+    returns 409 SlugIsNotAvailable, which used to bubble up as
+    RmsApiException and blocked recovery. We now treat it as success and
+    let _add_repo_role finish the job.
+    """
+    rms_user = RmsUser(id=TEST_RMS_ID, username=SOURCECRAFT_USERNAME, name="Test User")
+
+    def side_effect(method, path, **kwargs):
+        if method == "GET" and path == f"repos/{TEST_ORG}/{TEST_PUBLIC_REPO}":
+            return _make_response(HTTPStatus.OK, {"id": 42})
+        if method == "POST" and path == f"orgs/{TEST_ORG}/repos":
+            return _make_response(
+                HTTPStatus.CONFLICT,
+                {"error_code": "SlugIsNotAvailable", "message": "slug taken"},
+            )
+        if method == "POST" and path.endswith("/roles"):
+            return _make_response(HTTPStatus.OK)
+        raise AssertionError(f"unexpected request {method} {path}")
+
+    with patch.object(sourcecraft_api, "_request", side_effect=side_effect):
+        sourcecraft_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+
+
+def test_add_repo_role_when_role_already_exists_is_a_noop(sourcecraft_api):
+    """POST /roles is idempotent on the SourceCraft side: posting a role that
+    already exists returns 200 OK, not a duplicate-role error. This lets
+    create_project be safely re-invoked (e.g. after a partial setup) without
+    a pre-flight GET or duplicate-error handling.
+    """
+    repo_slug = f"{TEST_STUDENTS_GROUP}-{SOURCECRAFT_USERNAME}"
+
+    def side_effect(method, path, **kwargs):
+        if method == "POST" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
+            return _make_response(HTTPStatus.OK)
+        raise AssertionError(f"unexpected request {method} {path}")
+
+    with patch.object(sourcecraft_api, "_request", side_effect=side_effect):
+        # Must not raise even when role already exists on SC side.
+        sourcecraft_api._add_repo_role(repo_slug, "developer", TEST_RMS_ID)
+
+
+def test_add_repo_role_retries_on_gateway_timeout(sourcecraft_api):
+    """504 from POST /roles must trigger transparent retry within the same call.
+
+    Motivated by production incident: SC returned one 504 during a real
+    student sign-up, manytask propagated the error, and the student's repo
+    was left permanently without a developer-role assignment because no
+    retry mechanism existed.
+    """
+    repo_slug = f"{TEST_STUDENTS_GROUP}-{SOURCECRAFT_USERNAME}"
+    responses = iter(
+        [
+            _make_response(HTTPStatus.GATEWAY_TIMEOUT, {"error_code": "GatewayTimeout"}),
+            _make_response(HTTPStatus.OK),
+        ]
+    )
+
+    def side_effect(method, path, **kwargs):
+        if method == "POST" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
+            return next(responses)
+        raise AssertionError(f"unexpected request {method} {path}")
+
+    with (
+        patch.object(sourcecraft_api, "_request", side_effect=side_effect),
+        patch("tenacity.nap.sleep"),  # no real sleep in tests
+    ):
+        # Must not raise — second attempt succeeds.
+        sourcecraft_api._add_repo_role(repo_slug, "developer", TEST_RMS_ID)
+
+
+def test_add_repo_role_does_not_retry_on_client_error(sourcecraft_api):
+    """4xx from POST /roles must fail immediately without retry.
+
+    Retrying a 400 Bad Request would just waste time — the request is
+    malformed, retrying with the same payload cannot succeed.
+    """
+    repo_slug = f"{TEST_STUDENTS_GROUP}-{SOURCECRAFT_USERNAME}"
+    call_count = {"n": 0}
+
+    def side_effect(method, path, **kwargs):
+        if method == "POST" and path == f"repos/{TEST_ORG}/{repo_slug}/roles":
+            call_count["n"] += 1
+            return _make_response(HTTPStatus.BAD_REQUEST, {"error_code": "BadRequest"})
+        raise AssertionError(f"unexpected request {method} {path}")
+
+    with (
+        patch.object(sourcecraft_api, "_request", side_effect=side_effect),
+        patch("tenacity.nap.sleep"),
+    ):
+        with pytest.raises(RmsApiException):
+            sourcecraft_api._add_repo_role(repo_slug, "developer", TEST_RMS_ID)
+
+    assert call_count["n"] == 1, "4xx must not be retried"

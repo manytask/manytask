@@ -409,6 +409,14 @@ def test_not_ready(app):
             assert response.status_code == HTTPStatus.FOUND
 
 
+def test_not_ready_anonymous(app, mock_course):
+    """Anonymous users (no session) must see the not_ready page, not a 500."""
+    with app.test_request_context():
+        with patch.object(mock_course, "status", CourseStatus.CREATED):
+            response = app.test_client().get(f"/{TEST_COURSE_NAME}/not_ready")
+            assert response.status_code == HTTPStatus.OK
+
+
 def check_admin_in_data(response, check_true):
     assert response.status_code == HTTPStatus.OK
     if check_true:
