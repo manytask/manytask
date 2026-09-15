@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
 
 from . import models
-from .abstract import StorageApi, StoredUser, StudentCourseScores, TaskScore
+from .abstract import CourseAccessUser, StorageApi, StoredUser, StudentCourseScores, TaskScore
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -29,6 +29,8 @@ from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
 from .course import CourseStatus
 from .models import (
+    ROLE_COURSE_ADMIN,
+    ROLE_INSTANCE_ADMIN,
     ROLE_NAMESPACE_ADMIN,
     ROLE_PROGRAM_MANAGER,
     Course,
@@ -1104,6 +1106,78 @@ class DataBaseApi(StorageApi):
             )
             logger.info("Fetched users for course '%s': count=%s", course_name, len(users_on_courses))
             return [(self._to_stored_user(uoc.user), uoc.is_course_admin) for uoc in users_on_courses]
+
+    def get_course_access_users(self, course_name: str) -> list[CourseAccessUser]:
+        """Get every user with admin access to a course, from any scope.
+
+        Collects four independent sources and merges them by user, so a user holding
+        several levels (e.g. an instance admin who is also a course admin) appears
+        once with all levels listed:
+
+        * instance admins (:attr:`models.User.is_instance_admin`)
+        * namespace admins of the course's namespace
+        * program managers of the course's namespace
+        * course admins of the course itself
+
+        The namespace-scoped sources are skipped when the course has no namespace.
+
+        :param course_name: course name
+        :return: list of :class:`CourseAccessUser`, ordered by username
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+            except NoResultFound:
+                logger.warning("Course '%s' not found when fetching course access users", course_name)
+                return []
+
+            access_users: dict[int, CourseAccessUser] = {}
+
+            def add(user: models.User, access_level: str) -> None:
+                entry = access_users.get(user.id)
+                if entry is None:
+                    entry = CourseAccessUser(
+                        username=user.username,
+                        first_name=user.first_name,
+                        last_name=user.last_name,
+                    )
+                    access_users[user.id] = entry
+                if access_level not in entry.access_levels:
+                    entry.access_levels.append(access_level)
+
+            for user in session.query(models.User).filter(models.User.is_instance_admin.is_(True)).all():
+                add(user, ROLE_INSTANCE_ADMIN)
+
+            if course.namespace_id is not None:
+                namespace_roles = {
+                    models.UserOnNamespaceRole.NAMESPACE_ADMIN: ROLE_NAMESPACE_ADMIN,
+                    models.UserOnNamespaceRole.PROGRAM_MANAGER: ROLE_PROGRAM_MANAGER,
+                }
+                users_on_namespace = (
+                    session.query(models.UserOnNamespace)
+                    .filter(models.UserOnNamespace.namespace_id == course.namespace_id)
+                    .options(joinedload(models.UserOnNamespace.user))
+                    .all()
+                )
+                for user_on_namespace in users_on_namespace:
+                    access_level = namespace_roles.get(user_on_namespace.role)
+                    if access_level is not None:
+                        add(user_on_namespace.user, access_level)
+
+            users_on_course = (
+                session.query(models.UserOnCourse)
+                .filter(
+                    models.UserOnCourse.course_id == course.id,
+                    models.UserOnCourse.is_course_admin.is_(True),
+                )
+                .options(joinedload(models.UserOnCourse.user))
+                .all()
+            )
+            for user_on_course in users_on_course:
+                add(user_on_course.user, ROLE_COURSE_ADMIN)
+
+            logger.info("Fetched access users for course '%s': count=%s", course_name, len(access_users))
+            return sorted(access_users.values(), key=lambda access_user: access_user.username)
 
     def set_instance_admin_status(self, username: str, is_admin: bool) -> None:
         """Change user admin status
