@@ -145,6 +145,34 @@ class TestTester:
         assert context["parameters"] == expected
 
     @typing.no_type_check
+    @pytest.mark.parametrize(
+        "group_params, task_params, expected",
+        [
+            ({"b": 10, "c": 3}, {"c": 50, "d": 6}, {"a": 1, "b": 10, "c": 50, "d": 6}),
+            (None, {"b": 10, "c": 3}, {"a": 1, "b": 10, "c": 3}),
+            ({"b": 10, "c": 3}, None, {"a": 1, "b": 10, "c": 3}),
+        ],
+    )
+    def test_get_task_parameters_merge(self, mocker, group_params, task_params, expected):
+        mocker.patch("pkgutil.iter_modules", return_value=[])
+        tester = Tester(CourseMock(), CheckerConfigMock())
+        tester.default_params = CheckerParametersConfig(root={"a": 1, "b": 2})
+
+        group_config = (
+            CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root=group_params)) if group_params else None
+        )
+        mocker.patch.object(tester, "_get_group_config", return_value=group_config)
+
+        task_config = (
+            CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root=task_params))
+            if task_params
+            else CheckerSubConfig(version=1)
+        )
+        task = FileSystemTask(name="task1_1", relative_path="group1/task1_1", config=task_config)
+
+        assert tester.get_task_parameters(task) == expected
+
+    @typing.no_type_check
     def test_global_context_has_only_default_parameters(self, mocker):
         mocker.patch("pkgutil.iter_modules", return_value=[])
         tester = Tester(CourseMock(), CheckerConfigMock())
