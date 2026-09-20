@@ -352,6 +352,12 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     return redirect(url_for("root.index"))
 
 
+RMS_PROJECT_CREATION_FAILED_MESSAGE = (
+    "Could not create your repository. This is not something you can fix yourself - "
+    "please report it to the course staff."
+)
+
+
 @course_bp.route("/create_project", methods=["GET", "POST"])
 @requires_ready
 @requires_auth
@@ -359,32 +365,30 @@ def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    if request.method == "GET":
+    def render_create_project(error_message: str | None = None) -> str:
         return render_template(
             "create_project.html",
+            error_message=error_message,
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
         )
 
+    if request.method == "GET":
+        return render_create_project()
+
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
-        return render_template("create_project.html", error_message="CSRF Error")
+        return render_create_project("CSRF Error")
 
     rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
     if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        return render_template(
-            "create_project.html",
-            error_message="Invalid secret",
-            course_name=course.course_name,
-            course_favicon=app.favicon,
-            base_url=app.rms_api.base_url,
-        )
+        return render_create_project("Invalid secret")
 
     app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
 
@@ -393,8 +397,14 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
-        logger.error("Project creation failed: %s", ex.error_message)
-        return render_template(app.signup_template, error_message=ex.error_message, course_name=course.course_name)
+        logger.error("Project creation failed for user %s: %s", rms_user.username, ex.error_message)
+        return render_create_project(ex.error_message)
+    except RmsApiException as ex:
+        # Every RMS backend raises RmsApiException, so this is the generic path: without it a
+        # failing RMS (quota exhausted, slug taken, API down) escapes as a bare 500. The raw
+        # message is backend-internal, so it goes to the log and the user gets a readable one.
+        logger.error("Project creation failed for user %s: %s", rms_user.username, ex)
+        return render_create_project(RMS_PROJECT_CREATION_FAILED_MESSAGE)
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
