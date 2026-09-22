@@ -352,12 +352,6 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     return redirect(url_for("root.index"))
 
 
-RMS_PROJECT_CREATION_FAILED_MESSAGE = (
-    "Could not create your repository. This is not something you can fix yourself - "
-    "please report it to the course staff."
-)
-
-
 @course_bp.route("/create_project", methods=["GET", "POST"])
 @requires_ready
 @requires_auth
@@ -404,7 +398,10 @@ def create_project(course_name: str) -> ResponseReturnValue:
         # failing RMS (quota exhausted, slug taken, API down) escapes as a bare 500. The raw
         # message is backend-internal, so it goes to the log and the user gets a readable one.
         logger.error("Project creation failed for user %s: %s", rms_user.username, ex)
-        return render_create_project(RMS_PROJECT_CREATION_FAILED_MESSAGE)
+        return render_create_project(
+            "Could not create your repository. This is not something you can fix yourself - "
+            "please report it to the course staff."
+        )
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
