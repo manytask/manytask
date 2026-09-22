@@ -220,6 +220,7 @@ def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
     mock_gitlab_instance.projects.create.assert_called_once_with(
         _make_public_repo_params(TEST_GROUP_PUBLIC_NAME_SHORT, mock_gitlab_group.id)
     )
+    assert mock_gitlab_instance.projects.create.call_args.args[0]["container_registry_access_level"] == "private"
 
 
 def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab_public_project):
@@ -230,6 +231,9 @@ def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
     mock_gitlab_instance.projects.create.assert_not_called()
+    mock_gitlab_instance.projects.update.assert_called_once_with(
+        mock_gitlab_public_project.id, {"container_registry_access_level": "private"}
+    )
 
 
 def test_create_students_group(gitlab, mock_gitlab_group):
@@ -312,10 +316,8 @@ def test_create_project_existing_project(
     mock_gitlab_student_project.members.create.assert_called_once_with(
         {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.DEVELOPER}
     )
-    # a re-enroll must also (re)grant read access to the course public repo
-    mock_gitlab_public_project.members.create.assert_called_once_with(
-        {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.REPORTER}
-    )
+    mock_gitlab_public_project.members.create.assert_not_called()
+    assert mock_gitlab_student_project.ci_config_path == f".gitlab-ci.yml@{TEST_GROUP_PUBLIC_NAME}"
 
 
 def test_create_project_no_existing_project_creates_fork(
@@ -332,8 +334,11 @@ def test_create_project_no_existing_project_creates_fork(
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
     rms_api._get_project_by_name.assert_called_with(TEST_GROUP_PUBLIC_NAME)
     rms_api._get_group_by_name.assert_called_with(TEST_GROUP_STUDENT_NAME)
-    mock_gitlab_student_project.members.create.assert_called_once_with(
-        {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.REPORTER}
+    mock_gitlab_student_project.members.create.assert_not_called()
+    project = mock_gitlab_instance.projects.get.return_value
+    assert project.ci_config_path == f".gitlab-ci.yml@{TEST_GROUP_PUBLIC_NAME}"
+    project.members.create.assert_called_once_with(
+        {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.DEVELOPER}
     )
 
 
