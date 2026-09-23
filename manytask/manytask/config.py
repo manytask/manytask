@@ -46,6 +46,37 @@ class AddUserToNamespaceRequest(BaseModel):
     role: Literal["namespace_admin", "program_manager"]
 
 
+class CreateUserRequest(BaseModel):
+    """Request to create or update a manytask user from an RMS (GitLab/SourceCraft) user.
+
+    Exactly one of rms_id or username must be provided to identify the RMS user.
+    """
+
+    rms_id: Optional[str] = None
+    username: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    auth_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def check_identifier(self) -> "CreateUserRequest":
+        if bool(self.rms_id) == bool(self.username):
+            raise ValueError("Exactly one of 'rms_id' or 'username' must be provided")
+        return self
+
+
+class UserResponse(BaseModel):
+    user_id: int
+    username: str
+    rms_id: str
+    created: bool
+
+
+class EnrollUserRequest(BaseModel):
+    username: str
+    course_admin: bool = False
+
+
 ROLE_STUDENT = "student"
 
 

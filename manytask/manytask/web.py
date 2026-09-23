@@ -30,6 +30,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
+from .utils.enrollment import enroll_user_on_course
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
@@ -384,11 +385,10 @@ def create_project(course_name: str) -> ResponseReturnValue:
     if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
         return render_create_project("Invalid secret")
 
-    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
-
-    # Create use if needed
     try:
-        app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        enroll_user_on_course(
+            app.storage_api, app.rms_api, rms_user, course, session["manytask"]["username"], is_course_admin
+        )
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
         logger.error("Project creation failed for user %s: %s", rms_user.username, ex.error_message)

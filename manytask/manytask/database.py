@@ -932,21 +932,31 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' isn't enrolled in course '%s'", username, course_name)
                 return False
 
-    def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int) -> None:
-        """Update or create user in DB"""
+    def update_or_create_user(
+        self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int, update_names: bool = False
+    ) -> None:
+        """Update or create user in DB
+
+        :param update_names: if True, also update first_name/last_name on an already existing user
+            (by default they are only set when the user is created)
+        """
 
         with self._session_create() as session:
             logger.debug(
                 f"Creating or updating user '{username}' "
-                f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id}, auth_id={auth_id})"
+                f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id}, "
+                f"auth_id={auth_id}, update_names={update_names})"
             )
+            defaults = dict[str, Any](
+                rms_id=rms_id,
+                auth_id=auth_id,
+            )
+            if update_names:
+                defaults.update(first_name=first_name, last_name=last_name)
             self._update_or_create(
                 session,
                 models.User,
-                defaults=dict[str, Any](
-                    rms_id=rms_id,
-                    auth_id=auth_id,
-                ),
+                defaults=defaults,
                 create_defaults=dict[str, Any](
                     first_name=first_name,
                     last_name=last_name,
