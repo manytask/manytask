@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from loguru import logger
+from pydantic import ValidationError
 from redis.asyncio import Redis
 
 from app.models import CURRENT_SCHEMA_VERSION, CourseConfig
@@ -51,7 +52,7 @@ class CourseStore:
 
         try:
             stored_version = int(data.get("schema_version", "-1"))
-        except ValueError:
+        except TypeError, ValueError:
             stored_version = -1
 
         if stored_version != CURRENT_SCHEMA_VERSION:
@@ -63,8 +64,14 @@ class CourseStore:
             )
             return None
 
-        config = CourseConfig.model_validate_json(data["config_json"])
-        return name, config, data["course_token"]
+        try:
+            config = CourseConfig.model_validate_json(data["config_json"])
+            course_token = data["course_token"]
+        except KeyError, ValidationError:
+            logger.warning("Skipping course {} due to malformed stored data", name)
+            return None
+
+        return name, config, course_token
 
     async def list_courses(self) -> list[str]:
         """Return all course names. Schema-version filtering is per-get."""

@@ -129,3 +129,46 @@ class TestSchemaVersionMismatch:
         # but get_course filters out
         assert await store.get_course("legacy") is None
         assert await store.get_course("ok") is not None
+
+
+class TestMalformedRecords:
+    async def test_get_returns_none_for_malformed_config_json(
+        self,
+        fake_redis: FakeRedis,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        await fake_redis.hset(  # type: ignore[misc]
+            "courses:broken-json",
+            mapping={
+                "config_json": "{not json}",
+                "course_token": "tok",
+                "schema_version": str(CURRENT_SCHEMA_VERSION),
+            },
+        )
+        store = CourseStore(fake_redis)
+
+        with caplog.at_level("WARNING"):
+            result = await store.get_course("broken-json")
+
+        assert result is None
+        assert "malformed stored data" in caplog.text
+
+    async def test_get_returns_none_for_incomplete_hash(
+        self,
+        fake_redis: FakeRedis,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        await fake_redis.hset(  # type: ignore[misc]
+            "courses:missing-token",
+            mapping={
+                "config_json": _config().model_dump_json(),
+                "schema_version": str(CURRENT_SCHEMA_VERSION),
+            },
+        )
+        store = CourseStore(fake_redis)
+
+        with caplog.at_level("WARNING"):
+            result = await store.get_course("missing-token")
+
+        assert result is None
+        assert "malformed stored data" in caplog.text
