@@ -2,13 +2,14 @@ import os
 from http import HTTPStatus
 from unittest.mock import patch
 
+import gitlab
 import pytest
 from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
 
-from manytask.abstract import AuthenticatedUser, StudentCourseScores, TaskScore
+from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus
 from manytask.local_config import LocalConfig
@@ -720,3 +721,72 @@ def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
 
     assert soup.find(id="assignProgramManagerModal") is None
     assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
+def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):
+    """Regression: a failing RMS must not blow up the enrollment form with a 500.
+
+    ``create_project`` used to catch only ``gitlab.GitlabError``. Every RMS backend raises
+    ``RmsApiException`` instead, so on SourceCraft any backend failure (exhausted cloud quota,
+    taken slug, API outage) escaped the handler and Flask returned a bare 500. Students saw a
+    broken page with no idea whether it was their fault.
+    """
+    CSRFProtect(app)
+    mock_course.token = TEST_TOKEN
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(
+                app.rms_api,
+                "create_project",
+                side_effect=RmsApiException("Failed to create repo: {'error_code': 'ResourceExhausted'}"),
+            ),
+        ):
+            set_session(client, build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+            soup = BeautifulSoup(response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": mock_course.registration_secret},
+            )
+
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            # The user stays on the enrollment form, not on the signup page.
+            assert "Secret Code" in body
+            # Backend-internal detail is logged, not shown.
+            assert "ResourceExhausted" not in body
+            assert "course staff" in body
+
+
+def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitlab_oauth):
+    """The GitLab path keeps surfacing its own message, now on the create_project page."""
+    CSRFProtect(app)
+    mock_course.token = TEST_TOKEN
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(
+                app.rms_api,
+                "create_project",
+                side_effect=gitlab.GitlabError("boom", response_code=403),
+            ),
+        ):
+            set_session(client, build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+            soup = BeautifulSoup(response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": mock_course.registration_secret},
+            )
+
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            assert "boom" in body
+            assert "Secret Code" in body
