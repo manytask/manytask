@@ -551,7 +551,7 @@ def test_add_user_to_namespace_as_instance_admin(client_with_db, session, mock_s
     response = post_json(
         client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        {"user_id": regular_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
+        {"username": regular_user.username, "role": ROLE_PROGRAM_MANAGER},
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -606,7 +606,7 @@ def test_add_user_to_namespace_as_namespace_admin(client_with_db, session, mock_
     response = post_json(
         client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        {"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN},
+        {"username": new_user.username, "role": ROLE_NAMESPACE_ADMIN},
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -653,7 +653,7 @@ def test_add_user_to_namespace_as_program_manager_forbidden(
     response = post_json(
         client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        {"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
+        {"username": new_user.username, "role": ROLE_PROGRAM_MANAGER},
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
@@ -685,7 +685,7 @@ def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_sess
     response = post_json(
         client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        {"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
+        {"username": new_user.username, "role": ROLE_PROGRAM_MANAGER},
     )
     assert response.status_code == HTTPStatus.CREATED
 
@@ -693,7 +693,7 @@ def test_add_user_to_namespace_duplicate_role(client_with_db, session, mock_sess
     response = post_json(
         client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        {"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN},
+        {"username": new_user.username, "role": ROLE_NAMESPACE_ADMIN},
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
@@ -728,7 +728,9 @@ def test_add_user_to_namespace_invalid_role(client_with_db, session, mock_sessio
 
     for invalid_role in invalid_roles:
         response = post_json(
-            client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": new_user.rms_id, "role": invalid_role}
+            client_with_db,
+            f"/api/namespaces/{namespace_id}/users",
+            {"username": new_user.username, "role": invalid_role},
         )
 
         assert response.status_code == HTTPStatus.BAD_REQUEST, f"Role '{invalid_role}' should be invalid"
@@ -741,12 +743,12 @@ def test_add_user_to_namespace_missing_fields(client_with_db, mock_session_admin
 
     set_session(client_with_db, mock_session_admin)
 
-    # Missing user_id
+    # Missing username
     response = post_json(client_with_db, "/api/namespaces/1/users", {"role": ROLE_NAMESPACE_ADMIN})
     assert response.status_code == HTTPStatus.BAD_REQUEST
 
     # Missing role
-    response = post_json(client_with_db, "/api/namespaces/1/users", {"user_id": 1})
+    response = post_json(client_with_db, "/api/namespaces/1/users", {"username": "new_user"})
     assert response.status_code == HTTPStatus.BAD_REQUEST
 
     # Empty JSON
@@ -782,7 +784,9 @@ def test_add_user_to_namespace_nonexistent_user(client_with_db, session, mock_se
 
     # Try to add non-existent user
     response = post_json(
-        client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": 99999, "role": ROLE_NAMESPACE_ADMIN}
+        client_with_db,
+        f"/api/namespaces/{namespace_id}/users",
+        {"username": "missing_user", "role": ROLE_NAMESPACE_ADMIN},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -808,7 +812,7 @@ def test_add_user_to_namespace_nonexistent_namespace(client_with_db, session, mo
 
     # Try to add user to non-existent namespace
     response = post_json(
-        client_with_db, "/api/namespaces/99999/users", {"user_id": new_user.rms_id, "role": ROLE_NAMESPACE_ADMIN}
+        client_with_db, "/api/namespaces/99999/users", {"username": new_user.username, "role": ROLE_NAMESPACE_ADMIN}
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -840,7 +844,7 @@ def test_get_namespace_users_as_instance_admin(client_with_db, session, mock_ses
     response = post_json(
         client_with_db,
         f"/api/namespaces/{namespace_id}/users",
-        {"user_id": new_user.rms_id, "role": ROLE_PROGRAM_MANAGER},
+        {"username": new_user.username, "role": ROLE_PROGRAM_MANAGER},
     )
     assert response.status_code == HTTPStatus.CREATED
 
@@ -1011,7 +1015,9 @@ def test_remove_user_from_namespace_as_instance_admin(client_with_db, session, m
 
     # Add user to namespace
     response = post_json(
-        client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": new_user.rms_id, "role": "program_manager"}
+        client_with_db,
+        f"/api/namespaces/{namespace_id}/users",
+        {"username": new_user.username, "role": "program_manager"},
     )
     assert response.status_code == HTTPStatus.CREATED
 
@@ -1063,7 +1069,9 @@ def test_remove_user_from_namespace_as_namespace_admin(
 
     # Add user to namespace
     response = post_json(
-        client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": new_user.rms_id, "role": "program_manager"}
+        client_with_db,
+        f"/api/namespaces/{namespace_id}/users",
+        {"username": new_user.username, "role": "program_manager"},
     )
     assert response.status_code == HTTPStatus.CREATED
 
@@ -1113,7 +1121,9 @@ def test_remove_user_from_namespace_as_program_manager_forbidden(
 
     # Add user to namespace
     response = post_json(
-        client_with_db, f"/api/namespaces/{namespace_id}/users", {"user_id": new_user.rms_id, "role": "namespace_admin"}
+        client_with_db,
+        f"/api/namespaces/{namespace_id}/users",
+        {"username": new_user.username, "role": "namespace_admin"},
     )
     assert response.status_code == HTTPStatus.CREATED
 

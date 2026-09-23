@@ -1006,7 +1006,7 @@ def add_user_to_namespace(
 
     Request JSON:
     {
-        "user_id": 45,
+        "username": "student_username",
         "role": "namespace_admin" | "program_manager"
     }
 
@@ -1027,21 +1027,18 @@ def add_user_to_namespace(
 
     username = session["manytask"]["username"]
 
-    user_id = validated_data.user_id
+    target_username = validated_data.username
     role = validated_data.role
 
     try:
         try:
-            stored_user = storage_api.get_stored_user_by_rms_id(str(user_id))
-            if stored_user is None:
-                logger.error("User with id=%s not found in database", user_id)
-                return jsonify(
-                    ErrorResponse(error=f"User with id={user_id} not found").model_dump()
-                ), HTTPStatus.NOT_FOUND
+            stored_user = storage_api.get_stored_user_by_username(target_username)
             rms_user = rms_api.get_rms_user_by_id(stored_user.rms_id)
         except Exception as e:
-            logger.error("User with id=%s not found in RMS: %s", user_id, str(e))
-            return jsonify(ErrorResponse(error=f"User with id={user_id} not found").model_dump()), HTTPStatus.NOT_FOUND
+            logger.error("User with username=%s not found in RMS: %s", target_username, str(e))
+            return jsonify(
+                ErrorResponse(error=f"User with username={target_username} not found").model_dump()
+            ), HTTPStatus.NOT_FOUND
 
         # Сначала проверяем, что пользователь существует в локальной БД
         # (пользователь должен был хотя бы раз залогиниться в manytask)
@@ -1053,14 +1050,17 @@ def add_user_to_namespace(
                 assigned_by_username=username,
             )
         except NoResultFound as e:
-            logger.warning("User id=%s not registered in manytask: %s", user_id, str(e))
+            logger.warning("User username=%s not registered in manytask: %s", target_username, str(e))
             return jsonify(
                 ErrorResponse(
-                    error=f"User with id={user_id} is not registered in manytask. The user must log in at least once."
+                    error=(
+                        f"User with username={target_username} is not registered in manytask. "
+                        "The user must log in at least once."
+                    )
                 ).model_dump()
             ), HTTPStatus.NOT_FOUND
         except IntegrityError:
-            logger.warning("User id=%s already has a role in namespace id=%s", user_id, namespace_id)
+            logger.warning("User username=%s already has a role in namespace id=%s", target_username, namespace_id)
             return jsonify(
                 ErrorResponse(error="User already has a role in this namespace").model_dump()
             ), HTTPStatus.CONFLICT
@@ -1080,9 +1080,9 @@ def add_user_to_namespace(
             ), HTTPStatus.INTERNAL_SERVER_ERROR
 
         logger.info(
-            "User %s added user_id=%s to namespace id=%s with role %s",
+            "User %s added username=%s to namespace id=%s with role %s",
             username,
-            user_id,
+            target_username,
             namespace_id,
             role,
         )
@@ -1097,8 +1097,8 @@ def add_user_to_namespace(
 
     except Exception as e:
         logger.error(
-            "Unexpected error adding user_id=%s to namespace id=%s: %s",
-            user_id,
+            "Unexpected error adding username=%s to namespace id=%s: %s",
+            target_username,
             namespace_id,
             str(e),
             exc_info=True,

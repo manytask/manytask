@@ -917,6 +917,7 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
         abort(HTTPStatus.FORBIDDEN)
 
     namespace_users = app.storage_api.get_namespace_users(namespace_id)
+    namespace_user_ids = {user_id for user_id, _ in namespace_users}
 
     users_data = []
     for user_id, role in namespace_users:
@@ -944,6 +945,10 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
         "namespace_panel.html",
         namespace=namespace,
         users=users_data,
+        available_users=sorted(
+            (user for user in app.storage_api.get_all_users() if user.user_id not in namespace_user_ids),
+            key=lambda user: user.username.lower(),
+        ),
         courses=courses,
         is_instance_admin=is_instance_admin,
         manytask_version=app.manytask_version,
