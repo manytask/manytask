@@ -250,7 +250,8 @@ class Exporter:
         commit: bool = True,
         commit_message: str = "chore(auto): Update public files [skip-ci]",
     ) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target.mkdir(parents=True, exist_ok=True)
 
         disabled_groups_and_tasks_to_skip = [
             *[group.relative_path for group in self.course.get_groups(enabled=False)],
@@ -271,14 +272,15 @@ class Exporter:
             extra_ignore_paths=disabled_groups_and_tasks_to_skip,
         )
 
-        if commit:
+        if commit and not self.dry_run:
             self._commit_and_push_repo(target, commit_message)
 
     def export_for_testing(
         self,
         target: Path,
     ) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target.mkdir(parents=True, exist_ok=True)
 
         print_info(f"Copy from {self.repository_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -306,7 +308,8 @@ class Exporter:
         self,
         target: Path,
     ) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target.mkdir(parents=True, exist_ok=True)
 
         print_info(f"Copy from {self.repository_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -334,7 +337,8 @@ class Exporter:
         self,
         target: Path,
     ) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target.mkdir(parents=True, exist_ok=True)
 
         disabled_groups_and_tasks_to_skip = [
             *[group.relative_path for group in self.course.get_groups(enabled=False)],
@@ -606,6 +610,9 @@ class Exporter:
                 f"    - Copy <{path.relative_to(global_root)}> to <{path_destination.relative_to(global_destination)}>",
                 color="grey",
             )
+        if self.dry_run:
+            return
+
         path_destination.parent.mkdir(parents=True, exist_ok=True)
 
         # if `origin.template` - copy from this file as `origin`
