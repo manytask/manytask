@@ -228,7 +228,9 @@ def test_create_public_repo(
             "shared_runners_enabled": True,
             "auto_devops_enabled": False,
             "initialize_with_readme": True,
+            "merge_requests_access_level": "disabled",
             "container_registry_access_level": "private",
+            "public_jobs": False,
             "ci_config_path": f".gitlab-ci.yml@{TEST_GROUP_PUBLIC_NAME}",
         }
     )
@@ -247,7 +249,9 @@ def test_create_public_already_exist_repo(
     mock_gitlab_instance.projects.update.assert_called_once_with(
         mock_gitlab_public_project.id,
         {
+            "merge_requests_access_level": "disabled",
             "container_registry_access_level": "private",
+            "public_jobs": False,
             "ci_config_path": f".gitlab-ci.yml@{TEST_GROUP_PUBLIC_NAME}",
         },
     )

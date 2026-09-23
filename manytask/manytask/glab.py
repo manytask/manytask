@@ -30,6 +30,15 @@ def _validate_and_convert_user_id(user_id: str) -> int:
         raise ValueError(f"GitLab user ID must be convertible to integer, got: {user_id}")
 
 
+def _make_public_repo_settings(project_path: str) -> dict[str, Any]:
+    return {
+        "merge_requests_access_level": "disabled",
+        "container_registry_access_level": "private",
+        "public_jobs": False,
+        "ci_config_path": f".gitlab-ci.yml@{project_path}",
+    }
+
+
 def _make_public_repo_params(project_path: str, namespace_id: int) -> dict[str, Any]:
     project_name = project_path.split("/")[-1]
     return {
@@ -40,8 +49,7 @@ def _make_public_repo_params(project_path: str, namespace_id: int) -> dict[str, 
         "shared_runners_enabled": True,
         "auto_devops_enabled": False,
         "initialize_with_readme": True,
-        "container_registry_access_level": "private",
-        "ci_config_path": f".gitlab-ci.yml@{project_path}",
+        **_make_public_repo_settings(project_path),
     }
 
 
@@ -161,10 +169,7 @@ class GitLabApi(RmsApi, AuthApi):
                 logger.info("Project %s already exists", course_public_repo)
                 self._gitlab.projects.update(
                     project.id,
-                    {
-                        "container_registry_access_level": "private",
-                        "ci_config_path": f".gitlab-ci.yml@{course_public_repo}",
-                    },
+                    _make_public_repo_settings(course_public_repo),
                 )
                 return
 
