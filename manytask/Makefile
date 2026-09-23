@@ -15,9 +15,9 @@ export TESTCONTAINERS_RYUK_DISABLED
 
 .PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests
 
-check: copy-common-config lint test
+check: lint test
 
-check-colima: copy-common-config lint test-colima
+check-colima: lint test-colima
 
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
