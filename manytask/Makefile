@@ -1,5 +1,6 @@
 ROOT_DIR := manytask
 TESTS_DIR := tests
+TEST_ARGS ?= $(TESTS_DIR)
 DOCKER_COMPOSE_DEV := compose/docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 DOCS_DIR := ../docs
@@ -15,9 +16,9 @@ export TESTCONTAINERS_RYUK_DISABLED
 
 .PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests
 
-check: copy-common-config lint test
+check: lint test
 
-check-colima: copy-common-config lint test-colima
+check-colima: lint test-colima
 
 install-deps:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -37,11 +38,11 @@ reset-dev: clean-db
 test: copy-common-config install-deps run-manytask-tests
 
 run-manytask-tests:
-	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TEST_ARGS)
 
 test-colima: copy-common-config install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
-	uv run python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TESTS_DIR)/
+	uv run python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TEST_ARGS)
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
