@@ -385,8 +385,9 @@ def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., An
 
             username = session["manytask"]["username"]
             course_name = kwargs.get("course_name", None)
+            namespace_id = kwargs.get("namespace_id", None)
 
-            if not has_role(username, required_roles, app, course_name):
+            if not has_role(username, required_roles, app, course_name, namespace_id):
                 logger.warning(
                     "User %s attempted to access %s without required role(s): %s",
                     username,

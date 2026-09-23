@@ -397,6 +397,48 @@ def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
             assert "/instance_admin/courses/test_course_names/edit" in body
 
 
+def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
+    """Namespace admins can open the panel where they manage their namespace."""
+    namespace = MockCourseBase()
+    namespace.id = 1
+    namespace.name = "Test namespace"
+    namespace.slug = "test-namespace"
+    namespace.description = None
+    namespace.gitlab_group_id = 1
+
+    app.storage_api.get_namespace_by_id = lambda _namespace_id, _username: (namespace, "namespace_admin")
+    app.storage_api.get_namespace_users = lambda _namespace_id: []
+    app.storage_api.get_namespace_courses = lambda _namespace_id: []
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get(f"/instance_admin/namespaces/{namespace.id}")
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_oauth):
+    """Namespace admin access is limited to the requested namespace."""
+    app.storage_api.get_namespace_by_id = lambda namespace_id, _username: (
+        MockCourseBase(),
+        "namespace_admin" if namespace_id == 1 else "program_manager",
+    )
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get("/instance_admin/namespaces/2")
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
 def test_not_ready(app):
     with app.test_request_context():
         with (

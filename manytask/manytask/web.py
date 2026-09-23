@@ -821,7 +821,7 @@ def update_profile() -> ResponseReturnValue:
 
 
 @instance_admin_bp.route("/namespaces", methods=["GET"])
-@role_required(["namespace_admin", "instance_admin"])
+@requires_instance_or_namespace_admin
 def namespaces_list() -> ResponseReturnValue:
     """Display list of namespaces accessible to the user.
 
