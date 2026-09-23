@@ -397,6 +397,64 @@ def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
             assert "/instance_admin/courses/test_course_names/edit" in body
 
 
+def test_index_renders_namespace_table_for_namespace_admin(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    namespace = MockCourseBase()
+    namespace.id = 1
+    namespace.name = "Test namespace"
+    namespace.slug = "test-namespace"
+    namespace.description = "Namespace description"
+    namespace.gitlab_group_id = 1
+
+    app.storage_api.get_namespace_admin_namespaces = lambda _username: [namespace.id]
+    app.storage_api.get_user_namespaces = lambda _username: [(namespace, "namespace_admin")]
+    app.storage_api.get_namespace_users = lambda _namespace_id: [1, 2]
+    app.storage_api.get_namespace_courses = lambda _namespace_id: [{"name": "course"}]
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get("/")
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.data.decode()
+    assert "Namespaces you administer" in body
+    assert 'id="admin-namespaces-table"' in body
+    assert "adminNamespacesData" in body
+    assert 'title: "Edit"' in body
+    assert "Test namespace" in body
+    assert "/instance_admin/namespaces/1" in body
+
+
+def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    namespace = MockCourseBase()
+    namespace.id = 1
+    namespace.name = "Test namespace"
+    namespace.slug = "test-namespace"
+    namespace.description = None
+    namespace.gitlab_group_id = 1
+
+    app.storage_api.stored_user.instance_admin = True
+    app.storage_api.get_all_namespaces = lambda: [namespace]
+    app.storage_api.get_namespace_users = lambda _namespace_id: []
+    app.storage_api.get_namespace_courses = lambda _namespace_id: []
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get("/")
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Namespaces you administer" in response.data.decode()
+
+
 def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
     """Namespace admins can open the panel where they manage their namespace."""
     namespace = MockCourseBase()
