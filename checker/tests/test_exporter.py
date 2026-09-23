@@ -510,6 +510,24 @@ class TestExporterOnSimple:
         assert (simple_export_folder / "task1" / "test.txt").read_text(encoding="utf-8") == "Some TODO: Your solution\n"
         assert (simple_export_folder / "task2" / "test.txt").read_text(encoding="utf-8") == "Will replace the file"
 
+    def test_export_public_does_not_commit_by_default(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        simple_exporter: Exporter,
+        simple_export_folder: Path,
+    ) -> None:
+        called = False
+
+        def commit_and_push(*args: object, **kwargs: object) -> None:
+            nonlocal called
+            called = True
+
+        monkeypatch.setattr(simple_exporter, "_commit_and_push_repo", commit_and_push)
+
+        simple_exporter.export_public(simple_export_folder)
+
+        assert not called
+
     def test_export_for_testing(
         self,
         tmpdir: Path,
