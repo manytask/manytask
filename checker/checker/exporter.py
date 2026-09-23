@@ -737,11 +737,10 @@ class Exporter:
         """Commit and push all changes in the repository."""
         print_info("* git status...")
         r = subprocess.run(
-            "git status",
+            ["git", "status"],
             encoding="utf-8",
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            shell=True,
             check=True,
             cwd=repo_dir,
         )
