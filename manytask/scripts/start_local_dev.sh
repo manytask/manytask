@@ -22,8 +22,8 @@ check_requirements() {
         exit 1
     fi
 
-    if ! command -v docker-compose &> /dev/null; then
-        err "docker-compose is not installed or not in PATH"
+    if ! docker compose version &> /dev/null; then
+        err "Docker Compose v2 is not available. Install it and use 'docker compose'."
         exit 1
     fi
 
@@ -56,7 +56,7 @@ ensure_env_file() {
 
 start_containers() {
     log "Starting Docker containers..."
-    docker-compose -f "${COMPOSE_FILE}" up -d
+    docker compose -f "${COMPOSE_FILE}" up -d
     log "Containers started."
 }
 
@@ -99,7 +99,7 @@ setup_gitlab() {
 
 restart_manytask() {
     log "Restarting Manytask with new environment variables..."
-    docker-compose -f "${COMPOSE_FILE}" up -d manytask
+    docker compose -f "${COMPOSE_FILE}" up -d manytask
     log "Manytask restarted."
 }
 
