@@ -43,7 +43,8 @@ def _validate_and_convert_user_id(user_id: str) -> int:
         raise ValueError(f"GitLab user ID must be convertible to integer, got: {user_id}")
 
 
-def _make_public_repo_params(project_name: str, namespace_id: int) -> dict[str, Any]:
+def _make_public_repo_params(project_path: str, namespace_id: int) -> dict[str, Any]:
+    project_name = project_path.split("/")[-1]
     return {
         "name": project_name,
         "path": project_name,
@@ -53,6 +54,7 @@ def _make_public_repo_params(project_name: str, namespace_id: int) -> dict[str, 
         "auto_devops_enabled": False,
         "initialize_with_readme": True,
         "container_registry_access_level": "private",
+        "ci_config_path": f".gitlab-ci.yml@{project_path}",
     }
 
 
@@ -166,8 +168,6 @@ class GitLabApi(RmsApi, AuthApi):
     def create_public_repo(self, course_group: str, course_public_repo: str) -> None:
         logger.info("Creating public repo course_group=%s repo=%s", course_group, course_public_repo)
         group = self._get_group_by_name(course_group)
-        project_name = course_public_repo.split("/")[-1]
-
         try:
             project = self._gitlab.projects.get(course_public_repo)
         except GitlabGetError as exc:
@@ -175,10 +175,16 @@ class GitLabApi(RmsApi, AuthApi):
                 raise
         else:
             logger.info("Project %s already exists", course_public_repo)
-            self._gitlab.projects.update(project.id, {"container_registry_access_level": "private"})
+            self._gitlab.projects.update(
+                project.id,
+                {
+                    "container_registry_access_level": "private",
+                    "ci_config_path": f".gitlab-ci.yml@{course_public_repo}",
+                },
+            )
             return
 
-        self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
+        self._gitlab.projects.create(_make_public_repo_params(course_public_repo, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)
 
     def create_students_group(
