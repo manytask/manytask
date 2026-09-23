@@ -240,7 +240,9 @@ def test_create_public_repo(
             "shared_runners_enabled": True,
             "auto_devops_enabled": False,
             "initialize_with_readme": True,
+            "merge_requests_access_level": "disabled",
             "container_registry_access_level": "private",
+            "public_jobs": False,
             "ci_config_path": f".gitlab-ci.yml@{TEST_GROUP_PUBLIC_NAME}",
         }
     )
@@ -261,7 +263,9 @@ def test_create_public_already_exist_repo(
     mock_gitlab_instance.projects.update.assert_called_once_with(
         mock_gitlab_public_project.id,
         {
+            "merge_requests_access_level": "disabled",
             "container_registry_access_level": "private",
+            "public_jobs": False,
             "ci_config_path": f".gitlab-ci.yml@{TEST_GROUP_PUBLIC_NAME}",
         },
     )
@@ -441,6 +445,7 @@ def test_create_project_no_existing_project_creates_fork(
     mock_rms_user: RmsUser,
     mock_gitlab_group: MagicMock,
     mock_gitlab_public_project: MagicMock,
+    mock_gitlab_student_project: MagicMock,
     mock_gitlab_fork: MagicMock,
 ) -> None:
     rms_api, mock_gitlab_instance = gitlab
@@ -448,7 +453,8 @@ def test_create_project_no_existing_project_creates_fork(
     rms_api._get_group_by_name = MagicMock(return_value=mock_gitlab_group)
     rms_api._get_project_by_name = MagicMock(return_value=mock_gitlab_public_project)
     mock_gitlab_public_project.forks.create.return_value = mock_gitlab_fork
-    mock_gitlab_instance.projects.get.return_value.import_status = "finished"
+    mock_gitlab_instance.projects.get.return_value = mock_gitlab_student_project
+    mock_gitlab_student_project.import_status = "finished"
 
     rms_api.create_project(
         mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME, ci_config_path, TEST_PROTECTED_BRANCHES
@@ -752,14 +758,13 @@ def test_repository_access_includes_inherited_membership(gitlab) -> None:
 
 
 @pytest.mark.parametrize(
-    ("student_level", "public_level"),
+    "student_level",
     [
-        (const.AccessLevel.MAINTAINER, const.AccessLevel.MAINTAINER),
-        (const.AccessLevel.OWNER, const.AccessLevel.OWNER),
-        (const.AccessLevel.DEVELOPER, const.AccessLevel.REPORTER),
-        (const.AccessLevel.REPORTER, const.AccessLevel.REPORTER),
-        (const.AccessLevel.DEVELOPER, const.AccessLevel.GUEST),
-        (None, None),
+        const.AccessLevel.MAINTAINER,
+        const.AccessLevel.OWNER,
+        const.AccessLevel.DEVELOPER,
+        const.AccessLevel.REPORTER,
+        None,
     ],
 )
 def test_grant_student_access_respects_effective_roles(
@@ -767,33 +772,30 @@ def test_grant_student_access_respects_effective_roles(
     mock_rms_user: RmsUser,
     student_access_projects: tuple[Project, Project],
     student_level: int | None,
-    public_level: int | None,
 ) -> None:
     api, _ = gitlab
     student_project, public_project = student_access_projects
-    targets = (
-        (student_project, student_level, const.AccessLevel.DEVELOPER),
-    )
-    for project, existing_level, required_level in targets:
-        if existing_level is not None:
-            project.members_all.get.side_effect = None
-            project.members_all.get.return_value = MagicMock(access_level=existing_level)
-            if existing_level >= required_level:
-                project.members.create.side_effect = GitlabCreateError(
-                    "access_level must be at least the inherited role", response_code=400
-                )
+    required_level = const.AccessLevel.DEVELOPER
+    if student_level is not None:
+        student_project.members_all.get.side_effect = None
+        student_project.members_all.get.return_value = MagicMock(access_level=student_level)
+        if student_level >= required_level:
+            student_project.members.create.side_effect = GitlabCreateError(
+                "access_level must be at least the inherited role", response_code=400
+            )
 
     api._grant_student_access(mock_rms_user, student_project)
 
-    for project, existing_level, required_level in targets:
-        project.members_all.get.assert_called_once_with(int(mock_rms_user.id))
-        project.members.get.assert_not_called()
-        if existing_level is not None and existing_level >= required_level:
-            project.members.create.assert_not_called()
-        else:
-            project.members.create.assert_called_once_with(
-                {"user_id": int(mock_rms_user.id), "access_level": required_level}
-            )
+    student_project.members_all.get.assert_called_once_with(int(mock_rms_user.id))
+    student_project.members.get.assert_not_called()
+    if student_level is not None and student_level >= required_level:
+        student_project.members.create.assert_not_called()
+    else:
+        student_project.members.create.assert_called_once_with(
+            {"user_id": int(mock_rms_user.id), "access_level": required_level}
+        )
+    public_project.members_all.get.assert_not_called()
+    public_project.members.create.assert_not_called()
 
 
 @pytest.mark.parametrize("status", [403, 500])
