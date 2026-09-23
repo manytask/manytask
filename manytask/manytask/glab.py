@@ -30,7 +30,8 @@ def _validate_and_convert_user_id(user_id: str) -> int:
         raise ValueError(f"GitLab user ID must be convertible to integer, got: {user_id}")
 
 
-def _make_public_repo_params(project_name: str, namespace_id: int) -> dict[str, Any]:
+def _make_public_repo_params(project_path: str, namespace_id: int) -> dict[str, Any]:
+    project_name = project_path.split("/")[-1]
     return {
         "name": project_name,
         "path": project_name,
@@ -40,6 +41,7 @@ def _make_public_repo_params(project_name: str, namespace_id: int) -> dict[str, 
         "auto_devops_enabled": False,
         "initialize_with_readme": True,
         "container_registry_access_level": "private",
+        "ci_config_path": f".gitlab-ci.yml@{project_path}",
     }
 
 
@@ -157,12 +159,16 @@ class GitLabApi(RmsApi, AuthApi):
         for project in self._gitlab.projects.list(get_all=True, search=course_public_repo):
             if project.path_with_namespace == course_public_repo:
                 logger.info("Project %s already exists", course_public_repo)
-                self._gitlab.projects.update(project.id, {"container_registry_access_level": "private"})
+                self._gitlab.projects.update(
+                    project.id,
+                    {
+                        "container_registry_access_level": "private",
+                        "ci_config_path": f".gitlab-ci.yml@{course_public_repo}",
+                    },
+                )
                 return
 
-        project_name = course_public_repo.split("/")[-1]
-
-        self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
+        self._gitlab.projects.create(_make_public_repo_params(course_public_repo, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)
 
     def create_students_group(
