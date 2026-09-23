@@ -102,6 +102,13 @@
             </a>
         {% endif %}
 
+        {% if admin_namespaces %}
+            <section class="admin-namespaces mt-5">
+                <h2 class="h3 mb-3"><i class="fas fa-folder me-2"></i>Namespaces you administer</h2>
+                <div id="admin-namespaces-table"></div>
+            </section>
+        {% endif %}
+
         {% if is_instance_admin %}
             <a class="btn btn-primary mt-3" href="{{ url_for('instance_admin.instance_admin_panel') }}">Instance Admin panel</a>
         {% endif %}
@@ -117,6 +124,7 @@
 
     <script>
         const coursesData = {{ courses | tojson }};
+        const adminNamespacesData = {{ admin_namespaces | tojson }};
         // Canonical status order, taken from the CourseStatus enum on the
         // backend, so the filter dropdown and the Status column sort follow the
         // course lifecycle rather than alphabetical order.
@@ -284,6 +292,98 @@
                 window.tabulatorTable.clearFilter();
             });
         }
+
+        function buildAdminNamespacesTable() {
+            if (adminNamespacesData.length === 0) {
+                return;
+            }
+
+            const columns = [
+                {
+                    title: "Name",
+                    field: "name",
+                    sorter: "string",
+                    headerTooltip: "Namespace name",
+                    formatter: function (cell) {
+                        const data = cell.getRow().getData();
+                        const link = document.createElement('a');
+                        link.href = data.url;
+                        link.className = 'courses-table-link';
+                        link.textContent = cell.getValue();
+                        return link;
+                    }
+                },
+                {
+                    title: "Slug",
+                    field: "slug",
+                    sorter: "string",
+                    headerTooltip: "Namespace slug",
+                    formatter: function (cell) {
+                        const slug = document.createElement('code');
+                        slug.textContent = cell.getValue();
+                        return slug;
+                    }
+                },
+                {
+                    title: "Description",
+                    field: "description",
+                    sorter: "string",
+                    headerTooltip: "Namespace description",
+                    formatter: function (cell) {
+                        const description = cell.getValue();
+                        if (!description) {
+                            return '<em class="courses-table-muted">—</em>';
+                        }
+                        const text = document.createElement('span');
+                        text.textContent = description;
+                        return text;
+                    }
+                },
+                {
+                    title: "Courses",
+                    field: "courses_count",
+                    sorter: "number",
+                    hozAlign: "center",
+                    headerTooltip: "Number of courses in this namespace",
+                    formatter: function (cell) {
+                        return `<span class="badge bg-primary">${cell.getValue()}</span>`;
+                    }
+                },
+                {
+                    title: "Users",
+                    field: "users_count",
+                    sorter: "number",
+                    hozAlign: "center",
+                    headerTooltip: "Number of namespace users",
+                    formatter: function (cell) {
+                        return `<span class="badge bg-info">${cell.getValue()}</span>`;
+                    }
+                },
+                {
+                    title: "Edit",
+                    field: "id",
+                    headerSort: false,
+                    hozAlign: "center",
+                    width: 80,
+                    headerTooltip: "Edit namespace",
+                    formatter: function (cell) {
+                        const data = cell.getRow().getData();
+                        return `<a href="${data.url}" class="courses-table-edit" title="Edit namespace">`
+                            + `<i class="fas fa-pen"></i></a>`;
+                    }
+                }
+            ];
+
+            window.adminNamespacesTable = new Tabulator("#admin-namespaces-table", {
+                data: adminNamespacesData,
+                columns: columns,
+                layout: "fitColumns",
+                initialSort: [{column: "name", dir: "asc"}],
+                pagination: false,
+            });
+        }
+
+        buildAdminNamespacesTable();
 
         function applyView(view) {
             const isTable = view === 'table';
