@@ -312,3 +312,19 @@ class TestGradeReporting:
         assert result.exit_code == 0, result.output
         assert "No tasks to test" in result.output
         assert "tasks" not in captured_run
+
+
+class TestExport:
+    def test_dry_run_does_not_modify_export_root(self, course_root: Path) -> None:
+        export_root = course_root.parent / "export"
+        export_root.mkdir()
+        sentinel = export_root / "sentinel.txt"
+        sentinel.write_text("do not change")
+
+        result = CliRunner().invoke(
+            cli, ["export", str(course_root), str(export_root), "--dry-run"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert sentinel.read_text() == "do not change"
+        assert not (export_root / "group1").exists()
