@@ -247,7 +247,7 @@ class Exporter:
     def export_public(
         self,
         target: Path,
-        commit: bool = True,
+        commit: bool = False,
         commit_message: str = "chore(auto): Update public files [skip-ci]",
     ) -> None:
         target.mkdir(parents=True, exist_ok=True)
