@@ -721,6 +721,8 @@ def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
 
     assert soup.find(id="assignProgramManagerModal") is None
     assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
+
+
 def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):
     """Regression: a failing RMS must not blow up the enrollment form with a 500.
 
