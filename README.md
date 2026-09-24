@@ -62,6 +62,7 @@ Current developers:
 * [Alexander Kostrikov](https://github.com/akostrikov)
 * [Ivan Luchsh](https://github.com/Ch0p1k3)
 * [Daniil Maslov](https://github.com/dmasloff)
+* [Igor Mineev](https://github.com/ObjatieGroba)
 * [Ivan Samsonov](https://github.com/D1sney)
 * [Alexey Seliverstov](https://github.com/prawwtocol)
 * [Oleg Shatov](https://github.com/domwst)
