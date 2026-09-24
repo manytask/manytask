@@ -225,8 +225,14 @@ Determines which tasks are selected for grading when running `checker grade`.
 |---|---|
 | `branch_name` | Selects the single task/group whose name matches the current Git branch name. |
 | `commit_message` | Selects all tasks/groups whose name appears in the last commit message. |
-| `last_commit_changes` | Selects all tasks that have files changed in the last commit. *(default)* |
+| `last_commit_changes` | Selects all tasks that have files changed since the base commit (`--base-ref`, see below), or in the last commit if there is no base. *(default)* |
 | `files_changed` | *(Not yet implemented)* Compares current state against the previous commit. |
+
+For `last_commit_changes` the base commit is taken from `checker grade --base-ref <sha>`, or from the
+`CI_MERGE_REQUEST_DIFF_BASE_SHA` / `CI_COMMIT_BEFORE_SHA` GitLab CI variables. So when several commits
+are pushed at once, the tasks from all of them are graded, not only from the last one. If the base is a
+null sha, unknown or equal to `HEAD`, `HEAD~1` is used; after a force-push the merge-base is used; in a
+shallow clone the history is deepened once to find the base.
 
 ### `search_plugins`
 
