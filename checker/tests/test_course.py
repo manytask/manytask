@@ -432,7 +432,7 @@ class TestDetectChangesWithBaseRef:
             ([["group1/task1_1/a.py"], ["root_task_1/b.py"]], ["root_task_1", "task1_1"]),
             ([["group1/task1_1/a.py"], ["random_file.txt"]], ["task1_1"]),
             ([["group1/task1_1/a.py"], ["group1/task1_1/b.py"], ["group1/task1_2/c.py"]], ["task1_1", "task1_2"]),
-            ([["group2/task2_1/a.py"], ["root_task_1/b.py"]], ["root_task_1"]),  # task2_1 not enabled
+            ([["group2/task2_1/a.py"], ["root_task_1/b.py"]], ["root_task_1"]),
             ([[], []], []),
         ],
     )
@@ -466,9 +466,7 @@ class TestDetectChangesWithBaseRef:
     def test_force_push_uses_merge_base(self, git_init_repository_root: Path) -> None:
         repo = git.Repo(git_init_repository_root)
         fork_point = self._commit(repo, git_init_repository_root, ["group1/task1_1/a.py"], "graded before")
-        # state of the branch before the force-push
         old_head = self._commit(repo, git_init_repository_root, ["group1/task1_2/a.py"], "old")
-        # rewritten history: reset to fork point and push new commits
         repo.git.reset("--hard", fork_point.hexsha)
         self._commit(repo, git_init_repository_root, ["group1/task1_2/b.py"], "new 1")
         self._commit(repo, git_init_repository_root, ["root_task_1/b.py"], "new 2")
@@ -484,6 +482,6 @@ class TestDetectChangesWithBaseRef:
         clone_root = tmp_path / "clone"
         git.Repo.clone_from(f"file://{git_init_repository_root}", clone_root, depth=1)
         with pytest.raises(ValueError):
-            git.Repo(clone_root).commit(before_push)  # not fetched yet
+            git.Repo(clone_root).commit(before_push)
 
         assert self._detect(clone_root, before_push) == ["root_task_1", "task1_1"]
