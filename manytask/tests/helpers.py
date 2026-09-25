@@ -285,6 +285,10 @@ class MockStorageApiBase:
         return True
 
     @staticmethod
+    def check_if_instance_admin(_username):
+        return False
+
+    @staticmethod
     def get_grades(*_args, **_kwargs):
         return MockFinalGradeConfig()
 
