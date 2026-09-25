@@ -3,17 +3,23 @@
 
 ## `copy_files`
 
-Copy files matching glob patterns from one directory to another. Used to collect students solutions and private tests in one place in preparation for testing. In the example below only those files in the `allow_change` parameter will be copied, thus if the student changes tests these changes will not affect testing in the CI (`allow_change` can be set in the `.task.yml` file on a task basis).
+Copy files matching glob patterns from one directory to another. Used to collect the student's solution and the private tests in one place in preparation for testing.
+
+The example below takes **from the student repository** (`global.repo_dir`) only the files listed in the `allow_change` parameter, and puts them into the testing tree. Anything the student changed outside that list — the tests, for instance — is simply not copied, so it cannot affect grading in CI.
+
+`allow_change` is not a built-in field: it is an ordinary [parameter](./checker_yml_reference.md#default_parameters) that you define yourself in `default_parameters` and can narrow per task in `.task.yml`.
 
 ```yaml
-- name: "Copy reference tests"
+- name: "Take the student's allowed files"
   run: "copy_files"
   args:
-    source_dir: ${{ global.ref_dir }}/${{ task.task_sub_path }}
+    source_dir: ${{ global.repo_dir }}/${{ task.task_sub_path }}
     target_dir: ${{ global.temp_dir }}/${{ task.task_sub_path }}
     patterns: ${{ parameters.allow_change }}
     ignore_patterns: ["*.pyc"]
 ```
+
+> Note that this stage is **optional**. `checker check` / `checker grade` already build the testing tree by overlaying the reference repo's public and private files on top of the student's files, so tests are protected without any `copy_files` stage. Use this plugin when you want an explicit, per-task allow-list — see [the configuration guide](./checker_config.md#optional-an-explicit-allow-list-with-allow_change).
 
 | Arg | Type | Required | Description |
 |---|---|---|---|
@@ -25,6 +31,8 @@ Copy files matching glob patterns from one directory to another. Used to collect
 ## `check_regexps`
 
 Fail if any of the given regular expressions are found in the matched files. Useful for forbidding certain patterns (e.g. `exit(0)`, hardcoded answers).
+
+Reusing the same `allow_change` parameter here is a common idiom: the files a student may edit are exactly the files worth scanning for forbidden constructs.
 
 ```yaml
 - name: "Check forbidden patterns"
@@ -141,6 +149,7 @@ Send the final score to the Manytask platform via its [REST API](./api.md). Used
 | `report_url` | `AnyUrl` | yes | — | Full URL of the report endpoint: `https://<manytask-host>/api/<course_name>/report`. |
 | `report_token` | `str` | yes | — | Authentication token for the Manytask API. |
 | `check_deadline` | `bool` | yes | — | Whether Manytask should apply deadline penalties server-side. |
+| `allow_reduction` | `bool` | no | `false` | Allow replacing an existing score with a lower value. Must be enabled when reporting a negative integer. |
 | `origin` | `str \| null` | no | `null` | If set, collect files matching `patterns` from this directory and attach them to the report. |
 | `patterns` | `list[str]` | no | `["*"]` | Glob patterns for files to attach (only used when `origin` is set). |
 | `send_time` | `datetime` | no | now | Submission timestamp. Defaults to the current time with local timezone. |
@@ -150,7 +159,7 @@ Send the final score to the Manytask platform via its [REST API](./api.md). Used
 | Value | Description |
 |---|---|
 | `float` | A percentage of the score in `[0.0, 1.0]`, with an ability to give bonus up to `2.0`. Number below `0.0` will be clamped to `0.0`, number over `2.0` will return HTTP Bad Request. The number will be multiplied by the max number of points set to the task. |
-| `int` | If the reported number is integer, it is taken as a final score. Can be any integer number, even if larger than max score for the task. |
+| `int` | If the reported number is an integer, including a negative integer, it is taken as a final score. It can be larger than the task maximum. Persisting a negative value requires `allow_reduction: true`. |
 | `null` | Task is considered fully solved, max points are issued. |
 
 

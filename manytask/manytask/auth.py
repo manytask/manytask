@@ -254,8 +254,14 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             flash("course is hidden!", "course_hidden")
             abort(redirect(url_for("root.index")))
 
+        # NOTE: use the RMS-native username (session["rms"]["username"]) rather than the auth-provider
+        # login (auth_user.username): on SourceCraft the two may differ (e.g. when the desired slug is
+        # already taken the platform assigns a fallback like "ps5-1" for a Yandex login "Ps5"), and
+        # student repos are created under the RMS-native username. Passing the auth-provider login here
+        # would produce a false negative on the existence check, redirect the user to /create_project,
+        # and 500 with SlugIsNotAvailable when the create call tries to re-create the existing repo.
         if not handle_course_membership(app, course, username) or not app.rms_api.check_project_exists(
-            project_name=auth_user.username, project_group=course.gitlab_course_students_group
+            project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
         ):
             logger.info("User %s missing membership or project", username)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))

@@ -14,6 +14,7 @@ from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
+from manytask.abstract import StudentCourseScores, TaskScore
 from manytask.config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -424,8 +425,16 @@ def assert_stats(stats: dict, expected_keys: set[str], nonzero: dict[str, float]
     assert all(v == 0.0 for k, v in stats.items() if k not in nonzero)
 
 
-def named_scores(scores: dict, student: TestStudent = STUDENT) -> tuple:
-    return (scores, (student.first_name, student.last_name), None, None, None)
+def named_scores(scores: dict, student: TestStudent = STUDENT) -> StudentCourseScores:
+    """Build the expected StudentCourseScores from a {task_name: (score, is_solved)} dict."""
+    return StudentCourseScores(
+        username=student.username,
+        first_name=student.first_name,
+        last_name=student.last_name,
+        task_scores={
+            task_name: TaskScore(score=score, is_solved=is_solved) for task_name, (score, is_solved) in scores.items()
+        },
+    )
 
 
 def assert_counts(  # noqa: PLR0913

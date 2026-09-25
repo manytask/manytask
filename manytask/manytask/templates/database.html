@@ -119,6 +119,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
           id="light-theme">
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
@@ -399,37 +400,13 @@
 
             const valueEl = document.getElementById("filter-value");
 
-            // Transliteration-aware search:
-            // normalize both the search term and the searchable fields to a
-            // common Latin form before substring matching, so that typing
-            // "Ivan" matches "Иван" and typing "Иван" also matches "Ivan".
-            const CYRILLIC_TO_LATIN = {
-                'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh',
-                'з':'z','и':'i','й':'i','к':'k','л':'l','м':'m','н':'n','о':'o',
-                'п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'c',
-                'ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu',
-                'я':'ya',
-                // Ukrainian / Belarusian extras
-                'ї':'i','і':'i','є':'e','ґ':'g','ў':'u'
-            };
-
-            function normalizeForSearch(str) {
-                if (!str) return "";
-                const lower = str.toLowerCase();
-                let out = "";
-                for (let i = 0; i < lower.length; i++) {
-                    const ch = lower[i];
-                    out += Object.prototype.hasOwnProperty.call(CYRILLIC_TO_LATIN, ch)
-                        ? CYRILLIC_TO_LATIN[ch]
-                        : ch;
-                }
-                return out;
-            }
-
+            // Transliteration- and keyboard-layout-aware search uses the shared
+            // helpers in static/js/search-normalize.js. Variants are computed once
+            // per filter call and reused for every field.
             function customFilter(data) {
-                const searchTerm = normalizeForSearch(valueEl.value);
-                if (!searchTerm) return true;
-                if (normalizeForSearch(data.username).includes(searchTerm)) {
+                const searchVariants = searchTermVariants(valueEl.value);
+                if (searchVariants.length === 0) return true;
+                if (matchesSearchVariants(data.username, searchVariants)) {
                     return true;
                 }
                 // Normally we would search for match in first and last name independently,
@@ -439,8 +416,8 @@
                 const first_name = data.first_name ? data.first_name : "";
                 const last_name = data.last_name ? data.last_name : "";
                 const the_very_full_name = `${first_name} ${last_name} ${first_name}`;
-                
-                if (normalizeForSearch(the_very_full_name).includes(searchTerm)) {
+
+                if (matchesSearchVariants(the_very_full_name, searchVariants)) {
                     return true;
                 }
                 return false;
@@ -467,6 +444,18 @@
                 .then(response => response.json())
                 .then(data => {
                     let columns = [
+                        {
+                            title: "#",
+                            field: "rownum",
+                            frozen: true,
+                            formatter: "rownum",
+                            hozAlign: "center",
+                            headerHozAlign: "center",
+                            width: 50,
+                            minWidth: 40,
+                            headerSort: false,
+                            headerTooltip: "Row number",
+                        },
                         {
                             title: "Username",
                             field: "username",

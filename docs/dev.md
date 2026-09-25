@@ -57,8 +57,6 @@ Continue with [Adding a course](#adding-a-course) below.
 
 ## Manual setup (using an existing GitLab)
 
-Use this path if you want to develop against an existing GitLab server (for example [https://gitlab.manytask2.org/](https://gitlab.manytask2.org/)) instead of the bundled local GitLab. You will need **Admin access** to that GitLab; access to `gitlab.manytask2.org` can be requested from **[@artemzhmurov](https://t.me/artemzhmurov)**.
-
 ### Step 1 — Create a Personal Access Token in GitLab
 
 1. In the GitLab web interface, click your user icon, go to **Preferences → Access Tokens**.

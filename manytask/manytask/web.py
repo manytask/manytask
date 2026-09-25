@@ -30,7 +30,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
-from .utils.flask import can_edit_course, check_if_current_user_is_instance_admin, get_courses, has_role
+from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
     generate_token_hex,
@@ -72,6 +72,7 @@ def index() -> ResponseReturnValue:
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
         courses=courses,
+        status_order=[status.value for status in CourseStatus],
         can_create_courses=can_create_courses,
         is_instance_admin=is_instance_admin,
         username=username,
@@ -179,6 +180,9 @@ def course_page(course_name: str) -> ResponseReturnValue:
 def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
+    if app.app_config.disable_signup:
+        return redirect(url_for("root.login"))
+
     # ---- render page ---- #
     if request.method == "GET":
         return render_template(
@@ -258,8 +262,21 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         auth_id=session["auth"]["user_auth_id"],
     )
     if stored_user_or_none is not None:
+        # Resolve the RMS-native username from the RMS API. It may differ from the auth-provider
+        # login (e.g. on SourceCraft, when the desired slug is taken, the platform issues a fallback
+        # like "ps5-1" for the Yandex login "Ps5"). Storing the auth login here poisons downstream
+        # slug lookups (existence checks, repo URLs) that expect the RMS-native username.
+        try:
+            rms_username = app.rms_api.get_rms_user_by_id(stored_user_or_none.rms_id).username
+        except RmsApiException as e:
+            logger.warning(
+                "Failed to resolve RMS user for rms_id=%s (%s); falling back to auth username",
+                stored_user_or_none.rms_id,
+                e,
+            )
+            rms_username = session["auth"]["username"]
         session.setdefault("rms", {}).update(
-            set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=session["auth"]["username"]))
+            set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=rms_username))
         )
         session.setdefault("manytask", {}).update(
             set_manytask_session(user_id=stored_user_or_none.user_id, username=stored_user_or_none.username)
@@ -342,32 +359,30 @@ def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    if request.method == "GET":
+    def render_create_project(error_message: str | None = None) -> str:
         return render_template(
             "create_project.html",
+            error_message=error_message,
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
         )
 
+    if request.method == "GET":
+        return render_create_project()
+
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
-        return render_template("create_project.html", error_message="CSRF Error")
+        return render_create_project("CSRF Error")
 
     rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
     if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        return render_template(
-            "create_project.html",
-            error_message="Invalid secret",
-            course_name=course.course_name,
-            course_favicon=app.favicon,
-            base_url=app.rms_api.base_url,
-        )
+        return render_create_project("Invalid secret")
 
     app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
 
@@ -376,8 +391,17 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
-        logger.error("Project creation failed: %s", ex.error_message)
-        return render_template(app.signup_template, error_message=ex.error_message, course_name=course.course_name)
+        logger.error("Project creation failed for user %s: %s", rms_user.username, ex.error_message)
+        return render_create_project(ex.error_message)
+    except RmsApiException as ex:
+        # Every RMS backend raises RmsApiException, so this is the generic path: without it a
+        # failing RMS (quota exhausted, slug taken, API down) escapes as a bare 500. The raw
+        # message is backend-internal, so it goes to the log and the user gets a readable one.
+        logger.error("Project creation failed for user %s: %s", rms_user.username, ex)
+        return render_create_project(
+            "Could not create your repository. This is not something you can fix yourself - "
+            "please report it to the course staff."
+        )
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
@@ -395,8 +419,10 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     if course.status != CourseStatus.CREATED:
         return redirect(url_for("course.course_page", course_name=course_name))
 
-    username = "guest" if app.debug else session["manytask"]["username"]
-    can_edit_course = has_role(username, ["instance_admin", "namespace_admin"], app, course_name=course_name)
+    username = "guest" if app.debug else session.get("manytask", {}).get("username")
+    can_edit_course = bool(username) and has_role(
+        username, ["instance_admin", "namespace_admin"], app, course_name=course_name
+    )
 
     return render_template(
         "not_ready.html",

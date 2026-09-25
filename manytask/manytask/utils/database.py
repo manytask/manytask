@@ -37,31 +37,20 @@ def get_database_table_data(
 
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
-    for username, (
-        student_scores_with_solved,
-        name,
-        final_grade,
-        final_grade_override,
-        comment,
-    ) in scores_and_names.items():
-        # student_scores_with_solved = {task_name: (score, is_solved)}
-        student_scores = {task_name: score for task_name, (score, _) in student_scores_with_solved.items()}
-        total_score = sum(student_scores.values())
-        large_count = sum(1 for task in large_tasks if student_scores.get(task[0], 0) >= task[1])
-
-        first_name, last_name = name
+    for username, student in scores_and_names.items():
+        total_score = student.total_score
 
         row: dict[str, Any] = {
             "username": username,
-            "scores": student_scores,
+            "scores": student.scores,
             "total_score": total_score,
             "percent": calculate_percent(total_score, max_score),
-            "large_count": large_count,
+            "large_count": student.count_solved_large_tasks(large_tasks),
         }
 
         if include_admin_data or is_program_manager:
-            row["first_name"] = first_name
-            row["last_name"] = last_name
+            row["first_name"] = student.first_name
+            row["last_name"] = student.last_name
 
         if include_admin_data:
             row.update(
@@ -70,19 +59,19 @@ def get_database_table_data(
                         username=username,
                         course_students_group=course.gitlab_course_students_group,
                     ),
-                    "comment": comment,
+                    "comment": student.comment,
                 }
             )
 
-        if final_grade_override is not None:
-            effective_grade = final_grade_override
+        if student.final_grade_override is not None:
+            effective_grade = student.final_grade_override
             grade_is_override = True
         else:
             effective_grade = calculate_effective_grade(
                 course.status,
                 grades_config,
                 row,
-                final_grade,
+                student.final_grade,
             )
             grade_is_override = False
 

@@ -2,13 +2,14 @@ import os
 from http import HTTPStatus
 from unittest.mock import patch
 
+import gitlab
 import pytest
 from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
 
-from manytask.abstract import AuthenticatedUser
+from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus
 from manytask.local_config import LocalConfig
@@ -92,12 +93,14 @@ def mock_storage_api(mock_course):  # noqa: C901
         @staticmethod
         def get_all_scores_with_names(_course_name):
             return {
-                TEST_USERNAME: (
-                    {"task1": 100, "task2": 90},
-                    (TEST_FIRST_NAME, TEST_LAST_NAME),
-                    None,  # final_grade
-                    None,  # final_grade_override
-                    None,  # comment
+                TEST_USERNAME: StudentCourseScores(
+                    username=TEST_USERNAME,
+                    first_name=TEST_FIRST_NAME,
+                    last_name=TEST_LAST_NAME,
+                    task_scores={
+                        "task1": TaskScore(100, False),
+                        "task2": TaskScore(90, False),
+                    },
                 )
             }
 
@@ -216,11 +219,58 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             assert response.location == f"/{TEST_COURSE_NAME}/create_project"
 
 
+def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
+    """Regression for the SourceCraft ``SlugIsNotAvailable`` 500 on enrollment.
+
+    ``check_project_exists`` must be called with the RMS-native username (as stored in
+    ``session['rms']['username']``), not the auth-provider login (``session['auth']['username']``).
+    Otherwise, for users whose SC username differs from their Yandex login (e.g. Yandex ``Ps5``
+    -> SC ``ps5-1``), the existence check produces a false negative and the flow redirects to
+    ``create_project``, which 500s trying to re-create the already-existing repo.
+    """
+    CSRFProtect(app)
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(app.rms_api, "check_project_exists", return_value=False) as mock_check,
+        ):
+            # Simulate divergent identities: auth session has Yandex login, RMS session has SC username.
+            session_data = build_test_session()
+            session_data["rms"]["username"] = "ps5-1"
+            session_data["auth"]["username"] = "Ps5"
+            session_data["manytask"] = {
+                "version": 1.0,
+                "user_id": TEST_USER_ID,
+                "username": "Ps5",  # stored username is auth login
+            }
+            with client.session_transaction() as sess:
+                sess.update(session_data)
+            app.oauth = mock_gitlab_oauth
+
+            client.get(f"/{TEST_COURSE_NAME}/")
+
+            mock_check.assert_called_once()
+            call_kwargs = mock_check.call_args.kwargs
+            assert call_kwargs["project_name"] == "ps5-1", (
+                "Existence check must use the RMS-native username so the slug matches what "
+                "create_project builds; got the auth login instead, which is the reported bug."
+            )
+
+
 def test_signup_get(app):
     CSRFProtect(app)
     with app.test_request_context():
         response = app.test_client().get("/signup")
         assert response.status_code == HTTPStatus.OK
+
+
+def test_signup_get_disabled_redirects_to_login(app):
+    CSRFProtect(app)
+    app.app_config.disable_signup = True
+    with app.test_request_context():
+        response = app.test_client().get("/signup")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == url_for("root.login")
 
 
 def test_signup_post_password_mismatch(app, mock_course):
@@ -358,6 +408,14 @@ def test_not_ready(app):
             mock_check_if_instance_admin.return_value = True
             response = client.get(f"/{TEST_COURSE_NAME}/not_ready")
             assert response.status_code == HTTPStatus.FOUND
+
+
+def test_not_ready_anonymous(app, mock_course):
+    """Anonymous users (no session) must see the not_ready page, not a 500."""
+    with app.test_request_context():
+        with patch.object(mock_course, "status", CourseStatus.CREATED):
+            response = app.test_client().get(f"/{TEST_COURSE_NAME}/not_ready")
+            assert response.status_code == HTTPStatus.OK
 
 
 def check_admin_in_data(response, check_true):
@@ -558,6 +616,34 @@ def test_signup_finish_with_existing_user_in_db(app, mock_gitlab_oauth):
                 assert sess["rms"]["username"] == TEST_USERNAME
 
 
+def test_signup_finish_existing_user_uses_rms_username_not_auth_login(app, mock_gitlab_oauth):
+    """Regression: on stale-session restoration, ``session['rms']['username']`` must be the
+    RMS-native username (fetched from the RMS API by ``rms_id``), not the auth-provider login.
+
+    On SourceCraft the two can differ (e.g. Yandex login ``Ps5`` vs SC username ``ps5-1`` when
+    the natural slug is taken). Aliasing the auth login here poisons downstream slug lookups
+    such as ``check_project_exists`` and eventually surfaces as a 500 ``SlugIsNotAvailable``
+    from ``create_project``.
+    """
+    from manytask.abstract import RmsUser as _RmsUser
+    from tests.constants import TEST_RMS_ID as _TEST_RMS_ID
+
+    # Simulate SourceCraft assigning a fallback slug: auth login differs from RMS username.
+    app.rms_api.users[_TEST_RMS_ID] = _RmsUser(id=_TEST_RMS_ID, username="ps5-1", name="Test User")
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            set_session(client, build_test_session(include_rms=False))
+            app.oauth = mock_gitlab_oauth
+            response = client.post(url_for("root.signup_finish"))
+            assert response.status_code == HTTPStatus.FOUND
+
+            with client.session_transaction() as sess:
+                # RMS-native username was fetched from the API, not aliased from auth session.
+                assert sess["rms"]["username"] == "ps5-1"
+                assert sess["auth"]["username"] == TEST_USERNAME  # sanity: auth login unchanged
+
+
 def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
     CSRFProtect(app)
     data = {
@@ -595,3 +681,74 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
                 rms_id=rms_id,
                 auth_id=TEST_USER_ID,
             )
+
+
+def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):
+    """Regression: a failing RMS must not blow up the enrollment form with a 500.
+
+    ``create_project`` used to catch only ``gitlab.GitlabError``. Every RMS backend raises
+    ``RmsApiException`` instead, so on SourceCraft any backend failure (exhausted cloud quota,
+    taken slug, API outage) escaped the handler and Flask returned a bare 500. Students saw a
+    broken page with no idea whether it was their fault.
+    """
+    CSRFProtect(app)
+    mock_course.token = TEST_TOKEN
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(
+                app.rms_api,
+                "create_project",
+                side_effect=RmsApiException("Failed to create repo: {'error_code': 'ResourceExhausted'}"),
+            ),
+        ):
+            set_session(client, build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+            soup = BeautifulSoup(response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": mock_course.registration_secret},
+            )
+
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            # The user stays on the enrollment form, not on the signup page.
+            assert "Secret Code" in body
+            # Backend-internal detail is logged, not shown.
+            assert "ResourceExhausted" not in body
+            assert "course staff" in body
+
+
+def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitlab_oauth):
+    """The GitLab path keeps surfacing its own message, now on the create_project page."""
+    CSRFProtect(app)
+    mock_course.token = TEST_TOKEN
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(
+                app.rms_api,
+                "create_project",
+                side_effect=gitlab.GitlabError("boom", response_code=403),
+            ),
+        ):
+            set_session(client, build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+            soup = BeautifulSoup(response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": mock_course.registration_secret},
+            )
+
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            assert "boom" in body
+            assert "Secret Code" in body
