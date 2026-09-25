@@ -16,6 +16,11 @@ def get_database_table_data(
 
     Set include_admin_data=True to include per-student repo URLs, comments, and full names (for admins-only views).
     Set is_program_manager=True to include student full names (for program managers).
+
+    Users with admin access (course admin, namespace admin, instance admin, or program
+    manager) are hidden from the table entirely when the viewer is not an admin
+    (include_admin_data=False). When the viewer is an admin, they are kept in the table
+    and flagged with "is_admin" so the frontend can display them (e.g. grayed out).
     """
 
     course_name = course.course_name
@@ -38,6 +43,10 @@ def get_database_table_data(
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
     for username, student in scores_and_names.items():
+        if student.is_admin and not include_admin_data:
+            # Hide admin/staff accounts from non-admin viewers.
+            continue
+
         total_score = student.total_score
 
         row: dict[str, Any] = {
@@ -47,6 +56,9 @@ def get_database_table_data(
             "percent": calculate_percent(total_score, max_score),
             "large_count": student.count_solved_large_tasks(large_tasks),
         }
+
+        if include_admin_data:
+            row["is_admin"] = student.is_admin
 
         if include_admin_data or is_program_manager:
             row["first_name"] = student.first_name

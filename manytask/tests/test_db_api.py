@@ -992,6 +992,31 @@ def test_check_if_course_admin_namespace_program_manager_is_not_admin(db_api_wit
     assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
 
 
+def test_get_all_scores_with_names_flags_admin_users(db_api_with_initialized_first_course, session):
+    """get_all_scores_with_names should flag course/namespace/instance admins and program
+    managers via is_admin, instead of excluding them from the result."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    _create_namespace_with_course(session, created_by_id=owner_id)
+
+    regular_student, _ = add_user_on_course(session, student=STUDENT_1, user_id=2, is_course_admin=False)
+    namespace_admin, _ = add_user_on_course(session, student=STUDENT_2, user_id=3, is_course_admin=False)
+
+    session.add(
+        UserOnNamespace(
+            user_id=namespace_admin.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
+
+    assert all_scores[regular_student.username].is_admin is False
+    assert all_scores[namespace_admin.username].is_admin is True
+
+
 def test_check_if_course_admin_no_namespace_uses_course_flag(db_api_with_initialized_first_course, session):
     """When the course has no namespace, only the per-course admin flag matters."""
     create_user(db_api_with_initialized_first_course)

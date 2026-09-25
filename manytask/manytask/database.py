@@ -439,25 +439,36 @@ class DataBaseApi(StorageApi):
         Returns:
             dict mapping username to a StudentCourseScores object.
 
-        Excludes users with PROGRAM_MANAGER role in the course's namespace.
+        Every user with any kind of admin access (instance admin, namespace admin,
+        program manager, or course admin) is included but flagged via
+        :attr:`StudentCourseScores.is_admin`, so callers can hide or gray them out
+        depending on who is viewing the table.
         """
 
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             namespace_id = course.namespace_id
 
-            program_managers_subquery = None
+            admin_namespace_subquery = None
             if namespace_id is not None:
-                program_managers_subquery = select(models.UserOnNamespace.user_id).where(
+                admin_namespace_subquery = select(models.UserOnNamespace.user_id).where(
                     models.UserOnNamespace.namespace_id == namespace_id,
-                    models.UserOnNamespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER,
+                    models.UserOnNamespace.role.in_(
+                        (
+                            models.UserOnNamespaceRole.NAMESPACE_ADMIN,
+                            models.UserOnNamespaceRole.PROGRAM_MANAGER,
+                        )
+                    ),
                 )
 
             statement = (
                 select(
+                    User.id.label("user_id"),
                     User.username,
                     User.first_name,
                     User.last_name,
+                    User.is_instance_admin,
+                    UserOnCourse.is_course_admin,
                     Task.name.label("task_name"),
                     coalesce(Grade.score, 0).label("score"),
                     coalesce(Grade.is_solved, False).label("is_solved"),
@@ -475,16 +486,22 @@ class DataBaseApi(StorageApi):
                 )
             )
 
-            if program_managers_subquery is not None:
-                statement = statement.where(~User.id.in_(program_managers_subquery))
-
             rows = session.execute(statement).all()
+
+            admin_user_ids: set[int] = set()
+            if admin_namespace_subquery is not None:
+                admin_user_ids = set(session.execute(admin_namespace_subquery).scalars().all())
 
             scores_and_names: dict[str, StudentCourseScores] = {}
 
             for row in rows:
                 student = scores_and_names.get(row.username)
                 if student is None:
+                    is_admin = (
+                        bool(row.is_instance_admin)
+                        or bool(row.is_course_admin)
+                        or row.user_id in admin_user_ids
+                    )
                     student = StudentCourseScores(
                         username=row.username,
                         first_name=row.first_name,
@@ -492,6 +509,7 @@ class DataBaseApi(StorageApi):
                         final_grade=row.final_grade,
                         final_grade_override=row.final_grade_override,
                         comment=row.comment,
+                        is_admin=is_admin,
                     )
                     scores_and_names[row.username] = student
                 if row.task_name is not None:
