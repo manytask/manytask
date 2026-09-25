@@ -21,6 +21,9 @@ from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
 from .config import (
     AddUserToNamespaceRequest,
+    AssignProgramManagerRequest,
+    CourseAccessUserItem,
+    CourseAccessUsersResponse,
     CourseResponse,
     CreateCourseRequest,
     CreateNamespaceRequest,
@@ -37,12 +40,14 @@ from .config import (
     NamespaceUsersListResponse,
     NamespaceWithRoleResponse,
     PingResponse,
+    SetCourseAdminRequest,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
 from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
+from .models import ROLE_PROGRAM_MANAGER
 from .utils.database import get_database_table_data
 from .utils.generic import (
     calculate_percent,
@@ -70,6 +75,109 @@ def _get_stored_user_or_not_found(storage_api: StorageApi, rms_id: str) -> Store
     if stored_user is None:
         abort(HTTPStatus.NOT_FOUND, f"There is no registered user with rms_id={rms_id}")
     return stored_user
+
+
+def _add_namespace_role(
+    *,
+    namespace_id: int,
+    namespace: Any,
+    username: str,
+    role: str,
+    assigned_by_username: str,
+) -> tuple[Any, ResponseReturnValue | None]:
+    """Give a user a role in a namespace, in the database and in the RMS group.
+
+    Shared by the namespace users endpoint and the course access table, so both
+    paths perform exactly the same two steps in the same order and cannot drift.
+
+    :param namespace_id: id of the target namespace
+    :param namespace: the namespace object (needs ``gitlab_group_id``)
+    :param username: manytask username of the user to add
+    :param role: 'namespace_admin' or 'program_manager'
+    :param assigned_by_username: manytask username of the acting admin
+    :return: tuple of (user_on_namespace, error_response); exactly one is not None
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+    rms_api = app.rms_api
+
+    try:
+        user_on_namespace = storage_api.add_user_to_namespace(
+            namespace_id=namespace_id,
+            username=username,
+            role=role,
+            assigned_by_username=assigned_by_username,
+        )
+    except NoResultFound as e:
+        logger.warning("User %s not registered in manytask: %s", sanitize_log_data(username), str(e))
+        return None, (
+            jsonify(
+                ErrorResponse(
+                    error=f"User {username} is not registered in manytask. The user must log in at least once."
+                ).model_dump()
+            ),
+            HTTPStatus.NOT_FOUND,
+        )
+    except IntegrityError:
+        logger.warning("User %s already has a role in namespace id=%s", sanitize_log_data(username), namespace_id)
+        return None, (
+            jsonify(ErrorResponse(error="User already has a role in this namespace").model_dump()),
+            HTTPStatus.CONFLICT,
+        )
+    except ValueError as e:
+        logger.error("Invalid role %s: %s", role, str(e))
+        return None, (jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST)
+
+    # The RMS group membership is added only after the database row exists.
+    # TODO: откатить добавление в локальную БД, если добавление в группу RMS не удалось
+    try:
+        stored_user = storage_api.get_stored_user_by_username(username)
+        rms_api.add_user_to_namespace_group(
+            gitlab_group_id=namespace.gitlab_group_id,
+            rms_id=stored_user.rms_id,
+        )
+        logger.info(
+            "Added RMS user id=%s to group id=%s",
+            stored_user.rms_id,
+            namespace.gitlab_group_id,
+        )
+    except Exception as e:
+        logger.error("Failed to add user %s to RMS group: %s", sanitize_log_data(username), str(e))
+        return None, (
+            jsonify(ErrorResponse(error="Failed to add user to GitLab group").model_dump()),
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+
+    return user_on_namespace, None
+
+
+def _check_course_admin_access(course_name: str) -> ResponseReturnValue | None:
+    """Ensure the session user may administer the given course.
+
+    Instance admins pass unconditionally; otherwise the user must be a course admin
+    of this course. Returns ``None`` when access is allowed, or a ready-to-return
+    error response when it is not.
+    """
+    app: CustomFlask = current_app  # type: ignore
+
+    if app.debug:
+        return None
+
+    username = session["manytask"]["username"]
+    storage_api = app.storage_api
+
+    if storage_api.check_if_instance_admin(username) or storage_api.check_if_course_admin(course_name, username):
+        return None
+
+    logger.warning(
+        "User %s attempted to administer course %s without permission",
+        sanitize_log_data(username),
+        sanitize_log_data(course_name),
+    )
+    return (
+        jsonify(ErrorResponse(error="Only course admins can perform this action").model_dump()),
+        HTTPStatus.FORBIDDEN,
+    )
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -1038,46 +1146,23 @@ def add_user_to_namespace(
                 return jsonify(
                     ErrorResponse(error=f"User with id={user_id} not found").model_dump()
                 ), HTTPStatus.NOT_FOUND
-            rms_user = rms_api.get_rms_user_by_id(stored_user.rms_id)
+            rms_api.get_rms_user_by_id(stored_user.rms_id)
         except Exception as e:
             logger.error("User with id=%s not found in RMS: %s", user_id, str(e))
             return jsonify(ErrorResponse(error=f"User with id={user_id} not found").model_dump()), HTTPStatus.NOT_FOUND
 
-        # Сначала проверяем, что пользователь существует в локальной БД
-        # (пользователь должен был хотя бы раз залогиниться в manytask)
-        try:
-            user_on_namespace = storage_api.add_user_to_namespace(
-                namespace_id=namespace_id,
-                username=stored_user.username,
-                role=role,
-                assigned_by_username=username,
-            )
-        except NoResultFound as e:
-            logger.warning("User id=%s not registered in manytask: %s", user_id, str(e))
-            return jsonify(
-                ErrorResponse(
-                    error=f"User with id={user_id} is not registered in manytask. The user must log in at least once."
-                ).model_dump()
-            ), HTTPStatus.NOT_FOUND
-        except IntegrityError:
-            logger.warning("User id=%s already has a role in namespace id=%s", user_id, namespace_id)
-            return jsonify(
-                ErrorResponse(error="User already has a role in this namespace").model_dump()
-            ), HTTPStatus.CONFLICT
-        except ValueError as e:
-            logger.error("Invalid role %s: %s", role, str(e))
-            return jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST
-
-        # Добавляем в GitLab группу только после успешного добавления в БД
-        try:
-            rms_api.add_user_to_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_user.id)
-            logger.info("Added RMS user id=%s to GitLab group id=%s", rms_user.id, namespace.gitlab_group_id)
-        except Exception as e:
-            # TODO: откатить добавление в локальную БД
-            logger.error("Failed to add RMS user id=%s to GitLab group: %s", rms_user.id, str(e))
-            return jsonify(
-                ErrorResponse(error="Failed to add user to GitLab group").model_dump()
-            ), HTTPStatus.INTERNAL_SERVER_ERROR
+        # Сначала добавляем в локальную БД (пользователь должен был хотя бы раз
+        # залогиниться в manytask), затем в группу RMS — обе операции выполняет
+        # общий помощник, который также используется таблицей доступа к курсу.
+        user_on_namespace, error = _add_namespace_role(
+            namespace_id=namespace_id,
+            namespace=namespace,
+            username=stored_user.username,
+            role=role,
+            assigned_by_username=username,
+        )
+        if error:
+            return error
 
         logger.info(
             "User %s added user_id=%s to namespace id=%s with role %s",
@@ -1693,3 +1778,189 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
         return jsonify(
             {"success": False, "message": "Internal error when clearing grade override"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.get("/access_users")
+@requires_auth
+def get_course_access_users(course_name: str) -> ResponseReturnValue:
+    """List every user with admin access to the course, from any scope.
+
+    Includes instance admins, namespace admins and program managers of the course's
+    namespace, and course admins of the course itself. A user holding several of
+    these appears once, with all levels listed.
+
+    Returns:
+        200: List of users with their access levels
+        403: Forbidden (not a course admin nor an instance admin)
+        404: Course not found
+    """
+    app: CustomFlask = current_app  # type: ignore
+
+    error = _check_course_admin_access(course_name)
+    if error:
+        return error
+
+    __get_course_or_not_found(app.storage_api, course_name)
+
+    access_users = app.storage_api.get_course_access_users(course_name)
+    response = CourseAccessUsersResponse(
+        users=[
+            CourseAccessUserItem(
+                username=access_user.username,
+                first_name=access_user.first_name,
+                last_name=access_user.last_name,
+                access_levels=access_user.access_levels,
+            )
+            for access_user in access_users
+        ]
+    )
+    return jsonify(response.model_dump()), HTTPStatus.OK
+
+
+@bp.post("/course_admin")
+@requires_auth
+@requires_json_validation(SetCourseAdminRequest)
+def set_course_admin(course_name: str, validated_data: SetCourseAdminRequest) -> ResponseReturnValue:
+    """Grant or revoke course admin rights for a member of the course.
+
+    The target user must already be enrolled on the course: course admin status lives
+    on the users_on_courses row, so there is nothing to update for a non-member.
+
+    Request JSON:
+    {
+        "username": "student",
+        "is_admin": true
+    }
+
+    Returns:
+        200: Status updated
+        403: Forbidden (not a course admin nor an instance admin)
+        404: Course or user not found, or the user is not enrolled on the course
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+
+    error = _check_course_admin_access(course_name)
+    if error:
+        return error
+
+    __get_course_or_not_found(storage_api, course_name)
+
+    target_username = validated_data.username
+    try:
+        # DataBaseApi raises, other implementations may return None.
+        target_user = storage_api.get_stored_user_by_username(target_username)
+    except NoResultFound:
+        target_user = None
+    if target_user is None:
+        logger.warning("User %s not found when setting course admin status", sanitize_log_data(target_username))
+        return jsonify(ErrorResponse(error=f"User {target_username} not found").model_dump()), HTTPStatus.NOT_FOUND
+
+    if not storage_api.check_user_on_course(course_name, target_username):
+        logger.warning(
+            "User %s is not enrolled on course %s, cannot change course admin status",
+            sanitize_log_data(target_username),
+            sanitize_log_data(course_name),
+        )
+        return jsonify(
+            ErrorResponse(
+                error=f"User {target_username} is not enrolled on this course and cannot be made a course admin"
+            ).model_dump()
+        ), HTTPStatus.NOT_FOUND
+
+    storage_api.set_course_admin_status(course_name, target_username, validated_data.is_admin)
+
+    acting_username = "guest" if app.debug else session["manytask"]["username"]
+    logger.warning(
+        "User %s %s course admin status for %s in course %s",
+        sanitize_log_data(acting_username),
+        "granted" if validated_data.is_admin else "revoked",
+        sanitize_log_data(target_username),
+        sanitize_log_data(course_name),
+    )
+    return jsonify({"success": True}), HTTPStatus.OK
+
+
+@bp.post("/program_manager")
+@requires_auth
+@requires_json_validation(AssignProgramManagerRequest)
+def assign_program_manager(course_name: str, validated_data: AssignProgramManagerRequest) -> ResponseReturnValue:
+    """Assign a user as program manager of the course's namespace.
+
+    Program manager is a *namespace*-scoped role, so being a course admin is not
+    enough: the acting user must be an instance admin or a namespace admin of the
+    course's namespace, otherwise a course admin could grant access reaching beyond
+    their own course.
+
+    Request JSON:
+    {
+        "username": "manager"
+    }
+
+    Returns:
+        201: User assigned as program manager
+        400: The course has no namespace
+        403: Forbidden (not an instance admin nor a namespace admin of the namespace)
+        404: Course or user not found
+        409: The user already has a role in the namespace
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+
+    course = __get_course_or_not_found(storage_api, course_name)
+    namespace_id = course.namespace_id
+    if namespace_id is None:
+        logger.warning("Course %s has no namespace, cannot assign a program manager", sanitize_log_data(course_name))
+        return jsonify(
+            ErrorResponse(
+                error="This course does not belong to a namespace, so it has no program managers"
+            ).model_dump()
+        ), HTTPStatus.BAD_REQUEST
+
+    acting_username = "guest" if app.debug else session["manytask"]["username"]
+
+    if not app.debug:
+        if not storage_api.check_if_instance_admin(acting_username):
+            if namespace_id not in storage_api.get_namespace_admin_namespaces(acting_username):
+                logger.warning(
+                    "User %s attempted to assign a program manager in namespace id=%s without admin rights",
+                    sanitize_log_data(acting_username),
+                    namespace_id,
+                )
+                return jsonify(
+                    ErrorResponse(
+                        error="Only Instance Admin or Namespace Admin can assign program managers"
+                    ).model_dump()
+                ), HTTPStatus.FORBIDDEN
+
+    try:
+        namespace, _ = storage_api.get_namespace_by_id(namespace_id, acting_username)
+    except (PermissionError, NoResultFound):
+        logger.warning("Namespace id=%s not accessible when assigning a program manager", namespace_id)
+        return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
+
+    user_on_namespace, error = _add_namespace_role(
+        namespace_id=namespace_id,
+        namespace=namespace,
+        username=validated_data.username,
+        role=ROLE_PROGRAM_MANAGER,
+        assigned_by_username=acting_username,
+    )
+    if error:
+        return error
+
+    logger.info(
+        "User %s assigned %s as program manager of namespace id=%s (course %s)",
+        sanitize_log_data(acting_username),
+        sanitize_log_data(validated_data.username),
+        namespace_id,
+        sanitize_log_data(course_name),
+    )
+
+    response = UserOnNamespaceResponse(
+        id=user_on_namespace.id,
+        user_id=user_on_namespace.user_id,
+        namespace_id=user_on_namespace.namespace_id,
+        role=ROLE_PROGRAM_MANAGER,
+    )
+    return jsonify(response.model_dump()), HTTPStatus.CREATED
