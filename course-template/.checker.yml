@@ -43,7 +43,7 @@ structure:
     - "*private*"
 
 export:
-  destination: https://gitlab.manytask2.org/sandbox/public
+  destination: https://gitlab.manytask.org/sandbox/public
   default_branch: main
   commit_message: "chore(auto): export new tasks"
   templates: search
@@ -87,6 +87,6 @@ testing:
   #       username: ${{ env.GITLAB_USER_LOGIN }}
   #       task_name: ${{ task.task_name }}
   #       score: ${{ outputs.private_tests.percentage }}
-  #       report_url: https://app.manytask2.org
+  #       report_url: https://app.manytask.org
   #       report_token: ${{ env.MANYTASK_TOKEN }}
   #       check_deadline: true

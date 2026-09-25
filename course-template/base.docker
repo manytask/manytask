@@ -1,0 +1,28 @@
+# Reusable course checker/toolchain image. `.releaser-ci.yml` builds and pushes
+# this image before running `checker check` and before building testenv.docker.
+
+FROM alpine:3.20
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    # Go runs as root with no writable HOME in CI; pin its caches to /tmp and use
+    # GOPATH mode (no go.mod) so `go run a.go b.go` works for single-file tasks.
+    GO111MODULE=off \
+    GOCACHE=/tmp/.gocache \
+    GOPATH=/tmp/go
+
+# One toolchain per language group in the course template.
+RUN apk add --no-cache \
+        python3 py3-pip \
+        g++ \
+        go \
+        rust \
+        bash \
+        git \
+        tzdata
+
+# Alpine's system Python is PEP 668 "externally managed". This purpose-built
+# image installs checker globally; pytest is supplied by the course pipeline.
+ARG CHECKER_PIP_SPEC="git+https://github.com/manytask/manytask.git@26.0.5#subdirectory=checker"
+RUN pip3 install --break-system-packages "$CHECKER_PIP_SPEC" pytest
