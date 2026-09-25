@@ -493,18 +493,7 @@ class GitLabApi(RmsApi, AuthApi):
             if project.path_with_namespace == gitlab_project_path:
                 logger.info("Project already exists for user=%s group=%s", rms_user.username, course_students_group)
                 project = self._gitlab.projects.get(project.id)
-                try:
-                    # ensure user is a member of the project
-                    member = project.members.create(
-                        {
-                            "user_id": _validate_and_convert_user_id(rms_user.id),
-                            "access_level": gitlab.const.AccessLevel.DEVELOPER,
-                        }
-                    )
-                    logger.info("Access granted to existing project user=%s", member)
-                except gitlab.GitlabCreateError:
-                    logger.warning("Access already granted or conflict user=%s", rms_user.username)
-
+                self._grant_student_access(rms_user, project, self._get_project_by_name(course_public_repo))
                 return
 
         course_public_project = self._get_project_by_name(course_public_repo)
@@ -536,27 +525,30 @@ class GitLabApi(RmsApi, AuthApi):
         project.save()
 
         logger.info("Forked project created for user=%s repo=%s", rms_user.username, project.path_with_namespace)
-        try:
-            member = project.members.create(
-                {
-                    "user_id": _validate_and_convert_user_id(rms_user.id),
-                    "access_level": gitlab.const.AccessLevel.DEVELOPER,
-                }
-            )
-            logger.info("Access granted for forked project user=%s", member.username)
-        except gitlab.GitlabCreateError:
-            logger.warning("Access already granted or conflict on forked project user=%s", rms_user.username)
+        self._grant_student_access(rms_user, project, course_public_project)
 
-        try:
-            member = course_public_project.members.create(
-                {
-                    "user_id": _validate_and_convert_user_id(rms_user.id),
-                    "access_level": gitlab.const.AccessLevel.REPORTER,
-                }
-            )
-            logger.info("Access granted for course public project user=%s", member.username)
-        except gitlab.GitlabCreateError:
-            logger.warning("Access already granted or conflict on course public project user=%s", rms_user.username)
+    def _grant_student_access(
+        self,
+        rms_user: RmsUser,
+        project: gitlab.v4.objects.Project,
+        course_public_project: gitlab.v4.objects.Project,
+    ) -> None:
+        user_id = _validate_and_convert_user_id(rms_user.id)
+        for target, access_level in (
+            (project, gitlab.const.AccessLevel.DEVELOPER),
+            (course_public_project, gitlab.const.AccessLevel.REPORTER),
+        ):
+            try:
+                target.members.create({"user_id": user_id, "access_level": access_level})
+                logger.info(
+                    "Access %s granted on %s for user=%s", access_level, target.path_with_namespace, rms_user.username
+                )
+            except gitlab.GitlabCreateError:
+                logger.warning(
+                    "Access already granted or conflict on %s for user=%s",
+                    target.path_with_namespace,
+                    rms_user.username,
+                )
 
     def _construct_rms_user(
         self,

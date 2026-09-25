@@ -2,13 +2,14 @@ import os
 from http import HTTPStatus
 from unittest.mock import patch
 
+import gitlab
 import pytest
 from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
 
-from manytask.abstract import AuthenticatedUser, StudentCourseScores, TaskScore
+from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus
 from manytask.local_config import LocalConfig
@@ -409,6 +410,14 @@ def test_not_ready(app):
             assert response.status_code == HTTPStatus.FOUND
 
 
+def test_not_ready_anonymous(app, mock_course):
+    """Anonymous users (no session) must see the not_ready page, not a 500."""
+    with app.test_request_context():
+        with patch.object(mock_course, "status", CourseStatus.CREATED):
+            response = app.test_client().get(f"/{TEST_COURSE_NAME}/not_ready")
+            assert response.status_code == HTTPStatus.OK
+
+
 def check_admin_in_data(response, check_true):
     assert response.status_code == HTTPStatus.OK
     if check_true:
@@ -672,3 +681,114 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
                 rms_id=rms_id,
                 auth_id=TEST_USER_ID,
             )
+
+
+# ----- Course access table on the edit page -----
+
+
+def _get_edit_course_page(app, mock_gitlab_oauth):
+    """Open the course edit page as an instance admin and return the parsed HTML."""
+    CSRFProtect(app)  # the settings form renders a csrf_token
+    app.storage_api.stored_user.instance_admin = True
+    app.storage_api.course_admin = True  # required by the requires_course_admin guard
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+
+    with app.test_request_context(), app.test_client() as client:
+        app.oauth = mock_gitlab_oauth
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(url_for("instance_admin.edit_course", course_name=TEST_COURSE_NAME))
+        assert response.status_code == HTTPStatus.OK
+        return BeautifulSoup(response.data, "html.parser")
+
+
+def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    assert soup.find(id="course-access-table") is not None
+    assert soup.find(id="access-filter-value") is not None
+    assert soup.find(id="access-filter-clear") is not None
+
+
+def test_edit_course_renders_grant_course_admin_modal(app, mock_gitlab_oauth):
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    assert soup.find(id="grantCourseAdminModal") is not None
+
+
+def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
+    """Program managers are managed on the namespace panel, not from the course page."""
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    assert soup.find(id="assignProgramManagerModal") is None
+    assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
+
+
+def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):
+    """Regression: a failing RMS must not blow up the enrollment form with a 500.
+
+    ``create_project`` used to catch only ``gitlab.GitlabError``. Every RMS backend raises
+    ``RmsApiException`` instead, so on SourceCraft any backend failure (exhausted cloud quota,
+    taken slug, API outage) escaped the handler and Flask returned a bare 500. Students saw a
+    broken page with no idea whether it was their fault.
+    """
+    CSRFProtect(app)
+    mock_course.token = TEST_TOKEN
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(
+                app.rms_api,
+                "create_project",
+                side_effect=RmsApiException("Failed to create repo: {'error_code': 'ResourceExhausted'}"),
+            ),
+        ):
+            set_session(client, build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+            soup = BeautifulSoup(response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": mock_course.registration_secret},
+            )
+
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            # The user stays on the enrollment form, not on the signup page.
+            assert "Secret Code" in body
+            # Backend-internal detail is logged, not shown.
+            assert "ResourceExhausted" not in body
+            assert "course staff" in body
+
+
+def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitlab_oauth):
+    """The GitLab path keeps surfacing its own message, now on the create_project page."""
+    CSRFProtect(app)
+    mock_course.token = TEST_TOKEN
+    with app.test_request_context():
+        with (
+            app.test_client() as client,
+            patch.object(
+                app.rms_api,
+                "create_project",
+                side_effect=gitlab.GitlabError("boom", response_code=403),
+            ),
+        ):
+            set_session(client, build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+            soup = BeautifulSoup(response.data, "html.parser")
+            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": mock_course.registration_secret},
+            )
+
+            assert response.status_code == HTTPStatus.OK
+            body = response.data.decode()
+            assert "boom" in body
+            assert "Secret Code" in body

@@ -512,7 +512,7 @@ def export(
     course = Course(manytask_config, reference_root)
 
     # if export_root not empty - delete all except git folder
-    if export_root.exists():
+    if export_root.exists() and not dry_run:
         for path in export_root.iterdir():
             if path.name == ".git":
                 continue
@@ -529,7 +529,8 @@ def export(
         verbose=True,
         dry_run=dry_run,
     )
-    export_root.mkdir(exist_ok=True, parents=True)
+    if not dry_run:
+        export_root.mkdir(exist_ok=True, parents=True)
     exporter.export_public(
         export_root, commit=commit, commit_message=checker_config.export.commit_message
     )
@@ -568,7 +569,8 @@ def export_private(
         verbose=True,
         dry_run=dry_run,
     )
-    export_root.mkdir(exist_ok=True, parents=True)
+    if not dry_run:
+        export_root.mkdir(exist_ok=True, parents=True)
     exporter.export_private(export_root)
 
 

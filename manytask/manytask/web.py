@@ -359,32 +359,30 @@ def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
-    if request.method == "GET":
+    def render_create_project(error_message: str | None = None) -> str:
         return render_template(
             "create_project.html",
+            error_message=error_message,
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
         )
 
+    if request.method == "GET":
+        return render_create_project()
+
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
-        return render_template("create_project.html", error_message="CSRF Error")
+        return render_create_project("CSRF Error")
 
     rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
     if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        return render_template(
-            "create_project.html",
-            error_message="Invalid secret",
-            course_name=course.course_name,
-            course_favicon=app.favicon,
-            base_url=app.rms_api.base_url,
-        )
+        return render_create_project("Invalid secret")
 
     app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
 
@@ -393,8 +391,17 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
-        logger.error("Project creation failed: %s", ex.error_message)
-        return render_template(app.signup_template, error_message=ex.error_message, course_name=course.course_name)
+        logger.error("Project creation failed for user %s: %s", rms_user.username, ex.error_message)
+        return render_create_project(ex.error_message)
+    except RmsApiException as ex:
+        # Every RMS backend raises RmsApiException, so this is the generic path: without it a
+        # failing RMS (quota exhausted, slug taken, API down) escapes as a bare 500. The raw
+        # message is backend-internal, so it goes to the log and the user gets a readable one.
+        logger.error("Project creation failed for user %s: %s", rms_user.username, ex)
+        return render_create_project(
+            "Could not create your repository. This is not something you can fix yourself - "
+            "please report it to the course staff."
+        )
 
     return redirect(url_for("course.course_page", course_name=course_name))
 
@@ -412,8 +419,10 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     if course.status != CourseStatus.CREATED:
         return redirect(url_for("course.course_page", course_name=course_name))
 
-    username = "guest" if app.debug else session["manytask"]["username"]
-    can_edit_course = has_role(username, ["instance_admin", "namespace_admin"], app, course_name=course_name)
+    username = "guest" if app.debug else session.get("manytask", {}).get("username")
+    can_edit_course = bool(username) and has_role(
+        username, ["instance_admin", "namespace_admin"], app, course_name=course_name
+    )
 
     return render_template(
         "not_ready.html",
@@ -598,36 +607,6 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     )
 
 
-def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course_admin: bool) -> None:
-    """Grant or revoke course admin status based on the submitted form action.
-
-    Only instance admins or course admins of this course may perform this action.
-    """
-    if app.debug:
-        current_user = "guest"
-    else:
-        current_user = session["manytask"]["username"]
-
-        if not app.storage_api.check_if_course_admin(course_name, current_user):
-            safe_course_name = sanitize_log_data(course_name)
-            logger.warning(
-                "User %s attempted to change course admin status in course %s without permission",
-                current_user,
-                safe_course_name,
-            )
-            abort(HTTPStatus.FORBIDDEN)
-
-    target_username = request.form.get("username", "")
-    app.storage_api.set_course_admin_status(course_name, target_username, grant_course_admin)
-    app.logger.warning(
-        "User %s %s course admin status for %s in course %s",
-        current_user,
-        "granted" if grant_course_admin else "revoked",
-        target_username,
-        course_name,
-    )
-
-
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
 @requires_course_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
@@ -644,11 +623,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
             return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
-
-        action = request.form.get("action", "")
-        if action in ("grant_course_admin", "revoke_course_admin"):
-            _handle_course_admin_action(app, course_name, action == "grant_course_admin")
-            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         updated_settings = CourseConfig(
             course_name=course_name,
@@ -678,7 +652,12 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         )
 
     course_users = app.storage_api.get_course_users_with_admin_status(course_name)
-    return render_template("edit_course.html", course=course, course_users=course_users, rms=app.app_config.rms)
+    return render_template(
+        "edit_course.html",
+        course=course,
+        course_users=course_users,
+        rms=app.app_config.rms,
+    )
 
 
 @instance_admin_bp.route("/", methods=["GET"])

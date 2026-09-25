@@ -4,7 +4,7 @@ import pytest
 from flask import Flask
 
 from manytask.course import CourseStatus
-from manytask.utils.flask import can_edit_course, get_courses, get_user_roles
+from manytask.utils.flask import can_edit_course, check_if_current_user_is_instance_admin, get_courses, get_user_roles
 from tests.constants import TEST_COURSE_NAME, TEST_USERNAME
 
 
@@ -26,6 +26,14 @@ def app():
     app.storage_api = storage_api
 
     return app
+
+
+def test_check_if_current_user_is_instance_admin_anonymous(app):
+    """An anonymous request (no 'manytask' key in session) must not raise and must be denied."""
+    with app.test_request_context():
+        assert check_if_current_user_is_instance_admin(app) is False
+
+    app.storage_api.check_if_instance_admin.assert_not_called()
 
 
 @pytest.mark.parametrize(

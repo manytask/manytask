@@ -93,6 +93,7 @@ make check
 
 ## Relese checklist
 
-- [ ] Update VERSION file
+- [ ] Update VERSION file in ./manytask/
+- [ ] Update VERSION file in ./checker/
 - [ ] Update CHANGELOG.md
 - [ ] Change version of the checker that is installed in `course-tamplate/testenv.docker` and `course-template/.releaser-ci.yml`.
