@@ -1,0 +1,23 @@
+version: 1
+
+# Bash tasks source the student's solution and run a test driver; a non-zero exit
+# code fails the stage. Overrides the default run_pytest tasks_pipeline
+# (.checker.yml) for every task in the bash/ group.
+task_pipeline:
+  - name: "Run public tests"
+    run_if: ${{ parameters.run_testing }}
+    fail: fast
+    run: "run_script"
+    args:
+      origin: "${{ global.temp_dir }}/${{ task.task_sub_path }}"
+      script: "bash test_public.sh"
+      timeout: ${{ parameters.timeout }}
+
+  - name: "Run private tests"
+    run_if: ${{ parameters.run_testing }}
+    fail: fast
+    run: "run_script"
+    args:
+      origin: "${{ global.temp_dir }}/${{ task.task_sub_path }}"
+      script: "bash test_private.sh"
+      timeout: ${{ parameters.timeout }}

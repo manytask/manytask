@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
 
 import jinja2.nativetypes
 
 from .configs import PipelineStageConfig
+from .configs.checker import TParamType
 from .exceptions import BadConfig, PluginExecutionFailed
 from .plugins import PluginABC
 from .utils import print_info
@@ -51,6 +52,38 @@ class PipelineResult:
         )
 
 
+@dataclass
+class GlobalPipelineVariables:
+    """Base variables passed in pipeline stages."""
+
+    ref_dir: str
+    repo_dir: str
+    temp_dir: str
+    task_names: list[str]
+    task_sub_paths: list[str]
+
+
+@dataclass
+class TaskPipelineVariables:
+    """Variables passed in pipeline stages for each task."""
+
+    task_name: str
+    task_sub_path: str
+    task_score_percent: float
+
+
+PipelineContext = TypedDict(
+    "PipelineContext",
+    {
+        "global": GlobalPipelineVariables,
+        "task": TaskPipelineVariables | None,
+        "outputs": dict[str, PipelineStageResult],
+        "parameters": dict[str, TParamType],
+        "env": dict[str, str],
+    },
+)
+
+
 class ParametersResolver:
     def __init__(self) -> None:
         self.template_env = jinja2.nativetypes.NativeEnvironment(
@@ -59,7 +92,7 @@ class ParametersResolver:
             variable_end_string="}}",
         )
 
-    def resolve(self, template: str | list[str] | Any, context: dict[str, Any]) -> Any:
+    def resolve(self, template: str | list[str] | Any, context: PipelineContext) -> Any:
         """
         Resolve the template with context.
         * If template is a string, resolve it with jinja2
@@ -109,14 +142,20 @@ class PipelineRunner:
 
         self.parameters_resolver = ParametersResolver()
 
-        self.validate({}, validate_placeholders=False)
+        self._validate_plugins()
 
     def __len__(self) -> int:
         return len(self.pipeline)
 
+    def _validate_plugins(self) -> None:
+        """Validate that all pipeline stages reference existing plugins."""
+        for pipeline_stage in self.pipeline:
+            if pipeline_stage.run not in self.plugins:
+                raise BadConfig(f"Unknown plugin {pipeline_stage.run} in pipeline stage {pipeline_stage.name}")
+
     def validate(
         self,
-        context: dict[str, Any],
+        context: PipelineContext,
         validate_placeholders: bool = True,
     ) -> None:
         """
@@ -252,7 +291,7 @@ class PipelineRunner:
 
     def run(
         self,
-        context: dict[str, Any],
+        context: PipelineContext,
         *,
         dry_run: bool = False,
     ) -> PipelineResult:

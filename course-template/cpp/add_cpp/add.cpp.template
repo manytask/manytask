@@ -1,0 +1,7 @@
+// Student stub — exported as add.cpp. Implement `add` so the tests pass.
+int add(int a, int b) {
+    // TODO: implement me
+    (void)a;
+    (void)b;
+    return 0;
+}

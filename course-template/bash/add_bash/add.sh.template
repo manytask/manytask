@@ -1,0 +1,5 @@
+# Student stub — exported as add.sh. Implement `add` so it echoes a + b.
+add() {
+    # TODO: implement me
+    echo 0
+}

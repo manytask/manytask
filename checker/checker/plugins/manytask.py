@@ -30,10 +30,11 @@ class ManytaskPlugin(PluginABC):
         patterns: list[str] = ["*"]
         username: str
         task_name: str
-        score: float | None  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
+        score: int | float | None  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
         report_url: AnyUrl
         report_token: str
         check_deadline: bool
+        allow_reduction: bool = False
         send_time: datetime = datetime.now().astimezone()
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
@@ -44,7 +45,7 @@ class ManytaskPlugin(PluginABC):
         try:
             send_time_formatted = args.send_time.strftime(self.DEFAULT_TIME_FORMAT)
         except ValueError as e:
-            raise PluginExecutionFailed(str(e))
+            raise PluginExecutionFailed(f"Failed to format send_time: {e}")
 
         # Do not expose token in logs.
         data = {
@@ -53,6 +54,7 @@ class ManytaskPlugin(PluginABC):
             "username": args.username,
             "score": args.score,
             "check_deadline": args.check_deadline,
+            "allow_reduction": args.allow_reduction,
             "submit_time": send_time_formatted,
         }
 
@@ -89,7 +91,13 @@ class ManytaskPlugin(PluginABC):
         response = session.post(url=f"{report_url}", data=data, files=files)
 
         if response.status_code >= HTTP_ERROR_STATUS_CODE:
-            raise PluginExecutionFailed(f"{response.status_code}: {response.text}")
+            # Put the full response body into `output` so the pipeline prints it
+            # unconditionally (pipeline.py prints `error.output` always, but `message`
+            # only in verbose mode).
+            raise PluginExecutionFailed(
+                f"{response.status_code}: {response.text}",
+                output=f"Manytask returned HTTP {response.status_code}:\n{response.text}",
+            )
 
         return response
 

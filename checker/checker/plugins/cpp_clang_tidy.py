@@ -16,7 +16,7 @@ class CppClangTidyPlugin(PluginABC):
     class Args(PluginABC.Args):
         executable: str = "clang-tidy"
         reference_root: Path
-        build_dir: Path = Path("build")
+        build_dir: Path = Path("build-asan")
         task_path: Path
         lint_patterns: list[str]
 
@@ -34,6 +34,7 @@ class CppClangTidyPlugin(PluginABC):
             script=[args.executable, "-p", ".", "--use-color", "--quiet", *lint_files],
             paths_whitelist=[str(args.reference_root)],
             paths_blacklist=get_cpp_blacklist(args.reference_root),
+            env_whitelist=["PATH"],
         )
         output = SafeRunScriptPlugin()._run(run_args, verbose=verbose).output
         print_info(output)

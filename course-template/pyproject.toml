@@ -1,0 +1,12 @@
+[project]
+name = "manytask-sandbox"
+version = "0.1.0"
+description = "Sandbox course template for manytask"
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["python"]
+python_files = ["test_*.py"]

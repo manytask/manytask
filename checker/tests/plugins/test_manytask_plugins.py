@@ -100,6 +100,7 @@ class TestManytaskPlugin:
                 },
                 None,
             ),
+            ({"score": -42, "allow_reduction": True}, None),
             ({"send_time": TEST_NOW_DATETIME}, None),
             ({"send_time": TEST_NOW_DATETIME_STR}, None),
             ({"send_time": "invalidtime"}, ValidationError),
@@ -205,6 +206,11 @@ class TestManytaskPlugin:
                     ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
                 assert str(response_status_code) in str(exc.value), "Status code wasn't provided in exception message"
                 assert response_text in str(exc.value), "Error text wasn't provided in exception message"
+                # The full response body must also be stored in `output` so the pipeline
+                # prints it unconditionally (not just in verbose mode).
+                assert exc.value.output is not None, "Response body wasn't propagated to PluginExecutionFailed.output"
+                assert response_text in exc.value.output, "Response body missing from PluginExecutionFailed.output"
+                assert str(response_status_code) in exc.value.output, "Status code missing from output"
             else:
                 result = ManytaskPlugin._post_with_retries(self.REPORT_URL, {"key": "value"}, None)
                 assert result.status_code == HTTP_OK
@@ -220,6 +226,7 @@ class TestManytaskPlugin:
             "username": self.TEST_USERNAME,
             "score": self.TEST_SCORE,
             "check_deadline": self.TEST_CHECK_DEADLINE,
+            "allow_reduction": False,
             "submit_time": self.TEST_NOW_DATETIME_STR,
         }
 
@@ -235,6 +242,20 @@ class TestManytaskPlugin:
         )
 
         ManytaskPlugin._post_with_retries.assert_called_once_with(self.REPORT_URL, expected_data, expected_files)  # type: ignore[attr-defined]
+
+    def test_plugin_run_with_negative_integer_score(self, mocker: MockFixture) -> None:
+        args_dict = self.get_default_args_dict()
+        args_dict.update({"score": -42, "allow_reduction": True})
+
+        mocker.patch.object(ManytaskPlugin, "_post_with_retries")
+        ManytaskPlugin._post_with_retries.return_value.json.return_value = {"score": -42}  # type: ignore[attr-defined]
+
+        ManytaskPlugin().run(args_dict)
+
+        sent_data = ManytaskPlugin._post_with_retries.call_args.args[1]  # type: ignore[attr-defined]
+        assert sent_data["score"] == -42
+        assert isinstance(sent_data["score"], int)
+        assert sent_data["allow_reduction"] is True
 
     def test_verbose(self, mocker: MockFixture) -> None:
         args_dict = self.get_default_full_args_dict()

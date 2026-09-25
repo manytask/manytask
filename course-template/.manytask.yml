@@ -1,0 +1,76 @@
+version: 1
+status: in_progress
+
+settings:
+  course_name: sandbox
+  gitlab_base_url: https://gitlab.manytask2.org
+  public_repo: sandbox/public
+  students_group: sandbox/students
+
+ui:
+  task_url_template: https://gitlab.manytask2.org/sandbox/students/$USER_NAME/$GROUP_NAME/$TASK_NAME
+  links:
+    "Source repo": https://gitlab.manytask2.org/sandbox
+
+deadlines:
+  timezone: Europe/Moscow
+  deadlines: hard
+
+  schedule:
+    - group: python
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add
+          score: 100
+
+    - group: cpp
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_cpp
+          score: 100
+
+    - group: bash
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_bash
+          score: 100
+
+    - group: go
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_go
+          score: 100
+
+    - group: rust
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        - task: add_rust
+          score: 100
+
+# Optional: manual code review via merge requests, handled by the mr-reviewer bot.
+# Uncomment and adapt to enable. The bot reads this same file (delivered by the
+# `deploy-mr-review` CI job) and only scans the course when this section exists.
+# See docs/manytask_yml_reference.md#mr_review for the full field reference.
+#
+# mr_review:
+#   gitlab_group: sandbox/students          # GitLab group the bot scans for student MRs
+#   score_comment_pattern: "Score: {score}"  # how a teacher's grade comment is parsed
+#   tasks:
+#     - name: add                            # task name == the label put on the MR
+#       manual_review: true
+#       checklist:
+#         - type: pipeline_passed            # MR head pipeline must be green
+#         - type: forbidden_files            # MR must not touch these extensions
+#           extensions: [csv, json, txt]
+#         - type: folder_structure           # every change stays under this path
+#           required_path: "python/add"

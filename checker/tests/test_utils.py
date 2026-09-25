@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from checker.utils import print_ascii_tag, print_header_info, print_info, print_separator
+from checker.utils import (
+    print_ascii_tag,
+    print_header_info,
+    print_info,
+    print_separator,
+)
 
 
 class TestPrint:

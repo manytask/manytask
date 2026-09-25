@@ -32,8 +32,24 @@ jobs:
   release-docker:
     uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
     with:
+      # Repository root: Dockerfile COPY paths are manytask/… (see manytask/Dockerfile).
+      context: .
+      dockerfile: manytask/Dockerfile
       platforms: linux/amd64,linux/arm64
       tags: manytask/manytask:${{ github.ref_name }}
+      target: app
+      push: true
+    secrets:
+      registry_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      registry_password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  release-docker-mr-reviewer:
+    uses: manytask/workflows/.github/workflows/reusable-docker-build-push.yml@main
+    with:
+      context: .
+      dockerfile: mr-reviewer/Dockerfile
+      platforms: linux/amd64,linux/arm64
+      tags: manytask/mr-reviewer:${{ github.ref_name }}
       target: app
       push: true
     secrets:

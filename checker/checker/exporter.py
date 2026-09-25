@@ -247,10 +247,11 @@ class Exporter:
     def export_public(
         self,
         target: Path,
-        commit: bool = True,
+        commit: bool = False,
         commit_message: str = "chore(auto): Update public files [skip-ci]",
     ) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target.mkdir(parents=True, exist_ok=True)
 
         disabled_groups_and_tasks_to_skip = [
             *[group.relative_path for group in self.course.get_groups(enabled=False)],
@@ -271,14 +272,15 @@ class Exporter:
             extra_ignore_paths=disabled_groups_and_tasks_to_skip,
         )
 
-        if commit:
+        if commit and not self.dry_run:
             self._commit_and_push_repo(target, commit_message)
 
     def export_for_testing(
         self,
         target: Path,
     ) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target.mkdir(parents=True, exist_ok=True)
 
         print_info(f"Copy from {self.repository_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -306,7 +308,8 @@ class Exporter:
         self,
         target: Path,
     ) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target.mkdir(parents=True, exist_ok=True)
 
         print_info(f"Copy from {self.repository_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -334,7 +337,8 @@ class Exporter:
         self,
         target: Path,
     ) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target.mkdir(parents=True, exist_ok=True)
 
         disabled_groups_and_tasks_to_skip = [
             *[group.relative_path for group in self.course.get_groups(enabled=False)],
@@ -418,13 +422,19 @@ class Exporter:
         # if will replace with template - ignore file
         if path.name in exclude_paths:
             if self.verbose:
-                print_info(f"    - Skip <{path.relative_to(global_root)}> because of templating", color="grey")
+                print_info(
+                    f"    - Skip <{path.relative_to(global_root)}> because of templating",
+                    color="grey",
+                )
             return True, False, False
 
         # ignore if match ignore patterns
         if config.ignore_patterns and any(path.match(ignore_pattern) for ignore_pattern in config.ignore_patterns):
             if self.verbose:
-                print_info(f"    - Skip <{path.relative_to(global_root)}> because of ignore patterns", color="grey")
+                print_info(
+                    f"    - Skip <{path.relative_to(global_root)}> because of ignore patterns",
+                    color="grey",
+                )
             return True, False, False
 
         # If matches public patterns AND copy_public is False - skip
@@ -434,7 +444,8 @@ class Exporter:
         if is_public and not copy_public:
             if self.verbose:
                 print_info(
-                    f"    - Skip <{path.relative_to(global_root)}> because of public patterns skip", color="grey"
+                    f"    - Skip <{path.relative_to(global_root)}> because of public patterns skip",
+                    color="grey",
                 )
             return True, is_public, False
 
@@ -448,7 +459,8 @@ class Exporter:
         if is_private and not copy_private:
             if self.verbose:
                 print_info(
-                    f"    - Skip <{path.relative_to(global_root)}> because of skip private patterns skip", color="grey"
+                    f"    - Skip <{path.relative_to(global_root)}> because of skip private patterns skip",
+                    color="grey",
                 )
             return True, is_public, is_private
 
@@ -598,6 +610,9 @@ class Exporter:
                 f"    - Copy <{path.relative_to(global_root)}> to <{path_destination.relative_to(global_destination)}>",
                 color="grey",
             )
+        if self.dry_run:
+            return
+
         path_destination.parent.mkdir(parents=True, exist_ok=True)
 
         # if `origin.template` - copy from this file as `origin`
@@ -656,7 +671,10 @@ class Exporter:
 
         if extra_ignore_paths is not None and str(root.relative_to(global_root)) in extra_ignore_paths:
             if self.verbose:
-                print_info(f"    - Skip <{root.relative_to(global_root)}> because of extra ignore paths", color="grey")
+                print_info(
+                    f"    - Skip <{root.relative_to(global_root)}> because of extra ignore paths",
+                    color="grey",
+                )
             return
 
         # select paths to ignore - original to replace or templates to ignore
@@ -719,11 +737,10 @@ class Exporter:
         """Commit and push all changes in the repository."""
         print_info("* git status...")
         r = subprocess.run(
-            "git status",
+            ["git", "status"],
             encoding="utf-8",
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            shell=True,
             check=True,
             cwd=repo_dir,
         )
@@ -754,12 +771,14 @@ class Exporter:
             raise Exception(f"Git commit failed with code {r.returncode}: {r.stdout}")
 
         print_info("* git pushing...")
+        push_option_args: list[str] = []
+        for option in self.export_config.push_options:
+            push_option_args.extend(["-o", option])
         r = subprocess.run(
-            "git push -o ci.skip origin",
+            ["git", "push", *push_option_args, "origin"],
             encoding="utf-8",
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            shell=True,
             cwd=repo_dir,
         )
         print_info(r.stdout, color="grey")

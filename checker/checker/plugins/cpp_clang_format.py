@@ -40,6 +40,7 @@ class CppClangFormatPlugin(PluginABC):
                 *lint_files,
             ],
             paths_blacklist=get_cpp_blacklist(args.reference_root),
+            env_whitelist=["PATH"],
         )
         output = SafeRunScriptPlugin()._run(run_args, verbose=verbose).output
         print_info(output)

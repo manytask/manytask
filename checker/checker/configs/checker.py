@@ -75,6 +75,12 @@ class CheckerExportConfig(CustomBaseModel):
     default_branch: str = "main"
     commit_message: str = "chore(auto): export new tasks"
     templates: TemplateType = TemplateType.SEARCH
+    # Push options passed to `git push` as `-o <option>` flags when exporting.
+    # Backward-compatible default matches the previous hardcoded behavior:
+    # `["ci.skip"]` tells GitLab to skip pipelines for the auto-export commit.
+    # Set to `[]` for git servers that do not support push options (e.g. SourceCraft),
+    # or override with any other list of options understood by the destination server.
+    push_options: list[str] = Field(default_factory=lambda: ["ci.skip"])
 
 
 class PipelineStageConfig(CustomBaseModel):

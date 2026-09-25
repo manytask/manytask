@@ -1,0 +1,45 @@
+# CI pipeline executed in the STUDENT public repository.
+# Runs the checker against each student's submission and reports
+# the score back to the Manytask web application.
+
+stages:
+  - grade
+
+variables:
+  # Full registry path to the course testenv image built by the PRIVATE repo's
+  # .releaser-ci.yml (build-testenv job). This file is exported verbatim into the
+  # public/student repository, so the image must be referenced by its absolute
+  # registry path — NOT $CI_REGISTRY_IMAGE, which would resolve to the student
+  # project's own (empty) registry. The image bakes the private reference at
+  # /opt/course, which is how the student grade job reaches the hidden tests.
+  #
+  # The host MUST match the private project's CI_REGISTRY (where build-testenv
+  # pushed the image) — on this instance that is `gitlab.manytask2.org:5050`, NOT
+  # a `registry.` subdomain. The DOCKER_AUTH_CONFIG `auths` key below must use the
+  # same host. Override via a group CI/CD variable if your registry path differs.
+  TESTENV_IMAGE: "gitlab.manytask2.org:5050/sandbox/private/testenv:latest"
+
+grade:
+  # `checker grade . /opt/course` overlays the PRIVATE tests baked into the
+  # testenv image (at /opt/course) onto the student's solution (from the
+  # checkout, `.`), then runs public + private tests. Tools and the hidden
+  # reference are baked into the image, so there is no before_script.
+  #
+  # Cross-project registry pull: student repos are forks of sandbox/public and
+  # must pull this image from sandbox/private's registry. Set DOCKER_AUTH_CONFIG
+  # as a group CI/CD variable holding a deploy/group token with read_registry
+  # scope on sandbox/private (see docs/course_template.md).
+  #
+  # Score reporting: `checker grade` always runs the report_pipeline, which is
+  # commented out in .checker.yml by default. To report scores back to the
+  # manytask web app, uncomment that report_pipeline (report_score_manytask) and
+  # provide a MANYTASK_TOKEN CI variable — NOT a `--submit-score` flag (that grade
+  # option is currently a no-op in checker).
+  image: "$TESTENV_IMAGE"
+  stage: grade
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: on_success
+    - when: never
+  script:
+    - checker grade . /opt/course

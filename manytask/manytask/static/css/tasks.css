@@ -1,0 +1,476 @@
+.mt-lecture {
+    padding: 10px 20px 20px 20px;
+    border: 1px solid var(--bs-body-color);
+    margin-bottom: 30px;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.mt-lecture.special {
+    background-color: var(--bs-tertiary-bg);
+}
+
+.mt-task-card {
+    width: 180px;
+    height: 120px;
+    padding: 8px;
+    margin: 10px;
+    position: relative;
+    box-sizing: border-box;
+    border: 2px solid #00000000;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.mt-task-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 10px 20px rgba(77, 75, 75, 0.17);
+}
+
+
+@media (max-width: 667px) {
+    .mt-task-card {
+        width: 150px;
+    }
+}
+
+@media (max-width: 479px) {
+    .mt-task-card {
+        width: 135px;
+    }
+}
+
+.mt-task-card * {
+    text-decoration: none;
+    color: black;
+}
+
+.mt-task-card.unsolved {
+    background-color: #a8a8a8;
+}
+
+.mt-task-card.unsolved:hover {
+    background-color: #b8b8b8;
+}
+
+
+.mt-task-card.solved {
+    background-color: #66cda3 !important;
+}
+
+.mt-task-card.solved:hover {
+    background-color: #76ddb3 !important;
+}
+
+
+.mt-task-card.over_solved {
+    background-color: #66cd83 !important;
+}
+
+.mt-task-card.over_solved:hover {
+    background-color: #76dd93 !important;
+}
+
+
+.mt-task-card.solved_partially {
+    background-color: #a27fdc !important;
+}
+
+.mt-task-card.solved_partially:hover {
+    background-color: #b28fec !important;
+}
+
+.mt-task-card.bonus {
+    border: 2px solid #5bc0de;
+    background-color: rgba(227, 242, 253, 0.7);
+}
+
+.mt-task-card.bonus:hover {
+    border-color: #6bd0ee;
+    box-shadow: 0 10px 20px rgba(91, 192, 222, 0.2);
+    background-color: rgba(227, 242, 253, 0.7);
+}
+
+.mt-task-card.special {
+    border: 2px solid #f0ad4e !important;
+    background-color: rgba(255, 243, 224, 0.7);
+}
+
+.mt-task-card.special:hover {
+    border-color: #ffbd4e !important;
+    box-shadow: 0 10px 20px rgba(240, 173, 78, 0.2);
+    background-color: rgba(255, 243, 224, 0.7);
+}
+
+
+.mt-task-card:hover .mt-card__stats {
+    opacity: 0.9;
+}
+
+.mt-task-card * {
+    transition: all 0.3s ease;
+}
+
+.mt-task-card .mt-card__name {
+    text-align: center;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: -6px;
+}
+
+.mt-task-card .mt-card__stats {
+    opacity: 0.35;
+    bottom: 0.15em;
+    font-size: 1em;
+    margin-top: -5px;
+    text-align: center;
+    overflow: hidden;
+    max-width: 85%;
+}
+
+.mt-task-card .task-card__solutions {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    text-align: center;
+    overflow: hidden;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Tooltip text */
+.mt-task-card .demand .mt-card__stats {
+    border-bottom: 1px dotted;
+}
+
+.mt-task-card .demand .demand-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: var(--bs-secondary-bg-subtle);
+    text-align: center;
+    padding: 10px;
+    border-radius: 20px;
+
+    /* Position the tooltip text - see examples below! */
+    position: absolute;
+    z-index: 1000;
+    left: 60%;
+    top: 120%;
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.mt-task-card .demand:hover .demand-text {
+    visibility: visible;
+}
+
+.task-deadlines {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.task-deadlines.passed-deadline {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+}
+
+.task-deadline {
+    background: var(--bs-body-color-rgb);
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 5px;
+    border: 2px solid var(--bs-border-color-translucent);
+    min-width: 12rem;
+    font-size: 0.9rem;
+}
+
+.deadline-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.deadline-percent {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--bs-body);
+}
+
+.task-deadline__status {
+    border-radius: 12px;
+    font-size: 0.8rem;
+    padding: 2px 6px;
+}
+
+.task-deadline__progress {
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 5px 0;
+}
+
+.task-deadline__progress-bar {
+    height: 100%;
+    transition: width 0.5s ease;
+}
+
+.task-deadline__deadline-time {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 5px;
+}
+
+.task-deadline__deadline-hint {
+    font-size: 0.75rem;
+    text-align: right;
+    color: var(--bs-secondary-color);
+    font-style: italic;
+}
+
+
+@media (max-width: 767px) {
+    .task-deadlines {
+        width: 100%;
+        margin-top: 15px;
+    }
+
+    .d-block.d-sm-flex {
+        flex-direction: column;
+    }
+}
+
+.task-deadline__deadline-time i.fa-calendar,
+.task-deadline__deadline-time i.fa-clock {
+    margin-right: -0.2rem;
+}
+
+.task-deadline__status.active {
+    background: #e1fae4;
+    color: #4caf50;
+}
+
+.task-deadline__status.urgent {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.task-deadline__status.expired {
+    background: #f5f5f5;
+    color: #616161;
+}
+
+.task-deadline__progress-bar {
+    background: #4caf50;
+}
+
+.task-deadline__progress-bar.urgent {
+    background: linear-gradient(90deg, #ff8f00, #fd3e04);
+}
+
+.task-deadline__progress-bar.expired {
+    background: #9e9e9e;
+}
+
+.passed-deadline {
+    opacity: 0.9;
+}
+
+.passed-deadline .deadline-percent {
+    text-decoration: line-through;
+    text-decoration-thickness: 0.11rem;
+}
+
+.task-deadline__status::before {
+    font-family: "Font Awesome 6 Free", serif;
+    font-weight: 900;
+}
+
+.task-deadline__status.active::before {
+    content: "\f0f3";
+}
+
+.task-deadline__status.urgent::before {
+    content: "\f071";
+}
+
+.task-deadline__status.expired::before {
+    content: "\f1da";
+}
+
+.task-group__expired-notice {
+    background-color: rgba(220, 53, 69, 0.1);
+    border: 1px solid var(--bs-danger-border-subtle);
+    border-radius: 8px;
+    padding: 6px 10px;
+    align-items: center;
+    gap: 6px;
+    backdrop-filter: blur(2px);
+    z-index: 1;
+    transition: all 0.3s ease;
+}
+
+.task-group__expired-notice i {
+    color: #dc3545;
+    font-size: 0.9rem;
+}
+
+.task-group__expired-notice span {
+    color: #dc3545;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* ── Interpolated deadline graph ──────────────────────────────────────────── */
+
+.task-deadlines--graph {
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 280px;
+    max-width: 420px;
+    width: 100%;
+}
+
+/* The graph lives inside a regular .task-deadline plank, so it inherits the
+   plank's background, border, radius and padding for free. */
+.task-deadline--graph {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/*
+ * The "next deadline in" hint shares the header row with the percent and the
+ * status pill. .deadline-header is `justify-content: space-between`, so the
+ * hint is pushed to fill the gap and right-aligned against the pill; it is
+ * shorter than the pill, so the row height is unchanged.
+ */
+.task-deadline--graph .deadline-header {
+    align-items: baseline;
+    gap: 8px;
+}
+
+.task-deadline--graph .deadline-header .task-deadline__deadline-hint {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/*
+ * Hover tooltip on the graph's breakpoint dots. Mirrors the icon + text layout
+ * of .task-deadline__deadline-time on the non-interpolated planks.
+ */
+.deadline-graph-tip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.deadline-graph-tip i {
+    margin-right: 2px;
+    opacity: 0.75;
+}
+
+/*
+ * Palette + geometry for the canvas renderer. deadline-graph.js reads these
+ * custom properties, so all graph styling stays here in CSS.
+ */
+.deadline-graph-canvas {
+    display: block;
+    width: 100%;
+    margin: 2px 0 0 0;
+
+    /*
+     * Geometry (px, unitless — JS parses with parseFloat).
+     *
+     * Tuned so .task-deadline--graph is the same height as a regular deadline
+     * plank (~101px). Because the "next deadline in" hint moved up into
+     * .deadline-header, the canvas gets that row's height too: it now spans the
+     * progress-bar, date/time AND hint rows (2 + 50 = 52px vs ~52px replaced).
+     *
+     * Margin floors, both enforced by the renderer's label placement:
+     *   --graph-margin-top    >= 5  half of the 100 % label, which is centred
+     *                              on the top gridline (it is clamped into the
+     *                              canvas, so a smaller value only crowds it)
+     *   --graph-margin-bottom >= 10 the X-axis dates: 2px gap + ~7px glyph ink
+     *                              (9 puts the ink exactly on the canvas edge)
+     * Going below those crowds or clips the labels.
+     */
+    --graph-height: 51;
+    --graph-margin-left: 30;
+    --graph-margin-right: 6;
+    --graph-margin-top: 5;
+    --graph-margin-bottom: 10;
+    --graph-font-size: 9;
+
+    /* palette — mirrors the plank tokens */
+    --graph-text: var(--bs-secondary-color);
+    --graph-axis: color-mix(in srgb, var(--bs-body-color) 18%, transparent);
+    --graph-grid: color-mix(in srgb, var(--bs-body-color) 7%, transparent);
+    --graph-now: #ef6c00;
+
+    /* default (active) curve colours — match .task-deadline__progress-bar */
+    --graph-line: #4caf50;
+    --graph-dot: #388e3c;
+    --graph-fill: color-mix(in srgb, #4caf50 14%, transparent);
+}
+
+/* Urgent — mirrors .task-deadline__progress-bar.urgent gradient endpoints */
+.task-deadline--graph.urgent .deadline-graph-canvas {
+    --graph-line: #fd3e04;
+    --graph-dot: #ff8f00;
+    --graph-fill: color-mix(in srgb, #ff8f00 14%, transparent);
+}
+
+/* Expired — mirrors .task-deadline__progress-bar.expired */
+.task-deadline--graph.expired .deadline-graph-canvas {
+    --graph-line: #9e9e9e;
+    --graph-dot: #9e9e9e;
+    --graph-fill: color-mix(in srgb, #9e9e9e 12%, transparent);
+}
+
+/* Fallback for browsers without color-mix() */
+@supports not (color: color-mix(in srgb, red 50%, transparent)) {
+    .deadline-graph-canvas {
+        --graph-axis: rgba(128, 128, 128, 0.35);
+        --graph-grid: rgba(128, 128, 128, 0.12);
+        --graph-fill: rgba(76, 175, 80, 0.14);
+    }
+
+    .task-deadline--graph.urgent .deadline-graph-canvas {
+        --graph-fill: rgba(255, 143, 0, 0.14);
+    }
+
+    .task-deadline--graph.expired .deadline-graph-canvas {
+        --graph-fill: rgba(158, 158, 158, 0.12);
+    }
+}
+
+@media (max-width: 767px) {
+    .task-deadlines--graph {
+        min-width: unset;
+        max-width: unset;
+        align-items: stretch;
+    }
+}
+
+.course-status-badge {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid transparent;
+}

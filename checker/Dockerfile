@@ -17,12 +17,12 @@ RUN apk update && apk add --no-cache \
 WORKDIR /usr/src/app
 
 # Copy source code
-COPY pyproject.toml VERSION Makefile setup.py README.md ./
+COPY pyproject.toml VERSION Makefile README.md ./
 COPY checker ./checker
 
 # Install python dependencies and checker
 RUN python -m venv /opt/checker-venv
-RUN /opt/checker-venv/bin/python -m pip install --no-cache-dir --require-virtualenv . && \
+RUN /opt/checker-venv/bin/python -m pip install --no-cache-dir --require-virtualenv . pytest && \
     find /opt/checker-venv -type d -name '__pycache__' -exec rm -r {} + && \
     find /opt/checker-venv -type d -name 'tests' -exec rm -rf {} + && \
     find /opt/checker-venv -name '*.pyc' -delete && \

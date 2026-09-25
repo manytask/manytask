@@ -1,0 +1,17 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPattern": "/api/dev-course/ping",
+    "headers": {
+      "Authorization": {
+        "equalTo": "Bearer dev-token"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {"Content-Type": "application/json"},
+    "jsonBody": {"course": "dev-course", "ok": true}
+  }
+}

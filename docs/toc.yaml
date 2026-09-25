@@ -26,6 +26,8 @@ navigation:
 items:
   - name: About
     href: about.md
+  - name: Concepts
+    href: concepts.md
   - name: For students
     items:
       - name: Manytask
@@ -34,14 +36,20 @@ items:
     items:
       - name: Course as code
         href: course_as_code.md
-      - name: Deadline schedule
-        href: deadline_schedule.md
-      - name: Course grading
-        href: grading.md
-      - name: Course statuses
-        href: course_statuses.md
-      - name: Public export
-        href: checker.md
+      - name: The basic example
+        href: basic_example.md
+      - name: Course template
+        href: course_template.md
+      - name: Private repository
+        href: private_repo.md
+      - name: Checker configuration
+        href: checker_config.md
+      - name: Manytask configuration
+        href: manytask_config.md
+      - name: Running the course
+        href: running_course.md
+      - name: Checker pipelines and plugins
+        href: checker_pipelines_and_plugins.md
   - name: For system administrators
     items:
       - name: Production setup
@@ -54,5 +62,13 @@ items:
     items:
       - name: Development
         href: dev.md
+  - name: References
+    items:
+      - name: .manytask.yml reference
+        href: manytask_yml_reference.md
+      - name: .checker.yml reference
+        href: checker_yml_reference.md
+      - name: Checker built-in plugins
+        href: checker_plugins.md
       - name: REST API
         href: api.md

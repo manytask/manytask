@@ -440,15 +440,33 @@ class TestManytaskDeadlinesConfig:
     @pytest.mark.parametrize(
         "enabled, started, now, expected_tasks, expected_groups",
         [
-            (None, None, None, ["task1_1", "task1_2", "task2_1", "task2_2", "task3_1"], ["group1", "group2", "group3"]),
+            (
+                None,
+                None,
+                None,
+                ["task1_1", "task1_2", "task2_1", "task2_2", "task3_1"],
+                ["group1", "group2", "group3"],
+            ),
             (True, None, None, ["task1_1", "task3_1"], ["group1", "group3"]),
             (False, None, None, ["task1_2", "task2_1", "task2_2"], ["group2"]),
-            (None, True, None, ["task1_1", "task1_2", "task2_1", "task2_2"], ["group1", "group2"]),
+            (
+                None,
+                True,
+                None,
+                ["task1_1", "task1_2", "task2_1", "task2_2"],
+                ["group1", "group2"],
+            ),
             (None, False, None, ["task3_1"], ["group3"]),
             (True, True, None, ["task1_1"], ["group1"]),
             (True, False, None, ["task3_1"], ["group3"]),
             (None, True, datetime(2021, 1, 1), ["task1_1", "task1_2"], ["group1"]),
-            (None, False, datetime(2021, 1, 1), ["task2_1", "task2_2", "task3_1"], ["group2", "group3"]),
+            (
+                None,
+                False,
+                datetime(2021, 1, 1),
+                ["task2_1", "task2_2", "task3_1"],
+                ["group2", "group3"],
+            ),
         ],
     )
     def test_get_tasks_groups(
