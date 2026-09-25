@@ -126,16 +126,16 @@ class TestRunScriptWithScorePluginRun:
         result = plugin._run(args)
         assert abs(result.percentage - 0.5) < 1e-9
 
-    def test_non_zero_exit_with_report_score_still_runs(self) -> None:
-        """report_score=True implicitly allows failures so score is still parsed."""
+    def test_non_zero_exit_with_report_score_raises(self) -> None:
+        """report_score does not suppress a scorer failure by itself."""
         plugin = RunScriptWithScorePlugin()
         args = RunScriptWithScorePlugin.Args(
             origin="/tmp",
             script="echo 0.6; exit 1",
             report_score=True,
         )
-        result = plugin._run(args)
-        assert abs(result.percentage - 0.6) < 1e-9
+        with pytest.raises(PluginExecutionFailed, match="Script failed with exit code 1"):
+            plugin._run(args)
 
     def test_custom_score_pattern(self) -> None:
         plugin = RunScriptWithScorePlugin()

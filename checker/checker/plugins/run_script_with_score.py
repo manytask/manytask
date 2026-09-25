@@ -62,7 +62,7 @@ class RunScriptWithScorePlugin(RunScriptPlugin):
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
         script_cmd: str | list[str] = args.script
-        if args.allow_failures or args.report_score:
+        if args.allow_failures:
             # Wrap the entire command so a non-zero exit does not abort the pipeline.
             # We always produce a shell string here so that `|| true` applies to the
             # whole command, not just the last segment (e.g. `echo 50; exit 1 || true`
