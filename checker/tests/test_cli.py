@@ -328,3 +328,55 @@ class TestExport:
         assert result.exit_code == 0, result.output
         assert sentinel.read_text() == "do not change"
         assert not (export_root / "group1").exists()
+
+
+class TestGradeBaseRef:
+    @pytest.fixture
+    def captured_base_ref(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        captured: dict[str, Any] = {}
+
+        def fake_detect_changes(self: Any, detection_type: Any) -> list[Any]:
+            captured["base_ref"] = self.base_ref
+            return []
+
+        monkeypatch.setattr("checker.course.Course.detect_changes", fake_detect_changes)
+        monkeypatch.delenv("CI_COMMIT_BEFORE_SHA", raising=False)
+        monkeypatch.delenv("CI_MERGE_REQUEST_DIFF_BASE_SHA", raising=False)
+        return captured
+
+    def test_no_base_ref_by_default(
+        self, course_root: Path, captured_base_ref: dict[str, Any]
+    ) -> None:
+        result = run_grade(course_root)
+        assert result.exit_code == 0, result.output
+        assert captured_base_ref["base_ref"] is None
+
+    def test_base_ref_option(
+        self, course_root: Path, captured_base_ref: dict[str, Any]
+    ) -> None:
+        result = run_grade(course_root, "--base-ref", "abc123")
+        assert result.exit_code == 0, result.output
+        assert captured_base_ref["base_ref"] == "abc123"
+
+    def test_base_ref_from_gitlab_push_env(
+        self,
+        course_root: Path,
+        captured_base_ref: dict[str, Any],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("CI_COMMIT_BEFORE_SHA", "before")
+        result = run_grade(course_root)
+        assert result.exit_code == 0, result.output
+        assert captured_base_ref["base_ref"] == "before"
+
+    def test_merge_request_base_has_priority(
+        self,
+        course_root: Path,
+        captured_base_ref: dict[str, Any],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("CI_COMMIT_BEFORE_SHA", "0" * 40)
+        monkeypatch.setenv("CI_MERGE_REQUEST_DIFF_BASE_SHA", "mr_base")
+        result = run_grade(course_root)
+        assert result.exit_code == 0, result.output
+        assert captured_base_ref["base_ref"] == "mr_base"
