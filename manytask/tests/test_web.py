@@ -397,6 +397,107 @@ def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
             assert "/instance_admin/courses/test_course_names/edit" in body
 
 
+def test_index_renders_namespace_table_for_namespace_admin(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    namespace = MockCourseBase()
+    namespace.id = 1
+    namespace.name = "Test namespace"
+    namespace.slug = "test-namespace"
+    namespace.description = "Namespace description"
+    namespace.gitlab_group_id = 1
+
+    app.storage_api.get_namespace_admin_namespaces = lambda _username: [namespace.id]
+    app.storage_api.get_user_namespaces = lambda _username: [(namespace, "namespace_admin")]
+    app.storage_api.get_namespace_users = lambda _namespace_id: [1, 2]
+    app.storage_api.get_namespace_courses = lambda _namespace_id: [{"name": "course"}]
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get("/")
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.data.decode()
+    assert "Namespaces you administer" in body
+    assert 'id="admin-namespaces-table"' in body
+    assert "adminNamespacesData" in body
+    assert 'title: "Edit"' in body
+    assert "Test namespace" in body
+    assert "/instance_admin/namespaces/1" in body
+
+
+def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    namespace = MockCourseBase()
+    namespace.id = 1
+    namespace.name = "Test namespace"
+    namespace.slug = "test-namespace"
+    namespace.description = None
+    namespace.gitlab_group_id = 1
+
+    app.storage_api.stored_user.instance_admin = True
+    app.storage_api.get_all_namespaces = lambda: [namespace]
+    app.storage_api.get_namespace_users = lambda _namespace_id: []
+    app.storage_api.get_namespace_courses = lambda _namespace_id: []
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get("/")
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Namespaces you administer" in response.data.decode()
+
+
+def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
+    """Namespace admins can open the panel where they manage their namespace."""
+    namespace = MockCourseBase()
+    namespace.id = 1
+    namespace.name = "Test namespace"
+    namespace.slug = "test-namespace"
+    namespace.description = None
+    namespace.gitlab_group_id = 1
+
+    app.storage_api.get_namespace_by_id = lambda _namespace_id, _username: (namespace, "namespace_admin")
+    app.storage_api.get_namespace_users = lambda _namespace_id: []
+    app.storage_api.get_namespace_courses = lambda _namespace_id: []
+    app.storage_api.get_all_users = lambda: []
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get(f"/instance_admin/namespaces/{namespace.id}")
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_oauth):
+    """Namespace admin access is limited to the requested namespace."""
+    app.storage_api.get_namespace_by_id = lambda namespace_id, _username: (
+        MockCourseBase(),
+        "namespace_admin" if namespace_id == 1 else "program_manager",
+    )
+
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+
+            response = client.get("/instance_admin/namespaces/2")
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
 def test_not_ready(app):
     with app.test_request_context():
         with (
@@ -681,6 +782,46 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
                 rms_id=rms_id,
                 auth_id=TEST_USER_ID,
             )
+
+
+# ----- Course access table on the edit page -----
+
+
+def _get_edit_course_page(app, mock_gitlab_oauth):
+    """Open the course edit page as an instance admin and return the parsed HTML."""
+    CSRFProtect(app)  # the settings form renders a csrf_token
+    app.storage_api.stored_user.instance_admin = True
+    app.storage_api.course_admin = True  # required by the requires_course_admin guard
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+
+    with app.test_request_context(), app.test_client() as client:
+        app.oauth = mock_gitlab_oauth
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(url_for("instance_admin.edit_course", course_name=TEST_COURSE_NAME))
+        assert response.status_code == HTTPStatus.OK
+        return BeautifulSoup(response.data, "html.parser")
+
+
+def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    assert soup.find(id="course-access-table") is not None
+    assert soup.find(id="access-filter-value") is not None
+    assert soup.find(id="access-filter-clear") is not None
+
+
+def test_edit_course_renders_grant_course_admin_modal(app, mock_gitlab_oauth):
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    assert soup.find(id="grantCourseAdminModal") is not None
+
+
+def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
+    """Program managers are managed on the namespace panel, not from the course page."""
+    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+
+    assert soup.find(id="assignProgramManagerModal") is None
+    assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
 
 
 def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):

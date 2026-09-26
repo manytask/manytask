@@ -66,17 +66,47 @@ def index() -> ResponseReturnValue:
     can_create_courses = check_if_user_has_namespaces_to_admin(app)
     is_instance_admin = check_if_current_user_is_instance_admin(app)
     username = "guest" if app.debug else session["manytask"]["username"]
+    admin_namespaces = _get_admin_namespaces(app, username, is_instance_admin) if can_create_courses else []
 
     return render_template(
         "courses.html",
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
         courses=courses,
+        admin_namespaces=admin_namespaces,
         status_order=[status.value for status in CourseStatus],
         can_create_courses=can_create_courses,
         is_instance_admin=is_instance_admin,
         username=username,
     )
+
+
+def _get_admin_namespaces(app: CustomFlask, username: str, is_instance_admin: bool) -> list[dict[str, str | int]]:
+    """Build namespace table data visible to the current administrator."""
+    if is_instance_admin:
+        namespaces_with_roles = [(namespace, "instance_admin") for namespace in app.storage_api.get_all_namespaces()]
+    else:
+        namespaces_with_roles = app.storage_api.get_user_namespaces(username)
+
+    namespace_data = []
+    for namespace, role in namespaces_with_roles:
+        if role not in ("instance_admin", "namespace_admin"):
+            continue
+
+        namespace_data.append(
+            {
+                "id": namespace.id,
+                "name": namespace.name,
+                "url": url_for("instance_admin.namespace_panel", namespace_id=namespace.id),
+                "slug": namespace.slug,
+                "description": namespace.description or "",
+                "gitlab_group_id": namespace.gitlab_group_id,
+                "users_count": len(app.storage_api.get_namespace_users(namespace.id)),
+                "courses_count": len(app.storage_api.get_namespace_courses(namespace.id)),
+            }
+        )
+
+    return namespace_data
 
 
 @root_bp.route("/login", methods=["GET", "POST"])
@@ -607,36 +637,6 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
     )
 
 
-def _handle_course_admin_action(app: CustomFlask, course_name: str, grant_course_admin: bool) -> None:
-    """Grant or revoke course admin status based on the submitted form action.
-
-    Only instance admins or course admins of this course may perform this action.
-    """
-    if app.debug:
-        current_user = "guest"
-    else:
-        current_user = session["manytask"]["username"]
-
-        if not app.storage_api.check_if_course_admin(course_name, current_user):
-            safe_course_name = sanitize_log_data(course_name)
-            logger.warning(
-                "User %s attempted to change course admin status in course %s without permission",
-                current_user,
-                safe_course_name,
-            )
-            abort(HTTPStatus.FORBIDDEN)
-
-    target_username = request.form.get("username", "")
-    app.storage_api.set_course_admin_status(course_name, target_username, grant_course_admin)
-    app.logger.warning(
-        "User %s %s course admin status for %s in course %s",
-        current_user,
-        "granted" if grant_course_admin else "revoked",
-        target_username,
-        course_name,
-    )
-
-
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
 @requires_course_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
@@ -653,11 +653,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
             return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
-
-        action = request.form.get("action", "")
-        if action in ("grant_course_admin", "revoke_course_admin"):
-            _handle_course_admin_action(app, course_name, action == "grant_course_admin")
-            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         updated_settings = CourseConfig(
             course_name=course_name,
@@ -687,7 +682,12 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         )
 
     course_users = app.storage_api.get_course_users_with_admin_status(course_name)
-    return render_template("edit_course.html", course=course, course_users=course_users, rms=app.app_config.rms)
+    return render_template(
+        "edit_course.html",
+        course=course,
+        course_users=course_users,
+        rms=app.app_config.rms,
+    )
 
 
 @instance_admin_bp.route("/", methods=["GET"])
@@ -821,7 +821,7 @@ def update_profile() -> ResponseReturnValue:
 
 
 @instance_admin_bp.route("/namespaces", methods=["GET"])
-@role_required(["namespace_admin", "instance_admin"])
+@requires_instance_or_namespace_admin
 def namespaces_list() -> ResponseReturnValue:
     """Display list of namespaces accessible to the user.
 
@@ -833,49 +833,8 @@ def namespaces_list() -> ResponseReturnValue:
     username = session["manytask"]["username"]
     is_instance_admin = check_if_current_user_is_instance_admin(app)
 
-    if is_instance_admin:
-        logger.info("Instance Admin %s accessing all namespaces", username)
-        namespaces = app.storage_api.get_all_namespaces()
-        namespace_data = []
-
-        for ns in namespaces:
-            users_count = len(app.storage_api.get_namespace_users(ns.id))
-            courses = app.storage_api.get_namespace_courses(ns.id)
-            courses_count = len(courses)
-
-            namespace_data.append(
-                {
-                    "id": ns.id,
-                    "name": ns.name,
-                    "slug": ns.slug,
-                    "description": ns.description or "",
-                    "gitlab_group_id": ns.gitlab_group_id,
-                    "users_count": users_count,
-                    "courses_count": courses_count,
-                }
-            )
-    else:
-        logger.info("Namespace Admin %s accessing their namespaces", username)
-        user_namespaces = app.storage_api.get_user_namespaces(username)
-        namespace_data = []
-
-        for ns, role in user_namespaces:
-            if role == "namespace_admin":
-                users_count = len(app.storage_api.get_namespace_users(ns.id))
-                courses = app.storage_api.get_namespace_courses(ns.id)
-                courses_count = len(courses)
-
-                namespace_data.append(
-                    {
-                        "id": ns.id,
-                        "name": ns.name,
-                        "slug": ns.slug,
-                        "description": ns.description or "",
-                        "gitlab_group_id": ns.gitlab_group_id,
-                        "users_count": users_count,
-                        "courses_count": courses_count,
-                    }
-                )
+    logger.info("%s %s accessing namespaces", "Instance Admin" if is_instance_admin else "Namespace Admin", username)
+    namespace_data = _get_admin_namespaces(app, username, is_instance_admin)
 
     return render_template(
         "namespaces_list.html",
