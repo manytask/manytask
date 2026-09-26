@@ -467,6 +467,7 @@ def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
     app.storage_api.get_namespace_by_id = lambda _namespace_id, _username: (namespace, "namespace_admin")
     app.storage_api.get_namespace_users = lambda _namespace_id: []
     app.storage_api.get_namespace_courses = lambda _namespace_id: []
+    app.storage_api.get_all_users = lambda: []
 
     with app.test_request_context():
         with app.test_client() as client:

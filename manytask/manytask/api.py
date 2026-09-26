@@ -1114,7 +1114,7 @@ def add_user_to_namespace(
 
     Request JSON:
     {
-        "user_id": 45,
+        "username": "student_username",
         "role": "namespace_admin" | "program_manager"
     }
 
@@ -1131,33 +1131,20 @@ def add_user_to_namespace(
     """
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
-    rms_api = app.rms_api
 
     username = session["manytask"]["username"]
 
-    user_id = validated_data.user_id
+    target_username = validated_data.username
     role = validated_data.role
 
     try:
-        try:
-            stored_user = storage_api.get_stored_user_by_rms_id(str(user_id))
-            if stored_user is None:
-                logger.error("User with id=%s not found in database", user_id)
-                return jsonify(
-                    ErrorResponse(error=f"User with id={user_id} not found").model_dump()
-                ), HTTPStatus.NOT_FOUND
-            rms_api.get_rms_user_by_id(stored_user.rms_id)
-        except Exception as e:
-            logger.error("User with id=%s not found in RMS: %s", user_id, str(e))
-            return jsonify(ErrorResponse(error=f"User with id={user_id} not found").model_dump()), HTTPStatus.NOT_FOUND
-
         # Сначала добавляем в локальную БД (пользователь должен был хотя бы раз
         # залогиниться в manytask), затем в группу RMS — обе операции выполняет
         # общий помощник, который также используется таблицей доступа к курсу.
         user_on_namespace, error = _add_namespace_role(
             namespace_id=namespace_id,
             namespace=namespace,
-            username=stored_user.username,
+            username=target_username,
             role=role,
             assigned_by_username=username,
         )
@@ -1165,9 +1152,9 @@ def add_user_to_namespace(
             return error
 
         logger.info(
-            "User %s added user_id=%s to namespace id=%s with role %s",
+            "User %s added username=%s to namespace id=%s with role %s",
             username,
-            user_id,
+            target_username,
             namespace_id,
             role,
         )
@@ -1182,8 +1169,8 @@ def add_user_to_namespace(
 
     except Exception as e:
         logger.error(
-            "Unexpected error adding user_id=%s to namespace id=%s: %s",
-            user_id,
+            "Unexpected error adding username=%s to namespace id=%s: %s",
+            target_username,
             namespace_id,
             str(e),
             exc_info=True,

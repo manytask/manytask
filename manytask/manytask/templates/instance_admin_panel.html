@@ -309,10 +309,18 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label for="roleUserId" class="form-label">User ID (rms_id) *</label>
-                            <input type="number" class="form-control" id="roleUserId" name="user_id" required
-                                   placeholder="123">
-                            <small class="form-text text-muted">GitLab user ID</small>
+                            <label for="userToRole" class="form-label">Select user *</label>
+                            <div class="search-box mb-3">
+                                <label for="roleSearchInput"></label>
+                                <input type="text" class="form-control" placeholder="Search usernames..."
+                                       id="roleSearchInput" autocomplete="off">
+                            </div>
+                            <select class="form-select" id="userToRole" name="username" required size="5">
+                                <option value="" disabled selected>Select a user</option>
+                                {% for user in users %}
+                                    <option value="{{ user.username }}">{{ user.username }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="mb-3">
                             <label for="userRole" class="form-label">Role *</label>
@@ -418,17 +426,17 @@
             successDiv.classList.add('d-none');
 
             const namespaceId = form.querySelector('[name="namespace_id"]').value;
-            const userId = form.querySelector('[name="user_id"]').value;
+            const username = form.querySelector('[name="username"]').value;
             const role = form.querySelector('[name="role"]').value;
 
-            if (!namespaceId || !userId || !role) {
+            if (!namespaceId || !username || !role) {
                 errorDiv.textContent = 'All fields are required';
                 errorDiv.classList.remove('d-none');
                 return;
             }
 
             const formData = {
-                user_id: parseInt(userId),
+                username: username,
                 role: role
             };
 
@@ -444,7 +452,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    successDiv.textContent = `Role "${role}" assigned successfully to user ${userId}!`;
+                    successDiv.textContent = `Role "${role}" assigned successfully to user "${username}"!`;
                     successDiv.classList.remove('d-none');
                     form.reset();
                     
@@ -465,6 +473,7 @@
             document.getElementById('grantSearchInput').addEventListener('input', () => filterUsers('grant'));
             document.getElementById('revokeSearchInput').addEventListener('input', () => filterUsers('revoke'));
             document.getElementById('changeSearchInput').addEventListener('input', () => filterUsers('change'));
+            document.getElementById('roleSearchInput').addEventListener('input', () => filterUsers('role'));
 
             const clickableRows = document.querySelectorAll('.clickable-row');
             clickableRows.forEach(row => {

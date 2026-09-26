@@ -42,7 +42,7 @@ class CreateNamespaceRequest(BaseModel):
 
 
 class AddUserToNamespaceRequest(BaseModel):
-    user_id: int
+    username: str
     role: Literal["namespace_admin", "program_manager"]
 
 
