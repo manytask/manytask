@@ -96,7 +96,7 @@ Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fil
 
 ### Step 4 — Start the application
 
-From the **repository root** (the directory that contains both `manytask/` and `compose/`), run:
+From the `manytask/` component directory, run:
 
 ```bash
 docker compose -f compose/docker-compose.development.yml up --build -d
@@ -104,7 +104,45 @@ docker compose -f compose/docker-compose.development.yml up --build -d
 
 Manytask becomes available on [http://localhost:8081/](http://localhost:8081/).
 
-As a shortcut, you can also run **`make dev` from `manytask/`** — it is equivalent to passing `-f ../compose/docker-compose.development.yml` from there.
+As a shortcut, you can also run `make dev`; it uses the same Compose file.
+
+## Managing database migrations
+
+The local stack applies pending migrations automatically when the Manytask container starts and `APPLY_MIGRATIONS=true`. To inspect or deliberately change the revision, run Alembic in a one-off Manytask container.
+
+The bundled PostgreSQL service is reachable only on the Docker network; it is not published on `localhost:5432`. Therefore the `make migrate` and `make downgrade` targets require a separately configured, host-accessible `DATABASE_URL_EXTERNAL`. Do not use those targets with the default Compose stack.
+
+First ensure PostgreSQL is running and inspect its recorded revision:
+
+```bash
+docker compose -f compose/docker-compose.development.yml up -d postgres
+docker compose -f compose/docker-compose.development.yml exec postgres \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version;"'
+```
+
+To see the revision expected by the checked-out code, run:
+
+```bash
+uv run alembic -c manytask/alembic.ini heads
+```
+
+Upgrade the development database to the checkout's head:
+
+```bash
+docker compose -f compose/docker-compose.development.yml run --rm --no-deps \
+  -e TARGET_REVISION=head manytask \
+  python -c 'import os; from alembic import command; from alembic.config import Config; cfg = Config("/app/manytask/alembic.ini", config_args={"sqlalchemy.url": os.environ["DATABASE_URL"]}); command.upgrade(cfg, os.environ["TARGET_REVISION"])'
+```
+
+To roll back, replace `TARGET_REVISION` with an exact, earlier revision that exists in `manytask/manytask/migrations/versions/`:
+
+```bash
+docker compose -f compose/docker-compose.development.yml run --rm --no-deps \
+  -e TARGET_REVISION=<earlier_revision> manytask \
+  python -c 'import os; from alembic import command; from alembic.config import Config; cfg = Config("/app/manytask/alembic.ini", config_args={"sqlalchemy.url": os.environ["DATABASE_URL"]}); command.downgrade(cfg, os.environ["TARGET_REVISION"])'
+```
+
+Review the target migration's `downgrade()` implementation first: reverse migrations can discard data. Prefer an exact target revision over `-1`, particularly when the history contains merge revisions. Alembic cannot migrate to or from a revision whose migration file is absent; recover that file or restore a database backup instead.
 
 ## Adding a course
 
