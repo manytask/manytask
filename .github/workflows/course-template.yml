@@ -49,3 +49,22 @@ jobs:
             echo "::error::private files leaked into export"; exit 1
           fi
           echo "clean export"
+
+      - name: Build testenv and assert it has no raw private checkout
+        run: |
+          docker build --tag course-template-base --file course-template/base.docker course-template
+          docker build \
+            --tag course-template-testenv \
+            --file course-template/testenv.docker \
+            --build-arg BASE_IMAGE=course-template-base \
+            course-template
+          docker run --rm course-template-testenv sh -ec '
+            test -d /opt/course
+            test ! -e /build
+            test ! -e /course-template
+            test ! -e /opt/course/.git
+          '
+          if docker image history --no-trunc course-template-testenv | grep -q 'COPY . /build'; then
+            echo "::error::raw private checkout found in final image history"
+            exit 1
+          fi
