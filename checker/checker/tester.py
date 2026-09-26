@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from .configs.checker import CheckerConfig, CheckerSubConfig
@@ -137,6 +138,18 @@ class Tester:
         group = self.course.get_group_for_task(task.name)
         return group.config if group else None
 
+    def get_task_parameters(self, task: FileSystemTask) -> dict[str, Any]:
+        """Merge default, group and task parameters (task takes precedence over group over default)."""
+        parameters = self.default_params.__dict__.copy()
+
+        group_config = self._get_group_config(task)
+        if group_config and group_config.parameters:
+            parameters = parameters | group_config.parameters.__dict__
+        if task.config and task.config.parameters:
+            parameters = parameters | task.config.parameters.__dict__
+
+        return parameters
+
     def _build_task_context(
         self,
         global_variables: GlobalPipelineVariables,
@@ -146,12 +159,7 @@ class Tester:
     ) -> PipelineContext:
         context = self._build_global_context(global_variables, outputs)
         context["task"] = task_variables
-
-        group_config = self._get_group_config(task)
-        if group_config and group_config.parameters:
-            context["parameters"] = context["parameters"] | group_config.parameters.__dict__
-        if task.config and task.config.parameters:
-            context["parameters"] = context["parameters"] | task.config.parameters.__dict__
+        context["parameters"] = self.get_task_parameters(task)
 
         return context
 
