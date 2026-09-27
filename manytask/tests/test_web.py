@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
 
-from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
+from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus
 from manytask.local_config import LocalConfig
@@ -139,6 +139,23 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def check_if_course_admin(self, _course_name, _username):
             return self.course_admin
+
+        def get_course_access_users(self, _course_name):
+            levels = []
+            if self.stored_user.instance_admin:
+                levels.append("instance_admin")
+            if self.course_admin:
+                levels.append("course_admin")
+            if not levels:
+                return []
+            return [
+                CourseAccessUser(
+                    username=self.stored_user.username,
+                    first_name=self.stored_user.first_name,
+                    last_name=self.stored_user.last_name,
+                    access_levels=levels,
+                )
+            ]
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.course_admin = self.course_admin or course_admin

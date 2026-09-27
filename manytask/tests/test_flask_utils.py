@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from flask import Flask
 
+from manytask.abstract import CourseAccessUser
 from manytask.course import CourseStatus
 from manytask.utils.flask import can_edit_course, check_if_current_user_is_instance_admin, get_courses, get_user_roles
 from tests.constants import TEST_COURSE_NAME, TEST_USERNAME
@@ -18,8 +19,8 @@ def app():
     storage_api = MagicMock()
     storage_api.check_if_instance_admin.return_value = False
     storage_api.check_if_course_admin.return_value = False
+    storage_api.get_course_access_users.return_value = []
     storage_api.get_namespace_admin_namespaces.return_value = []
-    # Course with no namespace so check_if_current_user_is_namespace_admin short-circuits to False.
     course = MagicMock()
     course.namespace_id = None
     storage_api.get_course.return_value = course
@@ -55,18 +56,25 @@ def test_check_if_current_user_is_instance_admin_anonymous(app):
 )
 def test_get_user_roles_instance_admin_visibility(app, is_instance_admin, course_name, expected_roles):
     app.storage_api.check_if_instance_admin.return_value = is_instance_admin
+    if is_instance_admin:
+        app.storage_api.get_course_access_users.return_value = [
+            CourseAccessUser(TEST_USERNAME, "Test", "User", ["instance_admin"])
+        ]
 
     with app.test_request_context():
-        # get_user_roles may reach into session via check_if_current_user_is_namespace_admin;
-        # only need to seed session when a course_name is supplied.
-        if course_name is not None:
-            from flask import session
-
-            session["manytask"] = {"username": TEST_USERNAME}
-
         roles = get_user_roles(app, TEST_USERNAME, course_name=course_name)
 
     assert roles == expected_roles
+
+
+def test_get_user_roles_uses_requested_user_access(app):
+    app.storage_api.get_course_access_users.return_value = [
+        CourseAccessUser("other", "Other", "User", ["namespace_admin"]),
+        CourseAccessUser(TEST_USERNAME, "Test", "User", ["course_admin"]),
+    ]
+
+    with app.test_request_context():
+        assert get_user_roles(app, TEST_USERNAME, course_name=TEST_COURSE_NAME) == ["course_admin", "student"]
 
 
 def test_get_user_roles_checks_namespace_admin_for_requested_namespace(app):

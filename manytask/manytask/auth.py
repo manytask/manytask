@@ -223,8 +223,6 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
     @requires_auth
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        from .utils.flask import can_access_course
-
         app: CustomFlask = current_app  # type: ignore
 
         if app.debug:
@@ -240,14 +238,6 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             abort(HTTPStatus.FORBIDDEN)
         username = stored_user.username
         logger.info("User %s accessing course=%s", username, course.course_name)
-
-        if not can_access_course(app, username, course.course_name):
-            logger.warning(
-                "User %s attempted to access course %s without permission",
-                username,
-                course.course_name,
-            )
-            abort(HTTPStatus.FORBIDDEN)
 
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
         if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(course.course_name, username):

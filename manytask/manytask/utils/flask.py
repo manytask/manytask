@@ -111,28 +111,6 @@ def check_if_current_user_is_instance_admin(app: CustomFlask) -> bool:
         return app.storage_api.check_if_instance_admin(username)
 
 
-def check_if_current_user_is_namespace_admin(app: CustomFlask, course_name: str) -> bool:
-    """Check if user is a namespace admin for the given course
-
-    :param app: Flask application instance
-    :param username: Manytask username
-    :param course_name: Course to check for
-    :return: True if user is an instance admin
-    """
-    if app.debug:
-        return True
-    else:
-        username = session.get("manytask", {}).get("username")
-        if username is None:
-            return False
-        course = app.storage_api.get_course(course_name)
-        if course and course.namespace_id:
-            namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
-            if course.namespace_id in namespace_admin_namespaces:
-                return True
-        return False
-
-
 def check_if_user_has_namespaces_to_admin(app: CustomFlask) -> bool:
     """The user can create course only if:
     - They are instance admin
@@ -159,8 +137,9 @@ def get_user_roles(
 
     Possible roles:
     - 'instance_admin': Instance Admin
-    - 'namespace_admin': Namespace Admin (= Course Admin)
+    - 'namespace_admin': Namespace Admin (including namespace owners)
     - 'program_manager': Program Manager (student, hidden from results table)
+    - 'course_admin': Course Admin
     - 'student': Regular student
 
     :param app: Flask application instance
@@ -169,21 +148,19 @@ def get_user_roles(
     :param namespace_id: Optional namespace id for namespace-specific roles
     :return: List of role strings
     """
-    roles = []
-
-    if app.storage_api.check_if_instance_admin(username):
-        roles.append("instance_admin")
+    roles: list[str] = []
 
     if course_name:
-        if check_if_current_user_is_namespace_admin(app, course_name=course_name):
-            roles.append("namespace_admin")
-
-        if app.storage_api.check_if_course_admin(course_name, username):
-            if "namespace_admin" not in roles:
-                roles.append("namespace_admin")
-
+        access_user = next(
+            (user for user in app.storage_api.get_course_access_users(course_name) if user.username == username),
+            None,
+        )
+        if access_user is not None:
+            roles.extend(role for role in access_user.access_levels if role not in roles)
         roles.append("student")
-    elif namespace_id is not None:
+    elif app.storage_api.check_if_instance_admin(username):
+        roles.append("instance_admin")
+    if namespace_id is not None:
         try:
             _, namespace_role = app.storage_api.get_namespace_by_id(namespace_id, username)
         except PermissionError:
@@ -215,34 +192,3 @@ def has_role(
 
     user_roles = get_user_roles(app, username, course_name, namespace_id)
     return any(role in user_roles for role in required_roles)
-
-
-def can_access_course(app: CustomFlask, username: str, course_name: str) -> bool:
-    """Check if user can access a specific course.
-
-    For Instance Admins: access to all courses
-    For Namespace Admins: access to courses in their namespaces + courses where they are Course Admin
-    For Students: access to courses they are enrolled in, or allow new students to register
-
-    :param app: Flask application instance
-    :param username: manytask username
-    :param course_name: Course name to check access for
-    :return: True if user can access the course
-    """
-    if app.storage_api.check_if_instance_admin(username):
-        return True
-
-    if app.storage_api.check_if_course_admin(course_name, username):
-        return True
-
-    if check_if_current_user_is_namespace_admin(app, course_name=course_name):
-        course = app.storage_api.get_course(course_name)
-        if course and course.namespace_id:
-            namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
-            if course.namespace_id in namespace_admin_namespaces:
-                return True
-
-    if app.storage_api.check_user_on_course(course_name, username):
-        return True
-
-    return True
