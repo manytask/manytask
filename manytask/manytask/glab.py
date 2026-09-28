@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 import gitlab
 import gitlab.const
 import gitlab.v4.objects
 import requests
+import yaml
 from authlib.integrations.flask_client import OAuth
 from gitlab.exceptions import GitlabAuthenticationError, GitlabCreateError, GitlabGetError
 
@@ -60,6 +62,7 @@ class GitLabConfig:
     admin_token: str
     verify_ssl: bool = True
     dry_run: bool = False
+    web_base_url: str | None = None
 
 
 class GitLabApi(RmsApi, AuthApi):
@@ -73,6 +76,7 @@ class GitLabApi(RmsApi, AuthApi):
         """
         self.dry_run = config.dry_run
         self._base_url = config.base_url
+        self.web_base_url = config.web_base_url or config.base_url
         self._verify_ssl = config.verify_ssl
         self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token, ssl_verify=config.verify_ssl)
 
@@ -162,6 +166,152 @@ class GitLabApi(RmsApi, AuthApi):
 
         self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)
+
+    def create_private_repo(
+        self,
+        course_group: str,
+        repo_path: str,
+        public_repo: str,
+        students_group: str,
+        course_name: str,
+        template_language: str | None = None,
+    ) -> None:
+        """Create a private project, optionally copying one profile from the maintained template."""
+        group = self._get_group_by_name(course_group)
+        segments = repo_path.split("/")
+        full_path = f"{course_group}/{repo_path}"
+        for project in self._gitlab.projects.list(get_all=True, search=segments[-1]):
+            if project.path_with_namespace == full_path:
+                raise RmsApiException(f"Private repository {full_path} already exists")
+
+        template_files: list[dict[str, str]] = []
+        if template_language is not None:
+            template_files = self._get_course_template_files(
+                template_language, full_path, public_repo, students_group, course_name
+            )
+
+        for segment in segments[:-1]:
+            subgroup_path = f"{group.full_path}/{segment}"
+            try:
+                group = self._get_group_by_name(subgroup_path)
+            except RuntimeError:
+                group = self._gitlab.groups.create(
+                    {"name": segment, "path": segment, "parent_id": group.id, "visibility": "private"}
+                )
+
+        project = self._gitlab.projects.create(
+            {
+                "name": segments[-1],
+                "path": segments[-1],
+                "namespace_id": group.id,
+                "visibility": "private",
+                "initialize_with_readme": True,
+                "auto_devops_enabled": False,
+            }
+        )
+        if template_files:
+            try:
+                for action in template_files:
+                    if action["file_path"] == "README.md":
+                        action["action"] = "update"
+                project.commits.create(
+                    {
+                        "branch": project.default_branch or "main",
+                        "commit_message": f"Initialize {template_language} course from template",
+                        "actions": template_files,
+                    }
+                )
+            except Exception:
+                project.delete()
+                raise
+
+    def _get_course_template_files(
+        self, language: str, private_repo: str, public_repo: str, students_group: str, course_name: str
+    ) -> list[dict[str, str]]:
+        if language not in {"python", "cpp", "bash", "go", "rust"}:
+            raise ValueError(f"Unsupported course template language: {language}")
+        source = self._gitlab.projects.get("sandbox/private")
+        revision = source.commits.get("main").id
+        actions = []
+        profile_found = False
+        for entry in source.repository_tree(ref=revision, recursive=True, get_all=True):
+            path = entry["path"]
+            if entry["type"] != "blob" or path == "deploy.sh":
+                continue
+            top_level = path.split("/", 1)[0]
+            if top_level in {"python", "cpp", "bash", "go", "rust"} and top_level != language:
+                continue
+            if top_level == language:
+                profile_found = True
+            if path == "README.md":
+                actions.append(
+                    {
+                        "action": "create",
+                        "file_path": path,
+                        "content": (
+                            f"# {course_name}\n\n"
+                            f"Initialized from {self.web_base_url}/sandbox/private at revision `{revision}`.\n\n"
+                            f"Selected language: {language}. Review `.manytask.yml`, `.checker.yml`, "
+                            "and CI settings before releasing tasks.\n"
+                        ),
+                    }
+                )
+                continue
+            file = source.files.get(file_path=path, ref=revision)
+            if path in {".manytask.yml", ".checker.yml", ".releaser-ci.yml", ".gitlab-ci.yml"}:
+                content = file.decode().decode("utf-8")
+                content = self._configure_course_template_file(
+                    path, content, language, private_repo, public_repo, students_group, course_name
+                )
+                actions.append({"action": "create", "file_path": path, "content": content})
+            else:
+                actions.append({"action": "create", "file_path": path, "content": file.content, "encoding": "base64"})
+        if not profile_found:
+            raise RmsApiException(f"Course template has no {language} profile")
+        logger.info("Using course template sandbox/private at revision %s", revision)
+        return actions
+
+    def _configure_course_template_file(
+        self,
+        path: str,
+        content: str,
+        language: str,
+        private_repo: str,
+        public_repo: str,
+        students_group: str,
+        course_name: str,
+    ) -> str:
+        if path == ".manytask.yml":
+            config = yaml.safe_load(content)
+            config["settings"]["course_name"] = course_name
+            config["settings"]["gitlab_base_url"] = self.web_base_url
+            config["settings"]["public_repo"] = public_repo
+            config["settings"]["students_group"] = students_group
+            config["ui"]["task_url_template"] = (
+                f"{self.web_base_url}/{students_group}/$USER_NAME/$GROUP_NAME/$TASK_NAME"
+            )
+            config["deadlines"]["schedule"] = [
+                group for group in config["deadlines"]["schedule"] if group["group"] == language
+            ]
+            if not config["deadlines"]["schedule"]:
+                raise RmsApiException(f"Course template has no {language} schedule")
+            config["ui"]["links"]["Source repo"] = f"{self.web_base_url}/{private_repo}"
+            return yaml.safe_dump(config, sort_keys=False)
+        if path == ".checker.yml":
+            config = yaml.safe_load(content)
+            config["export"]["destination"] = f"{self.web_base_url}/{public_repo}"
+            return yaml.safe_dump(config, sort_keys=False)
+        if path == ".releaser-ci.yml":
+            base_url = urlsplit(self.web_base_url)
+            return content.replace('COURSE_NAME: "sandbox"', f'COURSE_NAME: "{course_name}"').replace(
+                "https://oauth2:${GITLAB_API_TOKEN}@gitlab.manytask.org/sandbox/public.git",
+                f"{base_url.scheme}://oauth2:${{GITLAB_API_TOKEN}}@{base_url.netloc}/{public_repo}.git",
+            )
+        host = urlsplit(self.web_base_url).hostname or ""
+        return content.replace(
+            "gitlab.manytask.org:5050/sandbox/private/testenv-image",
+            f"{host}:5050/{private_repo}/testenv-image",
+        )
 
     def create_students_group(
         self, course_students_group: str, parent_group_id: int | None = None

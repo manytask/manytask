@@ -1,4 +1,5 @@
 import logging
+import re
 import secrets
 from http import HTTPStatus
 from urllib.parse import urlparse
@@ -46,6 +47,23 @@ logger = logging.getLogger(__name__)
 root_bp = Blueprint("root", __name__)
 course_bp = Blueprint("course", __name__, url_prefix="/<course_name>")
 instance_admin_bp = Blueprint("instance_admin", __name__, url_prefix="/instance_admin")
+
+
+def _private_repo_form_error(
+    rms: str, repo_path: str, course_group: str, public_repo: str, use_template: bool, language: str
+) -> str | None:
+    if rms != "gitlab":
+        return "Private repository creation is only available for GitLab"
+    if not course_group or not repo_path.startswith(f"{course_group}/"):
+        return "Private repository must be inside the course group"
+    if repo_path == public_repo:
+        return "Private and public repositories must have different paths"
+    segments = repo_path.removeprefix(f"{course_group}/").split("/")
+    if any(segment in {".", ".."} or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", segment) for segment in segments):
+        return "Private repository path must contain valid names relative to the course group"
+    if use_template and language not in {"python", "cpp", "bash", "go", "rust"}:
+        return "Select a supported programming language"
+    return None
 
 
 @root_bp.get("/healthcheck")
@@ -573,9 +591,34 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         gitlab_course_public_repo = request.form["course_public_repo"].strip()
         gitlab_course_students_group = request.form["course_students_group"].strip()
 
+        create_private_repo = request.form.get("create_private_repo") == "on"
+        private_repo_full_path = request.form.get("private_repo_path", "").strip()
+        use_template = request.form.get("use_course_template") == "on"
+        template_language = request.form.get("template_language", "").strip()
+
+        # Both repository fields contain full paths; the RMS receives the private path relative to the course group.
+        gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
+        if create_private_repo:
+            private_repo_error = _private_repo_form_error(
+                app.app_config.rms,
+                private_repo_full_path,
+                gitlab_course_group_full_path,
+                gitlab_course_public_repo,
+                use_template,
+                template_language,
+            )
+            if private_repo_error:
+                return render_template(
+                    app.create_course_template,
+                    generated_token=generate_token_hex(24),
+                    error_message=private_repo_error,
+                    rms=app.app_config.rms,
+                    labels=app.create_course_labels,
+                )
+
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
-        gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
+        private_repo_path = private_repo_full_path.removeprefix(f"{gitlab_course_group_full_path}/")
 
         try:
             logger.info(
@@ -595,6 +638,16 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             logger.info("Creating students group: %s", gitlab_course_students_group)
             app.rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
             logger.info("Created students group")
+
+            if create_private_repo:
+                app.rms_api.create_private_repo(
+                    gitlab_course_group_full_path,
+                    private_repo_path,
+                    gitlab_course_public_repo,
+                    gitlab_course_students_group,
+                    course_name,
+                    template_language if use_template else None,
+                )
 
         except Exception as e:
             logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
@@ -616,6 +669,15 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             registration_secret=request.form["registration_secret"],
             token=request.form["token"],
             show_allscores=request.form.get("show_allscores", "off") == "on",
+            links=(
+                {
+                    "Private repository": (
+                        f"{app.app_config.gitlab_oauth_url}/{gitlab_course_group_full_path}/{private_repo_path}"
+                    )
+                }
+                if create_private_repo
+                else {}
+            ),
         )
 
         if app.storage_api.create_course(settings):

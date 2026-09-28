@@ -232,6 +232,77 @@ def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab
     mock_gitlab_instance.projects.create.assert_not_called()
 
 
+def test_create_private_repo_is_private(gitlab, mock_gitlab_group):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.list.return_value = []
+
+    gitlab_api.create_private_repo(
+        TEST_GROUP_NAME, "private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example"
+    )
+
+    params = mock_gitlab_instance.projects.create.call_args.args[0]
+    assert params["visibility"] == "private"
+    assert params["path"] == "private"
+    assert params["namespace_id"] == mock_gitlab_group.id
+    mock_gitlab_instance.projects.get.assert_not_called()
+
+
+def test_create_private_repo_from_template_selects_language(gitlab, mock_gitlab_group):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.list.return_value = []
+    source = MagicMock()
+    source.commits.get.return_value.id = "fixed-revision"
+    source.repository_tree.return_value = [
+        {"type": "blob", "path": ".manytask.yml"},
+        {"type": "blob", "path": "python/add/test_private.py"},
+        {"type": "blob", "path": "cpp/add_cpp/test_private.cpp"},
+    ]
+    source.files.get.return_value.decode.return_value = (
+        b"settings:\n  course_name: sandbox\n  public_repo: sandbox/public\n  students_group: sandbox/students\n"
+        b"ui:\n  links: {}\ndeadlines:\n  schedule:\n  - group: python\n  - group: cpp\n"
+    )
+    source.files.get.return_value.content = "Y29udGVudA=="
+    mock_gitlab_instance.projects.get.return_value = source
+    target = mock_gitlab_instance.projects.create.return_value
+    target.default_branch = "main"
+
+    gitlab_api.create_private_repo(
+        TEST_GROUP_NAME, "private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example", "python"
+    )
+
+    source.commits.get.assert_called_once_with("main")
+    actions = target.commits.create.call_args.args[0]["actions"]
+    paths = {action["file_path"] for action in actions}
+    assert paths == {".manytask.yml", "python/add/test_private.py"}
+    config = next(action["content"] for action in actions if action["file_path"] == ".manytask.yml")
+    assert "course_name: example" in config
+    assert "group: cpp" not in config
+    assert TEST_GROUP_PUBLIC_NAME in config
+
+
+def test_create_private_repo_in_nested_group(gitlab, mock_gitlab_group):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.side_effect = [mock_gitlab_group, GitlabGetError("not found")]
+    mock_gitlab_instance.groups.list.return_value = []
+    mock_gitlab_instance.projects.list.return_value = []
+    mock_gitlab_group.full_path = TEST_GROUP_NAME
+    nested_group = mock_gitlab_instance.groups.create.return_value
+    nested_group.id = 42
+
+    gitlab_api.create_private_repo(
+        TEST_GROUP_NAME, "materials/private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example"
+    )
+
+    mock_gitlab_instance.groups.create.assert_called_once_with(
+        {"name": "materials", "path": "materials", "parent_id": mock_gitlab_group.id, "visibility": "private"}
+    )
+    params = mock_gitlab_instance.projects.create.call_args.args[0]
+    assert params["path"] == "private"
+    assert params["namespace_id"] == nested_group.id
+
+
 def test_create_students_group(gitlab, mock_gitlab_group):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.groups.get.side_effect = [

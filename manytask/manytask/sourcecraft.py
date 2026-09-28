@@ -271,6 +271,17 @@ class SourceCraftApi(RmsApi):
 
         self._update_repo(course_public_repo, {"template_type": "organizational"})
 
+    def create_private_repo(
+        self,
+        course_group: str,
+        repo_path: str,
+        public_repo: str,
+        students_group: str,
+        course_name: str,
+        template_language: str | None = None,
+    ) -> None:
+        raise RmsApiException("Private course repository creation is not supported on SourceCraft")
+
     def create_students_group(
         self,
         course_students_group: str,
