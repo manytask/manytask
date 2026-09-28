@@ -219,6 +219,23 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             assert response.location == f"/{TEST_COURSE_NAME}/create_project"
 
 
+@pytest.mark.parametrize("page", ["", "database"])
+def test_course_pages_offer_personal_task_order(app, mock_gitlab_oauth, page):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+    assert response.status_code == HTTPStatus.OK
+    soup = BeautifulSoup(response.data, "html.parser")
+    control = soup.find("button", id="task-group-order")
+    assert control is not None
+    assert control["type"] == "button"
+    assert control.get_text(strip=True) == "Show oldest first"
+    assert control["data-username"] == TEST_USERNAME
+    assert control["data-course-name"] == TEST_COURSE_NAME
+
+
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
     """Regression for the SourceCraft ``SlugIsNotAvailable`` 500 on enrollment.
 
