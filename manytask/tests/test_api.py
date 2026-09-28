@@ -12,7 +12,7 @@ from pytest import approx
 from sqlalchemy.exc import NoResultFound
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import CourseAccessUser, RmsUser, StoredUser
+from manytask.abstract import CourseAccessUser, RmsApiException, RmsUser, StoredUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params, namespace_bp
 from manytask.api import bp as api_bp
 from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
@@ -1940,5 +1940,18 @@ def test_enroll_rms_error_returns_bad_gateway(app):
 
     with patch.object(app.rms_api, "create_project", side_effect=_raise):
         response = _enroll(app, TEST_COURSE_NAME, {"username": "failing_student"})
+
+    assert response.status_code == HTTPStatus.BAD_GATEWAY
+
+
+def test_enroll_rms_api_exception_returns_bad_gateway(app):
+    _register_rms_user(app, rms_id="52", username="failing_student_two", name="Failing StudentTwo")
+    _create_user(app, {"rms_id": "52", "first_name": "Failing", "last_name": "StudentTwo"})
+
+    def _raise(*_args, **_kwargs):
+        raise RmsApiException("sourcecraft is down")
+
+    with patch.object(app.rms_api, "create_project", side_effect=_raise):
+        response = _enroll(app, TEST_COURSE_NAME, {"username": "failing_student_two"})
 
     assert response.status_code == HTTPStatus.BAD_GATEWAY

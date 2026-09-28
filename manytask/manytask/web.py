@@ -246,7 +246,10 @@ def signup() -> ResponseReturnValue:
         validated_firstname = validate_name(firstname)
         validated_lastname = validate_name(lastname)
         if validated_firstname is None or validated_lastname is None:
-            raise Exception("Firstname and lastname must be 1-50 characters and contain only letters or hyphens.")
+            raise Exception(
+                "Firstname and lastname must be 1-50 characters and contain only letters, "
+                "hyphens, apostrophes or single spaces."
+            )
 
         # register user in gitlab
         rms_user = app.rms_api.register_new_user(
@@ -339,7 +342,8 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
             app.signup_finish_template,
             course_favicon=app.favicon,
             manytask_version=app.manytask_version,
-            error_message="Firstname and lastname must be 1-50 characters and contain only letters or hyphens.",
+            error_message="Firstname and lastname must be 1-50 characters and contain only letters, "
+            "hyphens, apostrophes or single spaces.",
         )
 
     try:

@@ -2188,7 +2188,7 @@ def enroll_user(course_name: str, validated_data: EnrollUserRequest) -> Response
 
     try:
         enroll_user_on_course(storage_api, rms_api, rms_user, course, username, course_admin)
-    except (RuntimeError, gitlab.GitlabError) as e:
+    except (RuntimeError, gitlab.GitlabError, RmsApiException) as e:
         message = getattr(e, "error_message", None) or str(e)
         logger.error("Failed to enroll user=%s on course=%s: %s", sanitize_log_data(username), course_name, message)
         return jsonify(ErrorResponse(error=str(message)).model_dump()), HTTPStatus.BAD_GATEWAY
