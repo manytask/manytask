@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import logging
+from base64 import b64encode
 from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
@@ -17,6 +20,39 @@ from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsApiException, RmsUs
 from .utils.generic import check_oauth_authenticated
 
 logger = logging.getLogger(__name__)
+
+COURSE_TEMPLATE_ROOT_FILES = (
+    ".checker.yml",
+    ".gitignore",
+    ".gitlab-ci.yml",
+    ".manytask.yml",
+    ".releaser-ci.yml",
+    "README.md",
+    "base.docker",
+    "pyproject.toml",
+    "testenv.docker",
+)
+
+
+def _default_course_template_dir() -> Path:
+    component_dir = Path(__file__).resolve().parents[1]
+    bundled = component_dir / "course-template"
+    return bundled if bundled.is_dir() else component_dir.parent / "course-template"
+
+
+def _course_template_profile_paths(profile_dir: Path) -> list[Path]:
+    paths = []
+    for path in sorted(profile_dir.rglob("*")):
+        relative_parts = path.relative_to(profile_dir).parts
+        if any(part.startswith(".") or part == "__pycache__" for part in relative_parts[:-1]):
+            continue
+        if path.name.startswith(".") and path.name not in {".group.yml", ".task.yml"}:
+            continue
+        if path.suffix in {".pyc", ".pyo"}:
+            continue
+        if path.is_file():
+            paths.append(path)
+    return paths
 
 
 def _validate_and_convert_user_id(user_id: str) -> int:
@@ -63,6 +99,7 @@ class GitLabConfig:
     verify_ssl: bool = True
     dry_run: bool = False
     web_base_url: str | None = None
+    course_template_dir: Path | None = None
 
 
 class GitLabApi(RmsApi, AuthApi):
@@ -77,6 +114,7 @@ class GitLabApi(RmsApi, AuthApi):
         self.dry_run = config.dry_run
         self._base_url = config.base_url
         self.web_base_url = config.web_base_url or config.base_url
+        self._course_template_dir = config.course_template_dir or _default_course_template_dir()
         self._verify_ssl = config.verify_ssl
         self._gitlab = gitlab.Gitlab(self.base_url, private_token=config.admin_token, ssl_verify=config.verify_ssl)
 
@@ -156,13 +194,12 @@ class GitLabApi(RmsApi, AuthApi):
     def create_public_repo(self, course_group: str, course_public_repo: str) -> None:
         logger.info("Creating public repo course_group=%s repo=%s", course_group, course_public_repo)
         group = self._get_group_by_name(course_group)
+        project_name = course_public_repo.split("/")[-1]
 
-        for project in self._gitlab.projects.list(get_all=True, search=course_public_repo):
+        for project in self._gitlab.projects.list(get_all=True, search=project_name):
             if project.path_with_namespace == course_public_repo:
                 logger.info("Project %s already exists", course_public_repo)
                 return
-
-        project_name = course_public_repo.split("/")[-1]
 
         self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)
@@ -230,19 +267,29 @@ class GitLabApi(RmsApi, AuthApi):
     ) -> list[dict[str, str]]:
         if language not in {"python", "cpp", "bash", "go", "rust"}:
             raise ValueError(f"Unsupported course template language: {language}")
-        source = self._gitlab.projects.get("sandbox/private")
-        revision = source.commits.get("main").id
-        actions = []
-        profile_found = False
-        for entry in source.repository_tree(ref=revision, recursive=True, get_all=True):
-            path = entry["path"]
-            if entry["type"] != "blob" or path == "deploy.sh":
-                continue
-            top_level = path.split("/", 1)[0]
-            if top_level in {"python", "cpp", "bash", "go", "rust"} and top_level != language:
-                continue
-            if top_level == language:
-                profile_found = True
+        template_dir = self._course_template_dir
+        profile_dir = template_dir / language
+        if not template_dir.is_dir():
+            raise RmsApiException("Course template files are missing from this Manytask installation")
+        if not profile_dir.is_dir():
+            raise RmsApiException(f"Course template has no {language} profile")
+
+        paths = [template_dir / name for name in COURSE_TEMPLATE_ROOT_FILES]
+        paths.extend(_course_template_profile_paths(profile_dir))
+        missing = [path.name for path in paths if not path.is_file() or path.is_symlink()]
+        if missing:
+            raise RmsApiException(f"Course template files are missing or invalid: {', '.join(missing)}")
+        if not any(path.parent == profile_dir for path in paths):
+            raise RmsApiException(f"Course template has no {language} profile files")
+
+        contents = [(path.relative_to(template_dir).as_posix(), path.read_bytes()) for path in paths]
+        digest = sha256()
+        for path, content in contents:
+            digest.update(path.encode("utf-8") + b"\0" + content + b"\0")
+        revision = digest.hexdigest()[:12]
+
+        actions: list[dict[str, str]] = []
+        for path, content in contents:
             if path == "README.md":
                 actions.append(
                     {
@@ -250,25 +297,27 @@ class GitLabApi(RmsApi, AuthApi):
                         "file_path": path,
                         "content": (
                             f"# {course_name}\n\n"
-                            f"Initialized from {self.web_base_url}/sandbox/private at revision `{revision}`.\n\n"
+                            f"Initialized from the Manytask course template (snapshot `{revision}`).\n\n"
                             f"Selected language: {language}. Review `.manytask.yml`, `.checker.yml`, "
                             "and CI settings before releasing tasks.\n"
                         ),
                     }
                 )
-                continue
-            file = source.files.get(file_path=path, ref=revision)
-            if path in {".manytask.yml", ".checker.yml", ".releaser-ci.yml", ".gitlab-ci.yml"}:
-                content = file.decode().decode("utf-8")
-                content = self._configure_course_template_file(
-                    path, content, language, private_repo, public_repo, students_group, course_name
+            elif path in {".manytask.yml", ".checker.yml", ".releaser-ci.yml", ".gitlab-ci.yml"}:
+                configured = self._configure_course_template_file(
+                    path, content.decode("utf-8"), language, private_repo, public_repo, students_group, course_name
                 )
-                actions.append({"action": "create", "file_path": path, "content": content})
+                actions.append({"action": "create", "file_path": path, "content": configured})
             else:
-                actions.append({"action": "create", "file_path": path, "content": file.content, "encoding": "base64"})
-        if not profile_found:
-            raise RmsApiException(f"Course template has no {language} profile")
-        logger.info("Using course template sandbox/private at revision %s", revision)
+                actions.append(
+                    {
+                        "action": "create",
+                        "file_path": path,
+                        "content": b64encode(content).decode("ascii"),
+                        "encoding": "base64",
+                    }
+                )
+        logger.info("Using bundled course template snapshot %s", revision)
         return actions
 
     def _configure_course_template_file(

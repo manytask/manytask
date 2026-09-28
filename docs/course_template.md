@@ -128,7 +128,9 @@ course group. Select **Create private repository**; the path field shows a full
 path beside the public repository (for example, `<your-course>/private`). You can
 edit that path within the same course group, then optionally select **Create
 from course template** and a programming language. The template is copied from
-`sandbox/private` at its current `main` revision. Only the selected language's
+the `course-template/` snapshot bundled with the running Manytask image; it
+does not depend on a template project in the course's GitLab instance. Rebuild
+the app image after updating the template. Only the selected language's
 task directory and schedule entry are copied. The repository is private, and a
 link appears on the course page. By default, its name follows the public repo
 (`public-2026-fall` → `private-2026-fall`) in the same group.
