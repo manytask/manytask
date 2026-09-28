@@ -1761,6 +1761,32 @@ def test_ignore_submissions_by_job_id_no_match_returns_empty(db_api_with_initial
     assert changes == []
 
 
+def test_ignore_submissions_by_job_id_filters_by_task(db_api_with_initialized_first_course, session):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    submit_time = datetime(2000, 2, 1, 12, 0, tzinfo=ZoneInfo("Europe/Berlin"))
+    db_api.store_submission(
+        FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", 1.0, submit_time, True, None, None, TEST_JOB_ID
+    )
+    db_api.store_submission(
+        FIRST_COURSE_NAME, TEST_USERNAME, "task_0_1", 1.0, submit_time, True, None, None, TEST_JOB_ID
+    )
+
+    changes = ignore_submissions_by_job_id(db_api, TEST_JOB_ID, True, task_name="task_0_0")
+
+    assert len(changes) == 1
+    assert changes[0].task_name == "task_0_0"
+    assert changes[0].ignored_before is False
+    assert changes[0].ignored_after is True
+
+    def ignored(task_name):
+        return session.query(GradeSubmission).join(Grade).join(Task).filter(Task.name == task_name).one().ignored
+
+    assert ignored("task_0_0") is True
+    assert ignored("task_0_1") is False
+
+
 def test_get_course_success(db_api_with_two_initialized_courses, first_course_config, second_course_config):
     first_course_config.status = CourseStatus.HIDDEN
     course = db_api_with_two_initialized_courses.get_course(FIRST_COURSE_NAME)

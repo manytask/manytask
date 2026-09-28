@@ -720,28 +720,33 @@ class DataBaseApi(StorageApi):
                 logger.error("Failed to store submission for '%s' on '%s': %s", username, task_name, str(e))
                 raise
 
-    def set_submissions_ignored_by_job_id(self, job_id: int, ignored: bool) -> list[SubmissionIgnoreChange]:
+    def set_submissions_ignored_by_job_id(
+        self, job_id: int, ignored: bool, task_name: str | None = None
+    ) -> list[SubmissionIgnoreChange]:
         """Flip the `ignored` flag on every grade_submissions row reported by a given CI job.
 
         :param job_id: GitLab CI job id the submissions were reported from
         :param ignored: new value of the `ignored` flag
+        :param task_name: if given, restrict to submissions of this task only
         :return: one SubmissionIgnoreChange per affected row, in no particular order
         """
         with self._session_create() as session:
-            submissions = (
-                session.query(models.GradeSubmission)
-                .filter(models.GradeSubmission.job_id == job_id)
-                .options(
-                    joinedload(models.GradeSubmission.grade).joinedload(models.Grade.task),
-                    joinedload(models.GradeSubmission.grade)
-                    .joinedload(models.Grade.user_on_course)
-                    .joinedload(models.UserOnCourse.user),
-                    joinedload(models.GradeSubmission.grade)
-                    .joinedload(models.Grade.user_on_course)
-                    .joinedload(models.UserOnCourse.course),
+            query = session.query(models.GradeSubmission).filter(models.GradeSubmission.job_id == job_id)
+            if task_name is not None:
+                query = (
+                    query.join(models.GradeSubmission.grade)
+                    .join(models.Grade.task)
+                    .filter(models.Task.name == task_name)
                 )
-                .all()
-            )
+            submissions = query.options(
+                joinedload(models.GradeSubmission.grade).joinedload(models.Grade.task),
+                joinedload(models.GradeSubmission.grade)
+                .joinedload(models.Grade.user_on_course)
+                .joinedload(models.UserOnCourse.user),
+                joinedload(models.GradeSubmission.grade)
+                .joinedload(models.Grade.user_on_course)
+                .joinedload(models.UserOnCourse.course),
+            ).all()
 
             changes = []
             for submission in submissions:
