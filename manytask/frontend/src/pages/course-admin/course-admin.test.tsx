@@ -89,6 +89,41 @@ it('accepts an explicit full group path in the selected namespace', async () => 
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
+it.each([
+  ['gitlab', 'Public Repo'],
+  ['gitlab', 'Students Group'],
+  ['sourcecraft', 'Public Repo'],
+  ['sourcecraft', 'Students Group'],
+] as const)('rejects a cleared generated %s %s path on submit', async (rms, label) => {
+  const user = userEvent.setup();
+  renderUi(<CreateCoursePage shared={makeSharedUi()} data={{...base, rms, values: {namespace_id: '4'}}} />);
+  await user.type(screen.getByLabelText('Course Group'), 'math');
+  await user.clear(screen.getByLabelText(label));
+  const form = screen.getByRole('button', {name: 'Create course'}).closest('form')!;
+  expect(new FormData(form).get(label === 'Public Repo' ? 'course_public_repo' : 'course_students_group')).toBe('');
+  expect(fireEvent.submit(form)).toBe(false);
+  expect(screen.getByRole('alert')).toHaveTextContent('Repository');
+});
+
+it('rejects a full group path outside the selected namespace', async () => {
+  const user = userEvent.setup();
+  renderUi(<CreateCoursePage shared={makeSharedUi()} data={{...base, values: {namespace_id: '4'}}} />);
+  await user.type(screen.getByLabelText('Course Group'), 'other/math');
+  const form = screen.getByRole('button', {name: 'Create course'}).closest('form')!;
+  expect(new FormData(form).get('course_public_repo')).toBe('other/math/public-2026-fall');
+  expect(fireEvent.submit(form)).toBe(false);
+  expect(screen.getByRole('alert')).toHaveTextContent('namespace and course group');
+});
+
+it('allows a group path when creating without a namespace', async () => {
+  const user = userEvent.setup();
+  renderUi(<CreateCoursePage shared={makeSharedUi()} data={{...base, namespaces: [], values: {namespace_id: '0'}}} />);
+  await user.type(screen.getByLabelText('Course Group'), 'other/math');
+  const form = screen.getByRole('button', {name: 'Create course'}).closest('form')!;
+  expect(new FormData(form).get('namespace_id')).toBe('0');
+  expect(fireEvent.submit(form)).toBe(true);
+});
+
 it('blocks create when namespace paths could not be loaded', async () => {
   const user = userEvent.setup();
   renderUi(<CreateCoursePage shared={makeSharedUi()} data={{...base,

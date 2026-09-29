@@ -1036,6 +1036,38 @@ def test_create_course_native_post_regular_user_is_forbidden_before_rms(app, moc
     create_group.assert_not_called()
 
 
+def test_create_course_bad_csrf_keeps_values_without_creating_resources(app, mock_gitlab_oauth):
+    app.oauth = mock_gitlab_oauth
+    app.create_course_labels = {}
+    app.storage_api.check_if_instance_admin = lambda _username: True
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "create_course_group") as create_group,
+        patch.object(app.rms_api, "create_public_repo") as create_public_repo,
+        patch.object(app.rms_api, "create_students_group") as create_students_group,
+        patch.object(app.storage_api, "create_course", create=True) as create_course,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post("/instance_admin/courses/new", data={
+            "csrf_token": "bad", "namespace_id": "0", "unique_course_name": "draft-course",
+            "registration_secret": "draft-secret", "token": "draft-token",
+            "course_group": "draft-group", "course_public_repo": "draft-group/public",
+            "course_students_group": "draft-group/students", "default_branch": "dev",
+        })
+    assert response.status_code == HTTPStatus.OK
+    payload = json.loads(BeautifulSoup(response.data, "html.parser").find(id="manytask-page").text)
+    assert payload["shared"]["errorMessage"] == "CSRF Error"
+    assert payload["data"]["values"] == {
+        "namespace_id": "0", "unique_course_name": "draft-course", "registration_secret": "draft-secret",
+        "token": "draft-token", "course_group": "draft-group", "course_public_repo": "draft-group/public",
+        "course_students_group": "draft-group/students", "default_branch": "dev",
+    }
+    create_group.assert_not_called()
+    create_public_repo.assert_not_called()
+    create_students_group.assert_not_called()
+    create_course.assert_not_called()
+
+
 def test_create_course_native_post_foreign_namespace_is_denied_before_rms(app, mock_gitlab_oauth):
     app.oauth = mock_gitlab_oauth
     app.create_course_labels = {}

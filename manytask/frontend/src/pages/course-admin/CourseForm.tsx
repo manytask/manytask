@@ -58,11 +58,13 @@ export function CourseForm({shared, data}: PageProps<CourseFormData>) {
   };
   const validate = (event: FormEvent<HTMLFormElement>) => {
     if (edit) return;
+    const namespacePath = pathFor(namespaceId);
+    const foreignGroup = data.rms === 'gitlab' && namespaceId !== '0' && group.includes('/') &&
+      !group.startsWith(`${namespacePath}/`);
     const prefix = data.rms === 'sourcecraft' ? group :
-      (namespaceId === '0' || group.includes('/') ? group : `${pathFor(namespaceId)}/${group}`) + '/';
-    if (data.namespaceError || error || !namespaceId || !group ||
-      (publicRepo && !publicRepo.startsWith(prefix)) ||
-      (studentsGroup && !studentsGroup.startsWith(prefix))) {
+      (namespaceId === '0' || group.includes('/') ? group : `${namespacePath}/${group}`) + '/';
+    if (data.namespaceError || error || !namespaceId || !group || foreignGroup ||
+      !publicRepo.startsWith(prefix) || !studentsGroup.startsWith(prefix)) {
       event.preventDefault();
       setError(data.rms === 'sourcecraft' ? 'Repository names must begin with the course prefix' :
         'Repository paths must begin with the namespace and course group');
@@ -108,9 +110,9 @@ export function CourseForm({shared, data}: PageProps<CourseFormData>) {
             <Field name={fieldNames.group} label={labels.course_group_label} value={group} required
               onUpdate={(value) => { setGroup(value); updateSuggestions(value, namespaceId); setError(null); }} />}
           <Field name={fieldNames.publicRepo} label={labels.course_public_repo_label}
-            value={publicRepo} required={edit} onUpdate={(value) => { publicTouched.current = true; setPublicRepo(value); setError(null); }} />
+            value={publicRepo} required onUpdate={(value) => { publicTouched.current = true; setPublicRepo(value); setError(null); }} />
           <Field name={fieldNames.studentsGroup} label={labels.course_students_group_label}
-            value={studentsGroup} onUpdate={(value) => { studentsTouched.current = true; setStudentsGroup(value); setError(null); }} />
+            value={studentsGroup} required={!edit} onUpdate={(value) => { studentsTouched.current = true; setStudentsGroup(value); setError(null); }} />
           <Field name={fieldNames.branch} label={labels.default_branch_label}
             value={data.values[fieldNames.branch] ?? 'main'} required />
         </section>
