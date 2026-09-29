@@ -130,15 +130,13 @@ deploy-manytask:
     # only (Project -> Settings -> CI/CD -> Variables): a group level variable is
     # inherited by the students subgroup, which would hand every student a token that
     # can grade the whole course. Students use their own MANYTASK_TOKEN instead, which
-    # manytask writes into each student project. MANYTASK_TOKEN is still accepted here
-    # for courses configured before per-student tokens existed.
-    - COURSE_TOKEN="${MANYTASK_COURSE_TOKEN:-$MANYTASK_TOKEN}"
+    # manytask writes into each student project; the config endpoints reject it.
     - 'curl --fail --data-binary "@.manytask.yml"
-       -H "Authorization: Bearer $COURSE_TOKEN"
+       -H "Authorization: Bearer $MANYTASK_COURSE_TOKEN"
        -H "Content-Type: application/x-yaml"
        "https://$MANYTASK_API/update_config"'
     - 'curl --fail -X POST
-       -H "Authorization: Bearer $COURSE_TOKEN"
+       -H "Authorization: Bearer $MANYTASK_COURSE_TOKEN"
        "https://$MANYTASK_API/update_cache"'
 
 deploy-public:
