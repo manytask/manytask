@@ -5,6 +5,7 @@ import '@gravity-ui/uikit/styles/styles.css';
 
 import {App} from './app/App';
 import {Theme} from './app/Theme';
+import './app/palette.css';
 import './app/styles.css';
 
 const root = document.getElementById('root');

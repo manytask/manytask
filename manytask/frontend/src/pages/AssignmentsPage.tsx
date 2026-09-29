@@ -39,7 +39,9 @@ export function AssignmentsPage({shared, data}: PageProps<AssignmentsData>) {
       <a href={data.sourcecraftInviteUrl} target="_blank" rel="noreferrer">{data.sourcecraftInviteUrl}</a>.
     </>} />}
     <div className="assignments-toolbar">
-      <span className="assignments-course-status">{shared.course?.status.replaceAll('_', ' ')}</span>
+      <span className="assignments-course-status" data-course-status={shared.course?.status}>
+        {shared.course?.status.replaceAll('_', ' ')}
+      </span>
       <div className="assignments-actions">
         <TaskOrderButton order={order} onToggle={toggleOrder} />
         <Button type="button" view="normal" size="m" onClick={() => setShowPassed((old) => !old)}>

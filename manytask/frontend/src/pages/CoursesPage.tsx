@@ -117,7 +117,8 @@ export function CoursesPage({data}: PageProps<CoursesData>) {
   const courseColumns = [
     {id: 'name', name: 'Name', meta: {sort: true}, template: (course: CourseRow) => <a href={course.href}>{course.name}</a>},
     {id: 'namespaceSlug', name: 'Namespace', meta: {sort: true}, template: (course: CourseRow) => course.namespaceSlug || '—'},
-    {id: 'status', name: 'Status', meta: {sort: true}, template: (course: CourseRow) => humanizeStatus(course.status)},
+    {id: 'status', name: 'Status', meta: {sort: true}, template: (course: CourseRow) =>
+      <span data-course-status={course.status}>{humanizeStatus(course.status)}</span>},
     {id: 'editHref', name: 'Edit', template: (course: CourseRow) => course.editHref ? <a href={course.editHref} aria-label={`Edit ${course.name}`}>Edit</a> : null},
   ];
   const namespaceColumns = [
@@ -146,13 +147,15 @@ export function CoursesPage({data}: PageProps<CoursesData>) {
       </Button>
       {completedVisible && <ul>
         {data.courses.filter((course) => course.status === 'finished').map((course) => <li key={course.href}>
-          <a href={course.href}>{course.name}</a> <span>{humanizeStatus(course.status)}</span>
+          <a href={course.href}>{course.name}</a>{' '}
+          <span data-course-status={course.status}>{humanizeStatus(course.status)}</span>
         </li>)}
         {!data.courses.some((course) => course.status === 'finished') && <li>No finished courses yet.</li>}
       </ul>}
       <ul>
         {data.courses.filter((course) => course.status !== 'finished').map((course) => <li key={course.href}>
-          <a href={course.href}>{course.name}</a> <span>{humanizeStatus(course.status)}</span>
+          <a href={course.href}>{course.name}</a>{' '}
+          <span data-course-status={course.status}>{humanizeStatus(course.status)}</span>
         </li>)}
         {!data.courses.some((course) => course.status !== 'finished') && <li>Unfortunately, there are no courses yet.</li>}
       </ul>

@@ -138,7 +138,8 @@ test('physical widths, pinning, sticky headers and edit reload preserve table st
   await expect(page.locator('.grades-table-scroll img')).toHaveCount(0);
   await chooseTheme(page,'dark');
   // UIKit transitions button colors for150ms; assert the settled palette before capture.
-  await expect(page.getByRole('button',{name:`Edit comment for ${editName}`,exact:true})).toHaveCSS('color','rgba(255, 255, 255, 0.85)');
+  const textColor=await page.locator('body').evaluate(el=>getComputedStyle(el).color);
+  await expect(page.getByRole('button',{name:`Edit comment for ${editName}`,exact:true})).toHaveCSS('color',textColor);
   await page.getByRole('textbox',{name:'Search students'}).fill('');
   await page.screenshot({path:'../.tmp/desktop-grades-dark.png',fullPage:true,animations:'disabled'});
 });

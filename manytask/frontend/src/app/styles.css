@@ -41,12 +41,6 @@ body {
   grid-template-columns: 64px minmax(0, 1fr);
 }
 
-.g-root_theme_light .app-shell,
-.g-root_theme_light .app-workspace,
-.g-root_theme_light .app-topbar {
-  background: var(--g-color-base-generic-ultralight);
-}
-
 .app-sidebar {
   box-sizing: border-box;
   position: sticky;
@@ -81,7 +75,7 @@ body {
 
 .app-brand {
   min-width: 0;
-  color: var(--g-color-text-primary);
+  color: #17c3b2;
   text-decoration: none;
 }
 
@@ -94,7 +88,7 @@ body {
 .app-brand__mark_default {
   display: grid;
   place-items: center;
-  color: var(--g-color-text-dark-primary);
+  color: var(--g-color-text-brand-contrast);
   background: var(--g-color-base-brand);
   font-weight: 700;
 }
@@ -132,7 +126,7 @@ body {
   flex: 0 0 24px;
   place-items: center;
   border-radius: 6px;
-  color: var(--g-color-text-dark-primary);
+  color: var(--g-color-text-brand-contrast);
   background: var(--g-color-base-brand);
   font-size: 12px;
   font-weight: 700;

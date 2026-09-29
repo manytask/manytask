@@ -19,12 +19,13 @@
 .courses-list li { box-sizing: border-box; min-height: 84px; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 16px; border: 1px solid var(--g-color-line-generic); border-radius: 12px; background: var(--g-color-base-float); }
 .courses-list li:has(a):hover { border-color: var(--g-color-line-generic-hover); background: var(--g-color-base-float-hover); }
 .courses-list li a { font-size: 16px; font-weight: 600; line-height: 22px; text-decoration: none; overflow-wrap: anywhere; }
-.courses-list li a:hover { text-decoration: underline; }
-.courses-list li span { width: max-content; max-width: 100%; padding: 2px 8px; border-radius: 10px; color: var(--g-color-text-secondary); background: var(--g-color-base-neutral-light); font-size: 12px; line-height: 16px; text-transform: capitalize; }
+.courses-list li a:hover { color: #64aeff; text-decoration: underline; }
+.courses-list li [data-course-status] { width: max-content; max-width: 100%; padding: 2px 8px; border-radius: 10px; font-size: 12px; line-height: 16px; text-transform: capitalize; }
 .courses-table-section, .courses-namespaces { box-sizing: border-box; padding: 20px; border: 1px solid var(--g-color-line-generic); border-radius: 12px; background: var(--g-color-base-float); }
 .courses-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
 .courses-controls label { font-weight: 500; }
 .courses-controls .g-text-input { width: min(100%, 320px); }
+.courses-table-section a:hover, .courses-namespaces a:hover { color: #64aeff; }
 .courses-enroll { box-sizing: border-box; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 20px; border: 1px solid var(--g-color-line-generic); border-radius: 12px; background: var(--g-color-base-float); }
 .courses-enroll > div { display: flex; flex: 1 1 280px; flex-direction: column; gap: 4px; }
 .courses-enroll > div span { color: var(--g-color-text-secondary); }
