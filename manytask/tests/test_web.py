@@ -9,6 +9,7 @@ from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
+from wtforms import ValidationError
 
 from manytask import ui
 from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
@@ -397,14 +398,36 @@ def test_index_shows_profile_menu(app, mock_gitlab_oauth):
             app.oauth = mock_gitlab_oauth
             response = client.get("/")
             assert response.status_code == HTTPStatus.OK
-            body = response.data.decode()
-            assert "nav-user-menu" in body
-            assert "changeUserInfoModal" in body
-            assert TEST_USERNAME in body
+            payload = ui_payload(response)
+            assert payload["shared"]["username"] == TEST_USERNAME
+            assert payload["shared"]["urls"]["updateProfile"] == "/update_profile"
+
+
+def test_profile_csrf_error_renders_course_directory_without_full_context(app, mock_gitlab_oauth):
+    """A failed profile POST has only error_message and must still render the directory."""
+    CSRFProtect(app)
+    with app.test_request_context():
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(build_test_session(include_manytask=True))
+            app.oauth = mock_gitlab_oauth
+            csrf_token = ui_payload(client.get("/"))["shared"]["csrfToken"]
+            with patch("manytask.web.validate_csrf", side_effect=ValidationError("expired")):
+                response = client.post(
+                    "/update_profile",
+                    data={"username": TEST_USERNAME, "first_name": "A", "last_name": "B", "csrf_token": csrf_token},
+                )
+    assert response.status_code == HTTPStatus.OK
+    payload = ui_payload(response)
+    assert payload["page"] == "courses"
+    assert payload["shared"]["errorMessage"] == "CSRF Error"
+    assert payload["data"]["courses"] == []
+    assert payload["data"]["adminNamespaces"] == []
+    assert payload["data"]["createCourseUrl"] is None
 
 
 def test_index_renders_list_and_table_views(app, mock_gitlab_oauth):
-    """The course list page should offer both the list and the table view."""
+    """The course directory payload keeps the allowed course and lifecycle order."""
     CSRFProtect(app)
     with app.test_request_context():
         with app.test_client() as client:
@@ -413,16 +436,20 @@ def test_index_renders_list_and_table_views(app, mock_gitlab_oauth):
             app.oauth = mock_gitlab_oauth
             response = client.get("/")
             assert response.status_code == HTTPStatus.OK
-            body = response.data.decode()
-
-            # Both view containers and the toggle button are present.
-            assert 'id="coursesListView"' in body
-            assert 'id="coursesTableView"' in body
-            assert 'id="toggleViewBtn"' in body
-            assert 'id="courses-table"' in body
-            # Tabulator assets are loaded.
-            assert "tabulator" in body
-            assert "tabulator-theme.js" in body
+            payload = ui_payload(response)
+            assert payload["page"] == "courses"
+            assert payload["data"]["courses"] == [
+                {
+                    "name": "test_course_names",
+                    "status": "created",
+                    "href": "/test_course_names/",
+                    "owners": "",
+                    "namespaceSlug": "",
+                    "editHref": None,
+                }
+            ]
+            assert payload["data"]["statusOrder"] == [status.value for status in CourseStatus]
+            assert "tabulator" not in response.data.decode().lower()
 
 
 def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
@@ -435,10 +462,13 @@ def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
             app.oauth = mock_gitlab_oauth
             response = client.get("/")
             assert response.status_code == HTTPStatus.OK
-            body = response.data.decode()
-            # can_edit is serialized into the embedded courses JSON; a regular
-            # user (no namespace access) can never edit.
-            assert '"can_edit": true' not in body
+            payload = ui_payload(response)
+            assert payload["data"]["courses"][0]["editHref"] is None
+            assert payload["data"]["createCourseUrl"] is None
+            assert payload["data"]["instanceAdminUrl"] is None
+            assert payload["data"]["namespacesUrl"] is None
+            assert payload["data"]["adminNamespaces"] == []
+            assert "/instance_admin/courses/test_course_names/edit" not in str(payload)
 
 
 def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
@@ -452,9 +482,10 @@ def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
             app.oauth = mock_gitlab_oauth
             response = client.get("/")
             assert response.status_code == HTTPStatus.OK
-            body = response.data.decode()
-            assert '"can_edit": true' in body
-            assert "/instance_admin/courses/test_course_names/edit" in body
+            payload = ui_payload(response)
+            assert payload["data"]["courses"][0]["editHref"] == "/instance_admin/courses/test_course_names/edit"
+            assert payload["data"]["createCourseUrl"] == "/instance_admin/courses/new"
+            assert payload["data"]["instanceAdminUrl"] == "/instance_admin/panel"
 
 
 def test_index_renders_namespace_table_for_namespace_admin(app, mock_gitlab_oauth):
@@ -480,13 +511,20 @@ def test_index_renders_namespace_table_for_namespace_admin(app, mock_gitlab_oaut
             response = client.get("/")
 
     assert response.status_code == HTTPStatus.OK
-    body = response.data.decode()
-    assert "Namespaces you administer" in body
-    assert 'id="admin-namespaces-table"' in body
-    assert "adminNamespacesData" in body
-    assert 'title: "Edit"' in body
-    assert "Test namespace" in body
-    assert "/instance_admin/namespaces/1" in body
+    payload = ui_payload(response)
+    assert payload["data"]["adminNamespaces"] == [
+        {
+            "id": 1,
+            "name": "Test namespace",
+            "href": "/instance_admin/namespaces/1",
+            "slug": "test-namespace",
+            "description": "Namespace description",
+            "coursesCount": 1,
+            "usersCount": 2,
+        }
+    ]
+    assert payload["data"]["namespacesUrl"] == "/instance_admin/namespaces"
+    assert payload["data"]["instanceAdminUrl"] is None
 
 
 def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth):
@@ -512,7 +550,9 @@ def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth
             response = client.get("/")
 
     assert response.status_code == HTTPStatus.OK
-    assert "Namespaces you administer" in response.data.decode()
+    payload = ui_payload(response)
+    assert payload["data"]["adminNamespaces"][0]["name"] == "Test namespace"
+    assert payload["data"]["instanceAdminUrl"] == "/instance_admin/panel"
 
 
 def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):

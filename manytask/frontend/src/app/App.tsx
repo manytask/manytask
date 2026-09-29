@@ -1,6 +1,7 @@
 import type {PageEnvelope} from './contracts';
 import {NotReadyPage} from '../pages/NotReadyPage';
 import {AuthPage, type AuthData} from '../pages/AuthPage';
+import {CoursesPage, type CoursesData} from '../pages/CoursesPage';
 import {AppShell} from './AppShell';
 
 type NotReadyData = {courseName: string; links: Array<{label: string; href: string}>};
@@ -30,6 +31,9 @@ export function App() {
     case 'signup-finish':
     case 'create-project':
       page = <AuthPage shared={envelope.shared} data={envelope.data as AuthData} />;
+      break;
+    case 'courses':
+      page = <CoursesPage shared={envelope.shared} data={envelope.data as CoursesData} />;
       break;
     default:
       page = <main role="alert">This page is not supported by this frontend build.</main>;

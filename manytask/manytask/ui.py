@@ -8,6 +8,7 @@ from typing import Any
 from flask import render_template, url_for
 
 from .ui_auth import serialize_create_project, serialize_signup, serialize_signup_finish, serialize_signup_yandex_id
+from .ui_courses import serialize as serialize_courses
 from .ui_shared import serialize_shared
 
 PageSerializer = Callable[[Mapping[str, Any]], dict[str, Any]]
@@ -62,6 +63,7 @@ PAGE_SERIALIZERS: dict[str, tuple[str, PageSerializer]] = {
     "signup_yandex_id.html": ("signup-yandex-id", serialize_signup_yandex_id),
     "signup_finish.html": ("signup-finish", serialize_signup_finish),
     "create_project.html": ("create-project", serialize_create_project),
+    "courses.html": ("courses", serialize_courses),
 }
 
 

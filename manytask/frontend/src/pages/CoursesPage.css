@@ -1,0 +1,24 @@
+.courses-page {
+  box-sizing: border-box;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+.courses-page h1, .courses-page h2 { margin: 0; }
+.courses-page a { color: var(--g-color-text-link); }
+.courses-list, .courses-table-section, .courses-namespaces { width: 100%; }
+.courses-list ul { padding-left: 24px; }
+.courses-list li { margin: 8px 0; }
+.courses-list li span { margin-left: 12px; color: var(--g-color-text-secondary); }
+.courses-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+.courses-controls label { flex-basis: 100%; }
+.courses-controls .g-text-input { width: min(100%, 320px); }
+.courses-enroll { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+.courses-enroll label { flex-basis: 100%; }
+.courses-enroll .g-text-input { width: min(100%, 320px); }
+.courses-admin-actions { display: flex; flex-wrap: wrap; gap: 16px; }
+.courses-namespaces h2 { margin-bottom: 16px; }
