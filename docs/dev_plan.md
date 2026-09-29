@@ -10,7 +10,7 @@ The existing product model remains **course as code**: teachers maintain course 
 
 **Goal:** a teacher can start a course from a maintained template and reach a first working release without assembling repositories and configuration by hand. An operator can deploy and update Manytask through a current, reproducible procedure.
 
-This PR [`feat_allow_to_create_private_repo_from_template](https://github.com/manytask/manytask/pull/1116)` is a concrete starting point: its GitLab course form can create a private repository beside the public one and seed it from a language profile bundled with the app image. It does not yet provision a SourceCraft private repository, configure CI credentials, or complete the first release. Use it as a design reference and verify its behavior against the current code before merging or extending it.
+PR [#1116](https://github.com/manytask/manytask/pull/1116) is a good starting point: its GitLab course form can create a private repository beside the public one and seed it from a language profile bundled with the app image. It does not yet provision a SourceCraft private repository, configure CI credentials, or complete the first release. Use it as a design reference and verify its behavior against the current code before merging or extending it.
 
 ### Teacher setup and reusable templates
 
@@ -19,6 +19,7 @@ This PR [`feat_allow_to_create_private_repo_from_template](https://github.com/ma
 - [ ] Give teachers a maintained scaffold and guide for creating or adapting their own course templates: task layout, solution stubs, public/private tests, language pipeline, local validation, and versioning. Verify the reference solution and student-visible export with a disposable sample course.
 - [ ] Show a persistent setup checklist after repository creation: grant the teaching team access, configure required CI/runner credentials, build the test environment, check the reference solution, preview the public repository, release one coherent revision, and inspect a passing and failing student submission. Each step needs a status, direct action or instructions, and a safe retry path.
 - [ ] Make provisioning recoverable when a provider or CI step fails. Repeated submission must not duplicate repositories or overwrite teacher work; partial resources and required manual cleanup must be visible.
+- [ ] Add a task that uses review bot to the template.
 
 ### Operator deployment and Terraform
 
