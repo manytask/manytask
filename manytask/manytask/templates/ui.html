@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    {% for href in assets.css %}<link rel="stylesheet" href="{{ href }}">{% endfor %}
+</head>
+<body>
+    <div id="root"></div>
+    <script id="manytask-page" type="application/json">{{ payload|tojson }}</script>
+    <script type="module" src="{{ assets.js }}"></script>
+</body>
+</html>

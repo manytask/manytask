@@ -1,3 +1,4 @@
+import json
 import os
 from http import HTTPStatus
 from unittest.mock import patch
@@ -534,6 +535,63 @@ def test_not_ready_anonymous(app, mock_course):
         with patch.object(mock_course, "status", CourseStatus.CREATED):
             response = app.test_client().get(f"/{TEST_COURSE_NAME}/not_ready")
             assert response.status_code == HTTPStatus.OK
+            payload = ui_payload(response)
+            assert payload["page"] == "not-ready"
+            assert payload["data"]["links"] == [
+                {"label": "Refresh", "href": f"/{TEST_COURSE_NAME}/"},
+                {"label": "Back to courses list", "href": "/"},
+            ]
+            assert "auth" not in response.get_data(as_text=True)
+            assert "access_token" not in response.get_data(as_text=True)
+            soup = BeautifulSoup(response.data, "html.parser")
+            assert soup.select_one('script[type="module"]')["src"].startswith("/static/dist/assets/main-")
+            assert soup.select_one('link[rel="stylesheet"]')["href"].startswith("/static/dist/assets/main-")
+
+
+def test_not_ready_admin_actions_follow_server_permissions(app, mock_course):
+    with (
+        patch.object(mock_course, "status", CourseStatus.CREATED),
+        patch("manytask.web.check_if_current_user_is_instance_admin", return_value=True),
+        patch("manytask.web.has_role", return_value=True),
+        app.test_client() as client,
+    ):
+        with client.session_transaction() as sess:
+            sess.update(build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/not_ready")
+
+    assert response.status_code == HTTPStatus.OK
+    payload = ui_payload(response)
+    assert payload["data"]["links"] == [
+        {"label": "Refresh", "href": f"/{TEST_COURSE_NAME}/"},
+        {"label": "Back to courses list", "href": "/"},
+        {"label": "Back to editing course", "href": f"/instance_admin/courses/{TEST_COURSE_NAME}/edit"},
+        {"label": "Instance Admin panel", "href": "/instance_admin/panel"},
+    ]
+    assert payload["shared"]["capabilities"]["canEditCourse"] is True
+    assert "access_token" not in response.get_data(as_text=True)
+
+
+def test_not_ready_namespace_admin_capability(app, mock_course):
+    with (
+        patch.object(mock_course, "status", CourseStatus.CREATED),
+        patch("manytask.web.check_if_current_user_is_instance_admin", return_value=False),
+        patch("manytask.web.has_role", return_value=True),
+        app.test_client() as client,
+    ):
+        with client.session_transaction() as sess:
+            sess.update(build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/not_ready")
+
+    assert response.status_code == HTTPStatus.OK
+    payload = ui_payload(response)
+    assert payload["shared"]["capabilities"]["namespaceAdmin"] is True
+    assert payload["shared"]["capabilities"]["instanceAdmin"] is False
+    assert all(link["label"] != "Instance Admin panel" for link in payload["data"]["links"])
+
+
+def ui_payload(response):
+    soup = BeautifulSoup(response.data, "html.parser")
+    return json.loads(soup.select_one("#manytask-page").text)
 
 
 def check_admin_in_data(response, check_true):

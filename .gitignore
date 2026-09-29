@@ -144,3 +144,7 @@ dmypy.json
 scripts
 # worktrees
 .worktrees/
+
+# Frontend dependencies and generated assets
+manytask/frontend/node_modules/
+manytask/manytask/static/dist/

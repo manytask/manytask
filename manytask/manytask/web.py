@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import gitlab
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
@@ -30,6 +30,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
+from .ui import render_ui as render_template
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
@@ -459,6 +460,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
         course_name=course.course_name,
         manytask_version=app.manytask_version,
         is_instance_admin=is_instance_admin,
+        is_namespace_admin=can_edit_course and not is_instance_admin,
         can_edit_course=can_edit_course,
     )
 
