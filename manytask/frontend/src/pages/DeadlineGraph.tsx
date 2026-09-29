@@ -141,18 +141,11 @@ export function DeadlineGraph({graph, now}: {graph: DeadlineGraphData; now: stri
     setTip(nearest?.spot ?? null);
   };
 
-  return <div className={`assignment-deadline assignment-deadline--graph ${graph.status}`}>
-    <div className="assignment-deadline-head">
-      <strong>{Math.round(graph.percent * 100)}%</strong>
-      <span className="assignment-deadline-hint">{graph.hint}</span>
-      <span className={`assignment-deadline-status ${graph.status}`}>{graph.status}</span>
-    </div>
-    <div className="assignment-graph-wrap">
-      <canvas ref={canvasRef} className="deadline-graph-canvas" role="img" aria-label="Deadline score curve"
-        onMouseMove={onMove} onMouseLeave={() => setTip(null)} />
-      {tip && <div role="tooltip" className="assignment-graph-tip" style={{left: tip.x, top: tip.y}}>
-        {tip.point.date} {tip.point.time} {tip.point.tz}
-      </div>}
-    </div>
+  return <div className={`assignment-graph-wrap ${graph.status}`}>
+    <canvas ref={canvasRef} className="deadline-graph-canvas" role="img" aria-label="Deadline score curve"
+      onMouseMove={onMove} onMouseLeave={() => setTip(null)} />
+    {tip && <div role="tooltip" className="assignment-graph-tip" style={{left: tip.x, top: tip.y}}>
+      {tip.point.date} {tip.point.time} {tip.point.tz}
+    </div>}
   </div>;
 }

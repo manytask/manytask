@@ -24,6 +24,29 @@ export type AssignmentsData = {
   courseName: string; now: string; sourcecraftInviteUrl: string | null; groups: AssignmentGroup[];
 };
 
+function compactCountdown(remaining: string) {
+  return remaining.replace(/^(?:Deadline expires|Next deadline) in:\s*/i, '').trim();
+}
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function DeadlineSchedule({graph, now}: {graph: DeadlineGraphData; now: string}) {
+  const [open, setOpen] = useState(false);
+  return <details className={`assignment-schedule ${graph.status}`}
+    onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>
+      <strong>Current multiplier: {Math.round(graph.percent * 100)}%</strong>
+      {graph.hint && <span>{graph.hint}</span>}
+      {graph.status !== 'active' && <span className={`assignment-deadline-status ${graph.status}`}>
+        {graph.status === 'expired' ? 'Expired' : 'Urgent'}
+      </span>}
+    </summary>
+    {open && <DeadlineGraph graph={graph} now={now} />}
+  </details>;
+}
+
 export function AssignmentsPage({shared, data}: PageProps<AssignmentsData>) {
   const [order, toggleOrder] = useTaskOrder(shared.username ?? '', data.courseName);
   const [showPassed, setShowPassed] = useState(false);
@@ -50,45 +73,78 @@ export function AssignmentsPage({shared, data}: PageProps<AssignmentsData>) {
       </div>
     </div>
     {groups.length === 0 ? <p>No assignments yet.</p> : <section aria-label="Assignment groups" className="assignment-groups">
-      {groups.map((group) => <article key={`${group.name}:${group.start}`} className={`assignment-group${group.special ? ' special' : ''}`}>
+      {groups.map((group) => {
+        const completed = group.tasks.filter((task) => task.state === 'solved' || task.state === 'over_solved').length;
+        const completion = group.tasks.length === 0 ? 0 : Math.round(completed / group.tasks.length * 100);
+        const completionLabel = `${completed} of ${group.tasks.length} tasks completed`;
+        const onlyTask = group.tasks.length === 1 ? group.tasks[0] : null;
+        const showTotal = !onlyTask || onlyTask.earned !== group.earned || onlyTask.score !== group.maximum;
+        const currentDeadline = group.deadlines.find((deadline) => !deadline.passed) ?? null;
+        const progressDeadline = currentDeadline ?? (showPassed ? group.deadlines[group.deadlines.length - 1] ?? null : null);
+        return <article key={`${group.name}:${group.start}`} className={`assignment-group${group.special ? ' special' : ''}`}>
         <div className="assignment-group-top">
-          <div>
-            <h2>{group.name}</h2>
-            <p className="assignment-group-score">Score: {group.earned}/{group.maximum}</p>
+          <div className="assignment-group-summary">
+            <div className="assignment-group-title">
+              <h2>{group.name}</h2>
+              {showTotal && <span className="assignment-group-score"
+                title="Group total; maximum excludes bonus task points">Total: {group.earned}/{group.maximum}</span>}
+            </div>
+            <div className="assignment-completion">
+              <span>{completionLabel}</span>
+              <div className="assignment-completion-track" role="progressbar" aria-label="Task completion"
+                aria-valuetext={completionLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={completion}>
+                <div style={{width: `${completion}%`}} />
+              </div>
+            </div>
           </div>
           <div className="assignment-deadlines">
             {group.expired && !showPassed && <div className="assignment-expired" title={group.endTz}>
               Expired: {group.endDate} {group.endTime}
             </div>}
-            {group.graph && <DeadlineGraph graph={group.graph} now={data.now} />}
-            {group.deadlines.filter((deadline) => showPassed || !deadline.passed).map((deadline, deadlineIndex) =>
-              <div key={`${deadline.at}:${deadlineIndex}`} className={`assignment-deadline${deadline.passed ? ' passed' : ''}`}>
-                <div className="assignment-deadline-head">
-                  <strong>{Math.round(deadline.percent * 100)}%</strong>
-                  <span className={`assignment-deadline-status ${deadline.passed ? 'expired' : deadline.urgent ? 'urgent' : 'active'}`}>
-                    {deadline.passed ? 'Expired' : deadline.urgent ? 'Urgent' : 'Active'}
-                  </span>
+            {group.graph && <DeadlineSchedule graph={group.graph} now={data.now} />}
+            {group.deadlines.filter((deadline) => showPassed || !deadline.passed).map((deadline, deadlineIndex) => {
+              const progress = clampPercent(deadline.progress);
+              const isCurrent = deadline === currentDeadline;
+              const showProgress = deadline === progressDeadline;
+              const countdown = compactCountdown(deadline.remaining);
+              const deadlineLabel = `${Math.round(deadline.percent * 100)}% of points until ${deadline.date} ${deadline.time}` +
+                (deadline.passed ? ' · Expired' : countdown ? ` · ${countdown} left` : '');
+              return <div key={`${deadline.at}:${deadlineIndex}`}
+                className={`assignment-deadline${isCurrent ? ' current' : ''}${showProgress ? ' has-progress' : ''}` +
+                  `${deadline.passed ? ' passed' : deadline.urgent ? ' urgent' : ''}`}
+                aria-current={isCurrent ? 'step' : undefined}>
+                <div className="assignment-deadline-copy">
+                  <span title={deadline.tz}>{deadlineLabel}</span>
+                  {deadline.urgent && !deadline.passed && <span className="assignment-deadline-status urgent">Urgent</span>}
                 </div>
-                <div className="assignment-progress"><div className={deadline.passed ? 'expired' : deadline.urgent ? 'urgent' : 'active'}
-                  style={{width: `${deadline.progress}%`}} /></div>
-                <div className="assignment-deadline-time" title={deadline.tz}>
-                  <span>{deadline.date}</span><span>{deadline.time}</span>
-                </div>
-                <div className="assignment-deadline-hint">{deadline.remaining}</div>
-              </div>)}
+                {showProgress && <div className="assignment-time-progress">
+                  <span>Time elapsed</span>
+                  <div className="assignment-progress" role="progressbar"
+                    aria-label={`Time elapsed until ${deadline.date} ${deadline.time}`}
+                    aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+                    <div className={deadline.passed ? 'expired' : deadline.urgent ? 'urgent' : 'active'}
+                      style={{width: `${progress}%`}} />
+                  </div>
+                  <span>{progress}%</span>
+                </div>}
+              </div>})}
           </div>
         </div>
         <div className="assignment-tasks">
           {group.tasks.map((task, taskIndex) => <a key={`${task.name}:${taskIndex}`} href={task.url}
             className={`assignment-task ${task.state}${task.bonus ? ' bonus' : ''}${task.special ? ' special' : ''}`}>
-            <span className="assignment-task-name">{task.name}</span>
-            <strong>{task.earned}/{task.score}</strong>
-            <span className="assignment-task-meta">
-              {task.special && 'special '}{task.bonus && 'bonus '}{task.statistics ?? 0}
+            <span className="assignment-task-main">
+              <span className="assignment-task-name">{task.name}</span>
+              <strong>{task.earned}/{task.score}</strong>
             </span>
+            {(task.special || task.bonus || task.statistics !== null) && <span className="assignment-task-meta">
+              {task.special && <span>Special</span>}
+              {task.bonus && <span>Bonus</span>}
+              {task.statistics !== null && <span>Submitted by {Math.round(task.statistics * 100)}%</span>}
+            </span>}
           </a>)}
         </div>
-      </article>)}
+      </article>})}
     </section>}
   </main>;
 }
