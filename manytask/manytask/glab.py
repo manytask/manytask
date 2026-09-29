@@ -303,7 +303,7 @@ class GitLabApi(RmsApi, AuthApi):
                         ),
                     }
                 )
-            elif path in {".manytask.yml", ".checker.yml", ".releaser-ci.yml", ".gitlab-ci.yml"}:
+            elif path in {".manytask.yml", ".checker.yml", ".releaser-ci.yml", ".gitlab-ci.yml", "pyproject.toml"}:
                 configured = self._configure_course_template_file(
                     path, content.decode("utf-8"), language, private_repo, public_repo, students_group, course_name
                 )
@@ -356,10 +356,19 @@ class GitLabApi(RmsApi, AuthApi):
                 "https://oauth2:${GITLAB_API_TOKEN}@gitlab.manytask.org/sandbox/public.git",
                 f"{base_url.scheme}://oauth2:${{GITLAB_API_TOKEN}}@{base_url.netloc}/{public_repo}.git",
             )
+        if path == "pyproject.toml":
+            return content.replace('name = "manytask-sandbox"', f'name = "manytask-{course_name}"').replace(
+                'description = "Sandbox course template for manytask"',
+                f'description = "Course {course_name} for Manytask"',
+            )
         host = urlsplit(self.web_base_url).hostname or ""
-        return content.replace(
-            "gitlab.manytask.org:5050/sandbox/private/testenv-image",
-            f"{host}:5050/{private_repo}/testenv-image",
+        return (
+            content.replace(
+                "gitlab.manytask.org:5050/sandbox/private/testenv-image",
+                f"{host}:5050/{private_repo}/testenv-image",
+            )
+            .replace("sandbox/public", public_repo)
+            .replace("sandbox/private", private_repo)
         )
 
     def create_students_group(

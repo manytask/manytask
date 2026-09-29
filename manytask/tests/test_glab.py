@@ -274,6 +274,13 @@ def test_create_private_repo_from_template_selects_language(gitlab, mock_gitlab_
     assert [group["group"] for group in settings["deadlines"]["schedule"]] == [language]
     readme = next(action["content"] for action in actions if action["file_path"] == "README.md")
     assert "snapshot" in readme
+    pyproject = next(action["content"] for action in actions if action["file_path"] == "pyproject.toml")
+    assert 'name = "manytask-example"' in pyproject
+    assert 'description = "Course example for Manytask"' in pyproject
+    public_ci = next(action["content"] for action in actions if action["file_path"] == ".gitlab-ci.yml")
+    assert "sandbox/" not in public_ci
+    assert TEST_GROUP_PUBLIC_NAME in public_ci
+    assert f"{TEST_GROUP_NAME}/private" in public_ci
 
 
 def test_create_private_repo_reports_missing_bundled_template(gitlab, mock_gitlab_group, tmp_path):
