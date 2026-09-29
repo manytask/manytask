@@ -589,6 +589,18 @@ def test_not_ready_namespace_admin_capability(app, mock_course):
     assert all(link["label"] != "Instance Admin panel" for link in payload["data"]["links"])
 
 
+def test_not_ready_flashes_are_delivered_once(app, mock_course):
+    with patch.object(mock_course, "status", CourseStatus.CREATED), app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess["_flashes"] = [("error", "Retry course setup")]
+
+        first = client.get(f"/{TEST_COURSE_NAME}/not_ready")
+        second = client.get(f"/{TEST_COURSE_NAME}/not_ready")
+
+    assert ui_payload(first)["shared"]["flashes"] == [{"category": "error", "message": "Retry course setup"}]
+    assert ui_payload(second)["shared"]["flashes"] == []
+
+
 def ui_payload(response):
     soup = BeautifulSoup(response.data, "html.parser")
     return json.loads(soup.select_one("#manytask-page").text)

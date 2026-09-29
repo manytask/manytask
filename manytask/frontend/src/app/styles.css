@@ -23,3 +23,9 @@ body {
   flex-wrap: wrap;
   gap: 12px;
 }
+
+.flash-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
