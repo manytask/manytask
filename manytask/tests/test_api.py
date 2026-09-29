@@ -1667,55 +1667,13 @@ def test_student_token_from_another_course_is_rejected(app):
     assert b"Invalid course token" in response.data
 
 
-def test_get_student_token_endpoint(app, authenticated_client):
-    response = authenticated_client.get(f"/api/{TEST_COURSE_NAME}/student_token")
+@pytest.mark.parametrize(
+    "method, path", [("get", "student_token"), ("post", "student_token/publish"), ("post", "student_token/rotate")]
+)
+def test_students_cannot_read_their_token_over_the_api(authenticated_client, method, path):
+    response = getattr(authenticated_client, method)(f"/api/{TEST_COURSE_NAME}/{path}")
 
-    assert response.status_code == HTTPStatus.OK
-    body = json.loads(response.data)
-    assert body["username"] == TEST_USERNAME
-    assert body["course"] == TEST_COURSE_NAME
-    assert body["ci_variable"] == "MANYTASK_TOKEN"
-    assert body["token"] == _student_token(app)
-
-
-def test_publish_student_token_writes_ci_variable(app, authenticated_client, mock_course):
-    rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
-    app.rms_api.create_project(rms_user, mock_course.gitlab_course_students_group, TEST_PUBLIC_REPO)
-
-    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/publish")
-
-    assert response.status_code == HTTPStatus.OK
-    body = json.loads(response.data)
-    assert body["published_to_repo"] is True
-    project = app.rms_api.projects[f"{mock_course.gitlab_course_students_group}/{TEST_USERNAME}"]
-    assert project.ci_variables["MANYTASK_TOKEN"] == body["token"]
-
-
-def test_publish_student_token_reports_missing_repo(app, authenticated_client):
-    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/publish")
-
-    assert response.status_code == HTTPStatus.OK
-    assert json.loads(response.data)["published_to_repo"] is False
-
-
-def test_rotate_student_token_invalidates_the_old_one(app, authenticated_client):
-    old_token = _student_token(app)
-
-    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/rotate")
-
-    assert response.status_code == HTTPStatus.OK
-    new_token = json.loads(response.data)["token"]
-    assert new_token != old_token
-
-    stale = app.test_client().get(f"/api/{TEST_COURSE_NAME}/ping", headers={"Authorization": f"Bearer {old_token}"})
-    assert stale.status_code == HTTPStatus.FORBIDDEN
-
-
-def test_student_token_requires_course_membership(app, authenticated_client):
-    with patch.object(app.storage_api, "check_user_on_course", return_value=False):
-        response = authenticated_client.get(f"/api/{TEST_COURSE_NAME}/student_token")
-
-    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 # ----- CSRF protection of session authenticated endpoints -----
@@ -1726,8 +1684,6 @@ SESSION_MUTATING_ROUTES = [
     ("post", "comment/update"),
     ("post", "grade/override"),
     ("post", "grade/clear_override"),
-    ("post", "student_token/publish"),
-    ("post", "student_token/rotate"),
 ]
 
 
@@ -1756,28 +1712,23 @@ def test_session_endpoints_reject_forged_csrf_token(app, authenticated_client, m
 def test_session_endpoint_accepts_valid_csrf_token(app, authenticated_client):
     enable_csrf(app)
     headers = csrf_headers(authenticated_client, app)
+    payload = {"username": TEST_USERNAME, "comment": "ok"}
 
-    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/rotate", headers=headers)
+    with patch.object(app.storage_api, "update_student_comment", create=True) as update_comment:
+        response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/comment/update", json=payload, headers=headers)
 
     assert response.status_code == HTTPStatus.OK
-    assert json.loads(response.data)["token"]
+    update_comment.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME, "ok")
 
 
 def test_csrf_token_is_also_accepted_from_a_form_field(app, authenticated_client):
     enable_csrf(app)
     token = csrf_headers(authenticated_client, app)["X-CSRFToken"]
 
-    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/student_token/rotate", data={"csrf_token": token})
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/comment/update", data={"csrf_token": token})
 
-    assert response.status_code == HTTPStatus.OK
-
-
-def test_get_endpoints_do_not_need_csrf(app, authenticated_client):
-    enable_csrf(app)
-
-    response = authenticated_client.get(f"/api/{TEST_COURSE_NAME}/student_token")
-
-    assert response.status_code == HTTPStatus.OK
+    # Past the CSRF check the handler runs and rejects the form body on its own terms.
+    assert json.loads(response.data)["message"] == "Request must be JSON"
 
 
 def test_course_token_requests_do_not_need_csrf(app):

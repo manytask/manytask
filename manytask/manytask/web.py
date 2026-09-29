@@ -441,8 +441,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
 def _publish_student_report_token(app: CustomFlask, course: Course, username: str, rms_username: str) -> None:
     """Give the fresh repository the student's own manytask token so its CI can report scores.
 
-    Failures are not fatal: the token is also shown on the course page, so the student can
-    always set the CI/CD variable by hand.
+    Failures are not fatal: submitting the create-project form again re-enrolls the student
+    and publishes the token once more. The token itself is never shown to the student.
     """
     try:
         token = app.storage_api.get_or_create_student_token(course.course_name, username)

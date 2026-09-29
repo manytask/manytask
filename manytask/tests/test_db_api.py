@@ -2024,18 +2024,6 @@ def test_student_tokens_are_unique_per_student(db_api_with_initialized_first_cou
     assert db_api.get_student_by_token(FIRST_COURSE_NAME, second).username == TEST_USERNAME_1
 
 
-def test_rotate_student_token_invalidates_previous(db_api_with_initialized_first_course):
-    db_api = db_api_with_initialized_first_course
-    _register_student(db_api)
-
-    old_token = db_api.get_or_create_student_token(FIRST_COURSE_NAME, TEST_USERNAME)
-    new_token = db_api.rotate_student_token(FIRST_COURSE_NAME, TEST_USERNAME)
-
-    assert new_token != old_token
-    assert db_api.get_student_by_token(FIRST_COURSE_NAME, old_token) is None
-    assert db_api.get_student_by_token(FIRST_COURSE_NAME, new_token).username == TEST_USERNAME
-
-
 def test_student_token_does_not_leak_into_another_course(db_api_with_two_initialized_courses):
     db_api = db_api_with_two_initialized_courses
     _register_student(db_api)

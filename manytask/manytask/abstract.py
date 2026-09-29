@@ -169,11 +169,6 @@ class StorageApi(ABC):
         ...
 
     @abstractmethod
-    def rotate_student_token(self, course_name: str, username: str) -> str:
-        """Replace the personal API token of a student on a course and return the new one."""
-        ...
-
-    @abstractmethod
     def get_student_by_token(self, course_name: str, token: str) -> StoredUser | None:
         """Resolve a personal student token to its owner, or None if no student on the course owns it."""
         ...
@@ -470,7 +465,7 @@ class RmsApi(ABC):
         """Publish the student's personal manytask token as a CI/CD variable of their repository.
 
         Not every RMS exposes CI/CD variables, so the base implementation is a no-op and
-        callers must treat a ``False`` result as "the student has to set the variable manually".
+        returns ``False``: such courses keep reporting scores with the course token.
 
         :returns: True if the variable was written
         """

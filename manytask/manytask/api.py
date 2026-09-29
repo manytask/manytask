@@ -20,7 +20,7 @@ from wtforms import ValidationError as CsrfValidationError
 from manytask.abstract import RmsApiException, StorageApi, StoredUser
 from manytask.database import TaskDisabledError
 
-from .abstract import REPORT_TOKEN_CI_VARIABLE, RmsApi, RmsUser
+from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
 from .config import (
     AddUserToNamespaceRequest,
@@ -44,7 +44,6 @@ from .config import (
     NamespaceWithRoleResponse,
     PingResponse,
     SetCourseAdminRequest,
-    StudentTokenResponse,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
@@ -846,84 +845,6 @@ def get_deadlines(course_name: str) -> ResponseReturnValue:
         jsonify(DeadlinesResponse(course=course_name, tasks=items).model_dump(mode="json")),
         HTTPStatus.OK,
     )
-
-
-def _get_student_token_context(course_name: str) -> tuple[CustomFlask, Course, str]:
-    """Resolve the signed-in student and their course, refusing users outside the course."""
-    app: CustomFlask = current_app  # type: ignore
-
-    course = __get_course_or_not_found(app.storage_api, course_name)
-    username = session["manytask"]["username"]
-
-    if not app.storage_api.check_user_on_course(course.course_name, username):
-        logger.warning(
-            "User %s asked for a personal token of course=%s they are not registered on",
-            username,
-            course_name,
-        )
-        abort(HTTPStatus.FORBIDDEN, "You are not registered on this course")
-
-    return app, course, username
-
-
-def _publish_student_token(app: CustomFlask, course: Course, username: str, token: str) -> bool:
-    try:
-        return app.rms_api.set_student_report_token(
-            username=username,
-            course_students_group=course.gitlab_course_students_group,
-            token=token,
-        )
-    except Exception as e:
-        logger.error("Failed to publish personal token of user=%s to their repo: %s", username, str(e))
-        return False
-
-
-def _student_token_response(course: Course, username: str, token: str, published: bool) -> ResponseReturnValue:
-    response = StudentTokenResponse(
-        course=course.course_name,
-        username=username,
-        token=token,
-        ci_variable=REPORT_TOKEN_CI_VARIABLE,
-        published_to_repo=published,
-    )
-    return jsonify(response.model_dump()), HTTPStatus.OK
-
-
-@bp.get("/student_token")
-@requires_auth
-@requires_ready
-def get_student_token(course_name: str) -> ResponseReturnValue:
-    """Return the signed-in student's personal API token for the course."""
-    app, course, username = _get_student_token_context(course_name)
-
-    token = app.storage_api.get_or_create_student_token(course.course_name, username)
-    return _student_token_response(course, username, token, published=False)
-
-
-@bp.post("/student_token/publish")
-@requires_auth
-@requires_csrf
-@requires_ready
-def publish_student_token(course_name: str) -> ResponseReturnValue:
-    """Write the student's personal token into the CI/CD variables of their repository."""
-    app, course, username = _get_student_token_context(course_name)
-
-    token = app.storage_api.get_or_create_student_token(course.course_name, username)
-    published = _publish_student_token(app, course, username, token)
-    return _student_token_response(course, username, token, published=published)
-
-
-@bp.post("/student_token/rotate")
-@requires_auth
-@requires_csrf
-@requires_ready
-def rotate_student_token(course_name: str) -> ResponseReturnValue:
-    """Issue a new personal token for the student, invalidating the previous one."""
-    app, course, username = _get_student_token_context(course_name)
-
-    token = app.storage_api.rotate_student_token(course.course_name, username)
-    published = _publish_student_token(app, course, username, token)
-    return _student_token_response(course, username, token, published=published)
 
 
 def _format_config_validation_error(course_name: str, exc: ValidationError) -> str:

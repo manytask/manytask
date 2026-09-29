@@ -287,11 +287,6 @@ class MockStorageApiBase:
     def get_or_create_student_token(self, course_name, username):
         return self.student_tokens.setdefault((course_name, username), f"student_token_{course_name}_{username}")
 
-    def rotate_student_token(self, course_name, username):
-        token = f"rotated_token_{course_name}_{username}_{len(self.student_tokens)}"
-        self.student_tokens[(course_name, username)] = token
-        return token
-
     def get_student_by_token(self, course_name, token):
         for (stored_course, username), stored_token in self.student_tokens.items():
             if stored_course == course_name and stored_token == token:

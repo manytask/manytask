@@ -806,24 +806,20 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
             )
 
 
-def test_course_page_renders_student_token_panel(app, mock_gitlab_oauth):
+def test_course_page_does_not_expose_student_token(app, mock_gitlab_oauth):
+    # A student who can read their own token can report any score for themselves, so the
+    # token must only reach the CI/CD variables of their repository.
     CSRFProtect(app)
     with app.test_request_context(), app.test_client() as client:
         set_session(client, build_test_session())
         app.oauth = mock_gitlab_oauth
+        token = app.storage_api.get_or_create_student_token(TEST_COURSE_NAME, TEST_USERNAME)
 
         response = client.get(f"/{TEST_COURSE_NAME}/")
 
         assert response.status_code == HTTPStatus.OK
-        soup = BeautifulSoup(response.data, "html.parser")
-        panel = soup.find(id="studentTokenPanel")
-        assert panel is not None
-        assert panel["data-token-url"] == f"/api/{TEST_COURSE_NAME}/student_token"
-        assert panel["data-rotate-url"] == f"/api/{TEST_COURSE_NAME}/student_token/rotate"
-        assert response.data.count(b"studentTokenValue") > 0
-        assert (
-            app.storage_api.get_or_create_student_token(TEST_COURSE_NAME, TEST_USERNAME).encode() not in response.data
-        )
+        assert token.encode() not in response.data
+        assert b"student_token" not in response.data
 
 
 def test_create_project_publishes_student_token(app, mock_gitlab_oauth, mock_course):

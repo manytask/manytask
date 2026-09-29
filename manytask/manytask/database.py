@@ -457,24 +457,6 @@ class DataBaseApi(StorageApi):
 
             return user_on_course.token
 
-    def rotate_student_token(self, course_name: str, username: str) -> str:
-        """Method for replacing a student's personal token for the course
-
-        :param course_name: course name
-        :param username: student username
-
-        :return: the new personal course token
-        """
-
-        with self._session_create() as session:
-            user_on_course = self._get_user_on_course_for_update(session, course_name, username)
-
-            user_on_course.token = generate_token_hex(STUDENT_TOKEN_BYTES)
-            logger.info("Rotated personal token for user=%s on course=%s", username, course_name)
-            session.commit()
-
-            return user_on_course.token
-
     def get_student_by_token(self, course_name: str, token: str) -> StoredUser | None:
         """Method for resolving a personal student token to its owner
 

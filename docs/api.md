@@ -18,9 +18,10 @@ reporting a score for anybody else returns `403`, and the course-wide endpoints 
 student who extracts their own token from their pipeline can at worst inflate their own results, which
 is why student pipelines get a personal token instead of the course token.
 
-Manytask writes each student's personal token into the `MANYTASK_TOKEN` CI/CD variable of their
-repository when the repository is created. A student can copy, re-publish or regenerate the token from
-the "My API token" panel on the course page. Regenerating invalidates the previous token immediately.
+Manytask writes each student's personal token into the masked `MANYTASK_TOKEN` CI/CD variable of their
+repository when the repository is created, and again when the student re-enrolls through the
+create-project form. The web UI and the API never return the token, so the only place it exists
+outside Manytask is the grading pipeline.
 
 Personal tokens are deliberately weaker than the course token on `/report`:
 
@@ -43,19 +44,11 @@ of the course.
 | GET    | `/api/<course_name>/is_admin`             | check whether RMS user is a course admin          | course only          | `rms_username` (query string, RMS/GitLab login)                           | -                                                                                                                     | `rms_username`, `is_admin`                                           |
 | GET    | `/api/<course_name>/deadlines`            | machine-readable list of tasks with deadlines     | course or personal | -                                                                         | -                                                                                                                     | `course`, `tasks` (list of `{task_name, group, deadline, score, is_bonus, is_large}`) |
 
-### Personal token management
+### Session-authenticated endpoints
 
-These endpoints are for the signed-in student in the browser: they authenticate with the session
-cookie instead of a token, so the state-changing ones also require a CSRF token, sent either as an
+When `/database/update`, `/comment/update`, `/grade/override`, `/grade/clear_override` and the
+`/api/namespaces*` and `/api/admin/courses` routes are called with the browser session cookie, as the
+web UI does, a state-changing request must carry a CSRF token, sent either as an
 `X-CSRFToken` header or as a `csrf_token` form field. Pages expose the current token in the
-`<meta name="csrf-token">` tag; front-end code gets it via the `window.csrfHeaders()` helper. The
-same requirement applies to the other session-authenticated API endpoints —
-`/database/update`, `/comment/update`, `/grade/override`, `/grade/clear_override` and the
-`/api/namespaces*` and `/api/admin/courses` routes. Requests authenticated with a course token are
-not affected.
-
-| method | api endpoint                                    | description                                                        | return                                                            |
-|--------|-------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------|
-| GET    | `/api/<course_name>/student_token`              | read own personal token, issuing one on first call                 | `course`, `username`, `token`, `ci_variable`, `published_to_repo` |
-| POST   | `/api/<course_name>/student_token/publish`      | write own token into the CI/CD variables of own repository         | same as above                                                      |
-| POST   | `/api/<course_name>/student_token/rotate`       | issue a new token, invalidate the old one, re-publish it           | same as above                                                      |
+`<meta name="csrf-token">` tag; front-end code gets it via the `window.csrfHeaders()` helper.
+Requests authenticated with a course token are not affected.

@@ -168,14 +168,6 @@ class PingResponse(BaseModel):
     username: Optional[str] = None
 
 
-class StudentTokenResponse(BaseModel):
-    course: str
-    username: str
-    token: str
-    ci_variable: str
-    published_to_repo: bool = False
-
-
 class IsAdminResponse(BaseModel):
     rms_username: str
     is_admin: bool
