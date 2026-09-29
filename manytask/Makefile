@@ -32,7 +32,7 @@ clean-db:
 	docker compose -f $(DOCKER_COMPOSE_DEV) down -v
 	docker volume prune -f
 
-reset-dev: clean-db
+reset-dev: frontend-build clean-db
 	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: copy-common-config install-deps run-manytask-tests

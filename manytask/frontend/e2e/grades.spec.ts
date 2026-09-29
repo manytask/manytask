@@ -64,7 +64,11 @@ test('physical widths, pinning, sticky headers and edit reload preserve table st
   await width(task,175); await width(username,190);
   const scoreButton = page.getByRole('button',{name:/^Edit score add_cpp for /}).first();
   const editName = (await scoreButton.getAttribute('aria-label'))!.replace('Edit score add_cpp for ','');
-  await scoreButton.click(); await page.getByLabel('Score',{exact:true}).fill('37');
+  await scoreButton.click();
+  const scoreInput = page.getByLabel('Score',{exact:true});
+  const updatedScore = Number(await scoreInput.inputValue()) === 37 ? '38' : '37';
+  await expect(scoreInput).not.toHaveValue(updatedScore);
+  await scoreInput.fill(updatedScore);
   await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button',{name:`Edit score add_cpp for ${editName}`,exact:true})).toBeFocused();
@@ -74,9 +78,12 @@ test('physical widths, pinning, sticky headers and edit reload preserve table st
   await expect(page.getByRole('button',{name:'Show oldest first'})).toBeVisible();
   await width(username,190); await width(task,175);
   // A score may move the edited row due to total-score sorting; find it via real search.
-  await expect(page.getByRole('button',{name:`Edit score add_cpp for ${editName}`,exact:true})).toHaveText('37');
+  await expect(page.getByRole('button',{name:`Edit score add_cpp for ${editName}`,exact:true})).toHaveText(updatedScore);
   await page.getByRole('button',{name:`Edit grade for ${editName}`,exact:true}).click();
-  await page.getByLabel('Grade',{exact:true}).fill('4');
+  const gradeInput = page.getByLabel('Grade',{exact:true});
+  const updatedGrade = Number(await gradeInput.inputValue()) === 4 ? '5' : '4';
+  await expect(gradeInput).not.toHaveValue(updatedGrade);
+  await gradeInput.fill(updatedGrade);
   await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button',{name:`Edit grade for ${editName}`,exact:true})).toBeFocused();
@@ -84,7 +91,11 @@ test('physical widths, pinning, sticky headers and edit reload preserve table st
   await width(username,190); await width(task,175);
   await page.getByRole('button',{name:'Show personal info'}).click();
   await page.getByRole('button',{name:`Edit comment for ${editName}`,exact:true}).click();
-  await page.getByLabel('Comment',{exact:true}).fill('Browser "saved"\n<img onerror=alert(1)> &quot; &amp;');
+  const commentInput = page.getByLabel('Comment',{exact:true});
+  const safetyComment = 'Browser "saved"\n<img onerror=alert(1)> &quot; &amp;';
+  const updatedComment = await commentInput.inputValue() === safetyComment ? `${safetyComment}\nUpdated again` : safetyComment;
+  await expect(commentInput).not.toHaveValue(updatedComment);
+  await commentInput.fill(updatedComment);
   await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button',{name:`Edit comment for ${editName}`,exact:true})).toBeFocused();
@@ -93,10 +104,11 @@ test('physical widths, pinning, sticky headers and edit reload preserve table st
   await expect(page.getByRole('button',{name:'Expand rust'})).toBeVisible();
   await width(username,190); await width(task,175);
   await page.reload(); await page.getByRole('textbox',{name:'Search students'}).fill(editName);
-  await expect(page.getByRole('button',{name:`Edit grade for ${editName}`,exact:true})).toHaveText('4 *');
-  await expect(page.getByRole('button',{name:`Edit comment for ${editName}`,exact:true})).toHaveText('Browser "saved"\n<img onerror=alert(1)> &quot; &amp;');
+  await expect(page.getByRole('button',{name:`Edit score add_cpp for ${editName}`,exact:true})).toHaveText(updatedScore);
+  await expect(page.getByRole('button',{name:`Edit grade for ${editName}`,exact:true})).toHaveText(`${updatedGrade} *`);
+  await expect(page.getByRole('button',{name:`Edit comment for ${editName}`,exact:true})).toHaveText(updatedComment);
   await page.getByRole('button',{name:`Edit comment for ${editName}`,exact:true}).click();
-  await expect(page.getByLabel('Comment',{exact:true})).toHaveValue('Browser "saved"\n<img onerror=alert(1)> &quot; &amp;');
+  await expect(commentInput).toHaveValue(updatedComment);
   await page.getByRole('dialog').getByRole('button',{name:'Cancel'}).click();
   await expect(page.locator('.grades-table-scroll img')).toHaveCount(0);
   await page.getByRole('button',{name:'Dark Theme'}).click();

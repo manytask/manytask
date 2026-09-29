@@ -19,7 +19,15 @@ beforeEach(() => vi.stubGlobal('ResizeObserver', class {
   unobserve() {}
   disconnect() {}
 }));
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => {
+  vi.useFakeTimers({toFake: ['Date']});
+  // Fake Date only: userEvent and async UI work keep their real timers.
+  vi.setSystemTime(new Date(2026, 6, 1, 12));
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 it('submits the native create fields and a permitted namespace zero', () => {
   renderUi(<CreateCoursePage shared={makeSharedUi()} data={{...base, namespaces: []}} />);
@@ -62,17 +70,23 @@ it('preserves SourceCraft hidden group values and an error response input', () =
   expect(screen.getByLabelText('Registration Secret')).toHaveValue('draft-secret');
 });
 
-it('suggests namespace and semester paths without replacing edited repository fields', async () => {
+it.each([
+  [new Date(2026, 5, 30, 12), 'science/math/public-2026-spring',
+    'science/math/students-2026-spring', 'science/math2/students-2026-spring'],
+  [new Date(2026, 6, 1, 12), 'science/math/public-2026-fall',
+    'science/math/students-2026-fall', 'science/math2/students-2026-fall'],
+])('suggests semester paths at %s without replacing edited repository fields', async (date, publicRepo, studentsGroup, updatedGroup) => {
+  vi.setSystemTime(date);
   const user = userEvent.setup();
   renderUi(<CreateCoursePage shared={makeSharedUi()} data={{...base, values: {namespace_id: '4'}}} />);
   await user.type(screen.getByLabelText('Course Group'), 'math');
-  expect(screen.getByLabelText('Public Repo')).toHaveValue('science/math/public-2026-fall');
-  expect(screen.getByLabelText('Students Group')).toHaveValue('science/math/students-2026-fall');
+  expect(screen.getByLabelText('Public Repo')).toHaveValue(publicRepo);
+  expect(screen.getByLabelText('Students Group')).toHaveValue(studentsGroup);
   await user.clear(screen.getByLabelText('Public Repo'));
   await user.type(screen.getByLabelText('Public Repo'), 'custom/public');
   await user.type(screen.getByLabelText('Course Group'), '2');
   expect(screen.getByLabelText('Public Repo')).toHaveValue('custom/public');
-  expect(screen.getByLabelText('Students Group')).toHaveValue('science/math2/students-2026-fall');
+  expect(screen.getByLabelText('Students Group')).toHaveValue(updatedGroup);
   const form = screen.getByRole('button', {name: 'Create course'}).closest('form')!;
   expect(new FormData(form).get('namespace_id')).toBe('4');
   expect(fireEvent.submit(form)).toBe(false);

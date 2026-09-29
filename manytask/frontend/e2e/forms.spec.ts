@@ -43,16 +43,37 @@ test('signup variants and native signup finish/enrollment with real CSRF', async
 test('native profile, course save and instance user management persist', async ({page}) => {
   await asRole(page,'instance_admin');
   await page.getByRole('button',{name:'Change user info',exact:true}).click();
-  await page.getByRole('dialog').getByLabel('First name',{exact:true}).fill('Updated');
-  await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).click();
+  const firstName = page.getByRole('dialog').getByLabel('First name',{exact:true});
+  const updatedName = await firstName.inputValue() === 'Updated' ? 'Updated-Again' : 'Updated';
+  await expect(firstName).not.toHaveValue(updatedName);
+  await firstName.fill(updatedName);
+  await Promise.all([
+    page.waitForNavigation(),
+    page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).click(),
+  ]);
+  await page.reload();
   await page.getByRole('button',{name:'Change user info',exact:true}).click();
-  await expect(page.getByRole('dialog').getByLabel('First name',{exact:true})).toHaveValue('Updated');
+  await expect(firstName).toHaveValue(updatedName);
   await page.getByRole('dialog').getByRole('button',{name:'Cancel'}).click();
   await page.goto('/instance_admin/courses/sandbox/edit');
-  await page.getByLabel('Registration Secret',{exact:true}).fill('preview');
-  await page.getByRole('button',{name:'Save changes'}).click();
-  await page.goto('/instance_admin/courses/sandbox/edit');
-  await expect(page.getByLabel('Registration Secret',{exact:true})).toHaveValue('preview');
+  const registrationSecret = page.getByLabel('Registration Secret',{exact:true});
+  const originalSecret = await registrationSecret.inputValue();
+  const updatedSecret = originalSecret === 'browser-enrollment' ? 'browser-enrollment-again' : 'browser-enrollment';
+  await expect(registrationSecret).not.toHaveValue(updatedSecret);
+  try {
+    await registrationSecret.fill(updatedSecret);
+    await Promise.all([page.waitForNavigation(), page.getByRole('button',{name:'Save changes'}).click()]);
+    await page.goto('/instance_admin/courses/sandbox/edit');
+    await page.reload();
+    await expect(registrationSecret).toHaveValue(updatedSecret);
+  } finally {
+    // Other scenarios share this course's enrollment value, even after a failed assertion.
+    await page.goto('/instance_admin/courses/sandbox/edit');
+    await registrationSecret.fill(originalSecret);
+    await Promise.all([page.waitForNavigation(), page.getByRole('button',{name:'Save changes'}).click()]);
+    await page.goto('/instance_admin/courses/sandbox/edit');
+    await expect(registrationSecret).toHaveValue(originalSecret);
+  }
   await page.goto('/instance_admin/panel');
   await page.getByRole('button',{name:'Grant admin rights',exact:true}).click();
   await page.getByRole('dialog').getByLabel('Select user').selectOption('student229');
