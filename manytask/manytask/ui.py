@@ -22,14 +22,6 @@ MANIFEST_PATH = Path(__file__).parent / "static" / "dist" / ".vite" / "manifest.
 
 def frontend_assets() -> dict[str, Any]:
     """Resolve the Vite entry and CSS for the current hashed build."""
-    try:
-        manifest = json.loads(MANIFEST_PATH.read_text())
-        entry = manifest["src/main.tsx"]
-    except (FileNotFoundError, KeyError, json.JSONDecodeError) as error:
-        raise RuntimeError(
-            "Frontend assets are missing or invalid; run 'npm run build' in manytask/frontend"
-        ) from error
-
     css: list[str] = []
     visited: set[str] = set()
 
@@ -43,8 +35,15 @@ def frontend_assets() -> dict[str, Any]:
                 visited.add(name)
                 collect(manifest[name])
 
-    collect(entry)
-    return {"js": "/static/dist/" + entry["file"], "css": css}
+    try:
+        manifest = json.loads(MANIFEST_PATH.read_text())
+        entry = manifest["src/main.tsx"]
+        collect(entry)
+        return {"js": "/static/dist/" + entry["file"], "css": css}
+    except (FileNotFoundError, KeyError, TypeError, AttributeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "Frontend assets are missing or invalid; run 'npm run build' in manytask/frontend"
+        ) from error
 
 
 def _serialize_not_ready(context: Mapping[str, Any]) -> dict[str, Any]:
@@ -79,6 +78,20 @@ PAGE_SERIALIZERS: dict[str, tuple[str, PageSerializer]] = {
 }
 
 
+def _page_title(template_name: str, context: Mapping[str, Any]) -> str:
+    titles = {
+        "create_course.html": "Create New Course",
+        "instance_admin_panel.html": "Instance Admin panel",
+        "namespaces_list.html": "Namespaces",
+    }
+    if template_name == "edit_course.html":
+        name = getattr(context.get("course"), "course_name", context.get("course_name", ""))
+        return f"Edit Course: {name}"
+    if template_name == "namespace_panel.html":
+        return f"{getattr(context.get('namespace'), 'name', '')} - Namespace Panel"
+    return titles.get(template_name) or context.get("course_name") or "Manytask"
+
+
 def render_ui(template_name: str, **context: Any) -> str:
     entry = PAGE_SERIALIZERS.get(template_name)
     if entry is None:
@@ -90,4 +103,6 @@ def render_ui(template_name: str, **context: Any) -> str:
         "shared": serialize_shared(context),
         "data": serialize(context),
     }
-    return render_template("ui.html", payload=payload, assets=frontend_assets())
+    return render_template(
+        "ui.html", payload=payload, assets=frontend_assets(), title=_page_title(template_name, context)
+    )

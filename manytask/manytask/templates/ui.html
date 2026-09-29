@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+    <title>{{ title }}</title>
+    <link rel="icon" href="{{ payload.shared.favicon }}">
+    <meta name="robots" content="noindex">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     {% for href in assets.css %}<link rel="stylesheet" href="{{ href }}">{% endfor %}
 </head>

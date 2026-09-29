@@ -2,8 +2,8 @@ services:
 
     manytask:
         build:
-            context: ..
-            dockerfile: Dockerfile
+            context: ../..
+            dockerfile: manytask/Dockerfile
             target: app
         container_name: test-manytask
         network_mode: bridge
@@ -16,6 +16,7 @@ services:
             - "8081:5050"
         volumes:
             - ../manytask:/app/manytask
+            - ../manytask/static/dist:/app/manytask/static/dist:ro
             - ../.tmp/cache:/cache
         links:
             - postgres:postgres

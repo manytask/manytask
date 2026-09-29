@@ -148,3 +148,7 @@ scripts
 # Frontend dependencies and generated assets
 manytask/frontend/node_modules/
 manytask/manytask/static/dist/
+
+# Frontend browser-test artifacts
+manytask/frontend/playwright-report/
+manytask/frontend/test-results/

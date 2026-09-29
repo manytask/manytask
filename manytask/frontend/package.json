@@ -2,6 +2,7 @@
   "name": "manytask-frontend",
   "private": true,
   "type": "module",
+  "engines": {"node": ">=24"},
   "scripts": {
     "dev": "vite build --watch",
     "build": "tsc --noEmit && vite build",

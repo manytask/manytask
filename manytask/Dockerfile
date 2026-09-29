@@ -1,3 +1,12 @@
+FROM node:24-alpine AS frontend_builder
+
+WORKDIR /frontend
+COPY manytask/frontend/package.json manytask/frontend/package-lock.json ./
+RUN npm ci
+COPY manytask/frontend/ ./
+RUN npm run build
+
+
 FROM python:3.14-alpine AS app_builder
 
 WORKDIR /app
@@ -30,6 +39,7 @@ WORKDIR /app
 COPY --from=app_builder /app/.venv /app/.venv
 
 COPY manytask/manytask/ /app/manytask
+COPY --from=frontend_builder /manytask/static/dist/ /app/manytask/static/dist/
 COPY manytask/VERSION /app/VERSION
 
 ENV PATH="/app/.venv/bin:$PATH" \

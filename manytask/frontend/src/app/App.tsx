@@ -1,18 +1,23 @@
-import {InstanceAdminPage} from '../pages/admin/InstanceAdminPage';
-import {NamespacesPage} from '../pages/admin/NamespacesPage';
-import {NamespacePage} from '../pages/admin/NamespacePage';
+import {lazy, Suspense} from 'react';
 import type {InstanceAdminData, NamespacesData, NamespaceData} from '../pages/admin/types';
 import type {PageEnvelope} from './contracts';
-import {NotReadyPage} from '../pages/NotReadyPage';
-import {AuthPage, type AuthData} from '../pages/AuthPage';
-import {CoursesPage, type CoursesData} from '../pages/CoursesPage';
-import {AssignmentsPage, type AssignmentsData} from '../pages/AssignmentsPage';
-import {GradesPage} from '../pages/grades/GradesPage';
-import {CreateCoursePage} from '../pages/course-admin/CreateCoursePage';
-import {EditCoursePage} from '../pages/course-admin/EditCoursePage';
+import type {AuthData} from '../pages/AuthPage';
+import type {CoursesData} from '../pages/CoursesPage';
+import type {AssignmentsData} from '../pages/AssignmentsPage';
 import type {CourseFormData} from '../pages/course-admin/types';
 import type {GradesData} from '../pages/grades/types';
 import {AppShell} from './AppShell';
+
+const InstanceAdminPage = lazy(() => import('../pages/admin/InstanceAdminPage').then((module) => ({default: module.InstanceAdminPage})));
+const NamespacesPage = lazy(() => import('../pages/admin/NamespacesPage').then((module) => ({default: module.NamespacesPage})));
+const NamespacePage = lazy(() => import('../pages/admin/NamespacePage').then((module) => ({default: module.NamespacePage})));
+const NotReadyPage = lazy(() => import('../pages/NotReadyPage').then((module) => ({default: module.NotReadyPage})));
+const AuthPage = lazy(() => import('../pages/AuthPage').then((module) => ({default: module.AuthPage})));
+const CoursesPage = lazy(() => import('../pages/CoursesPage').then((module) => ({default: module.CoursesPage})));
+const AssignmentsPage = lazy(() => import('../pages/AssignmentsPage').then((module) => ({default: module.AssignmentsPage})));
+const GradesPage = lazy(() => import('../pages/grades/GradesPage').then((module) => ({default: module.GradesPage})));
+const CreateCoursePage = lazy(() => import('../pages/course-admin/CreateCoursePage').then((module) => ({default: module.CreateCoursePage})));
+const EditCoursePage = lazy(() => import('../pages/course-admin/EditCoursePage').then((module) => ({default: module.EditCoursePage})));
 
 type NotReadyData = {courseName: string; links: Array<{label: string; href: string}>};
 
@@ -69,5 +74,7 @@ export function App() {
     default:
       page = <main role="alert">This page is not supported by this frontend build.</main>;
   }
-  return <AppShell shared={envelope.shared}>{page}</AppShell>;
+  return <AppShell shared={envelope.shared}>
+    <Suspense fallback={<main role="status">Loading page…</main>}>{page}</Suspense>
+  </AppShell>;
 }
