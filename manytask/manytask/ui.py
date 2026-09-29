@@ -9,6 +9,8 @@ from flask import render_template, url_for
 
 from .ui_assignments import serialize as serialize_assignments
 from .ui_auth import serialize_create_project, serialize_signup, serialize_signup_finish, serialize_signup_yandex_id
+from .ui_course_admin import serialize_create as serialize_create_course
+from .ui_course_admin import serialize_edit as serialize_edit_course
 from .ui_courses import serialize as serialize_courses
 from .ui_grades import serialize as serialize_grades
 from .ui_shared import serialize_shared
@@ -68,6 +70,8 @@ PAGE_SERIALIZERS: dict[str, tuple[str, PageSerializer]] = {
     "courses.html": ("courses", serialize_courses),
     "tasks.html": ("assignments", serialize_assignments),
     "database.html": ("grades", serialize_grades),
+    "create_course.html": ("create-course", serialize_create_course),
+    "edit_course.html": ("edit-course", serialize_edit_course),
 }
 
 

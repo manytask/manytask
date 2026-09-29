@@ -1,6 +1,7 @@
 import json
 import os
 from http import HTTPStatus
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import gitlab
@@ -968,41 +969,107 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
 # ----- Course access table on the edit page -----
 
 
-def _get_edit_course_page(app, mock_gitlab_oauth):
-    """Open the course edit page as an instance admin and return the parsed HTML."""
+def _get_edit_course_page(app, mock_gitlab_oauth, course_users=None):
+    """Open the course edit page as an instance admin and return its page data."""
     CSRFProtect(app)  # the settings form renders a csrf_token
     app.storage_api.stored_user.instance_admin = True
     app.storage_api.course_admin = True  # required by the requires_course_admin guard
-    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: course_users or []
 
     with app.test_request_context(), app.test_client() as client:
         app.oauth = mock_gitlab_oauth
         set_session(client, build_test_session(include_manytask=True))
         response = client.get(url_for("instance_admin.edit_course", course_name=TEST_COURSE_NAME))
         assert response.status_code == HTTPStatus.OK
-        return BeautifulSoup(response.data, "html.parser")
+        soup = BeautifulSoup(response.data, "html.parser")
+        return json.loads(soup.find(id="manytask-page").text)["data"]
 
 
 def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
-    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+    data = _get_edit_course_page(app, mock_gitlab_oauth)
+    assert data["accessUrls"] == {
+        "users": f"/api/{TEST_COURSE_NAME}/access_users",
+        "courseAdmin": f"/api/{TEST_COURSE_NAME}/course_admin",
+    }
 
-    assert soup.find(id="course-access-table") is not None
-    assert soup.find(id="access-filter-value") is not None
-    assert soup.find(id="access-filter-clear") is not None
 
-
-def test_edit_course_renders_grant_course_admin_modal(app, mock_gitlab_oauth):
-    soup = _get_edit_course_page(app, mock_gitlab_oauth)
-
-    assert soup.find(id="grantCourseAdminModal") is not None
+def test_edit_course_serializes_enrolled_nonadmin_candidate(app, mock_gitlab_oauth):
+    member = SimpleNamespace(username="alice", first_name="Alice", last_name="A", email="private@example.com")
+    data = _get_edit_course_page(app, mock_gitlab_oauth, [(member, False)])
+    assert data["courseUsers"] == [{"username": "alice", "firstName": "Alice", "lastName": "A"}]
+    assert "private@example.com" not in str(data)
 
 
 def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
     """Program managers are managed on the namespace panel, not from the course page."""
-    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+    data = _get_edit_course_page(app, mock_gitlab_oauth)
+    assert "programManager" not in data.get("accessUrls", {})
 
-    assert soup.find(id="assignProgramManagerModal") is None
-    assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
+
+def test_create_course_native_post_namespace_zero_redirects(app, mock_gitlab_oauth):
+    app.storage_api.check_if_instance_admin = lambda _username: True
+    saved = []
+    app.storage_api.create_course = lambda settings: saved.append(settings) or True
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client, patch("manytask.web.validate_csrf"):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post("/instance_admin/courses/new", data={
+            "csrf_token": "token", "namespace_id": "0", "unique_course_name": "new-course",
+            "registration_secret": "join", "token": "admin-secret", "show_allscores": "on",
+            "course_group": "new-course", "course_public_repo": "new-course/public-2026-fall",
+            "course_students_group": "new-course/students-2026-fall", "default_branch": "main",
+        })
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location.endswith("/new-course/")
+    assert len(saved) == 1
+    assert saved[0].namespace_id is None
+    assert saved[0].token == "admin-secret"
+
+
+def test_create_course_native_post_regular_user_is_forbidden_before_rms(app, mock_gitlab_oauth):
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.check_if_instance_admin = lambda _username: False
+    with app.test_client() as client, patch.object(app.rms_api, "create_course_group") as create_group:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post("/instance_admin/courses/new", data={"namespace_id": "0"})
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    create_group.assert_not_called()
+
+
+def test_create_course_native_post_foreign_namespace_is_denied_before_rms(app, mock_gitlab_oauth):
+    app.oauth = mock_gitlab_oauth
+    app.create_course_labels = {}
+    app.storage_api.check_if_instance_admin = lambda _username: False
+    app.storage_api.get_namespace_admin_namespaces = lambda _username: [4]
+    with app.test_client() as client, patch("manytask.web.validate_csrf"), patch.object(
+        app.rms_api, "create_course_group"
+    ) as create_group:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post("/instance_admin/courses/new", data={"namespace_id": "999"})
+    assert response.status_code == HTTPStatus.OK
+    payload = json.loads(BeautifulSoup(response.data, "html.parser").find(id="manytask-page").text)
+    assert payload["shared"]["errorMessage"] == "Namespace not found or access denied"
+    create_group.assert_not_called()
+
+
+def test_edit_course_bad_csrf_keeps_form_values_and_server_token(app, mock_gitlab_oauth, mock_course):
+    app.oauth = mock_gitlab_oauth
+    mock_course.token = "server-token"
+    app.storage_api.course_admin = True
+    app.storage_api.get_course_users_with_admin_status = lambda _course: []
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post(f"/instance_admin/courses/{TEST_COURSE_NAME}/edit", data={
+            "csrf_token": "bad", "registration_secret": "draft", "token": "forged",
+            "gitlab_course_public_repo": "draft/public",
+        })
+    assert response.status_code == HTTPStatus.OK
+    soup = BeautifulSoup(response.data, "html.parser")
+    payload = json.loads(soup.find(id="manytask-page").text)
+    assert payload["shared"]["errorMessage"] == "CSRF Error"
+    assert payload["data"]["values"]["registration_secret"] == "draft"
+    assert payload["data"]["values"]["gitlab_course_public_repo"] == "draft/public"
+    assert payload["data"]["values"]["token"] == app.storage_api.get_course(TEST_COURSE_NAME).token
 
 
 def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):

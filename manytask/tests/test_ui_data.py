@@ -212,3 +212,87 @@ def test_grades_serializer_contains_only_routes_and_authorized_capabilities():
             "clearGradeOverride": "/api/a.b/grade/clear_override",
         },
     }
+
+
+def test_course_form_serializer_preserves_failed_post_without_course_context():
+    from manytask.api import bp as api_bp
+    from manytask.ui_course_admin import serialize_edit
+
+    app = Flask(__name__)
+    app.register_blueprint(instance_admin_bp)
+    app.register_blueprint(course_bp)
+    app.register_blueprint(api_bp)
+    with app.test_request_context(
+        "/instance_admin/courses/a.b/edit", method="POST",
+        data={"registration_secret": "draft", "gitlab_course_public_repo": "new/public", "token": "forged"},
+    ):
+        from flask import request
+
+        request.view_args = {"course_name": "a.b"}
+        data = serialize_edit({"error_message": "CSRF Error", "rms": "sourcecraft"})
+    assert data["action"] == "/instance_admin/courses/a.b/edit"
+    assert data["values"]["registration_secret"] == "draft"
+    assert data["values"]["gitlab_course_public_repo"] == "new/public"
+    assert "token" not in data["values"]
+    assert data["accessUrls"] is None
+    assert data["courseUsers"] == []
+
+
+def test_course_edit_serializer_allows_only_displayed_user_fields():
+    from manytask.api import bp as api_bp
+    from manytask.ui_course_admin import serialize_edit
+
+    app = Flask(__name__)
+    app.register_blueprint(instance_admin_bp)
+    app.register_blueprint(course_bp)
+    app.register_blueprint(api_bp)
+    course = SimpleNamespace(
+        course_name="a.b", namespace_id=4, registration_secret="secret", token="fixed",
+        gitlab_course_group="g", gitlab_course_public_repo="g/public",
+        gitlab_course_students_group="g/students", gitlab_default_branch="main",
+        status=SimpleNamespace(value="in_progress"), show_allscores=False,
+    )
+    user = SimpleNamespace(username="alice", first_name="Alice", last_name="A", email="private@example.com")
+    with app.test_request_context("/instance_admin/courses/a.b/edit"):
+        data = serialize_edit({"course": course, "course_users": [(user, False)]})
+    assert data["values"]["token"] == "fixed"
+    assert data["courseUsers"] == [{"username": "alice", "firstName": "Alice", "lastName": "A"}]
+    assert "private@example.com" not in str(data)
+    assert data["accessUrls"] == {
+        "users": "/api/a.b/access_users", "courseAdmin": "/api/a.b/course_admin",
+    }
+
+
+def test_course_create_serializer_keeps_unchecked_scores_after_failed_post():
+    from manytask.ui_course_admin import serialize_create
+
+    app = Flask(__name__)
+    app.register_blueprint(instance_admin_bp)
+    with app.test_request_context("/instance_admin/courses/new", method="POST", data={"namespace_id": "0"}):
+        data = serialize_create({"generated_token": "server-generated"})
+    assert data["showAllScores"] is False
+    assert data["values"]["token"] == "server-generated"
+
+
+def test_course_create_serializer_blocks_missing_namespace_path():
+    from flask import session
+
+    from manytask.ui_course_admin import serialize_create
+
+    app = Flask(__name__)
+    app.secret_key = "test"
+    app.register_blueprint(instance_admin_bp)
+    namespace = SimpleNamespace(id=4, name="Science", slug="science", gitlab_group_id=8)
+    app.storage_api = SimpleNamespace(
+        check_if_instance_admin=lambda _username: True,
+        get_all_namespaces=lambda: [namespace],
+    )
+
+    def fail_path(_group_id):
+        raise RuntimeError("RMS unavailable")
+
+    app.rms_api = SimpleNamespace(get_group_path_by_id=fail_path)
+    with app.test_request_context("/instance_admin/courses/new?namespace_id=4"):
+        session["manytask"] = {"username": "admin"}
+        data = serialize_create({"generated_token": "token"})
+    assert data["namespaceError"] == "Could not load namespace paths. Please refresh the page."

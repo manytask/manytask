@@ -656,7 +656,11 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
-            return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
+            return render_template(
+                "edit_course.html", course=course,
+                course_users=app.storage_api.get_course_users_with_admin_status(course_name),
+                error_message="CSRF Error", rms=app.app_config.rms,
+            )
 
         updated_settings = CourseConfig(
             course_name=course_name,
@@ -681,6 +685,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         return render_template(
             "edit_course.html",
             course=updated_settings,
+            course_users=app.storage_api.get_course_users_with_admin_status(course_name),
             error_message="Error while updating course",
             rms=app.app_config.rms,
         )

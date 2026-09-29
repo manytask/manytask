@@ -4,6 +4,9 @@ import {AuthPage, type AuthData} from '../pages/AuthPage';
 import {CoursesPage, type CoursesData} from '../pages/CoursesPage';
 import {AssignmentsPage, type AssignmentsData} from '../pages/AssignmentsPage';
 import {GradesPage} from '../pages/grades/GradesPage';
+import {CreateCoursePage} from '../pages/course-admin/CreateCoursePage';
+import {EditCoursePage} from '../pages/course-admin/EditCoursePage';
+import type {CourseFormData} from '../pages/course-admin/types';
 import type {GradesData} from '../pages/grades/types';
 import {AppShell} from './AppShell';
 
@@ -43,6 +46,12 @@ export function App() {
       break;
     case 'grades':
       page = <GradesPage shared={envelope.shared} data={envelope.data as GradesData} />;
+      break;
+    case 'create-course':
+      page = <CreateCoursePage shared={envelope.shared} data={envelope.data as CourseFormData} />;
+      break;
+    case 'edit-course':
+      page = <EditCoursePage shared={envelope.shared} data={envelope.data as CourseFormData} />;
       break;
     default:
       page = <main role="alert">This page is not supported by this frontend build.</main>;
