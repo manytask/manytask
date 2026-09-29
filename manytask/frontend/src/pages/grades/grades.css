@@ -6,4 +6,5 @@
 .grades-table-scroll th, .grades-table-scroll td { overflow-wrap: anywhere; }
 .grades-admin-row { color: var(--g-color-text-secondary); }
 .grades-override { background: var(--g-color-base-warning-light); padding: 2px 4px; border-radius: 3px; }
+.grades-cell-action { max-width: 100%; }
 .grades-pagination select { font: inherit; color: var(--g-color-text-primary); background: var(--g-color-base-background); border: 1px solid var(--g-color-line-generic); border-radius: 4px; padding: 5px; }

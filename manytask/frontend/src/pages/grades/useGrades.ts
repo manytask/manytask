@@ -17,14 +17,17 @@ export function useGrades(url: string): {data: GradesResponse | null; loading: b
       const next = await requestJson<GradesResponse>(url, '', {signal: controller.signal});
       if (!controller.signal.aborted) setData(next);
     } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Unable to load grades');
+      if (!controller.signal.aborted) {
+        setError(cause instanceof Error ? cause.message : 'Unable to load grades');
+        throw cause;
+      }
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
   }, [url]);
   useEffect(() => {
     setData(null);
-    void reload();
+    void reload().catch(() => {});
     return () => active.current?.abort();
   }, [reload]);
   return {data, loading, error, reload};
