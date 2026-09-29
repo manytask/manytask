@@ -1,0 +1,5 @@
+.admin-page { max-width: 1280px; margin: 0 auto; padding: 16px; }
+.admin-page section { margin-top: 28px; }
+.admin-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 12px; }
+.admin-controls .g-text-input { max-width: 320px; }
+.admin-page select, .g-dialog select { max-width: 100%; padding: 8px; color: var(--g-color-text-primary); background: var(--g-color-base-background); border: 1px solid var(--g-color-line-generic); border-radius: 6px; }

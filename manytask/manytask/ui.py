@@ -7,6 +7,7 @@ from typing import Any
 
 from flask import render_template, url_for
 
+from .ui_administration import serialize_instance, serialize_namespace, serialize_namespaces
 from .ui_assignments import serialize as serialize_assignments
 from .ui_auth import serialize_create_project, serialize_signup, serialize_signup_finish, serialize_signup_yandex_id
 from .ui_course_admin import serialize_create as serialize_create_course
@@ -62,6 +63,9 @@ def _serialize_not_ready(context: Mapping[str, Any]) -> dict[str, Any]:
 
 
 PAGE_SERIALIZERS: dict[str, tuple[str, PageSerializer]] = {
+    "instance_admin_panel.html": ("instance-admin", serialize_instance),
+    "namespaces_list.html": ("namespaces", serialize_namespaces),
+    "namespace_panel.html": ("namespace", serialize_namespace),
     "not_ready.html": ("not-ready", _serialize_not_ready),
     "signup.html": ("signup", serialize_signup),
     "signup_yandex_id.html": ("signup-yandex-id", serialize_signup_yandex_id),

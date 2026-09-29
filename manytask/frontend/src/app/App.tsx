@@ -1,3 +1,7 @@
+import {InstanceAdminPage} from '../pages/admin/InstanceAdminPage';
+import {NamespacesPage} from '../pages/admin/NamespacesPage';
+import {NamespacePage} from '../pages/admin/NamespacePage';
+import type {InstanceAdminData, NamespacesData, NamespaceData} from '../pages/admin/types';
 import type {PageEnvelope} from './contracts';
 import {NotReadyPage} from '../pages/NotReadyPage';
 import {AuthPage, type AuthData} from '../pages/AuthPage';
@@ -52,6 +56,15 @@ export function App() {
       break;
     case 'edit-course':
       page = <EditCoursePage shared={envelope.shared} data={envelope.data as CourseFormData} />;
+      break;
+    case 'instance-admin':
+      page = <InstanceAdminPage shared={envelope.shared} data={envelope.data as InstanceAdminData} />;
+      break;
+    case 'namespaces':
+      page = <NamespacesPage shared={envelope.shared} data={envelope.data as NamespacesData} />;
+      break;
+    case 'namespace':
+      page = <NamespacePage shared={envelope.shared} data={envelope.data as NamespaceData} />;
       break;
     default:
       page = <main role="alert">This page is not supported by this frontend build.</main>;

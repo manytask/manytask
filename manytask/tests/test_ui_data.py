@@ -296,3 +296,87 @@ def test_course_create_serializer_blocks_missing_namespace_path():
         session["manytask"] = {"username": "admin"}
         data = serialize_create({"generated_token": "token"})
     assert data["namespaceError"] == "Could not load namespace paths. Please refresh the page."
+
+
+def test_admin_serializers_allowlist_users_and_retain_namespace_course_fields():
+    from manytask.api import namespace_bp
+    from manytask.ui_administration import serialize_instance, serialize_namespace, serialize_namespaces
+
+    expected_course_count = 3
+    app = Flask(__name__)
+    app.register_blueprint(instance_admin_bp)
+    app.register_blueprint(course_bp)
+    app.register_blueprint(namespace_bp)
+    user = SimpleNamespace(
+        user_id=2,
+        username="alice",
+        first_name="Alice",
+        last_name="A",
+        instance_admin=True,
+        rms_id=42,
+        email="private@example.com",
+        token="private-token",
+    )
+    namespace = SimpleNamespace(id=1, name="Учебный</script>", slug="study", description=None, gitlab_group_id=12)
+    ns_dict = {
+        "id": 1,
+        "name": namespace.name,
+        "slug": "study",
+        "description": None,
+        "gitlab_group_id": 12,
+        "users_count": 1,
+        "courses_count": 3,
+    }
+    with app.test_request_context("/instance_admin/panel"):
+        data = serialize_instance(
+            {
+                "users": [user],
+                "namespaces": [ns_dict],
+                "courses": [{"name": "Math", "url": "math", "namespace_slug": "study"}],
+            }
+        )
+        assert data["users"] == [
+            {"id": 2, "username": "alice", "firstName": "Alice", "lastName": "A", "instanceAdmin": True}
+        ]
+        assert data["courses"] == [
+            {"name": "Math", "href": "/instance_admin/courses/math/edit", "namespaceSlug": "study"}
+        ]
+        assert data["namespaceApiUrl"] == "/api/namespaces"
+        assert serialize_namespaces({"namespaces": [ns_dict]})["namespaces"][0]["coursesCount"] == expected_course_count
+        panel = serialize_namespace(
+            {
+                "namespace": namespace,
+                "users": [
+                    {"id": 2, "username": "alice", "rms_id": 42, "role": "namespace_admin", "token": "private-token"}
+                ],
+                "available_users": [user],
+                "courses": [
+                    {
+                        "id": 4,
+                        "name": "math",
+                        "url": "/math",
+                        "owners_string": "alice",
+                        "status": "running",
+                        "gitlab_course_group": "g/math",
+                    }
+                ],
+            }
+        )
+        assert panel["users"] == [{"id": 2, "username": "alice", "rmsId": 42, "role": "namespace_admin"}]
+        assert panel["availableUsers"] == [{"id": 2, "username": "alice", "rmsId": 42}]
+        assert panel["courses"] == [
+            {
+                "id": 4,
+                "name": "math",
+                "href": "/math",
+                "owners": "alice",
+                "status": "running",
+                "gitlabGroup": "g/math",
+                "editHref": "/instance_admin/courses/math/edit",
+            }
+        ]
+        assert panel["namespace"]["usersCount"] == 1
+        assert panel["usersUrl"] == "/api/namespaces/1/users"
+        assert panel["createCourseUrl"] == "/instance_admin/courses/new?namespace_id=1"
+    assert "private-token" not in str(data) + str(panel)
+    assert "private@example.com" not in str(data) + str(panel)

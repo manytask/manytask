@@ -15,6 +15,7 @@ from wtforms import ValidationError
 from manytask import ui
 from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
+from manytask.api import namespace_bp
 from manytask.course import CourseStatus
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
@@ -63,6 +64,7 @@ def app(mock_storage_api):
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(namespace_bp)
     app.register_blueprint(instance_admin_bp)
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
@@ -608,6 +610,8 @@ def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_
             response = client.get("/instance_admin/namespaces/2")
 
     assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"manytask-page" not in response.data
+    assert b"availableUsers" not in response.data
 
 
 def test_not_ready(app):
@@ -1201,3 +1205,20 @@ def test_grades_payload_and_api_keep_personal_data_admin_only(app, mock_gitlab_o
     assert rows[0]["total_score"] == -3  # noqa: PLR2004
     for field in ("first_name", "last_name", "repo_url", "comment"):
         assert (field in rows[0]) is is_admin
+
+
+def test_instance_admin_invalid_csrf_returns_react_error_without_private_users(app, mock_gitlab_oauth):
+    app.storage_api.stored_user.instance_admin = True
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client, patch("manytask.web.validate_csrf", side_effect=ValidationError("expired")):
+        with client.session_transaction() as sess:
+            sess.update(build_test_session(include_manytask=True))
+        response = client.post(
+            "/instance_admin/panel", data={"csrf_token": "bad", "action": "grant", "username": "target"}
+        )
+    assert response.status_code == HTTPStatus.OK
+    payload = ui_payload(response)
+    assert payload["page"] == "instance-admin"
+    assert payload["shared"]["errorMessage"] == "CSRF Error"
+    assert payload["data"]["users"] == []
+    assert payload["data"]["namespaces"] == []
