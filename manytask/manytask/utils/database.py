@@ -34,9 +34,7 @@ def get_database_table_data(
     for group in storage_api.get_groups(course_name, enabled=True, started=True):
         for task in group.tasks:
             if task.enabled:
-                all_tasks.append(
-                    {"name": task.name, "score": 0, "group": group.name, "group_start": group.start.isoformat()}
-                )
+                all_tasks.append({"name": task.name, "score": 0, "group": group.name})
                 if not task.is_bonus:
                     max_score += task.score
                 if task.is_large:

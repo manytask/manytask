@@ -140,24 +140,6 @@ def app():  # noqa: C901
     return app
 
 
-def test_database_tasks_include_their_own_group_start(app):
-    first_group = app.storage_api.groups[0]
-    first_group.start = datetime.datetime.fromisoformat("2026-09-01T12:00:00+03:00")
-    second_group = app.storage_api.MockGroup(first_group.tasks[1:])
-    second_group.name = "second_group"
-    second_group.start = datetime.datetime.fromisoformat("2026-09-10T09:00:00+00:00")
-    first_group.tasks = first_group.tasks[:1]
-    app.storage_api.groups.append(second_group)
-
-    course = app.storage_api.get_course("test_course")
-    result = get_database_table_data(app, course)
-    assert [(task["name"], task["group"], task["group_start"]) for task in result["tasks"]] == [
-        (TASK_1, "test_group", "2026-09-01T12:00:00+03:00"),
-        (TASK_2, "second_group", "2026-09-10T09:00:00+00:00"),
-        (TASK_LARGE, "second_group", "2026-09-10T09:00:00+00:00"),
-    ]
-
-
 def test_get_database_table_data(app):
     """Test database table data without admin data (non-admin view)"""
     expected_tasks_count = 3

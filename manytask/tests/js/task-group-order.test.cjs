@@ -49,18 +49,18 @@ test('toggles with one click and persists both choices separately for each user 
     assert.equal(assignments.value, 'asc');
     assert.equal(assignments.textContent, 'Show newest first');
 
-    const scores = control();
-    load(storage).initTaskGroupOrder(scores);
-    assert.equal(scores.value, 'asc');
-    assert.equal(scores.textContent, 'Show newest first');
+    const reopenedAssignments = control();
+    load(storage).initTaskGroupOrder(reopenedAssignments);
+    assert.equal(reopenedAssignments.value, 'asc');
+    assert.equal(reopenedAssignments.textContent, 'Show newest first');
     for (const other of [control('bob'), control('alice', 'cpp')]) {
         load(storage).initTaskGroupOrder(other);
         assert.equal(other.value, 'desc');
     }
 
-    scores.dispatchEvent(new Event('click'));
-    assert.equal(scores.value, 'desc');
-    assert.equal(scores.textContent, 'Show oldest first');
+    reopenedAssignments.dispatchEvent(new Event('click'));
+    assert.equal(reopenedAssignments.value, 'desc');
+    assert.equal(reopenedAssignments.textContent, 'Show oldest first');
     const reloaded = control();
     load(storage).initTaskGroupOrder(reloaded);
     assert.equal(reloaded.value, 'desc');

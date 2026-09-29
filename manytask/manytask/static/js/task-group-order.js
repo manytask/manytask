@@ -1,4 +1,4 @@
-// One preference for both course views, isolated by user and course in this browser.
+// Assignments preference, isolated by user and course in this browser.
 function initTaskGroupOrder(button) {
     const key = 'manytask:task-group-order:' + JSON.stringify([
         button.dataset.username, button.dataset.courseName,

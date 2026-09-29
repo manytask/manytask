@@ -30,7 +30,10 @@
         {{ course_status.value.replace("_", " ").title() }}
     </span>
     <div class="d-flex flex-wrap align-items-center gap-2">
-        {% include "_task_group_order.html" %}
+        <button id="task-group-order" type="button" class="btn btn-outline-secondary btn-sm" value="desc"
+                data-username="{{ username }}" data-course-name="{{ course_name }}">
+            Show oldest first
+        </button>
         <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
             Show past deadlines
         </button>

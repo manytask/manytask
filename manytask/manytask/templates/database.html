@@ -7,10 +7,8 @@
         <div class="spinner-border text-secondary" style="width: 3rem; height: 3rem;"></div>
     </div>
     <div class="container-fluid position-relative">
-        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="mb-0">Course Database</h2>
-
-            {% include "_task_group_order.html" %}
 
             {% if is_course_admin %}
             <div class="d-flex gap-2">
@@ -127,7 +125,6 @@
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/task-group-order.js') }}"></script>
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
           id="light-theme">
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
@@ -381,9 +378,6 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
-            const orderButton = document.getElementById('task-group-order');
-            initTaskGroupOrder(orderButton);
-
             {% if is_course_admin %}
                 editModal = new bootstrap.Modal(document.getElementById('editModal'));
                 editCommentModal = new bootstrap.Modal(document.getElementById('editCommentModal'));
@@ -614,18 +608,17 @@
                         columns[1].width = 60;
                     }
 
-                    const taskGroups = new Map();
+                    const taskGroups = {};
 
                     data.tasks.forEach(task => {
                         const groupName = task.group || 'ungrouped';
-                        if (!taskGroups.has(groupName)) {
-                            taskGroups.set(groupName, {start: task.group_start, tasks: []});
+                        if (!taskGroups[groupName]) {
+                            taskGroups[groupName] = [];
                         }
-                        taskGroups.get(groupName).tasks.push(task);
+                        taskGroups[groupName].push(task);
                     });
 
-                    const taskGroupColumns = [];
-                    taskGroups.forEach(({start, tasks}, groupName) => {
+                    Object.entries(taskGroups).forEach(([groupName, tasks]) => {
                         // Mini-columns for each task
                         const groupColumns = tasks.map(task => ({
                             title: task.name,
@@ -641,7 +634,7 @@
                         }));
 
                         // Add grouped columns
-                        taskGroupColumns.push({start, definition: {
+                        columns.push({
                             title: `${groupName} ▼`,
                             columns: groupColumns,
                             headerClick: function (e, column) {
@@ -691,17 +684,12 @@
 
                                 table.redraw(true);
                             }
-                        }});
+                        });
                     });
-
-                    function orderedColumns() {
-                        return columns.concat(sortTaskGroups(taskGroupColumns, orderButton.value)
-                            .map(group => group.definition));
-                    }
 
                     window.tabulatorTable = new Tabulator("#database-table", {
                         data: data.students,
-                        columns: orderedColumns(),
+                        columns: columns,
                         layout: "fitDataTable",
                         height: "70vh",
                         pagination: true,
@@ -990,33 +978,6 @@
                         });
                     }
                     {% endif %}
-                    orderButton.addEventListener('click', () => {
-                        const table = window.tabulatorTable;
-                        const sorters = table.getSorters().map(({field, dir}) => ({column: field, dir}));
-                        const columnState = new Map(table.getColumns().map(column => [column.getField(), {
-                            visible: column.isVisible(), width: column.getWidth(),
-                        }]));
-                        const collapsedGroups = new Set(Array.from(taskGroups.keys()).filter(name =>
-                            columnState.get(`${name}_collapsed`)?.visible));
-
-                        table.setColumns(orderedColumns());
-                        // Recreate summaries with the new column components so expanding still works.
-                        table.getColumns(true).forEach(column => {
-                            const definition = column.getDefinition();
-                            if (definition.columns && collapsedGroups.has(definition.title.replace(' ▼', ''))) {
-                                definition.headerClick(null, column);
-                            }
-                        });
-                        // Collapsing groups redraws the table, so restore widths afterwards.
-                        table.getColumns().forEach(column => {
-                            const state = columnState.get(column.getField());
-                            if (state) {
-                                column.setWidth(state.width);
-                                if (!state.visible) column.hide();
-                            }
-                        });
-                        table.setSort(sorters);
-                    });
                 })
                 .catch(error => {
                     console.error('Error creating table:', error);
