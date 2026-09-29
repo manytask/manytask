@@ -6,7 +6,9 @@
 .grades-actions, .grades-search, .grades-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .grades-search { width: min(100%, 520px); flex-wrap: nowrap; }
 .grades-search .g-text-input { flex: 1; }
-.grades-table-scroll { box-sizing: border-box; max-width: 100%; min-height: 320px; max-height: max(420px, calc(100vh - 350px)); overflow: auto; margin-bottom: 16px; border: 1px solid var(--g-color-line-generic); border-radius: 12px; background: var(--g-color-base-float); }
+/* Clip native scrollbar tracks along with the table at the rounded outer edge. */
+.grades-table-frame { max-width: 100%; overflow: hidden; margin-bottom: 16px; border: 1px solid var(--g-color-line-generic); border-radius: 12px; }
+.grades-table-scroll { box-sizing: border-box; max-width: 100%; min-height: 320px; max-height: max(420px, calc(100vh - 350px)); overflow: auto; background: var(--g-color-base-float); scrollbar-width: thin; scrollbar-color: var(--g-color-text-hint) var(--g-color-base-float); scrollbar-gutter: stable; }
 .grades-table-scroll table { background: var(--g-color-base-float); }
 .grades-table-scroll a { color: var(--g-color-text-link); }
 .grades-table-scroll a:hover { color: var(--g-color-text-link-hover); }
@@ -31,6 +33,7 @@
   .grades-heading { margin-bottom: 16px; }
   .grades-controls { padding: 12px; }
   .grades-search { width: 100%; }
-  .grades-table-scroll { min-height: 360px; max-height: calc(100vh - 240px); border-radius: 10px; }
+  .grades-table-frame { border-radius: 10px; }
+  .grades-table-scroll { min-height: 360px; max-height: calc(100vh - 240px); }
   .grades-pagination { align-items: stretch; }
 }

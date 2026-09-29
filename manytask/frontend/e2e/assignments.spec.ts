@@ -1,6 +1,40 @@
 import {test, expect, asRole, chooseTheme} from './fixtures';
 import type {AssignmentsData} from '../src/pages/AssignmentsPage';
 
+test('assignment navigation stays visible while scrolling on desktop and mobile', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 600});
+  await asRole(page);
+  await page.goto('/sandbox/');
+  await expect(page.locator('.assignment-group').first()).toBeVisible();
+  const header = page.locator('.app-topbar');
+
+  const checkScrolledHeader = async () => {
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+    await expect.poll(() => header.evaluate((element) => element.getBoundingClientRect().top)).toBe(0);
+    const home = header.getByRole('link', {name: 'Manytask', exact: true});
+    expect(await home.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+    })).toBe(true);
+  };
+
+  await checkScrolledHeader();
+  await page.getByRole('button', {name: 'Collapse navigation'}).click();
+  await checkScrolledHeader();
+  const sidebar = (await page.getByRole('complementary', {name: 'Application sidebar'}).boundingBox())!;
+  expect((await header.boundingBox())!.x).toBe(sidebar.x + sidebar.width);
+
+  await page.setViewportSize({width: 375, height: 600});
+  await chooseTheme(page, 'dark');
+  await checkScrolledHeader();
+  await page.getByRole('button', {name: 'Open navigation'}).click();
+  await expect(page.getByRole('dialog', {name: 'Navigation'})).toBeVisible();
+  await page.getByRole('button', {name: 'Close navigation'}).click();
+  await header.getByRole('link', {name: 'Manytask', exact: true}).click();
+  await expect(page.getByRole('heading', {name: 'List of courses'})).toBeVisible();
+});
+
 test('single-task groups stay compact and retain task links on desktop and mobile', async ({page}) => {
   await asRole(page);
   await page.goto('/sandbox/');

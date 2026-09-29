@@ -17,9 +17,29 @@
 .courses-list { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
 .courses-list ul { box-sizing: border-box; width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 .courses-list li { box-sizing: border-box; min-height: 84px; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 16px; border: 1px solid var(--g-color-line-generic); border-radius: 12px; background: var(--g-color-base-float); }
-.courses-list li:has(a):hover { border-color: var(--g-color-line-generic-hover); background: var(--g-color-base-float-hover); }
+.courses-list li:has(a) {
+  position: relative;
+  transition: transform 180ms ease-out, border-color 180ms ease-out, background-color 180ms ease-out, box-shadow 180ms ease-out;
+}
+.courses-list li:has(a):hover,
+.courses-list li:has(a:focus-visible) {
+  border-color: color-mix(in srgb, var(--g-color-text-link) 55%, var(--g-color-line-generic));
+  background: color-mix(in srgb, var(--g-color-text-link) 4%, var(--g-color-base-float));
+  box-shadow: 0 8px 24px -8px var(--g-color-sfx-shadow), 0 0 0 1px color-mix(in srgb, var(--g-color-text-link) 12%, transparent);
+}
+.courses-list li:has(a:focus-visible) { transform: translateY(-3px); }
+@media (hover: hover) {
+  .courses-list li:has(a):hover { transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .courses-list li:has(a),
+  .courses-list li:has(a):hover,
+  .courses-list li:has(a:focus-visible) { transition: none; transform: none; }
+}
 .courses-list li a { font-size: 16px; font-weight: 600; line-height: 22px; text-decoration: none; overflow-wrap: anywhere; }
-.courses-list li a:hover { color: #64aeff; text-decoration: underline; }
+/* Extend the native link across the card, including its one-pixel border. */
+.courses-list li a::after { content: ''; position: absolute; inset: -1px; border-radius: 12px; }
+.courses-list li a:hover { color: #64aeff; }
 .courses-list li [data-course-status] { width: max-content; max-width: 100%; padding: 2px 8px; border-radius: 10px; font-size: 12px; line-height: 16px; text-transform: capitalize; }
 .courses-table-section, .courses-namespaces { box-sizing: border-box; padding: 20px; border: 1px solid var(--g-color-line-generic); border-radius: 12px; background: var(--g-color-base-float); }
 .courses-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }

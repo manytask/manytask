@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from flask import Flask
+import pytest
+from flask import Flask, session
 
 from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
 from manytask.course import ManytaskDeadlinesType
@@ -182,6 +183,30 @@ def test_shared_navigation_includes_instance_admin_panel_from_course_context():
     ]
     assert shared["capabilities"]["instanceAdmin"] is True
     assert shared["capabilities"]["namespaceAdmin"] is False
+
+
+@pytest.mark.parametrize("username", ["admin", "student", None])
+def test_shared_navigation_retains_session_admin_without_course_or_role_context(username):
+    from manytask.ui_shared import serialize_shared
+
+    app = Flask(__name__)
+    app.secret_key = "test"
+    app.register_blueprint(root_bp)
+    app.register_blueprint(instance_admin_bp)
+    users = {
+        "admin": SimpleNamespace(first_name="Admin", last_name="", instance_admin=True),
+        "student": SimpleNamespace(first_name="Student", last_name="", instance_admin=False),
+    }
+    app.storage_api = SimpleNamespace(get_stored_user_by_username=users.__getitem__)
+    with app.test_request_context("/instance_admin/panel"):
+        if username:
+            session["manytask"] = {"username": username}
+        shared = serialize_shared({})
+
+    is_admin = username == "admin"
+    assert shared["capabilities"]["instanceAdmin"] is is_admin
+    admin_links = [link for link in shared["navigation"] if link["label"] == "Instance Admin panel"]
+    assert admin_links == ([{"label": "Instance Admin panel", "href": "/instance_admin/panel"}] if is_admin else [])
 
 
 def test_grades_serializer_contains_only_routes_and_authorized_capabilities():

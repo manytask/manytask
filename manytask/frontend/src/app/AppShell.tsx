@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState, type ReactNode} from 'react';
-import {ArrowRightFromSquare, Bars, ChartColumn, ChevronLeft, ChevronRight, Gear, House, ListCheck, Moon, Person, Xmark} from '@gravity-ui/icons';
+import {ArrowRightFromSquare, Bars, ChartColumn, ChevronLeft, ChevronRight, CodeTrunk, House, Layers3Diagonal, LayoutCellsLarge, Link, ListCheck, Moon, PencilToSquare, Person, Rocket, Shield, Xmark} from '@gravity-ui/icons';
 import {Alert, Button, Icon, Label, Text} from '@gravity-ui/uikit';
 
 import {ProfileDialog} from '../shared/ProfileDialog';
@@ -34,6 +34,18 @@ const ACTIVE_NAV_LABELS: Partial<Record<PageName, string>> = {
   'instance-admin': 'Instance Admin panel',
 };
 
+const NAVIGATION_ICONS = new Map<string, typeof House>([
+  ['courses', House],
+  ['assignments', ListCheck],
+  ['my repo', CodeTrunk],
+  ['my submits', Rocket],
+  ['all scores', LayoutCellsLarge],
+  ['edit course', PencilToSquare],
+  ['instance admin panel', Shield],
+  ['namespaces', Layers3Diagonal],
+  ['namespace', Layers3Diagonal],
+]);
+
 function savedCollapsed(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true';
@@ -51,12 +63,7 @@ function mobileViewport(): boolean {
 }
 
 function NavigationIcon({label}: {label: string}) {
-  const normalized = label.toLowerCase();
-  const data = normalized === 'courses' ? House
-    : normalized === 'assignments' ? ListCheck
-      : normalized.includes('score') ? ChartColumn
-        : normalized.includes('edit') || normalized.includes('admin') || normalized.includes('namespace') ? Gear
-          : ArrowRightFromSquare;
+  const data = NAVIGATION_ICONS.get(label.toLowerCase()) ?? Link;
   return <Icon data={data} size={18} />;
 }
 
@@ -217,7 +224,7 @@ export function AppShell({shared, page, children}: {shared: SharedUiData; page?:
       {isMobile && mobileOpen && <button className="app-sidebar-overlay" type="button" aria-label="Dismiss navigation" onClick={closeMobileNavigation} />}
       {sidebar}
       <div className="app-workspace">
-        <header className="app-topbar">
+        <header className={`app-topbar${page === 'assignments' ? ' app-topbar_sticky' : ''}`}>
           <Button ref={openerRef} className="app-mobile-menu" view="flat" size="l" aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
             <Icon data={Bars} size={20} />
           </Button>

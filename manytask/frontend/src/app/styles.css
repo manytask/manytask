@@ -334,6 +334,12 @@ body {
   background: var(--g-color-base-background);
 }
 
+.app-topbar_sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 .app-breadcrumbs {
   display: flex;
   min-width: 0;

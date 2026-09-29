@@ -179,8 +179,10 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
     {loading && <div role="status" aria-label="Loading grades"><Loader /></div>}
     {error && <div role="alert"><Alert theme="danger" title="Unable to load grades" message={error} /><Button onClick={() => void reload().catch(() => {})}>Retry</Button></div>}
     {data && <>
-      <div className="grades-table-scroll" ref={tableScrollRef}>
-        <Table table={table} size="s" verticalAlign="middle" attributes={{style: {width: table.getTotalSize(), tableLayout: 'fixed'}}} headerCellAttributes={(header) => ({style: {width: header.getSize()}})} stickyHeader rowClassName={(row) => row?.original.is_admin ? 'grades-admin-row' : ''} />
+      <div className="grades-table-frame">
+        <div className="grades-table-scroll" ref={tableScrollRef}>
+          <Table table={table} size="s" verticalAlign="middle" attributes={{style: {width: table.getTotalSize(), tableLayout: 'fixed'}}} headerCellAttributes={(header) => ({style: {width: header.getSize()}})} stickyHeader rowClassName={(row) => row?.original.is_admin ? 'grades-admin-row' : ''} />
+        </div>
       </div>
       {filtered.length === 0 && <p>No students found</p>}
       <div className="grades-pagination">

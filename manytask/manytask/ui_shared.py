@@ -52,7 +52,10 @@ def serialize_shared(context: Mapping[str, Any]) -> dict[str, Any]:
         )
 
     instance_admin = bool(
-        context.get("is_instance_admin") or (course and current_app.debug) or course_role("instance_admin")
+        context.get("is_instance_admin")
+        or getattr(current_user, "instance_admin", False)
+        or (course and current_app.debug)
+        or course_role("instance_admin")
     )
     namespace_admin = bool(context.get("is_namespace_admin") or course_role("namespace_admin"))
     role_admin = instance_admin or namespace_admin

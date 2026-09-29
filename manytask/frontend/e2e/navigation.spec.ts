@@ -37,7 +37,13 @@ for (const role of ['student', 'course_admin', 'namespace_admin', 'instance_admi
       await page.goto('/instance_admin/courses/sandbox/edit'); expect((await payload(page)).page).toBe('edit-course');
     }
     if (role === 'instance_admin') {
-      await page.goto('/instance_admin/panel'); expect((await payload(page)).page).toBe('instance-admin');
+      const adminLink = page.getByRole('navigation', {name: 'Main navigation'}).getByRole('link', {name: 'Instance Admin panel', exact: true});
+      await adminLink.click();
+      expect((await payload(page)).page).toBe('instance-admin');
+      await expect(adminLink).toBeVisible();
+      await expect(adminLink).toHaveAttribute('aria-current', 'page');
+      await page.reload();
+      await expect(adminLink).toHaveAttribute('aria-current', 'page');
     }
     await page.goto('/pending/not_ready'); expect((await payload(page)).page).toBe('not-ready');
     await expect(page).toHaveTitle('pending');
