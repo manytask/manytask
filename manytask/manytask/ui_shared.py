@@ -35,8 +35,23 @@ def serialize_shared(context: Mapping[str, Any]) -> dict[str, Any]:
     user_session = session.get("manytask", {})
     username = context.get("username") or user_session.get("username") or ("guest" if current_app.debug else None)
     course = _course_data(context)
-    can_edit_course = bool(context.get("can_edit_course") or context.get("is_course_admin"))
-    instance_admin = bool(context.get("is_instance_admin"))
+    has_role = context.get("has_role")
+
+    def course_role(role: str) -> bool:
+        return bool(
+            course is not None
+            and callable(has_role)
+            and context.get("app") is not None
+            and username is not None
+            and has_role(username, [role], context["app"], course["name"])
+        )
+
+    instance_admin = bool(
+        context.get("is_instance_admin") or (course and current_app.debug) or course_role("instance_admin")
+    )
+    namespace_admin = bool(context.get("is_namespace_admin") or course_role("namespace_admin"))
+    role_admin = instance_admin or namespace_admin
+    can_edit_course = bool(context.get("can_edit_course") or role_admin)
     can_create_courses = bool(context.get("can_create_courses"))
 
     navigation = [{"label": "Courses", "href": url_for("root.index")}]
@@ -46,7 +61,7 @@ def serialize_shared(context: Mapping[str, Any]) -> dict[str, Any]:
             href = context.get(key)
             if isinstance(href, str):
                 navigation.append({"label": label, "href": href})
-        if context.get("show_allscores"):
+        if context.get("show_allscores") or role_admin:
             navigation.append(
                 {"label": "All Scores", "href": url_for("course.show_database", course_name=course["name"])}
             )
@@ -94,7 +109,7 @@ def serialize_shared(context: Mapping[str, Any]) -> dict[str, Any]:
         },
         "capabilities": {
             "instanceAdmin": instance_admin,
-            "namespaceAdmin": bool(context.get("is_namespace_admin")),
+            "namespaceAdmin": namespace_admin,
             "courseAdmin": bool(context.get("is_course_admin")),
             "canCreateCourses": can_create_courses,
             "canEditCourse": can_edit_course,

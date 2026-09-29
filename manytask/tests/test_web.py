@@ -248,13 +248,12 @@ def test_course_page_payload_includes_authorized_score_maximum(
     }
 
 
-@pytest.mark.parametrize("page", ["", "database"])
-def test_course_pages_offer_personal_task_order(app, mock_gitlab_oauth, page):
+def test_legacy_database_page_offers_personal_task_order(app, mock_gitlab_oauth):
     CSRFProtect(app)
     app.oauth = mock_gitlab_oauth
     with app.test_client() as client:
         set_session(client, build_test_session(include_manytask=True))
-        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+        response = client.get(f"/{TEST_COURSE_NAME}/database")
     assert response.status_code == HTTPStatus.OK
     soup = BeautifulSoup(response.data, "html.parser")
     control = soup.find("button", id="task-group-order")
@@ -263,6 +262,19 @@ def test_course_pages_offer_personal_task_order(app, mock_gitlab_oauth, page):
     assert control.get_text(strip=True) == "Show oldest first"
     assert control["data-username"] == TEST_USERNAME
     assert control["data-course-name"] == TEST_COURSE_NAME
+
+
+def test_course_assignments_page_uses_react_payload(app, mock_gitlab_oauth):
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+    assert response.status_code == HTTPStatus.OK
+    payload = ui_payload(response)
+    assert payload["page"] == "assignments"
+    assert payload["data"]["courseName"] == TEST_COURSE_NAME
+    assert payload["data"]["groups"] == []
+    assert payload["shared"]["username"] == TEST_USERNAME
 
 
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
@@ -690,6 +702,9 @@ def ui_payload(response):
 
 def check_admin_in_data(response, check_true):
     assert response.status_code == HTTPStatus.OK
+    if BeautifulSoup(response.data, "html.parser").select_one("#manytask-page"):
+        assert ui_payload(response)["shared"]["capabilities"]["courseAdmin"] is check_true
+        return
     if check_true:
         assert b'class="adm-badge' in response.data
     else:

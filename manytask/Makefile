@@ -14,7 +14,7 @@ MANYTASK_CONFIG_OUT ?= .manytask.yml
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests run-js-tests
+.PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests run-js-tests run-frontend-tests
 
 check: lint test
 
@@ -40,10 +40,13 @@ test: copy-common-config install-deps run-manytask-tests
 run-js-tests:
 	node --test tests/js/*.test.cjs
 
-run-manytask-tests: run-js-tests
+run-frontend-tests:
+	npm --prefix frontend test
+
+run-manytask-tests: run-js-tests run-frontend-tests
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TEST_ARGS)
 
-test-colima: copy-common-config install-deps run-js-tests
+test-colima: copy-common-config install-deps run-js-tests run-frontend-tests
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
 	uv run python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TEST_ARGS)
 
