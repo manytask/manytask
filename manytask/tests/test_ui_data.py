@@ -182,3 +182,33 @@ def test_shared_navigation_includes_instance_admin_panel_from_course_context():
     ]
     assert shared["capabilities"]["instanceAdmin"] is True
     assert shared["capabilities"]["namespaceAdmin"] is False
+
+
+def test_grades_serializer_contains_only_routes_and_authorized_capabilities():
+    from manytask.api import bp
+    from manytask.ui_grades import serialize
+
+    app = Flask(__name__)
+    app.register_blueprint(bp)
+    with app.test_request_context():
+        data = serialize(
+            {
+                "course_name": "a.b",
+                "is_course_admin": False,
+                "readonly_fields": ["username", "total_score"],
+                "students": [{"first_name": "Private", "comment": "Secret"}],
+                "app": object(),
+            }
+        )
+    assert data == {
+        "courseName": "a.b",
+        "canEdit": False,
+        "readOnlyFields": ["username", "total_score"],
+        "urls": {
+            "database": "/api/a.b/database",
+            "updateScore": "/api/a.b/database/update",
+            "updateComment": "/api/a.b/comment/update",
+            "overrideGrade": "/api/a.b/grade/override",
+            "clearGradeOverride": "/api/a.b/grade/clear_override",
+        },
+    }

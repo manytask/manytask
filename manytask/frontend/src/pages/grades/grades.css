@@ -1,0 +1,9 @@
+.grades-page { min-width: 0; }
+.grades-toolbar, .grades-search, .grades-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.grades-toolbar h1 { margin-inline-end: auto; }
+.grades-search { max-width: 520px; flex-wrap: nowrap; }
+.grades-table-scroll { max-width: 100%; max-height: 70vh; overflow: auto; margin-bottom: 16px; }
+.grades-table-scroll th, .grades-table-scroll td { overflow-wrap: anywhere; }
+.grades-admin-row { color: var(--g-color-text-secondary); }
+.grades-override { background: var(--g-color-base-warning-light); padding: 2px 4px; border-radius: 3px; }
+.grades-pagination select { font: inherit; color: var(--g-color-text-primary); background: var(--g-color-base-background); border: 1px solid var(--g-color-line-generic); border-radius: 4px; padding: 5px; }

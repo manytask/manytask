@@ -248,20 +248,19 @@ def test_course_page_payload_includes_authorized_score_maximum(
     }
 
 
-def test_legacy_database_page_offers_personal_task_order(app, mock_gitlab_oauth):
+def test_database_page_offers_personal_task_order_in_react_payload(app, mock_gitlab_oauth):
     CSRFProtect(app)
     app.oauth = mock_gitlab_oauth
     with app.test_client() as client:
         set_session(client, build_test_session(include_manytask=True))
         response = client.get(f"/{TEST_COURSE_NAME}/database")
     assert response.status_code == HTTPStatus.OK
-    soup = BeautifulSoup(response.data, "html.parser")
-    control = soup.find("button", id="task-group-order")
-    assert control is not None
-    assert control["type"] == "button"
-    assert control.get_text(strip=True) == "Show oldest first"
-    assert control["data-username"] == TEST_USERNAME
-    assert control["data-course-name"] == TEST_COURSE_NAME
+    payload = ui_payload(response)
+    assert payload["page"] == "grades"
+    assert payload["data"]["courseName"] == TEST_COURSE_NAME
+    assert payload["shared"]["username"] == TEST_USERNAME
+    assert "students" not in payload["data"]
+    assert b"tabulator" not in response.data.lower()
 
 
 def test_course_assignments_page_uses_react_payload(app, mock_gitlab_oauth):
@@ -1073,3 +1072,33 @@ def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitla
             payload = ui_payload(response)
             assert "boom" in payload["shared"]["errorMessage"]
             assert payload["page"] == "create-project"
+
+
+@pytest.mark.parametrize("is_admin", [False, True])
+def test_grades_payload_and_api_keep_personal_data_admin_only(app, mock_gitlab_oauth, is_admin):
+    app.oauth = mock_gitlab_oauth
+    student = StudentCourseScores(
+        username="student",
+        first_name="Private first",
+        last_name="Private last",
+        task_scores={"negative.score": TaskScore(-3, False), "zero": TaskScore(0, False)},
+        comment="Private comment",
+    )
+    staff = StudentCourseScores(username="staff", first_name="Staff", last_name="Admin", is_admin=True)
+    with (
+        patch.object(app.storage_api, "check_if_course_admin", return_value=is_admin),
+        patch.object(app.storage_api, "get_all_scores_with_names", return_value={"student": student, "staff": staff}),
+        app.test_client() as client,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        page = client.get(f"/{TEST_COURSE_NAME}/database")
+        response = client.get(f"/api/{TEST_COURSE_NAME}/database")
+    assert response.status_code == HTTPStatus.OK
+    assert ui_payload(page)["data"]["canEdit"] is is_admin
+    assert "Private" not in page.get_data(as_text=True)
+    rows = response.get_json()["students"]
+    assert [row["username"] for row in rows] == (["student", "staff"] if is_admin else ["student"])
+    assert rows[0]["scores"] == {"negative.score": -3, "zero": 0}
+    assert rows[0]["total_score"] == -3  # noqa: PLR2004
+    for field in ("first_name", "last_name", "repo_url", "comment"):
+        assert (field in rows[0]) is is_admin

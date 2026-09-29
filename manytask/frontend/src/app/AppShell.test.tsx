@@ -29,3 +29,11 @@ it('shows a zero score and zero started maximum', () => {
   renderUi(<AppShell shared={makeSharedUi({course: {name: 'python', status: 'started', score: 0, bonusScore: 0, maxStartedScore: 0}})}><div>course</div></AppShell>);
   expect(screen.getByLabelText('Course score')).toHaveTextContent('0.0% · 0/0');
 });
+
+it('shows the ADMIN indicator only for course administrators', () => {
+  const base = makeSharedUi();
+  const {rerender} = renderUi(<AppShell shared={{...base, capabilities: {...base.capabilities, courseAdmin: true}}}><p>course</p></AppShell>);
+  expect(screen.getByText('ADMIN')).toBeVisible();
+  rerender(<AppShell shared={base}><p>course</p></AppShell>);
+  expect(screen.queryByText('ADMIN')).not.toBeInTheDocument();
+});

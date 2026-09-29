@@ -10,6 +10,7 @@ from flask import render_template, url_for
 from .ui_assignments import serialize as serialize_assignments
 from .ui_auth import serialize_create_project, serialize_signup, serialize_signup_finish, serialize_signup_yandex_id
 from .ui_courses import serialize as serialize_courses
+from .ui_grades import serialize as serialize_grades
 from .ui_shared import serialize_shared
 
 PageSerializer = Callable[[Mapping[str, Any]], dict[str, Any]]
@@ -66,6 +67,7 @@ PAGE_SERIALIZERS: dict[str, tuple[str, PageSerializer]] = {
     "create_project.html": ("create-project", serialize_create_project),
     "courses.html": ("courses", serialize_courses),
     "tasks.html": ("assignments", serialize_assignments),
+    "database.html": ("grades", serialize_grades),
 }
 
 

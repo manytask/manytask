@@ -6,6 +6,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],
-    server: {deps: {inline: ['@gravity-ui/uikit']}},
+    server: {deps: {inline: ['@gravity-ui/uikit', '@gravity-ui/table', '@gravity-ui/icons']}},
   },
 });

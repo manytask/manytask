@@ -1,5 +1,5 @@
 import {useState, type ReactNode} from 'react';
-import {Alert, Button, Text} from '@gravity-ui/uikit';
+import {Alert, Button, Label, Text} from '@gravity-ui/uikit';
 
 import {ProfileDialog} from '../shared/ProfileDialog';
 import {FlashMessages} from './FlashMessages';
@@ -17,6 +17,7 @@ export function AppShell({shared, children}: {shared: SharedUiData; children: Re
           {shared.favicon && <img src={shared.favicon} alt="" width="28" height="28" />}
           <Text variant="header-1">Manytask</Text>
         </a>
+        {shared.capabilities.courseAdmin && <Label theme="warning">ADMIN</Label>}
         <nav className="app-navigation" aria-label="Main navigation">
           {shared.navigation.map((link) => <a key={`${link.label}:${link.href}`} href={link.href}>{link.label}</a>)}
         </nav>
