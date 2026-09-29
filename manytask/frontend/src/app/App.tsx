@@ -1,5 +1,7 @@
 import type {PageEnvelope} from './contracts';
 import {NotReadyPage} from '../pages/NotReadyPage';
+import {AuthPage, type AuthData} from '../pages/AuthPage';
+import {AppShell} from './AppShell';
 
 type NotReadyData = {courseName: string; links: Array<{label: string; href: string}>};
 
@@ -18,10 +20,19 @@ export function App() {
   if (!envelope || envelope.schema_version !== 1) {
     return <main role="alert">Incompatible page version. Please refresh this page.</main>;
   }
+  let page;
   switch (envelope.page) {
     case 'not-ready':
-      return <NotReadyPage shared={envelope.shared} data={envelope.data as NotReadyData} />;
+      page = <NotReadyPage shared={envelope.shared} data={envelope.data as NotReadyData} />;
+      break;
+    case 'signup':
+    case 'signup-yandex-id':
+    case 'signup-finish':
+    case 'create-project':
+      page = <AuthPage shared={envelope.shared} data={envelope.data as AuthData} />;
+      break;
     default:
-      return <main role="alert">This page is not supported by this frontend build.</main>;
+      page = <main role="alert">This page is not supported by this frontend build.</main>;
   }
+  return <AppShell shared={envelope.shared}>{page}</AppShell>;
 }

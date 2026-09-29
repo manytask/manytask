@@ -282,6 +282,22 @@ def test_signup_get(app):
         assert response.status_code == HTTPStatus.OK
 
 
+def test_signup_invalid_csrf_renders_error_without_full_template_context(app):
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess["auth"] = {"access_token": "session-token-sentinel"}
+        response = client.post(
+            "/signup", data={"csrf_token": "invalid", "username": "alice", "password": "password-sentinel"}
+        )
+    assert response.status_code == HTTPStatus.OK
+    payload = ui_payload(response)
+    assert payload["page"] == "signup"
+    assert payload["shared"]["errorMessage"] == "CSRF Error"
+    assert payload["data"]["values"] == {"username": "alice"}
+    assert "session-token-sentinel" not in str(payload)
+    assert "password-sentinel" not in str(payload)
+
+
 def test_signup_get_disabled_redirects_to_login(app):
     CSRFProtect(app)
     app.app_config.disable_signup = True
@@ -295,8 +311,7 @@ def test_signup_post_password_mismatch(app, mock_course):
     CSRFProtect(app)
     with app.test_client() as client:
         response = client.get("/signup")
-        soup = BeautifulSoup(response.data, "html.parser")
-        csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+        csrf_token = ui_payload(response)["shared"]["csrfToken"]
 
         response = client.post(
             "/signup",
@@ -312,7 +327,7 @@ def test_signup_post_password_mismatch(app, mock_course):
             },
         )
         assert response.status_code == HTTPStatus.OK
-        assert b"Passwords don&#39;t match" in response.data
+        assert ui_payload(response)["shared"]["errorMessage"] == "Passwords don't match"
 
 
 def test_logout(app):
@@ -704,8 +719,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
         }
         with app.test_client() as client:
             response = client.get("/signup")
-            soup = BeautifulSoup(response.data, "html.parser")
-            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+            csrf_token = ui_payload(response)["shared"]["csrfToken"]
             data["csrf_token"] = csrf_token
             response = client.post(url_for("root.signup", course_name=TEST_COURSE_NAME), data=data)
             assert response.status_code == HTTPStatus.FOUND
@@ -850,8 +864,7 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
             mock_get_stored_user_by_auth_id.side_effect = [None, None, app.storage_api.stored_user]
 
             response = client.get(url_for("root.signup_finish"))
-            soup = BeautifulSoup(response.data, "html.parser")
-            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+            csrf_token = ui_payload(response)["shared"]["csrfToken"]
             data["csrf_token"] = csrf_token
             response = client.post(url_for("root.signup_finish"), data=data)
             assert response.status_code == HTTPStatus.FOUND
@@ -934,8 +947,7 @@ def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_co
             app.oauth = mock_gitlab_oauth
 
             response = client.get(f"/{TEST_COURSE_NAME}/create_project")
-            soup = BeautifulSoup(response.data, "html.parser")
-            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+            csrf_token = ui_payload(response)["shared"]["csrfToken"]
 
             response = client.post(
                 f"/{TEST_COURSE_NAME}/create_project",
@@ -943,12 +955,12 @@ def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_co
             )
 
             assert response.status_code == HTTPStatus.OK
-            body = response.data.decode()
+            payload = ui_payload(response)
             # The user stays on the enrollment form, not on the signup page.
-            assert "Secret Code" in body
+            assert payload["page"] == "create-project"
             # Backend-internal detail is logged, not shown.
-            assert "ResourceExhausted" not in body
-            assert "course staff" in body
+            assert "ResourceExhausted" not in str(payload)
+            assert "course staff" in payload["shared"]["errorMessage"]
 
 
 def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitlab_oauth):
@@ -968,8 +980,7 @@ def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitla
             app.oauth = mock_gitlab_oauth
 
             response = client.get(f"/{TEST_COURSE_NAME}/create_project")
-            soup = BeautifulSoup(response.data, "html.parser")
-            csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
+            csrf_token = ui_payload(response)["shared"]["csrfToken"]
 
             response = client.post(
                 f"/{TEST_COURSE_NAME}/create_project",
@@ -977,6 +988,6 @@ def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitla
             )
 
             assert response.status_code == HTTPStatus.OK
-            body = response.data.decode()
-            assert "boom" in body
-            assert "Secret Code" in body
+            payload = ui_payload(response)
+            assert "boom" in payload["shared"]["errorMessage"]
+            assert payload["page"] == "create-project"

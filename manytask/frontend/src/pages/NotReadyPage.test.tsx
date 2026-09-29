@@ -2,6 +2,7 @@ import {screen} from '@testing-library/react';
 import {describe, expect, it} from 'vitest';
 
 import {App} from '../app/App';
+import {AppShell} from '../app/AppShell';
 import {makeSharedUi, renderUi} from '../test/render';
 import {NotReadyPage} from './NotReadyPage';
 
@@ -24,10 +25,9 @@ describe('NotReadyPage', () => {
 
   it('displays each queued flash once with its severity', () => {
     renderUi(
-      <NotReadyPage
-        shared={makeSharedUi({flashes: [{category: 'error', message: 'Please try again'}]})}
-        data={{courseName: 'python', links: []}}
-      />,
+      <AppShell shared={makeSharedUi({flashes: [{category: 'error', message: 'Please try again'}]})}>
+        <NotReadyPage shared={makeSharedUi()} data={{courseName: 'python', links: []}} />
+      </AppShell>,
     );
 
     expect(screen.getAllByText('Please try again')).toHaveLength(1);
@@ -36,16 +36,15 @@ describe('NotReadyPage', () => {
 
   it('keeps success, warning, and info flash categories', () => {
     renderUi(
-      <NotReadyPage
-        shared={makeSharedUi({
+      <AppShell shared={makeSharedUi({
           flashes: [
             {category: 'success', message: 'Saved'},
             {category: 'warning', message: 'Almost full'},
             {category: 'info', message: 'Maintenance scheduled'},
           ],
-        })}
-        data={{courseName: 'python', links: []}}
-      />,
+        })}>
+        <NotReadyPage shared={makeSharedUi()} data={{courseName: 'python', links: []}} />
+      </AppShell>,
     );
 
     expect(screen.getByText('Success')).toBeInTheDocument();

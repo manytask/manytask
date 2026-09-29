@@ -1,12 +1,10 @@
 import {Alert, Button} from '@gravity-ui/uikit';
 
-import {FlashMessages} from '../app/FlashMessages';
 import type {NavLink, PageProps} from '../app/contracts';
 
-export function NotReadyPage({shared, data}: PageProps<{courseName: string; links: NavLink[]}>) {
+export function NotReadyPage({data}: PageProps<{courseName: string; links: NavLink[]}>) {
   return (
     <main className="not-ready-page">
-      <FlashMessages flashes={shared.flashes} />
       <Alert theme="info" title="Course is not ready" message={data.courseName} />
       <nav className="not-ready-actions" aria-label="Course actions">
         {data.links.map((link) => (

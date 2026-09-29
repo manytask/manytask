@@ -5,6 +5,23 @@ from bs4 import BeautifulSoup
 from flask import Flask, render_template
 
 from manytask import ui
+from manytask.web import root_bp
+
+
+def test_auth_serializer_only_returns_allowed_text_values():
+    from manytask.ui_auth import serialize_signup
+
+    app = Flask("auth_test")
+    app.secret_key = "test-key"
+    app.register_blueprint(root_bp)
+    with app.test_request_context(
+        "/signup",
+        method="POST",
+        data={"username": "alice", "firstname": "A", "password": "top-secret", "password2": "top-secret"},
+    ):
+        data = serialize_signup({"password": "different-secret"})
+    assert data["values"] == {"username": "alice", "firstname": "A"}
+    assert "secret" not in str(data)
 
 
 def test_json_cannot_close_script():

@@ -42,6 +42,10 @@ def serialize_shared(context: Mapping[str, Any]) -> dict[str, Any]:
     navigation = [{"label": "Courses", "href": url_for("root.index")}]
     if course is not None:
         navigation.append({"label": "Assignments", "href": url_for("course.course_page", course_name=course["name"])})
+        for label, key in (("My Repo", "student_repo_url"), ("My Submits", "student_ci_url")):
+            href = context.get(key)
+            if isinstance(href, str):
+                navigation.append({"label": label, "href": href})
         if context.get("show_allscores"):
             navigation.append(
                 {"label": "All Scores", "href": url_for("course.show_database", course_name=course["name"])}
@@ -52,6 +56,13 @@ def serialize_shared(context: Mapping[str, Any]) -> dict[str, Any]:
             )
     if instance_admin:
         navigation.append({"label": "Instance Admin panel", "href": url_for("instance_admin.instance_admin_panel")})
+    links = context.get("links")
+    if isinstance(links, Mapping):
+        navigation.extend(
+            {"label": label, "href": href}
+            for label, href in links.items()
+            if isinstance(label, str) and isinstance(href, str)
+        )
 
     courses = [
         {"label": item["name"], "href": item["url"]}

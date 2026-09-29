@@ -29,3 +29,49 @@ body {
   flex-direction: column;
   gap: 12px;
 }
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--g-color-line-generic);
+}
+
+.app-brand, .app-navigation, .app-account, .course-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-brand { text-decoration: none; color: inherit; }
+.app-navigation { flex: 1 1 360px; }
+.app-navigation a, .app-account a, .course-meta a { color: var(--g-color-text-link); }
+.course-meta nav { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+.app-account { margin-left: auto; }
+.shell-messages { padding: 16px 20px 0; }
+.shell-messages:empty { display: none; }
+.app-content { flex: 1; min-width: 0; }
+.app-content .table-scroll { max-width: 100%; overflow-x: auto; }
+.app-footer { padding: 16px 20px; color: var(--g-color-text-secondary); }
+.theme-switcher { display: flex; gap: 4px; justify-content: flex-end; padding: 8px 20px; }
+.auth-page { min-height: min(70vh, 700px); display: grid; place-items: center; padding: 32px 20px; }
+.auth-card { box-sizing: border-box; width: min(100%, 440px); display: flex; flex-direction: column; gap: 18px; padding: 28px; border: 1px solid var(--g-color-line-generic); border-radius: 12px; background: var(--g-color-base-float); }
+.form-fields { display: flex; flex-direction: column; gap: 14px; }
+.auth-field { display: flex; flex-direction: column; gap: 6px; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+
+@media (max-width: 640px) {
+  .app-header { padding: 12px; }
+  .app-navigation { flex-basis: 100%; }
+  .app-account { margin-left: 0; }
+  .theme-switcher { padding: 8px 12px; }
+}
