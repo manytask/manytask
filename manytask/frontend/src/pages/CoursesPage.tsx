@@ -1,5 +1,5 @@
 import {useMemo, useState} from 'react';
-import {Button, Select, Table, TextInput} from '@gravity-ui/uikit';
+import {Button, Select, Table, TextInput, withTableSorting} from '@gravity-ui/uikit';
 
 import type {PageProps} from '../app/contracts';
 import {matchesSearchVariants, searchTermVariants} from '../shared/search';
@@ -35,6 +35,49 @@ export type CoursesData = {
 
 const VIEW_STORAGE_KEY = 'manytask.coursesView';
 const humanizeStatus = (status: string) => status.replace(/_/g, ' ');
+type SortState = Array<{column: string; order: 'asc' | 'desc'}>;
+const SortableCoursesTable = withTableSorting<CourseRow>(Table);
+const SortableNamespacesTable = withTableSorting<AdminNamespace>(Table);
+
+function compareText(a: string, b: string): number {
+  return a.toLowerCase().localeCompare(b.toLowerCase());
+}
+
+function sortCourses(rows: CourseRow[], sort: SortState, statusOrder: string[]): CourseRow[] {
+  const rank = (status: string) => {
+    const index = statusOrder.indexOf(status);
+    return index === -1 ? statusOrder.length : index;
+  };
+  return [...rows].sort((a, b) => {
+    for (const {column, order} of sort) {
+      if (column === 'namespaceSlug') {
+        if (!a.namespaceSlug || !b.namespaceSlug) {
+          if (!a.namespaceSlug && !b.namespaceSlug) continue;
+          return !a.namespaceSlug ? 1 : -1;
+        }
+      }
+      const difference = column === 'name' ? compareText(a.name, b.name)
+        : column === 'namespaceSlug' ? compareText(a.namespaceSlug, b.namespaceSlug)
+        : column === 'status' ? rank(a.status) - rank(b.status) : 0;
+      if (difference !== 0) return order === 'asc' ? difference : -difference;
+    }
+    return 0;
+  });
+}
+
+function sortNamespaces(rows: AdminNamespace[], sort: SortState): AdminNamespace[] {
+  return [...rows].sort((a, b) => {
+    for (const {column, order} of sort) {
+      const difference = column === 'name' ? compareText(a.name, b.name)
+        : column === 'slug' ? compareText(a.slug, b.slug)
+        : column === 'description' ? compareText(a.description, b.description)
+        : column === 'coursesCount' ? a.coursesCount - b.coursesCount
+        : column === 'usersCount' ? a.usersCount - b.usersCount : 0;
+      if (difference !== 0) return order === 'asc' ? difference : -difference;
+    }
+    return 0;
+  });
+}
 
 function initialView(): 'list' | 'table' {
   try { return localStorage.getItem(VIEW_STORAGE_KEY) === 'table' ? 'table' : 'list'; }
@@ -47,6 +90,8 @@ export function CoursesPage({data}: PageProps<CoursesData>) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [courseInput, setCourseInput] = useState('');
+  const [courseSort, setCourseSort] = useState<SortState>([{column: 'name', order: 'asc'}]);
+  const [namespaceSort, setNamespaceSort] = useState<SortState>([{column: 'name', order: 'asc'}]);
 
   const changeView = (next: 'list' | 'table') => {
     setView(next);
@@ -66,20 +111,21 @@ export function CoursesPage({data}: PageProps<CoursesData>) {
     (!status || course.status === status) &&
     (matchesSearchVariants(course.name, variants) || matchesSearchVariants(course.namespaceSlug, variants))),
   [data.courses, status, variants]);
-  const sorted = useMemo(() => [...filtered].sort((a, b) => a.name.localeCompare(b.name)), [filtered]);
+  const sorted = useMemo(() => sortCourses(filtered, courseSort, data.statusOrder), [filtered, courseSort, data.statusOrder]);
+  const sortedNamespaces = useMemo(() => sortNamespaces(data.adminNamespaces, namespaceSort), [data.adminNamespaces, namespaceSort]);
 
   const courseColumns = [
-    {id: 'name', name: 'Name', template: (course: CourseRow) => <a href={course.href}>{course.name}</a>},
-    {id: 'namespaceSlug', name: 'Namespace', template: (course: CourseRow) => course.namespaceSlug || '—'},
-    {id: 'status', name: 'Status', template: (course: CourseRow) => humanizeStatus(course.status)},
+    {id: 'name', name: 'Name', meta: {sort: true}, template: (course: CourseRow) => <a href={course.href}>{course.name}</a>},
+    {id: 'namespaceSlug', name: 'Namespace', meta: {sort: true}, template: (course: CourseRow) => course.namespaceSlug || '—'},
+    {id: 'status', name: 'Status', meta: {sort: true}, template: (course: CourseRow) => humanizeStatus(course.status)},
     {id: 'editHref', name: 'Edit', template: (course: CourseRow) => course.editHref ? <a href={course.editHref} aria-label={`Edit ${course.name}`}>Edit</a> : null},
   ];
   const namespaceColumns = [
-    {id: 'name', name: 'Name', template: (namespace: AdminNamespace) => <a href={namespace.href}>{namespace.name}</a>},
-    {id: 'slug', name: 'Slug'},
-    {id: 'description', name: 'Description', template: (namespace: AdminNamespace) => namespace.description || '—'},
-    {id: 'coursesCount', name: 'Courses'},
-    {id: 'usersCount', name: 'Users'},
+    {id: 'name', name: 'Name', meta: {sort: true}, template: (namespace: AdminNamespace) => <a href={namespace.href}>{namespace.name}</a>},
+    {id: 'slug', name: 'Slug', meta: {sort: true}},
+    {id: 'description', name: 'Description', meta: {sort: true}, template: (namespace: AdminNamespace) => namespace.description || '—'},
+    {id: 'coursesCount', name: 'Courses', meta: {sort: true}},
+    {id: 'usersCount', name: 'Users', meta: {sort: true}},
     {id: 'href', name: 'Edit', template: (namespace: AdminNamespace) => <a href={namespace.href} aria-label={`Edit ${namespace.name}`}>Edit</a>},
   ];
 
@@ -118,7 +164,7 @@ export function CoursesPage({data}: PageProps<CoursesData>) {
         <Button onClick={() => { setQuery(''); setStatus(''); }}>Clear</Button>
       </div>
       <div className="table-scroll">
-        <Table aria-label="Courses" data={sorted} columns={courseColumns} />
+        <SortableCoursesTable aria-label="Courses" data={sorted} columns={courseColumns} sortState={courseSort} onSortStateChange={setCourseSort} />
       </div>
       {sorted.length === 0 && <p>Unfortunately, there are no courses yet.</p>}
     </section>}
@@ -136,7 +182,7 @@ export function CoursesPage({data}: PageProps<CoursesData>) {
     </div>
     {data.adminNamespaces.length > 0 && <section className="courses-namespaces">
       <h2>Namespaces you administer</h2>
-      <div className="table-scroll"><Table aria-label="Admin namespaces" data={data.adminNamespaces} columns={namespaceColumns} /></div>
+      <div className="table-scroll"><SortableNamespacesTable aria-label="Admin namespaces" data={sortedNamespaces} columns={namespaceColumns} sortState={namespaceSort} onSortStateChange={setNamespaceSort} /></div>
     </section>}
   </main>;
 }

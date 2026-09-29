@@ -107,3 +107,54 @@ it('uses the previous course URL for trimmed enrollment input', async () => {
   fireEvent.submit(form);
   expect(form.getAttribute('action')).toBe('/sample-course');
 });
+
+function firstColumn(table: HTMLElement): string[] {
+  return within(table).getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell')[0].textContent!.trim());
+}
+
+it('sorts course rows by namespace with blanks last and by server status order', async () => {
+  const user = userEvent.setup();
+  renderUi(<CoursesPage shared={makeSharedUi()} data={{...data, courses: [
+    {name: 'Bravo', status: 'created', href: '/bravo', owners: '', namespaceSlug: '', editHref: null},
+    {name: 'Alpha', status: 'finished', href: '/alpha', owners: '', namespaceSlug: 'zeta', editHref: null},
+    {name: 'Charlie', status: 'active', href: '/charlie', owners: '', namespaceSlug: 'alpha', editHref: null},
+  ]}} />);
+  await user.click(screen.getByRole('button', {name: 'Table view'}));
+  const table = screen.getByRole('table', {name: 'Courses'});
+  expect(firstColumn(table)).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  await user.click(within(table).getByRole('button', {name: 'Namespace'}));
+  expect(firstColumn(table)).toEqual(['Charlie', 'Alpha', 'Bravo']);
+  await user.click(within(table).getByRole('button', {name: 'Namespace'}));
+  expect(firstColumn(table)).toEqual(['Alpha', 'Charlie', 'Bravo']);
+  await user.click(within(table).getByRole('button', {name: 'Status'}));
+  expect(firstColumn(table)).toEqual(['Bravo', 'Charlie', 'Alpha']);
+  await user.type(screen.getByRole('textbox', {name: 'Search courses'}), 'alpha');
+  expect(firstColumn(table)).toEqual(['Charlie', 'Alpha']);
+  await user.click(screen.getByRole('button', {name: 'Clear'}));
+  expect(firstColumn(table)).toEqual(['Bravo', 'Charlie', 'Alpha']);
+  await user.click(within(table).getByRole('button', {name: 'Name'}));
+  expect(firstColumn(table)).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  await user.click(within(table).getByRole('button', {name: 'Name'}));
+  expect(firstColumn(table)).toEqual(['Charlie', 'Bravo', 'Alpha']);
+});
+
+it('sorts administered namespaces by name initially and numeric counts from keyboard headers', async () => {
+  const user = userEvent.setup();
+  renderUi(<CoursesPage shared={makeSharedUi()} data={{...data, adminNamespaces: [
+    {id: 1, name: 'Beta', href: '/ns/1', slug: 'b', description: '', coursesCount: 10, usersCount: 2},
+    {id: 2, name: 'Gamma', href: '/ns/2', slug: 'g', description: '', coursesCount: 1, usersCount: 20},
+    {id: 3, name: 'Alpha', href: '/ns/3', slug: 'a', description: '', coursesCount: 2, usersCount: 3},
+  ]}} />);
+  const table = screen.getByRole('table', {name: 'Admin namespaces'});
+  expect(firstColumn(table)).toEqual(['Alpha', 'Beta', 'Gamma']);
+  const coursesHeader = within(table).getByRole('button', {name: 'Courses'});
+  coursesHeader.focus();
+  await user.keyboard('{Enter}');
+  expect(firstColumn(table)).toEqual(['Gamma', 'Alpha', 'Beta']);
+  await user.click(within(table).getByRole('button', {name: 'Courses'}));
+  expect(firstColumn(table)).toEqual(['Beta', 'Alpha', 'Gamma']);
+  await user.click(within(table).getByRole('button', {name: 'Users'}));
+  expect(firstColumn(table)).toEqual(['Beta', 'Alpha', 'Gamma']);
+  await user.click(within(table).getByRole('button', {name: 'Users'}));
+  expect(firstColumn(table)).toEqual(['Gamma', 'Alpha', 'Beta']);
+});
