@@ -1,4 +1,4 @@
-import {fireEvent, screen, within} from '@testing-library/react';
+import {fireEvent, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 
@@ -201,16 +201,20 @@ it('mounts the deadline graph only while its disclosure is open and disconnects 
   expect(observes).toBe(0);
 
   await user.click(disclosure);
-  const canvas = screen.getByRole('img', {name: 'Deadline score curve'});
-  expect(observes).toBe(1);
+  // Native details toggle is asynchronous; the canvas can mount before its
+  // passive effect has drawn the curve and subscribed to size changes.
+  const canvas = await screen.findByRole('img', {name: 'Deadline score curve'});
+  await waitFor(() => expect(observes).toBe(1));
   fireEvent.mouseMove(canvas, {clientX: 38, clientY: 7});
   expect(screen.getByRole('tooltip')).toHaveTextContent('01.01.2026 12:00 MSK');
   fireEvent.mouseLeave(canvas);
   expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 
   await user.click(disclosure);
-  expect(screen.queryByRole('img', {name: 'Deadline score curve'})).not.toBeInTheDocument();
-  expect(disconnect).toHaveBeenCalledOnce();
+  await waitFor(() => {
+    expect(screen.queryByRole('img', {name: 'Deadline score curve'})).not.toBeInTheDocument();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
   view.unmount();
   expect(disconnect).toHaveBeenCalledOnce();
 });
