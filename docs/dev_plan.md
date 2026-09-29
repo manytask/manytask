@@ -22,9 +22,7 @@ This PR [`feat_allow_to_create_private_repo_from_template](https://github.com/ma
 
 ### Operator deployment and Terraform
 
-- [ ] Update the Terraform modules and cloud-init against the current application, supported provider versions, Docker Compose flow, database migrations, DNS/TLS setup, and health checks. Offer documented choices for a bundled GitLab or an external GitLab/SourceCraft connection instead of requiring a GitLab VM for every deployment.
-- [ ] Define a small set of deployment inputs, a preflight check, and clear outputs for the remaining OAuth/provider setup. Keep secrets out of plans, logs, instance metadata where possible, and example files; document protected state storage and rotation.
-- [ ] Replace stale or conflicting setup instructions with one tested path for fresh installation, upgrade, backup/restore, and rollback. Validate `terraform fmt`, `terraform validate`, and plans for fresh and existing deployments; smoke-test the resulting Manytask instance without changing production infrastructure as part of documentation work.
+- [ ] Check and update the Terraform modules.
 
 ### SourceCraft organization guide
 
