@@ -74,7 +74,7 @@ export function App() {
     default:
       page = <main role="alert">This page is not supported by this frontend build.</main>;
   }
-  return <AppShell shared={envelope.shared}>
+  return <AppShell shared={envelope.shared} page={envelope.page}>
     <Suspense fallback={<main role="status">Loading page…</main>}>{page}</Suspense>
   </AppShell>;
 }

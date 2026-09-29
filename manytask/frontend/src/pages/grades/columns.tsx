@@ -24,7 +24,7 @@ export function buildColumns(tasks: readonly TaskMeta[], canEdit: boolean, order
   const columns: ColumnDef<StudentRow>[] = [
     {id: 'rownum', header: '#', size: 50, minSize: 40, enableSorting: false,
       cell: ({row, table}) => table.getSortedRowModel().rows.findIndex((item) => item.id === row.id) + 1},
-    {id: 'username', accessorFn: (row) => row.username, header: 'Username', size: window.innerWidth < 500 ? 60 : 120, minSize: 1,
+    {id: 'username', accessorFn: (row) => row.username, header: 'Username', size: 120, minSize: 1,
       cell: ({row}) => canEdit && row.original.repo_url
         ? <a href={row.original.repo_url} target="_blank" rel="noopener noreferrer">{row.original.username}</a> : row.original.username},
   ];

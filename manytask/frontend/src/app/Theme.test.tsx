@@ -2,7 +2,7 @@ import {screen, render, fireEvent, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, expect, it, vi} from 'vitest';
 
-import {Theme} from './Theme';
+import {Theme, ThemeControls} from './Theme';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -16,7 +16,7 @@ it('uses the existing theme key and responds to system changes in auto', async (
   vi.stubGlobal('localStorage', {getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value)});
   vi.stubGlobal('matchMedia', () => ({matches: false, addEventListener: (_name: string, listener: typeof notify) => {notify = listener;}, removeEventListener: () => {removed = true;}}));
   const user = userEvent.setup();
-  const view = render(<Theme><div>content</div></Theme>);
+  const view = render(<Theme><ThemeControls /><div>content</div></Theme>);
   await user.click(screen.getByRole('button', {name: 'Dark Theme'}));
   expect(localStorage.getItem('theme')).toBe('dark');
   await user.click(screen.getByRole('button', {name: 'Auto Theme'}));
@@ -28,7 +28,13 @@ it('uses the existing theme key and responds to system changes in auto', async (
 
 it('continues to switch theme when storage throws', () => {
   vi.stubGlobal('localStorage', {getItem: () => {throw new Error('blocked');}, setItem: () => {throw new Error('blocked');}});
-  render(<Theme><div>content</div></Theme>);
+  render(<Theme><ThemeControls /><div>content</div></Theme>);
   fireEvent.click(screen.getByRole('button', {name: 'Dark Theme'}));
   expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+});
+
+it('renders controls where the shell places them instead of ahead of page content', () => {
+  render(<Theme><div>content</div></Theme>);
+  expect(screen.getByText('content')).toBeVisible();
+  expect(screen.queryByRole('group', {name: 'Theme'})).not.toBeInTheDocument();
 });

@@ -89,3 +89,30 @@ it('handles empty responses and omits admin-only columns and controls for viewer
   expect(screen.queryByRole('button', {name: 'Hide admins'})).not.toBeInTheDocument();
   expect(screen.queryByRole('button', {name: 'Comment'})).not.toBeInTheDocument();
 });
+
+it('uses the table viewport to keep task columns reachable and restores full pinning when space returns', async () => {
+  const resizeCallbacks: ResizeObserverCallback[] = [];
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: ResizeObserverCallback) { resizeCallbacks.push(callback); }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(response))));
+  renderUi(<GradesPage shared={shared} data={data} />);
+  await screen.findByText('student229');
+  const scroll = document.querySelector<HTMLElement>('.grades-table-scroll')!;
+  Object.defineProperty(scroll, 'clientWidth', {configurable: true, value: 720});
+
+  const resize = () => resizeCallbacks.forEach((callback) => callback([{
+    target: scroll, contentRect: scroll.getBoundingClientRect(), borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [],
+  } as unknown as ResizeObserverEntry], {} as ResizeObserver));
+  act(resize);
+  expect(screen.getByRole('columnheader', {name: 'Username'})).toHaveClass('gt-table__header-cell_pinned');
+  expect(screen.getByRole('columnheader', {name: 'First Name'})).not.toHaveClass('gt-table__header-cell_pinned');
+
+  Object.defineProperty(scroll, 'clientWidth', {configurable: true, value: 1400});
+  act(resize);
+  expect(screen.getByRole('columnheader', {name: 'First Name'})).toHaveClass('gt-table__header-cell_pinned');
+  expect(screen.getByRole('columnheader', {name: 'Comment'})).toHaveClass('gt-table__header-cell_pinned');
+});

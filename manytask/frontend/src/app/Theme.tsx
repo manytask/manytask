@@ -1,9 +1,16 @@
-import {useEffect, useState, type ReactNode} from 'react';
+import {createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode} from 'react';
 import {Button, ThemeProvider} from '@gravity-ui/uikit';
 
-type Preference = 'light' | 'dark' | 'auto';
+export type ThemePreference = 'light' | 'dark' | 'auto';
 
-function savedPreference(): Preference {
+type ThemeContextValue = {
+  preference: ThemePreference;
+  choose: (value: ThemePreference) => void;
+};
+
+const ThemeContext = createContext<ThemeContextValue>({preference: 'auto', choose: () => undefined});
+
+function savedPreference(): ThemePreference {
   try {
     const value = localStorage.getItem('theme');
     if (value === 'light' || value === 'dark' || value === 'auto') return value;
@@ -22,7 +29,7 @@ function systemDark(): boolean {
 }
 
 export function Theme({children}: {children: ReactNode}) {
-  const [preference, setPreference] = useState<Preference>(savedPreference);
+  const [preference, setPreference] = useState<ThemePreference>(savedPreference);
   const [dark, setDark] = useState(systemDark);
   const active = preference === 'auto' ? (dark ? 'dark' : 'light') : preference;
 
@@ -39,25 +46,31 @@ export function Theme({children}: {children: ReactNode}) {
     return () => media.removeEventListener('change', onChange);
   }, [preference]);
 
-  function choose(value: Preference) {
+  const choose = useCallback((value: ThemePreference) => {
     setPreference(value);
     try {
       localStorage.setItem('theme', value);
     } catch {
       // Keep the choice for the current page even if storage is unavailable.
     }
-  }
+  }, []);
+
+  const context = useMemo(() => ({preference, choose}), [preference, choose]);
 
   return (
     <ThemeProvider theme={active}>
-      <div className="theme-switcher" role="group" aria-label="Theme">
-        {(['light', 'dark', 'auto'] as const).map((value) => (
-          <Button key={value} view={preference === value ? 'action' : 'normal'} selected={preference === value} onClick={() => choose(value)}>
-            {value === 'auto' ? 'Auto' : value === 'dark' ? 'Dark' : 'Light'} Theme
-          </Button>
-        ))}
-      </div>
-      {children}
+      <ThemeContext.Provider value={context}>{children}</ThemeContext.Provider>
     </ThemeProvider>
   );
+}
+
+export function ThemeControls() {
+  const {preference, choose} = useContext(ThemeContext);
+  return <div className="theme-switcher" role="group" aria-label="Theme">
+    {(['light', 'dark', 'auto'] as const).map((value) => (
+      <Button key={value} size="s" view={preference === value ? 'action' : 'flat'} selected={preference === value} onClick={() => choose(value)}>
+        {value === 'auto' ? 'Auto' : value === 'dark' ? 'Dark' : 'Light'} Theme
+      </Button>
+    ))}
+  </div>;
 }

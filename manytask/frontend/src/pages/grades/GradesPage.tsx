@@ -17,6 +17,8 @@ import './grades.css';
 
 const emptyStudents: StudentRow[] = [];
 const emptyTasks: TaskMeta[] = [];
+const identityPinnedColumns = ['rownum', 'username'];
+const minimumTaskViewport = 160;
 
 export function GradesPage({shared, data: page}: PageProps<GradesData>) {
   const {data, loading, error, reload} = useGrades(page.urls.database);
@@ -26,12 +28,13 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
   const [allRows, setAllRows] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
-  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({left: window.innerWidth < 768 ? ['rownum', 'username'] : pinnedColumns});
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({left: window.innerWidth < 768 ? identityPinnedColumns : pinnedColumns});
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [filter, setFilter] = useState('');
   const [hideAdmins, setHideAdmins] = useState(false);
   const [editing, setEditing] = useState<{kind: 'score'; row: StudentRow; task: TaskMeta} | {kind: 'comment' | 'grade'; row: StudentRow} | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const editOpener = useRef<string | null>(null);
   const beginEdit = useCallback((next: NonNullable<typeof editing>) => {
     editOpener.current = document.activeElement?.getAttribute('aria-label') ?? null;
@@ -50,12 +53,6 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
     });
     return () => cancelAnimationFrame(frame);
   }, [editing]);
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
-    const update = () => setColumnPinning({left: media.matches ? ['rownum', 'username'] : pinnedColumns});
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
   const tasks = data?.tasks ?? emptyTasks;
   const students = data?.students ?? emptyStudents;
   const toggleGroup = useCallback((name: string) => setCollapsedGroups((previous) => {
@@ -112,6 +109,24 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
     onSortingChange: setSorting, onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility, onColumnSizingChange: setColumnSizing, onColumnPinningChange: setColumnPinning,
   });
+  useEffect(() => {
+    const container = tableScrollRef.current;
+    if (container === null) return;
+    const updatePinning = () => {
+      const fullPinnedWidth = pinnedColumns.reduce((total, id) => {
+        const column = table.getColumn(id);
+        return column?.getIsVisible() ? total + column.getSize() : total;
+      }, 0);
+      const left = container.clientWidth >= fullPinnedWidth + minimumTaskViewport
+        ? pinnedColumns : identityPinnedColumns;
+      setColumnPinning((previous) => previous.left?.length === left.length && previous.left.every((id, index) => id === left[index])
+        ? previous : {...previous, left});
+    };
+    const observer = new ResizeObserver(updatePinning);
+    observer.observe(container);
+    updatePinning();
+    return () => observer.disconnect();
+  }, [table, columnSizing, visibility]);
   const download = () => {
     const labels: Record<string, string> = {bonus_score: 'scores.bonus_score'};
     const rowNumbers = new Map(students.map((row, index) => [row, index + 1]));
@@ -144,25 +159,30 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
   };
   const personalHidden = columnVisibility.first_name === false;
   return <section className="grades-page" aria-label="Course database">
-    <div className="grades-toolbar">
+    <div className="grades-heading">
       <h1>Course Database</h1>
-      <TaskOrderButton order={taskOrder} onToggle={toggleTaskOrder} />
-      {page.canEdit && <>
-        <Button onClick={() => setHideAdmins((previous) => !previous)}>{hideAdmins ? 'Show admins' : 'Hide admins'}</Button>
-        <Button onClick={() => setColumnVisibility((previous) => ({...previous, ...Object.fromEntries(personalColumns.map((id) => [id, personalHidden]))}))}>{personalHidden ? 'Show personal info' : 'Hide personal info'}</Button>
-      </>}
-      <Button onClick={() => void reload().catch(() => {})} disabled={loading}>Reload grades</Button>
-      {data && <Button onClick={download}>Download CSV</Button>}
+      <p>Review student progress and manage course results.</p>
     </div>
-    <div className="grades-search">
-      <TextInput controlRef={searchRef} label="Search students" value={filter} onUpdate={setFilter} placeholder="Search..." />
-      <Button onClick={() => setFilter('')}>Clear</Button>
+    <div className="grades-controls">
+      <div className="grades-search">
+        <TextInput controlRef={searchRef} label="Search students" value={filter} onUpdate={setFilter} placeholder="Search..." />
+        <Button onClick={() => setFilter('')}>Clear</Button>
+      </div>
+      <div className="grades-actions">
+        <TaskOrderButton order={taskOrder} onToggle={toggleTaskOrder} />
+        {page.canEdit && <>
+          <Button onClick={() => setHideAdmins((previous) => !previous)}>{hideAdmins ? 'Show admins' : 'Hide admins'}</Button>
+          <Button onClick={() => setColumnVisibility((previous) => ({...previous, ...Object.fromEntries(personalColumns.map((id) => [id, personalHidden]))}))}>{personalHidden ? 'Show personal info' : 'Hide personal info'}</Button>
+        </>}
+        <Button onClick={() => void reload().catch(() => {})} disabled={loading}>Reload grades</Button>
+        {data && <Button onClick={download}>Download CSV</Button>}
+      </div>
     </div>
     {loading && <div role="status" aria-label="Loading grades"><Loader /></div>}
     {error && <div role="alert"><Alert theme="danger" title="Unable to load grades" message={error} /><Button onClick={() => void reload().catch(() => {})}>Retry</Button></div>}
     {data && <>
-      <div className="grades-table-scroll">
-        <Table table={table} attributes={{style: {width: table.getTotalSize(), tableLayout: 'fixed'}}} headerCellAttributes={(header) => ({style: {width: header.getSize()}})} stickyHeader rowClassName={(row) => row?.original.is_admin ? 'grades-admin-row' : ''} />
+      <div className="grades-table-scroll" ref={tableScrollRef}>
+        <Table table={table} size="s" verticalAlign="middle" attributes={{style: {width: table.getTotalSize(), tableLayout: 'fixed'}}} headerCellAttributes={(header) => ({style: {width: header.getSize()}})} stickyHeader rowClassName={(row) => row?.original.is_admin ? 'grades-admin-row' : ''} />
       </div>
       {filtered.length === 0 && <p>No students found</p>}
       <div className="grades-pagination">

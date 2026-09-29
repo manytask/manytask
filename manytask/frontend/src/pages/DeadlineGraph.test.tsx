@@ -2,7 +2,7 @@ import {act, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, expect, it, vi} from 'vitest';
 
-import {Theme} from '../app/Theme';
+import {Theme, ThemeControls} from '../app/Theme';
 import {DeadlineGraph, type DeadlineGraphData} from './DeadlineGraph';
 
 afterEach(() => {
@@ -49,7 +49,7 @@ it('repaints the curve with CSS colors after explicit and automatic theme change
     ],
   };
 
-  const view = render(<Theme><DeadlineGraph graph={graph} now="1970-01-01T00:02:30Z" /></Theme>);
+  const view = render(<Theme><ThemeControls /><DeadlineGraph graph={graph} now="1970-01-01T00:02:30Z" /></Theme>);
   expect(colors.at(-1)).toBe('#111111');
   expect(activeObservers).toBe(1);
 

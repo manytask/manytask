@@ -130,10 +130,15 @@ export function CoursesPage({data}: PageProps<CoursesData>) {
   ];
 
   return <main className="courses-page">
-    <h1>List of courses</h1>
-    <Button onClick={() => changeView(view === 'list' ? 'table' : 'list')}>
-      {view === 'list' ? 'Table view' : 'List view'}
-    </Button>
+    <div className="courses-heading">
+      <div>
+        <h1>List of courses</h1>
+        <p>Choose a course to continue learning or manage your available courses.</p>
+      </div>
+      <Button onClick={() => changeView(view === 'list' ? 'table' : 'list')}>
+        {view === 'list' ? 'Table view' : 'List view'}
+      </Button>
+    </div>
 
     {view === 'list' ? <section aria-label="Course list" className="courses-list">
       <Button onClick={() => setCompletedVisible(!completedVisible)}>
@@ -170,8 +175,14 @@ export function CoursesPage({data}: PageProps<CoursesData>) {
     </section>}
 
     <form className="courses-enroll" action={`/${courseInput.trim()}`} method="get">
-      <label htmlFor="course-input">Register on new course</label>
-      <TextInput id="course-input" value={courseInput} onUpdate={setCourseInput} placeholder="Course title..." controlProps={{required: true}} />
+      <div>
+        <strong>Register on new course</strong>
+        <span>Enter the course title shared by your instructor.</span>
+      </div>
+      <label className="courses-enroll-input" htmlFor="course-input">
+        <span className="visually-hidden">Register on new course</span>
+        <TextInput id="course-input" value={courseInput} onUpdate={setCourseInput} placeholder="Course title..." controlProps={{required: true}} />
+      </label>
       <Button type="submit" view="action">Go</Button>
     </form>
 

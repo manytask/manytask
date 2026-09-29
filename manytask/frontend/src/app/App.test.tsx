@@ -18,6 +18,7 @@ it('keeps the shell visible while loading the requested page, then renders its a
   renderUi(<App />);
   expect(screen.getByRole('status')).toHaveTextContent('Loading page');
   expect(screen.getByRole('navigation', {name: 'Main navigation'})).toBeVisible();
+  expect(screen.getByRole('navigation', {name: 'Breadcrumb'})).toHaveTextContent('Course not ready');
   expect(await screen.findByRole('link', {name: 'Refresh course'})).toHaveAttribute('href', '/python');
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });

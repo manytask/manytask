@@ -30,6 +30,10 @@ export function AssignmentsPage({shared, data}: PageProps<AssignmentsData>) {
   const groups = useMemo(() => orderGroups(data.groups, order), [data.groups, order]);
 
   return <main className="assignments-page">
+    <div className="assignments-heading">
+      <h1>Assignments</h1>
+      <p>{data.courseName}</p>
+    </div>
     {data.sourcecraftInviteUrl && <Alert theme="warning" title="SourceCraft invitation" message={<>
       You need to accept the organization invitation to access your repo. Please check your SourceCraft organizations at{' '}
       <a href={data.sourcecraftInviteUrl} target="_blank" rel="noreferrer">{data.sourcecraftInviteUrl}</a>.

@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import type {Locator, Page} from '@playwright/test';
-import {test, expect, asRole, payload} from './fixtures';
+import {test, expect, asRole, chooseTheme, payload} from './fixtures';
 
 async function width(cell: Locator, expected: number) {
   await expect.poll(async () => Math.abs((await cell.boundingBox())!.width - expected), {message: `${await cell.textContent()} should be ${expected}px`}).toBeLessThanOrEqual(2);
@@ -42,13 +42,12 @@ test('sticky grade headers own hit testing after combined table scrolling', asyn
   const username=page.getByRole('columnheader',{name:'Username',exact:true});
   const task=page.getByRole('columnheader',{name:'add_cpp',exact:true});
 
-  await scroll.evaluate(el=>{el.scrollLeft=500;el.scrollTop=300;});
+  await scroll.evaluate(el=>{el.scrollLeft=el.scrollWidth;el.scrollTop=300;});
   await expectHeaderOwnsCenterPoint(username);
   await expectHeaderOwnsCenterPoint(task);
 
   await page.setViewportSize({width:375,height:812});
-  await page.getByRole('button',{name:'Dark Theme'}).click();
-  await expect(page.getByRole('button',{name:'Dark Theme'})).toHaveAttribute('aria-pressed','true');
+  await chooseTheme(page,'dark');
   await scroll.evaluate(el=>{el.scrollLeft=el.scrollWidth;el.scrollTop=300;});
   await expectHeaderOwnsCenterPoint(username);
   await expectHeaderOwnsCenterPoint(task);
@@ -137,10 +136,8 @@ test('physical widths, pinning, sticky headers and edit reload preserve table st
   await expect(commentInput).toHaveValue(updatedComment);
   await page.getByRole('dialog').getByRole('button',{name:'Cancel'}).click();
   await expect(page.locator('.grades-table-scroll img')).toHaveCount(0);
-  await page.getByRole('button',{name:'Dark Theme'}).click();
+  await chooseTheme(page,'dark');
   // UIKit transitions button colors for150ms; assert the settled palette before capture.
-  await expect(page.getByRole('button',{name:'Dark Theme'})).toHaveAttribute('aria-pressed','true');
-  await expect(page.getByRole('button',{name:'Light Theme'})).toHaveCSS('color','rgba(255, 255, 255, 0.85)');
   await expect(page.getByRole('button',{name:`Edit comment for ${editName}`,exact:true})).toHaveCSS('color','rgba(255, 255, 255, 0.85)');
   await page.getByRole('textbox',{name:'Search students'}).fill('');
   await page.screenshot({path:'../.tmp/desktop-grades-dark.png',fullPage:true,animations:'disabled'});
@@ -213,21 +210,46 @@ test('narrow table keeps resized identity while tasks remain reachable after ord
     await page.getByRole('dialog').getByRole('button',{name:'Cancel'}).click();
     await expect(button).toBeFocused();
   }
-  const nameBox=(await username.boundingBox())!;expect(nameBox.x).toBe(50);
-  await expect(username).toHaveCSS('background-color','rgb(255, 255, 255)');
-  await expect(page.locator('.gt-table__cell_id_username').first()).toHaveCSS('background-color','rgb(255, 255, 255)');
+  const nameBox=(await username.boundingBox())!;const scrollBox=(await scroll.boundingBox())!;
+  const rowNumberBox=(await page.getByRole('columnheader',{name:'#',exact:true}).boundingBox())!;
+  expect(Math.abs(nameBox.x-scrollBox.x-rowNumberBox.width)).toBeLessThanOrEqual(2);
+  const lightTableBackground=await scroll.evaluate(el=>getComputedStyle(el).backgroundColor);
+  expect(lightTableBackground).not.toBe('rgba(0, 0, 0, 0)');
+  await expect(username).toHaveCSS('background-color',lightTableBackground);
+  await expect(page.locator('.gt-table__cell_id_username').first()).toHaveCSS('background-color',lightTableBackground);
   await page.screenshot({path:'../.tmp/mobile-grades-scrolled.png',fullPage:true});
-  await page.getByRole('button',{name:'Dark Theme'}).click();
-  const darkBackground=await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor);
-  expect(darkBackground).not.toBe('rgba(0, 0, 0, 0)');
-  await expect(username).toHaveCSS('background-color',darkBackground);
-  await expect(page.locator('.gt-table__cell_id_username').first()).toHaveCSS('background-color',darkBackground);
-  await expect(page.getByRole('button',{name:'Light Theme'})).toHaveCSS('color','rgba(255, 255, 255, 0.85)');
+  await chooseTheme(page,'dark');
+  const darkTableBackground=await scroll.evaluate(el=>getComputedStyle(el).backgroundColor);
+  expect(darkTableBackground).not.toBe('rgba(0, 0, 0, 0)');
+  await expect(username).toHaveCSS('background-color',darkTableBackground);
+  await expect(page.locator('.gt-table__cell_id_username').first()).toHaveCSS('background-color',darkTableBackground);
   await page.screenshot({path:'../.tmp/mobile-grades-scrolled-dark.png',fullPage:true,animations:'disabled'});
   await page.setViewportSize({width:1440,height:1000});
+  await page.getByRole('button',{name:'Collapse navigation',exact:true}).click();
   await width(username,190);
   const grade=page.getByRole('columnheader',{name:'Grade',exact:true});
+  await expect(grade).toHaveClass(/gt-table__header-cell_pinned/);
   await scroll.evaluate(el=>{el.scrollLeft=0;});const before=(await grade.boundingBox())!;
   await scroll.evaluate(el=>{el.scrollLeft=500;});const after=(await grade.boundingBox())!;
   expect(Math.abs(before.x-after.x)).toBeLessThanOrEqual(2);
+});
+
+test('sidebar width changes keep task columns reachable and pin full metadata only when it fits', async ({page}) => {
+  await page.setViewportSize({width:1024,height:900});
+  await asRole(page);await page.goto('/sandbox/database');
+  await expect(page.getByText('230 students',{exact:true})).toBeVisible();
+  const scroll=page.locator('.grades-table-scroll');
+  const firstName=page.getByRole('columnheader',{name:'First Name',exact:true});
+  await expect(firstName).not.toHaveClass(/gt-table__header-cell_pinned/);
+  const expandedWidth=await scroll.evaluate(el=>el.clientWidth);
+
+  await page.getByRole('button',{name:'Collapse navigation',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Expand navigation',exact:true})).toBeVisible();
+  await expect.poll(()=>scroll.evaluate(el=>el.clientWidth)).toBeGreaterThan(expandedWidth);
+  await expect(firstName).not.toHaveClass(/gt-table__header-cell_pinned/);
+  await scroll.evaluate(el=>{el.scrollLeft=el.scrollWidth;});
+  await expect(page.getByRole('columnheader',{name:'add_cpp',exact:true})).toBeVisible();
+
+  await page.setViewportSize({width:1440,height:900});
+  await expect(firstName).toHaveClass(/gt-table__header-cell_pinned/);
 });
