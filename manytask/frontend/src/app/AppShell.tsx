@@ -179,9 +179,11 @@ export function AppShell({shared, page, children}: {shared: SharedUiData; page?:
         <span className="course-switcher__mark" aria-hidden="true">{course?.name.slice(0, 1).toUpperCase() ?? 'C'}</span>
         <span className="course-switcher__name sidebar-label">{course?.name ?? 'Select course'}</span>
       </summary>
-      <nav aria-label="Courses">
-        {shared.courses.map((link) => <a key={link.href} href={link.href}>{link.label}</a>)}
-      </nav>
+      <div className="course-switcher__panel">
+        <nav aria-label="Courses">
+          {shared.courses.map((link) => <a key={link.href} href={link.href}>{link.label}</a>)}
+        </nav>
+      </div>
     </details>}
 
     {shared.capabilities.courseAdmin && <div className="sidebar-admin-label sidebar-label"><Label theme="warning">ADMIN</Label></div>}

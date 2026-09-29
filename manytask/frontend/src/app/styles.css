@@ -140,7 +140,7 @@ body {
   white-space: nowrap;
 }
 
-.course-switcher nav,
+.course-switcher__panel,
 .appearance-menu__panel {
   position: absolute;
   z-index: 30;
@@ -156,12 +156,23 @@ body {
   box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
 }
 
+.course-switcher__panel {
+  padding: 0;
+  overflow: hidden;
+}
+
 .course-switcher nav {
+  box-sizing: border-box;
   display: flex;
   max-height: min(50vh, 360px);
   flex-direction: column;
   gap: 2px;
+  padding: 8px;
   overflow-y: auto;
+  background: var(--g-color-base-float);
+  scrollbar-width: thin;
+  scrollbar-color: var(--g-color-text-hint) var(--g-color-base-float);
+  scrollbar-gutter: stable;
 }
 
 .course-switcher nav a {
@@ -304,7 +315,7 @@ body {
   justify-content: center;
 }
 
-.app-sidebar_collapsed .course-switcher nav,
+.app-sidebar_collapsed .course-switcher__panel,
 .app-sidebar_collapsed .appearance-menu__panel {
   top: auto;
   right: auto;
@@ -312,7 +323,7 @@ body {
   left: calc(100% + 8px);
 }
 
-.app-sidebar_collapsed .course-switcher nav {
+.app-sidebar_collapsed .course-switcher__panel {
   top: 0;
   bottom: auto;
 }
@@ -426,7 +437,7 @@ body {
     padding: 20px 16px 32px;
   }
 
-  .course-switcher nav,
+  .course-switcher__panel,
   .appearance-menu__panel {
     right: 0;
     width: auto;
