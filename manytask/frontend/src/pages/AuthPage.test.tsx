@@ -1,4 +1,4 @@
-import {screen} from '@testing-library/react';
+import {fireEvent, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {expect, it} from 'vitest';
 
@@ -52,4 +52,40 @@ it('keeps the finish and enrollment form field names', () => {
   const projectForm = screen.getByRole('button', {name: 'Join course'}).closest('form')!;
   expect(projectForm.getAttribute('action')).toBe('/python/create_project');
   expect([...new FormData(projectForm).keys()].sort()).toEqual(['csrf_token', 'secret']);
+});
+
+it('accepts ordinary signup values and rejects whitespace in constrained fields', () => {
+  renderUi(<AuthPage shared={makeSharedUi()} data={{kind: 'signup', action: '/signup', values: {}, loginUrl: '/login', sourcecraftUrl: null, invitationRequired: false}} />);
+  for (const [label, valid, invalid] of [
+    ['Username', 'alice', 'alice smith'],
+    ['First name', 'Alice', 'Alice Smith'],
+    ['Last name', 'Smith', 'Smith Jones'],
+    ['Password', 'secret123', 'secret word'],
+    ['Re-type password', 'secret123', 'secret word'],
+  ]) {
+    const input = screen.getByLabelText(label, {exact: true}) as HTMLInputElement;
+    fireEvent.change(input, {target: {value: valid}});
+    expect(input.checkValidity(), `${label} should accept ${valid}`).toBe(true);
+    fireEvent.change(input, {target: {value: invalid}});
+    expect(input.checkValidity(), `${label} should reject spaces`).toBe(false);
+  }
+  const email = screen.getByLabelText('Email address') as HTMLInputElement;
+  expect(email.getAttribute('pattern')).toBe(String.raw`[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`);
+  fireEvent.change(email, {target: {value: 'alice@example.com'}});
+  expect(email.checkValidity()).toBe(true);
+  fireEvent.change(email, {target: {value: 'invalid'}});
+  expect(email.checkValidity()).toBe(false);
+  fireEvent.change(email, {target: {value: 'alice@exampleXcom'}});
+  expect(email.checkValidity()).toBe(false);
+});
+
+it('accepts ordinary names on registration finish', () => {
+  renderUi(<AuthPage shared={makeSharedUi()} data={{kind: 'signup-finish', action: '/signup_finish', values: {}, loginUrl: '/login', sourcecraftUrl: null, invitationRequired: false}} />);
+  for (const label of ['First name', 'Last name']) {
+    const input = screen.getByLabelText(label) as HTMLInputElement;
+    fireEvent.change(input, {target: {value: 'Smith'}});
+    expect(input.checkValidity()).toBe(true);
+    fireEvent.change(input, {target: {value: 'Smith Jones'}});
+    expect(input.checkValidity()).toBe(false);
+  }
 });

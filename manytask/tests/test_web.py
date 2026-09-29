@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from flask import Flask, url_for
 from flask_wtf import CSRFProtect
 
+from manytask import ui
 from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus
@@ -218,6 +219,32 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             response = client.get(f"/{TEST_COURSE_NAME}/")
             assert response.status_code == HTTPStatus.FOUND
             assert response.location == f"/{TEST_COURSE_NAME}/create_project"
+
+
+@pytest.mark.parametrize("page,template", [("", "tasks.html"), ("database", "database.html")])
+@pytest.mark.parametrize("score_case", [({"task1": 60, "bonus_score": 5}, 5, 100, 65), ({"task1": 0}, 0, 0, 0)])
+def test_course_page_payload_includes_authorized_score_maximum(
+    app, mock_gitlab_oauth, monkeypatch, page, template, score_case
+):
+    scores, bonus_score, maximum, total_score = score_case
+    monkeypatch.setitem(ui.PAGE_SERIALIZERS, template, ("assignments", lambda _context: {}))
+    app.oauth = mock_gitlab_oauth
+    with (
+        patch.object(app.storage_api, "get_scores", return_value=scores),
+        patch.object(app.storage_api, "get_bonus_score", return_value=bonus_score),
+        patch.object(app.storage_api, "max_score_started", return_value=maximum),
+        app.test_client() as client,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+    assert response.status_code == HTTPStatus.OK
+    assert ui_payload(response)["shared"]["course"] == {
+        "name": TEST_COURSE_NAME,
+        "status": "in_progress",
+        "score": total_score,
+        "bonusScore": bonus_score,
+        "maxStartedScore": maximum,
+    }
 
 
 @pytest.mark.parametrize("page", ["", "database"])

@@ -8,7 +8,7 @@ import type {SharedUiData} from './contracts';
 export function AppShell({shared, children}: {shared: SharedUiData; children: ReactNode}) {
   const [profileOpen, setProfileOpen] = useState(false);
   const course = shared.course;
-  const percent = course && course.maxStartedScore > 0 ? Math.round(course.score / course.maxStartedScore * 1000) / 10 : null;
+  const percent = course ? (course.maxStartedScore === 0 ? '0.0' : (course.score / course.maxStartedScore * 100).toFixed(1)) : null;
 
   return (
     <div className="app-shell">
@@ -24,7 +24,7 @@ export function AppShell({shared, children}: {shared: SharedUiData; children: Re
           <details><summary>{course.name}</summary>
             <nav aria-label="Courses">{shared.courses.map((link) => <a key={link.href} href={link.href}>{link.label}</a>)}</nav>
           </details>
-          {percent !== null && <span aria-label="Course score">{percent}% · {course.score}/{course.maxStartedScore}{course.bonusScore > 0 ? ` (+${course.bonusScore} bonus)` : ''}</span>}
+          {percent !== null && <span aria-label="Course score">{percent}% · {course.score - course.bonusScore}{course.bonusScore > 0 ? `+${course.bonusScore}` : ''}/{course.maxStartedScore}</span>}
         </div>}
         {shared.username && <div className="app-account">
           <Text>{shared.username}</Text>

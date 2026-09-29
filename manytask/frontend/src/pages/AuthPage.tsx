@@ -60,15 +60,15 @@ export function AuthPage({shared, data}: PageProps<AuthData>) {
     {passwordError && <div role="alert">Passwords don't match</div>}
     <NativeForm action={data.action} csrfToken={shared.csrfToken} onSubmit={submit}>
       <div className="form-fields">
-        {isSignup && <Field name="username" label="Username" value={data.values.username} minLength={1} maxLength={32} pattern="\S*" />}
+        {isSignup && <Field name="username" label="Username" value={data.values.username} minLength={1} maxLength={32} pattern={String.raw`\S*`} />}
         {(isSignup || isFinish) && <>
-          <Field name="firstname" label="First name" value={data.values.firstname} minLength={2} maxLength={32} pattern="\S*" />
-          <Field name="lastname" label="Last name" value={data.values.lastname} minLength={2} maxLength={32} pattern="\S*" />
+          <Field name="firstname" label="First name" value={data.values.firstname} minLength={2} maxLength={32} pattern={String.raw`\S*`} />
+          <Field name="lastname" label="Last name" value={data.values.lastname} minLength={2} maxLength={32} pattern={String.raw`\S*`} />
         </>}
         {isSignup && <>
-          <Field name="email" label="Email address" type="email" value={data.values.email} pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}" />
-          <Field name="password" label="Password" type="password" minLength={6} pattern="\S*" />
-          <Field name="password2" label="Re-type password" type="password" minLength={6} pattern="\S*" />
+          <Field name="email" label="Email address" type="email" value={data.values.email} pattern={String.raw`[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`} />
+          <Field name="password" label="Password" type="password" minLength={6} pattern={String.raw`\S*`} />
+          <Field name="password2" label="Re-type password" type="password" minLength={6} pattern={String.raw`\S*`} />
         </>}
         {isProject && <Field name="secret" label="Secret Code" />}
       </div>
