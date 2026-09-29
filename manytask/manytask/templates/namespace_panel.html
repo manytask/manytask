@@ -153,10 +153,19 @@
                 <div class="modal-body">
                     <form id="addUserForm">
                         <div class="mb-3">
-                            <label for="userRmsId" class="form-label">User ID GitLab (int) *</label>
-                            <input type="number" class="form-control" id="userRmsId" name="user_id" required
-                                   placeholder="123">
-                            <small class="form-text text-muted">GitLab user ID of the user to add</small>
+                            <label for="userToAdd" class="form-label">Select user *</label>
+                            <div class="search-box mb-3">
+                                <label for="addUserSearchInput"></label>
+                                <input type="text" class="form-control" id="addUserSearchInput"
+                                       placeholder="Search usernames..." autocomplete="off">
+                            </div>
+                            <select class="form-select" id="userToAdd" name="username" required size="5">
+                                <option value="" disabled selected>Select a user</option>
+                                {% for user in available_users %}
+                                    <option value="{{ user.username }}">{{ user.username }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Only users who have logged in to Manytask are listed</small>
                         </div>
                         <div class="mb-3">
                             <label for="userRole" class="form-label">Role *</label>
@@ -189,17 +198,17 @@
             errorDiv.classList.add('d-none');
             successDiv.classList.add('d-none');
 
-            const userId = form.querySelector('[name="user_id"]').value;
+            const username = form.querySelector('[name="username"]').value;
             const role = form.querySelector('[name="role"]').value;
 
-            if (!userId || !role) {
+            if (!username || !role) {
                 errorDiv.textContent = 'All fields are required';
                 errorDiv.classList.remove('d-none');
                 return;
             }
 
             const formData = {
-                user_id: parseInt(userId),
+                username: username,
                 role: role
             };
 
@@ -215,7 +224,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    successDiv.textContent = `User with ID ${userId} added successfully!`;
+                    successDiv.textContent = `User "${username}" added successfully!`;
                     successDiv.classList.remove('d-none');
                     form.reset();
                     
@@ -319,6 +328,14 @@
                 }
             }, 5000);
         }
+
+        document.getElementById('addUserSearchInput').addEventListener('input', () => {
+            const filter = document.getElementById('addUserSearchInput').value.toLowerCase();
+            const options = document.getElementById('userToAdd').options;
+
+            for (const option of options) {
+                option.hidden = !option.disabled && !option.text.toLowerCase().includes(filter);
+            }
+        });
     </script>
 {% endblock %}
-

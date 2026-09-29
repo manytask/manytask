@@ -4,7 +4,7 @@ import pytest
 from flask import Flask
 
 from manytask.course import CourseStatus
-from manytask.utils.flask import can_edit_course, get_courses, get_user_roles
+from manytask.utils.flask import can_edit_course, check_if_current_user_is_instance_admin, get_courses, get_user_roles
 from tests.constants import TEST_COURSE_NAME, TEST_USERNAME
 
 
@@ -28,6 +28,14 @@ def app():
     return app
 
 
+def test_check_if_current_user_is_instance_admin_anonymous(app):
+    """An anonymous request (no 'manytask' key in session) must not raise and must be denied."""
+    with app.test_request_context():
+        assert check_if_current_user_is_instance_admin(app) is False
+
+    app.storage_api.check_if_instance_admin.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "is_instance_admin,course_name,expected_roles",
     [
@@ -39,7 +47,11 @@ def app():
         # Non-admin without course context has no roles (unchanged behavior).
         (False, None, []),
     ],
-    ids=["instance_admin_without_course", "instance_admin_with_course", "non_admin_without_course"],
+    ids=[
+        "instance_admin_without_course",
+        "instance_admin_with_course",
+        "non_admin_without_course",
+    ],
 )
 def test_get_user_roles_instance_admin_visibility(app, is_instance_admin, course_name, expected_roles):
     app.storage_api.check_if_instance_admin.return_value = is_instance_admin
@@ -55,6 +67,16 @@ def test_get_user_roles_instance_admin_visibility(app, is_instance_admin, course
         roles = get_user_roles(app, TEST_USERNAME, course_name=course_name)
 
     assert roles == expected_roles
+
+
+def test_get_user_roles_checks_namespace_admin_for_requested_namespace(app):
+    app.storage_api.get_namespace_by_id.side_effect = [
+        (object(), "namespace_admin"),
+        (object(), "program_manager"),
+    ]
+
+    assert get_user_roles(app, TEST_USERNAME, namespace_id=1) == ["namespace_admin"]
+    assert get_user_roles(app, TEST_USERNAME, namespace_id=2) == []
 
 
 @pytest.mark.parametrize(

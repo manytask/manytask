@@ -26,7 +26,8 @@ See the upstream docs:
 ├── .manytask.yml         # course settings + deadlines schedule
 ├── .gitlab-ci.yml        # CI for grading student submissions (lives in public)
 ├── .releaser-ci.yml      # CI for exporting private -> public (lives in private)
-├── testenv.docker        # image used by .gitlab-ci.yml to run tests
+├── base.docker           # checker + language toolchains, built before checks
+├── testenv.docker        # exports private reference in a two-stage Docker build
 ├── pyproject.toml        # python toolchain dependencies
 ├── tools/                # placeholder for shared plugins / testlib
 └── python/
@@ -83,7 +84,7 @@ Change at least these fields:
 
 - `.checker.yml` -> `export.destination` -> URL of your `public` repo
 - `.manytask.yml` -> `ui.task_url_template`, `ui.links`, `deadlines.schedule` (set real dates)
-- `.releaser-ci.yml` -> `REGISTRY` variable if you build images
+- `.releaser-ci.yml` -> `REGISTRY`, `MANYTASK_URL`, `COURSE_NAME`, and `PUBLIC_REPO_URL`
 
 ### 4. Set required GitLab CI/CD variables
 
@@ -92,6 +93,7 @@ In **Group -> Settings -> CI/CD -> Variables**:
 | Variable | Where to get it | Used for |
 |---|---|---|
 | `GITLAB_API_TOKEN` | Group access token, role `Maintainer`, scope `write_repository` | `checker export --commit` push to public |
+| `DOCKER_AUTH_CONFIG` | Docker auth JSON for a deploy/group token with `read_registry` + `write_registry` | push base/testenv images and let student repos pull testenv |
 
 In **the private project -> Settings -> CI/CD -> Variables** (project level, not group level):
 
@@ -105,7 +107,7 @@ project means the students subgroup never inherits it.
 You do **not** configure a token for score reporting: manytask writes each student's personal
 `MANYTASK_TOKEN` into their own repository, and that token can only change their own scores.
 
-### 5. Register the course on manytask2.org
+### 5. Register the course on manytask.org
 
 Ask a Manytask admin to register your course, providing:
 - course slug (e.g. `your-course`)
@@ -115,9 +117,11 @@ Ask a Manytask admin to register your course, providing:
 ### 6. Push to `main` and watch the pipeline
 
 `.releaser-ci.yml` will:
-1. Run `checker validate` to sanity-check configs.
-2. Run `checker export --commit` to copy public files into the public repo.
-3. Run `checker manytask update` to push deadlines to the Manytask web app.
+1. Verify configuration with `checker validate`.
+2. Build a checker/toolchain base image, then run `checker check . .`.
+3. Build and publish a testenv whose final image contains only the
+   `checker export-private` result.
+4. On `main`, manually deploy the image, `.manytask.yml`, and public repo.
 
 ---
 

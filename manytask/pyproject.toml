@@ -29,6 +29,7 @@ dependencies = [
     "httpx>=0.28.1",
     "yandexcloud>=0.388.0",
     "grpcio>=1.78.0",
+    "tenacity>=9.0.0",
 ]
 
 

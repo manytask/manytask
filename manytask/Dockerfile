@@ -2,14 +2,14 @@ FROM python:3.14-alpine AS app_builder
 
 WORKDIR /app
 
-# Build context: repository root (parent of manytask/), see docker-compose *.yml
-COPY manytask/pyproject.toml manytask/uv.lock manytask/VERSION ./
-COPY manytask/manytask/ /app/manytask
-
 ENV UV_VERSION=0.11.8
-RUN pip install uv==${UV_VERSION}
+RUN apk add --no-cache build-base \
+    && pip install uv==${UV_VERSION}
 
-RUN apk add --no-cache build-base
+# Build context: repository root (parent of manytask/), see docker-compose *.yml
+# Only dependency manifests go here: app sources are copied in the final stage,
+# so code changes do not invalidate the dependency layer.
+COPY manytask/pyproject.toml manytask/uv.lock manytask/VERSION ./
 
 RUN uv sync --locked --no-install-project
 
@@ -18,6 +18,12 @@ FROM python:3.14-alpine AS app
 
 RUN apk add --no-cache curl \
     && rm -rf /var/cache/apk/*
+
+# Set up Yandex.Cloud certificate
+RUN mkdir -p /root/.postgresql && \
+    curl -o /root/.postgresql/root.crt https://storage.yandexcloud.net/cloud-certs/CA.pem \
+        --retry 3 --retry-delay 2 --connect-timeout 10 && \
+    chmod 0600 /root/.postgresql/root.crt
 
 WORKDIR /app
 
@@ -41,10 +47,3 @@ CMD ["gunicorn", "--bind", "0.0.0.0:5050", \
     "--workers", "2", \
     "--threads", "4", \
     "manytask:create_app()"]
-
-# Set up Yandex.Cloud certificate
-RUN mkdir -p /root/.postgresql && \
-    curl -o /root/.postgresql/root.crt https://storage.yandexcloud.net/cloud-certs/CA.pem \
-        --retry 3 --retry-delay 2 --connect-timeout 10 && \
-    chmod 0600 /root/.postgresql/root.crt
-

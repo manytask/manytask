@@ -17,7 +17,7 @@
     </span>
 </div>
 {% endif %}
-<div class="mb-3 mt-2 d-flex justify-content-between align-items-center">
+<div class="mb-3 mt-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
     <span class="course-status-badge status-{{ course_status.value }}">
         <i class="fas
            {% if course_status.value == 'created' %}fa-plus-circle
@@ -29,11 +29,15 @@
            {% endif %} me-2"></i>
         {{ course_status.value.replace("_", " ").title() }}
     </span>
-    <div class="d-flex gap-2">
+    <div class="d-flex flex-wrap align-items-center gap-2">
         <button id="studentTokenBtn" class="btn btn-outline-secondary btn-sm" type="button"
                 data-bs-toggle="collapse" data-bs-target="#studentTokenPanel"
                 aria-expanded="false" aria-controls="studentTokenPanel">
             <i class="fas fa-key me-1"></i>My API token
+        </button>
+        <button id="task-group-order" type="button" class="btn btn-outline-secondary btn-sm" value="desc"
+                data-username="{{ username }}" data-course-name="{{ course_name }}">
+            Show oldest first
         </button>
         <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
             Show past deadlines
@@ -78,7 +82,8 @@
         </div>
     </div>
 </div>
-    {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True)[::-1] %}
+<div id="task-groups">
+    {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True) %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
         {% set solved_group_scores = [] %}
         {% for task in group.tasks %}
@@ -86,7 +91,8 @@
         {% endfor %}
         {% set solved_group_score = solved_group_scores|sum %}
 
-        <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}">
+        <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}"
+             data-group-start="{{ group.start.isoformat() }}">
 
             <div class="d-block d-sm-flex justify-content-between align-items-start">
                 <div class="d-block flex-column align-items-start">
@@ -94,7 +100,7 @@
                     <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
                 </div>
 
-                <div class="task-deadlines">
+                <div class="task-deadlines {% if deadlines_type.value == 'interpolate' %}task-deadlines--graph{% endif %}">
                     {% if group.end < now %}
                         <div class="task-deadline task-group__expired-notice expired-tooltip"
                              data-tippy-content="{{ group.end.strftime('%Z') }}" id="expiredNotice-{{ loop.index }}">
@@ -102,41 +108,61 @@
                             <span>Expired: {{ group.end.strftime('%d.%m.%Y %H:%M') }}</span>
                         </div>
                     {% endif %}
-                    {% set last = namespace(start=group.start) %}
-                    {% for deadline, percent in group.get_displayed_deadlines(deadlines_type) %}
-                        {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
-                        {% set is_expired = deadline < now %}
-                        <div class="task-deadline {% if deadline < now %}passed-deadline{% endif %}"
-                             {% if deadline < now %}style="display: none;"{% endif %}>
+
+                    {% if deadlines_type.value == 'interpolate' %}
+                        {% set graph = group.get_graph_data(now, deadlines_type) %}
+                        <div class="task-deadline task-deadline--graph {{ graph.status }}">
+                            {# The hint sits in the header row: it is shorter than the status
+                               pill that already sets the row height, so it costs no vertical
+                               space and frees a whole row for the graph. #}
                             <div class="deadline-header">
-                                <span class="deadline-percent">{{ (percent*100)|round|int }}%</span>
-                                <span class="task-deadline__status {{ 'expired' if is_expired else ('urgent' if is_less_than_day else 'active') }}">
-                                    {{ 'Expired' if is_expired else ('Urgent' if is_less_than_day else 'Active') }}
+                                <span class="deadline-percent">{{ (graph.percent*100)|round|int }}%</span>
+                                <span class="task-deadline__deadline-hint">{{ graph.hint }}</span>
+                                <span class="task-deadline__status {{ graph.status }}">
+                                    {{ graph.status|title }}
                                 </span>
                             </div>
-                            <div class="task-deadline__progress">
-                                <div class="task-deadline__progress-bar {{ 'expired' if is_expired else ('urgent' if is_less_than_day else '') }}"
-                                     style="width: {{ 100 if deadline < now else (0 if last.start > now else ((now.timestamp() - last.start.timestamp()) / (deadline.timestamp() - last.start.timestamp()) * 100) | abs | int) }}%">
+
+                            <canvas class="deadline-graph-canvas"
+                                    data-points='{{ graph.points | tojson }}'
+                                    data-now="{{ now.timestamp() }}"></canvas>
+                        </div>
+                    {% else %}
+                        {% set last = namespace(start=group.start) %}
+                        {% for deadline, percent in group.get_displayed_deadlines(deadlines_type) %}
+                            {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
+                            {% set is_expired = deadline < now %}
+                            <div class="task-deadline {% if deadline < now %}passed-deadline{% endif %}"
+                                 {% if deadline < now %}style="display: none;"{% endif %}>
+                                <div class="deadline-header">
+                                    <span class="deadline-percent">{{ (percent*100)|round|int }}%</span>
+                                    <span class="task-deadline__status {{ 'expired' if is_expired else ('urgent' if is_less_than_day else 'active') }}">
+                                        {{ 'Expired' if is_expired else ('Urgent' if is_less_than_day else 'Active') }}
+                                    </span>
+                                </div>
+                                <div class="task-deadline__progress">
+                                    <div class="task-deadline__progress-bar {{ 'expired' if is_expired else ('urgent' if is_less_than_day else '') }}"
+                                         style="width: {{ 100 if deadline < now else (0 if last.start > now else ((now.timestamp() - last.start.timestamp()) / (deadline.timestamp() - last.start.timestamp()) * 100) | abs | int) }}%">
+                                    </div>
+                                </div>
+
+                                <div class="task-deadline__deadline-time card-tooltip"
+                                     data-tippy-content="{{ deadline.strftime('%Z') }}">
+                                    <span><i class="far fa-calendar"></i>
+                                    <span>{{ deadline.strftime('%d.%m.%Y') }}</span></span>
+                                    <span>
+                                    <i class="far fa-clock"></i>
+                                    <span>{{ deadline.strftime('%H:%M') }}</span>
+                                    </span>
+                                </div>
+
+                                <div class="task-deadline__deadline-hint">
+                                    {{ '' if deadline < now else 'Deadline expires in: ' + format_remaining(deadline, now) }}
                                 </div>
                             </div>
-
-                            <div class="task-deadline__deadline-time card-tooltip"
-                                 data-tippy-content="{{ deadline.strftime('%Z') }}">
-                                <span><i class="far fa-calendar"></i>
-                                <span>{{ deadline.strftime('%d.%m.%Y') }}</span></span>
-                                <span>
-                                <i class="far fa-clock"></i>
-                                <span>{{ deadline.strftime('%H:%M') }}</span>
-                                </span>
-                            </div>
-
-                            <div class="task-deadline__deadline-hint">
-                                {% set remained = (((deadline - now).seconds / 3600)|int|string + ' h.') if is_less_than_day else ((deadline - now).days|string + ' d.') %}
-                                {{ '' if deadline < now else 'Deadline expires in: ' + remained }}
-                            </div>
-                        </div>
-                        {% set last.start = deadline %}
-                    {% endfor %}
+                            {% set last.start = deadline %}
+                        {% endfor %}
+                    {% endif %}
                 </div>
             </div>
             <hr class="dashed mt-1">
@@ -189,10 +215,29 @@
             </div>
         </div>
     {% endfor %}
+</div>
+
+    <script src="{{ url_for('static', filename='js/task-group-order.js') }}"></script>
+    <script>
+        const orderButton = document.getElementById('task-group-order');
+        const groupContainer = document.getElementById('task-groups');
+        const taskGroups = Array.from(groupContainer.children, element => ({
+            start: element.dataset.groupStart, element,
+        }));
+        initTaskGroupOrder(orderButton);
+        function applyTaskGroupOrder() {
+            for (const group of sortTaskGroups(taskGroups, orderButton.value)) {
+                groupContainer.appendChild(group.element);
+            }
+        }
+        applyTaskGroupOrder();
+        orderButton.addEventListener('click', applyTaskGroupOrder);
+    </script>
 
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
     <script src="{{ url_for('static', filename='js/student-token.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/deadline-graph.js') }}"></script>
     <script>
         tippy('.card-tooltip', {
             arrow: false,

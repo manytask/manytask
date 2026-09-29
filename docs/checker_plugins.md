@@ -3,17 +3,23 @@
 
 ## `copy_files`
 
-Copy files matching glob patterns from one directory to another. Used to collect students solutions and private tests in one place in preparation for testing. In the example below only those files in the `allow_change` parameter will be copied, thus if the student changes tests these changes will not affect testing in the CI (`allow_change` can be set in the `.task.yml` file on a task basis).
+Copy files matching glob patterns from one directory to another. Used to collect the student's solution and the private tests in one place in preparation for testing.
+
+The example below takes **from the student repository** (`global.repo_dir`) only the files listed in the `allow_change` parameter, and puts them into the testing tree. Anything the student changed outside that list — the tests, for instance — is simply not copied, so it cannot affect grading in CI.
+
+`allow_change` is not a built-in field: it is an ordinary [parameter](./checker_yml_reference.md#default_parameters) that you define yourself in `default_parameters` and can narrow per task in `.task.yml`.
 
 ```yaml
-- name: "Copy reference tests"
+- name: "Take the student's allowed files"
   run: "copy_files"
   args:
-    source_dir: ${{ global.ref_dir }}/${{ task.task_sub_path }}
+    source_dir: ${{ global.repo_dir }}/${{ task.task_sub_path }}
     target_dir: ${{ global.temp_dir }}/${{ task.task_sub_path }}
     patterns: ${{ parameters.allow_change }}
     ignore_patterns: ["*.pyc"]
 ```
+
+> Note that this stage is **optional**. `checker check` / `checker grade` already build the testing tree by overlaying the reference repo's public and private files on top of the student's files, so tests are protected without any `copy_files` stage. Use this plugin when you want an explicit, per-task allow-list — see [the configuration guide](./checker_config.md#optional-an-explicit-allow-list-with-allow_change).
 
 | Arg | Type | Required | Description |
 |---|---|---|---|
@@ -25,6 +31,8 @@ Copy files matching glob patterns from one directory to another. Used to collect
 ## `check_regexps`
 
 Fail if any of the given regular expressions are found in the matched files. Useful for forbidding certain patterns (e.g. `exit(0)`, hardcoded answers).
+
+Reusing the same `allow_change` parameter here is a common idiom: the files a student may edit are exactly the files worth scanning for forbidden constructs.
 
 ```yaml
 - name: "Check forbidden patterns"

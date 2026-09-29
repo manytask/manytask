@@ -12,6 +12,7 @@ CHECKER_CONFIG_OUT ?= ./.checker.yml
 
 CHECKER_PKG := checker
 TESTS_DIR := tests
+TEST_ARGS ?= $(TESTS_DIR)
 
 install-deps:
 	uv sync --extra dev
@@ -19,11 +20,11 @@ install-deps:
 test: copy-common-config install-deps run-checker-tests
 
 run-checker-tests:
-	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail tests
+	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) PYTHONPATH=. uv run pytest -c /dev/null --rootdir=. --import-mode=importlib -n 4 --skip-firejail $(TEST_ARGS)
 
 test-colima: copy-common-config install-deps
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
-	uv run python -m pytest --cov-report term-missing --cov=checker --skip-firejail tests/
+	uv run python -m pytest --cov-report term-missing --cov=checker --skip-firejail $(TEST_ARGS)
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }

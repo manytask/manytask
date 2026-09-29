@@ -79,7 +79,7 @@ It may be convenient to use different templating options in different tasks, whi
 
 ## Checker configuration (`.checker.yml`)
 
-This file specifies the default parameters for the checker script and defines the pipelines for task checking and exporting. There is a detailed [reference guide to the `.checker.yml` file](./checker_yml_reference.md), here we show a minimal example.
+This file specifies the default parameters for the checker script and defines the pipelines for task checking and exporting. There is a step-by-step [guide to writing `.checker.yml`](./checker_config.md) and a detailed [reference guide](./checker_yml_reference.md); here we show a minimal example.
 
 ```yaml
 version: 1
@@ -126,6 +126,8 @@ testing:
 ```
 
 Briefly, we set up patterns for the files that should be ignored by checker, files that are public (should be available to the students) and those that are private (should not be available to the students). The testing contains three stages: global, tasks and report. The global pipeline runs once per repo, preparing the testing system. Task pipeline runs tests for the task and save the result in `tests_output`. The report pipeline is then uses these data to report score (in this example it prints it). Both task and report pipeline run for each task needs checking. When `checker grade` is executed, the tasks need checking is determined by the changes in the last commit due to `changes_detection: last_commit_changes` setting. With `checker check` all the tasks will be checked.
+
+Note what is deliberately **missing** from the lists above: the solution file (`solution.py` and friends). A file matching none of the three lists is the only kind a student can actually change — at grading time the checker takes such files from the student repository, then overwrites everything public and private with your originals. This cuts both ways: listing a solution file as public would grade every student against your reference solution, while *omitting* `test_public.py` from `public_patterns` would let a student's edited tests run in CI. That is why `test_public.py` is listed above even though ordinary files are exported without being listed. The [configuration guide](./checker_config.md#the-file-classification-model) walks through this model in detail.
 
 One can override these settings for a group of tasks or even for single task using `.group.yml` and `.task.yml` files:
 

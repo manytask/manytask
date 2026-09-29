@@ -1,0 +1,176 @@
+# Demo config for test6 — showcases the interpolated deadline graph
+# Current date: 2026-09-07 (UTC+3), so groups below cover past, active, and future windows.
+
+version: 1
+
+settings:
+  course_name: test6
+  gitlab_base_url: https://gitlab.example.com
+  public_repo: test6/public
+  students_group: test6/students
+
+ui:
+  task_url_template: https://gitlab.example.com/$GROUP_NAME/$USER_NAME/$TASK_NAME
+  links:
+    "Manytask": https://github.com/manytask/manytask
+
+deadlines:
+  timezone: Europe/Moscow
+  deadlines: interpolate          # ← enables the canvas graph on the tasks page
+  max_submissions: 20
+  submission_penalty: 0.0
+  schedule:
+
+    # ── 1. Straight-line decline: no intermediate steps ────────────────────────
+    #    Graph: single diagonal from start (100 %) → end (0 %).
+    #    Status: currently active (now sits in the middle of the window).
+    - group: "A · No Steps (straight decline)"
+      start: 2026-08-01 00:00
+      end:   2026-10-31 23:59
+      tasks:
+        - task: a_task_1
+          score: 10
+        - task: a_task_2
+          score: 10
+        - task: a_task_3
+          score: 10
+
+    # ── 2. Single mid-step: classic "soft deadline" shape ─────────────────────
+    #    100 % until soft deadline (2026-09-01), then linear drop to 50 %
+    #    at the hard deadline (2026-10-15), then 0 % after that.
+    #    Status: past the soft deadline → currently on the descending slope.
+    - group: "B · One Step — past soft deadline"
+      start: 2026-08-15 00:00
+      steps:
+        0.5: 2026-09-01 23:59    # score drops below 100 % from this point
+      end:   2026-10-15 23:59
+      tasks:
+        - task: b_task_1
+          score: 20
+        - task: b_task_2
+          score: 20
+
+    # ── 3. Two steps: plateau → gentle slope → steep drop ────────────────────
+    #    100 % at start → 75 % at step 1 → 25 % at step 2 → 0 % at end.
+    #    Status: between step 1 and step 2 (active, declining).
+    - group: "C · Two Steps — on second slope"
+      start: 2026-08-01 00:00
+      steps:
+        0.75: 2026-09-01 23:59
+        0.25: 2026-09-20 23:59
+      end:   2026-10-31 23:59
+      tasks:
+        - task: c_task_1
+          score: 15
+        - task: c_task_2
+          score: 15
+        - task: c_task_3
+          score: 15
+          is_bonus: true
+
+    # ── 4. Already expired — full window in the past ──────────────────────────
+    #    Graph renders in grey; the "now" marker does not appear.
+    - group: "D · Expired (all grey)"
+      start: 2026-05-01 00:00
+      steps:
+        0.5: 2026-06-01 23:59
+      end:   2026-07-31 23:59
+      tasks:
+        - task: d_task_1
+          score: 10
+        - task: d_task_2
+          score: 10
+
+    # ── 5. Not yet started — "now" marker hidden, no expiry notice ────────────
+    #    Graph shows full green fill; the orange "now" line is off the left edge.
+    - group: "E · Future (not started yet)"
+      start: 2026-10-01 00:00
+      steps:
+        0.6: 2026-11-01 23:59
+      end:   2026-12-15 23:59
+      tasks:
+        - task: e_task_1
+          score: 25
+        - task: e_task_2
+          score: 25
+
+    # ── 6. Three steps — many break-points visible on the X axis ─────────────
+    #    Tests label collision suppression in crowded graphs.
+    - group: "F · Three Steps — label collision test"
+      start: 2026-08-01 00:00
+      steps:
+        0.8: 2026-08-20 23:59
+        0.5: 2026-09-10 23:59
+        0.2: 2026-09-25 23:59
+      end:   2026-10-10 23:59
+      tasks:
+        - task: f_task_1
+          score: 8
+        - task: f_task_2
+          score: 8
+        - task: f_task_3
+          score: 8
+        - task: f_task_4
+          score: 8
+
+    # ── 7. Long window, now near the end ─────────────────────────────────────
+    #    The "now" dot sits close to the end of the curve near 0 %.
+    - group: "G · Near expiry"
+      start: 2026-01-01 00:00
+      steps:
+        0.5: 2026-04-01 23:59
+      end:   2026-09-20 23:59
+      tasks:
+        - task: g_task_1
+          score: 30
+        - task: g_task_2
+          score: 30
+
+    # ── 8. Flat 100 % plateau — "now" is before the first score-drop step ─────
+    #    A step of 1.0 at 2026-09-20 creates a flat segment: the interpolation
+    #    between (start, 1.0) and (step1, 1.0) always yields 100 %.
+    #    The "now" dot therefore sits on the top horizontal line of the graph.
+    - group: "H · Still at 100 % (before first drop)"
+      start: 2026-09-01 00:00
+      steps:
+        1.0: 2026-09-20 23:59    # score stays at 100 % until this date
+        0.5: 2026-10-15 23:59    # then drops toward 50 % by this date
+        0.1: 2026-11-01 23:59    # then toward 10 % by this date
+      end:   2026-12-01 23:59
+      tasks:
+        - task: h_task_1
+          score: 20
+        - task: h_task_2
+          score: 20
+        - task: h_task_3
+          score: 20
+
+    # ── 9. Mixed deadline times — exercises the X-axis time rule ──────────────
+    #    A label shows the time only when the deadline is NOT at 23:59, and the
+    #    first point (the group start) never shows one. Here:
+    #      start 09:00  -> "01.09"        (first point, time suppressed)
+    #      step  18:30  -> "15.09 18:30"  (mid-day deadline, time shown)
+    #      step  23:59  -> "25.09"        (end of day, time redundant)
+    #      end   12:00  -> "05.10 12:00"  (mid-day deadline, time shown)
+    - group: "I · Mixed times (09:00 / 18:30 / 23:59 / 12:00)"
+      start: 2026-09-01 09:00
+      steps:
+        0.7: 2026-09-15 18:30
+        0.3: 2026-09-25 23:59
+      end:   2026-10-05 12:00
+      tasks:
+        - task: i_task_1
+          score: 12
+        - task: i_task_2
+          score: 12
+
+grades:
+  grades:
+    5:
+      - percent: 90
+    4:
+      - percent: 70
+    3:
+      - percent: 50
+    2:
+      - {"": 0}

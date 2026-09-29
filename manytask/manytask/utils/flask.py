@@ -105,7 +105,9 @@ def check_if_current_user_is_instance_admin(app: CustomFlask) -> bool:
     if app.debug:
         return True
     else:
-        username = session["manytask"]["username"]
+        username = session.get("manytask", {}).get("username")
+        if username is None:
+            return False
         return app.storage_api.check_if_instance_admin(username)
 
 
@@ -120,7 +122,9 @@ def check_if_current_user_is_namespace_admin(app: CustomFlask, course_name: str)
     if app.debug:
         return True
     else:
-        username = session["manytask"]["username"]
+        username = session.get("manytask", {}).get("username")
+        if username is None:
+            return False
         course = app.storage_api.get_course(course_name)
         if course and course.namespace_id:
             namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
@@ -145,7 +149,12 @@ def check_if_user_has_namespaces_to_admin(app: CustomFlask) -> bool:
         return len(namespace_admin_namespaces) > 0 or app.storage_api.check_if_instance_admin(username)
 
 
-def get_user_roles(app: CustomFlask, username: str, course_name: str | None = None) -> list[str]:
+def get_user_roles(
+    app: CustomFlask,
+    username: str,
+    course_name: str | None = None,
+    namespace_id: int | None = None,
+) -> list[str]:
     """Get list of roles for the user.
 
     Possible roles:
@@ -157,6 +166,7 @@ def get_user_roles(app: CustomFlask, username: str, course_name: str | None = No
     :param app: Flask application instance
     :param username: manytask username
     :param course_name: Optional course name for course-specific roles
+    :param namespace_id: Optional namespace id for namespace-specific roles
     :return: List of role strings
     """
     roles = []
@@ -173,23 +183,37 @@ def get_user_roles(app: CustomFlask, username: str, course_name: str | None = No
                 roles.append("namespace_admin")
 
         roles.append("student")
+    elif namespace_id is not None:
+        try:
+            _, namespace_role = app.storage_api.get_namespace_by_id(namespace_id, username)
+        except PermissionError:
+            namespace_role = None
+        if namespace_role == "namespace_admin":
+            roles.append("namespace_admin")
 
     return roles
 
 
-def has_role(username: str, required_roles: list[str] | str, app: CustomFlask, course_name: str | None = None) -> bool:
+def has_role(
+    username: str,
+    required_roles: list[str] | str,
+    app: CustomFlask,
+    course_name: str | None = None,
+    namespace_id: int | None = None,
+) -> bool:
     """Check if user has at least one of the required roles.
 
     :param username: manytask username
     :param required_roles: Single role string or list of role strings
     :param app: Flask application instance
     :param course_name: Optional course name for course-specific roles
+    :param namespace_id: Optional namespace id for namespace-specific roles
     :return: True if user has at least one of the required roles
     """
     if isinstance(required_roles, str):
         required_roles = [required_roles]
 
-    user_roles = get_user_roles(app, username, course_name)
+    user_roles = get_user_roles(app, username, course_name, namespace_id)
     return any(role in user_roles for role in required_roles)
 
 
