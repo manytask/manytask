@@ -62,6 +62,8 @@ items:
     items:
       - name: Development
         href: dev.md
+      - name: Development plan
+        href: dev_plan.md
   - name: References
     items:
       - name: .manytask.yml reference
