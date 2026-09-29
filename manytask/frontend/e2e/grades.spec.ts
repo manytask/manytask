@@ -14,6 +14,13 @@ async function resize(page: Page, cell: Locator, target: number) {
   await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 + target - before.width, box.y + box.height / 2, {steps:10});
   await page.mouse.up(); await width(cell,target);
 }
+async function expectHeaderOwnsCenterPoint(header: Locator) {
+  await expect.poll(() => header.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return hit != null && element.contains(hit);
+  }), {message: `${await header.textContent()} header should paint above body cells`}).toBe(true);
+}
 // RFC4180 parser: unlike split-lines it detects quoted embedded newlines and quotes.
 function parseCsv(csv: string): string[][] {
   const rows: string[][] = []; let row: string[] = []; let field = ''; let quoted = false;
@@ -27,6 +34,25 @@ function parseCsv(csv: string): string[][] {
   if (field || row.length) {row.push(field);rows.push(row);}
   return rows;
 }
+
+test('sticky grade headers own hit testing after combined table scrolling', async ({page}) => {
+  await asRole(page); await page.goto('/sandbox/database');
+  await expect(page.getByText('230 students',{exact:true})).toBeVisible();
+  const scroll=page.locator('.grades-table-scroll');
+  const username=page.getByRole('columnheader',{name:'Username',exact:true});
+  const task=page.getByRole('columnheader',{name:'add_cpp',exact:true});
+
+  await scroll.evaluate(el=>{el.scrollLeft=500;el.scrollTop=300;});
+  await expectHeaderOwnsCenterPoint(username);
+  await expectHeaderOwnsCenterPoint(task);
+
+  await page.setViewportSize({width:375,height:812});
+  await page.getByRole('button',{name:'Dark Theme'}).click();
+  await expect(page.getByRole('button',{name:'Dark Theme'})).toHaveAttribute('aria-pressed','true');
+  await scroll.evaluate(el=>{el.scrollLeft=el.scrollWidth;el.scrollTop=300;});
+  await expectHeaderOwnsCenterPoint(username);
+  await expectHeaderOwnsCenterPoint(task);
+});
 
 test('physical widths, pinning, sticky headers and edit reload preserve table state', async ({page}) => {
   await asRole(page); await page.goto('/sandbox/database');

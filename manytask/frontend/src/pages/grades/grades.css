@@ -4,6 +4,7 @@
 .grades-search { max-width: 520px; flex-wrap: nowrap; }
 .grades-table-scroll { max-width: 100%; max-height: 70vh; overflow: auto; margin-bottom: 16px; }
 .grades-table-scroll th, .grades-table-scroll td { overflow-wrap: anywhere; }
+.grades-table-scroll .gt-table__header_sticky { z-index: 2; }
 .grades-admin-row { color: var(--g-color-text-secondary); }
 .grades-override { background: var(--g-color-base-warning-light); padding: 2px 4px; border-radius: 3px; }
 .grades-cell-action { max-width: 100%; }
