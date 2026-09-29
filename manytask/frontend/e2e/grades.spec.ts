@@ -68,15 +68,11 @@ test('physical widths, pinning, sticky headers and edit reload preserve table st
   await page.getByRole('button',{name:'Collapse rust',exact:true}).click();
   await page.getByRole('textbox',{name:'Search students'}).fill('student');
   await page.getByRole('button',{name:'Next page',exact:true}).click();
-  for (const name of ['Show oldest first','Show newest first']) {
-    await page.getByRole('button',{name,exact:true}).click();
-    await expect(page.getByText('Page 2 of 3',{exact:true})).toBeVisible();
-    await expect(page.getByRole('button',{name:'Expand python'})).toBeVisible();
-    await width(username,190); await width(task,175);
-    // Python starts at the same date as cpp; stable ordering still follows group identity.
-    const python = page.getByRole('columnheader').filter({has:page.getByRole('button',{name:'Expand python'})});
-    await width(python,195);
-  }
+  await expect(page.getByText('Page 2 of 3',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Expand python'})).toBeVisible();
+  await width(username,190); await width(task,175);
+  const python = page.getByRole('columnheader').filter({has:page.getByRole('button',{name:'Expand python'})});
+  await width(python,195);
   const scroll = page.locator('.grades-table-scroll');
   await scroll.evaluate((el) => {el.scrollLeft=0;el.scrollTop=0;});
   const original = (await username.boundingBox())!;
@@ -100,7 +96,7 @@ test('physical widths, pinning, sticky headers and edit reload preserve table st
   await expect(page.getByText('Page 2 of 3',{exact:true})).toBeVisible();
   await expect(page.getByRole('textbox',{name:'Search students'})).toHaveValue('student');
   await expect(page.getByRole('button',{name:'Expand rust'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Show oldest first'})).toBeVisible();
+  await expect(page.getByRole('button',{name:/Show (oldest|newest) first/})).toHaveCount(0);
   await width(username,190); await width(task,175);
   // A score may move the edited row due to total-score sorting; find it via real search.
   await expect(page.getByRole('button',{name:`Edit score add_cpp for ${editName}`,exact:true})).toHaveText(updatedScore);
@@ -167,7 +163,6 @@ test('pending fetch, network retry and empty responses stay usable', async ({pag
   await page.route(url,async route=>{await pending;await route.continue();},{times:1});
   await page.getByRole('button',{name:'Reload grades'}).click();
   await expect(page.getByRole('button',{name:'Reload grades'})).toBeDisabled();
-  await page.getByRole('button',{name:'Show oldest first'}).click();
   await page.getByRole('textbox',{name:'Search students'}).fill('student');
   release(); await expect(page.getByRole('button',{name:'Reload grades'})).toBeEnabled();
   await page.route(url,route=>route.abort(),{times:1});
@@ -184,13 +179,12 @@ test('pending fetch, network retry and empty responses stay usable', async ({pag
   await expect(page.getByText('No students found')).toBeVisible();
 });
 
-test('narrow table keeps resized identity while tasks remain reachable after ordering and reload', async ({page}) => {
+test('narrow table keeps resized identity while tasks remain reachable after reload', async ({page}) => {
   await asRole(page);await page.goto('/sandbox/database');
   await expect(page.getByText('230 students',{exact:true})).toBeVisible();
   const username=page.getByRole('columnheader',{name:'Username',exact:true});
   await resize(page,username,190);
   await page.setViewportSize({width:375,height:812});
-  await page.getByRole('button',{name:'Show oldest first'}).click();
   await page.getByRole('button',{name:'Reload grades'}).click();
   await expect(page.getByRole('button',{name:'Reload grades'})).toBeEnabled();
   await width(username,190);

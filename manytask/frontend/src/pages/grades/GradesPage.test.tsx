@@ -27,12 +27,13 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it('preserves filtering, page, hidden columns, two collapsed groups and sorting through group order changes and reload', async () => {
+it('preserves filtering, page, hidden columns, two collapsed groups and sorting through reload without an order control', async () => {
   const user = userEvent.setup();
   const refreshed = {...response, students: response.students.map((student) => ({...student, percent: 23.45}))};
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(response))).mockResolvedValueOnce(new Response(JSON.stringify(refreshed))));
   renderUi(<GradesPage shared={shared} data={data} />);
   await screen.findByText('student229');
+  expect(screen.queryByRole('button', {name: /Show (oldest|newest) first/})).not.toBeInTheDocument();
   expect(rows()).toHaveLength(100);
   expect(rows()[0]).toHaveClass('grades-admin-row');
   expect(cells(rows()[0])).toEqual(['1', 'student229', 'Other', 'Иванов', '7 *', '229', '12.3', '2', '5', 'Review', '0', '9', '-2']);
@@ -46,9 +47,6 @@ it('preserves filtering, page, hidden columns, two collapsed groups and sorting 
   screen.getByRole('button', {name: 'Username'}).focus();
   await user.keyboard('{Enter}');
   expect(cells(rows()[0])).toEqual(['101', 'student100', '7 *', '100', '12.3', '2', '5', '0', '7']);
-  await user.click(screen.getByRole('button', {name: 'Show oldest first'}));
-  expect(cells(rows()[0])).toEqual(['101', 'student100', '7 *', '100', '12.3', '2', '5', '7', '0']);
-  await user.click(screen.getByRole('button', {name: 'Show newest first'}));
   await user.click(screen.getByRole('button', {name: 'Reload grades'}));
   await waitFor(() => expect(screen.getByRole('button', {name: 'Reload grades'})).toBeEnabled());
   expect(cells(rows()[0])).toEqual(['101', 'student100', '7 *', '100', '23.4', '2', '5', '0', '7']);

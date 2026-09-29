@@ -5,7 +5,6 @@ import {getPaginationRowModel, type ColumnPinningState, type ColumnSizingState, 
 import type {PageProps} from '../../app/contracts';
 import {matchesSearchVariants, searchTermVariants} from '../../shared/search';
 import {useTaskOrder} from '../../shared/taskOrder';
-import {TaskOrderButton} from '../../shared/TaskOrderButton';
 import {buildColumns, groupTasks, groupTotalColumnId, personalColumns, pinnedColumns, taskColumnId} from './columns';
 import {exportGradesCsv} from './csv';
 import {EditScoreDialog} from './EditScoreDialog';
@@ -22,7 +21,7 @@ const minimumTaskViewport = 160;
 
 export function GradesPage({shared, data: page}: PageProps<GradesData>) {
   const {data, loading, error, reload} = useGrades(page.urls.database);
-  const [taskOrder, toggleTaskOrder] = useTaskOrder(shared.username ?? '', page.courseName);
+  const [taskOrder] = useTaskOrder(shared.username ?? '', page.courseName);
   const [sorting, setSorting] = useState<SortingState>([{id: 'total_score', desc: true}]);
   const [pagination, setPagination] = useState<PaginationState>({pageIndex: 0, pageSize: 100});
   const [allRows, setAllRows] = useState(false);
@@ -169,7 +168,6 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
         <Button onClick={() => setFilter('')}>Clear</Button>
       </div>
       <div className="grades-actions">
-        <TaskOrderButton order={taskOrder} onToggle={toggleTaskOrder} />
         {page.canEdit && <>
           <Button onClick={() => setHideAdmins((previous) => !previous)}>{hideAdmins ? 'Show admins' : 'Hide admins'}</Button>
           <Button onClick={() => setColumnVisibility((previous) => ({...previous, ...Object.fromEntries(personalColumns.map((id) => [id, personalHidden]))}))}>{personalHidden ? 'Show personal info' : 'Hide personal info'}</Button>
