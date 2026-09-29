@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
+import {useThemeValue} from '@gravity-ui/uikit';
 
 export type DeadlineGraphData = {
   points: Array<{ts: number; pct: number; label: string; date: string; time: string; tz: string}>;
@@ -10,6 +11,7 @@ export type DeadlineGraphData = {
 type Hotspot = {x: number; y: number; point: DeadlineGraphData['points'][number]};
 
 export function DeadlineGraph({graph, now}: {graph: DeadlineGraphData; now: string}) {
+  const themeValue = useThemeValue();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hotspots = useRef<Hotspot[]>([]);
   const [tip, setTip] = useState<Hotspot | null>(null);
@@ -118,6 +120,8 @@ export function DeadlineGraph({graph, now}: {graph: DeadlineGraphData; now: stri
         return spot;
       });
     };
+    // Gravity applies its body theme class in a layout effect. This effect runs
+    // afterward, so getComputedStyle reads the new palette before painting.
     draw();
     if (typeof ResizeObserver !== 'undefined') {
       const observer = new ResizeObserver(draw);
@@ -126,7 +130,7 @@ export function DeadlineGraph({graph, now}: {graph: DeadlineGraphData; now: stri
     }
     window.addEventListener('resize', draw);
     return () => window.removeEventListener('resize', draw);
-  }, [graph, now]);
+  }, [graph, now, themeValue]);
 
   const onMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
