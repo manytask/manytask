@@ -10,7 +10,7 @@ The existing product model remains **course as code**: teachers maintain course 
 
 **Goal:** a teacher can start a course from a maintained template and reach a first working release without assembling repositories and configuration by hand. An operator can deploy and update Manytask through a current, reproducible procedure.
 
-The draft branch `feat_allow_to_create_private_repo_from_template` is a concrete starting point: its GitLab course form can create a private repository beside the public one and seed it from a language profile bundled with the app image. It does not yet provision a SourceCraft private repository, configure CI credentials, or complete the first release. Use it as a design reference and verify its behavior against the current code before merging or extending it.
+This PR [`feat_allow_to_create_private_repo_from_template](https://github.com/manytask/manytask/pull/1116)` is a concrete starting point: its GitLab course form can create a private repository beside the public one and seed it from a language profile bundled with the app image. It does not yet provision a SourceCraft private repository, configure CI credentials, or complete the first release. Use it as a design reference and verify its behavior against the current code before merging or extending it.
 
 ### Teacher setup and reusable templates
 
@@ -28,11 +28,20 @@ The draft branch `feat_allow_to_create_private_repo_from_template` is a concrete
 
 ### SourceCraft organization guide
 
+- [ ] Enrich the course template with SourceCraft CI/CD files.
 - [ ] Publish a step-by-step guide to creating the Yandex Cloud organization used by SourceCraft, selecting its slug, enabling SourceCraft, linking the required billing/account context, creating the service identity, granting the least required roles, and connecting it to Manytask. Identify which steps require an organization administrator and which Manytask can verify.
-- [ ] Record the actual SourceCraft quota names, current defaults, and where to view or request increases. Size the requested repository count, organization members/invitations, CI capacity, storage/registry usage, and applicable API limits from the expected number of courses and students. Avoid hard-coded universal numbers; include a worked example and a preflight that reports the configured limits and remaining capacity.
+- [ ] Record the actual SourceCraft quota names, current defaults, and where to view or request increases. Size the requested repository count, organization members/invitations, CI capacity, storage/registry usage, and applicable API limits from the expected number of courses and students.
 - [ ] Verify organization access, invitations, public repository creation, student repository creation, CI execution, and a first grade report in a disposable course. Document known provider gaps, including private repository provisioning, with an explicit manual path until supported.
 
-**First deliverable:** a teacher creates a GitLab course and private repository from the maintained template, follows the checklist, and releases a passing and a failing sample task without editing application code. An operator follows the updated deployment guide to a healthy instance, while a SourceCraft operator can create and check an organization with enough documented capacity for a pilot course. Record the manual steps and time spent so later iterations can remove them.
+### Error reporting and logging
+
+- [ ] Give students a clear result for every submission: current state, failed stage, a safe explanation, and the next useful action. Distinguish incorrect code, build/test failure, deadline or permission rejection, and a Manytask/CI outage. Show when a result is still pending or reporting failed, with a direct link to the relevant pipeline when available.
+- [ ] Give teachers and administrators actionable errors for course creation, template validation, provider provisioning, CI setup, release, and grading. Identify the failed step, affected course or submission, whether retry is safe, and what needs manual correction. Show more detailed diagnostics only to authorized roles; do not expose private tests, student code from other accounts, or credentials.
+- [ ] Use consistent error categories and stable codes across the web UI, API, checker, and MR reviewer. Return the same cause and correlation ID in user-visible errors and support diagnostics, while presenting detail appropriate to each role. Preserve partial-operation state so a retry does not hide or repeat completed work.
+- [ ] Standardize structured logging with timestamps, severity, component, operation, correlation ID, and relevant course, provider, pipeline, or submission identifiers. Propagate IDs across service boundaries, log failures once at the right boundary, and redact tokens, secrets, private test output, and sensitive source content.
+- [ ] Collect and retain logs with defined access and retention rules. Add alerts for stuck submissions, failed score reports, repeated provisioning errors, and release failures; link alerts to a runbook and the affected records.
+
+**First deliverable:** a teacher creates a GitLab course and private repository from the maintained template, follows the checklist, and releases a passing and a failing sample task without editing application code. In a failed submission and a simulated provisioning failure, the student or teacher sees an appropriate next step, and an administrator can trace the same event through sanitized logs.
 
 **Related backlog:** [#838](https://github.com/manytask/manytask/issues/838), [#599](https://github.com/manytask/manytask/issues/599), [#668](https://github.com/manytask/manytask/issues/668), [#1071](https://github.com/manytask/manytask/issues/1071), [#1002](https://github.com/manytask/manytask/issues/1002).
 
@@ -122,7 +131,6 @@ Use the [prioritized backlog](https://github.com/orgs/manytask/projects/3/views/
 - [ ] Use the course setup flow in section 1 for creation and release; keep its progress, failure, and retry states consistent with the rest of the interface.
 - [ ] Improve task ordering and future-task preview; add course-level resources and lecture links. Keep the first iteration of lecture publishing static and reviewable.
 - [ ] Improve administration with searchable course/user lists, explicit role scopes, and course-specific Hide/Unhide controls. Define how hidden students affect scoreboards and statistics.
-- [ ] Check keyboard use, accessible labels, contrast, narrow screens, and large-course performance. Validate the main journeys with representative students and teachers, then turn observed blockers into acceptance tests.
 
 **First deliverable:** a student can find a task, submit, understand a failed attempt, and follow the next action. A teacher can find that attempt and manage course access without a hidden permission change. The first-course journey is covered in section 1.
 
