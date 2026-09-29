@@ -52,7 +52,7 @@ export function Theme({children}: {children: ReactNode}) {
     <ThemeProvider theme={active}>
       <div className="theme-switcher" role="group" aria-label="Theme">
         {(['light', 'dark', 'auto'] as const).map((value) => (
-          <Button key={value} view={preference === value ? 'action' : 'normal'} aria-pressed={preference === value} onClick={() => choose(value)}>
+          <Button key={value} view={preference === value ? 'action' : 'normal'} selected={preference === value} onClick={() => choose(value)}>
             {value === 'auto' ? 'Auto' : value === 'dark' ? 'Dark' : 'Light'} Theme
           </Button>
         ))}

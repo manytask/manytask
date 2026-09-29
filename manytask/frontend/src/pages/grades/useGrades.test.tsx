@@ -18,3 +18,11 @@ it('aborts on URL changes and unmount and ignores late responses', async () => {
   expect(pending[2].signal.aborted).toBe(true);
   await act(async () => pending[2].resolve(new Response('{"tasks":[],"students":[]}')));
 });
+
+it('decodes the server comment escape once as plain text for display, editing and CSV', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({tasks: [], students: [
+    {username: 'alice', comment: 'Browser &quot;saved&quot;\n&lt;img onerror=alert(1)&gt; &amp; &#x27; &amp;lt;literal&amp;gt;'},
+  ]}))));
+  const {result} = renderHook(() => useGrades('/database'));
+  await waitFor(() => expect(result.current.data?.students[0].comment).toBe('Browser "saved"\n<img onerror=alert(1)> & \' &lt;literal&gt;'));
+});

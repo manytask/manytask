@@ -32,7 +32,7 @@ export function EditScoreDialog({open, row, task, csrfToken, url, onClose, onSav
     } catch (cause) {setError(`${saved ? 'Score saved, but refresh failed' : 'Unable to save score'}: ${cause instanceof Error ? cause.message : 'Unknown error'}`);}
     finally {setBusy(false);}
   };
-  return <Dialog open={open} onClose={() => {if (!busy) onClose();}} disableEscapeKeyDown={busy} disableOutsideClick={busy} aria-label={`Edit score ${task.name} for ${row.username}`}>
+  return <Dialog open={open} returnFocus={false} onClose={() => {if (!busy) onClose();}} disableEscapeKeyDown={busy} disableOutsideClick={busy} aria-label={`Edit score ${task.name} for ${row.username}`}>
     <Dialog.Header caption={`Edit score for ${task.name}`} />
     <Dialog.Body><form id="edit-score-form" onSubmit={(event) => void save(event)}>
       <label htmlFor="edit-score-input">Score</label>

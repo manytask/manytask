@@ -15,7 +15,13 @@ export function useGrades(url: string): {data: GradesResponse | null; loading: b
     setError(null);
     try {
       const next = await requestJson<GradesResponse>(url, '', {signal: controller.signal});
-      if (!controller.signal.aborted) setData(next);
+      // The existing API stores html.escape output. Decode exactly one layer
+      // for React text nodes, editor drafts and CSV; never interpret it as HTML.
+      const entities: Record<string, string> = {'&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#x27;': "'"};
+      const students = next.students.map((row) => ({...row,
+        comment: row.comment?.replace(/&(amp|lt|gt|quot|#x27);/g, (entity) => entities[entity]) ?? row.comment,
+      }));
+      if (!controller.signal.aborted) setData({...next, students});
     } catch (cause) {
       if (!controller.signal.aborted) {
         setError(cause instanceof Error ? cause.message : 'Unable to load grades');

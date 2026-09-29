@@ -26,12 +26,36 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
   const [allRows, setAllRows] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
-  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({left: pinnedColumns});
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({left: window.innerWidth < 768 ? ['rownum', 'username'] : pinnedColumns});
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [filter, setFilter] = useState('');
   const [hideAdmins, setHideAdmins] = useState(false);
   const [editing, setEditing] = useState<{kind: 'score'; row: StudentRow; task: TaskMeta} | {kind: 'comment' | 'grade'; row: StudentRow} | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const editOpener = useRef<string | null>(null);
+  const beginEdit = useCallback((next: NonNullable<typeof editing>) => {
+    editOpener.current = document.activeElement?.getAttribute('aria-label') ?? null;
+    setEditing(next);
+  }, []);
+  useEffect(() => {
+    if (editing !== null || editOpener.current === null) return;
+    const label = editOpener.current;
+    editOpener.current = null;
+    // Reload replaces cell elements. Restore the logical opener after React commits
+    // the new table, or the search field if sorting/filtering moved that row away.
+    const frame = requestAnimationFrame(() => {
+      const opener = Array.from(document.querySelectorAll<HTMLButtonElement>('.grades-cell-action'))
+        .find((button) => button.getAttribute('aria-label') === label);
+      (opener ?? searchRef.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editing]);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const update = () => setColumnPinning({left: media.matches ? ['rownum', 'username'] : pinnedColumns});
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const tasks = data?.tasks ?? emptyTasks;
   const students = data?.students ?? emptyStudents;
   const toggleGroup = useCallback((name: string) => setCollapsedGroups((previous) => {
@@ -40,10 +64,10 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
     return next;
   }), []);
   const columns = useMemo(() => buildColumns(tasks, page.canEdit, taskOrder, collapsedGroups, toggleGroup, {
-    score: (row, task) => setEditing({kind: 'score', row, task}),
-    comment: (row) => setEditing({kind: 'comment', row}),
-    grade: (row) => setEditing({kind: 'grade', row}),
-  }, page.readOnlyFields), [tasks, page.canEdit, page.readOnlyFields, taskOrder, collapsedGroups, toggleGroup]);
+    score: (row, task) => beginEdit({kind: 'score', row, task}),
+    comment: (row) => beginEdit({kind: 'comment', row}),
+    grade: (row) => beginEdit({kind: 'grade', row}),
+  }, page.readOnlyFields), [tasks, page.canEdit, page.readOnlyFields, taskOrder, collapsedGroups, toggleGroup, beginEdit]);
   const visibility = useMemo(() => {
     const next = {...columnVisibility};
     for (const [group, items] of groupTasks(tasks)) {
@@ -138,7 +162,7 @@ export function GradesPage({shared, data: page}: PageProps<GradesData>) {
     {error && <div role="alert"><Alert theme="danger" title="Unable to load grades" message={error} /><Button onClick={() => void reload().catch(() => {})}>Retry</Button></div>}
     {data && <>
       <div className="grades-table-scroll">
-        <Table table={table} stickyHeader rowClassName={(row) => row?.original.is_admin ? 'grades-admin-row' : ''} />
+        <Table table={table} attributes={{style: {width: table.getTotalSize(), tableLayout: 'fixed'}}} headerCellAttributes={(header) => ({style: {width: header.getSize()}})} stickyHeader rowClassName={(row) => row?.original.is_admin ? 'grades-admin-row' : ''} />
       </div>
       {filtered.length === 0 && <p>No students found</p>}
       <div className="grades-pagination">

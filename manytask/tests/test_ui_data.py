@@ -223,7 +223,8 @@ def test_course_form_serializer_preserves_failed_post_without_course_context():
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
     with app.test_request_context(
-        "/instance_admin/courses/a.b/edit", method="POST",
+        "/instance_admin/courses/a.b/edit",
+        method="POST",
         data={"registration_secret": "draft", "gitlab_course_public_repo": "new/public", "token": "forged"},
     ):
         from flask import request
@@ -247,10 +248,16 @@ def test_course_edit_serializer_allows_only_displayed_user_fields():
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
     course = SimpleNamespace(
-        course_name="a.b", namespace_id=4, registration_secret="secret", token="fixed",
-        gitlab_course_group="g", gitlab_course_public_repo="g/public",
-        gitlab_course_students_group="g/students", gitlab_default_branch="main",
-        status=SimpleNamespace(value="in_progress"), show_allscores=False,
+        course_name="a.b",
+        namespace_id=4,
+        registration_secret="secret",
+        token="fixed",
+        gitlab_course_group="g",
+        gitlab_course_public_repo="g/public",
+        gitlab_course_students_group="g/students",
+        gitlab_default_branch="main",
+        status=SimpleNamespace(value="in_progress"),
+        show_allscores=False,
     )
     user = SimpleNamespace(username="alice", first_name="Alice", last_name="A", email="private@example.com")
     with app.test_request_context("/instance_admin/courses/a.b/edit"):
@@ -259,7 +266,8 @@ def test_course_edit_serializer_allows_only_displayed_user_fields():
     assert data["courseUsers"] == [{"username": "alice", "firstName": "Alice", "lastName": "A"}]
     assert "private@example.com" not in str(data)
     assert data["accessUrls"] == {
-        "users": "/api/a.b/access_users", "courseAdmin": "/api/a.b/course_admin",
+        "users": "/api/a.b/access_users",
+        "courseAdmin": "/api/a.b/course_admin",
     }
 
 
@@ -380,3 +388,25 @@ def test_admin_serializers_allowlist_users_and_retain_namespace_course_fields():
         assert panel["createCourseUrl"] == "/instance_admin/courses/new?namespace_id=1"
     assert "private-token" not in str(data) + str(panel)
     assert "private@example.com" not in str(data) + str(panel)
+
+
+def test_shared_profile_reads_current_users_saved_names():
+    from flask import session
+
+    from manytask.ui_shared import serialize_shared
+
+    app = Flask(__name__)
+    app.secret_key = "test"
+    app.register_blueprint(root_bp)
+    app.register_blueprint(course_bp)
+    app.register_blueprint(instance_admin_bp)
+    user = SimpleNamespace(first_name="Updated", last_name="Иванов", private_token="must-not-serialize")
+    app.storage_api = SimpleNamespace(
+        get_stored_user_by_username=lambda username: user if username == "alice" else None
+    )
+    with app.test_request_context("/"):
+        session["manytask"] = {"username": "alice"}
+        data = serialize_shared({})
+        assert data["firstName"] == "Updated"
+        assert data["lastName"] == "Иванов"
+        assert "must-not-serialize" not in str(data)

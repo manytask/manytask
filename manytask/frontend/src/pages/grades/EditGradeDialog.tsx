@@ -34,7 +34,7 @@ export function EditGradeDialog({open, row, csrfToken, url, clearUrl, onClose, o
     if (!written && (draft.trim() === '' || !Number.isInteger(grade))) {setError('Enter a valid integer grade'); return;}
     void mutate(url, {username: row.username, grade});
   };
-  return <Dialog open={open} onClose={() => {if (!busy) onClose();}} disableEscapeKeyDown={busy} disableOutsideClick={busy} aria-label={`Edit grade for ${row.username}`}>
+  return <Dialog open={open} returnFocus={false} onClose={() => {if (!busy) onClose();}} disableEscapeKeyDown={busy} disableOutsideClick={busy} aria-label={`Edit grade for ${row.username}`}>
     <Dialog.Header caption={`Edit grade for ${row.username}`} />
     <Dialog.Body>
       <p>Current grade: {row.grade ?? '—'} {row.grade_is_override && '(manually set)'}</p>

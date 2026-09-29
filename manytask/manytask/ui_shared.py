@@ -34,6 +34,11 @@ def serialize_shared(context: Mapping[str, Any]) -> dict[str, Any]:
     """Select only the fields needed by the common UI; never serialize session or app."""
     user_session = session.get("manytask", {})
     username = context.get("username") or user_session.get("username") or ("guest" if current_app.debug else None)
+    storage = getattr(current_app, "storage_api", None)
+    current_username = user_session.get("username")
+    current_user = storage.get_stored_user_by_username(current_username) if storage and current_username else None
+    first_name = getattr(current_user, "first_name", "") if current_user else context.get("first_name", "")
+    last_name = getattr(current_user, "last_name", "") if current_user else context.get("last_name", "")
     course = _course_data(context)
     has_role = context.get("has_role")
 
@@ -92,8 +97,8 @@ def serialize_shared(context: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "csrfToken": generate_csrf(),
         "username": username,
-        "firstName": str(context.get("first_name") or ""),
-        "lastName": str(context.get("last_name") or ""),
+        "firstName": str(first_name or ""),
+        "lastName": str(last_name or ""),
         "version": str(context.get("manytask_version") or getattr(current_app, "manytask_version", "") or ""),
         "favicon": url_for("static", filename=favicon),
         "rms": rms,

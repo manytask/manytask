@@ -28,7 +28,7 @@ export function EditCommentDialog({open, row, csrfToken, url, onClose, onSaved}:
     } catch (cause) {setError(`${saved ? 'Comment saved, but refresh failed' : 'Unable to save comment'}: ${cause instanceof Error ? cause.message : 'Unknown error'}`);}
     finally {setBusy(false);}
   };
-  return <Dialog open={open} onClose={() => {if (!busy) onClose();}} disableEscapeKeyDown={busy} disableOutsideClick={busy} aria-label={`Edit comment for ${row.username}`}>
+  return <Dialog open={open} returnFocus={false} onClose={() => {if (!busy) onClose();}} disableEscapeKeyDown={busy} disableOutsideClick={busy} aria-label={`Edit comment for ${row.username}`}>
     <Dialog.Header caption={`Edit comment for ${row.username}`} />
     <Dialog.Body><form id="edit-comment-form" onSubmit={(event) => void save(event)}>
       <label htmlFor="edit-comment-input">Comment</label>
