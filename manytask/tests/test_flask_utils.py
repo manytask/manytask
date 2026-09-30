@@ -5,13 +5,13 @@ from flask import Flask
 
 from manytask.abstract import CourseAccessUser
 from manytask.course import CourseStatus
-from manytask.utils.flask import can_edit_course, check_if_current_user_is_instance_admin, get_courses, get_user_roles
+from manytask.utils.flask import can_edit_course, check_if_current_user_is_instance_admin, get_courses, has_role
 from tests.constants import TEST_COURSE_NAME, TEST_USERNAME
 
 
 @pytest.fixture
 def app():
-    """Minimal Flask app with a storage_api mock sufficient for get_user_roles."""
+    """Minimal Flask app with a storage_api mock sufficient for has_role."""
     app = Flask(__name__)
     app.config["DEBUG"] = False
     app.secret_key = "test_key"
@@ -38,15 +38,15 @@ def test_check_if_current_user_is_instance_admin_anonymous(app):
 
 
 @pytest.mark.parametrize(
-    "is_instance_admin,course_name,expected_roles",
+    "is_instance_admin,course_name,expected",
     [
         # Regression: instance admin on a route without course_name (e.g.
         # /instance_admin/panel) must still receive the instance_admin role.
-        (True, None, ["instance_admin"]),
+        (True, None, True),
         # Instance admin on a course-scoped route keeps all applicable roles.
-        (True, TEST_COURSE_NAME, ["instance_admin", "student"]),
+        (True, TEST_COURSE_NAME, True),
         # Non-admin without course context has no roles (unchanged behavior).
-        (False, None, []),
+        (False, None, False),
     ],
     ids=[
         "instance_admin_without_course",
@@ -54,7 +54,7 @@ def test_check_if_current_user_is_instance_admin_anonymous(app):
         "non_admin_without_course",
     ],
 )
-def test_get_user_roles_instance_admin_visibility(app, is_instance_admin, course_name, expected_roles):
+def test_has_role_instance_admin_visibility(app, is_instance_admin, course_name, expected):
     app.storage_api.check_if_instance_admin.return_value = is_instance_admin
     if is_instance_admin:
         app.storage_api.get_course_access_users.return_value = [
@@ -62,29 +62,32 @@ def test_get_user_roles_instance_admin_visibility(app, is_instance_admin, course
         ]
 
     with app.test_request_context():
-        roles = get_user_roles(app, TEST_USERNAME, course_name=course_name)
-
-    assert roles == expected_roles
+        assert has_role(TEST_USERNAME, "instance_admin", app, course_name=course_name) is expected
 
 
-def test_get_user_roles_uses_requested_user_access(app):
+def test_has_role_student_with_course(app):
+    assert has_role(TEST_USERNAME, "student", app, course_name=TEST_COURSE_NAME)
+
+
+def test_has_role_uses_requested_user_access(app):
     app.storage_api.get_course_access_users.return_value = [
         CourseAccessUser("other", "Other", "User", ["namespace_admin"]),
         CourseAccessUser(TEST_USERNAME, "Test", "User", ["course_admin"]),
     ]
 
     with app.test_request_context():
-        assert get_user_roles(app, TEST_USERNAME, course_name=TEST_COURSE_NAME) == ["course_admin", "student"]
+        assert has_role(TEST_USERNAME, ["instance_admin", "course_admin"], app, course_name=TEST_COURSE_NAME)
+        assert not has_role(TEST_USERNAME, "namespace_admin", app, course_name=TEST_COURSE_NAME)
 
 
-def test_get_user_roles_checks_namespace_admin_for_requested_namespace(app):
+def test_has_role_checks_namespace_admin_for_requested_namespace(app):
     app.storage_api.get_namespace_by_id.side_effect = [
         (object(), "namespace_admin"),
         (object(), "program_manager"),
     ]
 
-    assert get_user_roles(app, TEST_USERNAME, namespace_id=1) == ["namespace_admin"]
-    assert get_user_roles(app, TEST_USERNAME, namespace_id=2) == []
+    assert has_role(TEST_USERNAME, "namespace_admin", app, namespace_id=1)
+    assert not has_role(TEST_USERNAME, "namespace_admin", app, namespace_id=2)
 
 
 @pytest.mark.parametrize(

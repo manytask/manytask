@@ -127,50 +127,6 @@ def check_if_user_has_namespaces_to_admin(app: CustomFlask) -> bool:
         return len(namespace_admin_namespaces) > 0 or app.storage_api.check_if_instance_admin(username)
 
 
-def get_user_roles(
-    app: CustomFlask,
-    username: str,
-    course_name: str | None = None,
-    namespace_id: int | None = None,
-) -> list[str]:
-    """Get list of roles for the user.
-
-    Possible roles:
-    - 'instance_admin': Instance Admin
-    - 'namespace_admin': Namespace Admin (including namespace owners)
-    - 'program_manager': Program Manager (student, hidden from results table)
-    - 'course_admin': Course Admin
-    - 'student': Regular student
-
-    :param app: Flask application instance
-    :param username: manytask username
-    :param course_name: Optional course name for course-specific roles
-    :param namespace_id: Optional namespace id for namespace-specific roles
-    :return: List of role strings
-    """
-    roles: list[str] = []
-
-    if course_name:
-        access_user = next(
-            (user for user in app.storage_api.get_course_access_users(course_name) if user.username == username),
-            None,
-        )
-        if access_user is not None:
-            roles.extend(role for role in access_user.access_levels if role not in roles)
-        roles.append("student")
-    elif app.storage_api.check_if_instance_admin(username):
-        roles.append("instance_admin")
-    if namespace_id is not None:
-        try:
-            _, namespace_role = app.storage_api.get_namespace_by_id(namespace_id, username)
-        except PermissionError:
-            namespace_role = None
-        if namespace_role == "namespace_admin":
-            roles.append("namespace_admin")
-
-    return roles
-
-
 def has_role(
     username: str,
     required_roles: list[str] | str,
@@ -187,8 +143,23 @@ def has_role(
     :param namespace_id: Optional namespace id for namespace-specific roles
     :return: True if user has at least one of the required roles
     """
-    if isinstance(required_roles, str):
-        required_roles = [required_roles]
+    required = {required_roles} if isinstance(required_roles, str) else set(required_roles)
 
-    user_roles = get_user_roles(app, username, course_name, namespace_id)
-    return any(role in user_roles for role in required_roles)
+    if course_name:
+        access_user = next(
+            (user for user in app.storage_api.get_course_access_users(course_name) if user.username == username),
+            None,
+        )
+        if "student" in required or (access_user is not None and required.intersection(access_user.access_levels)):
+            return True
+    elif "instance_admin" in required and app.storage_api.check_if_instance_admin(username):
+        return True
+
+    if namespace_id is not None and "namespace_admin" in required:
+        try:
+            _, namespace_role = app.storage_api.get_namespace_by_id(namespace_id, username)
+        except PermissionError:
+            namespace_role = None
+        return namespace_role == "namespace_admin"
+
+    return False
