@@ -117,6 +117,11 @@
     max-width: 1100px;
 }
 
+.admin-namespaces {
+    width: 100%;
+    max-width: 1100px;
+}
+
 .courses-filter-controls {
     display: flex;
     flex-wrap: nowrap;

@@ -9,11 +9,16 @@
     <div class="container-fluid position-relative">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="mb-0">Course Database</h2>
-            
+
             {% if is_course_admin %}
-            <button id="toggle-personal-info" class="btn btn-outline-secondary btn-sm" title="Toggle personal info columns">
-                <i class="fas fa-eye"></i> Toggle Personal Info
-            </button>
+            <div class="d-flex gap-2">
+                <button id="toggle-admins" class="btn btn-outline-secondary btn-sm" title="Toggle admin/staff rows">
+                    <i class="fas fa-user-shield"></i> Hide Admins
+                </button>
+                <button id="toggle-personal-info" class="btn btn-outline-secondary btn-sm" title="Toggle personal info columns">
+                    <i class="fas fa-eye"></i> Toggle Personal Info
+                </button>
+            </div>
             {% endif %}
         </div>
 
@@ -400,10 +405,19 @@
 
             const valueEl = document.getElementById("filter-value");
 
+            // Whether admin/staff rows should be hidden from the table.
+            // Only relevant for course admins, since non-admins never receive
+            // admin rows from the server in the first place.
+            let hideAdmins = false;
+
             // Transliteration- and keyboard-layout-aware search uses the shared
             // helpers in static/js/search-normalize.js. Variants are computed once
             // per filter call and reused for every field.
             function customFilter(data) {
+                if (hideAdmins && data.is_admin) {
+                    return false;
+                }
+
                 const searchVariants = searchTermVariants(valueEl.value);
                 if (searchVariants.length === 0) return true;
                 if (matchesSearchVariants(data.username, searchVariants)) {
@@ -723,6 +737,15 @@
 
                             const data = row.getData();
 
+                            // Gray out admin/staff rows (course/namespace/instance admin, program manager)
+                            // so admin viewers can distinguish them from real students.
+                            const rowElement = row.getElement();
+                            if (data.is_admin) {
+                                rowElement.classList.add("db-admin-row");
+                            } else {
+                                rowElement.classList.remove("db-admin-row");
+                            }
+
                             // Add individual task scores and group totals
                             const groupColumns = window.tabulatorTable.getColumns().filter(col => col.getDefinition().columns);
                             groupColumns.forEach(groupCol => {
@@ -888,6 +911,37 @@
                             footer.insertBefore(exportButton, footer.firstChild);
                         }
                     }, 100);
+                    // Toggle admin/staff rows visibility (admins only)
+                    {% if is_course_admin %}
+                    const toggleAdminsButton = document.getElementById('toggle-admins');
+                    if (toggleAdminsButton) {
+                        toggleAdminsButton.addEventListener('click', function() {
+                            hideAdmins = !hideAdmins;
+
+                            const icon = toggleAdminsButton.querySelector('i');
+                            if (hideAdmins) {
+                                toggleAdminsButton.classList.remove('btn-outline-secondary');
+                                toggleAdminsButton.classList.add('btn-secondary');
+                                toggleAdminsButton.lastChild.textContent = ' Show Admins';
+                                if (icon) {
+                                    icon.classList.remove('fa-user-shield');
+                                    icon.classList.add('fa-user-slash');
+                                }
+                            } else {
+                                toggleAdminsButton.classList.remove('btn-secondary');
+                                toggleAdminsButton.classList.add('btn-outline-secondary');
+                                toggleAdminsButton.lastChild.textContent = ' Hide Admins';
+                                if (icon) {
+                                    icon.classList.remove('fa-user-slash');
+                                    icon.classList.add('fa-user-shield');
+                                }
+                            }
+
+                            window.tabulatorTable.setFilter(customFilter);
+                        });
+                    }
+                    {% endif %}
+
                     // Toggle personal info columns (admins only)
                     {% if is_course_admin %}
                     const toggleButton = document.getElementById('toggle-personal-info');

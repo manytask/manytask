@@ -277,12 +277,32 @@ class MockStorageApiBase:
         raise PermissionError("No access to namespace")
 
     @staticmethod
+    def get_all_namespaces():
+        return []
+
+    @staticmethod
+    def get_user_namespaces(_username):
+        return []
+
+    @staticmethod
+    def get_namespace_users(_namespace_id):
+        return []
+
+    @staticmethod
+    def get_namespace_courses(_namespace_id):
+        return []
+
+    @staticmethod
     def get_now_with_timezone(_course_name):
         return datetime.now(tz=ZoneInfo("UTC"))
 
     @staticmethod
     def check_user_on_course(*_args, **_kwargs):
         return True
+
+    @staticmethod
+    def check_if_instance_admin(_username):
+        return False
 
     @staticmethod
     def get_grades(*_args, **_kwargs):

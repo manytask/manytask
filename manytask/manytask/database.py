@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
 
 from . import models
-from .abstract import StorageApi, StoredUser, StudentCourseScores, TaskScore
+from .abstract import CourseAccessUser, StorageApi, StoredUser, StudentCourseScores, TaskScore
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -29,6 +29,8 @@ from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
 from .course import CourseStatus
 from .models import (
+    ROLE_COURSE_ADMIN,
+    ROLE_INSTANCE_ADMIN,
     ROLE_NAMESPACE_ADMIN,
     ROLE_PROGRAM_MANAGER,
     Course,
@@ -437,25 +439,36 @@ class DataBaseApi(StorageApi):
         Returns:
             dict mapping username to a StudentCourseScores object.
 
-        Excludes users with PROGRAM_MANAGER role in the course's namespace.
+        Every user with any kind of admin access (instance admin, namespace admin,
+        program manager, or course admin) is included but flagged via
+        :attr:`StudentCourseScores.is_admin`, so callers can hide or gray them out
+        depending on who is viewing the table.
         """
 
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             namespace_id = course.namespace_id
 
-            program_managers_subquery = None
+            admin_namespace_subquery = None
             if namespace_id is not None:
-                program_managers_subquery = select(models.UserOnNamespace.user_id).where(
+                admin_namespace_subquery = select(models.UserOnNamespace.user_id).where(
                     models.UserOnNamespace.namespace_id == namespace_id,
-                    models.UserOnNamespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER,
+                    models.UserOnNamespace.role.in_(
+                        (
+                            models.UserOnNamespaceRole.NAMESPACE_ADMIN,
+                            models.UserOnNamespaceRole.PROGRAM_MANAGER,
+                        )
+                    ),
                 )
 
             statement = (
                 select(
+                    User.id.label("user_id"),
                     User.username,
                     User.first_name,
                     User.last_name,
+                    User.is_instance_admin,
+                    UserOnCourse.is_course_admin,
                     Task.name.label("task_name"),
                     coalesce(Grade.score, 0).label("score"),
                     coalesce(Grade.is_solved, False).label("is_solved"),
@@ -473,16 +486,22 @@ class DataBaseApi(StorageApi):
                 )
             )
 
-            if program_managers_subquery is not None:
-                statement = statement.where(~User.id.in_(program_managers_subquery))
-
             rows = session.execute(statement).all()
+
+            admin_user_ids: set[int] = set()
+            if admin_namespace_subquery is not None:
+                admin_user_ids = set(session.execute(admin_namespace_subquery).scalars().all())
 
             scores_and_names: dict[str, StudentCourseScores] = {}
 
             for row in rows:
                 student = scores_and_names.get(row.username)
                 if student is None:
+                    is_admin = (
+                        bool(row.is_instance_admin)
+                        or bool(row.is_course_admin)
+                        or row.user_id in admin_user_ids
+                    )
                     student = StudentCourseScores(
                         username=row.username,
                         first_name=row.first_name,
@@ -490,6 +509,7 @@ class DataBaseApi(StorageApi):
                         final_grade=row.final_grade,
                         final_grade_override=row.final_grade_override,
                         comment=row.comment,
+                        is_admin=is_admin,
                     )
                     scores_and_names[row.username] = student
                 if row.task_name is not None:
@@ -1104,6 +1124,78 @@ class DataBaseApi(StorageApi):
             )
             logger.info("Fetched users for course '%s': count=%s", course_name, len(users_on_courses))
             return [(self._to_stored_user(uoc.user), uoc.is_course_admin) for uoc in users_on_courses]
+
+    def get_course_access_users(self, course_name: str) -> list[CourseAccessUser]:
+        """Get every user with admin access to a course, from any scope.
+
+        Collects four independent sources and merges them by user, so a user holding
+        several levels (e.g. an instance admin who is also a course admin) appears
+        once with all levels listed:
+
+        * instance admins (:attr:`models.User.is_instance_admin`)
+        * namespace admins of the course's namespace
+        * program managers of the course's namespace
+        * course admins of the course itself
+
+        The namespace-scoped sources are skipped when the course has no namespace.
+
+        :param course_name: course name
+        :return: list of :class:`CourseAccessUser`, ordered by username
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+            except NoResultFound:
+                logger.warning("Course '%s' not found when fetching course access users", course_name)
+                return []
+
+            access_users: dict[int, CourseAccessUser] = {}
+
+            def add(user: models.User, access_level: str) -> None:
+                entry = access_users.get(user.id)
+                if entry is None:
+                    entry = CourseAccessUser(
+                        username=user.username,
+                        first_name=user.first_name,
+                        last_name=user.last_name,
+                    )
+                    access_users[user.id] = entry
+                if access_level not in entry.access_levels:
+                    entry.access_levels.append(access_level)
+
+            for user in session.query(models.User).filter(models.User.is_instance_admin.is_(True)).all():
+                add(user, ROLE_INSTANCE_ADMIN)
+
+            if course.namespace_id is not None:
+                namespace_roles = {
+                    models.UserOnNamespaceRole.NAMESPACE_ADMIN: ROLE_NAMESPACE_ADMIN,
+                    models.UserOnNamespaceRole.PROGRAM_MANAGER: ROLE_PROGRAM_MANAGER,
+                }
+                users_on_namespace = (
+                    session.query(models.UserOnNamespace)
+                    .filter(models.UserOnNamespace.namespace_id == course.namespace_id)
+                    .options(joinedload(models.UserOnNamespace.user))
+                    .all()
+                )
+                for user_on_namespace in users_on_namespace:
+                    access_level = namespace_roles.get(user_on_namespace.role)
+                    if access_level is not None:
+                        add(user_on_namespace.user, access_level)
+
+            users_on_course = (
+                session.query(models.UserOnCourse)
+                .filter(
+                    models.UserOnCourse.course_id == course.id,
+                    models.UserOnCourse.is_course_admin.is_(True),
+                )
+                .options(joinedload(models.UserOnCourse.user))
+                .all()
+            )
+            for user_on_course in users_on_course:
+                add(user_on_course.user, ROLE_COURSE_ADMIN)
+
+            logger.info("Fetched access users for course '%s': count=%s", course_name, len(access_users))
+            return sorted(access_users.values(), key=lambda access_user: access_user.username)
 
     def set_instance_admin_status(self, username: str, is_admin: bool) -> None:
         """Change user admin status

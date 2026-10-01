@@ -198,6 +198,7 @@ This section controlls how the checker runs tests, the general structure is:
 testing:
   changes_detection: last_commit_changes
   search_plugins: ["tools/plugins"]
+  skip_unchanged_tasks: allow_change
 
   global_pipeline:
     - ...
@@ -213,6 +214,7 @@ testing:
 |---|---|---|---|---|
 | `changes_detection` | `str` | ➖ | `last_commit_changes` | Strategy for detecting which tasks changed. The full list of options are `branch_name`, `commit_message`, `last_commit_changes`, `files_changed`. See details [below](#changes_detection). |
 | `search_plugins` | `list[str]` | ➖ | `[]` | Paths (relative to repo root) to search for custom plugin Python files. |
+| `skip_unchanged_tasks` | `str` | ➖ | `null` | Name of the task parameter holding glob patterns of student-editable files (e.g. `allow_change`). If set, `checker grade` skips (does not run and does not report) any detected task whose matching files are byte-identical to the published version. `null` disables the check. See details [below](#skip_unchanged_tasks). |
 | `global_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once** per checker run, before any task pipeline. |
 | `tasks_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**. Can be overridden in `.task.yml`. |
 | `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task** only if `tasks_pipeline` succeeded. Can be overridden in `.task.yml`. |
@@ -227,6 +229,38 @@ Determines which tasks are selected for grading when running `checker grade`.
 | `commit_message` | Selects all tasks/groups whose name appears in the last commit message. |
 | `last_commit_changes` | Selects all tasks that have files changed in the last commit. *(default)* |
 | `files_changed` | *(Not yet implemented)* Compares current state against the previous commit. |
+
+### `skip_unchanged_tasks`
+
+When a student pulls newly published tasks from the public repo, all of them show up as "changed" to
+`changes_detection`: the untouched task is graded and reported as a failed submission, charging a penalty
+for a task the student hasn't even started.
+
+Set `skip_unchanged_tasks` to the name of the parameter that lists a task's student-editable files (typically
+`allow_change`, see the [`copy_files` plugin](checker_plugins.md)). For each task `changes_detection` picks up,
+`checker grade` then compares every file matching those patterns against the file the export would publish at
+that path (its `.template` counterpart, or the reference file with `SOLUTION BEGIN`/`SOLUTION END` blocks
+replaced, depending on `export.templates`; see [`templates` strategies](#templates-strategies)) - a task where every such file is
+byte-identical to the published version is skipped entirely: not run, not reported, no penalty. A task with no
+`allow_change` patterns, or none of whose files match, is always graded normally.
+
+Example: a task's student-editable files are declared once via `default_parameters` (or per-task/per-group in
+`.task.yml`/`.group.yml`, see [`allow_change`](checker_config.md#optional-an-explicit-allow-list-with-allow_change)),
+and `skip_unchanged_tasks` is pointed at that same parameter name:
+
+```yaml
+# .checker.yml
+default_parameters:
+  allow_change: ["solution.c"]
+
+testing:
+  changes_detection: last_commit_changes
+  skip_unchanged_tasks: allow_change
+```
+
+This is what makes `git pull`-ing newly published tasks safe: the student's `solution.c` is still byte-identical
+to the `solution.c.template` that was exported, so `checker grade` skips the task instead of grading the
+untouched template and reporting a failed (penalized) submission for it.
 
 ### `search_plugins`
 

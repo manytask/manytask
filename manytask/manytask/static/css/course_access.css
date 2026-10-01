@@ -1,0 +1,52 @@
+/* Course access table on the course edit page.
+   Mirrors the filter-control shape of courses.css so the two tables look the
+   same; colors come from Bootstrap variables and therefore follow the active
+   light/dark theme automatically. */
+
+.course-access-controls {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    align-items: center;
+    width: 100%;
+}
+
+.course-access-search {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.course-access-search .form-control {
+    padding-right: 2rem;
+}
+
+.course-access-search-icon {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--bs-secondary-color);
+    pointer-events: none;
+}
+
+#course-access-table {
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.course-access-revoke {
+    background: none;
+    border: none;
+    padding: 0 0 0 0.2em;
+    line-height: 1;
+    color: inherit;
+    opacity: 0.75;
+    cursor: pointer;
+    font-size: 1em;
+    vertical-align: middle;
+}
+
+.course-access-revoke:hover {
+    opacity: 1;
+}
