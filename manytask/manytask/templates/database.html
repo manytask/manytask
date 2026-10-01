@@ -183,9 +183,9 @@
             newScores[taskName] = newScore;
             fetch('{{ url_for("api.update_database", course_name=course_name) }}', {
                 method: 'POST',
-                headers: {
+                headers: window.csrfHeaders({
                     'Content-Type': 'application/json',
-                },
+                }),
                 body: JSON.stringify({
                     row_data: rowData,
                     new_scores: newScores
@@ -237,9 +237,9 @@
 
             fetch('{{ url_for("api.update_comment", course_name=course_name) }}', {
                 method: 'POST',
-                headers: {
+                headers: window.csrfHeaders({
                     'Content-Type': 'application/json',
-                },
+                }),
                 body: JSON.stringify({
                     username: username,
                     comment: newComment || null
@@ -312,9 +312,9 @@
 
                 fetch('{{ url_for("api.clear_grade_override", course_name=course_name) }}', {
                     method: 'POST',
-                    headers: {
+                    headers: window.csrfHeaders({
                         'Content-Type': 'application/json',
-                    },
+                    }),
                     body: JSON.stringify({
                         username: username
                     })
@@ -352,9 +352,9 @@
 
             fetch('{{ url_for("api.override_grade", course_name=course_name) }}', {
                 method: 'POST',
-                headers: {
+                headers: window.csrfHeaders({
                     'Content-Type': 'application/json',
-                },
+                }),
                 body: JSON.stringify({
                     username: username,
                     grade: newGrade

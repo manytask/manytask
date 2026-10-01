@@ -14,6 +14,9 @@
     {% block additional_styles %}{% endblock %}
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
+    <meta name="csrf-token" content="{{ csrf_token() if csrf_token is defined else '' }}">
+    {# Not deferred: inline scripts further down the page call window.csrfHeaders(). #}
+    <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
 </head>
 <body>
     {% block body %}

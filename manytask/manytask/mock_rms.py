@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 from authlib.integrations.flask_client import OAuth
 
-from .abstract import RmsApi, RmsApiException, RmsUser
+from .abstract import REPORT_TOKEN_CI_VARIABLE, RmsApi, RmsApiException, RmsUser
 
 
 @dataclass
@@ -12,6 +12,7 @@ class MockRmsProject:
     group: str
     visibility: str = "private"
     members: List[str] = field(default_factory=list)  # List of user IDs
+    ci_variables: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -169,6 +170,14 @@ class MockRmsApi(RmsApi):
         if course_students_group not in self.groups:
             self.groups[course_students_group] = MockRmsGroup(name=course_students_group)
         self.groups[course_students_group].projects[rms_user.username] = project
+
+    def set_student_report_token(self, username: str, course_students_group: str, token: str) -> bool:
+        project = self.projects.get(f"{course_students_group}/{username}")
+        if project is None:
+            return False
+
+        project.ci_variables[REPORT_TOKEN_CI_VARIABLE] = token
+        return True
 
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str:
         return f"{self.base_url}/{course_public_repo}/blob/{default_branch}"

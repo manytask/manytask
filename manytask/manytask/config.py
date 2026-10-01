@@ -164,6 +164,8 @@ class CourseResponse(BaseModel):
 class PingResponse(BaseModel):
     course: str
     ok: bool
+    scope: str = "course"
+    username: Optional[str] = None
 
 
 class IsAdminResponse(BaseModel):

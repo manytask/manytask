@@ -15,6 +15,17 @@ from app.manytask.models import DeadlineEntry, parse_manytask_datetime
 from app.observability import Metrics
 
 
+def _ping_scope(response: httpx.Response) -> str:
+    """Read the token scope out of a /ping body, defaulting to ``course`` for old manytask."""
+    try:
+        body = response.json()
+    except ValueError:
+        return "course"
+    if not isinstance(body, dict):
+        return "course"
+    return str(body.get("scope", "course"))
+
+
 class ManytaskClient:
     """Async manytask API wrapper. Owns no shared state besides the httpx client.
 
@@ -67,6 +78,10 @@ class ManytaskClient:
             raise ManytaskUnavailable(str(err)) from err
 
         if response.status_code == 200:
+            # /ping also accepts a student's personal token, which must not pass as a
+            # course credential here. Older manytask versions omit `scope` entirely.
+            if _ping_scope(response) != "course":
+                raise ManytaskTokenForbidden(f"manytask token for course {course_name} is not a course token")
             return
         if response.status_code == 403:
             raise ManytaskTokenForbidden(f"manytask rejected token for course {course_name}")

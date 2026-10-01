@@ -433,7 +433,26 @@ def create_project(course_name: str) -> ResponseReturnValue:
             "please report it to the course staff."
         )
 
+    _publish_student_report_token(app, course, session["manytask"]["username"], rms_user.username)
+
     return redirect(url_for("course.course_page", course_name=course_name))
+
+
+def _publish_student_report_token(app: CustomFlask, course: Course, username: str, rms_username: str) -> None:
+    """Give the fresh repository the student's own manytask token so its CI can report scores.
+
+    Failures are not fatal: submitting the create-project form again re-enrolls the student
+    and publishes the token once more. The token itself is never shown to the student.
+    """
+    try:
+        token = app.storage_api.get_or_create_student_token(course.course_name, username)
+        app.rms_api.set_student_report_token(
+            username=rms_username,
+            course_students_group=course.gitlab_course_students_group,
+            token=token,
+        )
+    except Exception as e:
+        logger.error("Failed to publish personal token for user %s: %s", sanitize_log_data(username), str(e))
 
 
 @course_bp.route("/not_ready")

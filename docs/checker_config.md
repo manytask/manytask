@@ -365,8 +365,10 @@ testing:
 ```
 
 `report_pipeline` runs only when `tasks_pipeline` succeeded, and only under `checker grade` — this
-is what pushes the score to Manytask, so it needs a `MANYTASK_TOKEN` CI variable. `checker check`
-runs the report pipeline in dry-run mode, so local runs never report a score.
+is what pushes the score to Manytask, so it needs a `MANYTASK_TOKEN` CI variable. Manytask
+provisions that variable in each student's repository: it is the student's personal token and only
+works for its owner. `checker check` runs the report pipeline in dry-run mode, so local runs never
+report a score.
 
 `changes_detection: last_commit_changes` means `checker grade` tests only the tasks touched by the
 pushed commits (diff against `CI_COMMIT_BEFORE_SHA` in GitLab CI, or `--base-ref`; `HEAD~1` otherwise).
@@ -412,8 +414,13 @@ two passes described [above](#where-student-edits-actually-go).
 | Variable | Where | Description |
 |---|---|---|
 | `GITLAB_API_TOKEN` | private repo | Push access to the public repo (`write_repository`, Maintainer) |
-| `MANYTASK_TOKEN` | group | Course token used by `report_score_manytask` |
+| `MANYTASK_COURSE_TOKEN` | private **project** | Course-wide token used by `.releaser-ci.yml` to push `.manytask.yml` |
 | `DOCKER_AUTH_CONFIG` | group | Registry credentials so student repos can pull the test image |
+
+`MANYTASK_COURSE_TOKEN` can grade every student in the course, so keep it on the private
+project. A group variable is inherited by the students subgroup and would leak it into
+student pipelines. Score reporting does not need it: Manytask provisions a personal
+`MANYTASK_TOKEN` in each student's repository, and that token only works for its owner.
 
 ## Adding a new task
 

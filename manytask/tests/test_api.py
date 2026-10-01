@@ -42,6 +42,8 @@ from tests.helpers import (
     MockCourseBase,
     MockStorageApiBase,
     build_test_session,
+    csrf_headers,
+    enable_csrf,
     make_created_course_mock,
     make_flask_app,
     raise_for_invalid_task,
@@ -1236,7 +1238,7 @@ def test_ping_success(app):
 
     assert response.status_code == HTTPStatus.OK
     body = json.loads(response.data)
-    assert body == {"course": TEST_COURSE_NAME, "ok": True}
+    assert body == {"course": TEST_COURSE_NAME, "ok": True, "scope": "course", "username": None}
 
 
 def test_ping_invalid_token(app):
@@ -1500,6 +1502,269 @@ def test_deadlines_invalid_token(app):
     response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
 
     assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+# ----- Personal student tokens -----
+
+
+OTHER_STUDENT = "other_student"
+REPORTED_SCORE = 90
+DEFAULTED_SCORE = 70
+EXISTING_SCORE = 80
+OVER_SOLVE_MULTIPLIER = 2
+
+
+def _student_token(app, username=TEST_USERNAME, course_name=TEST_COURSE_NAME):
+    return app.storage_api.get_or_create_student_token(course_name, username)
+
+
+def _student_headers(app, username=TEST_USERNAME):
+    return {"Authorization": f"Bearer {_student_token(app, username)}"}
+
+
+@pytest.fixture
+def registered_student(app):
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    app.storage_api.stored_user.rms_id = rms_user.id
+    return rms_user
+
+
+def test_report_with_student_token_for_self(app, registered_student):
+    data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME, "score": str(REPORTED_SCORE), "check_deadline": "True"}
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["username"] == TEST_USERNAME
+    assert body["score"] == REPORTED_SCORE
+
+
+def test_report_with_student_token_defaults_to_owner(app, registered_student):
+    data = {"task": TEST_TASK_NAME, "score": str(DEFAULTED_SCORE)}
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["username"] == TEST_USERNAME
+    assert body["score"] == DEFAULTED_SCORE
+
+
+def test_report_with_student_token_for_another_student_forbidden(app, registered_student):
+    data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME, "score": "100"}
+
+    response = _post_report(app, data=data, headers=_student_headers(app, OTHER_STUDENT))
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"personal student token" in response.data
+
+
+def test_report_with_student_token_ignores_deadline_bypass(app, registered_student, mock_group):
+    reduced_multiplier = 0.5
+    mock_group.get_current_percent_multiplier = lambda now, deadlines_type: reduced_multiplier
+    data = {
+        "task": TEST_TASK_NAME,
+        "score": "100",
+        "check_deadline": "False",
+        "submit_time": "2000-01-01 00:00:00+0000",
+    }
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["score"] == int(100 * reduced_multiplier)
+
+
+def test_report_with_student_token_cannot_reduce_score(app, registered_student):
+    app.storage_api.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] = EXISTING_SCORE
+    data = {"task": TEST_TASK_NAME, "score": "-42", "allow_reduction": "True", "check_deadline": "False"}
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["score"] == EXISTING_SCORE
+
+
+def test_report_with_student_token_caps_score(app, registered_student, mock_task):
+    data = {"task": TEST_TASK_NAME, "score": "999999", "check_deadline": "False"}
+
+    response = _post_report(app, data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["score"] == mock_task.score * OVER_SOLVE_MULTIPLIER
+
+
+def test_report_with_course_token_keeps_privileged_options(app, registered_student):
+    app.storage_api.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] = EXISTING_SCORE
+    negative_score = -42
+    data = {
+        "task": TEST_TASK_NAME,
+        "username": TEST_USERNAME,
+        "score": str(negative_score),
+        "allow_reduction": "True",
+        "check_deadline": "False",
+    }
+
+    response = _post_report(app, data=data, headers=_valid_token_headers())
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["score"] == negative_score
+
+
+def test_get_score_with_student_token_for_self(app, registered_student):
+    client = app.test_client()
+    data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/score", data=data, headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["username"] == TEST_USERNAME
+
+
+def test_get_score_with_student_token_for_another_student_forbidden(app, registered_student):
+    client = app.test_client()
+    data = {"task": TEST_TASK_NAME, "username": TEST_USERNAME}
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/score", data=data, headers=_student_headers(app, OTHER_STUDENT))
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_ping_with_student_token_reports_scope(app):
+    client = app.test_client()
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/ping", headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data) == {
+        "course": TEST_COURSE_NAME,
+        "ok": True,
+        "scope": "student",
+        "username": TEST_USERNAME,
+    }
+
+
+def test_deadlines_allow_student_token(app):
+    app.storage_api.groups_override = []
+    client = app.test_client()
+
+    response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.OK
+
+
+@pytest.mark.parametrize(
+    "method, path",
+    [
+        ("post", "update_config"),
+        ("get", "is_admin?rms_username=" + TEST_USERNAME),
+        ("get", "database"),
+        ("post", "database/update"),
+    ],
+)
+def test_course_wide_endpoints_reject_student_token(app, method, path):
+    client = app.test_client()
+
+    response = getattr(client, method)(f"/api/{TEST_COURSE_NAME}/{path}", headers=_student_headers(app))
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"requires the course token" in response.data
+
+
+def test_student_token_from_another_course_is_rejected(app):
+    app.storage_api.get_or_create_student_token("another_course", TEST_USERNAME)
+    headers = {"Authorization": f"Bearer {_student_token(app, TEST_USERNAME, 'another_course')}"}
+
+    response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/ping", headers=headers)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert b"Invalid course token" in response.data
+
+
+@pytest.mark.parametrize(
+    "method, path", [("get", "student_token"), ("post", "student_token/publish"), ("post", "student_token/rotate")]
+)
+def test_students_cannot_read_their_token_over_the_api(authenticated_client, method, path):
+    response = getattr(authenticated_client, method)(f"/api/{TEST_COURSE_NAME}/{path}")
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+# ----- CSRF protection of session authenticated endpoints -----
+
+
+SESSION_MUTATING_ROUTES = [
+    ("post", "database/update"),
+    ("post", "comment/update"),
+    ("post", "grade/override"),
+    ("post", "grade/clear_override"),
+]
+
+
+@pytest.mark.parametrize("method, path", SESSION_MUTATING_ROUTES)
+def test_session_endpoints_reject_missing_csrf_token(app, authenticated_client, method, path):
+    enable_csrf(app)
+
+    response = getattr(authenticated_client, method)(f"/api/{TEST_COURSE_NAME}/{path}", json={})
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "CSRF" in json.loads(response.data)["error"]
+
+
+@pytest.mark.parametrize("method, path", SESSION_MUTATING_ROUTES)
+def test_session_endpoints_reject_forged_csrf_token(app, authenticated_client, method, path):
+    enable_csrf(app)
+    headers = csrf_headers(authenticated_client, app)
+    headers["X-CSRFToken"] = headers["X-CSRFToken"][:-4] + "beef"
+
+    response = getattr(authenticated_client, method)(f"/api/{TEST_COURSE_NAME}/{path}", json={}, headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "CSRF" in json.loads(response.data)["error"]
+
+
+def test_session_endpoint_accepts_valid_csrf_token(app, authenticated_client):
+    enable_csrf(app)
+    headers = csrf_headers(authenticated_client, app)
+    payload = {"username": TEST_USERNAME, "comment": "ok"}
+
+    with patch.object(app.storage_api, "update_student_comment", create=True) as update_comment:
+        response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/comment/update", json=payload, headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    update_comment.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME, "ok")
+
+
+def test_csrf_token_is_also_accepted_from_a_form_field(app, authenticated_client):
+    enable_csrf(app)
+    token = csrf_headers(authenticated_client, app)["X-CSRFToken"]
+
+    response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/comment/update", data={"csrf_token": token})
+
+    # Past the CSRF check the handler runs and rejects the form body on its own terms.
+    assert json.loads(response.data)["message"] == "Request must be JSON"
+
+
+def test_course_token_requests_do_not_need_csrf(app):
+    enable_csrf(app)
+    payload = {
+        "row_data": {
+            "username": TEST_USERNAME,
+            "total_score": 0,
+            "grade": 0,
+            "percent": 0,
+            "large_count": 0,
+            "scores": {},
+        },
+        "new_scores": {"task1": 90},
+    }
+
+    response = app.test_client().post(
+        f"/api/{TEST_COURSE_NAME}/database/update", json=payload, headers=_valid_token_headers()
+    )
+
+    assert response.status_code == HTTPStatus.OK
 
 
 # ----- Course access table -----

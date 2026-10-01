@@ -215,9 +215,9 @@
             try {
                 const response = await fetch(`/api/namespaces/${namespaceId}/users`, {
                     method: 'POST',
-                    headers: {
+                    headers: window.csrfHeaders({
                         'Content-Type': 'application/json',
-                    },
+                    }),
                     body: JSON.stringify(formData)
                 });
 
@@ -266,9 +266,9 @@
             try {
                 const response = await fetch(`/api/namespaces/${namespaceId}/users/${userId}`, {
                     method: 'PATCH',
-                    headers: {
+                    headers: window.csrfHeaders({
                         'Content-Type': 'application/json',
-                    },
+                    }),
                     body: JSON.stringify({ role: newRole })
                 });
 
