@@ -946,6 +946,9 @@ def test_check_if_course_admin_namespace_owner(db_api_with_initialized_first_cou
 
     # user is the namespace owner, so it is a course admin even without UserOnCourse
     assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert _access_levels_by_username(db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME))[
+        TEST_USERNAME
+    ] == {"namespace_admin"}
     # unrelated user (instance admin excluded from this check via a non-owner) is not
     assert instance_admin_id != user.id
 
@@ -1457,6 +1460,7 @@ def test_get_course_access_users_namespace_roles(db_api_with_initialized_first_c
 
     assert result[TEST_USERNAME_1] == {"namespace_admin"}
     assert result[TEST_USERNAME_2] == {"program_manager"}
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME_2)
 
 
 def test_get_course_access_users_merges_levels_of_one_user(db_api_with_initialized_first_course, session):
