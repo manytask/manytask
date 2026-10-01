@@ -9,24 +9,25 @@ We track our progress using GitHub Projects (https://github.com/orgs/manytask/pr
 
 ## Setting up a development environment
 
-See the [development guide](../docs/dev.md) for a complete walkthrough of setting up a local environment (Manytask + local GitLab in Docker), configuring OAuth, adding a course, and running the stack.
+See the [development guide](docs/dev.md) for a complete walkthrough of setting up a local environment (Manytask + local GitLab in Docker), configuring OAuth, adding a course, and running the stack.
 
 ### Quick start
 
-The fastest way to get a full stack — Manytask + a local GitLab in Docker — running locally is the bundled startup script. From the `manytask/` directory, run:
+The fastest way to get a full stack — Manytask + a local GitLab in Docker — running locally is the bundled startup script. From the repository root, run:
 
 ```bash
+cd manytask
 ./scripts/start_local_dev.sh
 ```
 
-It starts the Docker containers, waits for GitLab to become ready, sets up the OAuth application, and wires the resulting credentials into `.env` (creating it from `.env.example` if needed). Once it finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/) and the local GitLab at [http://localhost:8929/](http://localhost:8929/). See the [development guide](../docs/dev.md) for details and troubleshooting.
+It starts the Docker containers, waits for GitLab to become ready, sets up the OAuth application, and wires the resulting credentials into `.env` (creating it from `.env.example` if needed). Once it finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/) and the local GitLab at [http://localhost:8929/](http://localhost:8929/). See the [development guide](docs/dev.md) for details and troubleshooting.
 
 ### In short
 
-* Dependencies are managed with [`uv`](https://docs.astral.sh/uv/). Install them with `make install-deps`.
+* Dependencies are managed with [`uv`](https://docs.astral.sh/uv/). From `manytask/`, install them with `make install-deps`.
 * The project targets **Python 3.12+**.
-* Common tasks are wrapped in the [`Makefile`](Makefile): `make dev` to run the stack, `make lint` to lint/format/type-check, `make test` to run the tests, and `make check` to run everything.
-* Database migrations are managed with [Alembic](https://alembic.sqlalchemy.org/): use `make makemigrations msg="..."`, `make migrate rev=head`, and `make history`.
+* Common tasks are wrapped in the [`Makefile`](manytask/Makefile): from `manytask/`, run `make dev` to run the stack, `make lint` to lint/format/type-check, `make test` to run the tests, and `make check` to run everything.
+* Database migrations are managed with [Alembic](https://alembic.sqlalchemy.org/): from `manytask/`, use `make makemigrations msg="..."`, `make migrate rev=head`, and `make history`.
 
 ## Git Commit Messages and PR description
 
@@ -79,7 +80,7 @@ We usually ask an author to merge their code so they can double-check that the c
 
 All python code should follow [PEP8](https://www.python.org/dev/peps/pep-0008/) and be typed.
 
-The code is formatted and linted with [`ruff`](https://docs.astral.sh/ruff/) (which also handles import sorting) and type checked with [`mypy`](https://mypy-lang.org/). [`pylint`](https://pylint.readthedocs.io/) is used for duplicate-code detection. Run all of these at once with:
+The code is formatted and linted with [`ruff`](https://docs.astral.sh/ruff/) (which also handles import sorting) and type checked with [`mypy`](https://mypy-lang.org/). [`pylint`](https://pylint.readthedocs.io/) is used for duplicate-code detection. From `manytask/`, run all of these at once with:
 
 ```bash
 make lint
@@ -91,9 +92,8 @@ Before opening a PR, make sure the full check suite passes:
 make check
 ```
 
-## Relese checklist
+## Release checklist
 
-- [ ] Update VERSION file in ./manytask/
-- [ ] Update VERSION file in ./checker/
-- [ ] Update CHANGELOG.md
-- [ ] Change version of the checker that is installed in `course-tamplate/testenv.docker` and `course-template/.releaser-ci.yml`.
+- [ ] Update `manytask/VERSION` and `checker/VERSION`.
+- [ ] Update `CHANGELOG.md`.
+- [ ] Change the checker version in `course-template/testenv.docker` and `course-template/.releaser-ci.yml`.
