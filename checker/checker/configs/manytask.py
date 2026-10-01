@@ -82,13 +82,6 @@ class ManytaskGroupConfig(CustomBaseModel):
             for percent, date_or_delta in zip([1.0, *self.steps.keys()], [*self.steps.values(), self.end])
         }
 
-    def get_current_percent_multiplier(self, now: datetime) -> float:
-        percents = self.get_percents_before_deadline()
-        for percent, date in percents.items():
-            if now <= date:
-                return percent
-        return 0.0
-
     def replace_timezone(self, timezone: ZoneInfo) -> None:
         self.start = self.start.replace(tzinfo=timezone)
         self.end = self.end.replace(tzinfo=timezone) if isinstance(self.end, datetime) else self.end
