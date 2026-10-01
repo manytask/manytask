@@ -95,5 +95,5 @@ make check
 ## Release checklist
 
 - [ ] Update `manytask/VERSION` and `checker/VERSION`.
-- [ ] Update `manytask/CHANGELOG.md`.
+- [ ] Update `CHANGELOG.md`.
 - [ ] Change the checker version in `course-template/testenv.docker` and `course-template/.releaser-ci.yml`.

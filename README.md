@@ -8,6 +8,8 @@
 
 Small web application for managing courses: store students' grades, maintain deadlines, provide scoreboard etc.
 
+See the [changelog](CHANGELOG.md) for release history.
+
 ---
 
 ## How it works
