@@ -229,6 +229,73 @@ def test_get_database_table_data_with_admin_data(app):
             assert student["grade_is_override"] is expected_overrides[student_id]
 
 
+def test_get_database_table_data_hides_admins_from_students(app):
+    """Users flagged as admins should be excluded from the non-admin (student) view."""
+    app.storage_api.get_all_scores_with_names = lambda _course_name: {
+        STUDENT_1: StudentCourseScores(
+            username=STUDENT_1,
+            first_name=STUDENT_DATA[STUDENT_1][0],
+            last_name=STUDENT_DATA[STUDENT_1][1],
+            task_scores={
+                TASK_1: TaskScore(SCORES[STUDENT_1][TASK_1], False),
+            },
+            is_admin=False,
+        ),
+        STUDENT_2: StudentCourseScores(
+            username=STUDENT_2,
+            first_name=STUDENT_DATA[STUDENT_2][0],
+            last_name=STUDENT_DATA[STUDENT_2][1],
+            task_scores={
+                TASK_1: TaskScore(SCORES[STUDENT_2][TASK_1], False),
+            },
+            is_admin=True,
+        ),
+    }
+
+    with app.test_request_context():
+        test_course = app.storage_api.get_course("test_course")
+        result = get_database_table_data(app, test_course, include_admin_data=False)
+
+        usernames = {s["username"] for s in result["students"]}
+        assert usernames == {STUDENT_1}
+
+
+def test_get_database_table_data_shows_admins_flagged_for_admins(app):
+    """Admin viewers should see admin/staff users too, flagged via is_admin."""
+    app.storage_api.get_all_scores_with_names = lambda _course_name: {
+        STUDENT_1: StudentCourseScores(
+            username=STUDENT_1,
+            first_name=STUDENT_DATA[STUDENT_1][0],
+            last_name=STUDENT_DATA[STUDENT_1][1],
+            task_scores={
+                TASK_1: TaskScore(SCORES[STUDENT_1][TASK_1], False),
+            },
+            is_admin=False,
+        ),
+        STUDENT_2: StudentCourseScores(
+            username=STUDENT_2,
+            first_name=STUDENT_DATA[STUDENT_2][0],
+            last_name=STUDENT_DATA[STUDENT_2][1],
+            task_scores={
+                TASK_1: TaskScore(SCORES[STUDENT_2][TASK_1], False),
+            },
+            is_admin=True,
+        ),
+    }
+
+    with app.test_request_context():
+        test_course = app.storage_api.get_course("test_course")
+        result = get_database_table_data(app, test_course, include_admin_data=True)
+
+        usernames = {s["username"] for s in result["students"]}
+        assert usernames == {STUDENT_1, STUDENT_2}
+
+        student_1_row = next(s for s in result["students"] if s["username"] == STUDENT_1)
+        student_2_row = next(s for s in result["students"] if s["username"] == STUDENT_2)
+        assert student_1_row["is_admin"] is False
+        assert student_2_row["is_admin"] is True
+
+
 def test_get_database_table_data_no_scores(app):
     expected_tasks_count = 3
 
