@@ -209,13 +209,6 @@ class ManytaskDeadlinesConfig(CustomBaseModel):
                         raise ValueError("window is too large")
         return self
 
-    def find_task(self, task_name: str) -> tuple[ManytaskGroupConfig, ManytaskTaskConfig]:
-        for group in self.schedule:
-            for task in group.tasks:
-                if task.name == task_name:
-                    return group, task
-        raise KeyError(f"Task {task_name} not found")
-
     def get_groups(
         self,
         enabled: bool | None = None,
@@ -276,13 +269,6 @@ class ManytaskDeadlinesConfig(CustomBaseModel):
             tasks = [task for task in tasks if task.is_bonus == is_bonus]
 
         return tasks
-
-    def max_score(self, started: bool | None = True, *, now: datetime | None = None) -> int:
-        return sum(task.score for task in self.get_tasks(enabled=True, started=started, is_bonus=False, now=now))
-
-    @property
-    def max_score_started(self) -> int:
-        return self.max_score(started=True, now=self.get_now_with_timezone())
 
 
 class ManytaskConfig(CustomBaseModel, YamlLoaderMixin["ManytaskConfig"]):
