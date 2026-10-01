@@ -1,0 +1,34 @@
+# Exported as .sourcecraft/ci.yaml in the public repository. Student forks
+# invoke the private course's shared grade workflow on each push.
+on:
+  push:
+    - workflows: grade
+
+workflows:
+  grade:
+    tasks:
+      - name: grade
+        cubes:
+          - name: get-workflow-values
+            env:
+              STUDENT_REPO_PREFIX: your-course-student-
+            script:
+              - |
+                set -eu
+                repo_name="$(basename "$SOURCECRAFT_REPO_URL" .git)"
+                student_username="${repo_name#"$STUDENT_REPO_PREFIX"}"
+                WORKFLOW_VALUES=$(printf '[{"name":"HTTPS_CLONE_URL","value":"%s"},{"name":"REF_NAME","value":"%s"},{"name":"STUDENT_USERNAME","value":"%s"}]' \
+                  "$SOURCECRAFT_REPO_URL" "$SOURCECRAFT_COMMIT_REF_NAME" "$student_username")
+                echo "WORKFLOW_VALUES=$WORKFLOW_VALUES" >> "$SOURCECRAFT_ENV"
+          - name: grade
+            env:
+              ORG_SLUG: your-organization
+              REPO_SLUG: your-private-repo
+              WORKFLOW_NAME: grade
+              TASK_NAME: grade
+              CUBE_NAME: grade
+              ARTIFACT_LOCAL_PATH: output.txt
+            image: cr.yandex/sourcecraft/cubes/shared-workflows:latest
+            artifacts:
+              paths:
+                - artifacts/output
