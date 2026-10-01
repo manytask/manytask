@@ -2,7 +2,6 @@
 
 [![Test](https://github.com/manytask/manytask/actions/workflows/test.yml/badge.svg)](https://github.com/manytask/manytask/actions/workflows/test.yml)
 [![Publish](https://github.com/manytask/manytask/actions/workflows/publish.yml/badge.svg)](https://github.com/manytask/manytask/actions/workflows/publish.yml)
-[![codecov](https://codecov.io/gh/yandexdataschool/manytask/branch/main/graph/badge.svg?token=3F9J850FX2)](https://codecov.io/gh/yandexdataschool/manytask)
 [![github](https://img.shields.io/github/v/release/manytask/manytask?logo=github&display_name=tag&sort=semver)](https://github.com/manytask/manytask/releases)
 [![docker](https://img.shields.io/docker/v/manytask/manytask?label=docker&logo=docker&sort=semver)](https://hub.docker.com/r/manytask/manytask)
 
