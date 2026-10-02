@@ -20,6 +20,7 @@ services:
             - "8081:5050"
         volumes:
             - ../manytask:/app/manytask
+            - ../manytask/static/dist:/app/manytask/static/dist:ro
             - ../.tmp/cache:/cache
         networks:
             - manytask-dev-net

@@ -14,17 +14,17 @@ MANYTASK_CONFIG_OUT ?= .manytask.yml
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests run-js-tests
+.PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests run-frontend-tests frontend-install frontend-build frontend-watch frontend-check
 
 check: lint test
 
 check-colima: lint test-colima
 
-install-deps:
+install-deps: frontend-install
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	uv sync --active --all-extras
 
-dev:
+dev: frontend-build
 	docker compose -f $(DOCKER_COMPOSE_DEV) down
 	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
@@ -32,22 +32,35 @@ clean-db:
 	docker compose -f $(DOCKER_COMPOSE_DEV) down -v
 	docker volume prune -f
 
-reset-dev: clean-db
+reset-dev: frontend-build clean-db
 	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
 
 test: copy-common-config install-deps run-manytask-tests
 
-run-js-tests:
-	node --test tests/js/*.test.cjs
+# Shared prerequisites run npm ci once per Make invocation, including `make test`.
+frontend-install:
+	npm --prefix frontend ci
 
-run-manytask-tests: run-js-tests
+frontend-build: frontend-install
+	npm --prefix frontend run build
+
+frontend-watch: frontend-install
+	npm --prefix frontend run dev
+
+frontend-check: frontend-install
+	npm --prefix frontend run typecheck
+
+run-frontend-tests: frontend-install
+	npm --prefix frontend test
+
+run-manytask-tests: frontend-check run-frontend-tests frontend-build
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TEST_ARGS)
 
-test-colima: copy-common-config install-deps run-js-tests
+test-colima: copy-common-config install-deps frontend-check run-frontend-tests frontend-build
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
 	uv run python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TEST_ARGS)
 
-lint:
+lint: frontend-check
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
 	uv run ruff format $(ROOT_DIR) $(TESTS_DIR)
 	uv run ruff check $(ROOT_DIR) $(TESTS_DIR)/ --fix

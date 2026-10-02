@@ -157,8 +157,18 @@ enable = ["R0801"]
 [tool.pylint.reports]
 min-similarity-lines = 3
 
+# Resources are enumerated below; do not infer data packages from build artifacts.
 [tool.setuptools]
-packages = ["manytask"]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["manytask", "manytask.*"]
+exclude = ["manytask.static*", "manytask.templates*"]
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
+
+# Build the frontend before packaging. Dot-prefixed Vite manifests need an explicit glob.
+[tool.setuptools.package-data]
+manytask = ["alembic.ini", "templates/*.html", "static/**/*", "static/dist/.vite/manifest.json"]
+"manytask.migrations" = ["script.py.mako"]

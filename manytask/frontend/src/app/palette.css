@@ -1,0 +1,170 @@
+/* Manytask's original Bootstrap 5.3 palette, applied to Gravity components,
+   including dialogs and menus rendered outside the application root. */
+.g-root.g-root_theme_light {
+  color-scheme: light;
+  --g-color-base-background: #fff;
+  --g-color-base-neutral-light: #f8f9fa;
+  --g-color-base-neutral-medium: #e9ecef;
+  --g-color-base-neutral-heavy: #6c757d;
+  --g-color-base-selection: #cfe2ff;
+  --g-color-base-selection-hover: #b6d4fe;
+  --g-color-text-primary: #212529;
+  --g-color-text-complementary: #495057;
+  --g-color-text-secondary: rgba(33, 37, 41, .75);
+  --g-color-text-hint: rgba(33, 37, 41, .5);
+  --g-color-text-link: #0d6efd;
+  --g-color-text-link-hover: #0a58ca;
+  --g-color-line-generic: #dee2e6;
+  --g-color-line-generic-hover: #adb5bd;
+
+  --g-color-base-positive-light: #d1e7dd;
+  --g-color-text-positive: #0a3622;
+  --g-color-line-positive: #a3cfbb;
+  --g-color-base-info-light: #cff4fc;
+  --g-color-text-info: #055160;
+  --g-color-line-info: #9eeaf9;
+  --g-color-base-warning-light: #fff3cd;
+  --g-color-text-warning: #664d03;
+  --g-color-line-warning: #ffe69c;
+  --g-color-base-danger-light: #f8d7da;
+  --g-color-text-danger: #58151c;
+  --g-color-line-danger: #f1aeb5;
+
+  --manytask-primary-text: #052c65;
+  --manytask-primary-border: #9ec5fe;
+  --manytask-secondary-bg: #e2e3e5;
+  --manytask-secondary-text: #2b2f32;
+  --manytask-secondary-border: #c4c8cb;
+}
+
+.g-root.g-root_theme_dark {
+  color-scheme: dark;
+  --g-color-base-background: #212529;
+  --g-color-base-neutral-light: #2b3035;
+  --g-color-base-neutral-medium: #343a40;
+  --g-color-base-neutral-heavy: #6c757d;
+  --g-color-base-selection: #031633;
+  --g-color-base-selection-hover: #052c65;
+  --g-color-text-primary: #dee2e6;
+  --g-color-text-complementary: #ced4da;
+  --g-color-text-secondary: rgba(222, 226, 230, .75);
+  --g-color-text-hint: rgba(222, 226, 230, .5);
+  --g-color-text-link: #6ea8fe;
+  --g-color-text-link-hover: #8bb9fe;
+  --g-color-line-generic: #495057;
+  --g-color-line-generic-hover: #6c757d;
+
+  --g-color-base-positive-light: #051b11;
+  --g-color-text-positive: #75b798;
+  --g-color-line-positive: #0f5132;
+  --g-color-base-info-light: #032830;
+  --g-color-text-info: #6edff6;
+  --g-color-line-info: #087990;
+  --g-color-base-warning-light: #332701;
+  --g-color-text-warning: #ffda6a;
+  --g-color-line-warning: #997404;
+  --g-color-base-danger-light: #2c0b0e;
+  --g-color-text-danger: #ea868f;
+  --g-color-line-danger: #842029;
+
+  --manytask-primary-text: #6ea8fe;
+  --manytask-primary-border: #084298;
+  --manytask-secondary-bg: #161719;
+  --manytask-secondary-text: #a7acb1;
+  --manytask-secondary-border: #41464b;
+}
+
+.g-root.g-root_theme_light,
+.g-root.g-root_theme_dark {
+  --g-color-base-brand: #0d6efd;
+  --g-color-base-brand-hover: #0b5ed7;
+  --g-color-text-brand: var(--g-color-text-link);
+  --g-color-text-brand-heavy: var(--g-color-text-link-hover);
+  --g-color-text-brand-contrast: #fff;
+  --g-color-line-brand: #0d6efd;
+  --g-color-line-focus: rgba(13, 110, 253, .5);
+
+  --g-color-base-float: var(--g-color-base-background);
+  --g-color-base-float-hover: var(--g-color-base-neutral-light);
+  --g-color-base-float-medium: var(--g-color-base-neutral-medium);
+  --g-color-base-float-heavy: var(--g-color-base-neutral-heavy);
+  --g-color-base-float-accent: var(--g-color-base-background);
+  --g-color-base-float-accent-hover: var(--g-color-base-neutral-light);
+  --g-color-base-float-announcement: var(--g-color-base-neutral-light);
+  --g-color-base-modal: var(--g-color-base-background);
+  --g-color-base-generic: var(--g-color-base-neutral-light);
+  --g-color-base-generic-hover: var(--g-color-base-neutral-medium);
+  --g-color-base-generic-medium: var(--g-color-base-neutral-medium);
+  --g-color-base-generic-medium-hover: var(--g-color-line-generic);
+  --g-color-base-generic-accent: var(--g-color-base-neutral-medium);
+  --g-color-base-generic-accent-disabled: var(--g-color-base-neutral-light);
+  --g-color-base-generic-ultralight: var(--g-color-base-neutral-light);
+  --g-color-base-simple-hover: var(--g-color-base-neutral-light);
+  --g-color-base-simple-hover-solid: var(--g-color-base-neutral-light);
+  --g-color-base-neutral-light-hover: var(--g-color-base-neutral-medium);
+  --g-color-base-neutral-medium-hover: var(--g-color-line-generic);
+  --g-color-base-neutral-heavy-hover: var(--g-color-line-generic-hover);
+  --g-color-line-generic-solid: var(--g-color-line-generic);
+  --g-color-line-generic-active: var(--g-color-line-generic-hover);
+  --g-color-line-generic-accent: var(--g-color-line-generic);
+  --g-color-line-generic-accent-hover: var(--g-color-line-generic-hover);
+  --g-color-text-link-visited: var(--g-color-text-link);
+  --g-color-text-link-visited-hover: var(--g-color-text-link-hover);
+
+  --g-color-base-positive-heavy: #198754;
+  --g-color-base-positive-heavy-hover: #157347;
+  --g-color-base-info-heavy: #0dcaf0;
+  --g-color-base-info-heavy-hover: #31d2f2;
+  --g-color-base-warning-heavy: #ffc107;
+  --g-color-base-warning-heavy-hover: #ffca2c;
+  --g-color-base-danger-heavy: #dc3545;
+  --g-color-base-danger-heavy-hover: #bb2d3b;
+  --g-color-base-positive-light-hover: var(--g-color-line-positive);
+  --g-color-base-positive-medium: var(--g-color-line-positive);
+  --g-color-base-positive-medium-hover: var(--g-color-line-positive);
+  --g-color-base-info-light-hover: var(--g-color-line-info);
+  --g-color-base-info-medium: var(--g-color-line-info);
+  --g-color-base-info-medium-hover: var(--g-color-line-info);
+  --g-color-base-warning-light-hover: var(--g-color-line-warning);
+  --g-color-base-warning-medium: var(--g-color-line-warning);
+  --g-color-base-warning-medium-hover: var(--g-color-line-warning);
+  --g-color-base-danger-light-hover: var(--g-color-line-danger);
+  --g-color-base-danger-medium: var(--g-color-line-danger);
+  --g-color-base-danger-medium-hover: var(--g-color-line-danger);
+  --g-color-text-positive-heavy: var(--g-color-text-positive);
+  --g-color-text-info-heavy: var(--g-color-text-info);
+  --g-color-text-warning-heavy: var(--g-color-text-warning);
+  --g-color-text-danger-heavy: var(--g-color-text-danger);
+}
+
+/* Existing course states keep the same semantic colors in list and table views. */
+.g-root [data-course-status] {
+  color: var(--course-status-text, var(--manytask-secondary-text));
+  background: var(--course-status-bg, var(--manytask-secondary-bg));
+  border: 1px solid var(--course-status-border, var(--manytask-secondary-border));
+}
+.g-root [data-course-status="created"] {
+  --course-status-bg: var(--g-color-base-info-light);
+  --course-status-text: var(--g-color-text-info);
+  --course-status-border: var(--g-color-line-info);
+}
+.g-root [data-course-status="in_progress"] {
+  --course-status-bg: var(--g-color-base-positive-light);
+  --course-status-text: var(--g-color-text-positive);
+  --course-status-border: var(--g-color-line-positive);
+}
+.g-root [data-course-status="all_tasks_issued"] {
+  --course-status-bg: var(--g-color-base-warning-light);
+  --course-status-text: var(--g-color-text-warning);
+  --course-status-border: var(--g-color-line-warning);
+}
+.g-root [data-course-status="doreshka"] {
+  --course-status-bg: var(--g-color-base-danger-light);
+  --course-status-text: var(--g-color-text-danger);
+  --course-status-border: var(--g-color-line-danger);
+}
+.g-root [data-course-status="finished"] {
+  --course-status-bg: var(--g-color-base-selection);
+  --course-status-text: var(--manytask-primary-text);
+  --course-status-border: var(--manytask-primary-border);
+}

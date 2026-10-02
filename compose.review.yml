@@ -1,0 +1,49 @@
+name: manytask-review
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: review
+      POSTGRES_PASSWORD: review
+      POSTGRES_DB: review
+    volumes:
+      - review-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U review -d review"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      dockerfile: manytask/Dockerfile
+    ports:
+      - "127.0.0.1:8082:5050"
+    environment:
+      MANYTASK_PREVIEW_DATABASE_URL: postgresql://review:review@db:5432/review
+    volumes:
+      - ./manytask/tests:/app/tests:ro
+      - ./course-template:/course-template:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - gunicorn
+      - "tests.ui_preview:create_preview_app()"
+      - --bind=0.0.0.0:5050
+      - --workers=1
+      - --threads=4
+      - --preload
+      - --access-logfile=-
+      - --error-logfile=-
+    healthcheck:
+      test: [CMD, curl, -f, "http://localhost:5050/__preview__/health"]
+      interval: 3s
+      timeout: 5s
+      start_period: 30s
+      retries: 30
+
+volumes:
+  review-db:

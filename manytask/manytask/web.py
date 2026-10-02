@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import gitlab
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from wtforms import ValidationError
@@ -30,6 +30,7 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .main import CustomFlask
+from .ui import render_ui as render_template
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
@@ -195,6 +196,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         links=course.links,
         scores=tasks_scores,
         bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
+        max_started_score=storage_api.max_score_started(course.course_name),
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=app.favicon,
@@ -459,6 +461,7 @@ def not_ready(course_name: str) -> ResponseReturnValue:
         course_name=course.course_name,
         manytask_version=app.manytask_version,
         is_instance_admin=is_instance_admin,
+        is_namespace_admin=can_edit_course and not is_instance_admin,
         can_edit_course=can_edit_course,
     )
 
@@ -499,6 +502,7 @@ def show_database(course_name: str) -> ResponseReturnValue:
         course_status=course.status,
         scores=scores,
         bonus_score=bonus_score,
+        max_started_score=storage_api.max_score_started(course.course_name),
         username=student_username,
         is_course_admin=student_course_admin,
         app=app,
@@ -652,7 +656,11 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
             app.logger.error("CSRF validation failed: %s", e)
-            return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
+            return render_template(
+                "edit_course.html", course=course,
+                course_users=app.storage_api.get_course_users_with_admin_status(course_name),
+                error_message="CSRF Error", rms=app.app_config.rms,
+            )
 
         updated_settings = CourseConfig(
             course_name=course_name,
@@ -677,6 +685,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         return render_template(
             "edit_course.html",
             course=updated_settings,
+            course_users=app.storage_api.get_course_users_with_admin_status(course_name),
             error_message="Error while updating course",
             rms=app.app_config.rms,
         )
