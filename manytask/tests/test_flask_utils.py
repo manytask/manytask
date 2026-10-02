@@ -170,10 +170,14 @@ def test_get_courses_populates_can_edit_and_edit_url(app, monkeypatch):
     by_name = {c["name"]: c for c in result}
     assert by_name["editable"]["can_edit"] is True
     assert by_name["editable"]["namespace_slug"] == "ns-5"
+    assert by_name["editable"]["namespace_url"] == "/instance_admin.namespace_panel"
     assert by_name["editable"]["edit_url"] == "/instance_admin.edit_course"
     assert by_name["readonly"]["can_edit"] is False
+    assert by_name["readonly"]["namespace_slug"] == "ns-7"
+    assert by_name["readonly"]["namespace_url"] == ""
     assert by_name["no_namespace"]["can_edit"] is False
     assert by_name["no_namespace"]["namespace_slug"] == ""
+    assert by_name["no_namespace"]["namespace_url"] == ""
 
 
 def test_get_courses_instance_admin_can_edit_all(app, monkeypatch):
@@ -195,3 +199,22 @@ def test_get_courses_instance_admin_can_edit_all(app, monkeypatch):
     assert len(result) == 1
     # Instance admin edits even a course without a namespace.
     assert result[0]["can_edit"] is True
+
+
+def test_get_courses_instance_admin_links_namespace(app, monkeypatch):
+    monkeypatch.setattr("manytask.utils.flask.url_for", lambda endpoint, **kw: f"/{endpoint}/{kw.get('namespace_id')}")
+
+    app.storage_api.check_if_instance_admin.return_value = True
+    app.storage_api.get_all_courses_names_with_statuses.return_value = [("some_course", CourseStatus.IN_PROGRESS)]
+    app.storage_api.get_course.return_value = _course(ADMIN_NAMESPACE_ID)
+    namespace = MagicMock()
+    namespace.slug = "ns-5"
+    app.storage_api.get_namespace_by_id.return_value = (namespace, None)
+
+    with app.test_request_context():
+        from flask import session
+
+        session["manytask"] = {"username": TEST_USERNAME}
+        result = get_courses(app)
+
+    assert result[0]["namespace_url"] == "/instance_admin.namespace_panel/5"

@@ -124,7 +124,7 @@
 
     <script>
         const coursesData = {{ courses | tojson }};
-        const adminNamespacesData = {{ admin_namespaces | tojson }};
+        const adminNamespacesData = {{ admin_namespaces | default([]) | tojson }};
         // Canonical status order, taken from the CourseStatus enum on the
         // backend, so the filter dropdown and the Status column sort follow the
         // course lifecycle rather than alphabetical order.
@@ -213,7 +213,17 @@
                     headerTooltip: "Namespace",
                     formatter: function (cell) {
                         const value = cell.getValue();
-                        return value ? value : '<em class="courses-table-muted">—</em>';
+                        if (!value) {
+                            return '<em class="courses-table-muted">—</em>';
+                        }
+                        const url = cell.getRow().getData().namespace_url;
+                        const label = document.createElement(url ? 'a' : 'span');
+                        if (url) {
+                            label.href = url;
+                            label.className = 'courses-table-link';
+                        }
+                        label.textContent = value;
+                        return label;
                     }
                 },
                 {
