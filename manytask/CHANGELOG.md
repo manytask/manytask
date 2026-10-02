@@ -2,14 +2,16 @@
 
 ## [26.0.6](https://github.com/manytask/manytask/releases/tag/26.0.6) - 2026-10-01
 
-This release expands course and namespace administration, improves the checker and course template release pipeline, and fixes several export and web errors.
+This release expands course and namespace administration, improves checker grading and the course template release pipeline, and fixes several export and web errors.
 
 ### Features
 
 - Add personal task group ordering and the option to skip unchanged tasks during grading ([#1092](https://github.com/manytask/manytask/pull/1092)).
+- Check all tasks changed across a multi-commit push during grading ([#1110](https://github.com/manytask/manytask/pull/1110)).
 - Add course access API endpoints and course administrator management ([#1063](https://github.com/manytask/manytask/pull/1063), [#1064](https://github.com/manytask/manytask/pull/1064)).
 - Add namespace editing and prompt for a username when adding a user ([#1106](https://github.com/manytask/manytask/pull/1106), [#1107](https://github.com/manytask/manytask/pull/1107)).
 - Hide teachers, administrators, and project managers from the scores table ([#1079](https://github.com/manytask/manytask/pull/1079)).
+- Round scores after applying a deadline multiplier instead of truncating them ([#1124](https://github.com/manytask/manytask/pull/1124)).
 
 ### Fixes
 
@@ -22,7 +24,7 @@ This release expands course and namespace administration, improves the checker a
 
 - Redesign the course template release pipeline ([#1109](https://github.com/manytask/manytask/pull/1109)).
 - Simplify test targets, add test arguments, and avoid a shell call for Git status ([#1104](https://github.com/manytask/manytask/pull/1104), [#1103](https://github.com/manytask/manytask/pull/1103), [#1102](https://github.com/manytask/manytask/pull/1102)).
-- Update dependencies and development documentation.
+- Update dependencies and development documentation, including the urllib3 minimum and uv lockfiles ([#1123](https://github.com/manytask/manytask/pull/1123)).
 
 **Full Changelog**: [26.0.5...26.0.6](https://github.com/manytask/manytask/compare/26.0.5...26.0.6)
 
