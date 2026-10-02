@@ -123,6 +123,25 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
 
 ## Using the template for your own course
 
+On GitLab, the **Create course** form can create a private repository in the new
+course group. Select **Create private repository**; the path field shows a full
+path beside the public repository (for example, `<your-course>/private`). You can
+edit that path within the same course group, then optionally select **Create
+from course template** and a programming language. The template is copied from
+the `course-template/` snapshot bundled with the running Manytask image; it
+does not depend on a template project in the course's GitLab instance. Rebuild
+the app image after updating the template. Only the selected language's
+task directory and schedule entry are copied. The repository is private, and a
+link appears on the course page. By default, its name follows the public repo
+(`public-2026-fall` → `private-2026-fall`) in the same group.
+
+The generated configuration fills in the course name, public repository, student
+group, and private repository links. Review the CI settings and add the required
+credentials before releasing assignments. SourceCraft course creation does not
+offer private repository provisioning yet.
+
+For a course created outside the form, use the manual setup below.
+
 1. Create two empty GitLab projects — `<your-course>/private` (template clone) and `<your-course>/public` (auto-generated for students) — plus an empty `<your-course>/students` group.
 2. Clone the monorepo, then deploy the template to your private GitLab project:
 
