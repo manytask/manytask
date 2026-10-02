@@ -36,6 +36,7 @@ class Course:
     """
 
     TASK_CONFIG_NAME = ".task.yml"
+    SHALLOW_DEEPEN_BY = 100
     GROUP_CONFIG_NAME = ".group.yml"
 
     def __init__(
@@ -44,6 +45,7 @@ class Course:
         repository_root: Path,
         reference_root: Path | None = None,
         branch_name: str | None = None,
+        base_ref: str | None = None,
     ):
         self.manytask_config = manytask_config
 
@@ -54,6 +56,7 @@ class Course:
         self.potential_tasks = {task.name: task for task in self._search_for_tasks_by_configs(self.reference_root)}
 
         self.branch_name = branch_name
+        self.base_ref = base_ref
 
         self.task_to_group = {task.name: group for group in self.potential_groups.values() for task in group.tasks}
 
@@ -215,9 +218,20 @@ class Course:
         repo: git.Repo,
         potential_tasks: list[FileSystemTask],
     ) -> list[FileSystemTask]:
-        """Detect changes by matching last commit file changes to task paths."""
-        last_commit = repo.head.commit
-        changed_files = [item.a_path for item in last_commit.diff("HEAD~1")]
+        """Detect changes by matching file changes since the base commit to task paths.
+
+        The base is `self.base_ref` (e.g. the branch state before the push) when it is usable,
+        so all commits of a multi-commit push are taken into account; otherwise HEAD~1.
+        """
+        head = repo.head.commit
+        base = self._resolve_base_commit(repo, head)
+        if base is not None:
+            print_info(f"Detecting changes in range {base.hexsha[:8]}..{head.hexsha[:8]}", color="grey")
+            diff = head.diff(base)
+        else:
+            print_info("No base commit found, using all files of HEAD", color="grey")
+            diff = head.diff(git.NULL_TREE)
+        changed_files = [item.a_path or item.b_path for item in diff]
         print_info(f"Last commit changes: {changed_files}", color="grey")
 
         changed_tasks = [
@@ -233,6 +247,59 @@ class Course:
             warnings.warn(f"No active tasks found for last commit changes {changed_files}")
 
         return changed_tasks
+
+    def _resolve_base_commit(self, repo: git.Repo, head: git.Commit) -> git.Commit | None:
+        """Find the commit to diff HEAD against.
+
+        Uses `self.base_ref` if it is set, is not a null sha and is known to the repository
+        (for shallow clones the history is deepened once). If the base is not an ancestor
+        of HEAD (force-push) the merge-base is used. Falls back to HEAD~1 (None for a root commit).
+        """
+        fallback = head.parents[0] if head.parents else None
+
+        base_ref = (self.base_ref or "").strip()
+        if not base_ref or set(base_ref) == {"0"}:
+            return fallback
+
+        base = self._get_commit(repo, base_ref)
+        if base is None and self._is_shallow(repo):
+            print_info(f"Base {base_ref[:8]} not found in shallow clone, deepening history", color="grey")
+            try:
+                repo.git.fetch("--no-tags", f"--deepen={self.SHALLOW_DEEPEN_BY}", "origin")
+            except git.GitCommandError as e:
+                print_info(f"Failed to deepen history: {e}", color="yellow")
+            base = self._get_commit(repo, base_ref)
+
+        if base is None:
+            warnings.warn(f"Base {base_ref} not found in repository, falling back to HEAD~1")
+            return fallback
+
+        if base == head:
+            return fallback
+
+        if not repo.is_ancestor(base, head):
+            merge_bases = repo.merge_base(base, head)
+            if not merge_bases:
+                warnings.warn(f"Base {base_ref} has no common history with HEAD, falling back to HEAD~1")
+                return fallback
+            print_info(f"Base {base_ref[:8]} is not an ancestor of HEAD, using merge-base", color="grey")
+            base = merge_bases[0]
+
+        return base
+
+    @staticmethod
+    def _get_commit(repo: git.Repo, ref: str) -> git.Commit | None:
+        try:
+            return repo.commit(ref)
+        except (git.BadName, ValueError):
+            return None
+
+    @staticmethod
+    def _is_shallow(repo: git.Repo) -> bool:
+        try:
+            return repo.git.rev_parse("--is-shallow-repository") == "true"
+        except git.GitCommandError:
+            return False
 
     def _tasks_from_groups(
         self,
@@ -257,7 +324,7 @@ class Course:
         :param detection_type: detection type, see CheckerTestingConfig.ChangesDetectionType
             - BRANCH_NAME: task name == branch name (single task/group)
             - COMMIT_MESSAGE: task name in commit message (can be multiple tasks/groups)
-            - LAST_COMMIT_CHANGES: task relative path in last commit changes (can be multiple tasks)
+            - LAST_COMMIT_CHANGES: task relative path in changes since base_ref, or HEAD~1 (can be multiple tasks)
         :return: list of changed tasks
         :raises CheckerException: if repository is not a git repository
         """
