@@ -33,12 +33,15 @@ def get_courses(app: CustomFlask) -> list[dict[str, str | bool]]:
     for course_name, status in courses_names:
         course_obj = app.storage_api.get_course(course_name)
         namespace_slug = ""
+        namespace_url = ""
         namespace_role: str | None = None
         namespace_id = course_obj.namespace_id if course_obj else None
         if namespace_id:
             try:
                 namespace, namespace_role = app.storage_api.get_namespace_by_id(namespace_id, username)
                 namespace_slug = namespace.slug
+                if is_instance_admin or namespace_role == "namespace_admin":
+                    namespace_url = url_for("instance_admin.namespace_panel", namespace_id=namespace_id)
             except Exception:
                 pass  # Namespace not found or no access
 
@@ -48,6 +51,7 @@ def get_courses(app: CustomFlask) -> list[dict[str, str | bool]]:
                 "status": status.value,
                 "url": url_for("course.course_page", course_name=course_name),
                 "namespace_slug": namespace_slug,
+                "namespace_url": namespace_url,
                 "can_edit": can_edit_course(
                     app,
                     is_instance_admin=is_instance_admin,

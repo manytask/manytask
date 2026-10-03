@@ -6,7 +6,7 @@ import gitlab
 import pytest
 from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
-from flask import Flask, url_for
+from flask import Flask, render_template, url_for
 from flask_wtf import CSRFProtect
 
 from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
@@ -383,6 +383,16 @@ def test_index_renders_list_and_table_views(app, mock_gitlab_oauth):
             # Tabulator assets are loaded.
             assert "tabulator" in body
             assert "tabulator-theme.js" in body
+
+
+def test_courses_template_without_admin_namespaces(app):
+    """An older route without namespace data can still render the course list."""
+    with app.test_request_context():
+        body = render_template(
+            "courses.html", courses=[], status_order=[], can_create_courses=False, is_instance_admin=False
+        )
+
+    assert "const adminNamespacesData = [];" in body
 
 
 def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
