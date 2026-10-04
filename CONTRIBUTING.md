@@ -96,4 +96,4 @@ make check
 
 - [ ] Update `manytask/VERSION` and `checker/VERSION`.
 - [ ] Update `CHANGELOG.md`.
-- [ ] Change the checker version in `course-template/testenv.docker` and `course-template/.releaser-ci.yml`.
+- [ ] Change the checker version pinned in `course-template/base.docker` and `course-template/.releaser-ci.yml`.
