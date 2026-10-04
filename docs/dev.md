@@ -51,7 +51,7 @@ The script does the following:
    - `GITLAB_CLIENT_SECRET`
 5. Restarts Manytask to pick up the updated environment variables.
 
-After the script finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/) and the local GitLab at [http://localhost:8929/](http://localhost:8929/).
+After the script finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/), the local GitLab at [http://localhost:8929/](http://localhost:8929/), and its container registry at `localhost:5050`.
 
 Continue with [Adding a course](#adding-a-course) below.
 
