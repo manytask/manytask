@@ -50,6 +50,7 @@ services:
             GITLAB_ROOT_PASSWORD: "changeme123!"
             GITLAB_OMNIBUS_CONFIG: |
                 external_url 'http://localhost:8929'
+                registry_external_url 'http://localhost:5050'
                 gitlab_rails['gitlab_shell_ssh_port'] = 8222
                 prometheus_monitoring['enable'] = false
                 alertmanager['enable'] = false
@@ -62,6 +63,7 @@ services:
                 sidekiq['concurrency'] = 10
         ports:
             - "8929:8929"    # HTTP web UI
+            - "5050:5050"    # Container registry
             - "8222:22"      # SSH (optional)
         shm_size: '256m'
         volumes:

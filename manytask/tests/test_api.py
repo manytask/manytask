@@ -595,6 +595,21 @@ def test_update_score_after_deadline(app):
     assert result == score * group.get_current_percent_multiplier(submit_time, course.deadlines_type)
 
 
+@pytest.mark.parametrize(("score", "expected_score"), [(13, 10), (11, 8)])
+def test_update_score_rounds_interpolated_deadline_score(mock_course, mock_task, score, expected_score):
+    start = datetime(2025, 9, 1)
+    group = ManytaskGroupConfig(
+        group="test",
+        start=start,
+        steps={0.5: start + timedelta(days=2)},
+        end=start + timedelta(days=4),
+    )
+    mock_course.deadlines_type = ManytaskDeadlinesType.INTERPOLATE
+    submit_time = start + timedelta(days=1)
+
+    assert _update_score(mock_course, group, mock_task, score, "", 0, submit_time) == expected_score
+
+
 def test_update_config_success(app):
     client = app.test_client()
     headers = {"Authorization": f"Bearer {os.getenv('MANYTASK_COURSE_TOKEN')}"}
