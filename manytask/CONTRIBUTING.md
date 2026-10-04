@@ -91,9 +91,9 @@ Before opening a PR, make sure the full check suite passes:
 make check
 ```
 
-## Relese checklist
+## Release checklist
 
 - [ ] Update VERSION file in ./manytask/
 - [ ] Update VERSION file in ./checker/
 - [ ] Update CHANGELOG.md
-- [ ] Change version of the checker that is installed in `course-tamplate/testenv.docker` and `course-template/.releaser-ci.yml`.
+- [ ] Change the checker version pinned in `course-template/base.docker` and `course-template/.releaser-ci.yml`.

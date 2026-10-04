@@ -17,7 +17,7 @@ variables:
   TESTENV_IMAGE: "$CI_REGISTRY_IMAGE/testenv-image:$CI_COMMIT_REF_SLUG"
   # The checker is installed from the monorepo because the PyPI release does
   # not yet contain the `validate` and `export-private` commands.
-  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@26.0.5#subdirectory=checker"
+  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@26.0.6#subdirectory=checker"
 
 stages:
   - verify
