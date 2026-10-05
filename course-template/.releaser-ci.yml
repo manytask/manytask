@@ -29,6 +29,9 @@ stages:
 .docker:
   image: docker:20.10.18
   before_script:
+    # Local runners mount the host Docker socket instead of providing a Docker-in-Docker service.
+    # Override any inherited DOCKER_HOST (for example tcp://docker:2375).
+    - export DOCKER_HOST="unix:///var/run/docker.sock"
     # Register config.json so Docker can pull and push course images.
     - mkdir -p "$HOME/.docker"
     - printf '%s' "$DOCKER_AUTH_CONFIG" > "$HOME/.docker/config.json"
