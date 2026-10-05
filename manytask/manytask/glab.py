@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from base64 import b64encode
 from dataclasses import dataclass
@@ -215,6 +216,7 @@ class GitLabApi(RmsApi, AuthApi):
     ) -> None:
         """Create a private project, optionally copying one profile from the maintained template."""
         group = self._get_group_by_name(course_group)
+        course_group_object = group
         segments = repo_path.split("/")
         full_path = f"{course_group}/{repo_path}"
         for project in self._gitlab.projects.list(get_all=True, search=segments[-1]):
@@ -246,8 +248,9 @@ class GitLabApi(RmsApi, AuthApi):
                 "auto_devops_enabled": False,
             }
         )
-        if template_files:
-            try:
+        try:
+            self._configure_registry_credentials(project, course_group_object)
+            if template_files:
                 for action in template_files:
                     if action["file_path"] == "README.md":
                         action["action"] = "update"
@@ -258,9 +261,35 @@ class GitLabApi(RmsApi, AuthApi):
                         "actions": template_files,
                     }
                 )
-            except Exception:
-                project.delete()
-                raise
+        except Exception:
+            project.delete()
+            raise
+
+    def _configure_registry_credentials(
+        self, project: gitlab.v4.objects.Project, course_group: gitlab.v4.objects.Group
+    ) -> None:
+        """Create and distribute registry credentials for a newly created course repository."""
+        deploy_token = project.deploytokens.create(
+            {
+                "name": "manytask-registry",
+                "scopes": ["read_registry", "write_registry"],
+            }
+        )
+        username = deploy_token.username
+        token = deploy_token.token
+        if not isinstance(username, str) or not isinstance(token, str):
+            raise RmsApiException("GitLab did not return credentials for the registry deploy token")
+
+        auth = b64encode(f"{username}:{token}".encode("utf-8")).decode("ascii")
+        docker_auth_config = json.dumps({"auths": {self._registry_host(): {"auth": auth}}}, separators=(",", ":"))
+        course_group.variables.create({"key": "DOCKER_AUTH_CONFIG", "value": docker_auth_config})
+        logger.info("Configured registry credentials for private course repository")
+
+    def _registry_host(self) -> str:
+        host = urlsplit(self.web_base_url).hostname
+        if host is None:
+            raise RmsApiException(f"GitLab web URL has no hostname: {self.web_base_url}")
+        return f"{host}:5050"
 
     def _get_course_template_files(
         self, language: str, private_repo: str, public_repo: str, students_group: str, course_name: str
@@ -361,11 +390,10 @@ class GitLabApi(RmsApi, AuthApi):
                 'description = "Sandbox course template for manytask"',
                 f'description = "Course {course_name} for Manytask"',
             )
-        host = urlsplit(self.web_base_url).hostname or ""
         return (
             content.replace(
                 "gitlab.manytask.org:5050/sandbox/private/testenv-image",
-                f"{host}:5050/{private_repo}/testenv-image",
+                f"{self._registry_host()}/{private_repo}/testenv-image",
             )
             .replace("sandbox/public", public_repo)
             .replace("sandbox/private", private_repo)

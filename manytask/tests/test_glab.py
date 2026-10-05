@@ -1,3 +1,4 @@
+import json
 from unittest import mock
 from unittest.mock import MagicMock, patch
 
@@ -51,6 +52,7 @@ def create_mock_gitlab_group(group_id: int, name_short: str, name_full: str) -> 
     group.id = group_id
     group.name = name_short
     group.full_name = name_full
+    group.variables = MagicMock()
     return group
 
 
@@ -165,6 +167,9 @@ def gitlab(
 ):
     """Fixture to set up the GitLabApi with mocked GitLab objects."""
     mock_gitlab_instance = mock_gitlab.return_value
+    deploy_token = mock_gitlab_instance.projects.create.return_value.deploytokens.create.return_value
+    deploy_token.username = "gitlab+deploy-token-1"
+    deploy_token.token = "registry-token"
     mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group, mock_gitlab_group_student]
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_project, mock_gitlab_public_project]
 
@@ -238,6 +243,10 @@ def test_create_private_repo_is_private(gitlab, mock_gitlab_group):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
     mock_gitlab_instance.projects.list.return_value = []
+    project = mock_gitlab_instance.projects.create.return_value
+    deploy_token = project.deploytokens.create.return_value
+    deploy_token.username = "gitlab+deploy-token-1"
+    deploy_token.token = "registry-token"
 
     gitlab_api.create_private_repo(
         TEST_GROUP_NAME, "private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example"
@@ -248,6 +257,28 @@ def test_create_private_repo_is_private(gitlab, mock_gitlab_group):
     assert params["path"] == "private"
     assert params["namespace_id"] == mock_gitlab_group.id
     mock_gitlab_instance.projects.get.assert_not_called()
+    project.deploytokens.create.assert_called_once_with(
+        {"name": "manytask-registry", "scopes": ["read_registry", "write_registry"]}
+    )
+    docker_auth_config = mock_gitlab_group.variables.create.call_args.args[0]["value"]
+    assert json.loads(docker_auth_config) == {
+        "auths": {"example.com:5050": {"auth": "Z2l0bGFiK2RlcGxveS10b2tlbi0xOnJlZ2lzdHJ5LXRva2Vu"}}
+    }
+
+
+def test_create_private_repo_deletes_project_when_registry_credentials_fail(gitlab, mock_gitlab_group):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.list.return_value = []
+    project = mock_gitlab_instance.projects.create.return_value
+    project.deploytokens.create.side_effect = RuntimeError("GitLab deploy token API failed")
+
+    with pytest.raises(RuntimeError, match="deploy token API failed"):
+        gitlab_api.create_private_repo(
+            TEST_GROUP_NAME, "private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example"
+        )
+
+    project.delete.assert_called_once_with()
 
 
 @pytest.mark.parametrize("language", ["python", "cpp", "bash", "go", "rust"])
