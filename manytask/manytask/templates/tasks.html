@@ -37,10 +37,16 @@
         <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
             Show past deadlines
         </button>
+        <button id="toggle-future-tasks" type="button" class="btn btn-outline-secondary btn-sm"
+                aria-pressed="false" aria-controls="task-groups"
+                data-username="{{ username }}" data-course-name="{{ course_name }}">
+            Show future tasks
+        </button>
     </div>
 </div>
 <div id="task-groups">
-    {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True) %}
+    {% for group in app.storage_api.get_groups(course_name, enabled=True) %}
+        {% set is_upcoming = group.start > now %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
         {% set solved_group_scores = [] %}
         {% for task in group.tasks %}
@@ -49,12 +55,18 @@
         {% set solved_group_score = solved_group_scores|sum %}
 
         <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}"
-             data-group-start="{{ group.start.isoformat() }}">
+             data-group-start="{{ group.start.isoformat() }}"
+             {% if is_upcoming %}data-upcoming hidden{% endif %}>
 
             <div class="d-block d-sm-flex justify-content-between align-items-start">
                 <div class="d-block flex-column align-items-start">
                     <span class="fs-2 mb-0">{{ group.name }}</span>
                     <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
+                    {% if is_upcoming %}
+                        <div class="text-body-secondary small">
+                            Opens: {{ group.start.strftime('%d.%m.%Y %H:%M %Z') }}
+                        </div>
+                    {% endif %}
                 </div>
 
                 <div class="task-deadlines {% if deadlines_type.value == 'interpolate' %}task-deadlines--graph{% endif %}">
@@ -68,15 +80,16 @@
 
                     {% if deadlines_type.value == 'interpolate' %}
                         {% set graph = group.get_graph_data(now, deadlines_type) %}
-                        <div class="task-deadline task-deadline--graph {{ graph.status }}">
+                        {% set deadline_status = 'upcoming' if is_upcoming else graph.status %}
+                        <div class="task-deadline task-deadline--graph {{ deadline_status }}">
                             {# The hint sits in the header row: it is shorter than the status
                                pill that already sets the row height, so it costs no vertical
                                space and frees a whole row for the graph. #}
                             <div class="deadline-header">
                                 <span class="deadline-percent">{{ (graph.percent*100)|round|int }}%</span>
-                                <span class="task-deadline__deadline-hint">{{ graph.hint }}</span>
-                                <span class="task-deadline__status {{ graph.status }}">
-                                    {{ graph.status|title }}
+                                <span class="task-deadline__deadline-hint">{{ 'Opens in: ' + format_remaining(group.start, now) if is_upcoming else graph.hint }}</span>
+                                <span class="task-deadline__status {{ deadline_status }}">
+                                    {{ deadline_status|title }}
                                 </span>
                             </div>
 
@@ -89,12 +102,13 @@
                         {% for deadline, percent in group.get_displayed_deadlines(deadlines_type) %}
                             {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
                             {% set is_expired = deadline < now %}
+                            {% set deadline_status = 'upcoming' if is_upcoming else ('expired' if is_expired else ('urgent' if is_less_than_day else 'active')) %}
                             <div class="task-deadline {% if deadline < now %}passed-deadline{% endif %}"
                                  {% if deadline < now %}style="display: none;"{% endif %}>
                                 <div class="deadline-header">
                                     <span class="deadline-percent">{{ (percent*100)|round|int }}%</span>
-                                    <span class="task-deadline__status {{ 'expired' if is_expired else ('urgent' if is_less_than_day else 'active') }}">
-                                        {{ 'Expired' if is_expired else ('Urgent' if is_less_than_day else 'Active') }}
+                                    <span class="task-deadline__status {{ deadline_status }}">
+                                        {{ deadline_status|title }}
                                     </span>
                                 </div>
                                 <div class="task-deadline__progress">
@@ -175,6 +189,7 @@
 </div>
 
     <script src="{{ url_for('static', filename='js/task-group-order.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/future-tasks.js') }}"></script>
     <script>
         const orderButton = document.getElementById('task-group-order');
         const groupContainer = document.getElementById('task-groups');
@@ -189,12 +204,16 @@
         }
         applyTaskGroupOrder();
         orderButton.addEventListener('click', applyTaskGroupOrder);
+        const futureTasksButton = document.getElementById('toggle-future-tasks');
+        initFutureTasks(futureTasksButton, groupContainer.querySelectorAll('[data-upcoming]'));
     </script>
 
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
     <script src="{{ url_for('static', filename='js/deadline-graph.js') }}"></script>
     <script>
+        // Graphs rendered inside hidden groups need their visible width after revealing them.
+        futureTasksButton.addEventListener('click', initDeadlineGraphs);
         tippy('.card-tooltip', {
             arrow: false,
             placement: 'top-end'

@@ -1,6 +1,8 @@
 import os
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import gitlab
 import pytest
@@ -11,10 +13,12 @@ from flask_wtf import CSRFProtect
 
 from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
-from manytask.course import CourseStatus
+from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
+from manytask.utils.generic import format_remaining
 from manytask.web import course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
@@ -237,6 +241,70 @@ def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oau
     assert control.get_text(strip=True) == "Show oldest first"
     assert control["data-username"] == TEST_USERNAME
     assert control["data-course-name"] == TEST_COURSE_NAME
+
+
+@pytest.mark.parametrize("page", ["", "database"])
+def test_future_tasks_control_is_only_offered_on_assignments(app, mock_gitlab_oauth, page):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+    assert response.status_code == HTTPStatus.OK
+    soup = BeautifulSoup(response.data, "html.parser")
+    control = soup.find("button", id="toggle-future-tasks")
+    if page == "database":
+        assert control is None
+        return
+    assert control is not None
+    assert control["type"] == "button"
+    assert control["aria-pressed"] == "false"
+    assert control.get_text(strip=True) == "Show future tasks"
+    assert control["data-username"] == TEST_USERNAME
+    assert control["data-course-name"] == TEST_COURSE_NAME
+
+
+@pytest.mark.parametrize("deadlines_type", list(ManytaskDeadlinesType))
+@pytest.mark.parametrize("start_offset", [-1, 0, 1])
+def test_future_tasks_are_hidden_and_labelled_until_their_start(
+    app, mock_gitlab_oauth, mock_course, deadlines_type, start_offset
+):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.jinja_env.globals["format_remaining"] = format_remaining
+    mock_course.deadlines_type = deadlines_type
+    now = datetime(2026, 10, 7, 12, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    group = ManytaskGroupConfig(
+        group="week_1",
+        start=now + timedelta(seconds=start_offset),
+        steps={0.5: now + timedelta(days=1)},
+        end=now + timedelta(days=2),
+        tasks=[ManytaskTaskConfig(task="task_1", score=10)],
+    )
+    with (
+        patch("manytask.web.get_current_time", return_value=now),
+        patch.object(app.storage_api, "get_groups", return_value=[group]) as get_groups,
+        app.test_client() as client,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+    assert response.status_code == HTTPStatus.OK
+    # The board must include future groups while retaining the disabled-task filter.
+    get_groups.assert_called_once_with(TEST_COURSE_NAME, enabled=True)
+    soup = BeautifulSoup(response.data, "html.parser")
+    rendered_group = soup.select_one("#task-groups > .mt-lecture")
+    assert rendered_group.select_one(".mt-card__name").get_text(strip=True) == "task_1"
+    assert rendered_group.has_attr("hidden") == (start_offset > 0)
+    assert rendered_group.has_attr("data-upcoming") == (start_offset > 0)
+    statuses = rendered_group.select(".task-deadline__status")
+    assert statuses
+    if start_offset > 0:
+        assert all(status.get_text(strip=True) == "Upcoming" for status in statuses)
+        assert "Opens: 07.10.2026 12:00 MSK" in rendered_group.get_text()
+        assert not rendered_group.select(".task-deadline__status.active, .task-deadline__status.urgent")
+    else:
+        assert not rendered_group.select(".task-deadline__status.upcoming")
+        assert "Opens:" not in rendered_group.get_text()
 
 
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
