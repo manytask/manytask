@@ -212,7 +212,7 @@ testing:
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `changes_detection` | `str` | ➖ | `last_commit_changes` | Strategy for detecting which tasks changed. The full list of options are `branch_name`, `commit_message`, `last_commit_changes`, `files_changed`. See details [below](#changes_detection). |
+| `changes_detection` | `str` | ➖ | `last_commit_changes` | Strategy for detecting which tasks changed. The full list of options are `branch_name`, `branch_name_or_commit_message`, `commit_message`, `last_commit_changes`, `files_changed`. See details [below](#changes_detection). |
 | `search_plugins` | `list[str]` | ➖ | `[]` | Paths (relative to repo root) to search for custom plugin Python files. |
 | `skip_unchanged_tasks` | `str` | ➖ | `null` | Name of the task parameter holding glob patterns of student-editable files (e.g. `allow_change`). If set, `checker grade` skips (does not run and does not report) any detected task whose matching files are byte-identical to the published version. `null` disables the check. See details [below](#skip_unchanged_tasks). |
 | `global_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once** per checker run, before any task pipeline. |
@@ -226,6 +226,7 @@ Determines which tasks are selected for grading when running `checker grade`.
 | Value | Description |
 |---|---|
 | `branch_name` | Selects the single task/group whose name matches the current Git branch name. |
+| `branch_name_or_commit_message` | On a branch other than `main`, selects the task/group matching its name. If none is selected, or the branch is `main` or detached, selects tasks/groups named in the last commit message. |
 | `commit_message` | Selects all tasks/groups whose name appears in the last commit message. |
 | `last_commit_changes` | Selects all tasks that have files changed since the base commit (`--base-ref`, see below), or in the last commit if there is no base. *(default)* |
 | `files_changed` | *(Not yet implemented)* Compares current state against the previous commit. |
