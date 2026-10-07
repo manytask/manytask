@@ -329,7 +329,7 @@ class Course:
 
         :param detection_type: detection type, see CheckerTestingConfig.ChangesDetectionType
             - BRANCH_NAME: task name == branch name (single task/group)
-            - BRANCH_NAME_OR_COMMIT_MESSAGE: try a branch other than main/master, then the last commit message
+            - BRANCH_NAME_OR_COMMIT_MESSAGE: compare both sources when a non-default branch matches; reject conflicts
             - COMMIT_MESSAGE: task name in commit message (can be multiple tasks/groups)
             - LAST_COMMIT_CHANGES: task relative path in changes since base_ref, or HEAD~1 (can be multiple tasks)
         :return: list of changed tasks
@@ -351,11 +351,21 @@ class Course:
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE:
             branch_name = self._get_branch_name(repo)
+            branch_tasks: list[FileSystemTask] = []
             if branch_name is not None and branch_name not in ("main", "master"):
-                changed_tasks = self._detect_by_branch_name(repo, potential_tasks, enabled_groups, branch_name)
-                if changed_tasks:
-                    return changed_tasks
-            return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
+                branch_tasks = self._detect_by_branch_name(repo, potential_tasks, enabled_groups, branch_name)
+            commit_tasks = self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
+
+            branch_task_names = {task.name for task in branch_tasks}
+            commit_task_names = {task.name for task in commit_tasks}
+            if branch_task_names and commit_task_names and branch_task_names != commit_task_names:
+                raise CheckerException(
+                    f"Ambiguous task detection: branch {branch_name!r} selects "
+                    f"{sorted(branch_task_names)}, but the commit message selects {sorted(commit_task_names)}. "
+                    "Make the names agree, or select explicitly with --task/--group "
+                    "(and --submit-score when reporting is needed)."
+                )
+            return branch_tasks or commit_tasks
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE:
             return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
