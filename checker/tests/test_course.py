@@ -291,6 +291,7 @@ class TestCourse:
             ("task2_1", "task4_1", ["task4_1"]),  # disabled branch task
             ("group3", "task4_1", ["task4_1"]),  # empty branch group
             ("main", "task4_1", ["task4_1"]),
+            ("master", "task4_1", ["task4_1"]),
             ("feature-work", "no matching task", []),
         ],
     )
@@ -316,7 +317,7 @@ class TestCourse:
 
     @pytest.mark.parametrize(
         "branch_override, expected_changed_tasks",
-        [(None, ["task4_1"]), ("task1_1", ["task1_1"]), ("main", ["task4_1"])],
+        [(None, ["task4_1"]), ("task1_1", ["task1_1"]), ("main", ["task4_1"]), ("master", ["task4_1"])],
     )
     def test_detect_changes_by_branch_name_or_commit_message_detached_head(
         self,

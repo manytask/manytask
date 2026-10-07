@@ -226,7 +226,7 @@ Determines which tasks are selected for grading when running `checker grade`.
 | Value | Description |
 |---|---|
 | `branch_name` | Selects the single task/group whose name matches the current Git branch name. |
-| `branch_name_or_commit_message` | On a branch other than `main`, selects the task/group matching its name. If none is selected, or the branch is `main` or detached, selects tasks/groups named in the last commit message. |
+| `branch_name_or_commit_message` | On a branch other than `main` or `master`, selects the task/group matching its name. If none is selected, or the branch is `main`, `master`, or detached, selects tasks/groups named in the last commit message. |
 | `commit_message` | Selects all tasks/groups whose name appears in the last commit message. |
 | `last_commit_changes` | Selects all tasks that have files changed since the base commit (`--base-ref`, see below), or in the last commit if there is no base. *(default)* |
 | `files_changed` | *(Not yet implemented)* Compares current state against the previous commit. |

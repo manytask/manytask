@@ -329,7 +329,7 @@ class Course:
 
         :param detection_type: detection type, see CheckerTestingConfig.ChangesDetectionType
             - BRANCH_NAME: task name == branch name (single task/group)
-            - BRANCH_NAME_OR_COMMIT_MESSAGE: try a non-main branch, then the last commit message
+            - BRANCH_NAME_OR_COMMIT_MESSAGE: try a branch other than main/master, then the last commit message
             - COMMIT_MESSAGE: task name in commit message (can be multiple tasks/groups)
             - LAST_COMMIT_CHANGES: task relative path in changes since base_ref, or HEAD~1 (can be multiple tasks)
         :return: list of changed tasks
@@ -351,7 +351,7 @@ class Course:
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE:
             branch_name = self._get_branch_name(repo)
-            if branch_name is not None and branch_name != "main":
+            if branch_name is not None and branch_name not in ("main", "master"):
                 changed_tasks = self._detect_by_branch_name(repo, potential_tasks, enabled_groups, branch_name)
                 if changed_tasks:
                     return changed_tasks
