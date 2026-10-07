@@ -246,6 +246,7 @@ class MockCourseBase:
         self.show_allscores = True
         self.gitlab_default_branch = "main"
         self.deadlines_type = ManytaskDeadlinesType.HARD
+        self.allow_future_tasks = False
         self.namespace_id = None
 
 

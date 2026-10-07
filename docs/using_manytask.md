@@ -30,7 +30,7 @@ After you logged in, you will see a list of courses you are currently registered
 
 ### 3. Solve a task
 
-Use **Show future tasks** on the course page to preview scheduled tasks before their opening date. These groups are hidden by default and marked **Upcoming** with their opening date and deadlines. **Hide future tasks** hides them again. Your choice is saved in this browser separately for each student and course. Previewing a task does not open it for submissions or publish its files to the public repository; disabled tasks remain hidden.
+If your teacher enables `ui.allow_future_tasks` in the course configuration, use **Show future tasks** on the course page to preview scheduled tasks before their opening date. These groups are hidden by default and marked **Upcoming** with their opening date and deadlines. **Hide future tasks** hides them again. Your choice is saved in this browser separately for each student and course. Previewing a task does not change its opening date or publish its files to the public repository; disabled tasks remain hidden.
 
 Note that the mechanics on how to submit tasks may differ from course to course and you should consult documentation on the course itself fot the specifics. Normally, you can find step-by-step instructions in README.md file in the root of the public repository (or your fork of the public repository).
 

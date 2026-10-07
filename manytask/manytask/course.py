@@ -69,6 +69,7 @@ class CourseConfig:
     task_url_template: str = ""
     links: dict[str, str] = field(default_factory=dict)
     deadlines_type: ManytaskDeadlinesType = ManytaskDeadlinesType.HARD
+    allow_future_tasks: bool = False
 
 
 class Course:
@@ -98,6 +99,7 @@ class Course:
 
         self.task_url_template = config.task_url_template
         self.links = config.links
+        self.allow_future_tasks = config.allow_future_tasks
 
     @property
     def gitlab_course_group(self) -> str:

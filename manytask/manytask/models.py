@@ -242,6 +242,7 @@ class Course(Base):
     # ui parameters
     task_url_template: Mapped[str]
     links: Mapped[dict[str, str]] = mapped_column(StrStrDict, server_default="{}", default=dict)
+    allow_future_tasks: Mapped[bool] = mapped_column(default=False, server_default="false")
 
     # deadlines parameters
     timezone: Mapped[str] = mapped_column(default="UTC", server_default="UTC")
@@ -286,6 +287,7 @@ class Course(Base):
                 task_url_template=self.task_url_template,
                 links=self.links,
                 deadlines_type=self.deadlines_type,
+                allow_future_tasks=self.allow_future_tasks,
             )
         )
 

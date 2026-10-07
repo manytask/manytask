@@ -10,7 +10,7 @@ import yaml
 from alembic import command
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
-from sqlalchemy import event
+from sqlalchemy import event, inspect, text
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -1247,6 +1247,39 @@ def test_auto_database_migration(engine, alembic_cfg, postgres_container, first_
 
             with Session(engine) as session:
                 test_not_initialized_course(session, db_api, first_course_config)
+
+
+def test_future_tasks_migration_defaults_existing_courses_to_false(engine, tables, alembic_cfg):
+    command.downgrade(alembic_cfg, "a1b2c3d4e5f6")
+    with engine.begin() as connection:
+        connection.execute(
+            text("""
+            INSERT INTO courses (name, registration_secret, token, show_allscores,
+                gitlab_course_group, gitlab_course_public_repo, gitlab_course_students_group,
+                gitlab_default_branch, task_url_template)
+            VALUES ('existing-course', 'secret', 'token', false, 'group', 'public', 'students',
+                'main', 'https://example.com/tasks')
+        """)
+        )
+    command.upgrade(alembic_cfg, "head")
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT allow_future_tasks FROM courses")).scalar_one() is False
+    command.downgrade(alembic_cfg, "a1b2c3d4e5f6")
+    with engine.connect() as connection:
+        assert "allow_future_tasks" not in {column["name"] for column in inspect(connection).get_columns("courses")}
+        assert connection.execute(text("SELECT name FROM courses")).scalar_one() == "existing-course"
+
+
+def test_future_tasks_permission_is_saved_on_course_creation_and_edit(db_api, first_course_config):
+    db_api.create_course(first_course_config)
+    assert db_api.get_course(FIRST_COURSE_NAME).allow_future_tasks is False
+    first_course_config.allow_future_tasks = True
+    db_api.edit_course(first_course_config)
+    assert db_api.get_course(FIRST_COURSE_NAME).allow_future_tasks is True
+    first_course_config.course_name = "another-course"
+    first_course_config.token = "another-token"
+    db_api.create_course(first_course_config)
+    assert db_api.get_course("another-course").allow_future_tasks is True
 
 
 def test_store_score_integrity_error(db_api_with_two_initialized_courses, session):

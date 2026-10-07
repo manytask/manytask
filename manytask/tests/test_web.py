@@ -13,8 +13,9 @@ from flask_wtf import CSRFProtect
 
 from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
-from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
-from manytask.course import CourseStatus, ManytaskDeadlinesType
+from manytask.config import ManytaskConfig, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
+from manytask.database import DataBaseApi, DatabaseConfig
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -244,16 +245,20 @@ def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oau
 
 
 @pytest.mark.parametrize("page", ["", "database"])
-def test_future_tasks_control_is_only_offered_on_assignments(app, mock_gitlab_oauth, page):
+@pytest.mark.parametrize("allow_future_tasks", [False, True])
+def test_future_tasks_control_is_only_offered_on_assignments(
+    app, mock_gitlab_oauth, mock_course, page, allow_future_tasks
+):
     CSRFProtect(app)
     app.oauth = mock_gitlab_oauth
+    mock_course.allow_future_tasks = allow_future_tasks
     with app.test_client() as client:
         set_session(client, build_test_session(include_manytask=True))
         response = client.get(f"/{TEST_COURSE_NAME}/{page}")
     assert response.status_code == HTTPStatus.OK
     soup = BeautifulSoup(response.data, "html.parser")
     control = soup.find("button", id="toggle-future-tasks")
-    if page == "database":
+    if page == "database" or not allow_future_tasks:
         assert control is None
         return
     assert control is not None
@@ -273,6 +278,7 @@ def test_future_tasks_are_hidden_and_labelled_until_their_start(
     app.oauth = mock_gitlab_oauth
     app.jinja_env.globals["format_remaining"] = format_remaining
     mock_course.deadlines_type = deadlines_type
+    mock_course.allow_future_tasks = True
     now = datetime(2026, 10, 7, 12, 0, tzinfo=ZoneInfo("Europe/Moscow"))
     group = ManytaskGroupConfig(
         group="week_1",
@@ -290,7 +296,7 @@ def test_future_tasks_are_hidden_and_labelled_until_their_start(
         response = client.get(f"/{TEST_COURSE_NAME}/")
     assert response.status_code == HTTPStatus.OK
     # The board must include future groups while retaining the disabled-task filter.
-    get_groups.assert_called_once_with(TEST_COURSE_NAME, enabled=True)
+    get_groups.assert_called_once_with(TEST_COURSE_NAME, enabled=True, started=None, now=now)
     soup = BeautifulSoup(response.data, "html.parser")
     rendered_group = soup.select_one("#task-groups > .mt-lecture")
     assert rendered_group.select_one(".mt-card__name").get_text(strip=True) == "task_1"
@@ -305,6 +311,105 @@ def test_future_tasks_are_hidden_and_labelled_until_their_start(
     else:
         assert not rendered_group.select(".task-deadline__status.upcoming")
         assert "Opens:" not in rendered_group.get_text()
+
+
+@pytest.mark.parametrize("ui_settings", [{}, {"allow_future_tasks": False}, {"allow_future_tasks": True}])
+def test_course_config_gates_future_tasks_on_the_server(
+    app, mock_course, mock_gitlab_oauth, session, postgres_container, ui_settings
+):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.jinja_env.globals["format_remaining"] = format_remaining
+    storage = DataBaseApi(
+        DatabaseConfig(
+            database_url=postgres_container.get_connection_url(),
+            instance_admin_username="instance_admin",
+            session_factory=lambda: session,
+        )
+    )
+    app.storage_api = storage
+    storage.create_course(
+        CourseConfig(
+            course_name=TEST_COURSE_NAME,
+            namespace_id=None,
+            gitlab_course_group=TEST_GROUP_NAME,
+            gitlab_course_public_repo=TEST_PUBLIC_REPO,
+            gitlab_course_students_group=TEST_STUDENTS_GROUP,
+            gitlab_default_branch="main",
+            registration_secret=TEST_SECRET,
+            token=TEST_TOKEN,
+            show_allscores=True,
+            status=CourseStatus.IN_PROGRESS,
+        )
+    )
+    rms_user = app.rms_api.get_rms_user_by_username(TEST_USERNAME)
+    storage.update_or_create_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, rms_user.id, TEST_USER_ID)
+    storage.sync_user_on_course(TEST_COURSE_NAME, TEST_USERNAME, False)
+    now = datetime(2026, 10, 7, 12, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+
+    def update_config(settings):
+        storage.update_course(
+            TEST_COURSE_NAME,
+            ManytaskConfig(
+                **{
+                    "version": 1,
+                    "ui": {"task_url_template": mock_course.task_url_template, **settings},
+                    "deadlines": {
+                        "timezone": "Europe/Moscow",
+                        "schedule": [
+                            {
+                                "group": name,
+                                "start": now + timedelta(days=offset),
+                                "end": now + timedelta(days=10),
+                                "enabled": name != "disabled-group",
+                                "tasks": [
+                                    {"task": name + "-task", "score": 10},
+                                    {"task": name + "-disabled-task", "score": 10, "enabled": False},
+                                ],
+                            }
+                            for name, offset in [("opened", -1), ("upcoming", 1), ("disabled-group", 1)]
+                        ],
+                    },
+                }
+            ),
+        )
+
+    with patch("manytask.web.get_current_time", return_value=now), app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        # Start with permission granted, then exercise revocation and omission as well.
+        update_config({"allow_future_tasks": True})
+        update_config(ui_settings)
+        response = client.get(f"/{TEST_COURSE_NAME}/?show_future_tasks=true")
+        assert response.status_code == HTTPStatus.OK
+        soup = BeautifulSoup(response.data, "html.parser")
+        allowed = ui_settings.get("allow_future_tasks", False)
+        assert bool(soup.find("button", id="toggle-future-tasks")) == allowed
+        names = [card.get_text(strip=True) for card in soup.select(".mt-card__name")]
+        assert names == (["opened-task", "upcoming-task"] if allowed else ["opened-task"])
+        if not allowed:
+            assert b"upcoming-task" not in response.data
+            assert b"data-upcoming" not in response.data
+
+        # Saving unrelated settings through the admin form must preserve the permission.
+        storage.set_instance_admin_status(TEST_USERNAME, True)
+        edit_url = f"/instance_admin/courses/{TEST_COURSE_NAME}/edit"
+        edit_page = client.get(edit_url)
+        assert edit_page.status_code == HTTPStatus.OK
+        csrf = BeautifulSoup(edit_page.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(
+            edit_url,
+            data={
+                "csrf_token": csrf,
+                "gitlab_course_group": TEST_GROUP_NAME,
+                "gitlab_course_public_repo": TEST_PUBLIC_REPO,
+                "gitlab_course_students_group": TEST_STUDENTS_GROUP,
+                "gitlab_default_branch": "main",
+                "registration_secret": "updated-secret",
+                "course_status": "in_progress",
+            },
+        )
+        assert response.status_code == HTTPStatus.FOUND
+        assert storage.get_course(TEST_COURSE_NAME).allow_future_tasks is allowed
 
 
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):

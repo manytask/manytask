@@ -54,6 +54,7 @@ Controls how the course is displayed in the Manytask web interface.
 ```yaml
 ui:
   task_url_template: https://rms.example.com/course/students/$USER_NAME/$GROUP_NAME/$TASK_NAME
+  allow_future_tasks: false
   links:
     "TG Channel": https://t.me/joinchat/example
     "LMS": https://lms.example.com/
@@ -63,6 +64,9 @@ ui:
 |---|---|---|---|
 | `task_url_template` | string | yes | URL template for linking to individual tasks in Repository Management System (RMS, e.g. GitLab). Must start with `http://` or `https://`. |
 | `links` | dict[string, string] | no | Named links shown in the course UI (e.g. Telegram, LMS). Any number of entries. |
+| `allow_future_tasks` | boolean | no | Defaults to `false`. Set to `true` to offer students a **Show future tasks** button on the assignments board. Future groups are initially hidden; each student's choice is saved in their browser per course. Disabled groups and tasks remain hidden. |
+
+When `allow_future_tasks` is `false` or omitted, the server excludes future groups from the assignments page and the button is absent. Removing the setting from a subsequent config update revokes permission, even if a student previously chose to show future tasks. This setting does not change opening dates, scoring, or task export.
 
 ### `task_url_template` macros
 

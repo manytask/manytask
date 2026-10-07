@@ -37,15 +37,17 @@
         <button id="toggleDeadlinesBtn" class="btn btn-outline-secondary btn-sm">
             Show past deadlines
         </button>
+        {% if allow_future_tasks %}
         <button id="toggle-future-tasks" type="button" class="btn btn-outline-secondary btn-sm"
                 aria-pressed="false" aria-controls="task-groups"
                 data-username="{{ username }}" data-course-name="{{ course_name }}">
             Show future tasks
         </button>
+        {% endif %}
     </div>
 </div>
 <div id="task-groups">
-    {% for group in app.storage_api.get_groups(course_name, enabled=True) %}
+    {% for group in app.storage_api.get_groups(course_name, enabled=True, started=none if allow_future_tasks else true, now=now) %}
         {% set is_upcoming = group.start > now %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
         {% set solved_group_scores = [] %}
@@ -189,7 +191,9 @@
 </div>
 
     <script src="{{ url_for('static', filename='js/task-group-order.js') }}"></script>
+    {% if allow_future_tasks %}
     <script src="{{ url_for('static', filename='js/future-tasks.js') }}"></script>
+    {% endif %}
     <script>
         const orderButton = document.getElementById('task-group-order');
         const groupContainer = document.getElementById('task-groups');
@@ -204,16 +208,20 @@
         }
         applyTaskGroupOrder();
         orderButton.addEventListener('click', applyTaskGroupOrder);
+        {% if allow_future_tasks %}
         const futureTasksButton = document.getElementById('toggle-future-tasks');
         initFutureTasks(futureTasksButton, groupContainer.querySelectorAll('[data-upcoming]'));
+        {% endif %}
     </script>
 
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
     <script src="{{ url_for('static', filename='js/deadline-graph.js') }}"></script>
     <script>
+        {% if allow_future_tasks %}
         // Graphs rendered inside hidden groups need their visible width after revealing them.
         futureTasksButton.addEventListener('click', initDeadlineGraphs);
+        {% endif %}
         tippy('.card-tooltip', {
             arrow: false,
             placement: 'top-end'
