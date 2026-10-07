@@ -107,6 +107,9 @@ def test_create_course_as_instance_admin(client_with_db, session, mock_session_a
     course = session.query(Course).filter_by(name="Algorithms 2024 Spring").first()
     assert course is not None
     assert course.namespace_id == namespace_id
+    rms_api = client_with_db.application.rms_api
+    assert rms_api.projects[data["gitlab_course_public_repo"]].ci_variables["MANYTASK_TOKEN"] == course.token
+    assert rms_api.groups[data["gitlab_course_students_group"]].ci_variables["MANYTASK_TOKEN"] == course.token
 
 
 def test_create_course_as_namespace_admin_in_own_namespace(

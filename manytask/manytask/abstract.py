@@ -411,6 +411,11 @@ class RmsApi(ABC):
         ...
 
     @abstractmethod
+    def configure_course_manytask_token(
+        self, public_repo: str, students_group: str, token: str, private_repo: str | None = None
+    ) -> None: ...
+
+    @abstractmethod
     def create_namespace_group(
         self,
         name: str,

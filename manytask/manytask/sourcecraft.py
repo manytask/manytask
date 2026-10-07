@@ -293,6 +293,11 @@ class SourceCraftApi(RmsApi):
         """
         logger.info("Will skip students group creation, SourceCraft doesn't have user groups yet")
 
+    def configure_course_manytask_token(
+        self, public_repo: str, students_group: str, token: str, private_repo: str | None = None
+    ) -> None:
+        """SourceCraft course CI variables are not managed by this adapter."""
+
     def check_project_exists(
         self,
         project_name: str,

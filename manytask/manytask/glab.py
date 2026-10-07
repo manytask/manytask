@@ -460,6 +460,16 @@ class GitLabApi(RmsApi, AuthApi):
                     )
             raise
 
+    def configure_course_manytask_token(
+        self, public_repo: str, students_group: str, token: str, private_repo: str | None = None
+    ) -> None:
+        """Install the course token as a hidden, masked CI variable on its GitLab resources."""
+        variable = {"key": "MANYTASK_TOKEN", "value": token, "masked": True, "masked_and_hidden": True}
+        if private_repo is not None:
+            self._get_project_by_name(private_repo).variables.create(variable.copy())
+        self._get_project_by_name(public_repo).variables.create(variable.copy())
+        self._get_group_by_name(students_group).variables.create(variable.copy())
+
     def create_namespace_group(self, name: str, path: str, description: str | None = None) -> int:
         """Create a top-level GitLab group for a namespace.
 

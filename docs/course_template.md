@@ -161,14 +161,17 @@ For a course created outside the form, use the manual setup below.
     ```
 
 3. Edit `.checker.yml` (`export.destination`), `.manytask.yml` (`settings`, `ui`, `deadlines.schedule`), and `.releaser-ci.yml` (`REGISTRY`, `MANYTASK_URL`, `COURSE_NAME`, and `PUBLIC_REPO_URL`).
-4. Add CI/CD variables in **Group → Settings → CI/CD → Variables**:
+4. Add registry and API credentials in **Group → Settings → CI/CD → Variables**.
+   Manytask provisions `MANYTASK_TOKEN` as a hidden, masked variable on the public
+   repository, students group, and any private repository it creates. For a
+   repository created separately, add the course token as `MANYTASK_TOKEN` there.
 
     | Variable | Purpose |
     |---|---|
     | `GITLAB_API_TOKEN` | Lets `checker export --commit` push to the public repo. Group access token, role `Maintainer`, scope `write_repository`. |
     | `DOCKER_AUTH_CONFIG` | Lets the private pipeline push course images and student repos pull them. Set it to deploy/group-token credentials with `read_registry` + `write_registry` on the private project. |
     | `TESTENV_IMAGE` | Absolute registry path to the testenv image used by the student `grade` job; host must match the private project's `CI_REGISTRY` (e.g. `gitlab.manytask.org:5050/<course>/private/testenv-image:latest`). Defaults to the sandbox path in `.gitlab-ci.yml`; override for your course. |
-    | `MANYTASK_TOKEN` | Course token used by the optional `report_score_manytask` pipeline in `.checker.yml` and by `.releaser-ci.yml` to send `.manytask.yml` to Manytask. |
+    | `MANYTASK_TOKEN` | Course token used by `.checker.yml` and `.releaser-ci.yml`. |
 
 5. Create a **deploy token** with `read_registry` + `write_registry` on the private
    project and store its Docker auth JSON in `DOCKER_AUTH_CONFIG`. The release jobs

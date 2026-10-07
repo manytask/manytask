@@ -364,6 +364,35 @@ def test_create_students_group(gitlab, mock_gitlab_group):
     mock_gitlab_instance.groups.create.assert_called_once_with(_make_students_group_params(short_name))
 
 
+def test_configure_course_manytask_token(gitlab, mock_gitlab_group_student, mock_gitlab_public_project):
+    gitlab_api, mock_gitlab_instance = gitlab
+    private_project = create_mock_gitlab_project(TEST_PROJECT_ID + 3, f"{TEST_GROUP_NAME}/private")
+    mock_gitlab_instance.projects.list.return_value = [private_project, mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group_student
+
+    gitlab_api.configure_course_manytask_token(
+        TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "course-token", f"{TEST_GROUP_NAME}/private"
+    )
+
+    expected = {"key": "MANYTASK_TOKEN", "value": "course-token", "masked": True, "masked_and_hidden": True}
+    private_project.variables.create.assert_called_once_with(expected)
+    mock_gitlab_public_project.variables.create.assert_called_once_with(expected)
+    mock_gitlab_group_student.variables.create.assert_called_once_with(expected)
+
+
+def test_configure_course_manytask_token_without_private_repo(
+    gitlab, mock_gitlab_public_project, mock_gitlab_group_student
+):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.projects.list.return_value = [mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group_student
+
+    gitlab_api.configure_course_manytask_token(TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "course-token")
+
+    mock_gitlab_public_project.variables.create.assert_called_once()
+    mock_gitlab_group_student.variables.create.assert_called_once()
+
+
 def test_get_group_by_name_success(gitlab, mock_gitlab_group):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.groups.get.return_value = mock_gitlab_group

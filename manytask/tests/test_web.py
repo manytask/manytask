@@ -97,6 +97,9 @@ def test_create_course_provisions_selected_private_template(app, mock_gitlab_oau
 
     assert response.status_code == HTTPStatus.FOUND
     assert app.rms_api.projects["new-course/materials/private"].visibility == "private"
+    assert app.rms_api.projects["new-course/materials/private"].ci_variables["MANYTASK_TOKEN"] == "token"
+    assert app.rms_api.projects["new-course/public"].ci_variables["MANYTASK_TOKEN"] == "token"
+    assert app.rms_api.groups["new-course/students"].ci_variables["MANYTASK_TOKEN"] == "token"
     settings = create_course.call_args.args[0]
     assert settings.links["Private repository"] == f"{GITLAB_BASE_URL}/new-course/materials/private"
 

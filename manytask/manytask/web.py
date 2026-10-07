@@ -619,6 +619,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
         private_repo_path = private_repo_full_path.removeprefix(f"{gitlab_course_group_full_path}/")
+        course_token = request.form["token"]
 
         try:
             logger.info(
@@ -649,6 +650,13 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                     template_language if use_template else None,
                 )
 
+            app.rms_api.configure_course_manytask_token(
+                gitlab_course_public_repo,
+                gitlab_course_students_group,
+                course_token,
+                private_repo_full_path if create_private_repo else None,
+            )
+
         except Exception as e:
             logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
             return render_template(
@@ -667,7 +675,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             gitlab_course_students_group=gitlab_course_students_group,
             gitlab_default_branch=request.form["default_branch"],
             registration_secret=request.form["registration_secret"],
-            token=request.form["token"],
+            token=course_token,
             show_allscores=request.form.get("show_allscores", "off") == "on",
             links=(
                 {
