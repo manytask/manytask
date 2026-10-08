@@ -70,6 +70,30 @@ class MockRmsApi(RmsApi):
         self.projects[project_path] = project
         self.groups[course_group].projects[course_public_repo] = project
 
+    def create_private_repo(
+        self,
+        course_group: str,
+        repo_path: str,
+        public_repo: str,
+        students_group: str,
+        course_name: str,
+        template_language: str | None = None,
+    ) -> None:
+        full_path = f"{course_group}/{repo_path}"
+        if full_path in self.projects:
+            raise RmsApiException(f"Private repository {full_path} already exists")
+        if template_language is not None and template_language not in {"python", "cpp", "bash", "go", "rust"}:
+            raise ValueError(f"Unsupported course template language: {template_language}")
+        segments = repo_path.split("/")
+        parent_group = course_group
+        for segment in segments[:-1]:
+            parent_group = f"{parent_group}/{segment}"
+            self.groups.setdefault(parent_group, MockRmsGroup(name=segment))
+        self.groups.setdefault(parent_group, MockRmsGroup(name=parent_group))
+        project = MockRmsProject(name=segments[-1], group=parent_group)
+        self.projects[full_path] = project
+        self.groups[parent_group].projects[segments[-1]] = project
+
     def create_students_group(
         self,
         course_students_group: str,

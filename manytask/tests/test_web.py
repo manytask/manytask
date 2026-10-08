@@ -15,7 +15,7 @@ from manytask.course import CourseStatus
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
-from manytask.web import course_bp, instance_admin_bp, root_bp
+from manytask.web import _private_repo_form_error, course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
     TEST_CLIENT_PROFILE_SESSION_VERSION,
@@ -46,6 +46,59 @@ from tests.helpers import (
     raise_for_invalid_task,
     set_session,
 )
+
+
+@pytest.mark.parametrize(
+    ("path", "use_template", "language", "expected"),
+    [
+        ("new-course/private", False, "", None),
+        ("new-course/nested/private", False, "", None),
+        ("other-course/private", False, "", "inside the course group"),
+        ("new-course/..", False, "", "Private repository path"),
+        ("new-course/public", False, "", "different paths"),
+        ("new-course/private", True, "", "Select a supported"),
+        ("new-course/private", True, "python", None),
+    ],
+)
+def test_private_repo_form_validation(path, use_template, language, expected):
+    error = _private_repo_form_error("gitlab", path, "new-course", "new-course/public", use_template, language)
+    assert (error is None) if expected is None else expected in error
+
+
+def test_create_course_provisions_selected_private_template(app, mock_gitlab_oauth):
+    app.storage_api.stored_user.instance_admin = True
+    app.oauth = mock_gitlab_oauth
+    app.app_config.gitlab_oauth_url = GITLAB_BASE_URL
+    with (
+        app.test_client() as client,
+        patch("manytask.web.validate_csrf"),
+        patch("manytask.web.check_course_creation_namespace_permission", return_value=(None, None, None, None)),
+        patch.object(app.storage_api, "create_course", return_value=True, create=True) as create_course,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post(
+            "/instance_admin/courses/new",
+            data={
+                "csrf_token": "test",
+                "namespace_id": "0",
+                "unique_course_name": "new-course",
+                "course_group": "new-course",
+                "course_public_repo": "new-course/public",
+                "course_students_group": "new-course/students",
+                "default_branch": "main",
+                "registration_secret": "secret",
+                "token": "token",
+                "create_private_repo": "on",
+                "private_repo_path": "new-course/materials/private",
+                "use_course_template": "on",
+                "template_language": "python",
+            },
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert app.rms_api.projects["new-course/materials/private"].visibility == "private"
+    settings = create_course.call_args.args[0]
+    assert settings.links["Private repository"] == f"{GITLAB_BASE_URL}/new-course/materials/private"
 
 
 @pytest.fixture
