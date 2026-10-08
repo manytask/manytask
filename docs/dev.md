@@ -40,6 +40,7 @@ The script does the following:
 1. Starts the Docker containers (Manytask, Postgres, local GitLab).
 2. Waits for GitLab to become ready.
 3. Runs `scripts/setup_local_gitlab.sh`, which:
+   - requires GitLab email confirmation before new users can sign in,
    - creates or reuses an admin Personal Access Token (`manytask-admin`),
    - creates or reuses the OAuth application (`manytask-local`),
    - reads the runner registration token and tries to register a local runner.
@@ -51,13 +52,15 @@ The script does the following:
    - `GITLAB_CLIENT_SECRET`
 5. Restarts Manytask to pick up the updated environment variables.
 
-After the script finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/), the local GitLab at [http://localhost:8929/](http://localhost:8929/), and its container registry at `localhost:5050`.
+After the script finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/), the local GitLab at [http://localhost:8929/](http://localhost:8929/), and its container registry at `localhost:5050`. GitLab confirmation and password reset emails appear in the local Mailpit inbox at [http://localhost:8025/](http://localhost:8025/). Confirm a new account's email there before logging in.
 
 Continue with [Adding a course](#adding-a-course) below.
 
 ## Manual setup (using an existing GitLab)
 
 ### Step 1 — Create a Personal Access Token in GitLab
+
+Configure outbound email and set GitLab's **Email confirmation settings** to **Hard** (Admin Area → Settings → General → Sign-up restrictions) before accepting signups or restoring deleted accounts. Manytask does not store user email addresses. GitLab must confirm the email before a new user can sign in; it also sends confirmation and password reset emails when an administrator recreates a deleted account. The bundled local stack applies this setting and delivers these messages to Mailpit. Without a stored email or an existing GitLab account, only an instance administrator can verify ownership and restore an account.
 
 1. In the GitLab web interface, click your user icon, go to **Preferences → Access Tokens**.
 2. Create an admin token with the following scopes: `api`, `read_api`, `read_user`, `read_repository`, `write_repository`, `read_registry`, `write_registry`, `sudo`, `admin_mode`.

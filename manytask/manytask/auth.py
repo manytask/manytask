@@ -260,9 +260,18 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         # student repos are created under the RMS-native username. Passing the auth-provider login here
         # would produce a false negative on the existence check, redirect the user to /create_project,
         # and 500 with SlugIsNotAvailable when the create call tries to re-create the existing repo.
-        if not handle_course_membership(app, course, username) or not app.rms_api.check_project_exists(
+        enrolled = bool(handle_course_membership(app, course, username))
+        project_exists = enrolled and app.rms_api.check_project_exists(
             project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
-        ):
+        )
+        gitlab_access_missing = (
+            app.app_config.rms == "gitlab"
+            and project_exists
+            and not app.rms_api.check_user_has_repo_access(
+                session["rms"]["rms_id"], session["rms"]["username"], course.gitlab_course_students_group
+            )
+        )
+        if not enrolled or not project_exists or gitlab_access_missing:
             logger.info("User %s missing membership or project", username)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 

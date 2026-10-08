@@ -237,6 +237,11 @@ class StorageApi(ABC):
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
+    def get_user_course_names(self, username: str) -> list[str]:
+        """Return every enrolled course, including hidden and not-yet-started courses."""
+        ...
+
+    @abstractmethod
     def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]: ...
 
     @abstractmethod
@@ -378,7 +383,7 @@ class RmsApi(ABC):
         firstname: str,
         lastname: str,
         email: str,
-        password: str,
+        password: str | None,
     ) -> RmsUser: ...
 
     @abstractmethod

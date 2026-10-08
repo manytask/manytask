@@ -99,6 +99,11 @@
         <div class="action-group">
             <h3><i class="fas fa-users me-2"></i>User management</h3>
             <div class="admin-actions">
+                {% if rms_backend == "gitlab" %}
+                    <a class="btn btn-outline-primary admin-btn" href="{{ url_for('instance_admin.restore_gitlab_user') }}">
+                        <i class="fas fa-user-plus"></i> Restore GitLab user
+                    </a>
+                {% endif %}
                 <button type="button" class="btn btn-warning admin-btn" data-bs-toggle="modal"
                         data-bs-target="#grantAdminModal">
                     <i class="fas fa-user-shield"></i>

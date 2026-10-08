@@ -370,6 +370,20 @@ def create_user(db_api: DataBaseApi, student: TestStudent = STUDENT):
     )
 
 
+def test_get_user_course_names_includes_hidden_and_created(db_api_with_two_initialized_courses, session):
+    create_user(db_api_with_two_initialized_courses)
+    for course_name in (FIRST_COURSE_NAME, SECOND_COURSE_NAME):
+        db_api_with_two_initialized_courses.sync_user_on_course(course_name, TEST_USERNAME, False)
+    session.query(Course).filter_by(name=FIRST_COURSE_NAME).one().status = CourseStatus.HIDDEN
+    session.query(Course).filter_by(name=SECOND_COURSE_NAME).one().status = CourseStatus.CREATED
+    session.commit()
+
+    assert db_api_with_two_initialized_courses.get_user_course_names(TEST_USERNAME) == sorted(
+        [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
+    )
+    assert db_api_with_two_initialized_courses.get_user_course_names("unknown") == []
+
+
 def make_user(student: TestStudent = STUDENT, **kwargs) -> User:
     return User(
         username=student.username,

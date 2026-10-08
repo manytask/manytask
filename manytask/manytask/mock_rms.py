@@ -42,7 +42,7 @@ class MockRmsApi(RmsApi):
         firstname: str,
         lastname: str,
         email: str,
-        password: str,
+        password: str | None,
     ) -> RmsUser:
         if username in self.users_by_username:
             raise RmsApiException(f"User with username {username} already exists")

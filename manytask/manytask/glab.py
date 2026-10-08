@@ -82,25 +82,27 @@ class GitLabApi(RmsApi, AuthApi):
         firstname: str,
         lastname: str,
         email: str,
-        password: str,
+        password: str | None,
     ) -> RmsUser:
-        logger.info("Creating new GitLab user username=%s email=%s", username, email)
+        logger.info("Creating new GitLab user username=%s", username)
         try:
             name = f"{firstname} {lastname}"
-            new_user = self._gitlab.users.create(
-                {
-                    "email": email,
-                    "username": username,
-                    "name": name,
-                    "external": False,
-                    "password": password,
-                    "skip_confirmation": True,
-                }
-            )
+            user_data = {
+                "email": email,
+                "username": username,
+                "name": name,
+                "external": False,
+                "skip_confirmation": False,
+            }
+            if password is None:
+                user_data["reset_password"] = True
+            else:
+                user_data["password"] = password
+            new_user = self._gitlab.users.create(user_data)
             logger.info("GitLab user created successfully id=%s username=%s", new_user.id, username)
             return RmsUser(id=str(new_user.id), username=username, name=name)
         except Exception:
-            logger.error("Failed to create GitLab user username=%s email=%s", username, email, exc_info=True)
+            logger.error("Failed to create GitLab user username=%s", username, exc_info=True)
             raise
 
     def _get_group_by_name(self, group_name: str) -> gitlab.v4.objects.Group:
@@ -544,11 +546,13 @@ class GitLabApi(RmsApi, AuthApi):
                     "Access %s granted on %s for user=%s", access_level, target.path_with_namespace, rms_user.username
                 )
             except gitlab.GitlabCreateError:
-                logger.warning(
-                    "Access already granted or conflict on %s for user=%s",
-                    target.path_with_namespace,
-                    rms_user.username,
-                )
+                # An existing membership is harmless; a failed grant must remain
+                # visible so account recovery does not report success without access.
+                member = target.members.get(user_id)
+                if member.access_level < access_level:
+                    member.access_level = access_level
+                    member.save()
+                logger.info("Access verified on %s for user=%s", target.path_with_namespace, rms_user.username)
 
     def _construct_rms_user(
         self,

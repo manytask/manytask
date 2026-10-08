@@ -3,11 +3,12 @@ set -euo pipefail
 
 # This script bootstraps a local GitLab for manytask:
 # 1) Waits for GitLab HTTP to be ready
-# 2) Creates/reads an admin PAT
-# 3) Creates/reads an OAuth app for manytask and grabs client_id/secret
-# 4) Reads the runners registration token
-# 5) Registers the gitlab-runner container
-# 6) Appends all secrets into manytask/.env (non-destructive)
+# 2) Requires email confirmation before newly registered users can sign in
+# 3) Creates/reads an admin PAT
+# 4) Creates/reads an OAuth app for manytask and grabs client_id/secret
+# 5) Reads the runners registration token
+# 6) Registers the gitlab-runner container
+# 7) Appends all secrets into manytask/.env (non-destructive)
 
 GITLAB_CONTAINER="${GITLAB_CONTAINER:-manytask_gitlab}"
 RUNNER_CONTAINER="${RUNNER_CONTAINER:-manytask_gitlab_runner}"
@@ -73,6 +74,13 @@ main() {
     require_cmd curl
 
     wait_for_gitlab
+
+    log "Requiring email confirmation before GitLab sign-in..."
+    rails_runner "
+        settings = ApplicationSetting.current
+        settings.update!(email_confirmation_setting: 'hard')
+        abort 'Email confirmation setting was not applied' unless settings.reload.email_confirmation_setting == 'hard'
+    "
 
     ADMIN_PAT="$(get_env_value GITLAB_ADMIN_TOKEN)"
     if [ -n "${ADMIN_PAT}" ]; then

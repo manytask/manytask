@@ -194,7 +194,7 @@ def test_register_new_user(gitlab):
             "name": f"{firstname} {lastname}",
             "external": False,
             "password": password,
-            "skip_confirmation": True,
+            "skip_confirmation": False,
         }
     )
 
@@ -409,3 +409,47 @@ def test_get_url_for_repo(gitlab):
     url = gitlab_api.get_url_for_repo(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert url == f"{gitlab_api.base_url}/{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}"
+
+
+def test_register_new_user_sends_password_reset(gitlab):
+    gitlab_api, mock_gitlab_instance = gitlab
+
+    gitlab_api.register_new_user(TEST_USERNAME, TEST_USER_FIRSTNAME, TEST_USER_LASTNAME, TEST_USER_EMAIL, None)
+
+    mock_gitlab_instance.users.create.assert_called_once_with(
+        {
+            "email": TEST_USER_EMAIL,
+            "username": TEST_USERNAME,
+            "name": f"{TEST_USER_FIRSTNAME} {TEST_USER_LASTNAME}",
+            "external": False,
+            "skip_confirmation": False,
+            "reset_password": True,
+        }
+    )
+
+
+def test_grant_student_access_reports_missing_membership(gitlab, mock_rms_user):
+    from gitlab import GitlabCreateError
+
+    gitlab_api, _ = gitlab
+    project = MagicMock()
+    project.members.create.side_effect = GitlabCreateError("Forbidden")
+    project.members.get.side_effect = GitlabGetError("Not found")
+
+    with pytest.raises(GitlabGetError):
+        gitlab_api._grant_student_access(mock_rms_user, project, MagicMock())
+
+
+def test_grant_student_access_upgrades_existing_membership(gitlab, mock_rms_user):
+    from gitlab import GitlabCreateError
+
+    gitlab_api, _ = gitlab
+    project = MagicMock()
+    member = MagicMock(access_level=const.AccessLevel.REPORTER)
+    project.members.create.side_effect = GitlabCreateError("Already exists")
+    project.members.get.return_value = member
+
+    gitlab_api._grant_student_access(mock_rms_user, project, MagicMock())
+
+    assert member.access_level == const.AccessLevel.DEVELOPER
+    member.save.assert_called_once_with()

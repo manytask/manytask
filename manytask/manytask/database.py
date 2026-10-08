@@ -497,11 +497,7 @@ class DataBaseApi(StorageApi):
             for row in rows:
                 student = scores_and_names.get(row.username)
                 if student is None:
-                    is_admin = (
-                        bool(row.is_instance_admin)
-                        or bool(row.is_course_admin)
-                        or row.user_id in admin_user_ids
-                    )
+                    is_admin = bool(row.is_instance_admin) or bool(row.is_course_admin) or row.user_id in admin_user_ids
                     student = StudentCourseScores(
                         username=row.username,
                         first_name=row.first_name,
@@ -1000,6 +996,17 @@ class DataBaseApi(StorageApi):
             result = [(user_on_course.course.name, user_on_course.course.status) for user_on_course in user_on_courses]
             logger.info("User '%s' participates in %s courses", username, len(result))
             return result
+
+    def get_user_course_names(self, username: str) -> list[str]:
+        with self._session_create() as session:
+            return [
+                course_name
+                for (course_name,) in session.query(models.Course.name)
+                .join(models.UserOnCourse, models.UserOnCourse.course_id == models.Course.id)
+                .join(models.User, models.User.id == models.UserOnCourse.user_id)
+                .filter(models.User.username == username)
+                .order_by(models.Course.name)
+            ]
 
     def get_all_courses_names_with_statuses(self) -> list[tuple[str, CourseStatus]]:
         """Get a list of all courses names"""

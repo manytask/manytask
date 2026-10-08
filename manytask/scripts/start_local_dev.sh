@@ -112,6 +112,7 @@ show_success_message() {
     echo "Services:"
     echo "  Manytask:    http://localhost:8081"
     echo "  GitLab:      http://localhost:8929"
+    echo "  Mailpit:     http://localhost:8025"
     echo "  Registry:    localhost:5050"
     echo ""
     echo "GitLab credentials:"

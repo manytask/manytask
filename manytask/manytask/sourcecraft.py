@@ -389,7 +389,7 @@ class SourceCraftApi(RmsApi):
         firstname: str,
         lastname: str,
         email: str,
-        password: str,
+        password: str | None,
     ) -> RmsUser:
         raise NotImplementedError("register_new_user method not implemented yet")
 

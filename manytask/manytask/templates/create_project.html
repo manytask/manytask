@@ -13,11 +13,24 @@
                         {{ error_message }}
                     </div>
                 {% endif %}
-                <div class="form-floating">
-                    <input type="text" name="secret" class="form-control" id="floatingCode" placeholder="Code" required>
-                    <label for="floatingCode">Secret Code</label>
-                </div>
-                <button class="btn btn-primary w-100 py-2 mt-3" type="submit" value="CreateRepo">Join course</button>
+                {% if recreate_project %}
+                    {% if repository_exists %}
+                        <p>Your repository exists, but your GitLab account cannot access it. Restore your access?</p>
+                    {% else %}
+                        <p>Your repository for this course is missing. Create a new fork from the course's public repository?</p>
+                        <p>Creating a new fork will not restore code from a deleted repository. Your Manytask grades will remain.</p>
+                    {% endif %}
+                    <input type="hidden" name="recreate_project" value="yes">
+                    <button class="btn btn-primary w-100 py-2 mt-3" type="submit">
+                        {{ "Restore repository access" if repository_exists else "Create new repository" }}
+                    </button>
+                {% else %}
+                    <div class="form-floating">
+                        <input type="text" name="secret" class="form-control" id="floatingCode" placeholder="Code" required>
+                        <label for="floatingCode">Secret Code</label>
+                    </div>
+                    <button class="btn btn-primary w-100 py-2 mt-3" type="submit" value="CreateRepo">Join course</button>
+                {% endif %}
                 <a href="{{ url_for('root.index') }}" class="btn btn-outline-secondary w-100 py-2 mt-2">
                     <i class="fas fa-arrow-left me-1"></i>Back to courses
                 </a>
@@ -26,7 +39,7 @@
                 document.querySelector('form').addEventListener('submit', function() {
                     const btn = this.querySelector('button[type="submit"]');
                     btn.disabled = true;
-                    btn.textContent = 'Joining...';
+                    btn.textContent = 'Creating...';
                 });
             </script>
         </div>

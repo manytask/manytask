@@ -8,12 +8,14 @@ from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
+from sqlalchemy.exc import NoResultFound
 from wtforms import ValidationError
 
 from manytask.abstract import RmsApiException, RmsUser, StoredUser
 
 from .abstract import ClientProfile
 from .auth import (
+    handle_course_membership,
     handle_oauth_callback,
     redirect_to_login_with_bad_session,
     requires_auth,
@@ -112,8 +114,21 @@ def _get_admin_namespaces(app: CustomFlask, username: str, is_instance_admin: bo
 @root_bp.route("/login", methods=["GET", "POST"])
 def login() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
-    oauth: OAuth = app.oauth
+    if app.app_config.rms == "gitlab" and request.method == "GET":
+        return render_template("login_gitlab.html", course_favicon=app.favicon)
+    return _begin_oauth_login(app)
 
+
+@root_bp.get("/login/start")
+def login_start() -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    if app.app_config.rms != "gitlab":
+        abort(HTTPStatus.NOT_FOUND)
+    return _begin_oauth_login(app)
+
+
+def _begin_oauth_login(app: CustomFlask) -> ResponseReturnValue:
+    oauth: OAuth = app.oauth
     redirect_uri = url_for("root.login_finish", _external=True)
     return oauth.auth_provider.authorize_redirect(redirect_uri)
 
@@ -242,6 +257,13 @@ def signup() -> ResponseReturnValue:
             lambda attr: request.form[attr].strip(), ("username", "firstname", "lastname", "email")
         )
 
+        try:
+            app.storage_api.get_stored_user_by_username(username)
+        except NoResultFound:
+            pass
+        else:
+            raise ValueError("This username already belongs to a Manytask account. Contact an instance administrator.")
+
         validated_firstname = validate_name(firstname)
         validated_lastname = validate_name(lastname)
         if validated_firstname is None or validated_lastname is None:
@@ -362,6 +384,16 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
                 error_message=f"Failed to get RMS user: {e}",
             )
 
+    # A GitLab username can be registered again after its original account is deleted.
+    # Do not let that new GitLab identity claim the old Manytask account and its grades.
+    if _manytask_username_exists(app, session["auth"]["username"]):
+        return render_template(
+            app.signup_finish_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message="This username already belongs to a Manytask account. Contact an instance administrator.",
+        ), HTTPStatus.CONFLICT
+
     app.storage_api.update_or_create_user(
         username=session["auth"]["username"],
         first_name=firstname,
@@ -382,17 +414,40 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     return redirect(url_for("root.index"))
 
 
+def _manytask_username_exists(app: CustomFlask, username: str) -> bool:
+    try:
+        return app.storage_api.get_stored_user_by_username(username) is not None
+    except NoResultFound:
+        return False
+
+
 @course_bp.route("/create_project", methods=["GET", "POST"])
 @requires_ready
 @requires_auth
-def create_project(course_name: str) -> ResponseReturnValue:
+def create_project(course_name: str) -> ResponseReturnValue:  # noqa: PLR0911
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
+    enrolled = bool(handle_course_membership(app, course, session["manytask"]["username"]))
+    project_exists = enrolled and app.rms_api.check_project_exists(
+        project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
+    )
+    gitlab_access_missing = (
+        app.app_config.rms == "gitlab"
+        and project_exists
+        and not app.rms_api.check_user_has_repo_access(
+            session["rms"]["rms_id"], session["rms"]["username"], course.gitlab_course_students_group
+        )
+    )
+
+    if project_exists and not gitlab_access_missing:
+        return redirect(url_for("course.course_page", course_name=course_name))
 
     def render_create_project(error_message: str | None = None) -> str:
         return render_template(
             "create_project.html",
             error_message=error_message,
+            recreate_project=enrolled,
+            repository_exists=project_exists,
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
@@ -409,12 +464,16 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
-    # Set user to be course admin if they provided course token as a secret
-    is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
-    if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
-        return render_create_project("Invalid secret")
-
-    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
+    if enrolled:
+        if request.form.get("recreate_project") != "yes":
+            return render_create_project("Confirm that you want to create a new repository.")
+    else:
+        # Set user to be course admin if they provided course token as a secret.
+        secret = request.form.get("secret", "")
+        is_course_admin = secrets.compare_digest(secret, course.token)
+        if not is_course_admin and not secrets.compare_digest(secret, course.registration_secret):
+            return render_create_project("Invalid secret")
+        app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
 
     # Create use if needed
     try:
@@ -773,8 +832,111 @@ def instance_admin_panel() -> ResponseReturnValue:
         )
 
     return render_template(
-        "instance_admin_panel.html", courses=get_courses(app), users=users, namespaces=namespaces_data
+        "instance_admin_panel.html",
+        courses=get_courses(app),
+        users=users,
+        namespaces=namespaces_data,
+        rms_backend=app.app_config.rms,
     )
+
+
+@instance_admin_bp.route("/restore_gitlab_user", methods=["GET", "POST"])
+@role_required(["instance_admin"])
+def restore_gitlab_user() -> ResponseReturnValue:
+    """Recreate a missing GitLab account and restore its existing course access."""
+    app: CustomFlask = current_app  # type: ignore
+    if app.app_config.rms != "gitlab":
+        abort(HTTPStatus.NOT_FOUND)
+    if request.method == "GET":
+        return render_template("restore_gitlab_user.html")
+
+    status = HTTPStatus.OK
+    error_message = None
+    success_message = None
+    username = request.form.get("username", "").strip()
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+        email = request.form.get("email", "").strip()
+        if not username or not email or "@" not in email:
+            raise ValueError("Enter a username and email address.")
+        stored_user = app.storage_api.get_stored_user_by_username(username)
+        rms_user = _resolve_recovery_rms_user(app, stored_user, email)
+        course_names = app.storage_api.get_user_course_names(username)
+        failed_courses = _restore_course_projects(app, rms_user, course_names)
+    except ValidationError:
+        error_message, status = "CSRF Error", HTTPStatus.BAD_REQUEST
+    except ValueError as e:
+        error_message, status = str(e), HTTPStatus.BAD_REQUEST
+    except NoResultFound:
+        error_message, status = "Manytask user not found.", HTTPStatus.NOT_FOUND
+    except GitLabIdentityConflict as e:
+        error_message, status = str(e), HTTPStatus.CONFLICT
+    except (gitlab.GitlabError, RmsApiException, RuntimeError):
+        logger.exception("GitLab user restoration failed for username=%s", username)
+        error_message, status = (
+            "Could not restore this GitLab user. Check server logs and retry.",
+            HTTPStatus.BAD_GATEWAY,
+        )
+    else:
+        if failed_courses:
+            error_message = "Some course repositories could not be restored. Retry this operation: " + ", ".join(
+                failed_courses
+            )
+            status = HTTPStatus.BAD_GATEWAY
+        else:
+            success_message = f"Restored GitLab access for {username} across {len(course_names)} enrolled courses."
+
+    return render_template(
+        "restore_gitlab_user.html", error_message=error_message, success_message=success_message
+    ), status
+
+
+class GitLabIdentityConflict(Exception):
+    """The requested GitLab identity does not match the Manytask account."""
+
+
+def _resolve_recovery_rms_user(app: CustomFlask, stored_user: StoredUser, email: str) -> RmsUser:
+    try:
+        rms_user = app.rms_api.get_rms_user_by_username(stored_user.username)
+    except RmsApiException:
+        try:
+            app.rms_api.get_rms_user_by_id(stored_user.rms_id)
+        except (RmsApiException, gitlab.GitlabGetError):
+            pass
+        else:
+            raise GitLabIdentityConflict(
+                "The original GitLab account still exists under another username. No changes made."
+            )
+
+        rms_user = app.rms_api.register_new_user(
+            stored_user.username, stored_user.first_name, stored_user.last_name, email, None
+        )
+        app.storage_api.update_or_create_user(
+            username=stored_user.username,
+            first_name=stored_user.first_name,
+            last_name=stored_user.last_name,
+            rms_id=rms_user.id,
+            auth_id=int(rms_user.id),
+        )
+    else:
+        if rms_user.id != stored_user.rms_id:
+            raise GitLabIdentityConflict("This GitLab username belongs to a different account. No changes made.")
+    return rms_user
+
+
+def _restore_course_projects(app: CustomFlask, rms_user: RmsUser, course_names: list[str]) -> list[str]:
+    failed_courses = []
+    for course_name in course_names:
+        course = app.storage_api.get_course(course_name)
+        if course is None:
+            failed_courses.append(course_name)
+            continue
+        try:
+            app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        except (gitlab.GitlabError, RmsApiException, RuntimeError):
+            logger.exception("Failed to restore GitLab project for user=%s course=%s", rms_user.username, course_name)
+            failed_courses.append(course_name)
+    return failed_courses
 
 
 @root_bp.route("/update_profile", methods=["POST"])

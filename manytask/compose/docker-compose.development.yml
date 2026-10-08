@@ -61,6 +61,13 @@ services:
                 gitlab_kas['enable'] = false
                 puma['worker_processes'] = 0
                 sidekiq['concurrency'] = 10
+                gitlab_rails['smtp_enable'] = true
+                gitlab_rails['smtp_address'] = 'mailpit'
+                gitlab_rails['smtp_port'] = 1025
+                gitlab_rails['smtp_domain'] = 'localhost'
+                gitlab_rails['smtp_authentication'] = false
+                gitlab_rails['smtp_enable_starttls_auto'] = false
+                gitlab_rails['gitlab_email_from'] = 'gitlab@localhost'
         ports:
             - "8929:8929"    # HTTP web UI
             - "5050:5050"    # Container registry
@@ -70,6 +77,13 @@ services:
             - gitlab_config:/etc/gitlab
             - gitlab_logs:/var/log/gitlab
             - gitlab_data:/var/opt/gitlab
+        networks:
+            - manytask-dev-net
+
+    mailpit:
+        image: axllent/mailpit:latest
+        ports:
+            - "8025:8025"    # Local confirmation and password reset emails
         networks:
             - manytask-dev-net
 

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="container py-5" style="max-width: 600px;">
+    <h1 class="h3 mb-3">Restore GitLab user</h1>
+    <p>Use this for an existing Manytask user whose GitLab account was deleted. Verify the user's identity and email address before continuing. Manytask does not store the email. If a new account is created, GitLab will send confirmation and password reset emails.</p>
+    {% if error_message %}
+        <div class="alert alert-danger" role="alert">{{ error_message }}</div>
+    {% endif %}
+    {% if success_message %}
+        <div class="alert alert-success" role="alert">{{ success_message }}</div>
+    {% endif %}
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+            <label for="restoreUsername" class="form-label">Manytask username</label>
+            <input type="text" name="username" id="restoreUsername" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label for="restoreEmail" class="form-label">Verified email address</label>
+            <input type="email" name="email" id="restoreEmail" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Restore account and course repositories</button>
+        <a href="{{ url_for('instance_admin.instance_admin_panel') }}" class="btn btn-link">Back to admin panel</a>
+    </form>
+</div>
+{% endblock %}

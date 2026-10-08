@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="container py-5" style="max-width: 480px;">
+    <h1 class="h3 mb-4">Log in to Manytask</h1>
+    <a href="{{ url_for('root.login_start') }}" class="btn btn-primary w-100">Continue with GitLab</a>
+    <p class="mt-3">Just signed up? Confirm your email through GitLab before logging in.</p>
+    <p class="mb-0">If your GitLab account is missing, contact an instance administrator to restore access.</p>
+</div>
+{% endblock %}

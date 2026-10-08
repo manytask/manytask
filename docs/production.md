@@ -14,6 +14,8 @@ And set up dns record to point this ip.
 
 For example: `py.manytask.org` - domain for python course
 
+For a GitLab-backed instance, configure outbound email and set **Email confirmation settings** to **Hard** in GitLab's Admin Area → Settings → General → Sign-up restrictions. Manytask does not store user email addresses. Users whose GitLab accounts have been deleted need an instance administrator to verify their identity and restore access.
+
 
 ## Deploy 
 
