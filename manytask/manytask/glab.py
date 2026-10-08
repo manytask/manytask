@@ -30,7 +30,17 @@ def _validate_and_convert_user_id(user_id: str) -> int:
         raise ValueError(f"GitLab user ID must be convertible to integer, got: {user_id}")
 
 
-def _make_public_repo_params(project_name: str, namespace_id: int) -> dict[str, Any]:
+def _make_public_repo_settings(project_path: str) -> dict[str, Any]:
+    return {
+        "merge_requests_access_level": "disabled",
+        "container_registry_access_level": "private",
+        "public_jobs": False,
+        "ci_config_path": f".gitlab-ci.yml@{project_path}",
+    }
+
+
+def _make_public_repo_params(project_path: str, namespace_id: int) -> dict[str, Any]:
+    project_name = project_path.split("/")[-1]
     return {
         "name": project_name,
         "path": project_name,
@@ -39,6 +49,7 @@ def _make_public_repo_params(project_name: str, namespace_id: int) -> dict[str, 
         "shared_runners_enabled": True,
         "auto_devops_enabled": False,
         "initialize_with_readme": True,
+        **_make_public_repo_settings(project_path),
     }
 
 
@@ -156,11 +167,13 @@ class GitLabApi(RmsApi, AuthApi):
         for project in self._gitlab.projects.list(get_all=True, search=course_public_repo):
             if project.path_with_namespace == course_public_repo:
                 logger.info("Project %s already exists", course_public_repo)
+                self._gitlab.projects.update(
+                    project.id,
+                    _make_public_repo_settings(course_public_repo),
+                )
                 return
 
-        project_name = course_public_repo.split("/")[-1]
-
-        self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
+        self._gitlab.projects.create(_make_public_repo_params(course_public_repo, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)
 
     def create_students_group(
@@ -493,7 +506,9 @@ class GitLabApi(RmsApi, AuthApi):
             if project.path_with_namespace == gitlab_project_path:
                 logger.info("Project already exists for user=%s group=%s", rms_user.username, course_students_group)
                 project = self._gitlab.projects.get(project.id)
-                self._grant_student_access(rms_user, project, self._get_project_by_name(course_public_repo))
+                project.ci_config_path = f".gitlab-ci.yml@{course_public_repo}"
+                project.save()
+                self._grant_student_access(rms_user, project)
                 return
 
         course_public_project = self._get_project_by_name(course_public_repo)
@@ -509,8 +524,6 @@ class GitLabApi(RmsApi, AuthApi):
                 # Enable shared runners
                 # TODO: Relay on groups runners
                 # "shared_runners_enabled": students_group.shared_runners_setting == "enabled",
-                # Set external gitlab-ci config from public repo
-                "ci_config_path": f".gitlab-ci.yml@{course_public_project.path_with_namespace}",
                 # Merge method to squash
                 "merge_method": "squash",
                 # Disable AutoDevOps
@@ -522,33 +535,26 @@ class GitLabApi(RmsApi, AuthApi):
         # Unprotect all branches
         for protected_branch in project.protectedbranches.list(get_all=True):
             protected_branch.delete()
+        # Set this through the project update API; the fork endpoint does not support it.
+        project.ci_config_path = f".gitlab-ci.yml@{course_public_repo}"
         project.save()
 
         logger.info("Forked project created for user=%s repo=%s", rms_user.username, project.path_with_namespace)
-        self._grant_student_access(rms_user, project, course_public_project)
+        self._grant_student_access(rms_user, project)
 
     def _grant_student_access(
         self,
         rms_user: RmsUser,
         project: gitlab.v4.objects.Project,
-        course_public_project: gitlab.v4.objects.Project,
     ) -> None:
         user_id = _validate_and_convert_user_id(rms_user.id)
-        for target, access_level in (
-            (project, gitlab.const.AccessLevel.DEVELOPER),
-            (course_public_project, gitlab.const.AccessLevel.REPORTER),
-        ):
-            try:
-                target.members.create({"user_id": user_id, "access_level": access_level})
-                logger.info(
-                    "Access %s granted on %s for user=%s", access_level, target.path_with_namespace, rms_user.username
-                )
-            except gitlab.GitlabCreateError:
-                logger.warning(
-                    "Access already granted or conflict on %s for user=%s",
-                    target.path_with_namespace,
-                    rms_user.username,
-                )
+        try:
+            project.members.create({"user_id": user_id, "access_level": gitlab.const.AccessLevel.DEVELOPER})
+            logger.info("Developer access granted on %s for user=%s", project.path_with_namespace, rms_user.username)
+        except gitlab.GitlabCreateError:
+            logger.warning(
+                "Access already granted or conflict on %s for user=%s", project.path_with_namespace, rms_user.username
+            )
 
     def _construct_rms_user(
         self,
