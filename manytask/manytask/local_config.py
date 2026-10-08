@@ -32,6 +32,9 @@ class LocalConfig:
 
     disable_signup: bool
 
+    # instance-scoped API token (MANYTASK_API_TOKEN), used by requires_instance_token
+    api_token: str
+
     @classmethod
     def from_env(cls) -> LocalConfig:
         gitlab_url = os.environ.get("GITLAB_URL", "https://gitlab.manytask2.org")
@@ -56,6 +59,7 @@ class LocalConfig:
             yandex_id_client_secret=os.environ.get("YANDEX_ID_CLIENT_SECRET", ""),
             yandex_id_oauth_base=os.environ.get("YANDEX_ID_OAUTH_BASE", "https://oauth.yandex.com"),
             disable_signup=os.environ.get("MANYTASK_DISABLE_SIGNUP", "false").lower() in ("true", "1", "yes"),
+            api_token=os.environ.get("MANYTASK_API_TOKEN", ""),
         )
 
 
@@ -85,6 +89,8 @@ class DebugLocalConfig(LocalConfig):
     yandex_id_oauth_base: str = "https://oauth.yandex.com"
 
     disable_signup: bool = False
+
+    api_token: str = ""
 
     show_allscores: bool = True
 
