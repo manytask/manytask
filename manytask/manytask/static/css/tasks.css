@@ -253,6 +253,11 @@
     margin-right: -0.2rem;
 }
 
+.task-deadline__status.upcoming {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+}
+
 .task-deadline__status.active {
     background: #e1fae4;
     color: #4caf50;

@@ -188,6 +188,7 @@ class DeadlinesResponse(BaseModel):
 class ManytaskUiConfig(BaseModel):
     task_url_template: str  # $GROUP_NAME $TASK_NAME $USER_NAME vars are available
     links: dict[str, str] = Field(default_factory=dict)
+    allow_future_tasks: bool = False
 
     @field_validator("task_url_template")
     @classmethod

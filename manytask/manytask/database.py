@@ -682,6 +682,7 @@ class DataBaseApi(StorageApi):
                     task_url_template=settings_config.task_url_template,
                     links=settings_config.links,
                     deadlines_type=settings_config.deadlines_type,
+                    allow_future_tasks=settings_config.allow_future_tasks,
                 )
                 logger.info("Successfully created course '%s'", settings_config.course_name)
                 return True
@@ -715,6 +716,7 @@ class DataBaseApi(StorageApi):
                         "task_url_template": settings_config.task_url_template,
                         "links": settings_config.links,
                         "deadlines_type": settings_config.deadlines_type,
+                        "allow_future_tasks": settings_config.allow_future_tasks,
                     },
                     name=settings_config.course_name,
                 )
@@ -744,6 +746,7 @@ class DataBaseApi(StorageApi):
                     "task_url_template": config.ui.task_url_template,
                     "links": config.ui.links,
                     "deadlines_type": config.deadlines.deadlines,
+                    "allow_future_tasks": config.ui.allow_future_tasks,
                 },
                 name=course_name,
             )

@@ -185,6 +185,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         app=app,
         allscores_url=allscores_url,
         show_allscores=course.show_allscores,
+        allow_future_tasks=course.allow_future_tasks,
         student_repo_url=student_repo,
         student_ci_url=student_ci_url,
         manytask_version=app.manytask_version,
@@ -668,6 +669,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             task_url_template=course.task_url_template,
             links=course.links,
             deadlines_type=course.deadlines_type,
+            allow_future_tasks=course.allow_future_tasks,
         )
 
         if app.storage_api.edit_course(updated_settings):
