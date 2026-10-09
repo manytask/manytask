@@ -277,6 +277,102 @@ def test_course_page_uses_rms_username_for_project_existence_check(app, mock_git
             )
 
 
+@pytest.mark.parametrize("page", ["", "database", "create_project"])
+def test_enrolled_user_with_missing_repository_sees_recovery(app, mock_gitlab_oauth, page):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.rms_api.projects.pop(f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}")
+
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == f"/{TEST_COURSE_NAME}/recover_project"
+
+        recovery = client.get(response.location)
+        assert recovery.status_code == HTTPStatus.OK
+        assert b"Your course repository has been lost or deleted" in recovery.data
+        soup = BeautifulSoup(recovery.data, "html.parser")
+        form = soup.find("form", action=f"/{TEST_COURSE_NAME}/recover_project")
+        assert form.find("button", type="submit").get_text(strip=True) == "Re-create repository"
+        assert form.find("input", {"name": "csrf_token"}) is not None
+
+
+def test_recovery_recreates_repository_from_current_public_repo(app, mock_course, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.rms_api.projects.pop(f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}")
+    mock_course.gitlab_course_public_repo = "course/current-public"
+
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+
+        with (
+            patch.object(app.rms_api, "create_project", wraps=app.rms_api.create_project) as create_repo,
+            patch.object(app.storage_api, "sync_user_on_course") as sync_membership,
+        ):
+            response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == f"/{TEST_COURSE_NAME}/"
+        create_repo.assert_called_once()
+        rms_user, students_group, public_repo = create_repo.call_args.args
+        assert rms_user.username == TEST_USERNAME
+        assert students_group == TEST_STUDENTS_GROUP
+        assert public_repo == "course/current-public"
+        sync_membership.assert_not_called()
+        assert app.rms_api.check_project_exists(TEST_USERNAME, TEST_STUDENTS_GROUP)
+        assert client.get(f"/{TEST_COURSE_NAME}/").status_code == HTTPStatus.OK
+
+
+def test_recovery_requires_existing_enrollment(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", return_value=False),
+        patch.object(app.rms_api, "create_project") as create_repo,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        enrollment = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        csrf_token = BeautifulSoup(enrollment.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+        assert response.status_code == HTTPStatus.FORBIDDEN
+        create_repo.assert_not_called()
+
+
+def test_recovery_skips_creation_when_repository_has_returned(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == f"/{TEST_COURSE_NAME}/"
+
+
+def test_recovery_shows_rms_error_without_leaking_backend_details(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.rms_api.projects.pop(f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}")
+
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "create_project", side_effect=RmsApiException("ResourceExhausted")),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        recovery = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        csrf_token = BeautifulSoup(recovery.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+
+        response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+        assert response.status_code == HTTPStatus.OK
+        assert b"course staff" in response.data
+        assert b"ResourceExhausted" not in response.data
+        assert not app.rms_api.check_project_exists(TEST_USERNAME, TEST_STUDENTS_GROUP)
+
+
 def test_signup_get(app):
     CSRFProtect(app)
     with app.test_request_context():
@@ -857,6 +953,7 @@ def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_co
     with app.test_request_context():
         with (
             app.test_client() as client,
+            patch.object(app.storage_api, "check_user_on_course", return_value=False),
             patch.object(
                 app.rms_api,
                 "create_project",
@@ -891,6 +988,7 @@ def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitla
     with app.test_request_context():
         with (
             app.test_client() as client,
+            patch.object(app.storage_api, "check_user_on_course", return_value=False),
             patch.object(
                 app.rms_api,
                 "create_project",
