@@ -416,11 +416,8 @@ class GitLabApi(RmsApi, AuthApi):
         logger.info("Checking if project exists path=%s", gitlab_project_path)
 
         try:
-            project = self._gitlab.projects.get(gitlab_project_path)
-        except GitlabGetError:
-            logger.info("Project does not exist project_name=%s group=%s", project_name, project_group)
-            logger.debug("Gitlab error:", exc_info=True)
-            return False
+            # A path scheduled for deletion can redirect to its renamed project, so compare current paths.
+            projects = self._gitlab.projects.list(get_all=True, search=project_name)
         except GitlabAuthenticationError as e:
             logger.error(
                 "GitLab authentication error while checking project existence: %s. "
@@ -430,18 +427,9 @@ class GitLabApi(RmsApi, AuthApi):
             )
             raise RmsApiException(f"GitLab authentication failed: {str(e)}") from e
 
-        project_path = project.path_with_namespace
-        logger.debug("Found project candidate path=%s", project_path)
-        if project_path == gitlab_project_path:
-            logger.info("Project exists project_name=%s group=%s", project_name, project_group)
-            return True
-
-        logger.info(
-            f"Project does not match the expected pattern:\n"
-            f"got project candidate path={project_path}\n"
-            f"awaited project_name={project_name} group={project_group}"
-        )
-        return False
+        exists = any(project.path_with_namespace == gitlab_project_path for project in projects)
+        logger.info("Project %s exists=%s", gitlab_project_path, exists)
+        return exists
 
     def check_user_has_repo_access(
         self,

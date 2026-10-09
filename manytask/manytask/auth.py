@@ -258,8 +258,7 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         # login (auth_user.username): on SourceCraft the two may differ (e.g. when the desired slug is
         # already taken the platform assigns a fallback like "ps5-1" for a Yandex login "Ps5"), and
         # student repos are created under the RMS-native username. Passing the auth-provider login here
-        # would produce a false negative on the existence check, redirect the user to /recover_project,
-        # and 500 with SlugIsNotAvailable when the create call tries to re-create the existing repo.
+        # would produce a false negative and send a user with an existing repo to recovery.
         if not handle_course_membership(app, course, username):
             logger.info("User %s is not enrolled in course %s", username, course.course_name)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))

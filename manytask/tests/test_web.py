@@ -245,8 +245,8 @@ def test_course_page_uses_rms_username_for_project_existence_check(app, mock_git
     ``check_project_exists`` must be called with the RMS-native username (as stored in
     ``session['rms']['username']``), not the auth-provider login (``session['auth']['username']``).
     Otherwise, for users whose SC username differs from their Yandex login (e.g. Yandex ``Ps5``
-    -> SC ``ps5-1``), the existence check produces a false negative and the flow redirects to
-    ``create_project``, which 500s trying to re-create the already-existing repo.
+    -> SC ``ps5-1``), the existence check produces a false negative and sends them to recovery
+    even though their repository exists.
     """
     CSRFProtect(app)
     with app.test_request_context():
