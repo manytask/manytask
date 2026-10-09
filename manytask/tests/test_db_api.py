@@ -24,7 +24,7 @@ from manytask.config import (
 )
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
-from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
+from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError, UserIdentityConflictError
 from manytask.models import (
     Course,
     Deadline,
@@ -1544,6 +1544,22 @@ def test_update_or_create_user_existing(db_api_with_two_initialized_courses, ses
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
     create_user(db_api_with_two_initialized_courses)
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
+
+
+def test_update_or_create_user_rejects_different_identity(db_api_with_two_initialized_courses, session):
+    user = make_user(id=2, is_instance_admin=True)
+    session.add(user)
+    session.commit()
+
+    with pytest.raises(UserIdentityConflictError):
+        db_api_with_two_initialized_courses.update_or_create_user(
+            TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, "different-rms-id", TEST_AUTH_ID + 1
+        )
+
+    stored_user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    assert stored_user.rms_id == TEST_RMS_ID
+    assert stored_user.auth_id == TEST_AUTH_ID
+    assert stored_user.is_instance_admin is True
 
 
 def test_update_or_create_user_nonexisting(db_api_with_two_initialized_courses, session):

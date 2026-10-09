@@ -8,6 +8,7 @@ from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
+from sqlalchemy.exc import NoResultFound
 from wtforms import ValidationError
 
 from manytask.abstract import RmsApiException, RmsUser, StoredUser
@@ -29,6 +30,7 @@ from .auth import (
     valid_rms_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
+from .database import UserIdentityConflictError
 from .main import CustomFlask
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
@@ -41,11 +43,59 @@ from .utils.sourcecraft import normalize_string
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
+MISSING_GITLAB_ACCOUNT_MESSAGE = (
+    "The GitLab account for this Manytask username is missing. Please contact Manytask support."
+)
 
 logger = logging.getLogger(__name__)
 root_bp = Blueprint("root", __name__)
 course_bp = Blueprint("course", __name__, url_prefix="/<course_name>")
 instance_admin_bp = Blueprint("instance_admin", __name__, url_prefix="/instance_admin")
+
+
+def _manytask_username_exists(app: CustomFlask, username: str) -> bool:
+    try:
+        app.storage_api.get_stored_user_by_username(username)
+    except NoResultFound:
+        return False
+    return True
+
+
+def _store_signup_user(
+    app: CustomFlask, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int
+) -> bool:
+    try:
+        app.storage_api.update_or_create_user(
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            rms_id=rms_id,
+            auth_id=auth_id,
+        )
+    except UserIdentityConflictError:
+        logger.warning("Registration conflicts with an existing Manytask identity")
+        return False
+    return True
+
+
+def _restore_existing_user_session(app: CustomFlask, stored_user: StoredUser) -> ResponseReturnValue:
+    # The RMS-native username may differ from the authentication login on SourceCraft.
+    try:
+        rms_username = app.rms_api.get_rms_user_by_id(stored_user.rms_id).username
+    except RmsApiException as e:
+        logger.warning(
+            "Failed to resolve RMS user for rms_id=%s (%s); falling back to auth username",
+            stored_user.rms_id,
+            e,
+        )
+        rms_username = session["auth"]["username"]
+    session.setdefault("rms", {}).update(
+        set_rms_session(ClientProfile(rms_id=stored_user.rms_id, username=rms_username))
+    )
+    session.setdefault("manytask", {}).update(
+        set_manytask_session(user_id=stored_user.user_id, username=stored_user.username)
+    )
+    return redirect(url_for("root.index"))
 
 
 @root_bp.get("/healthcheck")
@@ -247,6 +297,13 @@ def signup() -> ResponseReturnValue:
         if validated_firstname is None or validated_lastname is None:
             raise Exception("Firstname and lastname must be 1-50 characters and contain only letters or hyphens.")
 
+        if _manytask_username_exists(app, username):
+            try:
+                app.rms_api.get_rms_user_by_username(username)
+            except RmsApiException as e:
+                raise UserIdentityConflictError(MISSING_GITLAB_ACCOUNT_MESSAGE) from e
+            raise ValueError("This username is already registered. Please log in.")
+
         # register user in gitlab
         rms_user = app.rms_api.register_new_user(
             username,
@@ -269,7 +326,7 @@ def signup() -> ResponseReturnValue:
         logger.warning("User registration failed: %s", e)
         return render_template(
             app.signup_template,
-            error_message=str(e),
+            error_message=MISSING_GITLAB_ACCOUNT_MESSAGE if isinstance(e, UserIdentityConflictError) else str(e),
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
         )
@@ -292,26 +349,15 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         auth_id=session["auth"]["user_auth_id"],
     )
     if stored_user_or_none is not None:
-        # Resolve the RMS-native username from the RMS API. It may differ from the auth-provider
-        # login (e.g. on SourceCraft, when the desired slug is taken, the platform issues a fallback
-        # like "ps5-1" for the Yandex login "Ps5"). Storing the auth login here poisons downstream
-        # slug lookups (existence checks, repo URLs) that expect the RMS-native username.
-        try:
-            rms_username = app.rms_api.get_rms_user_by_id(stored_user_or_none.rms_id).username
-        except RmsApiException as e:
-            logger.warning(
-                "Failed to resolve RMS user for rms_id=%s (%s); falling back to auth username",
-                stored_user_or_none.rms_id,
-                e,
-            )
-            rms_username = session["auth"]["username"]
-        session.setdefault("rms", {}).update(
-            set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=rms_username))
+        return _restore_existing_user_session(app, stored_user_or_none)
+
+    if app.app_config.rms == "gitlab" and _manytask_username_exists(app, session["auth"]["username"]):
+        return render_template(
+            app.signup_finish_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message=MISSING_GITLAB_ACCOUNT_MESSAGE,
         )
-        session.setdefault("manytask", {}).update(
-            set_manytask_session(user_id=stored_user_or_none.user_id, username=stored_user_or_none.username)
-        )
-        return redirect(url_for("root.index"))
 
     if request.method == "GET":
         return render_template(
@@ -362,13 +408,17 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
                 error_message=f"Failed to get RMS user: {e}",
             )
 
-    app.storage_api.update_or_create_user(
-        username=session["auth"]["username"],
-        first_name=firstname,
-        last_name=lastname,
-        rms_id=rms_user.id,
-        auth_id=session["auth"]["user_auth_id"],
-    )
+    if not _store_signup_user(
+        app, session["auth"]["username"], firstname, lastname, rms_user.id, session["auth"]["user_auth_id"]
+    ):
+        return render_template(
+            app.signup_finish_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message=MISSING_GITLAB_ACCOUNT_MESSAGE
+            if app.app_config.rms == "gitlab"
+            else "This username is already registered in Manytask. Please contact Manytask support.",
+        )
 
     stored_user = app.storage_api.get_stored_user_by_auth_id(auth_id=session["auth"]["user_auth_id"])
     if stored_user is None:

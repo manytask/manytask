@@ -52,6 +52,10 @@ class TaskDisabledError(Exception):
     pass
 
 
+class UserIdentityConflictError(Exception):
+    """A username already belongs to a different authentication account."""
+
+
 def calculate_effective_grade(
     course_status: CourseStatus,
     grades_config: ManytaskFinalGradeConfig,
@@ -497,11 +501,7 @@ class DataBaseApi(StorageApi):
             for row in rows:
                 student = scores_and_names.get(row.username)
                 if student is None:
-                    is_admin = (
-                        bool(row.is_instance_admin)
-                        or bool(row.is_course_admin)
-                        or row.user_id in admin_user_ids
-                    )
+                    is_admin = bool(row.is_instance_admin) or bool(row.is_course_admin) or row.user_id in admin_user_ids
                     student = StudentCourseScores(
                         username=row.username,
                         first_name=row.first_name,
@@ -953,27 +953,39 @@ class DataBaseApi(StorageApi):
                 return False
 
     def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int) -> None:
-        """Update or create user in DB"""
+        """Create a user or keep an existing user with the same provider identity."""
 
         with self._session_create() as session:
             logger.debug(
                 f"Creating or updating user '{username}' "
                 f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id}, auth_id={auth_id})"
             )
-            self._update_or_create(
-                session,
-                models.User,
-                defaults=dict[str, Any](
-                    rms_id=rms_id,
-                    auth_id=auth_id,
-                ),
-                create_defaults=dict[str, Any](
+            existing_user = self._query_with_for_update(session, models.User, username=username)
+            if existing_user is not None:
+                if existing_user.rms_id != rms_id or existing_user.auth_id != auth_id:
+                    raise UserIdentityConflictError(f"Username '{username}' belongs to a different account")
+                return
+
+            session.add(
+                models.User(
+                    username=username,
                     first_name=first_name,
                     last_name=last_name,
-                ),
-                username=username,
+                    rms_id=rms_id,
+                    auth_id=auth_id,
+                )
             )
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError as e:
+                session.rollback()
+                # A concurrent insert may have claimed this username after our first lookup.
+                existing_user = session.query(models.User).filter_by(username=username).one_or_none()
+                if existing_user is not None:
+                    if existing_user.rms_id != rms_id or existing_user.auth_id != auth_id:
+                        raise UserIdentityConflictError(f"Username '{username}' belongs to a different account") from e
+                    return
+                raise
             logger.info("User '%s' created or updated in database", username)
 
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]:
