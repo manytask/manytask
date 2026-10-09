@@ -428,6 +428,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
 def _redirect_existing_enrollment(app: CustomFlask, course: Course) -> ResponseReturnValue | None:
     if app.debug or not app.storage_api.check_user_on_course(course.course_name, session["manytask"]["username"]):
         return None
+    # Repository names use the RMS username, which may differ from the authentication login.
     if not app.rms_api.check_project_exists(
         project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
     ):

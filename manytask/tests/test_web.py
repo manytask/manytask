@@ -239,7 +239,7 @@ def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oau
     assert control["data-course-name"] == TEST_COURSE_NAME
 
 
-def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
+def test_create_project_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
     """Regression for the SourceCraft ``SlugIsNotAvailable`` 500 on enrollment.
 
     ``check_project_exists`` must be called with the RMS-native username (as stored in
@@ -267,9 +267,10 @@ def test_course_page_uses_rms_username_for_project_existence_check(app, mock_git
                 sess.update(session_data)
             app.oauth = mock_gitlab_oauth
 
-            client.get(f"/{TEST_COURSE_NAME}/")
+            response = client.get(f"/{TEST_COURSE_NAME}/create_project")
 
             mock_check.assert_called_once()
+            assert response.location == f"/{TEST_COURSE_NAME}/recover_project"
             call_kwargs = mock_check.call_args.kwargs
             assert call_kwargs["project_name"] == "ps5-1", (
                 "Existence check must use the RMS-native username so the slug matches what "
@@ -277,15 +278,33 @@ def test_course_page_uses_rms_username_for_project_existence_check(app, mock_git
             )
 
 
-@pytest.mark.parametrize("page", ["", "database", "create_project"])
-def test_enrolled_user_with_missing_repository_sees_recovery(app, mock_gitlab_oauth, page):
+@pytest.mark.parametrize("page", ["", "database"])
+def test_enrolled_user_with_missing_repository_can_open_course_pages(app, mock_gitlab_oauth, page):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.rms_api.projects.pop(f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}")
+
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "check_project_exists", side_effect=AssertionError("Unexpected RMS lookup")),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+
+    assert response.status_code == HTTPStatus.OK
+    if page == "":
+        soup = BeautifulSoup(response.data, "html.parser")
+        assert soup.find("a", href=f"/{TEST_COURSE_NAME}/recover_project") is not None
+
+
+def test_enrolled_user_with_missing_repository_sees_recovery_from_enrollment(app, mock_gitlab_oauth):
     CSRFProtect(app)
     app.oauth = mock_gitlab_oauth
     app.rms_api.projects.pop(f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}")
 
     with app.test_client() as client:
         set_session(client, build_test_session(include_manytask=True))
-        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+        response = client.get(f"/{TEST_COURSE_NAME}/create_project")
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == f"/{TEST_COURSE_NAME}/recover_project"
 
