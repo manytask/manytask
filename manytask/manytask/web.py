@@ -30,7 +30,7 @@ from .auth import (
     valid_rms_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
-from .database import UserIdentityConflictError
+from .database import UNBOUND_INSTANCE_ADMIN_AUTH_ID, UNBOUND_INSTANCE_ADMIN_RMS_ID, UserIdentityConflictError
 from .main import CustomFlask
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
@@ -53,12 +53,20 @@ course_bp = Blueprint("course", __name__, url_prefix="/<course_name>")
 instance_admin_bp = Blueprint("instance_admin", __name__, url_prefix="/instance_admin")
 
 
-def _manytask_username_exists(app: CustomFlask, username: str) -> bool:
+def _manytask_username_is_claimed(app: CustomFlask, username: str) -> bool:
     try:
-        app.storage_api.get_stored_user_by_username(username)
+        stored_user = app.storage_api.get_stored_user_by_username(username)
     except NoResultFound:
         return False
-    return True
+    return not _is_unbound_instance_admin(stored_user)
+
+
+def _is_unbound_instance_admin(stored_user: StoredUser) -> bool:
+    return (
+        stored_user.instance_admin
+        and stored_user.rms_id == UNBOUND_INSTANCE_ADMIN_RMS_ID
+        and stored_user.auth_id == UNBOUND_INSTANCE_ADMIN_AUTH_ID
+    )
 
 
 def _store_signup_user(
@@ -297,7 +305,7 @@ def signup() -> ResponseReturnValue:
         if validated_firstname is None or validated_lastname is None:
             raise Exception("Firstname and lastname must be 1-50 characters and contain only letters or hyphens.")
 
-        if _manytask_username_exists(app, username):
+        if _manytask_username_is_claimed(app, username):
             try:
                 app.rms_api.get_rms_user_by_username(username)
             except RmsApiException as e:
@@ -351,7 +359,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     if stored_user_or_none is not None:
         return _restore_existing_user_session(app, stored_user_or_none)
 
-    if app.app_config.rms == "gitlab" and _manytask_username_exists(app, session["auth"]["username"]):
+    if app.app_config.rms == "gitlab" and _manytask_username_is_claimed(app, session["auth"]["username"]):
         return render_template(
             app.signup_finish_template,
             course_favicon=app.favicon,

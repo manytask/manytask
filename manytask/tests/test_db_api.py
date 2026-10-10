@@ -1546,6 +1546,23 @@ def test_update_or_create_user_existing(db_api_with_two_initialized_courses, ses
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
 
 
+def test_update_or_create_user_binds_initial_admin(db_api, session):
+    admin = session.query(User).filter_by(username="instance_admin").one()
+    admin_id = admin.id
+    assert (admin.rms_id, admin.auth_id, admin.is_instance_admin) == ("-1", -1, True)
+
+    db_api.update_or_create_user("instance_admin", TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
+
+    admin = session.query(User).filter_by(username="instance_admin").one()
+    assert admin.id == admin_id
+    assert (admin.first_name, admin.last_name) == (TEST_FIRST_NAME, TEST_LAST_NAME)
+    assert (admin.rms_id, admin.auth_id, admin.is_instance_admin) == (TEST_RMS_ID, TEST_AUTH_ID, True)
+    assert db_api.get_stored_user_by_auth_id(TEST_AUTH_ID).instance_admin is True
+
+    with pytest.raises(UserIdentityConflictError):
+        db_api.update_or_create_user("instance_admin", TEST_FIRST_NAME, TEST_LAST_NAME, "other", TEST_AUTH_ID + 1)
+
+
 def test_update_or_create_user_rejects_different_identity(db_api_with_two_initialized_courses, session):
     user = make_user(id=2, is_instance_admin=True)
     session.add(user)
