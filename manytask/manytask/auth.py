@@ -254,9 +254,20 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             flash("course is hidden!", "course_hidden")
             abort(redirect(url_for("root.index")))
 
+        # NOTE: use the RMS-native username (session["rms"]["username"]) rather than the auth-provider
+        # login (auth_user.username): on SourceCraft the two may differ (e.g. when the desired slug is
+        # already taken the platform assigns a fallback like "ps5-1" for a Yandex login "Ps5"), and
+        # student repos are created under the RMS-native username. Passing the auth-provider login here
+        # would produce a false negative and send a user with an existing repo to recovery.
         if not handle_course_membership(app, course, username):
             logger.info("User %s is not enrolled in course %s", username, course.course_name)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
+
+        if not app.rms_api.check_project_exists(
+            project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
+        ):
+            logger.info("User %s is enrolled but missing a repository in course %s", username, course.course_name)
+            abort(redirect(url_for("course.recover_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_user_on_course(
