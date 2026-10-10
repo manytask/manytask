@@ -283,6 +283,94 @@ class TestCourse:
         assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
 
     @pytest.mark.parametrize(
+        "branch_name, commit_message, expected_changed_tasks",
+        [
+            ("task1_1", "fixes", ["task1_1"]),
+            ("group1", "fixes", ["task1_1", "task1_2"]),
+            ("task1_1", "fix task1_1", ["task1_1"]),
+            ("group1", "fix task1_1 and task1_2", ["task1_1", "task1_2"]),
+            ("feature-work", "task1_1 and root_task_1", ["task1_1", "root_task_1"]),
+            ("task2_1", "task4_1", ["task4_1"]),  # disabled branch task
+            ("group3", "task4_1", ["task4_1"]),  # empty branch group
+            ("main", "task4_1", ["task4_1"]),
+            ("master", "task4_1", ["task4_1"]),
+            ("feature-work", "no matching task", []),
+        ],
+    )
+    def test_detect_changes_by_branch_name_or_commit_message(
+        self,
+        git_init_repository_root: Path,
+        branch_name: str,
+        commit_message: str,
+        expected_changed_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        if repo.active_branch.name != branch_name:
+            repo.git.checkout("-b", branch_name)
+        repo.git.commit("-m", commit_message, "--allow-empty")
+        course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+
+        detection_type = CheckerTestingConfig.model_validate(
+            {"changes_detection": "branch_name_or_commit_message"}
+        ).changes_detection
+        changed_tasks = course.detect_changes(detection_type)
+
+        assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+
+    @pytest.mark.parametrize(
+        "branch_name, commit_message, branch_tasks, commit_tasks",
+        [
+            ("task1_1", "task4_1", ["task1_1"], ["task4_1"]),
+            ("group1", "task4_1", ["task1_1", "task1_2"], ["task4_1"]),
+            ("task1_1", "task1_1 and task4_1", ["task1_1"], ["task1_1", "task4_1"]),
+        ],
+    )
+    def test_detect_changes_by_branch_name_or_commit_message_rejects_ambiguity(
+        self,
+        git_init_repository_root: Path,
+        branch_name: str,
+        commit_message: str,
+        branch_tasks: list[str],
+        commit_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        repo.git.checkout("-b", branch_name)
+        repo.git.commit("-m", commit_message, "--allow-empty")
+        course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+
+        with pytest.raises(CheckerException, match="Ambiguous task detection") as error:
+            course.detect_changes(CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE)
+
+        assert branch_name in str(error.value)
+        assert str(sorted(branch_tasks)) in str(error.value)
+        assert str(sorted(commit_tasks)) in str(error.value)
+
+    @pytest.mark.parametrize(
+        "branch_override, expected_changed_tasks",
+        [(None, ["task4_1"]), ("task4_1", ["task4_1"]), ("main", ["task4_1"]), ("master", ["task4_1"])],
+    )
+    def test_detect_changes_by_branch_name_or_commit_message_detached_head(
+        self,
+        git_init_repository_root: Path,
+        branch_override: str | None,
+        expected_changed_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        repo.git.commit("-m", "task4_1", "--allow-empty")
+        repo.git.checkout(repo.head.commit.hexsha)
+        course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG,
+            repository_root=git_init_repository_root,
+            branch_name=branch_override,
+        )
+
+        changed_tasks = course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE
+        )
+
+        assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+
+    @pytest.mark.parametrize(
         "commit_message, changed_files, expected_changed_tasks",
         [
             ("task1_1", ["group1/task1_1/file1_1_1"], ["task1_1"]),
@@ -405,3 +493,83 @@ class TestCourse:
         assert all(isinstance(task, FileSystemTask) for task in changed_tasks)
         assert len(changed_tasks) == len(expected_changed_tasks)
         assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+
+
+class TestDetectChangesWithBaseRef:
+    """last_commit_changes with base_ref: all commits of a multi-commit push are taken into account."""
+
+    @staticmethod
+    def _commit(repo: git.Repo, root: Path, files: list[str], message: str = "commit") -> git.Commit:
+        for filename in files:
+            path = root / filename
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"{message} {filename}")
+        repo.git.add(".")
+        repo.git.commit("-m", message, "--allow-empty")
+        return repo.head.commit
+
+    @staticmethod
+    def _detect(root: Path, base_ref: str | None) -> list[str]:
+        course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=root, base_ref=base_ref)
+        tasks = course.detect_changes(CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES)
+        return sorted(task.name for task in tasks)
+
+    @pytest.mark.parametrize(
+        "commits, expected_changed_tasks",
+        [
+            ([["group1/task1_1/a.py"], ["root_task_1/b.py"]], ["root_task_1", "task1_1"]),
+            ([["group1/task1_1/a.py"], ["random_file.txt"]], ["task1_1"]),
+            ([["group1/task1_1/a.py"], ["group1/task1_1/b.py"], ["group1/task1_2/c.py"]], ["task1_1", "task1_2"]),
+            ([["group2/task2_1/a.py"], ["root_task_1/b.py"]], ["root_task_1"]),
+            ([[], []], []),
+        ],
+    )
+    def test_multiple_commits_in_one_push(
+        self,
+        git_init_repository_root: Path,
+        commits: list[list[str]],
+        expected_changed_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        before_push = repo.head.commit.hexsha
+        for i, files in enumerate(commits):
+            self._commit(repo, git_init_repository_root, files, f"commit {i}")
+
+        assert self._detect(git_init_repository_root, before_push) == expected_changed_tasks
+
+    @pytest.mark.parametrize("base_ref", [None, "", "0" * 40, "deadbeef" * 5, "not-a-ref"])
+    def test_unusable_base_ref_falls_back_to_last_commit(self, git_init_repository_root: Path, base_ref: str | None) -> None:
+        repo = git.Repo(git_init_repository_root)
+        self._commit(repo, git_init_repository_root, ["group1/task1_1/a.py"], "first")
+        self._commit(repo, git_init_repository_root, ["root_task_1/b.py"], "second")
+
+        assert self._detect(git_init_repository_root, base_ref) == ["root_task_1"]
+
+    def test_base_equal_to_head_falls_back_to_last_commit(self, git_init_repository_root: Path) -> None:
+        repo = git.Repo(git_init_repository_root)
+        head = self._commit(repo, git_init_repository_root, ["root_task_1/b.py"])
+
+        assert self._detect(git_init_repository_root, head.hexsha) == ["root_task_1"]
+
+    def test_force_push_uses_merge_base(self, git_init_repository_root: Path) -> None:
+        repo = git.Repo(git_init_repository_root)
+        fork_point = self._commit(repo, git_init_repository_root, ["group1/task1_1/a.py"], "graded before")
+        old_head = self._commit(repo, git_init_repository_root, ["group1/task1_2/a.py"], "old")
+        repo.git.reset("--hard", fork_point.hexsha)
+        self._commit(repo, git_init_repository_root, ["group1/task1_2/b.py"], "new 1")
+        self._commit(repo, git_init_repository_root, ["root_task_1/b.py"], "new 2")
+
+        assert self._detect(git_init_repository_root, old_head.hexsha) == ["root_task_1", "task1_2"]
+
+    def test_shallow_clone_is_deepened(self, git_init_repository_root: Path, tmp_path: Path) -> None:
+        origin = git.Repo(git_init_repository_root)
+        before_push = origin.head.commit.hexsha
+        self._commit(origin, git_init_repository_root, ["group1/task1_1/a.py"], "first")
+        self._commit(origin, git_init_repository_root, ["root_task_1/b.py"], "second")
+
+        clone_root = tmp_path / "clone"
+        git.Repo.clone_from(f"file://{git_init_repository_root}", clone_root, depth=1)
+        with pytest.raises(ValueError):
+            git.Repo(clone_root).commit(before_push)
+
+        assert self._detect(clone_root, before_push) == ["root_task_1", "task1_1"]

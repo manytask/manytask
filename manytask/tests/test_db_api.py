@@ -24,7 +24,7 @@ from manytask.config import (
 )
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
-from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
+from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError, UserIdentityConflictError
 from manytask.models import (
     Course,
     Deadline,
@@ -992,6 +992,31 @@ def test_check_if_course_admin_namespace_program_manager_is_not_admin(db_api_wit
     assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
 
 
+def test_get_all_scores_with_names_flags_admin_users(db_api_with_initialized_first_course, session):
+    """get_all_scores_with_names should flag course/namespace/instance admins and program
+    managers via is_admin, instead of excluding them from the result."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    _create_namespace_with_course(session, created_by_id=owner_id)
+
+    regular_student, _ = add_user_on_course(session, student=STUDENT_1, user_id=2, is_course_admin=False)
+    namespace_admin, _ = add_user_on_course(session, student=STUDENT_2, user_id=3, is_course_admin=False)
+
+    session.add(
+        UserOnNamespace(
+            user_id=namespace_admin.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    all_scores = db_api_with_initialized_first_course.get_all_scores_with_names(FIRST_COURSE_NAME)
+
+    assert all_scores[regular_student.username].is_admin is False
+    assert all_scores[namespace_admin.username].is_admin is True
+
+
 def test_check_if_course_admin_no_namespace_uses_course_flag(db_api_with_initialized_first_course, session):
     """When the course has no namespace, only the per-course admin flag matters."""
     create_user(db_api_with_initialized_first_course)
@@ -1375,6 +1400,136 @@ def test_get_course_users_with_admin_status_unknown_course(db_api_with_two_initi
     assert db_api_with_two_initialized_courses.get_course_users_with_admin_status("nonexistent_course") == []
 
 
+def _access_levels_by_username(access_users) -> dict[str, set[str]]:
+    return {access_user.username: set(access_user.access_levels) for access_user in access_users}
+
+
+def test_get_course_access_users_instance_admin(db_api_with_initialized_first_course):
+    """The bootstrap instance admin has access to every course."""
+    result = db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME)
+
+    assert _access_levels_by_username(result) == {"instance_admin": {"instance_admin"}}
+
+
+def test_get_course_access_users_course_admin(db_api_with_initialized_first_course, session):
+    add_user_on_course(session, is_course_admin=True)
+
+    result = db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME)
+
+    assert _access_levels_by_username(result)[TEST_USERNAME] == {"course_admin"}
+
+
+def test_get_course_access_users_excludes_plain_students(db_api_with_initialized_first_course, session):
+    """A course member without the admin flag must not appear in the access table."""
+    add_user_on_course(session, is_course_admin=False)
+
+    result = db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME)
+
+    assert TEST_USERNAME not in _access_levels_by_username(result)
+
+
+def test_get_course_access_users_namespace_roles(db_api_with_initialized_first_course, session):
+    """Namespace admins and program managers of the course's namespace are included."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    namespace_admin, _ = add_user_on_course(session, student=STUDENT_1, user_id=3, is_course_admin=False)
+    program_manager, _ = add_user_on_course(session, student=STUDENT_2, user_id=4, is_course_admin=False)
+
+    _create_namespace_with_course(session, created_by_id=owner_id)
+    session.add(
+        UserOnNamespace(
+            user_id=namespace_admin.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.add(
+        UserOnNamespace(
+            user_id=program_manager.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.PROGRAM_MANAGER,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    result = _access_levels_by_username(db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME))
+
+    assert result[TEST_USERNAME_1] == {"namespace_admin"}
+    assert result[TEST_USERNAME_2] == {"program_manager"}
+
+
+def test_get_course_access_users_merges_levels_of_one_user(db_api_with_initialized_first_course, session):
+    """A user holding several levels appears once, with all of them listed."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    user, _ = add_user_on_course(session, is_course_admin=True)
+
+    _create_namespace_with_course(session, created_by_id=owner_id)
+    session.add(
+        UserOnNamespace(
+            user_id=user.id,
+            namespace_id=1,
+            role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    result = db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME)
+
+    matching = [access_user for access_user in result if access_user.username == TEST_USERNAME]
+    assert len(matching) == 1
+    assert set(matching[0].access_levels) == {"namespace_admin", "course_admin"}
+
+
+def test_get_course_access_users_ignores_other_namespace(db_api_with_two_initialized_courses, session):
+    """Roles in a namespace the course does not belong to must not leak in."""
+    owner_id = session.query(User).filter_by(username="instance_admin").one().id
+    other_user, _ = add_user_on_course(session, student=STUDENT_1, user_id=3, is_course_admin=False)
+
+    # The namespace is attached to the *second* course only.
+    _create_namespace_with_course(session, created_by_id=owner_id, course_id=2, namespace_id=2)
+    session.add(
+        UserOnNamespace(
+            user_id=other_user.id,
+            namespace_id=2,
+            role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+            assigned_by_id=owner_id,
+        )
+    )
+    session.commit()
+
+    result = _access_levels_by_username(db_api_with_two_initialized_courses.get_course_access_users(FIRST_COURSE_NAME))
+
+    assert TEST_USERNAME_1 not in result
+
+
+def test_get_course_access_users_course_without_namespace(db_api_with_initialized_first_course, session):
+    """A course with no namespace still reports instance and course admins."""
+    add_user_on_course(session, is_course_admin=True)
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.namespace_id is None
+
+    result = _access_levels_by_username(db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME))
+
+    assert result == {"instance_admin": {"instance_admin"}, TEST_USERNAME: {"course_admin"}}
+
+
+def test_get_course_access_users_sorted_by_username(db_api_with_initialized_first_course, session):
+    add_user_on_course(session, student=STUDENT_2, user_id=4, is_course_admin=True)
+    add_user_on_course(session, student=STUDENT_1, user_id=3, is_course_admin=True)
+
+    result = db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME)
+
+    usernames = [access_user.username for access_user in result]
+    assert usernames == sorted(usernames)
+
+
+def test_get_course_access_users_unknown_course(db_api_with_two_initialized_courses):
+    assert db_api_with_two_initialized_courses.get_course_access_users("nonexistent_course") == []
+
+
 def test_check_user_on_course(db_api_with_two_initialized_courses, session):
     add_user_on_course(session, is_course_admin=True)
 
@@ -1389,6 +1544,39 @@ def test_update_or_create_user_existing(db_api_with_two_initialized_courses, ses
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
     create_user(db_api_with_two_initialized_courses)
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
+
+
+def test_update_or_create_user_binds_initial_admin(db_api, session):
+    admin = session.query(User).filter_by(username="instance_admin").one()
+    admin_id = admin.id
+    assert (admin.rms_id, admin.auth_id, admin.is_instance_admin) == ("-1", -1, True)
+
+    db_api.update_or_create_user("instance_admin", TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
+
+    admin = session.query(User).filter_by(username="instance_admin").one()
+    assert admin.id == admin_id
+    assert (admin.first_name, admin.last_name) == (TEST_FIRST_NAME, TEST_LAST_NAME)
+    assert (admin.rms_id, admin.auth_id, admin.is_instance_admin) == (TEST_RMS_ID, TEST_AUTH_ID, True)
+    assert db_api.get_stored_user_by_auth_id(TEST_AUTH_ID).instance_admin is True
+
+    with pytest.raises(UserIdentityConflictError):
+        db_api.update_or_create_user("instance_admin", TEST_FIRST_NAME, TEST_LAST_NAME, "other", TEST_AUTH_ID + 1)
+
+
+def test_update_or_create_user_rejects_different_identity(db_api_with_two_initialized_courses, session):
+    user = make_user(id=2, is_instance_admin=True)
+    session.add(user)
+    session.commit()
+
+    with pytest.raises(UserIdentityConflictError):
+        db_api_with_two_initialized_courses.update_or_create_user(
+            TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, "different-rms-id", TEST_AUTH_ID + 1
+        )
+
+    stored_user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    assert stored_user.rms_id == TEST_RMS_ID
+    assert stored_user.auth_id == TEST_AUTH_ID
+    assert stored_user.is_instance_admin is True
 
 
 def test_update_or_create_user_nonexisting(db_api_with_two_initialized_courses, session):

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="container-fluid d-flex flex-column justify-content-center align-items-center" style="height: 100vh">
+    <h1>Your course repository has been lost or deleted</h1>
+    <p>Re-create it from the current public course repository to continue.</p>
+    {% if error_message %}
+        <div class="alert alert-danger" role="alert">{{ error_message }}</div>
+    {% endif %}
+    <form method="post" action="{{ url_for('course.recover_project', course_name=course_name) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-primary" type="submit">Re-create repository</button>
+    </form>
+    <a class="btn btn-outline-secondary mt-3" href="{{ url_for('root.index') }}">Back to courses</a>
+</div>
+{% endblock %}

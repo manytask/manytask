@@ -38,6 +38,26 @@ class StoredUser:
 
 
 @dataclass
+class CourseAccessUser:
+    """A user who has some kind of admin access to a course.
+
+    Access may come from three different scopes, which overlap: a user can be an
+    instance admin *and* a course admin at the same time. ``access_levels`` therefore
+    holds every level that applies, using the role constants from
+    :mod:`manytask.models` (``instance_admin``, ``namespace_admin``,
+    ``program_manager``, ``course_admin``).
+    """
+
+    username: str
+    first_name: str
+    last_name: str
+    access_levels: list[str] = field(default_factory=list)
+
+    def __repr__(self) -> str:
+        return f"CourseAccessUser(username={self.username}, access_levels={self.access_levels})"
+
+
+@dataclass
 class TaskScore:
     """Score of a single task of a single student."""
 
@@ -56,6 +76,12 @@ class StudentCourseScores:
     final_grade: int | None = None
     final_grade_override: int | None = None
     comment: str | None = None
+    is_admin: bool = False
+    """True if the user is a course admin, namespace admin, instance admin, or program manager.
+
+    Used to hide admin/staff accounts from the all-scores table when viewed by regular
+    students, while still allowing admin viewers to see them (typically grayed out).
+    """
 
     def __repr__(self) -> str:
         return f"StudentCourseScores(username={self.username}, tasks={len(self.task_scores)})"
@@ -227,6 +253,9 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_course_users_with_admin_status(self, course_name: str) -> list[tuple[StoredUser, bool]]: ...
+
+    @abstractmethod
+    def get_course_access_users(self, course_name: str) -> list[CourseAccessUser]: ...
 
     @abstractmethod
     def set_instance_admin_status(
