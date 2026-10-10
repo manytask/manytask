@@ -46,10 +46,16 @@ from .utils.generic import calculate_percent
 ModelType = TypeVar("ModelType", bound=models.Base)
 
 logger = logging.getLogger(__name__)
+UNBOUND_INSTANCE_ADMIN_RMS_ID = "-1"
+UNBOUND_INSTANCE_ADMIN_AUTH_ID = -1
 
 
 class TaskDisabledError(Exception):
     pass
+
+
+class UserIdentityConflictError(Exception):
+    """A username already belongs to a different authentication account."""
 
 
 def calculate_effective_grade(
@@ -137,7 +143,12 @@ class DataBaseApi(StorageApi):
                 models.User,
                 username=config.instance_admin_username,
                 defaults={"is_instance_admin": True},
-                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": "-1", "auth_id": -1},
+                create_defaults={
+                    "first_name": "Instance",
+                    "last_name": "Admin",
+                    "rms_id": UNBOUND_INSTANCE_ADMIN_RMS_ID,
+                    "auth_id": UNBOUND_INSTANCE_ADMIN_AUTH_ID,
+                },
             )
             session.commit()
 
@@ -497,11 +508,7 @@ class DataBaseApi(StorageApi):
             for row in rows:
                 student = scores_and_names.get(row.username)
                 if student is None:
-                    is_admin = (
-                        bool(row.is_instance_admin)
-                        or bool(row.is_course_admin)
-                        or row.user_id in admin_user_ids
-                    )
+                    is_admin = bool(row.is_instance_admin) or bool(row.is_course_admin) or row.user_id in admin_user_ids
                     student = StudentCourseScores(
                         username=row.username,
                         first_name=row.first_name,
@@ -952,28 +959,55 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' isn't enrolled in course '%s'", username, course_name)
                 return False
 
+    @staticmethod
+    def _bind_or_validate_existing_user(
+        session: Session, user: models.User, first_name: str, last_name: str, rms_id: str, auth_id: int
+    ) -> None:
+        if (
+            user.is_instance_admin
+            and user.rms_id == UNBOUND_INSTANCE_ADMIN_RMS_ID
+            and user.auth_id == UNBOUND_INSTANCE_ADMIN_AUTH_ID
+        ):
+            user.first_name = first_name
+            user.last_name = last_name
+            user.rms_id = rms_id
+            user.auth_id = auth_id
+            session.commit()
+        elif user.rms_id != rms_id or user.auth_id != auth_id:
+            raise UserIdentityConflictError(f"Username '{user.username}' belongs to a different account")
+
     def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int) -> None:
-        """Update or create user in DB"""
+        """Create a user, bind the initial admin, or keep an existing provider identity."""
 
         with self._session_create() as session:
             logger.debug(
                 f"Creating or updating user '{username}' "
                 f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id}, auth_id={auth_id})"
             )
-            self._update_or_create(
-                session,
-                models.User,
-                defaults=dict[str, Any](
-                    rms_id=rms_id,
-                    auth_id=auth_id,
-                ),
-                create_defaults=dict[str, Any](
+            existing_user = self._query_with_for_update(session, models.User, username=username)
+            if existing_user is not None:
+                self._bind_or_validate_existing_user(session, existing_user, first_name, last_name, rms_id, auth_id)
+                return
+
+            session.add(
+                models.User(
+                    username=username,
                     first_name=first_name,
                     last_name=last_name,
-                ),
-                username=username,
+                    rms_id=rms_id,
+                    auth_id=auth_id,
+                )
             )
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                # A concurrent insert may have claimed this username after our first lookup.
+                existing_user = self._query_with_for_update(session, models.User, username=username)
+                if existing_user is not None:
+                    self._bind_or_validate_existing_user(session, existing_user, first_name, last_name, rms_id, auth_id)
+                    return
+                raise
             logger.info("User '%s' created or updated in database", username)
 
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]:

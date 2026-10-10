@@ -7,11 +7,14 @@ import pytest
 from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
 from flask import Flask, url_for
+from flask.testing import FlaskClient
 from flask_wtf import CSRFProtect
+from sqlalchemy.exc import NoResultFound
 
 from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
 from manytask.course import CourseStatus
+from manytask.database import UserIdentityConflictError
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -724,6 +727,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
     with (
         patch.object(mock_gitlab_oauth.auth_provider, "authorize_access_token") as mock_authorize_access_token,
         patch.object(mock_storage_api, "update_or_create_user") as mock_register_new_mt_user,
+        patch.object(mock_storage_api, "get_stored_user_by_username", side_effect=NoResultFound),
         # app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
@@ -749,6 +753,83 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
                 rms_id=rms_user.id,
                 auth_id=int(rms_user.id),
             )
+
+
+def _signup_form_data(client: FlaskClient, username: str) -> dict[str, str]:
+    response = client.get("/signup")
+    csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+    return {
+        "csrf_token": csrf_token,
+        "username": username,
+        "firstname": TEST_FIRST_NAME,
+        "lastname": TEST_LAST_NAME,
+        "email": TEST_EMAIL,
+        "password": TEST_PASSWORD,
+        "password2": TEST_PASSWORD,
+    }
+
+
+def test_signup_rejects_missing_gitlab_account_for_existing_manytask_username(app):
+    CSRFProtect(app)
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "get_rms_user_by_username", side_effect=RmsApiException("User not found")),
+        patch.object(app.rms_api, "register_new_user") as register_new_user,
+        patch.object(app.storage_api, "update_or_create_user") as update_or_create_user,
+    ):
+        response = client.post("/signup", data=_signup_form_data(client, TEST_USERNAME))
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"The GitLab account for this Manytask username is missing." in response.data
+    assert b"Please contact Manytask support." in response.data
+    register_new_user.assert_not_called()
+    update_or_create_user.assert_not_called()
+
+
+def test_signup_rejects_existing_username_with_gitlab_account(app):
+    CSRFProtect(app)
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "register_new_user") as register_new_user,
+    ):
+        response = client.post("/signup", data=_signup_form_data(client, TEST_USERNAME))
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"This username is already registered. Please log in." in response.data
+    register_new_user.assert_not_called()
+
+
+def test_signup_allows_unbound_initial_admin(app):
+    CSRFProtect(app)
+    admin = app.storage_api.stored_user
+    admin.username = TEST_USERNAME_1
+    admin.instance_admin = True
+    admin.rms_id = "-1"
+    admin.auth_id = -1
+
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "update_or_create_user") as update_or_create_user,
+    ):
+        response = client.post("/signup", data=_signup_form_data(client, TEST_USERNAME_1))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == "/login"
+    update_or_create_user.assert_called_once()
+
+
+def test_signup_shows_support_message_if_username_is_claimed_during_registration(app):
+    CSRFProtect(app)
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_stored_user_by_username", side_effect=NoResultFound),
+        patch.object(app.storage_api, "update_or_create_user", side_effect=UserIdentityConflictError("conflict")),
+    ):
+        response = client.post("/signup", data=_signup_form_data(client, TEST_USERNAME_1))
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"The GitLab account for this Manytask username is missing." in response.data
+    assert b"Please contact Manytask support." in response.data
 
 
 def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
@@ -861,6 +942,57 @@ def test_signup_finish_existing_user_uses_rms_username_not_auth_login(app, mock_
                 assert sess["auth"]["username"] == TEST_USERNAME  # sanity: auth login unchanged
 
 
+def test_signup_finish_rejects_different_gitlab_account_for_existing_username(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_stored_user_by_auth_id", return_value=None),
+        patch.object(app.storage_api, "update_or_create_user") as update_or_create_user,
+    ):
+        set_session(client, build_test_session(include_rms=False))
+        response = client.get("/signup_finish")
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"The GitLab account for this Manytask username is missing." in response.data
+    assert b"Please contact Manytask support." in response.data
+    update_or_create_user.assert_not_called()
+
+
+def test_signup_finish_allows_unbound_initial_admin(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    admin = app.storage_api.stored_user
+    admin.instance_admin = True
+    admin.rms_id = "-1"
+    admin.auth_id = -1
+
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_stored_user_by_auth_id", side_effect=[None, None, admin]),
+        patch.object(app.storage_api, "update_or_create_user") as update_or_create_user,
+    ):
+        set_session(client, build_test_session(include_rms=False))
+        response = client.get("/signup_finish")
+        assert response.status_code == HTTPStatus.OK
+        assert b"The GitLab account for this Manytask username is missing." not in response.data
+
+        csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(
+            "/signup_finish", data={"firstname": "Test", "lastname": "User", "csrf_token": csrf_token}
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == "/"
+    update_or_create_user.assert_called_once_with(
+        username=TEST_USERNAME,
+        first_name="Test",
+        last_name="User",
+        rms_id=TEST_RMS_ID,
+        auth_id=TEST_USER_ID,
+    )
+
+
 def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
     CSRFProtect(app)
     data = {
@@ -872,6 +1004,7 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
         with (
             app.test_client() as client,
             patch.object(app.storage_api, "get_stored_user_by_auth_id") as mock_get_stored_user_by_auth_id,
+            patch.object(app.storage_api, "get_stored_user_by_username", side_effect=NoResultFound),
             patch.object(app.storage_api, "update_or_create_user") as mock_update_or_create_user,
         ):
             set_session(client, build_test_session(include_rms=False))
