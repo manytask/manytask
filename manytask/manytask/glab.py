@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, Optional
 
 import gitlab
@@ -416,8 +417,7 @@ class GitLabApi(RmsApi, AuthApi):
         logger.info("Checking if project exists path=%s", gitlab_project_path)
 
         try:
-            # A path scheduled for deletion can redirect to its renamed project, so compare current paths.
-            projects = self._gitlab.projects.list(get_all=True, search=project_name)
+            project = self._gitlab.projects.get(gitlab_project_path)
         except GitlabAuthenticationError as e:
             logger.error(
                 "GitLab authentication error while checking project existence: %s. "
@@ -426,8 +426,14 @@ class GitLabApi(RmsApi, AuthApi):
                 exc_info=True,
             )
             raise RmsApiException(f"GitLab authentication failed: {str(e)}") from e
+        except GitlabGetError as e:
+            if e.response_code != HTTPStatus.NOT_FOUND:
+                raise
+            logger.info("Project %s exists=False", gitlab_project_path)
+            return False
 
-        exists = any(project.path_with_namespace == gitlab_project_path for project in projects)
+        # GitLab can redirect a path scheduled for deletion to its renamed project.
+        exists = project.path_with_namespace == gitlab_project_path
         logger.info("Project %s exists=%s", gitlab_project_path, exists)
         return exists
 
