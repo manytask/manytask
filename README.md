@@ -56,6 +56,7 @@ Current developers:
 
 * [Sofia Anokhovskaya](https://github.com/cin-bun)
 * [Dzmitry Charnushevich](https://github.com/Dmi4er4)
+* [Vlad Chebakov](https://github.com/Teranikys)
 * [Olga Gorbunova](https://github.com/elyaishere)
 * [Ivan Gorobets](https://github.com/KIoppert)
 * [Dmitrii Kiselev](https://github.com/kanmir)
