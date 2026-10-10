@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, Optional
 
 import gitlab
@@ -417,10 +418,6 @@ class GitLabApi(RmsApi, AuthApi):
 
         try:
             project = self._gitlab.projects.get(gitlab_project_path)
-        except GitlabGetError:
-            logger.info("Project does not exist project_name=%s group=%s", project_name, project_group)
-            logger.debug("Gitlab error:", exc_info=True)
-            return False
         except GitlabAuthenticationError as e:
             logger.error(
                 "GitLab authentication error while checking project existence: %s. "
@@ -429,19 +426,16 @@ class GitLabApi(RmsApi, AuthApi):
                 exc_info=True,
             )
             raise RmsApiException(f"GitLab authentication failed: {str(e)}") from e
+        except GitlabGetError as e:
+            if e.response_code != HTTPStatus.NOT_FOUND:
+                raise
+            logger.info("Project %s exists=False", gitlab_project_path)
+            return False
 
-        project_path = project.path_with_namespace
-        logger.debug("Found project candidate path=%s", project_path)
-        if project_path == gitlab_project_path:
-            logger.info("Project exists project_name=%s group=%s", project_name, project_group)
-            return True
-
-        logger.info(
-            f"Project does not match the expected pattern:\n"
-            f"got project candidate path={project_path}\n"
-            f"awaited project_name={project_name} group={project_group}"
-        )
-        return False
+        # GitLab can redirect a path scheduled for deletion to its renamed project.
+        exists = project.path_with_namespace == gitlab_project_path
+        logger.info("Project %s exists=%s", gitlab_project_path, exists)
+        return exists
 
     def check_user_has_repo_access(
         self,

@@ -389,6 +389,10 @@ def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
+    existing_enrollment_redirect = _redirect_existing_enrollment(app, course)
+    if existing_enrollment_redirect is not None:
+        return existing_enrollment_redirect
+
     def render_create_project(error_message: str | None = None) -> str:
         return render_template(
             "create_project.html",
@@ -407,8 +411,6 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error("CSRF validation failed: %s", e)
         return render_create_project("CSRF Error")
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
-
     # Set user to be course admin if they provided course token as a secret
     is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
     if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
@@ -416,24 +418,76 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
 
-    # Create use if needed
+    error_message = _create_student_project(app, course)
+    if error_message is not None:
+        return render_create_project(error_message)
+
+    return redirect(url_for("course.course_page", course_name=course_name))
+
+
+def _redirect_existing_enrollment(app: CustomFlask, course: Course) -> ResponseReturnValue | None:
+    if app.debug or not app.storage_api.check_user_on_course(course.course_name, session["manytask"]["username"]):
+        return None
+    if not app.rms_api.check_project_exists(
+        project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
+    ):
+        return redirect(url_for("course.recover_project", course_name=course.course_name))
+    return redirect(url_for("course.course_page", course_name=course.course_name))
+
+
+def _create_student_project(app: CustomFlask, course: Course) -> str | None:
+    """Run the RMS setup used by both enrollment and repository recovery."""
     try:
+        rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
         app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
-        logger.error("Project creation failed for user %s: %s", rms_user.username, ex.error_message)
-        return render_create_project(ex.error_message)
+        logger.error("Project creation failed in course %s: %s", course.course_name, ex.error_message)
+        return ex.error_message
     except RmsApiException as ex:
-        # Every RMS backend raises RmsApiException, so this is the generic path: without it a
-        # failing RMS (quota exhausted, slug taken, API down) escapes as a bare 500. The raw
-        # message is backend-internal, so it goes to the log and the user gets a readable one.
-        logger.error("Project creation failed for user %s: %s", rms_user.username, ex)
-        return render_create_project(
+        logger.error("Project creation failed in course %s: %s", course.course_name, ex)
+        return (
             "Could not create your repository. This is not something you can fix yourself - "
             "please report it to the course staff."
         )
+    return None
 
-    return redirect(url_for("course.course_page", course_name=course_name))
+
+@course_bp.route("/recover_project", methods=["GET", "POST"])
+@requires_ready
+@requires_auth
+def recover_project(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
+    username = session["manytask"]["username"]
+
+    if not app.storage_api.check_user_on_course(course.course_name, username):
+        abort(HTTPStatus.FORBIDDEN)
+
+    if app.rms_api.check_project_exists(
+        project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
+    ):
+        return redirect(url_for("course.course_page", course_name=course_name))
+
+    error_message = None
+    if request.method == "POST":
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError as e:
+            app.logger.error("CSRF validation failed: %s", e)
+            error_message = "CSRF Error"
+        else:
+            error_message = _create_student_project(app, course)
+            if error_message is None:
+                return redirect(url_for("course.course_page", course_name=course_name))
+
+    return render_template(
+        "recover_project.html",
+        course_name=course.course_name,
+        course_favicon=app.favicon,
+        manytask_version=app.manytask_version,
+        error_message=error_message,
+    )
 
 
 @course_bp.route("/not_ready")

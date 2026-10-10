@@ -283,17 +283,37 @@ def test_check_project_exists(gitlab, mock_gitlab_student_project):
     exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert exists is True
-    mock_gitlab_instance.projects.get.assert_called_with(f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.get.assert_called_once_with(f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.list.assert_not_called()
 
 
 def test_check_project_not_exists(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("Not found")
+    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("Not found", response_code=404)
 
     exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_NAME)
 
     assert exists is False
-    mock_gitlab_instance.projects.get.assert_called_with(f"{TEST_GROUP_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.get.assert_called_once_with(f"{TEST_GROUP_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.list.assert_not_called()
+
+
+def test_check_project_scheduled_for_deletion_is_missing(gitlab, mock_gitlab_student_project):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_student_project.path_with_namespace += "-deletion_scheduled-28"
+    mock_gitlab_instance.projects.get.return_value = mock_gitlab_student_project
+
+    assert gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME) is False
+    mock_gitlab_instance.projects.get.assert_called_once_with(f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.list.assert_not_called()
+
+
+def test_check_project_api_failure_is_not_reported_as_missing(gitlab):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("GitLab unavailable", response_code=503)
+
+    with pytest.raises(GitlabGetError, match="GitLab unavailable"):
+        gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
 
 def test_create_project_existing_project(
