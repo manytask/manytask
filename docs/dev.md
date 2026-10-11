@@ -37,7 +37,7 @@ If `.env` is missing, the script creates it from `.env.example`.
 
 The script does the following:
 
-1. Starts the Docker containers (Manytask, Postgres, local GitLab).
+1. Starts the Docker containers (Manytask, Postgres, local GitLab). The local GitLab uses the same Postgres container as Manytask, with its own role and database.
 2. Waits for GitLab to become ready.
 3. Runs `scripts/setup_local_gitlab.sh`, which:
    - creates or reuses an admin Personal Access Token (`manytask-admin`),
@@ -89,6 +89,9 @@ Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fil
 | `POSTGRES_USER`          | Postgres username (e.g. `manytaskadmin`)                                                                          |
 | `POSTGRES_PASSWORD`      | Postgres password (e.g. `localdevdbpass`)                                                                         |
 | `POSTGRES_DB`            | Postgres database name (e.g. `manytask`)                                                                          |
+| `GITLAB_DB_USER`         | Postgres role used by the local GitLab (e.g. `gitlab`)                                                             |
+| `GITLAB_DB_PASSWORD`     | Password of that role (e.g. `localgitlabdbpass`)                                                                   |
+| `GITLAB_DB_NAME`         | Database of the local GitLab (e.g. `gitlab`)                                                                       |
 | `DATABASE_URL`           | Connection string used inside containers (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}`) |
 | `DATABASE_URL_EXTERNAL`  | Connection string used from the host (for Alembic etc.) (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}`) |
 | `DOCS_HOST`              | Host name for docs (not used in development, can be left blank)                                                    |
