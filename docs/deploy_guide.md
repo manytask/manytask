@@ -78,7 +78,7 @@ GITLAB_URL=https://gitlab.example.com
 GITLAB_ADMIN_TOKEN=your_gitlab_admin_token
 
 # Database
-DATABASE_URL=postgresql://user:password@postgres:5432/manytask
+DATABASE_URL=postgresql://user:password@pgbouncer:5432/manytask
 
 # Application
 APP_HOST=app.example.com
@@ -122,6 +122,12 @@ GRANT ALL PRIVILEGES ON DATABASE manytask TO adminmanytask;
 \c manytask
 GRANT ALL ON SCHEMA public TO adminmanytask;
 \q
+```
+
+The application connects to the database through PgBouncer (`pgbouncer` service) in transaction pooling mode, which keeps the number of PostgreSQL connections low regardless of the number of application workers. To inspect the pools, use the admin console:
+
+```bash
+sudo docker exec -e PGPASSWORD=$POSTGRES_PASSWORD manytask_pgbouncer psql -h 127.0.0.1 -U $POSTGRES_USER -d pgbouncer -c 'SHOW POOLS;'
 ```
 
 Restart the application to apply migrations:

@@ -93,6 +93,7 @@ Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fil
 | `GITLAB_DB_PASSWORD`     | Password of that role (e.g. `localgitlabdbpass`)                                                                   |
 | `GITLAB_DB_NAME`         | Database of the local GitLab (e.g. `gitlab`)                                                                       |
 | `DATABASE_URL`           | Connection string used inside containers (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}`) |
+| `DATABASE_URL`           | Connection string used inside containers (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}`) |
 | `DATABASE_URL_EXTERNAL`  | Connection string used from the host (for Alembic etc.) (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}`) |
 | `DOCS_HOST`              | Host name for docs (not used in development, can be left blank)                                                    |
 | `APP_HOST`               | Host name for the Manytask app (not used in development, can be left blank)                                        |
@@ -102,8 +103,10 @@ Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fil
 From the `manytask/` component directory, run:
 
 ```bash
-docker compose -f compose/docker-compose.development.yml up --build -d
+docker compose --env-file .env -f compose/docker-compose.development.yml up --build -d
 ```
+
+Compose must be given `.env` explicitly: when run from `manytask/` it otherwise looks for it next to the compose file and the variables used in the file (e.g. `${POSTGRES_USER}`) are not interpolated.
 
 Manytask becomes available on [http://localhost:8081/](http://localhost:8081/).
 
@@ -118,8 +121,8 @@ The bundled PostgreSQL service is reachable only on the Docker network; it is no
 First ensure PostgreSQL is running and inspect its recorded revision:
 
 ```bash
-docker compose -f compose/docker-compose.development.yml up -d postgres
-docker compose -f compose/docker-compose.development.yml exec postgres \
+docker compose --env-file .env -f compose/docker-compose.development.yml up -d postgres
+docker compose --env-file .env -f compose/docker-compose.development.yml exec postgres \
   sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version;"'
 ```
 
@@ -132,7 +135,7 @@ uv run alembic -c manytask/alembic.ini heads
 Upgrade the development database to the checkout's head:
 
 ```bash
-docker compose -f compose/docker-compose.development.yml run --rm --no-deps \
+docker compose --env-file .env -f compose/docker-compose.development.yml run --rm --no-deps \
   -e TARGET_REVISION=head manytask \
   python -c 'import os; from alembic import command; from alembic.config import Config; cfg = Config("/app/manytask/alembic.ini", config_args={"sqlalchemy.url": os.environ["DATABASE_URL"]}); command.upgrade(cfg, os.environ["TARGET_REVISION"])'
 ```
@@ -140,7 +143,7 @@ docker compose -f compose/docker-compose.development.yml run --rm --no-deps \
 To roll back, replace `TARGET_REVISION` with an exact, earlier revision that exists in `manytask/manytask/migrations/versions/`:
 
 ```bash
-docker compose -f compose/docker-compose.development.yml run --rm --no-deps \
+docker compose --env-file .env -f compose/docker-compose.development.yml run --rm --no-deps \
   -e TARGET_REVISION=<earlier_revision> manytask \
   python -c 'import os; from alembic import command; from alembic.config import Config; cfg = Config("/app/manytask/alembic.ini", config_args={"sqlalchemy.url": os.environ["DATABASE_URL"]}); command.downgrade(cfg, os.environ["TARGET_REVISION"])'
 ```
@@ -287,7 +290,7 @@ Start the full local stack:
 Check containers:
 
 ```bash
-docker compose -f compose/docker-compose.development.yml ps
+docker compose --env-file .env -f compose/docker-compose.development.yml ps
 ```
 
 Manytask logs:
@@ -305,13 +308,13 @@ docker logs -f manytask_gitlab
 Rebuild and restart only Manytask:
 
 ```bash
-docker compose -f compose/docker-compose.development.yml up --build --no-deps -d manytask
+docker compose --env-file .env -f compose/docker-compose.development.yml up --build --no-deps -d manytask
 ```
 
 Stop the stack:
 
 ```bash
-docker compose -f compose/docker-compose.development.yml down
+docker compose --env-file .env -f compose/docker-compose.development.yml down
 ```
 
 ## Troubleshooting
