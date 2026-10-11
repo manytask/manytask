@@ -138,6 +138,39 @@ sudo docker restart test-manytask
 
 ---
 
+## 7.1 GitLab with an External PostgreSQL (Optional)
+
+To keep one shared, backed-up Postgres for both Manytask and GitLab (so that `pg_dumpall` covers both), run GitLab without its bundled database. Create a separate role and database; the extensions must be created by a superuser in advance, since the role is not one:
+
+```sql
+CREATE ROLE gitlab WITH LOGIN PASSWORD 'gitlabpass';
+CREATE DATABASE gitlab OWNER gitlab;
+\c gitlab
+GRANT ALL ON SCHEMA public TO gitlab;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+CREATE EXTENSION IF NOT EXISTS amcheck;
+```
+
+`plpgsql` is built in. See the [GitLab requirements](https://docs.gitlab.com/install/requirements/#extensions) for the current list.
+
+Then in `/etc/gitlab/gitlab.rb` (or `GITLAB_OMNIBUS_CONFIG`):
+
+```ruby
+postgresql['enable'] = false
+gitlab_rails['db_adapter'] = 'postgresql'
+gitlab_rails['db_encoding'] = 'unicode'
+gitlab_rails['db_host'] = 'postgres'
+gitlab_rails['db_port'] = 5432
+gitlab_rails['db_database'] = 'gitlab'
+gitlab_rails['db_username'] = 'gitlab'
+gitlab_rails['db_password'] = 'gitlabpass'
+```
+
+The Postgres server must be reachable from the GitLab container (e.g. a shared Docker network). GitLab loads its schema (about 1000 tables) in a single transaction, so raise `max_locks_per_transaction` (e.g. to `256`) on the Postgres server, otherwise the first migration fails with `out of shared memory`. The `gitlab` data volume still holds repositories and configuration, so back it up as well.
+
+---
+
 ## 8. Instance Admin Setup
 
 ```bash
