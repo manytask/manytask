@@ -335,7 +335,10 @@ class SourceCraftApi(RmsApi):
         ci_config_path: str,
         protected_branches: list[ProtectedBranchSettings],
     ) -> bool:
-        logger.debug("SourceCraft does not support project CI/protected-branch settings yet")
+        logger.debug(
+            "SourceCraft: CI config path cannot be overridden and branch protection is declared "
+            "in .sourcecraft/branches.yaml in the repo; nothing to do"
+        )
         return False
 
     def create_project(
@@ -351,8 +354,9 @@ class SourceCraftApi(RmsApi):
         :param rms_user: User information
         :param course_students_group: repo slug prefix
         :param course_public_repo: public repo slug
-        :param ci_config_path: UNUSED, SourceCraft has no equivalent setting yet
-        :param protected_branches: UNUSED, SourceCraft has no equivalent setting yet
+        :param ci_config_path: UNUSED, SourceCraft has no way to override the CI config path
+        :param protected_branches: UNUSED here, SourceCraft branch protection is declared in
+            .sourcecraft/branches.yaml inside the repository (so it comes with the template repo), not via the API
         """
         logger.info(f"Creating repo for user {rms_user.username}")
 
