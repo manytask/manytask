@@ -497,7 +497,13 @@ def _create_student_project(app: CustomFlask, course: Course) -> str | None:
     """Run the RMS setup used by both enrollment and repository recovery."""
     try:
         rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
-        app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        app.rms_api.create_project(
+            rms_user,
+            course.gitlab_course_students_group,
+            course.gitlab_course_public_repo,
+            course.ci_config_path,
+            course.protected_branches,
+        )
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
         logger.error("Project creation failed in course %s: %s", course.course_name, ex.error_message)

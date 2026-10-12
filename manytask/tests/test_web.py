@@ -13,7 +13,7 @@ from sqlalchemy.exc import NoResultFound
 
 from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
-from manytask.course import CourseStatus
+from manytask.course import CourseStatus, ProtectedBranchSettings
 from manytask.database import UserIdentityConflictError
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
@@ -65,7 +65,17 @@ def app(mock_storage_api):
     app.register_blueprint(instance_admin_bp)
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
-    app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+    app.rms_api.create_project(
+        rms_user,
+        TEST_STUDENTS_GROUP,
+        TEST_PUBLIC_REPO,
+        f".gitlab-ci.yml@{TEST_PUBLIC_REPO}",
+        [
+            ProtectedBranchSettings(
+                name="main", push_access_level="developer", merge_access_level="developer", allow_force_push=True
+            )
+        ],
+    )
     app.auth_api = MockAuthApi()
     app.auth_api.user = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
     app.storage_api = mock_storage_api
@@ -321,10 +331,12 @@ def test_recovery_recreates_repository_from_current_public_repo(app, mock_course
         assert response.status_code == HTTPStatus.FOUND
         assert response.location == f"/{TEST_COURSE_NAME}/"
         create_repo.assert_called_once()
-        rms_user, students_group, public_repo = create_repo.call_args.args
+        rms_user, students_group, public_repo, ci_config_path, protected_branches = create_repo.call_args.args
         assert rms_user.username == TEST_USERNAME
         assert students_group == TEST_STUDENTS_GROUP
         assert public_repo == "course/current-public"
+        assert ci_config_path == mock_course.ci_config_path
+        assert protected_branches == mock_course.protected_branches
         sync_membership.assert_not_called()
         assert app.rms_api.check_project_exists(TEST_USERNAME, TEST_STUDENTS_GROUP)
         assert client.get(f"/{TEST_COURSE_NAME}/").status_code == HTTPStatus.OK
