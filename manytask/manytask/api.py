@@ -402,7 +402,7 @@ def _update_score(
             now=submit_time - extra_time,
             deadlines_type=course.deadlines_type,
         )
-        score = int(score * multiplier)
+        score = round(score * multiplier)
         logger.debug("Applied multiplier=%s, adjusted_score=%s", multiplier, score)
 
     return score if allow_reduction else max(old_score, score)

@@ -24,5 +24,5 @@ RUN apk add --no-cache \
 
 # Alpine's system Python is PEP 668 "externally managed". This purpose-built
 # image installs checker globally; pytest is supplied by the course pipeline.
-ARG CHECKER_PIP_SPEC="git+https://github.com/manytask/manytask.git@26.0.5#subdirectory=checker"
+ARG CHECKER_PIP_SPEC="git+https://github.com/manytask/manytask.git@26.0.6#subdirectory=checker"
 RUN pip3 install --break-system-packages "$CHECKER_PIP_SPEC" pytest

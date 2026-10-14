@@ -15,6 +15,7 @@ from manytask.abstract import CourseAccessUser, RmsUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.course import ProtectedBranchSettings
 from manytask.database import DataBaseApi
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -233,7 +234,17 @@ def authenticated_client(app, mock_gitlab_oauth):
         rms_user: RmsUser = app.rms_api.register_new_user(
             TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
         )
-        app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+        app.rms_api.create_project(
+            rms_user,
+            TEST_STUDENTS_GROUP,
+            TEST_PUBLIC_REPO,
+            f".gitlab-ci.yml@{TEST_PUBLIC_REPO}",
+            [
+                ProtectedBranchSettings(
+                    name="main", push_access_level="developer", merge_access_level="developer", allow_force_push=True
+                )
+            ],
+        )
 
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -593,6 +604,21 @@ def test_update_score_after_deadline(app):
     # Test with check_deadline=True
     result = _update_score(course, group, task, score, flags, old_score, submit_time, check_deadline=True)
     assert result == score * group.get_current_percent_multiplier(submit_time, course.deadlines_type)
+
+
+@pytest.mark.parametrize(("score", "expected_score"), [(13, 10), (11, 8)])
+def test_update_score_rounds_interpolated_deadline_score(mock_course, mock_task, score, expected_score):
+    start = datetime(2025, 9, 1)
+    group = ManytaskGroupConfig(
+        group="test",
+        start=start,
+        steps={0.5: start + timedelta(days=2)},
+        end=start + timedelta(days=4),
+    )
+    mock_course.deadlines_type = ManytaskDeadlinesType.INTERPOLATE
+    submit_time = start + timedelta(days=1)
+
+    assert _update_score(mock_course, group, mock_task, score, "", 0, submit_time) == expected_score
 
 
 def test_update_config_success(app):

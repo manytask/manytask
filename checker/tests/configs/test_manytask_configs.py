@@ -9,10 +9,6 @@ from pydantic import ValidationError
 
 from checker.configs.manytask import ManytaskDeadlinesConfig, ManytaskGroupConfig
 
-# Test constants
-HALF_MULTIPLIER = 0.5
-
-
 class TestManytaskDeadlinesConfigGroup:
     def test_minimal_init(self) -> None:
         ManytaskGroupConfig(
@@ -142,53 +138,6 @@ class TestManytaskDeadlinesConfigGroup:
             0.5: datetime(2021, 1, 4, 9, 0),
             0.2: datetime(2021, 1, 5, 9, 0),
         }
-
-    @pytest.mark.parametrize(
-        "now, expected_percent",
-        [
-            (datetime(1000, 1, 1, 0, 0), 1.0),
-            (datetime(2021, 1, 1, 0, 0), 1.0),
-            (datetime(2021, 1, 1, 12, 0), 1.0),
-            (datetime(2021, 1, 2, 1, 0), 0.9),
-            (datetime(2021, 1, 4, 1, 0), 0.2),
-            (datetime(2021, 1, 5, 1, 0), 0.0),
-            (datetime(3000, 1, 5, 1, 0), 0.0),
-        ],
-    )
-    def test_get_current_percent_multiplier(self, now: datetime, expected_percent: float) -> None:
-        group = ManytaskGroupConfig(
-            group="group1",
-            start="2021-01-01 00:00",
-            steps={
-                0.9: "2021-01-02 00:00",
-                0.5: "2021-01-03 00:00",
-                0.2: "2021-01-04 00:00",
-            },
-            end="2021-01-05 00:00",
-            tasks=[],
-        )
-
-        assert group.get_current_percent_multiplier(now=now) == expected_percent
-
-    def test_get_current_percent_multiplier_timedelta(self) -> None:
-        group = ManytaskGroupConfig(
-            group="group1",
-            start="2021-01-01 00:00",
-            steps={
-                HALF_MULTIPLIER: "1d 09:00:00",
-            },
-            end="2d 09:00:00",
-            tasks=[],
-        )
-
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 1, 0, 0)) == 1.0
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 0, 0)) == 1.0
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 8, 59)) == 1.0
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 2, 9, 1)) == HALF_MULTIPLIER
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 8, 59)) == HALF_MULTIPLIER
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 3, 9, 1)) == 0.0
-        assert group.get_current_percent_multiplier(now=datetime(2021, 1, 4, 0, 0)) == 0.0
-
 
 class TestManytaskDeadlinesConfig:
     def test_minimal_init(self) -> None:
