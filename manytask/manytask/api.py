@@ -410,7 +410,7 @@ def _update_score(
 
 @bp.get("/healthcheck")
 @requires_ready
-def healthcheck() -> ResponseReturnValue:
+def healthcheck(course_name: str) -> ResponseReturnValue:
     return "OK", HTTPStatus.OK
 
 
