@@ -1,0 +1,178 @@
+# SourceCraft CI for the private course repository. Replace the example
+# connection, registry, repository, and Manytask URL before enabling it.
+tokens:
+  SERVICE_CONNECTION:
+    service_connection: your-course-service-connection
+    scope: repo
+
+cubes:
+  - name: docker-login
+    script:
+      - |
+        set -eu
+        printf '%s' "$SOURCECRAFT_TOKEN" | docker login \
+          --username iam --password-stdin pkg.sourcecraft.tech
+
+  - name: get-iam-token
+    env:
+      ID_TOKEN: ${{ tokens.SERVICE_CONNECTION.id_token }}
+      YC_SA_ID: ${{ tokens.SERVICE_CONNECTION.service_account_id }}
+    image: cr.yandex/sourcecraft/yc-iam:latest
+
+workflows:
+  # Invoked by the public/student repository through shared-workflows.
+  grade:
+    settings:
+      shared: true
+    inputs:
+      HTTPS_CLONE_URL:
+        type: string
+        required: true
+      REF_NAME:
+        type: string
+        required: true
+      STUDENT_USERNAME:
+        type: string
+        required: true
+    tasks:
+      - name: grade
+        image:
+          name: pkg.sourcecraft.tech/cr/your-organization/your-registry/your-course/testenv-image:latest
+          username: iam
+          password: ${{ env.SOURCECRAFT_TOKEN }}
+        cubes:
+          - uses: get-iam-token
+          - name: grade
+            env:
+              IAM_TOKEN: ${{ cubes.get-iam-token.outputs.IAM_TOKEN }}
+              MANYTASK_TOKEN: ${{ secrets.MANYTASK_TOKEN }}
+              CLONE_URL: ${{ inputs.HTTPS_CLONE_URL }}
+              REF_NAME: ${{ inputs.REF_NAME }}
+              STUDENT_USERNAME: ${{ inputs.STUDENT_USERNAME }}
+            script:
+              - |
+                set -eu
+                cd "$SOURCECRAFT_WORKSPACE"
+                export CI_PIPELINE_CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                git clone --branch "$REF_NAME" \
+                  "https://git:${IAM_TOKEN}@${CLONE_URL#https://git@}" student_repo
+                if checker grade student_repo /opt/course > output.txt 2>&1; then
+                  cat output.txt
+                else
+                  result=$?
+                  cat output.txt
+                  exit "$result"
+                fi
+            artifacts:
+              paths:
+                - output.txt
+
+  # Build the same two-stage testenv as the GitLab pipeline. Only the
+  # export-private result is present in the final image.
+  verify-and-build:
+    tasks:
+      - name: verify-and-build
+        env:
+          REGISTRY: pkg.sourcecraft.tech/cr/your-organization/your-registry/your-course
+        cubes:
+          - uses: docker-login
+          - name: build
+            script:
+              - |
+                set -eu
+                cd "$SOURCECRAFT_WORKSPACE"
+                tag="$(printf '%s' "$SOURCECRAFT_COMMIT_REF_NAME" | tr '/:' '--')"
+                base_image="$REGISTRY/ci-base:$tag"
+                testenv_image="$REGISTRY/testenv-image:$tag"
+                docker build --tag "$base_image" --file base.docker .
+                docker build --tag "course-check:$tag" \
+                  --build-arg "BASE_IMAGE=$base_image" --file - . <<'DOCKERFILE'
+                ARG BASE_IMAGE
+                FROM ${BASE_IMAGE}
+                COPY . /course
+                WORKDIR /course
+                RUN checker validate . && checker check . .
+                DOCKERFILE
+                docker build --tag "$testenv_image" --file testenv.docker \
+                  --build-arg "BASE_IMAGE=$base_image" .
+                docker push "$base_image"
+                docker push "$testenv_image"
+
+  # Run these three deployment workflows for the default branch after a
+  # successful verify-and-build run.
+  deploy-docker:
+    tasks:
+      - name: deploy-docker
+        env:
+          REGISTRY: pkg.sourcecraft.tech/cr/your-organization/your-registry/your-course
+        cubes:
+          - uses: docker-login
+          - name: deploy
+            script:
+              - |
+                set -eu
+                cd "$SOURCECRAFT_WORKSPACE"
+                tag="$(printf '%s' "$SOURCECRAFT_COMMIT_REF_NAME" | tr '/:' '--')"
+                docker pull "$REGISTRY/ci-base:$tag"
+                docker pull "$REGISTRY/testenv-image:$tag"
+                docker tag "$REGISTRY/ci-base:$tag" "$REGISTRY/ci-base:latest"
+                docker tag "$REGISTRY/testenv-image:$tag" "$REGISTRY/testenv-image:latest"
+                docker push "$REGISTRY/ci-base:latest"
+                docker push "$REGISTRY/testenv-image:latest"
+
+  deploy-public:
+    tasks:
+      - name: deploy-public
+        image:
+          name: pkg.sourcecraft.tech/cr/your-organization/your-registry/your-course/ci-base:latest
+          username: iam
+          password: ${{ env.SOURCECRAFT_TOKEN }}
+        env:
+          PUBLIC_REPO_URL: https://git.sourcecraft.dev/your-organization/your-public-repo.git
+        cubes:
+          - uses: get-iam-token
+          - name: deploy
+            env:
+              IAM_TOKEN: ${{ cubes.get-iam-token.outputs.IAM_TOKEN }}
+            script:
+              - |
+                set -eu
+                cd "$SOURCECRAFT_WORKSPACE"
+                export_dir="$(mktemp -d)"
+                git clone "https://git:${IAM_TOKEN}@${PUBLIC_REPO_URL#https://}" "$export_dir"
+                checker export . "$export_dir"
+                mkdir -p "$export_dir/.sourcecraft"
+                cp .sourcecraft.public/ci.yaml "$export_dir/.sourcecraft/ci.yaml"
+                cd "$export_dir"
+                git config user.email "ci@manytask.org"
+                git config user.name "Manytask CI"
+                git add -A
+                if ! git diff --cached --quiet; then
+                  git commit -m "chore(auto): export new tasks"
+                  git push origin HEAD:main
+                fi
+
+  deploy-manytask:
+    tasks:
+      - name: deploy-manytask
+        env:
+          MANYTASK_API: https://app.manytask.org/api/your-course
+          MANYTASK_TOKEN: ${{ secrets.MANYTASK_TOKEN }}
+        cubes:
+          - name: deploy
+            image: curlimages/curl:latest
+            script:
+              - |
+                set -eu
+                cd "$SOURCECRAFT_WORKSPACE"
+                curl --fail --data-binary "@.manytask.yml" \
+                  -H "Authorization: Bearer $MANYTASK_TOKEN" \
+                  -H "Content-Type: application/x-yaml" \
+                  "$MANYTASK_API/update_config"
+                curl --fail -X POST \
+                  -H "Authorization: Bearer $MANYTASK_TOKEN" \
+                  "$MANYTASK_API/update_cache"
+
+on:
+  push:
+    - workflows: verify-and-build

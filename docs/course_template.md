@@ -46,6 +46,8 @@ course-template/
 ├── .manytask.yml         # settings + deadlines schedule (one group per language)
 ├── .gitlab-ci.yml        # CI for grading student submissions (uses the testenv image)
 ├── .releaser-ci.yml      # CI: build+push testenv image, check, export private → public (not exported)
+├── .sourcecraft/ci.yaml  # private SourceCraft workflows and shared grade workflow
+├── .sourcecraft.public/ci.yaml # installed as .sourcecraft/ci.yaml in the public repo
 ├── .gitignore
 ├── base.docker           # checker + Python/C++/Go/Rust/Bash toolchains
 ├── testenv.docker        # two-stage build; final image has export-private output at /opt/course
@@ -86,7 +88,7 @@ carries a copy of the private repository — including the private tests — and
 checker. The same image runs `checker check` in the private repo and `checker grade`
 in student repos.
 
-The template wires this in two pipelines:
+The template wires this in two GitLab pipelines:
 
 1. **Private repo (`.releaser-ci.yml`)** — on every push:
    - **`verify`** validates the course configuration. **`build-base`** then publishes
@@ -158,6 +160,29 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
 
 6. Ask a Manytask admin to register your course (slug, public repo URL, students group URL).
 7. Push to `main`, then run the three manual deploy jobs to publish the image, export the public repo, and update Manytask.
+
+## SourceCraft CI
+
+The template also includes private SourceCraft workflows in
+`course-template/.sourcecraft/ci.yaml` and a public/student workflow in
+`course-template/.sourcecraft.public/ci.yaml`.
+The private `verify-and-build` workflow runs on pushes and uses `base.docker` and
+`testenv.docker` to validate and check the course, then publish branch-tagged
+images. After it passes on the default branch, run `deploy-docker` to publish
+`:latest`, `deploy-public` to export the course, and `deploy-manytask` to update
+the course configuration. The public CI file calls the private shared `grade`
+workflow for student pushes; the grade job runs `checker grade` against the
+published testenv image's `/opt/course` reference.
+
+`checker export` keeps both SourceCraft directories private. During
+`deploy-public`, CI copies `.sourcecraft.public/ci.yaml` into the exported
+repository as `.sourcecraft/ci.yaml`. This makes the student workflow available
+without publishing the private build and deployment workflow.
+
+Set the service connection, registry paths, public repository URL, Manytask API
+URL, private repository slug, and student repository name prefix in the two CI
+files before enabling them. Store `MANYTASK_TOKEN` as a SourceCraft secret.
+The template's `README.md` lists each field and the deployment order.
 
 Full step-by-step instructions live in the template's own
 [`README.md`](https://github.com/manytask/manytask/blob/main/course-template/README.md).

@@ -45,9 +45,14 @@ jobs:
         run: |
           rm -rf /tmp/ct-export && mkdir -p /tmp/ct-export
           uv run checker export ../course-template /tmp/ct-export
-          if find /tmp/ct-export -type f \( -name '*private*' -o -name '.releaser-ci.yml' \) | grep -q .; then
+          if find /tmp/ct-export -type f \( -name '*private*' -o -name '.releaser-ci.yml' \) | grep -q . \
+            || test -e /tmp/ct-export/.sourcecraft \
+            || test -e /tmp/ct-export/.sourcecraft.public; then
             echo "::error::private files leaked into export"; exit 1
           fi
+          mkdir -p /tmp/ct-export/.sourcecraft
+          cp ../course-template/.sourcecraft.public/ci.yaml /tmp/ct-export/.sourcecraft/ci.yaml
+          test -s /tmp/ct-export/.sourcecraft/ci.yaml
           echo "clean export"
 
       - name: Build testenv and assert it has no raw private checkout
