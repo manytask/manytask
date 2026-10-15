@@ -5,7 +5,7 @@ const {test} = require('node:test');
 const vm = require('node:vm');
 
 const template = readFileSync(path.join(__dirname, '../../manytask/templates/create_course.html'), 'utf8');
-const source = template.match(/<script>([\s\S]*?)<\/script>/)[1];
+const source = template.match(/<script>([\s\S]*?)<\/script>/i)[1];
 
 function element(value = '') {
     const target = new EventTarget();
