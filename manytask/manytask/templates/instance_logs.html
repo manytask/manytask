@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Instance logs{% endblock %}
+
+{% block additional_styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/instance_admin_panel.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/instance_logs.css') }}">
+{% endblock %}
+
+{% block body %}
+<main class="admin-container" id="instance-logs" data-url="{{ url_for('instance_admin.instance_logs_data') }}"
+      data-download-url="{{ url_for('instance_admin.instance_logs_download') }}">
+    <div class="admin-header mb-4">
+        <h1>Instance logs</h1>
+        <a href="{{ url_for('instance_admin.instance_admin_panel') }}" class="btn btn-outline-secondary">Back to admin panel</a>
+    </div>
+    <p>Recent lines (up to 1 MiB) from this Manytask instance. Updates every 3 seconds.
+        Application errors appear in Application; Server errors contains Gunicorn errors.</p>
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+        <label for="log-source">Log</label>
+        <select id="log-source" class="form-select w-auto">
+            <option value="general">Application</option>
+            <option value="error">Server errors</option>
+            <option value="access">HTTP access</option>
+        </select>
+        <label for="log-lines">Lines</label>
+        <select id="log-lines" class="form-select w-auto">
+            {% for count in line_options %}
+            <option value="{{ count }}"{% if count == default_lines %} selected{% endif %}>{{ count }}</option>
+            {% endfor %}
+        </select>
+        <a id="log-download" href="{{ url_for('instance_admin.instance_logs_download', source='general') }}"
+           class="btn btn-outline-secondary" download>Download full log</a>
+        <button type="button" id="log-pause" class="btn btn-outline-primary" aria-pressed="false">Pause updates</button>
+        <label><input type="checkbox" id="log-follow" checked> Auto-scroll</label>
+        <span id="log-status" role="status" aria-live="polite">Loading…</span>
+    </div>
+    <pre id="log-output" tabindex="0" aria-label="Log entries"></pre>
+    <p class="text-muted mt-2">The viewer and download include the current file and retained rotated files.
+        Downloads contain all retained entries for the selected log, regardless of the line limit.
+        Database, GitLab, and other service logs are available separately.</p>
+</main>
+<script src="{{ url_for('static', filename='js/instance-logs.js') }}" defer></script>
+{% endblock %}

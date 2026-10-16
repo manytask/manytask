@@ -18,6 +18,7 @@ from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
+from .log_viewer import LOG_BACKUP_COUNT, LOG_FILES
 from .utils.rms_settings import schedule_rms_settings_reconcile
 
 MAX_AGE_IN_SECONDS = 86400
@@ -288,25 +289,25 @@ def _logging_config(app: CustomFlask) -> dict[str, Any]:
             "general_file": {
                 "class": "logging.handlers.RotatingFileHandler",
                 "formatter": "default",
-                "filename": "/var/log/general.log",
+                "filename": str(LOG_FILES["general"]),
                 "maxBytes": 10 * 1000,
-                "backupCount": 2,
+                "backupCount": LOG_BACKUP_COUNT,
                 "delay": "True",
             },
             "error_file": {
                 "class": "logging.handlers.RotatingFileHandler",
                 "formatter": "default",
-                "filename": "/var/log/error.log",
+                "filename": str(LOG_FILES["error"]),
                 "maxBytes": 10 * 1000,
-                "backupCount": 2,
+                "backupCount": LOG_BACKUP_COUNT,
                 "delay": "True",
             },
             "access_file": {
                 "class": "logging.handlers.RotatingFileHandler",
                 "formatter": "access",
-                "filename": "/var/log/access.log",
+                "filename": str(LOG_FILES["access"]),
                 "maxBytes": 10 * 1000,
-                "backupCount": 2,
+                "backupCount": LOG_BACKUP_COUNT,
                 "delay": "True",
             },
         },
