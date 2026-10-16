@@ -15,6 +15,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -43,7 +44,14 @@ from .auth import (
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .database import UNBOUND_INSTANCE_ADMIN_AUTH_ID, UNBOUND_INSTANCE_ADMIN_RMS_ID, UserIdentityConflictError
-from .log_viewer import LOG_FILES, MAX_LOG_LINES, read_log_tail
+from .log_viewer import (
+    DEFAULT_LOG_LINES,
+    LOG_FILES,
+    LOG_LINE_OPTIONS,
+    MAX_LOG_LINES,
+    create_log_download,
+    read_log_tail,
+)
 from .main import CustomFlask
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
@@ -69,7 +77,11 @@ instance_admin_bp = Blueprint("instance_admin", __name__, url_prefix="/instance_
 @instance_admin_bp.before_request
 def protect_debug_logs() -> None:
     # Debug mode bypasses authentication elsewhere and only logs to the console.
-    if current_app.debug and request.endpoint in {"instance_admin.instance_logs", "instance_admin.instance_logs_data"}:
+    if current_app.debug and request.endpoint in {
+        "instance_admin.instance_logs",
+        "instance_admin.instance_logs_data",
+        "instance_admin.instance_logs_download",
+    }:
         abort(HTTPStatus.FORBIDDEN)
 
 
@@ -918,7 +930,9 @@ def instance_admin_panel() -> ResponseReturnValue:
 @instance_admin_bp.get("/logs")
 @role_required(["instance_admin"])
 def instance_logs() -> ResponseReturnValue:
-    response = make_response(render_template("instance_logs.html", max_lines=MAX_LOG_LINES))
+    response = make_response(
+        render_template("instance_logs.html", default_lines=DEFAULT_LOG_LINES, line_options=LOG_LINE_OPTIONS)
+    )
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -931,12 +945,47 @@ def instance_logs_data() -> ResponseReturnValue:
     if source not in LOG_FILES:
         return jsonify(error="Unknown log source."), HTTPStatus.BAD_REQUEST, headers
     try:
-        content = read_log_tail(source)
+        lines = int(request.args.get("lines", str(DEFAULT_LOG_LINES)))
+        if not 1 <= lines <= MAX_LOG_LINES:
+            raise ValueError
+    except ValueError:
+        return jsonify(error=f"Line count must be between 1 and {MAX_LOG_LINES}."), HTTPStatus.BAD_REQUEST, headers
+    try:
+        content = read_log_tail(source, lines)
     except FileNotFoundError:
         return jsonify(content="", message="No log file yet. Waiting for log entries."), HTTPStatus.OK, headers
     except OSError:
         return jsonify(error="This log is currently unavailable."), HTTPStatus.SERVICE_UNAVAILABLE, headers
     return jsonify(content=content, message=""), HTTPStatus.OK, headers
+
+
+@instance_admin_bp.get("/logs/download")
+@role_required(["instance_admin"])
+def instance_logs_download() -> ResponseReturnValue:
+    source = request.args.get("source", "general")
+    if source not in LOG_FILES:
+        abort(HTTPStatus.BAD_REQUEST)
+    try:
+        snapshot = create_log_download(source)
+    except FileNotFoundError:
+        abort(HTTPStatus.NOT_FOUND, description="No log files yet.")
+    except OSError:
+        abort(HTTPStatus.SERVICE_UNAVAILABLE, description="This log is currently unavailable.")
+    try:
+        response = send_file(
+            snapshot,
+            mimetype="text/plain",
+            as_attachment=True,
+            download_name=f"manytask-{source}.log",
+            conditional=False,
+        )
+    except BaseException:
+        snapshot.close()
+        raise
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.call_on_close(snapshot.close)
+    return response
 
 
 @root_bp.route("/update_profile", methods=["POST"])

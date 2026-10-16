@@ -7,17 +7,18 @@ const vm = require('node:vm');
 const script = fs.readFileSync(path.join(__dirname, '../../manytask/static/js/instance-logs.js'), 'utf8');
 
 function setup(fetch) {
-    const elements = Object.fromEntries(['instance-logs', 'log-source', 'log-pause', 'log-follow', 'log-status', 'log-output'].map(id => [id, {
+    const elements = Object.fromEntries(['instance-logs', 'log-source', 'log-lines', 'log-download', 'log-pause', 'log-follow', 'log-status', 'log-output'].map(id => [id, {
         textContent: '',
         value: 'general',
         checked: true,
-        dataset: {url: '/instance_admin/logs/data'},
+        dataset: {url: '/instance_admin/logs/data', downloadUrl: '/instance_admin/logs/download'},
         scrollHeight: 300,
         scrollTop: 0,
         listeners: {},
         addEventListener(event, callback) { this.listeners[event] = callback; },
         setAttribute(name, value) { this[name] = value; },
     }]));
+    elements['log-lines'].value = '200';
     const timers = new Map();
     let timerId = 0;
     const document = {hidden: false, getElementById: id => elements[id], addEventListener() {}};
@@ -55,8 +56,23 @@ test('refreshes as text, follows, pauses, and resumes with the selected source',
     elements['log-pause'].listeners.click();
     await settle();
     assert.equal(requests.length, 2);
-    assert.match(requests[1], /source=access$/);
+    assert.match(requests[1], /source=access&lines=200$/);
+    assert.match(elements['log-download'].href, /\/logs\/download\?source=access$/);
     assert.equal(elements['log-output'].scrollTop, 25);
+});
+
+test('changing the line count refreshes without limiting the download', async () => {
+    const requests = [];
+    const {elements} = setup(async url => {
+        requests.push(url.toString());
+        return response('entries');
+    });
+    await settle();
+    elements['log-lines'].value = '5000';
+    elements['log-lines'].listeners.change();
+    await settle();
+    assert.match(requests[1], /source=general&lines=5000$/);
+    assert.match(elements['log-download'].href, /download\?source=general$/);
 });
 
 test('discards a response from a previous log source', async () => {

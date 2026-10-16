@@ -1,6 +1,8 @@
 (() => {
     const root = document.getElementById('instance-logs');
     const source = document.getElementById('log-source');
+    const lines = document.getElementById('log-lines');
+    const download = document.getElementById('log-download');
     const pause = document.getElementById('log-pause');
     const follow = document.getElementById('log-follow');
     const status = document.getElementById('log-status');
@@ -8,6 +10,12 @@
     let paused = false;
     let timer;
     let controller;
+
+    function updateDownload() {
+        const url = new URL(root.dataset.downloadUrl, window.location.origin);
+        url.searchParams.set('source', source.value);
+        download.href = url.toString();
+    }
 
     async function refresh() {
         clearTimeout(timer);
@@ -19,6 +27,7 @@
         try {
             const url = new URL(root.dataset.url, window.location.origin);
             url.searchParams.set('source', source.value);
+            url.searchParams.set('lines', lines.value);
             const response = await fetch(url, {cache: 'no-store', signal: request.signal});
             if (response.redirected || response.status === 401 || response.status === 403) {
                 paused = true;
@@ -48,7 +57,12 @@
     }
 
     source.addEventListener('change', () => {
+        updateDownload();
         output.textContent = '';
+        status.textContent = paused ? 'Updates paused.' : 'Loading…';
+        refresh();
+    });
+    lines.addEventListener('change', () => {
         status.textContent = paused ? 'Updates paused.' : 'Loading…';
         refresh();
     });
@@ -64,5 +78,6 @@
         clearTimeout(timer);
         controller?.abort();
     });
+    updateDownload();
     refresh();
 })();

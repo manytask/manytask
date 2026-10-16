@@ -1,5 +1,6 @@
 import os
 from http import HTTPStatus
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -53,7 +54,7 @@ from tests.helpers import (
 )
 
 
-@pytest.mark.parametrize("path", ["/instance_admin/logs", "/instance_admin/logs/data"])
+@pytest.mark.parametrize("path", ["/instance_admin/logs", "/instance_admin/logs/data", "/instance_admin/logs/download"])
 @pytest.mark.parametrize("access", ["anonymous", "student", "course_admin", "namespace_admin", "instance_admin"])
 def test_instance_logs_access(app, mock_gitlab_oauth, path: str, access: str) -> None:
     app.oauth = mock_gitlab_oauth
@@ -65,7 +66,10 @@ def test_instance_logs_access(app, mock_gitlab_oauth, path: str, access: str) ->
         with patch(
             "manytask.utils.flask.check_if_user_has_namespaces_to_admin", return_value=access == "namespace_admin"
         ):
-            with patch("manytask.web.read_log_tail", return_value="test entry") as read:
+            with (
+                patch("manytask.web.read_log_tail", return_value="test entry") as read,
+                patch("manytask.web.create_log_download", return_value=BytesIO(b"test entry")) as download,
+            ):
                 response = client.get(path)
         expected = (
             HTTPStatus.FOUND
@@ -75,17 +79,52 @@ def test_instance_logs_access(app, mock_gitlab_oauth, path: str, access: str) ->
         assert response.status_code == expected
         if access != "instance_admin":
             read.assert_not_called()
+            download.assert_not_called()
         else:
             assert response.headers["Cache-Control"] == "no-store"
-            assert b"test entry" in response.data if path.endswith("data") else b"log-source" in response.data
+            assert b"log-source" in response.data if path == "/instance_admin/logs" else b"test entry" in response.data
+        response.close()
 
 
-@pytest.mark.parametrize("path", ["/instance_admin/logs", "/instance_admin/logs/data"])
+@pytest.mark.parametrize("path", ["/instance_admin/logs", "/instance_admin/logs/data", "/instance_admin/logs/download"])
 def test_debug_mode_does_not_expose_logs(app, path: str) -> None:
     app.debug = True
-    with app.test_client() as client, patch("manytask.web.read_log_tail") as read:
+    with (
+        app.test_client() as client,
+        patch("manytask.web.read_log_tail") as read,
+        patch("manytask.web.create_log_download") as download,
+    ):
         assert client.get(path).status_code == HTTPStatus.FORBIDDEN
         read.assert_not_called()
+        download.assert_not_called()
+
+
+def test_log_line_count_and_full_download(app, mock_gitlab_oauth, tmp_path: Path, monkeypatch) -> None:
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.stored_user.instance_admin = True
+    path = tmp_path / "access.log"
+    monkeypatch.setitem(LOG_FILES, "access", path)
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        assert client.get("/instance_admin/logs/download?source=access").status_code == HTTPStatus.NOT_FOUND
+        path.write_text("".join(f"entry {number}\n" for number in range(1000)))
+        path.with_name("access.log.1").write_text("previous file\n")
+        response = client.get("/instance_admin/logs/data?source=access&lines=500")
+        assert response.json["content"].splitlines() == [f"entry {number}" for number in range(500, 1000)]
+        for invalid in ("0", "-1", "5001", "abc", ""):
+            assert client.get(f"/instance_admin/logs/data?lines={invalid}").status_code == HTTPStatus.BAD_REQUEST
+        response = client.get("/instance_admin/logs/download?source=access&lines=1")
+        assert response.status_code == HTTPStatus.OK
+        assert response.data == b"previous file\n" + path.read_bytes()
+        assert response.mimetype == "text/plain"
+        assert response.headers["Content-Disposition"] == "attachment; filename=manytask-access.log"
+        assert response.headers["Cache-Control"] == "no-store"
+        response.close()
+        assert client.get("/instance_admin/logs/download?source=../../etc/passwd").status_code == HTTPStatus.BAD_REQUEST
+        with patch("manytask.web.create_log_download", side_effect=PermissionError("private path")):
+            response = client.get("/instance_admin/logs/download?source=access")
+        assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+        assert b"private path" not in response.data
 
 
 def test_instance_logs_data_updates_and_errors(app, mock_gitlab_oauth, tmp_path: Path, monkeypatch) -> None:
