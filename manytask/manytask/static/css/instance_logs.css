@@ -1,0 +1,13 @@
+#log-output {
+    height: 65vh;
+    min-height: 20rem;
+    overflow: auto;
+    padding: 1rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    background: #151a23;
+    color: #e1e7ef;
+    font-size: .85rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
