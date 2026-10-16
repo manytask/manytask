@@ -790,7 +790,8 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 
         if app.storage_api.edit_course(updated_settings):
             logger.info("Successfully updated course settings for: %s", sanitize_log_data(course_name))
-            return redirect(url_for("course.course_page", course_name=course_name))
+            flash("Course changes saved successfully.", category="success")
+            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         return render_template(
             "edit_course.html",
