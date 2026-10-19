@@ -808,38 +808,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
     )
 
 
-@instance_admin_bp.route("/", methods=["GET"])
-@requires_auth
-def instance_admin_index() -> ResponseReturnValue:
-    """Root instance admin page that redirects based on user role.
-
-    Instance Admin -> /instance_admin/panel
-    Namespace Admin -> /
-    """
-    from .utils.flask import check_if_current_user_is_instance_admin, check_if_user_has_namespaces_to_admin
-
-    app: CustomFlask = current_app  # type: ignore
-
-    if app.debug:
-        return redirect(url_for("instance_admin.instance_admin_panel"))
-
-    username = session["manytask"]["username"]
-    is_instance_admin = check_if_current_user_is_instance_admin(app)
-
-    if is_instance_admin:
-        logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
-        return redirect(url_for("instance_admin.instance_admin_panel"))
-
-    is_namespace_admin = check_if_user_has_namespaces_to_admin(app)
-
-    if is_namespace_admin:
-        logger.info("Namespace Admin %s accessing instance admin root, redirecting to main page", username)
-        return redirect(url_for("root.index"))
-
-    logger.warning("User %s attempted to access instance admin without privileges", username)
-    abort(HTTPStatus.FORBIDDEN)
-
-
 @instance_admin_bp.route("/panel", methods=["GET", "POST"])
 @role_required(["instance_admin"])
 def instance_admin_panel() -> ResponseReturnValue:
