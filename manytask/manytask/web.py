@@ -458,6 +458,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
+            can_edit_course=app.debug
+            or app.storage_api.check_if_course_admin(course.course_name, session["manytask"]["username"]),
         )
 
     if request.method == "GET":
