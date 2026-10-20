@@ -95,14 +95,22 @@ services:
                 gitlab_kas['enable'] = false
                 puma['worker_processes'] = 0
                 sidekiq['concurrency'] = 10
-                postgresql['enable'] = false
-                gitlab_rails['db_adapter'] = 'postgresql'
-                gitlab_rails['db_encoding'] = 'unicode'
-                gitlab_rails['db_host'] = 'postgres'
-                gitlab_rails['db_port'] = 5432
-                gitlab_rails['db_database'] = ENV['GITLAB_DB_NAME']
-                gitlab_rails['db_username'] = ENV['GITLAB_DB_USER']
-                gitlab_rails['db_password'] = ENV['GITLAB_DB_PASSWORD']
+                # Existing installations keep their embedded database until explicitly migrated.
+                db_keys = %w[GITLAB_DB_NAME GITLAB_DB_USER GITLAB_DB_PASSWORD]
+                db_configured = db_keys.map { |key| !ENV.fetch(key, '').empty? }
+                if db_configured.any? && !db_configured.all?
+                  raise 'Set all three GITLAB_DB_NAME, GITLAB_DB_USER, GITLAB_DB_PASSWORD, or leave all unset'
+                end
+                postgresql['enable'] = !db_configured.all?
+                if db_configured.all?
+                  gitlab_rails['db_adapter'] = 'postgresql'
+                  gitlab_rails['db_encoding'] = 'unicode'
+                  gitlab_rails['db_host'] = 'postgres'
+                  gitlab_rails['db_port'] = 5432
+                  gitlab_rails['db_database'] = ENV['GITLAB_DB_NAME']
+                  gitlab_rails['db_username'] = ENV['GITLAB_DB_USER']
+                  gitlab_rails['db_password'] = ENV['GITLAB_DB_PASSWORD']
+                end
         ports:
             - "8929:8929"    # HTTP web UI
             - "5050:5050"    # Container registry
