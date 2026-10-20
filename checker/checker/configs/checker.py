@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from pathlib import Path
 from typing import Optional, Union
 
 from pydantic import AnyUrl, Field, RootModel, ValidationError, field_validator
@@ -165,6 +166,9 @@ class CheckerSubConfig(CustomBaseModel, YamlLoaderMixin["CheckerSubConfig"]):
 
     # Note: use Optional[...] instead of ... | None as pydantic does not support | in older python versions
     structure: Optional[CheckerStructureConfig] = None
+    # Task-folder-relative globs. None keeps the legacy structure-based merge;
+    # a list rebuilds the task from reference and takes only these student files.
+    editable_patterns: Optional[list[str]] = None
     parameters: Optional[CheckerParametersConfig] = None
     task_pipeline: Optional[list[PipelineStageConfig]] = None
     report_pipeline: Optional[list[PipelineStageConfig]] = None
@@ -172,6 +176,20 @@ class CheckerSubConfig(CustomBaseModel, YamlLoaderMixin["CheckerSubConfig"]):
     @classmethod
     def default(cls) -> "CheckerSubConfig":
         return CheckerSubConfig(version=1)
+
+    @field_validator("editable_patterns")
+    @classmethod
+    def check_editable_patterns(
+        cls, patterns: Optional[list[str]]
+    ) -> Optional[list[str]]:
+        if patterns is not None:
+            for pattern in patterns:
+                path = Path(pattern)
+                if not pattern or path.is_absolute() or ".." in path.parts:
+                    raise ValueError(
+                        "editable_patterns must stay inside the task folder"
+                    )
+        return patterns
 
     @field_validator("version")
     @classmethod

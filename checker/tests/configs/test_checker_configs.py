@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
-from checker.configs import CheckerExportConfig
+from checker.configs import CheckerExportConfig, CheckerSubConfig
+
+
+@pytest.mark.parametrize(
+    "patterns",
+    [["../solution.py"], ["/tmp/solution.py"], ["src/../../solution.py"], [""]],
+)
+def test_editable_patterns_stay_in_task_folder(patterns: list[str]) -> None:
+    with pytest.raises(ValidationError, match="must stay inside the task folder"):
+        CheckerSubConfig(version=1, editable_patterns=patterns)
 
 
 class TestCheckerExportConfig:

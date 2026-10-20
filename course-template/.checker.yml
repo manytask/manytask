@@ -26,6 +26,7 @@ structure:
     - ".checker.yml"    # `checker grade` reads it in the student repo
     - ".manytask.yml"   # course/deadlines config, also read by grade
     - ".task.yml"       # per-task structure (checker/course.py)
+    - ".task.*.yml"     # named tasks sharing a folder
     - ".group.yml"      # per-group structure (checker/course.py)
 
   # Dotfiles are private by default (".*"), so any future secret an

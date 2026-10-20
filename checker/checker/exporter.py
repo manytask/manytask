@@ -7,8 +7,8 @@ import tempfile
 from pathlib import Path
 
 from checker.configs import CheckerExportConfig, CheckerStructureConfig
-from checker.course import Course
-from checker.exceptions import BadStructure
+from checker.course import Course, FileSystemTask
+from checker.exceptions import BadConfig, BadStructure
 from checker.utils import print_info
 
 
@@ -47,6 +47,18 @@ class Exporter:
         self.temporary_dir = Path(self._temporary_dir_manager.name)
 
         self.sub_config_files = {}
+        tasks_by_path: dict[str, FileSystemTask] = {}
+        for task in self.course.potential_tasks.values():
+            other_task = tasks_by_path.get(task.relative_path)
+            if (
+                other_task is not None
+                and other_task.config.structure != task.config.structure
+            ):
+                raise BadConfig(
+                    f"Tasks {other_task.name!r} and {task.name!r} share folder "
+                    f"{task.relative_path!r} but have different structure overrides"
+                )
+            tasks_by_path[task.relative_path] = task
         for group in self.course.get_groups(enabled=True):
             relative_path = Path(group.relative_path)
             if group.config.structure:
@@ -244,6 +256,21 @@ class Exporter:
 
         return exclude_paths
 
+    def _unpublished_paths(self) -> list[str]:
+        published_task_paths = {
+            task.relative_path
+            for task in self.course.get_tasks(enabled=True, started=True)
+        }
+        return [
+            *[group.relative_path for group in self.course.get_groups(enabled=False)],
+            *[group.relative_path for group in self.course.get_groups(started=False)],
+            *[
+                task.relative_path
+                for task in self.course.get_tasks()
+                if task.relative_path not in published_task_paths
+            ],
+        ]
+
     def export_public(
         self,
         target: Path,
@@ -252,13 +279,6 @@ class Exporter:
     ) -> None:
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
-
-        disabled_groups_and_tasks_to_skip = [
-            *[group.relative_path for group in self.course.get_groups(enabled=False)],
-            *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
-            *[task.relative_path for task in self.course.get_tasks(started=False)],
-        ]
 
         print_info(f"Copy from {self.reference_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -269,7 +289,7 @@ class Exporter:
             copy_private=False,
             copy_other=True,
             fill_templates=True,
-            extra_ignore_paths=disabled_groups_and_tasks_to_skip,
+            extra_ignore_paths=self._unpublished_paths(),
         )
 
         if commit and not self.dry_run:
@@ -303,6 +323,98 @@ class Exporter:
             copy_other=False,
             fill_templates=False,
         )
+
+    def _structure_for_path(self, relative_path: Path) -> CheckerStructureConfig:
+        config = self.structure_config
+        for parent in [*reversed(relative_path.parents), relative_path]:
+            config = self._get_sub_config(
+                self.reference_root / parent, config, self.reference_root
+            )
+        return config
+
+    def _task_path_is_ignored(self, task_path: Path, relative_path: Path) -> bool:
+        for path in [*reversed(relative_path.parents), relative_path]:
+            if path == Path("."):
+                continue
+            config = self._structure_for_path(task_path / path.parent)
+            if any(
+                (self.reference_root / task_path / path).match(pattern)
+                for pattern in config.ignore_patterns or []
+            ):
+                return True
+        return False
+
+    def prepare_task_for_testing(self, target: Path, task: FileSystemTask) -> None:
+        """Reset a task to the reference, then apply only its declared student files.
+
+        Repeating the reset for tasks sharing a directory prevents another task's
+        solution or generated files from affecting the next pipeline. Omitting
+        ``editable_patterns`` preserves the usual repository-wide testing export.
+        """
+        patterns = task.config.editable_patterns
+        if patterns is None or self.dry_run:
+            return
+
+        task_path = Path(task.relative_path)
+        source = self.reference_root / task_path
+        destination = target / task_path
+        student_source = self.repository_root / task_path
+        for original_root in (
+            self.reference_root.resolve(),
+            self.repository_root.resolve(),
+        ):
+            for destination_root in (target.resolve(), destination.resolve()):
+                if destination_root.is_relative_to(
+                    original_root
+                ) or original_root.is_relative_to(destination_root):
+                    raise BadStructure(
+                        "Task testing destination must not overlap the reference or student repository"
+                    )
+
+        def ignored_entries(directory: str, names: list[str]) -> set[str]:
+            directory_path = Path(directory)
+            config = self._structure_for_path(
+                directory_path.relative_to(self.reference_root)
+            )
+            return {
+                name
+                for name in names
+                if any(
+                    (directory_path / name).match(pattern)
+                    for pattern in config.ignore_patterns or []
+                )
+            }
+
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        elif destination.exists() or destination.is_symlink():
+            destination.unlink()
+        if self._task_path_is_ignored(Path("."), task_path):
+            return
+        shutil.copytree(source, destination, ignore=ignored_entries)
+
+        for pattern in patterns:
+            for reference_entry in source.glob(pattern):
+                destination_entry = destination / reference_entry.relative_to(source)
+                if destination_entry.is_dir():
+                    shutil.rmtree(destination_entry)
+                elif destination_entry.exists() or destination_entry.is_symlink():
+                    destination_entry.unlink()
+
+        if not student_source.resolve().is_relative_to(self.repository_root.resolve()):
+            return
+        for relative in self._collect_student_files(student_source, patterns):
+            if self._task_path_is_ignored(task_path, relative):
+                continue
+            student_file = student_source / relative
+            if not student_file.resolve().is_relative_to(student_source.resolve()):
+                continue
+            destination_file = destination / relative
+            destination_file.parent.mkdir(parents=True, exist_ok=True)
+            if destination_file.is_dir():
+                shutil.rmtree(destination_file)
+            shutil.copyfile(student_file, destination_file)
+            shutil.copymode(student_file, destination_file)
 
     def export_for_contribution(
         self,
@@ -340,12 +452,7 @@ class Exporter:
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
-        disabled_groups_and_tasks_to_skip = [
-            *[group.relative_path for group in self.course.get_groups(enabled=False)],
-            *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
-            *[task.relative_path for task in self.course.get_tasks(started=False)],
-        ]
+        disabled_groups_and_tasks_to_skip = self._unpublished_paths()
 
         print_info(f"Copy from {self.reference_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -431,16 +538,25 @@ class Exporter:
 
         return True
 
-    def _collect_student_files(self, student_task_dir: Path, patterns: list[str]) -> list[Path]:
+    def _collect_student_files(
+        self, student_task_dir: Path, patterns: list[str]
+    ) -> list[Path]:
         """Collect files matched by `patterns` in `student_task_dir`, same convention as `copy_files`."""
         if not student_task_dir.is_dir():
             return []
 
         collected: set[Path] = set()
+        student_root = student_task_dir.resolve()
         for pattern in patterns:
             for entry in student_task_dir.glob(pattern):
+                if not entry.resolve().is_relative_to(student_root):
+                    continue
                 if entry.is_dir():
-                    collected.update(sub.relative_to(student_task_dir) for sub in entry.rglob("*") if sub.is_file())
+                    collected.update(
+                        sub.relative_to(student_task_dir)
+                        for sub in entry.rglob("*")
+                        if sub.is_file() and sub.resolve().is_relative_to(student_root)
+                    )
                 elif entry.is_file():
                     collected.add(entry.relative_to(student_task_dir))
 

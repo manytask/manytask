@@ -161,6 +161,65 @@ class TestCourse:
             assert isinstance(task, FileSystemTask)
             assert (repository_root / task.relative_path).exists()
 
+    def test_named_tasks_share_folder(self, repository_root: Path) -> None:
+        shared = repository_root / "group1" / "shared"
+        shared.mkdir()
+        for name in ("task1_1", "task1_2"):
+            (repository_root / "group1" / name / ".task.yml").unlink()
+            (shared / f".task.{name}.yml").write_text(
+                f"version: 1\neditable_patterns: [{name}.py]\n"
+                f"parameters:\n  solution: {name}.py\n"
+            )
+
+        course = Course(TEST_MANYTASK_CONFIG, repository_root)
+        course.validate()
+        tasks = [
+            task for task in course.get_tasks() if task.name in ("task1_1", "task1_2")
+        ]
+        assert {task.name for task in tasks} == {"task1_1", "task1_2"}
+        for task in tasks:
+            assert task.relative_path == "group1/shared"
+            assert task.config.editable_patterns == [f"{task.name}.py"]
+            assert task.config.parameters["solution"] == f"{task.name}.py"
+            assert course.get_group_for_task(task.name).name == "group1"
+
+    @pytest.mark.parametrize("content", ["", " \n \n", "version: 1"])
+    def test_named_and_legacy_tasks_coexist(
+        self, repository_root: Path, content: str
+    ) -> None:
+        (repository_root / "root_task_1" / ".task.extra.yml").write_text(content)
+        (repository_root / ".task.root.yml").write_text(content)
+
+        tasks = Course(TEST_MANYTASK_CONFIG, repository_root).potential_tasks
+        assert (
+            tasks["extra"].relative_path
+            == tasks["root_task_1"].relative_path
+            == "root_task_1"
+        )
+        assert tasks["root"].relative_path == "."
+
+    @pytest.mark.parametrize(
+        "relative_path",
+        [
+            "group2/.task.task1_1.yml",
+            "group1/task1_1/.task.task1_1.yml",
+            "group2/task1_1/.task.yml",
+        ],
+    )
+    def test_duplicate_task_names_rejected(
+        self, repository_root: Path, relative_path: str
+    ) -> None:
+        config_path = repository_root / relative_path
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("")
+        with pytest.raises(BadConfig, match="Duplicate task name 'task1_1'"):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
+    def test_empty_named_task_rejected(self, repository_root: Path) -> None:
+        (repository_root / ".task..yml").write_text("")
+        with pytest.raises(BadConfig, match="Empty task name"):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
     def test_validate_missing_task(self, repository_root: Path) -> None:
         shutil.rmtree(repository_root / "group1" / "task1_1")
         with pytest.raises(BadConfig):
