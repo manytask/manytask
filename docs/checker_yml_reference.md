@@ -7,7 +7,7 @@ The `.checker.yml` file lives at the root of your **private** (reference) course
 - Default parameters shared across all tasks
 - How the testing pipelines are assembled and executed
 
-For sub-folder overrides see [`.task.yml` / `.group.yml`](#taskymltaskgroupyml-sub-configs) at the bottom of this page.
+For sub-folder overrides see [task and group sub-configs](#taskymltaskgroupyml-sub-configs) at the bottom of this page.
 
 ---
 
@@ -54,14 +54,14 @@ default_parameters:
   allowed_imports: ["os", "sys"]
 ```
 
-These defaults can be overridden per-task or per-group in `.task.yml` / `.group.yml` files, more parameters can be added for task group or individual tasks (see [sub-configs](#taskymltaskgroupyml-sub-configs)).
+These defaults can be overridden per-task or per-group in task config / `.group.yml` files, more parameters can be added for task groups or individual tasks (see [sub-configs](#taskymltaskgroupyml-sub-configs)).
 
-Parameter names are entirely up to you — the checker never interprets them, it only substitutes
-them into stage `args` and `run_if`. The widely used `allow_change` convention is just such a
-user-defined parameter: it becomes meaningful only when a stage consumes it, e.g.
+Parameter names are entirely up to you. The checker substitutes them into stage `args` and
+`run_if`; `testing.skip_unchanged_tasks` can also name a parameter to read. The widely used
+`allow_change` convention is a user-defined parameter consumed by these settings or stages, e.g.
 `patterns: ${{ parameters.allow_change }}` in [`copy_files`](./checker_plugins.md#copy_files) or
-[`check_regexps`](./checker_plugins.md#check_regexps). See
-[the configuration guide](./checker_config.md#optional-an-explicit-allow-list-with-allow_change).
+[`check_regexps`](./checker_plugins.md#check_regexps). To enforce which student files enter a task's
+grading folder, use [`editable_patterns`](#editable_patterns) directly in its task config.
 
 
 ## `structure`
@@ -72,7 +72,7 @@ This section controls which files are copied, hidden, or ignored when exporting 
 structure:
   ignore_patterns: [".git", ".idea", "__pycache__", "*.pyc"]
   # List only the specific dotfiles students need — do NOT use a bare "*".
-  public_patterns: [".gitignore", ".gitlab-ci-students.yml"]
+  public_patterns: [".gitignore", ".gitlab-ci-students.yml", ".task.yml", ".group.yml"]
   private_patterns: [".*", "*private*", "data_private"]
 ```
 
@@ -85,7 +85,8 @@ structure:
 ### The fourth, implicit class: student-editable files
 
 A file that matches **none** of the three lists belongs to an unnamed fourth class — "other" — and
-that class is what students are allowed to change. Solution files must land here.
+by default that class is what students are allowed to change. Solution files must land here unless
+the task uses an explicit [`editable_patterns`](#editable_patterns) list.
 
 | Class | Exported to public repo? | At grading time taken from |
 |---|---|---|
@@ -102,7 +103,7 @@ pass 1 — student repo:    other files only        → the solution
 pass 2 — reference repo:  public + private files  → overwrite pass 1
 ```
 
-Consequences worth remembering:
+The following behavior applies when `editable_patterns` is omitted or `null`:
 
 - Marking a file public or private is what makes it **tamper-proof** — pass 2 overwrites the
   student's copy. A visible test that is *not* listed in `public_patterns` is an "other" file, so
@@ -120,7 +121,9 @@ When a **directory** matches `public_patterns` or `private_patterns`, it is copi
 pattern lists are not re-applied to its contents. `public_patterns: ["tools"]` therefore publishes
 `tools/test_private.py` as well. Match individual files when a folder holds a mix.
 
-> **Warning:** `**` (double-star recursive glob) is **not allowed** in any pattern. Patterns are applied at each directory level individually.
+> **Warning:** `**` (double-star recursive glob) is **not supported in `structure` patterns**.
+> These patterns are applied at each directory level individually. The separate task-level
+> `editable_patterns` field uses `Path.glob` and supports recursive patterns.
 
 > **Warning — never put a bare `"*"` in `public_patterns`.** The exporter
 > classifies a file as *public* before it considers `private_patterns`, and a
@@ -140,10 +143,10 @@ pattern lists are not re-applied to its contents. `public_patterns: ["tools"]` t
 > [`course-template/.checker.yml`](https://github.com/manytask/manytask/blob/main/course-template/.checker.yml) for a
 > worked example.
 
-Pattern precedence: `ignore_patterns` > `private_patterns` > `public_patterns`
+Pattern precedence: `ignore_patterns` > `public_patterns` > `private_patterns`
 
 
-## `export` section
+## Export {#export}
 
 Settings used by the `checker export` command to publish tasks to the public student repository. Example%
 
@@ -164,7 +167,11 @@ export:
 | `templates` | `str` | no  | `"search"` | Template strategy for generating student-facing task files. One of `search`, `create`, `search_or_create`. |
 | `push_options` | `list[str]` | no | `["ci.skip"]` | Push options passed to `git push` as `-o <option>` flags on export. The default `"ci.skip"` tells GitLab to skip pipelines for the auto-export commit. Set to `[]` for git servers that do not support push options (e.g. SourceCraft), or override with any other list of options understood by the destination server. |
 
-### `templates` strategies
+A folder shared by several tasks is exported once any task in it is enabled and has started
+(and its group is released). Normal public/private/ignore patterns apply to the whole folder.
+A later sibling's start date does not hide that sibling's files within an already published folder.
+
+### Template strategies {#templates-strategies}
 
 | Value | Description |
 |---|---|
@@ -190,7 +197,7 @@ def add(a, b):
 ```
 
 
-## `testing` section
+## Testing {#testing}
 
 This section controlls how the checker runs tests, the general structure is:
 
@@ -236,6 +243,11 @@ For `last_commit_changes` the base commit is taken from `checker grade --base-re
 are pushed at once, the tasks from all of them are graded, not only from the last one. If the base is a
 null sha, unknown or equal to `HEAD`, `HEAD~1` is used; after a force-push the merge-base is used; in a
 shallow clone the history is deepened once to find the base.
+
+When tasks share a folder, `last_commit_changes` selects every active task in that folder for a
+change anywhere beneath it. Branch-name and commit-message selection use logical task names from
+the `tasks` mapping in `.task.yml`; `--task <name>` also selects by that logical name.
+
 ### `skip_unchanged_tasks`
 
 When a student pulls newly published tasks from the public repo, all of them show up as "changed" to
@@ -243,25 +255,29 @@ When a student pulls newly published tasks from the public repo, all of them sho
 for a task the student hasn't even started.
 
 Set `skip_unchanged_tasks` to the name of the parameter that lists a task's student-editable files (typically
-`allow_change`, see the [`copy_files` plugin](checker_plugins.md)). For each task `changes_detection` picks up,
+`allow_change`). For each task `changes_detection` picks up,
 `checker grade` then compares every file matching those patterns against the file the export would publish at
 that path (its `.template` counterpart, or the reference file with `SOLUTION BEGIN`/`SOLUTION END` blocks
 replaced, depending on `export.templates`; see [`templates` strategies](#templates-strategies)) - a task where every such file is
 byte-identical to the published version is skipped entirely: not run, not reported, no penalty. A task with no
 `allow_change` patterns, or none of whose files match, is always graded normally.
 
-Example: a task's student-editable files are declared once via `default_parameters` (or per-task/per-group in
-`.task.yml`/`.group.yml`, see [`allow_change`](checker_config.md#optional-an-explicit-allow-list-with-allow_change)),
-and `skip_unchanged_tasks` is pointed at that same parameter name:
+This setting reads a parameter, not the built-in `editable_patterns` field. To combine enforced
+editable files with skipping untouched tasks, keep both lists aligned:
 
 ```yaml
 # .checker.yml
-default_parameters:
-  allow_change: ["solution.c"]
-
 testing:
   changes_detection: last_commit_changes
   skip_unchanged_tasks: allow_change
+```
+
+```yaml
+# .task.yml
+version: 1
+editable_patterns: ["solution.c"]
+parameters:
+  allow_change: ["solution.c"]
 ```
 
 This is what makes `git pull`-ing newly published tasks safe: the student's `solution.c` is still byte-identical
@@ -400,9 +416,17 @@ Example:
 ```
 
 
-## `.task.yml` / `.group.yml` sub-configs
+## Task and group sub-configs {#taskymltaskgroupyml-sub-configs}
 
-You need to place a `.task.yml` (or `.group.yml`) file inside any task or group folder to indicate that this folder contains task (or group of tasks). These files can also be used to override parts of the root `.checker.yml` for this scope, or to add or redefine parameters.
+Place `.group.yml` in a group folder and `.task.yml` in a task folder. Without a `tasks` field,
+`.task.yml` defines one task named after the folder. This includes an empty file or a file
+containing only `version: 1`, preserving existing course configurations.
+
+To define several tasks in one folder, add a nonempty `tasks` mapping whose keys are logical task
+names. Each entry is an object of task overrides, or `{}` to inherit all defaults. The mapping
+creates only those named tasks; it does not also create a task named after the folder. Task names
+must be unique across the course, including folder-derived names. Each logical task is listed
+separately in `.manytask.yml`.
 
 Example:
 
@@ -410,9 +434,11 @@ Example:
 # .task.yml
 version: 1
 
-structure:           # optional — overrides root structure for this task
+editable_patterns: ["solution.py"]  # optional, task configs only
+
+structure:           # optional — overrides inherited structure for this folder
   ignore_patterns: ["*.pyc"]
-  public_patterns: ["solution.py", "README.md"]
+  public_patterns: ["README.md", ".task.yml"]
   private_patterns: ["tests/", ".*"]
 
 parameters:          # optional — merged on top of default_parameters
@@ -434,25 +460,79 @@ report_pipeline:     # optional — replaces testing.report_pipeline for this ta
 
 | Field | Type | Description |
 |---|---|---|
-| `version` | `int` | Must be `1`. |
-| `structure` | object | Same fields as root [`structure`](#structure). Replaces the root value entirely for this folder. |
-| `parameters` | object | Merged on top of `default_parameters`. Task-level values take precedence. |
-| `task_pipeline` | `list[stage]` | Replaces `testing.tasks_pipeline` for this task. Note "task", not "tasks".|
-| `report_pipeline` | `list[stage]` | Replaces `testing.report_pipeline` for this task. |
+| `version` | `int` | Must be `1`. File-level only, not repeated in `tasks` entries. |
+| `structure` | object | Same fields as root [`structure`](#structure). Each supplied list replaces the inherited list for this folder. File-level only: shared by every task in the folder. |
+| `tasks` | `map[str, object]` | Optional in `.task.yml`. Nonempty mapping of logical task names to overrides; entries may contain `editable_patterns`, `parameters`, `task_pipeline`, and `report_pipeline`. |
+| `editable_patterns` | `list[str] \| null` | Task configs only. Student files to overlay onto a fresh reference copy before this task pipeline. A `tasks` entry inherits the file-level value when omitted; `null` selects the structure-based merge, and `[]` uses reference files only. See [details](#editable_patterns). |
+| `parameters` | `object \| null` | Merged per key on top of inherited parameters. A task entry takes precedence over file-level defaults; `null` in an entry clears the file-level defaults while retaining group/root parameters. |
+| `task_pipeline` | `list[stage] \| null` | Replaces the inherited task pipeline. Note "task", not "tasks". `[]` disables the pipeline; `null` in an entry uses the group/root pipeline instead of the file-level default. |
+| `report_pipeline` | `list[stage] \| null` | Replaces the inherited report pipeline. `[]` disables the pipeline; `null` in an entry uses the group/root pipeline instead of the file-level default. |
 
 > **`structure` replaces, `parameters` merge.** Each `structure` list you set in a sub-config
 > discards the root list for that folder — if you override `private_patterns`, repeat every entry
 > you still need, including `".*"`. Parameters, by contrast, are merged
-> (`default_parameters` < `.group.yml` < `.task.yml`), so a sub-config can set a single key.
+> (`default_parameters` < `.group.yml` < `.task.yml` defaults < the `tasks` entry), so an override
+> can set a single key. Pattern lists and pipelines replace their inherited values.
 
-> Sub-configs are only loaded for **enabled** groups and tasks — those present in `.manytask.yml`
-> with `enabled: true`.
+Task config files are discovered and validated regardless of whether the task is enabled or
+listed in `.manytask.yml`. Scheduling still determines which tasks are graded or exported.
 
 If the pipeline is defined for the smaller scope, this definition overrides larger scope. The priority is then:
 
-1. `.task.yml` in the task folder
-2. `.group.yml` in the parent group folder
-3. Root `testing.tasks_pipeline` / `testing.report_pipeline`
+1. The individual entry in `.task.yml`'s `tasks` mapping
+2. Top-level `.task.yml` defaults (or the flat task config when `tasks` is absent)
+3. `.group.yml` in the parent group folder
+4. Root `testing.tasks_pipeline` / `testing.report_pipeline`
+
+### `editable_patterns`
+
+An optional field directly in `.task.yml` or in one of its `tasks` entries, separate from
+`parameters`. A task entry inherits the file-level value when it omits the field. It is not
+inherited from `.group.yml` or root defaults.
+
+For a configured list, the checker resets the task folder before each task pipeline to the
+reference files, including reference solutions and excluding ignored files. It then overlays
+only student files matched by the list, first removing matching reference files so deleted
+student files remain absent. This prevents other student edits and changes from a
+previous sibling task pipeline from affecting this task. `[]` overlays nothing; `null` selects
+the existing `structure`-based preparation. Omitting the field uses that preparation only when
+no file-level list is inherited.
+
+Patterns use Python `Path.glob` relative to the task folder, for example `"solution.py"`,
+`"src/*.cpp"`, or `"src/**/*.py"`. Include only files students are intended to control.
+Patterns must be nonempty, relative paths without `..` components.
+`structure` still determines what is published; `editable_patterns` does not expose private files.
+
+For example, two tasks in `week_1/shared/`:
+
+```yaml
+# week_1/shared/.task.yml
+version: 1
+
+parameters:                 # shared defaults for both tasks
+  timeout: 30
+
+tasks:
+  parser:
+    editable_patterns: ["parser.py"]
+    parameters:
+      allow_change: ["parser.py"]
+  formatter:
+    editable_patterns: ["formatter.py"]
+    parameters:
+      allow_change: ["formatter.py"]
+      timeout: 60
+```
+
+`parser` uses the student's `parser.py` with the reference `formatter.py`; `formatter` uses the
+opposite combination. `task.task_name` is the logical name (`parser` or `formatter`), while
+`task.task_sub_path` is `week_1/shared` for both. They are scheduled and reported separately.
+If the Manytask task URL template uses `$TASK_NAME`, set each task's
+[`url`](manytask_yml_reference.md#task) to the actual shared folder or statement.
+
+If dotfiles are private through `".*"`, include `".task.yml"` in `public_patterns` to publish
+the task config. A released shared folder publishes all files permitted by those patterns even
+if a sibling task is not yet released.
 
 ## Complete example of the file
 

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import click
 
-from .configs import CheckerConfig, CheckerSubConfig, ManytaskConfig
+from .configs import CheckerConfig, CheckerTaskFileConfig, ManytaskConfig
 from .course import Course, FileSystemTask
 from .exceptions import CheckerValidationError, TestingError
 from .exporter import Exporter
@@ -602,7 +602,7 @@ def schema(
     """Generate json schema for the checker configs."""
     checker_schema = CheckerConfig.get_json_schema()
     manytask_schema = ManytaskConfig.get_json_schema()
-    task_schema = CheckerSubConfig.get_json_schema()
+    task_schema = CheckerTaskFileConfig.get_json_schema()
 
     with open(output_folder / "schema-checker.json", "w") as f:
         json.dump(checker_schema, f, indent=2)

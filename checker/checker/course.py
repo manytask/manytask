@@ -9,7 +9,12 @@ from typing import Any
 
 import git
 
-from .configs import CheckerSubConfig, CheckerTestingConfig, ManytaskConfig
+from .configs import (
+    CheckerSubConfig,
+    CheckerTaskFileConfig,
+    CheckerTestingConfig,
+    ManytaskConfig,
+)
 from .exceptions import BadConfig, CheckerException
 from .utils import print_info
 
@@ -52,13 +57,27 @@ class Course:
         self.repository_root = repository_root
         self.reference_root = reference_root or repository_root
 
-        self.potential_groups = {group.name: group for group in self._search_for_groups_by_configs(self.reference_root)}
-        self.potential_tasks = {task.name: task for task in self._search_for_tasks_by_configs(self.reference_root)}
+        self.potential_groups = {
+            group.name: group
+            for group in self._search_for_groups_by_configs(self.reference_root)
+        }
+        self.potential_tasks: dict[str, FileSystemTask] = {}
+        for task in self._search_for_tasks_by_configs(self.reference_root):
+            if task.name in self.potential_tasks:
+                previous = self.potential_tasks[task.name]
+                raise BadConfig(
+                    f"Duplicate task name {task.name!r} in {previous.relative_path!r} and {task.relative_path!r}"
+                )
+            self.potential_tasks[task.name] = task
 
         self.branch_name = branch_name
         self.base_ref = base_ref
 
-        self.task_to_group = {task.name: group for group in self.potential_groups.values() for task in group.tasks}
+        self.task_to_group = {
+            task.name: group
+            for group in self.potential_groups.values()
+            for task in group.tasks
+        }
 
     def get_group_for_task(self, task_name: str) -> FileSystemGroup | None:
         """Get the group that contains the given task, or None if not found."""
@@ -110,21 +129,24 @@ class Course:
     def _search_for_tasks_by_configs(
         root: Path,
     ) -> Generator[FileSystemTask, Any, None]:
-        for task_config_path in root.glob(f"**/{Course.TASK_CONFIG_NAME}"):
+        for task_config_path in sorted(root.glob(f"**/{Course.TASK_CONFIG_NAME}")):
             relative_task_path = task_config_path.parent.relative_to(root)
 
             # if empty file - use default
             if task_config_path.read_text().strip() == "":
-                task_config = CheckerSubConfig.default()
+                task_file = CheckerTaskFileConfig(version=1)
             # if any content - read yml
             else:
-                task_config = CheckerSubConfig.from_yaml(task_config_path)
+                task_file = CheckerTaskFileConfig.from_yaml(task_config_path)
 
-            yield FileSystemTask(
-                name=task_config_path.parent.name,
-                relative_path=str(relative_task_path),
-                config=task_config,
-            )
+            for task_name, task_config in task_file.resolve_tasks(
+                task_config_path.parent.name
+            ).items():
+                yield FileSystemTask(
+                    name=task_name,
+                    relative_path=str(relative_task_path),
+                    config=task_config,
+                )
 
     @staticmethod
     def _search_for_groups_by_configs(
