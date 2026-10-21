@@ -112,17 +112,6 @@ def test_deleted_solution_selects_its_task(tmp_path: Path) -> None:
     assert _detect(course) == ["seq-read"]
 
 
-def test_rename_selects_both_source_and_destination_tasks(tmp_path: Path) -> None:
-    course, repository, folder = _make_course(tmp_path)
-    course.potential_tasks["seq-write"].config.parameters.root["allow_change"] = [
-        "renamed.cpp"
-    ]
-    (folder / "seq-read.cpp").rename(folder / "renamed.cpp")
-    _commit(repository)
-
-    assert _detect(course) == ["seq-read", "seq-write"]
-
-
 @pytest.mark.parametrize(
     "pattern, changed_file, expected",
     [

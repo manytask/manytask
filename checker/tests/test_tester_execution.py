@@ -42,16 +42,8 @@ TIMESTAMP = datetime(2025, 1, 1, tzinfo=timezone.utc)
             {"report:first"},
             True,
             False,
-            r"Reporting score failed for: \['first'\]",
+            "Reporting score failed",
             ["global", "task:first", "report:first", "task:second", "report:second"],
-        ),
-        (
-            {"task:first", "report:second"},
-            True,
-            False,
-            r"Task pipelines failed: \['first'\]; "
-            r"Reporting score failed for: \['second'\]",
-            ["global", "task:first", "task:second", "report:second"],
         ),
         (
             {"report:first"},

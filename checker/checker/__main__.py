@@ -531,7 +531,7 @@ def export(
     manytask_config = ManytaskConfig.from_yaml(manytask_config_path)
 
     # read filesystem, check existing tasks
-    course = Course(manytask_config, reference_root, excluded_paths=[export_root])
+    course = Course(manytask_config, reference_root)
 
     # if export_root not empty - delete all except git folder
     if export_root.exists() and not dry_run:
@@ -583,7 +583,7 @@ def export_private(
     manytask_config = ManytaskConfig.from_yaml(manytask_config_path)
 
     # read filesystem, check existing tasks
-    course = Course(manytask_config, reference_root, excluded_paths=[export_root])
+    course = Course(manytask_config, reference_root)
 
     # create exporter and export files for public
     exporter = Exporter(
