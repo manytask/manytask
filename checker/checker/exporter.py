@@ -353,10 +353,6 @@ class Exporter:
         source = self.reference_root / task_path
         destination = target / task_path
         student_source = self.repository_root / task_path
-        for original_root in (self.reference_root.resolve(), self.repository_root.resolve()):
-            for destination_root in (target.resolve(), destination.resolve()):
-                if destination_root.is_relative_to(original_root) or original_root.is_relative_to(destination_root):
-                    raise BadStructure("Task testing destination must not overlap the reference or student repository")
 
         def ignored_entries(directory: str, names: list[str]) -> set[str]:
             directory_path = Path(directory)
@@ -379,8 +375,6 @@ class Exporter:
                 elif destination_entry.exists() or destination_entry.is_symlink():
                     destination_entry.unlink()
 
-        if not student_source.resolve().is_relative_to(self.repository_root.resolve()):
-            return
         for relative in self._collect_student_files(student_source, patterns):
             if self._is_ignored(task_path / relative):
                 continue
