@@ -7,7 +7,6 @@ import tempfile
 from pathlib import Path
 
 from checker.configs import CheckerExportConfig, CheckerStructureConfig
-from checker.configs.checker import validate_allow_change
 from checker.course import Course, FileSystemTask
 from checker.exceptions import BadConfig, BadStructure
 from checker.utils import print_info
@@ -346,15 +345,14 @@ class Exporter:
         return False
 
     def prepare_task_for_testing(
-        self, target: Path, task: FileSystemTask, patterns: list[str] | None
+        self, target: Path, task: FileSystemTask, patterns: list[str] | None = None
     ) -> None:
-        """Reset a task to the reference, then apply only its declared student files.
+        """Reset a task folder, then overlay files matched by relative patterns.
 
-        Repeating the reset for tasks sharing a directory prevents another task's
-        solution or generated files from affecting the next pipeline. Omitting
-        ``parameters.allow_change`` preserves the usual repository-wide testing export.
+        The caller supplies validated patterns independently of the course config
+        format. None leaves the existing workspace untouched; an empty list uses
+        reference files only. Dry runs leave the workspace untouched as well.
         """
-        patterns = validate_allow_change(patterns)
         if patterns is None or self.dry_run:
             return
 
@@ -406,7 +404,9 @@ class Exporter:
 
         if not student_source.resolve().is_relative_to(self.repository_root.resolve()):
             return
-        for relative in self._collect_student_files(student_source, patterns):
+        for relative in self._collect_student_files(
+            student_source, patterns, restrict_to_task=True
+        ):
             if self._task_path_is_ignored(task_path, relative):
                 continue
             student_file = student_source / relative
@@ -524,7 +524,9 @@ class Exporter:
         student_task_dir = self.repository_root / task_relative_path
         reference_task_dir = self.reference_root / task_relative_path
 
-        student_files = self._collect_student_files(student_task_dir, patterns)
+        student_files = self._collect_student_files(
+            student_task_dir, patterns, restrict_to_task=True
+        )
         if not student_files:
             return False
 
@@ -542,23 +544,39 @@ class Exporter:
         return True
 
     def _collect_student_files(
-        self, student_task_dir: Path, patterns: list[str]
+        self,
+        student_task_dir: Path,
+        patterns: list[str],
+        *,
+        restrict_to_task: bool = False,
     ) -> list[Path]:
-        """Collect files matched by `patterns` in `student_task_dir`, same convention as `copy_files`."""
+        """Collect matching files, optionally excluding links outside the task.
+
+        Existing callers retain the same glob behavior as copy_files. Workspace
+        preparation opts into confinement to the student task directory.
+        """
         if not student_task_dir.is_dir():
             return []
 
         collected: set[Path] = set()
-        student_root = student_task_dir.resolve()
+        student_root = (
+            student_task_dir.resolve() if restrict_to_task else student_task_dir
+        )
         for pattern in patterns:
             for entry in student_task_dir.glob(pattern):
-                if not entry.resolve().is_relative_to(student_root):
+                if restrict_to_task and not entry.resolve().is_relative_to(
+                    student_root
+                ):
                     continue
                 if entry.is_dir():
                     collected.update(
                         sub.relative_to(student_task_dir)
                         for sub in entry.rglob("*")
-                        if sub.is_file() and sub.resolve().is_relative_to(student_root)
+                        if sub.is_file()
+                        and (
+                            not restrict_to_task
+                            or sub.resolve().is_relative_to(student_root)
+                        )
                     )
                 elif entry.is_file():
                     collected.add(entry.relative_to(student_task_dir))
