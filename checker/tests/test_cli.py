@@ -465,8 +465,6 @@ class TestGradeBaseRef:
         result = run_grade(course_root)
         assert result.exit_code == 0, result.output
         assert captured_base_ref["base_ref"] == "mr_base"
-
-
 class TestGradeSkipUnchangedTasks:
     @pytest.fixture(autouse=True)
     def detect_changes_from_filesystem(self, monkeypatch: pytest.MonkeyPatch) -> None:

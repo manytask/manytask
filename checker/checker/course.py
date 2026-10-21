@@ -482,10 +482,7 @@ class Course:
         if detection_type == CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE:
             return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
 
-        if (
-            detection_type
-            == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES
-        ):
+        if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
             return self._detect_by_last_commit_changes(
                 repo, potential_tasks, default_parameters
             )
