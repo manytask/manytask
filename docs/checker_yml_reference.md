@@ -244,9 +244,18 @@ are pushed at once, the tasks from all of them are graded, not only from the las
 null sha, unknown or equal to `HEAD`, `HEAD~1` is used; after a force-push the merge-base is used; in a
 shallow clone the history is deepened once to find the base.
 
-When tasks share a folder, `last_commit_changes` selects every active task in that folder for a
-change anywhere beneath it. Branch-name and commit-message selection use logical task names from
-the `tasks` mapping in `.tasks.yml`; `--task <name>` also selects by that logical name.
+When tasks share a folder, `last_commit_changes` selects a task with a nonempty effective
+`parameters.allow_change` list only if the commit diff changes a file matching that list. Patterns
+are relative to the shared folder and inherit from `default_parameters` through `.group.yml`,
+task-file defaults, and the individual task entry, as they do for grading. A changed shared file
+listed by several tasks selects all of them. A sibling solved in an older commit is not selected
+merely because its solution differs from the published template.
+
+Tasks without a nonempty effective list (omitted, `null`, or `[]`) retain folder-based detection:
+any change beneath the folder selects them. Single-task folders also retain folder-based detection.
+Branch-name and commit-message selection use logical task names from the `tasks` mapping in
+`.tasks.yml`; `--task <name>` also selects by that logical name. These explicit selections are not
+restricted by `allow_change`.
 
 ### `skip_unchanged_tasks`
 
@@ -262,8 +271,11 @@ replaced, depending on `export.templates`; see [`templates` strategies](#templat
 byte-identical to the published version is skipped entirely: not run, not reported, no penalty. A task with no
 `allow_change` patterns, or none of whose files match, is always graded normally.
 
-Set `testing.skip_unchanged_tasks: allow_change` to reuse the same file list for task preparation
-and skipping untouched submissions:
+This check happens after commit selection and compares against the published version, not the
+commit's base. It can skip newly pulled templates; it does not select tasks or rerun older solutions.
+
+Set `testing.skip_unchanged_tasks: allow_change` to reuse the same file list for shared-folder
+change detection, task preparation, and skipping untouched submissions:
 
 ```yaml
 # .checker.yml

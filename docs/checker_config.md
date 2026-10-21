@@ -279,8 +279,15 @@ task. `.task.yml` does not accept this mapping: rename a multi-task file to `.ta
 Add `add` and `multiply` separately to `.manytask.yml`. Task names must be unique across the
 course, including names from flat `.task.yml` files. `checker check --task add` and branch-name
 selection address the logical task name; `task.task_sub_path` still points to `python/arithmetic`.
-`last_commit_changes` selects every active task sharing a changed folder, so use
-`skip_unchanged_tasks` with task-specific `allow_change` patterns if untouched siblings should skip.
+With `last_commit_changes`, a task sharing a folder is selected only when the commit diff changes
+a file matching its effective, nonempty `parameters.allow_change` list. Patterns are relative to
+the shared folder and follow the same inheritance as grading. In this example, changing only
+`add.py` selects `add`; an older solution in `multiply.py` does not cause `multiply` to run again.
+A shared file listed by both tasks selects both. Tasks without a nonempty list keep folder-based
+detection: any change beneath the folder selects them. Single-task folders keep that behavior too.
+
+`skip_unchanged_tasks` is a separate check after commit selection: it compares the selected task's
+editable files to the published templates and can skip a newly pulled, untouched task.
 
 If `ui.task_url_template` contains `$TASK_NAME`, give each schedule entry a
 [`url`](manytask_yml_reference.md#task) pointing to the actual shared folder or its statement,
@@ -411,7 +418,8 @@ runs the report pipeline in dry-run mode, so local runs never report a score.
 
 `changes_detection: last_commit_changes` means `checker grade` tests only the tasks touched by the
 pushed commits (diff against `CI_COMMIT_BEFORE_SHA` in GitLab CI, or `--base-ref`; `HEAD~1` otherwise).
-All active tasks in a shared folder count as touched when a file in that folder changes.
+In shared folders, each task's nonempty `parameters.allow_change` list narrows detection to its
+matching files; see [Several tasks in one folder](#several-tasks-in-one-folder).
 `checker check` always tests everything.
 
 See [Checker pipelines and plugins](./checker_pipelines_and_plugins.md) and the

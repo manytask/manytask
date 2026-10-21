@@ -18,6 +18,7 @@ from .configs import (
     CheckerTestingConfig,
     ManytaskConfig,
 )
+from .configs.checker import validate_allow_change
 from .exceptions import BadConfig, CheckerException
 from .utils import print_info
 
@@ -432,6 +433,7 @@ class Course:
         detection_type: CheckerTestingConfig.ChangesDetectionType,
         *,
         task_patterns: dict[str, list[str] | None] | None = None,
+        default_parameters: dict[str, Any] | None = None,
     ) -> list[FileSystemTask]:
         """
         Detects changes in the repository based on the provided detection type.
@@ -444,6 +446,7 @@ class Course:
         :return: list of changed tasks
         :param task_patterns: optional task-relative globs supplied by a configuration adapter;
             nonempty lists narrow file-based detection for tasks sharing a folder
+        :param default_parameters: global defaults used when resolving parameters.allow_change
         :raises CheckerException: if repository is not a git repository
         """
         print_info(f"Detecting changes by {detection_type}")
@@ -482,6 +485,15 @@ class Course:
             return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
+            if task_patterns is None:
+                task_patterns = {
+                    task.name: validate_allow_change(
+                        self.get_task_parameters(task, default_parameters).get(
+                            "allow_change"
+                        )
+                    )
+                    for task in potential_tasks
+                }
             return self._detect_by_last_commit_changes(
                 repo, potential_tasks, task_patterns
             )

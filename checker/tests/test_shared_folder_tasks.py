@@ -332,11 +332,13 @@ def test_skip_unchanged_checks_each_shared_task_editable_files(
     )
     repository = git.Repo.init(student)
     actor = git.Actor("Checker tests", "checker@example.com")
+    (student / "group/shared/one.txt").write_text("previous student one")
     repository.index.add(["group/shared"])
     repository.index.commit("Initial student files", author=actor, committer=actor)
+    (student / "group/shared/one.txt").write_text("reference one")
     (student / "group/shared/two.txt").write_text("student two revised")
-    repository.index.add(["group/shared/two.txt"])
-    repository.index.commit("Revise two", author=actor, committer=actor)
+    repository.index.add(["group/shared/one.txt", "group/shared/two.txt"])
+    repository.index.commit("Reset one and revise two", author=actor, committer=actor)
     task_config = reference / "group/shared/.tasks.yml"
     config = yaml.safe_load(task_config.read_text())
     config["tasks"]["two"]["parameters"]["own_content"] = "student two revised"
@@ -358,6 +360,39 @@ def test_skip_unchanged_checks_each_shared_task_editable_files(
     assert (student / "executed.txt").read_text().splitlines() == expected
     assert (student / "reported.txt").read_text().splitlines() == expected
     assert ("Skipping <one>" in result.output) is skip_unchanged
+
+
+@pytest.mark.parametrize("skip_unchanged", [False, True])
+def test_grade_only_reports_shared_task_changed_since_previous_commit(
+    tmp_path: Path, skip_unchanged: bool
+) -> None:
+    student, reference = _create_course(tmp_path, skip_unchanged=skip_unchanged)
+    repository = git.Repo.init(student)
+    actor = git.Actor("Checker tests", "checker@example.com")
+    repository.index.add(["group/shared"])
+    repository.index.commit("Both tasks already solved", author=actor, committer=actor)
+    (student / "group/shared/two.txt").write_text("student two revised")
+    repository.index.add(["group/shared/two.txt"])
+    repository.index.commit("Revise only two", author=actor, committer=actor)
+    task_path = reference / "group/shared/.tasks.yml"
+    config = yaml.safe_load(task_path.read_text())
+    config["tasks"]["two"]["parameters"]["own_content"] = "student two revised"
+    _write_yaml(task_path, config)
+    _expect_workspace(
+        reference,
+        {
+            "one.txt": "reference one",
+            "two.txt": "student two revised",
+            "protected.txt": "reference protected",
+        },
+    )
+
+    result = _grade(student, reference)
+
+    assert result.exit_code == 0, result.output
+    assert (student / "executed.txt").read_text().splitlines() == ["two"]
+    assert (student / "reported.txt").read_text().splitlines() == ["two"]
+    assert "Skipping <one>" not in result.output
 
 
 def test_grade_inherits_file_defaults_and_uses_entry_pipeline(tmp_path: Path) -> None:
