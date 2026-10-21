@@ -395,7 +395,7 @@ class Exporter:
 
         if not student_source.resolve().is_relative_to(self.repository_root.resolve()):
             return
-        for relative in self._collect_student_files(student_source, patterns, restrict_to_task=True):
+        for relative in self._collect_student_files(student_source, patterns):
             if self._is_ignored(task_path / relative):
                 continue
             destination_file = destination / relative
@@ -548,13 +548,8 @@ class Exporter:
 
         return True
 
-    def _collect_student_files(
-        self, student_task_dir: Path, patterns: list[str], *, restrict_to_task: bool = False
-    ) -> list[Path]:
-        """Collect files matched by `patterns` in `student_task_dir`, same convention as `copy_files`.
-
-        With `restrict_to_task`, files that resolve (via symlinks) outside `student_task_dir` are dropped.
-        """
+    def _collect_student_files(self, student_task_dir: Path, patterns: list[str]) -> list[Path]:
+        """Collect files matched by `patterns` in `student_task_dir`, same convention as `copy_files`."""
         if not student_task_dir.is_dir():
             return []
 
@@ -565,10 +560,6 @@ class Exporter:
                     collected.update(sub.relative_to(student_task_dir) for sub in entry.rglob("*") if sub.is_file())
                 elif entry.is_file():
                     collected.add(entry.relative_to(student_task_dir))
-
-        if restrict_to_task:
-            student_root = student_task_dir.resolve()
-            collected = {path for path in collected if (student_task_dir / path).resolve().is_relative_to(student_root)}
 
         return sorted(collected)
 
