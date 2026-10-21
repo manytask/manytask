@@ -292,7 +292,14 @@ class Course:
         else:
             print_info("No base commit found, using all files of HEAD", color="grey")
             diff = head.diff(git.NULL_TREE)
-        changed_files = [item.a_path or item.b_path for item in diff]
+        changed_files = sorted(
+            {
+                path
+                for item in diff
+                for path in (item.a_path, item.b_path)
+                if path is not None
+            }
+        )
         print_info(f"Last commit changes: {changed_files}", color="grey")
 
         tasks_per_path = Counter(
