@@ -218,6 +218,7 @@ class Exporter:
         self,
         root: Path,
         ignore_templates: bool,
+        excluded_path: Path | None = None,
     ) -> list[str]:
         """Search for files/folder should be ignored due to templating in the current directory only"""
         exclude_paths = []
@@ -227,6 +228,11 @@ class Exporter:
             CheckerExportConfig.TemplateType.SEARCH_OR_CREATE,
         ):
             for template_file_or_folder in root.glob(f"*{self.TEMPLATE_SUFFIX}"):
+                if (
+                    excluded_path is not None
+                    and template_file_or_folder.resolve() == excluded_path.resolve()
+                ):
+                    continue
                 if ignore_templates:
                     exclude_paths.append(template_file_or_folder.name)
                 else:
@@ -865,6 +871,12 @@ class Exporter:
         global_root = global_root or root
         global_destination = global_destination or destination
 
+        if (
+            root.resolve() != global_root.resolve()
+            and root.resolve() == global_destination.resolve()
+        ):
+            return
+
         if self.verbose:
             print_info(
                 f"Copy files from <{root.relative_to(global_root)}> to <{destination.relative_to(global_destination)}>",
@@ -881,10 +893,14 @@ class Exporter:
             return
 
         # select paths to ignore - original to replace or templates to ignore
-        exclude_paths = self._search_for_exclude_due_to_templates(root, not fill_templates)
+        exclude_paths = self._search_for_exclude_due_to_templates(
+            root, not fill_templates, excluded_path=global_destination
+        )
 
         # Iterate over all files in the root directory
         for path in root.iterdir():
+            if path.resolve() == global_destination.resolve():
+                continue
             path_destination = destination / path.relative_to(root)
             is_text_file = self._is_text_file(path)
             is_path_template_file = self._is_template_file(path)

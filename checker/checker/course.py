@@ -49,15 +49,25 @@ class Course:
         reference_root: Path | None = None,
         branch_name: str | None = None,
         base_ref: str | None = None,
+        *,
+        excluded_paths: list[Path] | None = None,
     ):
         self.manytask_config = manytask_config
 
         self.repository_root = repository_root
         self.reference_root = reference_root or repository_root
+        discovery_exclusions = tuple(path.resolve() for path in excluded_paths or [])
 
-        self.potential_groups = {group.name: group for group in self._search_for_groups_by_configs(self.reference_root)}
+        self.potential_groups = {
+            group.name: group
+            for group in self._search_for_groups_by_configs(
+                self.reference_root, discovery_exclusions
+            )
+        }
         self.potential_tasks: dict[str, FileSystemTask] = {}
-        for task in self._search_for_tasks_by_configs(self.reference_root):
+        for task in self._search_for_tasks_by_configs(
+            self.reference_root, discovery_exclusions
+        ):
             if task.name in self.potential_tasks:
                 previous = self.potential_tasks[task.name]
                 raise BadConfig(
@@ -155,12 +165,36 @@ class Course:
         ]
 
     @staticmethod
+    def _search_config_paths(
+        root: Path,
+        config_patterns: tuple[str, ...],
+        excluded_paths: tuple[Path, ...],
+    ) -> Generator[Path, None, None]:
+        """Find metadata without descending into explicitly excluded output trees."""
+        for folder, directories, files in root.walk():
+            directories[:] = [
+                name
+                for name in directories
+                if not any(
+                    (folder / name).resolve().is_relative_to(excluded)
+                    for excluded in excluded_paths
+                )
+            ]
+            for name in files:
+                if any(fnmatchcase(name, pattern) for pattern in config_patterns):
+                    yield folder / name
+
+    @staticmethod
     def _search_for_tasks_by_configs(
         root: Path,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> Generator[FileSystemTask, Any, None]:
         config_paths = sorted(
-            set(root.glob(f"**/{Course.TASK_CONFIG_NAME}"))
-            | set(root.glob(f"**/{Course.NAMED_TASK_CONFIG_PATTERN}"))
+            Course._search_config_paths(
+                root,
+                (Course.TASK_CONFIG_NAME, Course.NAMED_TASK_CONFIG_PATTERN),
+                excluded_paths,
+            )
         )
         for task_config_path in config_paths:
             yield from Course._load_tasks_from_config(root, task_config_path)
@@ -168,14 +202,19 @@ class Course:
     @staticmethod
     def _search_for_groups_by_configs(
         root: Path,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> Generator[FileSystemGroup, Any, None]:
-        for group_config_path in root.glob(f"**/{Course.GROUP_CONFIG_NAME}"):
+        for group_config_path in Course._search_config_paths(
+            root, (Course.GROUP_CONFIG_NAME,), excluded_paths
+        ):
             relative_group_path = group_config_path.parent.relative_to(root)
 
             group_config = Course._load_sub_config(group_config_path)
 
             group_tasks = list(
-                Course._search_for_tasks_by_configs(group_config_path.parent)
+                Course._search_for_tasks_by_configs(
+                    group_config_path.parent, excluded_paths
+                )
             )
             for task in group_tasks:
                 task.relative_path = str(relative_group_path / task.relative_path)
