@@ -9,6 +9,10 @@
 {% block body %}
 <div class="container mt-4">
     <h2>Edit Course: {{ course.course_name }}</h2>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <a href="{{ url_for('course.create_project', course_name=course.course_name) }}" class="btn btn-outline-primary">Course registration</a>
+        <a href="{{ url_for('root.index') }}" class="btn btn-outline-secondary">Back to courses list</a>
+    </div>
     {% if error_message %}
     <div class="alert alert-danger" role="alert">
         {{ error_message }}
