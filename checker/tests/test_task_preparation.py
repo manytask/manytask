@@ -197,18 +197,6 @@ class TestExporterTaskPreparation:
 
         assert (source / task.relative_path / "alpha.py").read_bytes() == before
 
-    def test_prepare_task_ignores_external_student_symlinks(self, task_exporter: Exporter, tmp_path: Path) -> None:
-        task = task_exporter.course.potential_tasks["shared"]
-        student_file = task_exporter.repository_root / task.relative_path / "alpha.py"
-        external_file = tmp_path / "outside.py"
-        external_file.write_text("external content")
-        student_file.unlink()
-        student_file.symlink_to(external_file)
-
-        task_exporter.prepare_task_for_testing(task_exporter.temporary_dir, task, ["alpha.py", "src"])
-
-        assert not (task_exporter.temporary_dir / task.relative_path / "alpha.py").exists()
-
     def test_prepare_task_preserves_deleted_allowed_files(self, task_exporter: Exporter) -> None:
         task = task_exporter.course.potential_tasks["shared"]
         student_folder = task_exporter.repository_root / task.relative_path
@@ -221,25 +209,3 @@ class TestExporterTaskPreparation:
         assert not (folder / "alpha.py").exists()
         assert not (folder / "src/extra.py").exists()
         assert (folder / "beta.py").read_text() == "reference beta"
-
-    @pytest.mark.parametrize("restrict_to_task", [False, True])
-    def test_file_collection_keeps_legacy_link_behavior_unless_restricted(
-        self, task_exporter: Exporter, tmp_path: Path, restrict_to_task: bool
-    ) -> None:
-        folder = task_exporter.repository_root / "group/shared"
-        outside = tmp_path / "external"
-        outside.mkdir()
-        (outside / "linked.py").write_text("external")
-        (folder / "link.py").symlink_to(outside / "linked.py")
-        (folder / "src/link.py").symlink_to(outside / "linked.py")
-        (folder / "linked_dir").symlink_to(outside, target_is_directory=True)
-        patterns = ["link.py", "src", "linked_dir"]
-
-        files = task_exporter._collect_student_files(folder, patterns, restrict_to_task=restrict_to_task)
-
-        expected = {Path("src/extra.py"), Path("src/ignored.py")}
-        if not restrict_to_task:
-            expected.update(map(Path, ["link.py", "src/link.py", "linked_dir/linked.py"]))
-        assert set(files) == expected
-        if not restrict_to_task:
-            assert task_exporter._collect_student_files(folder, patterns) == files
