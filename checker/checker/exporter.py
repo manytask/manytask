@@ -244,6 +244,14 @@ class Exporter:
 
         return exclude_paths
 
+    def _unpublished_paths(self) -> list[str]:
+        return [
+            *[group.relative_path for group in self.course.get_groups(enabled=False)],
+            *[group.relative_path for group in self.course.get_groups(started=False)],
+            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
+            *[task.relative_path for task in self.course.get_tasks(started=False)],
+        ]
+
     def export_public(
         self,
         target: Path,
@@ -253,12 +261,7 @@ class Exporter:
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
-        disabled_groups_and_tasks_to_skip = [
-            *[group.relative_path for group in self.course.get_groups(enabled=False)],
-            *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
-            *[task.relative_path for task in self.course.get_tasks(started=False)],
-        ]
+        disabled_groups_and_tasks_to_skip = self._unpublished_paths()
 
         print_info(f"Copy from {self.reference_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -340,12 +343,7 @@ class Exporter:
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
-        disabled_groups_and_tasks_to_skip = [
-            *[group.relative_path for group in self.course.get_groups(enabled=False)],
-            *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
-            *[task.relative_path for task in self.course.get_tasks(started=False)],
-        ]
+        disabled_groups_and_tasks_to_skip = self._unpublished_paths()
 
         print_info(f"Copy from {self.reference_root} to {target}", color="grey")
         self._copy_files_with_config(
