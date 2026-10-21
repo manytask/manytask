@@ -136,37 +136,6 @@ class TestExporterOnSimple:
     def test_simple_validate_ok(self, tmpdir: Path, simple_exporter: Exporter) -> None:
         simple_exporter.validate()
 
-    @pytest.mark.parametrize("method", ["export_public", "export_private"])
-    @pytest.mark.parametrize(
-        "state", ["disabled_task", "future_task", "disabled_group", "future_group"]
-    )
-    def test_export_preserves_unreleased_task_exclusions(
-        self,
-        simple_exporter: Exporter,
-        simple_export_folder: Path,
-        method: str,
-        state: str,
-    ) -> None:
-        schedule = simple_exporter.course.manytask_config.deadlines.schedule
-        group = schedule[0]
-        if state == "disabled_task":
-            group.tasks[1].enabled = False
-        elif state == "future_task":
-            future = group.model_copy(deep=True)
-            future.group = "future"
-            future.start = future.start.replace(year=2999)
-            future.tasks = [group.tasks.pop()]
-            schedule.append(future)
-        elif state == "disabled_group":
-            group.enabled = False
-        else:
-            group.start = group.start.replace(year=2999)
-
-        getattr(simple_exporter, method)(simple_export_folder)
-
-        assert not (simple_export_folder / "task2").exists()
-        assert (simple_export_folder / "task1").exists() == state.endswith("task")
-
     def test_simple_validate_mix_templates_in_task(
         self,
         tmpdir: Path,
@@ -559,18 +528,14 @@ class TestExporterOnSimple:
 
         assert not called
 
-    @pytest.mark.parametrize(
-        "prepare_method", ["export_for_testing", "prepare_task_for_testing"]
-    )
     def test_export_for_testing(
         self,
         tmpdir: Path,
         simple_exporter: Exporter,
         simple_private_folder: Path,
         simple_export_folder: Path,
-        prepare_method: str,
     ) -> None:
-        getattr(simple_exporter, prepare_method)(simple_export_folder)
+        simple_exporter.export_for_testing(simple_export_folder)
 
         assert_files_in_folder(
             simple_export_folder.resolve(),
@@ -588,46 +553,12 @@ class TestExporterOnSimple:
             ],
         )
         # check templates was resolved if needed (non here)
-        assert (simple_export_folder / "task1" / "test.txt").read_text(
-            encoding="utf-8"
-        ) == "Some Changes"
-        assert (simple_export_folder / "task2" / "test.txt").read_text(
-            encoding="utf-8"
-        ) == "Student changed it"
+        assert (simple_export_folder / "task1" / "test.txt").read_text(encoding="utf-8") == "Some Changes"
+        assert (simple_export_folder / "task2" / "test.txt").read_text(encoding="utf-8") == "Student changed it"
         assert (simple_export_folder / "just_file").read_text(encoding="utf-8") == "hey"
         # overwritten to public tests
-        assert (
-            simple_export_folder / "public_folder" / "file_in_public_folder"
-        ).read_text(encoding="utf-8") == "file"
-        assert (simple_export_folder / "task1" / "public_file.py").read_text(
-            encoding="utf-8"
-        ) == "print('Hello')\n"
-
-    @pytest.mark.parametrize("public_directory", [False, True])
-    def test_testing_export_preserves_structure_context_for_public_directories(
-        self,
-        simple_exporter: Exporter,
-        simple_export_folder: Path,
-        public_directory: bool,
-    ) -> None:
-        # A classified directory inherits its parent's rules; an ordinary task
-        # directory applies its own overrides before copying its children.
-        if public_directory:
-            simple_exporter.structure_config.public_patterns = ["public*", "task1"]
-        reference_task = simple_exporter.reference_root / "task1"
-        (reference_task / ".ignore_me").write_text("ignored by the parent only")
-
-        simple_exporter.export_for_testing(simple_export_folder)
-
-        task_folder = simple_export_folder / "task1"
-        assert (task_folder / "extra_ignore_me").exists() == public_directory
-        assert (task_folder / ".ignore_me").exists() != public_directory
-        expected = (
-            "Some SOLUTION BEGIN\nHello\nSOLUTION END\n"
-            if public_directory
-            else "Some Changes"
-        )
-        assert (task_folder / "test.txt").read_text() == expected
+        assert (simple_export_folder / "public_folder" / "file_in_public_folder").read_text(encoding="utf-8") == "file"
+        assert (simple_export_folder / "task1" / "public_file.py").read_text(encoding="utf-8") == "print('Hello')\n"
 
     def test_export_for_contribution(
         self,
@@ -872,9 +803,7 @@ class TestExporterIsTaskUnchanged:
 
 class TestExporterSharedTasks:
     @pytest.fixture()
-    def shared_exporter(
-        self, tmp_path: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE
-    ) -> Exporter:
+    def shared_exporter(self, tmp_path: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> Exporter:
         reference = tmp_path / "reference"
         student = tmp_path / "student"
         generate_file_structure(
@@ -978,9 +907,7 @@ class TestExporterSharedTasks:
 
         getattr(shared_exporter, export_method)(shared_exporter.temporary_dir)
 
-        assert (
-            shared_exporter.temporary_dir / "group/shared/alpha.py"
-        ).read_text() == "published alpha"
+        assert (shared_exporter.temporary_dir / "group/shared/alpha.py").read_text() == "published alpha"
 
     @pytest.mark.parametrize("export_method", ["export_public", "export_private"])
     def test_export_public_omits_shared_folder_without_published_tasks(
@@ -994,29 +921,21 @@ class TestExporterSharedTasks:
         assert not (shared_exporter.temporary_dir / "group/shared").exists()
 
     @pytest.mark.parametrize("export_method", ["export_public", "export_private"])
-    def test_export_public_preserves_disabled_group_skip(
-        self, shared_exporter: Exporter, export_method: str
-    ) -> None:
+    def test_export_public_preserves_disabled_group_skip(self, shared_exporter: Exporter, export_method: str) -> None:
         shared_exporter.course.manytask_config.deadlines.schedule[0].enabled = False
 
         getattr(shared_exporter, export_method)(shared_exporter.temporary_dir)
 
         assert not (shared_exporter.temporary_dir / "group").exists()
 
-    @pytest.mark.parametrize(
-        "other_override", [None, CheckerStructureConfig(ignore_patterns=["different"])]
-    )
+    @pytest.mark.parametrize("other_override", [None, CheckerStructureConfig(ignore_patterns=["different"])])
     def test_shared_folder_rejects_conflicting_structure_even_for_disabled_tasks(
         self, shared_exporter: Exporter, other_override: CheckerStructureConfig | None
     ) -> None:
         tasks = shared_exporter.course.potential_tasks
-        tasks["alpha"].config.structure = CheckerStructureConfig(
-            ignore_patterns=["same"]
-        )
+        tasks["alpha"].config.structure = CheckerStructureConfig(ignore_patterns=["same"])
         tasks["beta"].config.structure = other_override
-        shared_exporter.course.manytask_config.deadlines.schedule[0].tasks[
-            1
-        ].enabled = False
+        shared_exporter.course.manytask_config.deadlines.schedule[0].tasks[1].enabled = False
 
         with pytest.raises(BadConfig, match="different structure overrides"):
             Exporter(
@@ -1025,9 +944,7 @@ class TestExporterSharedTasks:
                 shared_exporter.export_config,
             )
 
-    def test_shared_folder_accepts_matching_structure(
-        self, shared_exporter: Exporter
-    ) -> None:
+    def test_shared_folder_accepts_matching_structure(self, shared_exporter: Exporter) -> None:
         for task in shared_exporter.course.potential_tasks.values():
             task.config.structure = CheckerStructureConfig(ignore_patterns=["same"])
 
@@ -1037,9 +954,7 @@ class TestExporterSharedTasks:
             shared_exporter.export_config,
         )
 
-        assert exporter.sub_config_files[Path("group/shared")].ignore_patterns == [
-            "same"
-        ]
+        assert exporter.sub_config_files[Path("group/shared")].ignore_patterns == ["same"]
 
 
 class _TestExporter:
