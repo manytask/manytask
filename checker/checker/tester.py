@@ -61,7 +61,9 @@ class Tester:
 
         self.plugins = load_plugins(self.testing_config.search_plugins, verbose=verbose)
 
-        self.global_pipeline = PipelineRunner(self.testing_config.global_pipeline, self.plugins, verbose=verbose)
+        self.global_pipeline = PipelineRunner(
+            self.testing_config.global_pipeline, self.plugins, verbose=verbose
+        )
 
         self.repository_dir = self.course.repository_root
         self.reference_dir = self.course.reference_root
@@ -70,11 +72,18 @@ class Tester:
         self.dry_run = dry_run
 
         group_with_percents = [
-            (group, group.get_percents_before_deadline()) for group in course.manytask_config.deadlines.get_groups()
+            (group, group.get_percents_before_deadline())
+            for group in course.manytask_config.deadlines.get_groups()
         ]
-        self.task_to_percents = {task.name: percs for group, percs in group_with_percents for task in group.tasks}
+        self.task_to_percents = {
+            task.name: percs
+            for group, percs in group_with_percents
+            for task in group.tasks
+        }
         self.deadlines_type = course.manytask_config.deadlines.deadlines
-        self.interpolation_window = (course.manytask_config.deadlines.window or 0) * 3600 * 24  # in seconds
+        self.interpolation_window = (
+            (course.manytask_config.deadlines.window or 0) * 3600 * 24
+        )  # in seconds
 
     def _calc_interpolated_percent(
         self,
@@ -214,6 +223,50 @@ class Tester:
 
             print_info("  ok")
 
+    def _run_task(
+        self,
+        task: FileSystemTask,
+        global_variables: GlobalPipelineVariables,
+        outputs: dict[str, PipelineStageResult],
+        report: bool,
+        timestamp: datetime | None,
+    ) -> tuple[PipelineResult, PipelineResult | None]:
+        # run task pipeline
+        print_header_info(f"Run <{task.name}> task pipeline:", color="pink")
+
+        # create task context
+        task_score = self._get_task_score_percent(task.name, timestamp)
+        task_variables = self._get_task_pipeline_parameters(task, task_score)
+        context = self._build_task_context(
+            global_variables, outputs, task, task_variables
+        )
+
+        task_pipeline_result: PipelineResult = self._get_task_pipeline_runner(task).run(
+            context, dry_run=self.dry_run
+        )
+        print_separator("-")
+
+        print_info(str(task_pipeline_result), color="pink")
+        print_separator("-")
+
+        task_report_result: PipelineResult | None = None
+        # Report score if task pipeline succeeded
+        if task_pipeline_result:
+            report_pipeline = self._get_task_report_pipeline_runner(task)
+            print_info(f"Reporting <{task.name}> task tests:", color="pink")
+            if report:
+                task_report_result = report_pipeline.run(context, dry_run=self.dry_run)
+                if task_report_result:
+                    print_info("->Reporting succeeded")
+                else:
+                    print_info("->Reporting failed")
+            else:
+                _: PipelineResult = report_pipeline.run(context, dry_run=True)
+                print_info("->Reporting disabled (dry-run)")
+            print_separator("-")
+
+        return task_pipeline_result, task_report_result
+
     def run(
         self,
         origin: Path,
@@ -242,7 +295,9 @@ class Tester:
         if len(self.global_pipeline) > 0 or self.verbose:
             print_header_info("Run global pipeline:", color="pink")
             context = self._build_global_context(global_variables, outputs)
-            global_pipeline_result: PipelineResult = self.global_pipeline.run(context, dry_run=self.dry_run)
+            global_pipeline_result: PipelineResult = self.global_pipeline.run(
+                context, dry_run=self.dry_run
+            )
             print_separator("-")
             print_info(str(global_pipeline_result), color="pink")
 
@@ -252,39 +307,13 @@ class Tester:
         failed_tasks = []
         failed_reports = []
         for task in tasks:
-            # run task pipeline
-            print_header_info(f"Run <{task.name}> task pipeline:", color="pink")
-
-            # create task context
-            task_score = self._get_task_score_percent(task.name, timestamp)
-            task_variables = self._get_task_pipeline_parameters(task, task_score)
-            context = self._build_task_context(global_variables, outputs, task, task_variables)
-
-            task_pipeline_result: PipelineResult = self._get_task_pipeline_runner(task).run(
-                context, dry_run=self.dry_run
+            task_result, report_result = self._run_task(
+                task, global_variables, outputs, report, timestamp
             )
-            print_separator("-")
-
-            print_info(str(task_pipeline_result), color="pink")
-            print_separator("-")
-
-            # Report score if task pipeline succeeded
-            if task_pipeline_result:
-                report_pipeline = self._get_task_report_pipeline_runner(task)
-                print_info(f"Reporting <{task.name}> task tests:", color="pink")
-                if report:
-                    task_report_result: PipelineResult = report_pipeline.run(context, dry_run=self.dry_run)
-                    if task_report_result:
-                        print_info("->Reporting succeeded")
-                    else:
-                        print_info("->Reporting failed")
-                        failed_reports.append(task.name)
-                else:
-                    _: PipelineResult = report_pipeline.run(context, dry_run=True)
-                    print_info("->Reporting disabled (dry-run)")
-                print_separator("-")
-            else:
+            if not task_result:
                 failed_tasks.append(task.name)
+            elif report_result is not None and not report_result:
+                failed_reports.append(task.name)
 
         if failed_tasks:
             raise TestingError(f"Task pipelines failed: {failed_tasks}")

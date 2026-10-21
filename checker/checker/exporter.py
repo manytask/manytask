@@ -259,7 +259,11 @@ class Exporter:
         return [
             *[group.relative_path for group in self.course.get_groups(enabled=False)],
             *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks() if task.relative_path not in published_task_paths],
+            *[
+                task.relative_path
+                for task in self.course.get_tasks()
+                if task.relative_path not in published_task_paths
+            ],
         ]
 
     def export_public(

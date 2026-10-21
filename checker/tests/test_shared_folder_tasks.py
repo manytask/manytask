@@ -52,7 +52,9 @@ def _write_yaml(path: Path, config: dict[str, Any]) -> None:
     path.write_text(yaml.safe_dump(config))
 
 
-def _expect_workspace(reference: Path, expected: dict[str, str], *, injected: bool = False) -> None:
+def _expect_workspace(
+    reference: Path, expected: dict[str, str], *, injected: bool = False
+) -> None:
     path = reference / ".checker.yml"
     config = yaml.safe_load(path.read_text())
     config["testing"]["global_pipeline"] = [
@@ -188,7 +190,11 @@ def _create_course(
     )
 
     for name in ("one", "two"):
-        content = f"reference {name}" if unchanged_one and name == "one" else f"student {name}"
+        content = (
+            f"reference {name}"
+            if unchanged_one and name == "one"
+            else f"student {name}"
+        )
         _write_yaml(
             reference / shared_path / f".task.{name}.yml",
             {
@@ -201,7 +207,9 @@ def _create_course(
             },
         )
         (reference / shared_path / f"{name}.txt").write_text(f"reference {name}")
-        (reference / shared_path / f"{name}.txt.template").write_text(f"reference {name}")
+        (reference / shared_path / f"{name}.txt.template").write_text(
+            f"reference {name}"
+        )
         (student / shared_path / f"{name}.txt").write_text(content)
 
     (reference / shared_path / "protected.txt").write_text("reference protected")
@@ -223,7 +231,9 @@ def _grade(student: Path, reference: Path, *args: str) -> Result:
 
 
 @pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
-def test_grade_shared_folder_tasks_use_one_workspace_in_either_order(tmp_path: Path, order: tuple[str, str]) -> None:
+def test_grade_shared_folder_tasks_use_one_workspace_in_either_order(
+    tmp_path: Path, order: tuple[str, str]
+) -> None:
     student, reference = _create_course(tmp_path, order)
 
     result = _grade(student, reference, "--all-tasks", "--submit-score")
@@ -282,8 +292,12 @@ def test_mixed_shared_tasks_preserve_legacy_student_files_and_global_preparation
 
 
 @pytest.mark.parametrize("skip_unchanged", [False, True])
-def test_skip_unchanged_checks_each_shared_task_editable_files(tmp_path: Path, skip_unchanged: bool) -> None:
-    student, reference = _create_course(tmp_path, unchanged_one=True, skip_unchanged=skip_unchanged)
+def test_skip_unchanged_checks_each_shared_task_editable_files(
+    tmp_path: Path, skip_unchanged: bool
+) -> None:
+    student, reference = _create_course(
+        tmp_path, unchanged_one=True, skip_unchanged=skip_unchanged
+    )
     repository = git.Repo.init(student)
     actor = git.Actor("Checker tests", "checker@example.com")
     repository.index.add(["group/shared"])
@@ -315,7 +329,9 @@ def test_skip_unchanged_checks_each_shared_task_editable_files(tmp_path: Path, s
 
 
 @pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
-def test_empty_patterns_task_uses_the_same_selected_file_union(tmp_path: Path, order: tuple[str, str]) -> None:
+def test_empty_patterns_task_uses_the_same_selected_file_union(
+    tmp_path: Path, order: tuple[str, str]
+) -> None:
     student, reference = _create_course(tmp_path, order)
     path = reference / "group/shared/.task.one.yml"
     config = yaml.safe_load(path.read_text())
