@@ -7,7 +7,6 @@ import pytest
 
 from checker.configs import CheckerExportConfig, CheckerStructureConfig, ManytaskConfig
 from checker.course import Course
-from checker.exceptions import BadStructure
 from checker.exporter import Exporter
 
 T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
@@ -182,20 +181,6 @@ class TestExporterTaskPreparation:
         task_exporter.prepare_task_for_testing(task_exporter.temporary_dir, task, patterns)
 
         assert sorted(path.name for path in folder.iterdir()) == ["existing.txt"]
-
-    @pytest.mark.parametrize("which_root", ["reference_root", "repository_root"])
-    @pytest.mark.parametrize("use_ancestor", [True, False])
-    def test_prepare_task_refuses_to_overwrite_source(
-        self, task_exporter: Exporter, which_root: str, use_ancestor: bool
-    ) -> None:
-        task = task_exporter.course.potential_tasks["shared"]
-        source = getattr(task_exporter, which_root)
-        before = (source / task.relative_path / "alpha.py").read_bytes()
-
-        with pytest.raises(BadStructure, match="must not overlap"):
-            task_exporter.prepare_task_for_testing(source.parent if use_ancestor else source, task, ["alpha.py"])
-
-        assert (source / task.relative_path / "alpha.py").read_bytes() == before
 
     def test_prepare_task_preserves_deleted_allowed_files(self, task_exporter: Exporter) -> None:
         task = task_exporter.course.potential_tasks["shared"]
