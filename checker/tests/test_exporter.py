@@ -136,6 +136,37 @@ class TestExporterOnSimple:
     def test_simple_validate_ok(self, tmpdir: Path, simple_exporter: Exporter) -> None:
         simple_exporter.validate()
 
+    @pytest.mark.parametrize("method", ["export_public", "export_private"])
+    @pytest.mark.parametrize(
+        "state", ["disabled_task", "future_task", "disabled_group", "future_group"]
+    )
+    def test_export_preserves_unreleased_task_exclusions(
+        self,
+        simple_exporter: Exporter,
+        simple_export_folder: Path,
+        method: str,
+        state: str,
+    ) -> None:
+        schedule = simple_exporter.course.manytask_config.deadlines.schedule
+        group = schedule[0]
+        if state == "disabled_task":
+            group.tasks[1].enabled = False
+        elif state == "future_task":
+            future = group.model_copy(deep=True)
+            future.group = "future"
+            future.start = future.start.replace(year=2999)
+            future.tasks = [group.tasks.pop()]
+            schedule.append(future)
+        elif state == "disabled_group":
+            group.enabled = False
+        else:
+            group.start = group.start.replace(year=2999)
+
+        getattr(simple_exporter, method)(simple_export_folder)
+
+        assert not (simple_export_folder / "task2").exists()
+        assert (simple_export_folder / "task1").exists() == state.endswith("task")
+
     def test_simple_validate_mix_templates_in_task(
         self,
         tmpdir: Path,

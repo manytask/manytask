@@ -107,24 +107,28 @@ class Course:
         ]
 
     @staticmethod
+    def _load_sub_config(path: Path) -> CheckerSubConfig:
+        if path.read_text().strip() == "":
+            return CheckerSubConfig.default()
+        return CheckerSubConfig.from_yaml(path)
+
+    @staticmethod
+    def _load_tasks_from_config(root: Path, path: Path) -> list[FileSystemTask]:
+        relative_path = path.parent.relative_to(root)
+        return [
+            FileSystemTask(
+                name=path.parent.name,
+                relative_path=str(relative_path),
+                config=Course._load_sub_config(path),
+            )
+        ]
+
+    @staticmethod
     def _search_for_tasks_by_configs(
         root: Path,
     ) -> Generator[FileSystemTask, Any, None]:
         for task_config_path in root.glob(f"**/{Course.TASK_CONFIG_NAME}"):
-            relative_task_path = task_config_path.parent.relative_to(root)
-
-            # if empty file - use default
-            if task_config_path.read_text().strip() == "":
-                task_config = CheckerSubConfig.default()
-            # if any content - read yml
-            else:
-                task_config = CheckerSubConfig.from_yaml(task_config_path)
-
-            yield FileSystemTask(
-                name=task_config_path.parent.name,
-                relative_path=str(relative_task_path),
-                config=task_config,
-            )
+            yield from Course._load_tasks_from_config(root, task_config_path)
 
     @staticmethod
     def _search_for_groups_by_configs(
@@ -133,14 +137,11 @@ class Course:
         for group_config_path in root.glob(f"**/{Course.GROUP_CONFIG_NAME}"):
             relative_group_path = group_config_path.parent.relative_to(root)
 
-            # if empty file - use default
-            if group_config_path.read_text().strip() == "" or group_config_path.read_text().strip() == "\n":
-                group_config = CheckerSubConfig.default()
-            # if any content - read yml
-            else:
-                group_config = CheckerSubConfig.from_yaml(group_config_path)
+            group_config = Course._load_sub_config(group_config_path)
 
-            group_tasks = list(Course._search_for_tasks_by_configs(group_config_path.parent))
+            group_tasks = list(
+                Course._search_for_tasks_by_configs(group_config_path.parent)
+            )
             for task in group_tasks:
                 task.relative_path = str(relative_group_path / task.relative_path)
 
