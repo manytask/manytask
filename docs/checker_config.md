@@ -410,7 +410,8 @@ runs the report pipeline in dry-run mode, so local runs never report a score.
 
 `changes_detection: last_commit_changes` means `checker grade` tests only the tasks touched by the
 pushed commits (diff against `CI_COMMIT_BEFORE_SHA` in GitLab CI, or `--base-ref`; `HEAD~1` otherwise).
-All active tasks in a shared folder count as touched when a file in that folder changes.
+In a shared folder, a task's nonempty `editable_patterns` list narrows detection to matching files;
+tasks without a nonempty list keep folder-based detection.
 `checker check` always tests everything.
 
 See [Checker pipelines and plugins](./checker_pipelines_and_plugins.md) and the
