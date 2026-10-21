@@ -140,15 +140,7 @@ class Tester:
 
     def get_task_parameters(self, task: FileSystemTask) -> dict[str, Any]:
         """Merge default, group and task parameters (task takes precedence over group over default)."""
-        parameters = self.default_params.__dict__.copy()
-
-        group_config = self._get_group_config(task)
-        if group_config and group_config.parameters:
-            parameters = parameters | group_config.parameters.__dict__
-        if task.config and task.config.parameters:
-            parameters = parameters | task.config.parameters.__dict__
-
-        return parameters
+        return self.course.get_task_parameters(task, self.default_params.root)
 
     def _build_task_context(
         self,

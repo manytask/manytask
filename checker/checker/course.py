@@ -64,6 +64,20 @@ class Course:
         """Get the group that contains the given task, or None if not found."""
         return self.task_to_group.get(task_name)
 
+    def get_task_parameters(
+        self,
+        task: FileSystemTask,
+        default_parameters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Resolve the same parameter inheritance for detection and grading."""
+        parameters = (default_parameters or {}).copy()
+        group = self.get_group_for_task(task.name)
+        if group and group.config.parameters:
+            parameters.update(group.config.parameters.root)
+        if task.config.parameters:
+            parameters.update(task.config.parameters.root)
+        return parameters
+
     def validate(self) -> None:
         # check all groups and tasks mentioned in deadlines exists
         deadlines_groups = self.manytask_config.get_groups(enabled=True)
