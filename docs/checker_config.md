@@ -239,6 +239,19 @@ Use this when a task has an unusual shape — several solution files, generated 
 folder — and you want the reviewable list to sit next to the task instead of in the root config.
 For a uniform course the structure patterns alone are simpler and harder to get wrong.
 
+The same parameter name can also be pointed at by `testing.skip_unchanged_tasks`, so that a freshly
+pulled, untouched task is skipped instead of graded against its own template — see
+[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks):
+
+```yaml
+# .checker.yml
+default_parameters:
+  allow_change: ["add.py"]
+
+testing:
+  skip_unchanged_tasks: allow_change
+```
+
 ## Templates
 
 Students must receive a stub instead of your solution. Two strategies, selected by
@@ -356,7 +369,8 @@ is what pushes the score to Manytask, so it needs a `MANYTASK_TOKEN` CI variable
 runs the report pipeline in dry-run mode, so local runs never report a score.
 
 `changes_detection: last_commit_changes` means `checker grade` tests only the tasks touched by the
-last commit. `checker check` always tests everything.
+pushed commits (diff against `CI_COMMIT_BEFORE_SHA` in GitLab CI, or `--base-ref`; `HEAD~1` otherwise).
+`checker check` always tests everything.
 
 See [Checker pipelines and plugins](./checker_pipelines_and_plugins.md) and the
 [built-in plugin list](./checker_plugins.md) for the available stages.

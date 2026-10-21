@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploy course-template/ (the monorepo source of truth) to the GitLab
-# private repo. Usage: course-template/deploy.sh git@gitlab.manytask2.org:sandbox/private.git
+# private repo. Usage: course-template/deploy.sh git@gitlab.manytask.org:sandbox/private.git
 set -euo pipefail
 
 REMOTE="${1:?usage: deploy.sh <gitlab-private-remote-url>}"

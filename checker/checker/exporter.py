@@ -401,6 +401,95 @@ class Exporter:
         content = path.read_text()
         return self.TEMPLATE_START_COMMENT in content and self.TEMPLATE_END_COMMENT in content
 
+    def is_task_unchanged(self, task_relative_path: str, patterns: list[str]) -> bool:
+        """Check if all student-editable files of a task are identical to the published version.
+
+        `patterns` are glob patterns (relative to the task dir, same convention as `copy_files`)
+        pointing at the files a student is allowed to change. Returns False if there is nothing
+        to compare (no patterns, or no files matched) - such a task is graded normally.
+        """
+        if not patterns:
+            return False
+
+        student_task_dir = self.repository_root / task_relative_path
+        reference_task_dir = self.reference_root / task_relative_path
+
+        student_files = self._collect_student_files(student_task_dir, patterns)
+        if not student_files:
+            return False
+
+        for relative in student_files:
+            student_bytes = (student_task_dir / relative).read_bytes()
+            expected_bytes = self._exported_content(reference_task_dir, relative)
+            if expected_bytes is None or student_bytes != expected_bytes:
+                if self.verbose:
+                    print_info(
+                        f"    - <{Path(task_relative_path) / relative}> differs from the published version",
+                        color="grey",
+                    )
+                return False
+
+        return True
+
+    def _collect_student_files(self, student_task_dir: Path, patterns: list[str]) -> list[Path]:
+        """Collect files matched by `patterns` in `student_task_dir`, same convention as `copy_files`."""
+        if not student_task_dir.is_dir():
+            return []
+
+        collected: set[Path] = set()
+        for pattern in patterns:
+            for entry in student_task_dir.glob(pattern):
+                if entry.is_dir():
+                    collected.update(sub.relative_to(student_task_dir) for sub in entry.rglob("*") if sub.is_file())
+                elif entry.is_file():
+                    collected.add(entry.relative_to(student_task_dir))
+
+        return sorted(collected)
+
+    def _exported_content(self, reference_task_dir: Path, relative: Path) -> bytes | None:
+        """Content the export would publish for `relative` (relative to the task dir), or None."""
+        if self.export_config.templates in (
+            CheckerExportConfig.TemplateType.SEARCH,
+            CheckerExportConfig.TemplateType.SEARCH_OR_CREATE,
+        ):
+            template_bytes = self._find_template_bytes(reference_task_dir, relative)
+            if template_bytes is not None:
+                return template_bytes
+
+        reference_file = reference_task_dir / relative
+        if self.export_config.templates in (
+            CheckerExportConfig.TemplateType.CREATE,
+            CheckerExportConfig.TemplateType.SEARCH_OR_CREATE,
+        ) and self._is_text_file(reference_file):
+            content = reference_file.read_text()
+            if self.TEMPLATE_START_COMMENT in content and self.TEMPLATE_END_COMMENT in content:
+                return self._render_template_comments(content).encode()
+
+        if reference_file.exists():
+            return reference_file.read_bytes()
+
+        return None
+
+    def _find_template_bytes(self, task_dir: Path, relative: Path) -> bytes | None:
+        """Find the `.template` counterpart of `relative`, closest match first.
+
+        Checks the file itself (`<name>.template` sibling), then each ancestor directory of
+        `relative` within the task dir (`<dir>.template/<rest of path>`), closest first.
+        """
+        file_template = task_dir / relative.with_name(relative.name + self.TEMPLATE_SUFFIX)
+        if file_template.is_file():
+            return file_template.read_bytes()
+
+        for parent in relative.parents:
+            if parent == Path("."):
+                continue
+            dir_template = task_dir / parent.parent / (parent.name + self.TEMPLATE_SUFFIX)
+            candidate = dir_template / relative.relative_to(parent)
+            if candidate.is_file():
+                return candidate.read_bytes()
+
+        return None
+
     def _should_skip_path(  # noqa: C901, PLR0911, PLR0912, PLR0913
         self,
         path: Path,
@@ -621,13 +710,16 @@ class Exporter:
 
         # if template comments in file - replace them, not greedy
         if fill_templates and is_path_template_comment:
-            file_content = path.read_text()
-            file_content = self.TEMPLATE_COMMENT_REGEX.sub(self.TEMPLATE_REPLACE_COMMENT, file_content)
+            file_content = self._render_template_comments(path.read_text())
             path_destination.touch(exist_ok=True)
             path_destination.write_text(file_content)
         else:
             shutil.copyfile(path, path_destination)
             shutil.copymode(path, path_destination)
+
+    def _render_template_comments(self, content: str) -> str:
+        """Replace `SOLUTION BEGIN`/`SOLUTION END` blocks with the placeholder, not greedy."""
+        return self.TEMPLATE_COMMENT_REGEX.sub(self.TEMPLATE_REPLACE_COMMENT, content)
 
     def _copy_files_with_config(  # noqa: PLR0913
         self,

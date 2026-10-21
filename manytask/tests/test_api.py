@@ -11,10 +11,11 @@ from flask import json, url_for
 from pytest import approx
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import RmsUser
+from manytask.abstract import CourseAccessUser, RmsUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.course import ProtectedBranchSettings
 from manytask.database import DataBaseApi
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -233,7 +234,17 @@ def authenticated_client(app, mock_gitlab_oauth):
         rms_user: RmsUser = app.rms_api.register_new_user(
             TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
         )
-        app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+        app.rms_api.create_project(
+            rms_user,
+            TEST_STUDENTS_GROUP,
+            TEST_PUBLIC_REPO,
+            f".gitlab-ci.yml@{TEST_PUBLIC_REPO}",
+            [
+                ProtectedBranchSettings(
+                    name="main", push_access_level="developer", merge_access_level="developer", allow_force_push=True
+                )
+            ],
+        )
 
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -244,6 +255,32 @@ def authenticated_client(app, mock_gitlab_oauth):
             build_test_session(include_manytask=True, access_token="", refresh_token=""),
         )
         yield client
+
+
+@pytest.mark.parametrize("course_name", [TEST_COURSE_NAME, "another-course"])
+def test_healthcheck_success(app, mock_course, course_name):
+    with patch.object(app.storage_api, "get_course", return_value=mock_course) as mock_get_course:
+        response = app.test_client().get(f"/api/{course_name}/healthcheck")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.get_data(as_text=True) == "OK"
+    mock_get_course.assert_called_once_with(course_name)
+
+
+def test_healthcheck_unknown_course(app):
+    with patch.object(app.storage_api, "get_course", return_value=None):
+        response = app.test_client().get("/api/unknown-course/healthcheck")
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == "/"
+
+
+def test_healthcheck_not_ready(app):
+    with patch.object(app.storage_api, "get_course", return_value=make_created_course_mock()):
+        response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/healthcheck")
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == f"/{TEST_COURSE_NAME}/not_ready"
 
 
 def test_parse_flags_no_flags():
@@ -593,6 +630,21 @@ def test_update_score_after_deadline(app):
     # Test with check_deadline=True
     result = _update_score(course, group, task, score, flags, old_score, submit_time, check_deadline=True)
     assert result == score * group.get_current_percent_multiplier(submit_time, course.deadlines_type)
+
+
+@pytest.mark.parametrize(("score", "expected_score"), [(13, 10), (11, 8)])
+def test_update_score_rounds_interpolated_deadline_score(mock_course, mock_task, score, expected_score):
+    start = datetime(2025, 9, 1)
+    group = ManytaskGroupConfig(
+        group="test",
+        start=start,
+        steps={0.5: start + timedelta(days=2)},
+        end=start + timedelta(days=4),
+    )
+    mock_course.deadlines_type = ManytaskDeadlinesType.INTERPOLATE
+    submit_time = start + timedelta(days=1)
+
+    assert _update_score(mock_course, group, mock_task, score, "", 0, submit_time) == expected_score
 
 
 def test_update_config_success(app):
@@ -1485,3 +1537,166 @@ def test_deadlines_invalid_token(app):
     response = client.get(f"/api/{TEST_COURSE_NAME}/deadlines", headers=headers)
 
     assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+# ----- Course access table -----
+
+
+ACCESS_USERS_URL = f"/api/{TEST_COURSE_NAME}/access_users"
+COURSE_ADMIN_URL = f"/api/{TEST_COURSE_NAME}/course_admin"
+PROGRAM_MANAGER_URL = f"/api/{TEST_COURSE_NAME}/program_manager"
+
+
+def _stub_access_users(app, access_users):
+    app.storage_api.get_course_access_users = lambda _course_name: access_users
+
+
+def test_get_access_users_returns_levels(app, authenticated_client):
+    _stub_access_users(
+        app,
+        [
+            CourseAccessUser(
+                username=TEST_USERNAME,
+                first_name=TEST_FIRST_NAME,
+                last_name=TEST_LAST_NAME,
+                access_levels=["instance_admin", "course_admin"],
+            )
+        ],
+    )
+
+    response = authenticated_client.get(ACCESS_USERS_URL)
+
+    assert response.status_code == HTTPStatus.OK
+    body = json.loads(response.data)
+    assert body["users"] == [
+        {
+            "username": TEST_USERNAME,
+            "first_name": TEST_FIRST_NAME,
+            "last_name": TEST_LAST_NAME,
+            "access_levels": ["instance_admin", "course_admin"],
+        }
+    ]
+
+
+def test_get_access_users_empty(app, authenticated_client):
+    _stub_access_users(app, [])
+
+    response = authenticated_client.get(ACCESS_USERS_URL)
+
+    assert response.status_code == HTTPStatus.OK
+    assert json.loads(response.data)["users"] == []
+
+
+def test_get_access_users_forbidden_for_non_admin(app, authenticated_client):
+    app.storage_api.non_admin_users.add(TEST_USERNAME)
+    app.storage_api.check_if_instance_admin = lambda _username: False
+    _stub_access_users(app, [])
+
+    response = authenticated_client.get(ACCESS_USERS_URL)
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_set_course_admin_grants(app, authenticated_client):
+    calls = []
+    app.storage_api.set_course_admin_status = lambda *args: calls.append(args)
+
+    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": TEST_USERNAME, "is_admin": True})
+
+    assert response.status_code == HTTPStatus.OK
+    assert calls == [(TEST_COURSE_NAME, TEST_USERNAME, True)]
+
+
+def test_set_course_admin_revokes(app, authenticated_client):
+    calls = []
+    app.storage_api.set_course_admin_status = lambda *args: calls.append(args)
+
+    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": TEST_USERNAME, "is_admin": False})
+
+    assert response.status_code == HTTPStatus.OK
+    assert calls == [(TEST_COURSE_NAME, TEST_USERNAME, False)]
+
+
+def test_set_course_admin_unknown_user(app, authenticated_client):
+    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": "nobody", "is_admin": True})
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_set_course_admin_rejects_non_member(app, authenticated_client):
+    """Course admin status lives on the enrollment row, so non-members are rejected."""
+    app.storage_api.check_user_on_course = lambda *_args, **_kwargs: False
+    calls = []
+    app.storage_api.set_course_admin_status = lambda *args: calls.append(args)
+
+    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": TEST_USERNAME, "is_admin": True})
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert "not enrolled" in json.loads(response.data)["error"]
+    assert calls == []
+
+
+def test_set_course_admin_forbidden_for_non_admin(app, authenticated_client):
+    app.storage_api.non_admin_users.add(TEST_USERNAME)
+    app.storage_api.check_if_instance_admin = lambda _username: False
+
+    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": TEST_USERNAME, "is_admin": True})
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_set_course_admin_requires_json(app, authenticated_client):
+    response = authenticated_client.post(COURSE_ADMIN_URL, data="not json", content_type="text/plain")
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_assign_program_manager_without_namespace(app, authenticated_client, mock_course):
+    """A course outside any namespace has no program managers to assign."""
+    assert mock_course.namespace_id is None
+
+    response = authenticated_client.post(PROGRAM_MANAGER_URL, json={"username": TEST_USERNAME})
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "namespace" in json.loads(response.data)["error"]
+
+
+def test_assign_program_manager_forbidden_for_course_admin(app, authenticated_client, mock_course):
+    """Being a course admin must not be enough to grant a namespace-level role."""
+    mock_course.namespace_id = 1
+    app.storage_api.check_if_instance_admin = lambda _username: False
+    app.storage_api.get_namespace_admin_namespaces = lambda _username: []
+
+    response = authenticated_client.post(PROGRAM_MANAGER_URL, json={"username": TEST_USERNAME})
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert "Namespace Admin" in json.loads(response.data)["error"]
+
+
+def test_assign_program_manager_allowed_for_namespace_admin(app, authenticated_client, mock_course):
+    mock_course.namespace_id = 1
+    app.storage_api.check_if_instance_admin = lambda _username: False
+    app.storage_api.get_namespace_admin_namespaces = lambda _username: [1]
+
+    namespace = MagicMock()
+    namespace.gitlab_group_id = 1
+    app.storage_api.get_namespace_by_id = lambda _namespace_id, _username: (namespace, "namespace_admin")
+
+    user_on_namespace = MagicMock()
+    user_on_namespace.id = 1
+    user_on_namespace.user_id = 2
+    user_on_namespace.namespace_id = 1
+    added = []
+
+    def add_user_to_namespace(*, namespace_id, username, role, assigned_by_username):
+        added.append((namespace_id, username, role))
+        return user_on_namespace
+
+    app.storage_api.add_user_to_namespace = add_user_to_namespace
+    app.rms_api.add_user_to_namespace_group = lambda **_kwargs: None
+
+    response = authenticated_client.post(PROGRAM_MANAGER_URL, json={"username": TEST_USERNAME})
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert added == [(1, TEST_USERNAME, "program_manager")]
+    assert json.loads(response.data)["role"] == "program_manager"

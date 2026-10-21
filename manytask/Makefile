@@ -1,7 +1,7 @@
 ROOT_DIR := manytask
 TESTS_DIR := tests
 TEST_ARGS ?= $(TESTS_DIR)
-DOCKER_COMPOSE_DEV := compose/docker-compose.development.yml
+DOCKER_COMPOSE_DEV := docker compose --env-file .env -f compose/docker-compose.development.yml
 ALEMBIC_CONFIG_PATH := manytask/alembic.ini
 DOCS_DIR := ../docs
 DOCS_HTML_DIR := html
@@ -14,7 +14,7 @@ MANYTASK_CONFIG_OUT ?= .manytask.yml
 TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
-.PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests
+.PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests run-js-tests
 
 check: lint test
 
@@ -25,22 +25,25 @@ install-deps:
 	uv sync --active --all-extras
 
 dev:
-	docker compose -f $(DOCKER_COMPOSE_DEV) down
-	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
+	$(DOCKER_COMPOSE_DEV) down
+	$(DOCKER_COMPOSE_DEV) up --build
 
 clean-db:
-	docker compose -f $(DOCKER_COMPOSE_DEV) down -v
+	$(DOCKER_COMPOSE_DEV) down -v
 	docker volume prune -f
 
 reset-dev: clean-db
-	docker compose -f $(DOCKER_COMPOSE_DEV) up --build
+	$(DOCKER_COMPOSE_DEV) up --build
 
 test: copy-common-config install-deps run-manytask-tests
 
-run-manytask-tests:
+run-js-tests:
+	node --test tests/js/*.test.cjs
+
+run-manytask-tests: run-js-tests
 	TESTCONTAINERS_RYUK_DISABLED=$(TESTCONTAINERS_RYUK_DISABLED) uv run pytest -n 4 --cov-report term-missing --cov=$(ROOT_DIR) $(TEST_ARGS)
 
-test-colima: copy-common-config install-deps
+test-colima: copy-common-config install-deps run-js-tests
 	DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
 	uv run python -m pytest --cov-report term-missing --cov=$(ROOT_DIR) $(TEST_ARGS)
 

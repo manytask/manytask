@@ -198,6 +198,7 @@ def _select_tasks(
     help="Num of processes parallel checking",
 )
 @click.option("--no-clean", is_flag=True, help="Clean or not check tmp folders")
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.option(
     "-v/-s",
     "--verbose/--silent",
@@ -218,6 +219,7 @@ def check(  # noqa: PLR0913
     parallelize: bool,
     num_processes: int,
     no_clean: bool,
+    verbose_copy: bool,
     verbose: bool,
     dry_run: bool,
 ) -> None:
@@ -247,7 +249,7 @@ def check(  # noqa: PLR0913
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         cleanup=not no_clean,
         dry_run=dry_run,
     )
@@ -338,6 +340,15 @@ def _parse_timestamp(
 @click.option(
     "--branch", type=str, default=None, help="Rewrite branch name for the submission"
 )
+@click.option(
+    "--base-ref",
+    type=str,
+    default=None,
+    envvar=["CI_MERGE_REQUEST_DIFF_BASE_SHA", "CI_COMMIT_BEFORE_SHA"],
+    show_envvar=True,
+    help="Commit to detect changes from (last_commit_changes), "
+    "e.g. branch state before the push; defaults to HEAD~1",
+)
 @click.option("--no-clean", is_flag=True, help="Clean or not check tmp folders")
 @click.option(
     "-v/-s",
@@ -361,6 +372,7 @@ def grade(  # noqa: PLR0913
     timestamp: datetime | None,
     username: str | None,
     branch: str | None,
+    base_ref: str | None,
     no_clean: bool,
     verbose: bool,
     dry_run: bool,
@@ -388,7 +400,9 @@ def grade(  # noqa: PLR0913
     manytask_config = ManytaskConfig.from_yaml(manytask_config_path)
 
     # read filesystem, check existing tasks
-    course = Course(manytask_config, root, reference_root, branch_name=branch)
+    course = Course(
+        manytask_config, root, reference_root, branch_name=branch, base_ref=base_ref
+    )
 
     # create exporter and export files for testing
     exporter = Exporter(
@@ -425,6 +439,30 @@ def grade(  # noqa: PLR0913
             print_info(e)
             sys.exit(1)
 
+    # create tester to... to test =)
+    tester = Tester(course, checker_config, verbose=verbose, dry_run=dry_run)
+
+    # skip tasks whose student-editable files are unchanged since the published version
+    # (e.g. a newly pulled task the student has not started yet); only applies to the
+    # changes-detection path - an explicit -t/-g/--all-tasks override always grades
+    if not override:
+        skip_unchanged_param = checker_config.testing.skip_unchanged_tasks
+        if skip_unchanged_param:
+            remaining_tasks = []
+            for changed_task in tasks_to_grade:
+                raw_patterns = tester.get_task_parameters(changed_task).get(skip_unchanged_param, [])
+                patterns = raw_patterns if isinstance(raw_patterns, list) else []
+                patterns = [pattern for pattern in patterns if isinstance(pattern, str)]
+                if exporter.is_task_unchanged(changed_task.relative_path, patterns):
+                    print_info(
+                        f"Skipping <{changed_task.name}>: files matching `{skip_unchanged_param}` "
+                        f"are unchanged since the published version",
+                        color="grey",
+                    )
+                    continue
+                remaining_tasks.append(changed_task)
+            tasks_to_grade = remaining_tasks
+
     if not tasks_to_grade:
         print_info("No tasks to test", color="orange")
         return
@@ -437,9 +475,6 @@ def grade(  # noqa: PLR0913
         else "Reporting scores disabled (pass --submit-score to enable)",
         color="grey",
     )
-
-    # create tester to... to test =)
-    tester = Tester(course, checker_config, verbose=verbose, dry_run=dry_run)
 
     # run tests
     # TODO: progressbar on parallelize
@@ -470,6 +505,7 @@ def grade(  # noqa: PLR0913
 @click.option(
     "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
 )
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.pass_context
 def export(
     ctx: click.Context,
@@ -477,6 +513,7 @@ def export(
     export_root: Path,
     commit: bool,
     dry_run: bool,
+    verbose_copy: bool,
 ) -> None:
     """Export tasks from reference to public repository."""
     # get configs paths
@@ -505,7 +542,7 @@ def export(
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         dry_run=dry_run,
     )
     if not dry_run:
@@ -521,12 +558,14 @@ def export(
 @click.option(
     "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
 )
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.pass_context
 def export_private(
     ctx: click.Context,
     reference_root: Path,
     export_root: Path,
     dry_run: bool,
+    verbose_copy: bool,
 ) -> None:
     """Export files to testing directory."""
     # get configs paths
@@ -545,7 +584,7 @@ def export_private(
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         dry_run=dry_run,
     )
     if not dry_run:

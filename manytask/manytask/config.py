@@ -42,7 +42,7 @@ class CreateNamespaceRequest(BaseModel):
 
 
 class AddUserToNamespaceRequest(BaseModel):
-    user_id: int
+    username: str
     role: Literal["namespace_admin", "program_manager"]
 
 
@@ -94,6 +94,36 @@ class NamespaceUserItem(BaseModel):
 
 class NamespaceUsersListResponse(BaseModel):
     users: list[NamespaceUserItem]
+
+
+class CourseAccessUserItem(BaseModel):
+    """A single row of the course access table.
+
+    ``access_levels`` may hold several entries at once, because the scopes overlap:
+    an instance admin can also be a course admin of the same course.
+    """
+
+    username: str
+    first_name: str
+    last_name: str
+    access_levels: list[str]
+
+
+class CourseAccessUsersResponse(BaseModel):
+    users: list[CourseAccessUserItem]
+
+
+class SetCourseAdminRequest(BaseModel):
+    """Request to grant or revoke course admin rights for a course member."""
+
+    username: str
+    is_admin: bool
+
+
+class AssignProgramManagerRequest(BaseModel):
+    """Request to assign a user as program manager of the course's namespace."""
+
+    username: str
 
 
 class CreateCourseRequest(BaseModel):
@@ -480,6 +510,36 @@ class ManytaskFinalGradeConfig(BaseModel):
         return False
 
 
+class ProtectedBranchConfig(BaseModel):
+    name: str
+    push_access_level: Literal["no_access", "developer", "maintainer"] = "developer"
+    merge_access_level: Literal["no_access", "developer", "maintainer"] = "developer"
+    allow_force_push: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, data: str) -> str:
+        if not data.strip():
+            raise ValueError("protected branch name cannot be empty")
+        return data
+
+
+class ManytaskRmsConfig(BaseModel):
+    ci_config_path: Optional[str] = None
+    protected_branches: Optional[list[ProtectedBranchConfig]] = None
+
+    @field_validator("protected_branches")
+    @classmethod
+    def check_branch_names_unique(cls, data: list[ProtectedBranchConfig] | None) -> list[ProtectedBranchConfig] | None:
+        if data is None:
+            return data
+        names = [branch.name for branch in data]
+        duplicates = [name for name in names if names.count(name) > 1]
+        if duplicates:
+            raise ValueError(f"Protected branch names should be unique, duplicates: {duplicates}")
+        return data
+
+
 class ManytaskConfig(BaseModel):
     """Manytask configuration."""
 
@@ -489,6 +549,7 @@ class ManytaskConfig(BaseModel):
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
     grades: Optional[ManytaskFinalGradeConfig] = None
+    rms: Optional[ManytaskRmsConfig] = None
 
     @field_validator("version")
     @classmethod

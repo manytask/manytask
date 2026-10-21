@@ -133,7 +133,19 @@
 
     <div class="{% if active_page == 'database' %}px-0 w-100{% else %}px-3 container-lg{% endif %}">
         {# Add bootstrap empty space for header #}
-        <div class="container-fluid" style="height: 80px;"></div>
+        <div id="course-navbar-spacer" class="container-fluid" style="height: 80px;"></div>
+        <script>
+            (() => {
+                const navbar = document.querySelector('nav.navbar');
+                const spacer = document.getElementById('course-navbar-spacer');
+                const updateSpacing = () => {
+                    spacer.style.height = `${navbar.getBoundingClientRect().height + 10}px`;
+                };
+                // The fixed navbar can wrap to several rows on narrow screens.
+                new ResizeObserver(updateSpacing).observe(navbar);
+                updateSpacing();
+            })();
+        </script>
 
         {% block content %}
         {% endblock %}

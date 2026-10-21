@@ -105,6 +105,7 @@ class PipelineStageConfig(CustomBaseModel):
 class CheckerTestingConfig(CustomBaseModel):
     class ChangesDetectionType(Enum):
         BRANCH_NAME = "branch_name"
+        BRANCH_NAME_OR_COMMIT_MESSAGE = "branch_name_or_commit_message"
         COMMIT_MESSAGE = "commit_message"
         LAST_COMMIT_CHANGES = "last_commit_changes"
         FILES_CHANGED = "files_changed"
@@ -112,6 +113,10 @@ class CheckerTestingConfig(CustomBaseModel):
     changes_detection: ChangesDetectionType = ChangesDetectionType.LAST_COMMIT_CHANGES
 
     search_plugins: list[str] = Field(default_factory=list)
+
+    # name of the task parameter holding glob patterns of student-editable files (e.g. "allow_change");
+    # None disables skipping tasks unchanged since the published version
+    skip_unchanged_tasks: Optional[str] = None
 
     global_pipeline: list[PipelineStageConfig] = Field(default_factory=list)
     tasks_pipeline: list[PipelineStageConfig] = Field(default_factory=list)
