@@ -274,8 +274,10 @@ class Tester:
             else:
                 failed_tasks.append(task.name)
 
+        errors = []
         if failed_tasks:
-            raise TestingError(f"Task pipelines failed: {failed_tasks}")
-
+            errors.append(f"Task pipelines failed: {failed_tasks}")
         if failed_reports:
-            raise TestingError(f"Reporting score failed for: {failed_tasks}")
+            errors.append(f"Reporting score failed for: {failed_reports}")
+        if errors:
+            raise TestingError("; ".join(errors))
