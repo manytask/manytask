@@ -1102,6 +1102,37 @@ def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
     assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
 
 
+@pytest.mark.parametrize("can_edit", [True, False])
+@pytest.mark.parametrize("invalid_secret", [True, False])
+def test_enrollment_edit_link_permissions(
+    app: Flask, mock_gitlab_oauth: object, can_edit: bool, invalid_secret: bool
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.course_admin = can_edit
+    app.storage_api.get_course(TEST_COURSE_NAME).token = TEST_TOKEN
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", return_value=False),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        if invalid_secret:
+            csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": "invalid-secret"},
+            )
+            assert b"Invalid secret" in response.data
+
+        assert response.status_code == HTTPStatus.OK
+        soup = BeautifulSoup(response.data, "html.parser")
+        edit_link = soup.find("a", href=f"/instance_admin/courses/{TEST_COURSE_NAME}/edit")
+        assert (edit_link is not None) == can_edit
+        if can_edit:
+            assert edit_link.get_text(strip=True) == "Back to editing course"
+
+
 def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):
     """Regression: a failing RMS must not blow up the enrollment form with a 500.
 

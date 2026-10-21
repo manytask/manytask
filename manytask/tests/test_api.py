@@ -257,6 +257,32 @@ def authenticated_client(app, mock_gitlab_oauth):
         yield client
 
 
+@pytest.mark.parametrize("course_name", [TEST_COURSE_NAME, "another-course"])
+def test_healthcheck_success(app, mock_course, course_name):
+    with patch.object(app.storage_api, "get_course", return_value=mock_course) as mock_get_course:
+        response = app.test_client().get(f"/api/{course_name}/healthcheck")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.get_data(as_text=True) == "OK"
+    mock_get_course.assert_called_once_with(course_name)
+
+
+def test_healthcheck_unknown_course(app):
+    with patch.object(app.storage_api, "get_course", return_value=None):
+        response = app.test_client().get("/api/unknown-course/healthcheck")
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == "/"
+
+
+def test_healthcheck_not_ready(app):
+    with patch.object(app.storage_api, "get_course", return_value=make_created_course_mock()):
+        response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/healthcheck")
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == f"/{TEST_COURSE_NAME}/not_ready"
+
+
 def test_parse_flags_no_flags():
     assert _parse_flags(None) == timedelta()
     assert _parse_flags("") == timedelta()

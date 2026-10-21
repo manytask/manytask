@@ -458,6 +458,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
+            can_edit_course=app.debug
+            or app.storage_api.check_if_course_admin(course.course_name, session["manytask"]["username"]),
         )
 
     if request.method == "GET":
@@ -790,7 +792,8 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 
         if app.storage_api.edit_course(updated_settings):
             logger.info("Successfully updated course settings for: %s", sanitize_log_data(course_name))
-            return redirect(url_for("course.course_page", course_name=course_name))
+            flash("Course changes saved successfully.", category="success")
+            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         return render_template(
             "edit_course.html",
@@ -806,38 +809,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         course_users=course_users,
         rms=app.app_config.rms,
     )
-
-
-@instance_admin_bp.route("/", methods=["GET"])
-@requires_auth
-def instance_admin_index() -> ResponseReturnValue:
-    """Root instance admin page that redirects based on user role.
-
-    Instance Admin -> /instance_admin/panel
-    Namespace Admin -> /instance_admin/namespaces
-    """
-    from .utils.flask import check_if_current_user_is_instance_admin, check_if_user_has_namespaces_to_admin
-
-    app: CustomFlask = current_app  # type: ignore
-
-    if app.debug:
-        return redirect(url_for("instance_admin.instance_admin_panel"))
-
-    username = session["manytask"]["username"]
-    is_instance_admin = check_if_current_user_is_instance_admin(app)
-
-    if is_instance_admin:
-        logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
-        return redirect(url_for("instance_admin.instance_admin_panel"))
-
-    is_namespace_admin = check_if_user_has_namespaces_to_admin(app)
-
-    if is_namespace_admin:
-        logger.info("Namespace Admin %s accessing instance admin root, redirecting to namespaces", username)
-        return redirect(url_for("instance_admin.namespaces_list"))
-
-    logger.warning("User %s attempted to access instance admin without privileges", username)
-    abort(HTTPStatus.FORBIDDEN)
 
 
 @instance_admin_bp.route("/panel", methods=["GET", "POST"])
@@ -936,30 +907,6 @@ def update_profile() -> ResponseReturnValue:
             return redirect(referrer)
 
     return redirect(url_for("root.index"))
-
-
-@instance_admin_bp.route("/namespaces", methods=["GET"])
-@requires_instance_or_namespace_admin
-def namespaces_list() -> ResponseReturnValue:
-    """Display list of namespaces accessible to the user.
-
-    Instance Admin sees all namespaces.
-    Namespace Admin sees only their namespaces.
-    """
-    app: CustomFlask = current_app  # type: ignore
-
-    username = session["manytask"]["username"]
-    is_instance_admin = check_if_current_user_is_instance_admin(app)
-
-    logger.info("%s %s accessing namespaces", "Instance Admin" if is_instance_admin else "Namespace Admin", username)
-    namespace_data = _get_admin_namespaces(app, username, is_instance_admin)
-
-    return render_template(
-        "namespaces_list.html",
-        namespaces=namespace_data,
-        is_instance_admin=is_instance_admin,
-        manytask_version=app.manytask_version,
-    )
 
 
 @instance_admin_bp.route("/namespaces/<int:namespace_id>", methods=["GET"])
