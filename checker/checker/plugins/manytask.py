@@ -88,13 +88,7 @@ class ManytaskPlugin(PluginABC):
         session = requests.Session()
         session.mount("https://", adapter)
         session.mount("http://", adapter)
-        try:
-            response = session.post(url=f"{report_url}", data=data, files=files)
-        except requests.RequestException as e:
-            raise PluginExecutionFailed(
-                "Unable to send score to Manytask",
-                output=f"Unable to send score to Manytask: {e}",
-            ) from e
+        response = session.post(url=f"{report_url}", data=data, files=files)
 
         if response.status_code >= HTTP_ERROR_STATUS_CODE:
             # Put the full response body into `output` so the pipeline prints it

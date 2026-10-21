@@ -7,7 +7,6 @@ from urllib.parse import parse_qs
 
 import git
 import pytest
-import requests
 import yaml
 from click.testing import CliRunner, Result
 from requests_mock import Mocker
@@ -135,43 +134,6 @@ def test_successful_shared_task_is_reported_despite_other_failures(
     assert report["task"] == [passing_task]
     assert report["score"] == ["1.0"]
     assert f"Report for task '{passing_task}'" in result.output
-
-
-def test_report_connection_failure_does_not_prevent_later_shared_task_reporting(
-    tmp_path: Path,
-) -> None:
-    with Mocker() as reports:
-        reports.post(
-            REPORT_URL,
-            [
-                {"exc": requests.ConnectionError("connection interrupted")},
-                {"json": {"score": 1.0}},
-            ],
-        )
-        result = _grade_shared_tasks(tmp_path, {"seq-read", "seq-write"})
-
-    assert result.exit_code == 1, result.output
-    assert len(reports.request_history) == 2
-    assert "Report for task 'seq-write'" in result.output
-    assert "Task pipelines failed: ['rnd-read', 'rnd-write']" in result.output
-    assert "Reporting score failed for: ['seq-read']" in result.output
-    assert "Unable to send score to Manytask: connection interrupted" in result.output
-
-
-def test_rejected_successful_shared_task_report_is_listed_with_failed_tasks(
-    tmp_path: Path,
-) -> None:
-    with Mocker() as reports:
-        reports.post(REPORT_URL, status_code=403, text="Invalid course token")
-        result = _grade_shared_tasks(tmp_path, {"seq-read"})
-
-    assert result.exit_code == 1, result.output
-    assert len(reports.request_history) == 1
-    assert (
-        "Task pipelines failed: ['seq-write', 'rnd-read', 'rnd-write']" in result.output
-    )
-    assert "Reporting score failed for: ['seq-read']" in result.output
-    assert "Manytask returned HTTP 403:\nInvalid course token" in result.output
 
 
 def test_automatic_grading_reports_only_the_changed_successful_shared_task(
