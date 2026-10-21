@@ -41,7 +41,7 @@ structure:
 > student may change — you list the files they may *not* change, and everything left over is
 > theirs.
 
-Tasks can instead declare an explicit [`editable_patterns`](#explicit-editable-files) list. That
+Tasks can also declare an explicit [`parameters.allow_change`](#explicit-editable-files) list. That
 list controls which student files enter that task's grading folder; `structure` still controls export.
 
 Precedence when a file matches several lists is `ignore_patterns` > `public_patterns` >
@@ -74,7 +74,7 @@ never overwrites it.
 > it. If you want the student's edits to it discarded at grading time, you must put it in
 > `public_patterns` explicitly.
 
-Without `editable_patterns`, gold solutions never enter the merged tree: export replaces them
+Without `parameters.allow_change`, gold solutions never enter the merged tree: export replaces them
 with their `.template` counterparts (see [Templates](#templates)), and grading takes `add.py`
 from the student because it is an "other" file.
 
@@ -196,41 +196,31 @@ there. Only tasks enabled in `.manytask.yml` are selected for grading or publish
 
 ## Explicit editable files
 
-Set `editable_patterns` directly in a task config to enforce which student files are used for
-that task. Before **each** task pipeline, the checker rebuilds its folder from the reference
-repository, including working solutions and excluding ignored files, then overlays only the
-matching student files. Edits to all other files are discarded. This also resets changes left
-by a previous task pipeline when several tasks share a folder.
-Matching reference files are removed before the overlay, so a student-deleted solution file
-stays absent rather than falling back to the working reference solution.
+Set `parameters.allow_change` to specify which student files are used for a task. Before **each**
+task pipeline, the checker rebuilds its folder from the reference repository, including working
+solutions and excluding ignored files, then overlays only the matching student files. This resets
+changes left by a previous task pipeline when several tasks share a folder. Matching reference
+files are removed first, so a student-deleted solution stays absent instead of using the reference solution.
 
 ```yaml
 # python/add/.task.yml
 version: 1
-editable_patterns: ["add.py"]
-```
-
-Patterns are relative to the task folder and use Python `Path.glob`, including recursive patterns
-such as `"src/**/*.py"`. A `tasks` entry inherits this field from the top level of its `.tasks.yml`
-and can replace it; `.group.yml` and `default_parameters` do not supply it. When there is no
-inherited list, omitting the field keeps the existing structure-based merge. Set it to `null` to
-select that merge explicitly, or to `[]` to use only reference files.
-
-### Using `allow_change` with plugins {#optional-an-explicit-allow-list-with-allow_change}
-
-`parameters.allow_change` remains an ordinary parameter for plugins and
-[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks). It does not enforce an
-editable set: a `copy_files` stage alone cannot remove other student files already in the merged
-tree. If you also use it to skip untouched submissions or select files for a plugin, repeat the
-same patterns:
-
-```yaml
-# python/add/.task.yml
-version: 1
-editable_patterns: ["add.py"]
 parameters:
   allow_change: ["add.py"]
 ```
+
+Patterns are relative to the task folder and use Python `Path.glob`, including recursive patterns
+such as `"src/**/*.py"`. The list follows ordinary parameter inheritance:
+`default_parameters` → `.group.yml` → task-file defaults → the individual `.tasks.yml` entry.
+An explicitly supplied list replaces the inherited list. Set `allow_change: null` to use the
+existing structure-based merge, or `allow_change: []` to use only reference files. If no level
+sets `allow_change`, the structure-based merge remains in effect.
+
+### Using `allow_change` with plugins {#optional-an-explicit-allow-list-with-allow_change}
+
+The same `parameters.allow_change` list is available to plugins and
+[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks). No separate editable-file
+setting or `copy_files` stage is required for the checker to apply the list.
 
 ```yaml
 # .checker.yml
@@ -261,11 +251,9 @@ parameters:                 # shared defaults
 
 tasks:
   add:
-    editable_patterns: ["add.py"]
     parameters:
       allow_change: ["add.py"]
   multiply:
-    editable_patterns: ["multiply.py"]
     parameters:
       allow_change: ["multiply.py"]
       timeout: 60
@@ -274,7 +262,7 @@ tasks:
 Grading `add` uses the student's `add.py` and the reference `multiply.py`; grading `multiply`
 does the reverse. Both tasks inherit common top-level settings. Here `add` uses a timeout of
 30 seconds and `multiply` uses 60 seconds. A `tasks` entry can override `parameters`,
-`editable_patterns`, `task_pipeline`, and `report_pipeline`. Parameters merge per key; pattern
+`task_pipeline` and `report_pipeline`. Set `allow_change` inside `parameters` to choose editable files. Parameters merge per key; pattern
 lists and pipelines replace the inherited value, including an explicit empty list.
 
 Keep `version` and `structure` at the top level: one shared folder has one structure for export.
@@ -454,7 +442,7 @@ grade:
 
 `checker grade STUDENT_ROOT REFERENCE_ROOT` builds the merged tree from those two roots — the same
 two passes described [above](#where-student-edits-actually-go), followed by each task's
-[`editable_patterns`](#explicit-editable-files) reset when configured.
+[`parameters.allow_change`](#explicit-editable-files) reset when configured.
 
 ### Required CI/CD variables
 
@@ -480,7 +468,7 @@ checker check --task new_task
 
 ## Pre-flight checklist
 
-- [ ] Without `editable_patterns`, solution files match **no** structure pattern list; with it,
+- [ ] Without `parameters.allow_change`, solution files match **no** structure pattern list; with it,
       only intended student files match the editable list.
 - [ ] Every file that contributes to the score — including visible tests — is in
       `public_patterns` or `private_patterns`. Being exported is not protection.

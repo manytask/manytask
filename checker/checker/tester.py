@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .configs.checker import CheckerConfig, CheckerSubConfig
+from .configs.checker import CheckerConfig, CheckerSubConfig, validate_allow_change
 from .configs.manytask import ManytaskDeadlinesType
 from .course import Course, FileSystemTask
 from .exceptions import TestingError
@@ -235,6 +235,12 @@ class Tester:
     ) -> None:
         # get all tasks
         tasks = tasks or self.course.get_tasks(enabled=True)
+        allowed_patterns = {
+            task.name: validate_allow_change(
+                self.get_task_parameters(task).get("allow_change")
+            )
+            for task in tasks
+        }
 
         # create outputs to pass to pipeline
         outputs: dict[str, PipelineStageResult] = {}
@@ -257,14 +263,12 @@ class Tester:
         failed_reports = []
         task_exporter: Exporter | None = None
         legacy_paths = {
-            task.relative_path
-            for task in tasks
-            if task.config.editable_patterns is None
+            task.relative_path for task in tasks if allowed_patterns[task.name] is None
         }
         explicit_paths = {
             task.relative_path
             for task in tasks
-            if task.config.editable_patterns is not None
+            if allowed_patterns[task.name] is not None
         }
         with ExitStack() as backups:
             legacy_snapshots: dict[str, Path | None] = {}
@@ -279,7 +283,7 @@ class Tester:
                         legacy_snapshots[path] = snapshot
 
             for task in tasks:
-                if task.config.editable_patterns is not None:
+                if allowed_patterns[task.name] is not None:
                     if task_exporter is None:
                         task_exporter = Exporter(
                             self.course,
@@ -288,7 +292,9 @@ class Tester:
                             verbose=self.verbose,
                             dry_run=self.dry_run,
                         )
-                    task_exporter.prepare_task_for_testing(origin, task)
+                    task_exporter.prepare_task_for_testing(
+                        origin, task, allowed_patterns[task.name]
+                    )
                 elif task.relative_path in legacy_snapshots:
                     destination = origin / task.relative_path
                     if destination.is_dir() and not destination.is_symlink():

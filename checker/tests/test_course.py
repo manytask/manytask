@@ -173,8 +173,10 @@ class TestCourse:
                     "version": 1,
                     "tasks": {
                         name: {
-                            "editable_patterns": [f"{name}.py"],
-                            "parameters": {"solution": f"{name}.py"},
+                            "parameters": {
+                                "solution": f"{name}.py",
+                                "allow_change": [f"{name}.py"],
+                            },
                         }
                         for name in ("task1_1", "task1_2")
                     },
@@ -190,8 +192,8 @@ class TestCourse:
         assert {task.name for task in tasks} == {"task1_1", "task1_2"}
         for task in tasks:
             assert task.relative_path == "group1/shared"
-            assert task.config.editable_patterns == [f"{task.name}.py"]
             assert task.config.parameters is not None
+            assert task.config.parameters["allow_change"] == [f"{task.name}.py"]
             assert task.config.parameters["solution"] == f"{task.name}.py"
             group = course.get_group_for_task(task.name)
             assert group is not None and group.name == "group1"

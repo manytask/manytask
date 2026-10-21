@@ -163,7 +163,6 @@ def _create_course(
             else f"student {name}"
         )
         task_config["tasks"][name] = {
-            "editable_patterns": [f"{name}.txt"],
             "parameters": {
                 "allow_change": [f"{name}.txt"],
                 "own_content": content,
@@ -212,6 +211,32 @@ def test_grade_selects_one_logical_task_from_a_shared_folder(tmp_path: Path) -> 
     assert (student / "reported.txt").read_text().splitlines() == ["two"]
 
 
+@pytest.mark.parametrize("scope", ["global", "group", "file"])
+def test_allow_change_is_inherited_before_task_file_preparation(
+    tmp_path: Path, scope: str
+) -> None:
+    student, reference = _create_course(tmp_path)
+    task_path = reference / "group/shared/.tasks.yml"
+    task_config = yaml.safe_load(task_path.read_text())
+    task_config["tasks"]["one"]["parameters"].pop("allow_change")
+    if scope == "file":
+        task_config["parameters"]["allow_change"] = ["one.txt"]
+    else:
+        path = reference / (".checker.yml" if scope == "global" else "group/.group.yml")
+        config = yaml.safe_load(path.read_text())
+        config["default_parameters" if scope == "global" else "parameters"][
+            "allow_change"
+        ] = ["one.txt"]
+        _write_yaml(path, config)
+    _write_yaml(task_path, task_config)
+
+    result = _grade(student, reference, "--all-tasks", "--submit-score")
+
+    assert result.exit_code == 0, result.output
+    assert (student / "executed.txt").read_text().splitlines() == ["one", "two"]
+    assert (student / "reported.txt").read_text().splitlines() == ["one", "two"]
+
+
 @pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
 def test_mixed_shared_tasks_preserve_legacy_student_files_and_global_preparation(
     tmp_path: Path, order: tuple[str, str]
@@ -237,7 +262,7 @@ def test_mixed_shared_tasks_preserve_legacy_student_files_and_global_preparation
     _write_yaml(checker_path, checker_config)
     task_path = reference / "group/shared/.tasks.yml"
     task_config = yaml.safe_load(task_path.read_text())
-    task_config["tasks"]["two"].pop("editable_patterns")
+    task_config["tasks"]["two"]["parameters"].pop("allow_change")
     task_config["tasks"]["two"]["task_pipeline"] = [
         {
             "name": "Check the original merged student folder",

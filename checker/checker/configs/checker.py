@@ -23,6 +23,27 @@ TParamType = Union[bool, int, float, str, list[Union[int, float, str, None]], No
 TTemplate = Union[str, list[Union[TParamType, str]], dict[str, Union[TParamType, str]]]
 
 
+def validate_allow_change(value: object) -> list[str] | None:
+    if value is None:
+        return None
+    message = (
+        "allow_change must be a list of relative glob patterns inside the task folder"
+    )
+    if not isinstance(value, list):
+        raise ValueError(message)
+    patterns = []
+    for pattern in value:
+        if (
+            not isinstance(pattern, str)
+            or not pattern
+            or Path(pattern).is_absolute()
+            or ".." in Path(pattern).parts
+        ):
+            raise ValueError(message)
+        patterns.append(pattern)
+    return patterns
+
+
 class CheckerStructureConfig(CustomBaseModel):
     # Note: use Optional/Union[...] instead of ... | None as pydantic does not support | in older python versions
     ignore_patterns: Optional[list[str]] = None
@@ -33,6 +54,14 @@ class CheckerStructureConfig(CustomBaseModel):
 
 class CheckerParametersConfig(RootModel[dict[str, TParamType]]):
     root: dict[str, TParamType]
+
+    @field_validator("root")
+    @classmethod
+    def check_allow_change(
+        cls, parameters: dict[str, TParamType]
+    ) -> dict[str, TParamType]:
+        validate_allow_change(parameters.get("allow_change"))
+        return parameters
 
     def __getitem__(self, item: str) -> TParamType:
         return self.root[item]
@@ -166,26 +195,9 @@ class CheckerTaskOverrides(CustomBaseModel):
 
     model_config = ConfigDict(extra="forbid", validate_default=True)
     # Note: use Optional[...] instead of ... | None as pydantic does not support | in older python versions
-    # Task-folder-relative globs. None keeps the legacy structure-based merge;
-    # a list rebuilds the task from reference and takes only these student files.
-    editable_patterns: Optional[list[str]] = None
     parameters: Optional[CheckerParametersConfig] = None
     task_pipeline: Optional[list[PipelineStageConfig]] = None
     report_pipeline: Optional[list[PipelineStageConfig]] = None
-
-    @field_validator("editable_patterns")
-    @classmethod
-    def check_editable_patterns(
-        cls, patterns: Optional[list[str]]
-    ) -> Optional[list[str]]:
-        if patterns is not None:
-            for pattern in patterns:
-                path = Path(pattern)
-                if not pattern or path.is_absolute() or ".." in path.parts:
-                    raise ValueError(
-                        "editable_patterns must stay inside the task folder"
-                    )
-        return patterns
 
 
 class CheckerSubConfig(CheckerTaskOverrides, YamlLoaderMixin["CheckerSubConfig"]):

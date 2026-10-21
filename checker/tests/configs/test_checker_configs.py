@@ -7,10 +7,10 @@ from pydantic import ValidationError
 
 from checker.configs import (
     CheckerExportConfig,
-    CheckerSubConfig,
     CheckerTaskFileConfig,
     CheckerTasksFileConfig,
 )
+from checker.configs.checker import CheckerParametersConfig
 from checker.exceptions import BadConfig
 
 
@@ -18,9 +18,9 @@ from checker.exceptions import BadConfig
     "patterns",
     [["../solution.py"], ["/tmp/solution.py"], ["src/../../solution.py"], [""]],
 )
-def test_editable_patterns_stay_in_task_folder(patterns: list[str]) -> None:
-    with pytest.raises(ValidationError, match="must stay inside the task folder"):
-        CheckerSubConfig(version=1, editable_patterns=patterns)
+def test_allow_change_stays_in_task_folder(patterns: list[str]) -> None:
+    with pytest.raises(ValidationError, match="inside the task folder"):
+        CheckerParametersConfig(root={"allow_change": patterns})
 
 
 def test_task_file_merges_common_defaults_with_entry_overrides() -> None:
@@ -28,13 +28,19 @@ def test_task_file_merges_common_defaults_with_entry_overrides() -> None:
         {
             "version": 1,
             "structure": {"private_patterns": [".*"]},
-            "editable_patterns": ["shared.py"],
-            "parameters": {"timeout": 10, "shared": "common"},
+            "parameters": {
+                "timeout": 10,
+                "shared": "common",
+                "allow_change": ["shared.py"],
+            },
             "task_pipeline": [{"name": "shared", "run": "run_script"}],
             "tasks": {
                 "parse": {
-                    "editable_patterns": ["parser.py"],
-                    "parameters": {"timeout": 20, "nullable": None},
+                    "parameters": {
+                        "timeout": 20,
+                        "nullable": None,
+                        "allow_change": ["parser.py"],
+                    },
                 },
                 "render": {},
             },
@@ -45,14 +51,17 @@ def test_task_file_merges_common_defaults_with_entry_overrides() -> None:
 
     assert list(tasks) == ["parse", "render"]
     assert tasks["parse"].version == 1
-    assert tasks["parse"].editable_patterns == ["parser.py"]
-    assert tasks["render"].editable_patterns == ["shared.py"]
     assert tasks["parse"].parameters.root == {
         "timeout": 20,
         "shared": "common",
         "nullable": None,
+        "allow_change": ["parser.py"],
     }
-    assert tasks["render"].parameters.root == {"timeout": 10, "shared": "common"}
+    assert tasks["render"].parameters.root == {
+        "timeout": 10,
+        "shared": "common",
+        "allow_change": ["shared.py"],
+    }
     assert tasks["parse"].task_pipeline == tasks["render"].task_pipeline
     assert tasks["parse"].structure == tasks["render"].structure == config.structure
 
@@ -64,16 +73,14 @@ def test_task_file_preserves_explicit_null_and_empty_lists(
     config = CheckerTasksFileConfig.model_validate(
         {
             "version": 1,
-            "editable_patterns": ["common.py"],
             "task_pipeline": [{"name": "shared", "run": "run_script"}],
             "report_pipeline": [{"name": "shared report", "run": "run_script"}],
-            "parameters": {"shared": "common"},
+            "parameters": {"shared": "common", "allow_change": ["common.py"]},
             "tasks": {
                 "parse": {
-                    "editable_patterns": override,
                     "task_pipeline": override,
                     "report_pipeline": override,
-                    "parameters": None,
+                    "parameters": {"allow_change": override},
                 }
             },
         }
@@ -81,10 +88,8 @@ def test_task_file_preserves_explicit_null_and_empty_lists(
 
     task = config.resolve_tasks("folder")["parse"]
 
-    assert (
-        task.editable_patterns == task.task_pipeline == task.report_pipeline == override
-    )
-    assert task.parameters is None
+    assert task.task_pipeline == task.report_pipeline == override
+    assert task.parameters.root == {"shared": "common", "allow_change": override}
 
 
 @pytest.mark.parametrize(
@@ -101,7 +106,7 @@ def test_task_file_preserves_explicit_null_and_empty_lists(
         {"parse": {"structure": {}}},
         {"parse": {"version": 1}},
         {"parse": {"tasks": {"nested": {}}}},
-        {"parse": {"editable_patterns": ["../solution.py"]}},
+        {"parse": {"parameters": {"allow_change": ["../solution.py"]}}},
     ],
 )
 def test_task_file_rejects_invalid_task_definitions(tasks: object) -> None:
@@ -143,7 +148,7 @@ def test_task_file_schema_describes_named_entries() -> None:
     assert CheckerTaskFileConfig.get_json_schema()["not"] == {"required": ["tasks"]}
     entry = schema["$defs"]["CheckerTaskOverrides"]
     assert entry["additionalProperties"] is False
-    assert "editable_patterns" in entry["properties"]
+    assert "parameters" in entry["properties"]
     assert "version" not in entry["properties"]
     assert "structure" not in entry["properties"]
 

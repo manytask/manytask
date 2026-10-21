@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 from checker.configs import CheckerExportConfig, CheckerStructureConfig
+from checker.configs.checker import validate_allow_change
 from checker.course import Course, FileSystemTask
 from checker.exceptions import BadConfig, BadStructure
 from checker.utils import print_info
@@ -344,14 +345,16 @@ class Exporter:
                 return True
         return False
 
-    def prepare_task_for_testing(self, target: Path, task: FileSystemTask) -> None:
+    def prepare_task_for_testing(
+        self, target: Path, task: FileSystemTask, patterns: list[str] | None
+    ) -> None:
         """Reset a task to the reference, then apply only its declared student files.
 
         Repeating the reset for tasks sharing a directory prevents another task's
         solution or generated files from affecting the next pipeline. Omitting
-        ``editable_patterns`` preserves the usual repository-wide testing export.
+        ``parameters.allow_change`` preserves the usual repository-wide testing export.
         """
-        patterns = task.config.editable_patterns
+        patterns = validate_allow_change(patterns)
         if patterns is None or self.dry_run:
             return
 

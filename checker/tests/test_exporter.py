@@ -817,9 +817,9 @@ class TestExporterSharedTasks:
                             "version: 1\n"
                             "tasks:\n"
                             "  alpha:\n"
-                            '    editable_patterns: ["alpha.py", "src"]\n'
+                            '    parameters:\n      allow_change: ["alpha.py", "src"]\n'
                             "  beta:\n"
-                            '    editable_patterns: ["beta.py", "**/*.py"]\n'
+                            '    parameters:\n      allow_change: ["beta.py", "**/*.py"]\n'
                         ),
                         "alpha.py": "reference alpha",
                         "alpha.py.template": "published alpha",
@@ -899,7 +899,9 @@ class TestExporterSharedTasks:
         folder = target / "group/shared"
         shared_exporter.export_for_testing(target)
 
-        shared_exporter.prepare_task_for_testing(target, tasks["alpha"])
+        shared_exporter.prepare_task_for_testing(
+            target, tasks["alpha"], ["alpha.py", "src"]
+        )
 
         assert (folder / "alpha.py").read_text() == "student alpha"
         assert (folder / "beta.py").read_text() == "reference beta"
@@ -912,8 +914,7 @@ class TestExporterSharedTasks:
         assert not (folder / "extra.txt").exists()
 
         (folder / "generated.txt").write_text("artifact from alpha")
-        tasks["beta"].config.editable_patterns = ["beta.py"]
-        shared_exporter.prepare_task_for_testing(target, tasks["beta"])
+        shared_exporter.prepare_task_for_testing(target, tasks["beta"], ["beta.py"])
 
         assert (folder / "alpha.py").read_text() == "reference alpha"
         assert (folder / "beta.py").read_text() == "student beta"
@@ -924,13 +925,14 @@ class TestExporterSharedTasks:
         self, shared_exporter: Exporter
     ) -> None:
         task = shared_exporter.course.potential_tasks["alpha"]
-        task.config.editable_patterns = []
         reference_file = (
             shared_exporter.reference_root / task.relative_path / "alpha.py"
         )
         reference_file.write_text("SOLUTION BEGIN\nreference alpha\nSOLUTION END")
 
-        shared_exporter.prepare_task_for_testing(shared_exporter.temporary_dir, task)
+        shared_exporter.prepare_task_for_testing(
+            shared_exporter.temporary_dir, task, []
+        )
 
         assert (
             shared_exporter.temporary_dir / task.relative_path / "alpha.py"
@@ -941,13 +943,14 @@ class TestExporterSharedTasks:
         self, shared_exporter: Exporter, dry_run: bool, patterns: list[str] | None
     ) -> None:
         task = shared_exporter.course.potential_tasks["alpha"]
-        task.config.editable_patterns = patterns
         shared_exporter.dry_run = dry_run
         folder = shared_exporter.temporary_dir / task.relative_path
         folder.mkdir(parents=True)
         (folder / "existing.txt").write_text("existing")
 
-        shared_exporter.prepare_task_for_testing(shared_exporter.temporary_dir, task)
+        shared_exporter.prepare_task_for_testing(
+            shared_exporter.temporary_dir, task, patterns
+        )
 
         assert_files_in_folder(folder, ["existing.txt"])
 
@@ -962,7 +965,7 @@ class TestExporterSharedTasks:
 
         with pytest.raises(BadStructure, match="must not overlap"):
             shared_exporter.prepare_task_for_testing(
-                source.parent if use_ancestor else source, task
+                source.parent if use_ancestor else source, task, ["alpha.py"]
             )
 
         assert (source / task.relative_path / "alpha.py").read_bytes() == before
@@ -977,7 +980,9 @@ class TestExporterSharedTasks:
         student_file.unlink()
         student_file.symlink_to(external_file)
 
-        shared_exporter.prepare_task_for_testing(shared_exporter.temporary_dir, task)
+        shared_exporter.prepare_task_for_testing(
+            shared_exporter.temporary_dir, task, ["alpha.py", "src"]
+        )
 
         assert not (
             shared_exporter.temporary_dir / task.relative_path / "alpha.py"
@@ -991,7 +996,9 @@ class TestExporterSharedTasks:
         (student_folder / "alpha.py").unlink()
         (student_folder / "src/extra.py").unlink()
 
-        shared_exporter.prepare_task_for_testing(shared_exporter.temporary_dir, task)
+        shared_exporter.prepare_task_for_testing(
+            shared_exporter.temporary_dir, task, ["alpha.py", "src"]
+        )
 
         folder = shared_exporter.temporary_dir / task.relative_path
         assert not (folder / "alpha.py").exists()
