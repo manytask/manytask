@@ -464,6 +464,10 @@ class Course:
             return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
+            if task_patterns is None:
+                task_patterns = {
+                    task.name: task.config.editable_patterns for task in potential_tasks
+                }
             return self._detect_by_last_commit_changes(
                 repo, potential_tasks, task_patterns
             )

@@ -275,8 +275,11 @@ Keep a shared override in `.group.yml` or `.checker.yml` when possible.
 Add `add` and `multiply` separately to `.manytask.yml`. Task names must be unique across the
 course, including names from legacy `.task.yml` files. `checker check --task add` and branch-name
 selection address the logical task name; `task.task_sub_path` still points to `python/arithmetic`.
-`last_commit_changes` selects every active task sharing a changed folder, so use
-`skip_unchanged_tasks` with task-specific `allow_change` patterns if untouched siblings should skip.
+With `last_commit_changes`, a task sharing a folder is selected when the diff changes a file
+matching its nonempty `editable_patterns` list. Changing only `add.py` selects `add`; a shared
+file listed by both tasks selects both. Tasks without a nonempty list keep folder-based detection,
+as do single-task folders. Older solutions in sibling files do not cause those siblings to rerun.
+`skip_unchanged_tasks` remains a separate comparison against published templates after selection.
 
 If `ui.task_url_template` contains `$TASK_NAME`, give each schedule entry a
 [`url`](manytask_yml_reference.md#task) pointing to the actual shared folder or its statement,

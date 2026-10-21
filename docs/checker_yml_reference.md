@@ -244,9 +244,12 @@ are pushed at once, the tasks from all of them are graded, not only from the las
 null sha, unknown or equal to `HEAD`, `HEAD~1` is used; after a force-push the merge-base is used; in a
 shallow clone the history is deepened once to find the base.
 
-When tasks share a folder, `last_commit_changes` selects every active task in that folder for a
-change anywhere beneath it. Branch-name and commit-message selection use logical task names from
-`.task.<name>.yml`; `--task <name>` also selects by that logical name.
+When tasks share a folder, `last_commit_changes` selects a task with nonempty `editable_patterns`
+only when the diff changes a matching file relative to that folder. A shared file listed by several
+tasks selects all of them. Tasks with omitted, `null`, or empty patterns retain folder-based detection,
+as do single-task folders. `skip_unchanged_tasks` is a separate comparison against published templates.
+Branch-name and commit-message selection use logical task names from `.task.<name>.yml`;
+`--task <name>` also selects by that logical name. These selections do not use file patterns.
 
 ### `skip_unchanged_tasks`
 
