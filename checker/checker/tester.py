@@ -61,9 +61,7 @@ class Tester:
 
         self.plugins = load_plugins(self.testing_config.search_plugins, verbose=verbose)
 
-        self.global_pipeline = PipelineRunner(
-            self.testing_config.global_pipeline, self.plugins, verbose=verbose
-        )
+        self.global_pipeline = PipelineRunner(self.testing_config.global_pipeline, self.plugins, verbose=verbose)
 
         self.repository_dir = self.course.repository_root
         self.reference_dir = self.course.reference_root
@@ -72,18 +70,11 @@ class Tester:
         self.dry_run = dry_run
 
         group_with_percents = [
-            (group, group.get_percents_before_deadline())
-            for group in course.manytask_config.deadlines.get_groups()
+            (group, group.get_percents_before_deadline()) for group in course.manytask_config.deadlines.get_groups()
         ]
-        self.task_to_percents = {
-            task.name: percs
-            for group, percs in group_with_percents
-            for task in group.tasks
-        }
+        self.task_to_percents = {task.name: percs for group, percs in group_with_percents for task in group.tasks}
         self.deadlines_type = course.manytask_config.deadlines.deadlines
-        self.interpolation_window = (
-            (course.manytask_config.deadlines.window or 0) * 3600 * 24
-        )  # in seconds
+        self.interpolation_window = (course.manytask_config.deadlines.window or 0) * 3600 * 24  # in seconds
 
     def _calc_interpolated_percent(
         self,
@@ -267,6 +258,24 @@ class Tester:
 
         return task_pipeline_result, task_report_result
 
+    def _prepare_task_workspaces(
+        self,
+        origin: Path,
+        tasks: list[FileSystemTask],
+        allowed_patterns: dict[str, list[str] | None],
+    ) -> None:
+        """Reset the folders of tasks that restrict the student's editable files to the reference ones."""
+        if all(patterns is None for patterns in allowed_patterns.values()):
+            return
+        task_exporter = Exporter(
+            self.course,
+            self.structure_config,
+            self.checker_config.export,
+            verbose=self.verbose,
+            dry_run=self.dry_run,
+        )
+        task_exporter.prepare_tasks_for_testing(origin, tasks, allowed_patterns)
+
     def run(
         self,
         origin: Path,
@@ -277,15 +286,7 @@ class Tester:
         # get all tasks
         tasks = tasks or self.course.get_tasks(enabled=True)
         allowed_patterns = {task.name: task.config.editable_patterns for task in tasks}
-        if any(patterns is not None for patterns in allowed_patterns.values()):
-            task_exporter = Exporter(
-                self.course,
-                self.structure_config,
-                self.checker_config.export,
-                verbose=self.verbose,
-                dry_run=self.dry_run,
-            )
-            task_exporter.prepare_tasks_for_testing(origin, tasks, allowed_patterns)
+        self._prepare_task_workspaces(origin, tasks, allowed_patterns)
 
         # create outputs to pass to pipeline
         outputs: dict[str, PipelineStageResult] = {}

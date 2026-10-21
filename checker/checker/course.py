@@ -53,10 +53,7 @@ class Course:
         self.repository_root = repository_root
         self.reference_root = reference_root or repository_root
 
-        self.potential_groups = {
-            group.name: group
-            for group in self._search_for_groups_by_configs(self.reference_root)
-        }
+        self.potential_groups = {group.name: group for group in self._search_for_groups_by_configs(self.reference_root)}
         self.potential_tasks: dict[str, FileSystemTask] = {}
         for task in self._search_for_tasks_by_configs(self.reference_root):
             if task.name in self.potential_tasks:
@@ -69,11 +66,7 @@ class Course:
         self.branch_name = branch_name
         self.base_ref = base_ref
 
-        self.task_to_group = {
-            task.name: group
-            for group in self.potential_groups.values()
-            for task in group.tasks
-        }
+        self.task_to_group = {task.name: group for group in self.potential_groups.values() for task in group.tasks}
 
     def get_group_for_task(self, task_name: str) -> FileSystemGroup | None:
         """Get the group that contains the given task, or None if not found."""
