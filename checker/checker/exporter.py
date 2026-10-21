@@ -531,7 +531,7 @@ class Exporter:
         student_task_dir = self.repository_root / task_relative_path
         reference_task_dir = self.reference_root / task_relative_path
 
-        student_files = self._collect_student_files(student_task_dir, patterns, restrict_to_task=True)
+        student_files = self._collect_student_files(student_task_dir, patterns)
         if not student_files:
             return False
 
