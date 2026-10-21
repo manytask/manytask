@@ -79,6 +79,7 @@ def test_pipeline_execution_order_and_reporting(
     course.repository_root = course.reference_root = tmp_path
     course.manytask_config = mocker.Mock()
     course.get_tasks.return_value = tasks
+    course.get_task_parameters.return_value = {}
     course.get_group_for_task.return_value = None
     group = mocker.Mock()
     group.tasks = tasks
