@@ -437,7 +437,8 @@ def grade(  # noqa: PLR0913
     else:
         try:
             tasks_to_grade = course.detect_changes(
-                checker_config.testing.changes_detection
+                checker_config.testing.changes_detection,
+                default_parameters=checker_config.default_parameters.root,
             )
         except Exception as e:
             print_info("DETECT CHANGES FAILED", color="red")

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import warnings
+from collections import Counter
 from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,7 @@ from .configs import (
     CheckerTestingConfig,
     ManytaskConfig,
 )
+from .configs.checker import validate_allow_change
 from .exceptions import BadConfig, CheckerException
 from .utils import print_info
 
@@ -77,6 +80,20 @@ class Course:
     def get_group_for_task(self, task_name: str) -> FileSystemGroup | None:
         """Get the group that contains the given task, or None if not found."""
         return self.task_to_group.get(task_name)
+
+    def get_task_parameters(
+        self,
+        task: FileSystemTask,
+        default_parameters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Resolve the same parameter inheritance for detection and grading."""
+        parameters = (default_parameters or {}).copy()
+        group = self.get_group_for_task(task.name)
+        if group and group.config.parameters:
+            parameters.update(group.config.parameters.root)
+        if task.config.parameters:
+            parameters.update(task.config.parameters.root)
+        return parameters
 
     def validate(self) -> None:
         # check all groups and tasks mentioned in deadlines exists
@@ -261,6 +278,7 @@ class Course:
         self,
         repo: git.Repo,
         potential_tasks: list[FileSystemTask],
+        default_parameters: dict[str, Any] | None = None,
     ) -> list[FileSystemTask]:
         """Detect changes by matching file changes since the base commit to task paths.
 
@@ -275,14 +293,43 @@ class Course:
         else:
             print_info("No base commit found, using all files of HEAD", color="grey")
             diff = head.diff(git.NULL_TREE)
-        changed_files = [item.a_path or item.b_path for item in diff]
+        changed_files = sorted(
+            {
+                path
+                for item in diff
+                for path in (item.a_path, item.b_path)
+                if path is not None
+            }
+        )
         print_info(f"Last commit changes: {changed_files}", color="grey")
 
-        changed_tasks = [
-            task
-            for task in potential_tasks
-            if any(file is not None and Path(file).is_relative_to(task.relative_path) for file in changed_files)
-        ]
+        tasks_per_path = Counter(
+            task.relative_path for task in self.potential_tasks.values()
+        )
+        changed_tasks = []
+        for task in potential_tasks:
+            task_files = [
+                Path(file).relative_to(task.relative_path)
+                for file in changed_files
+                if Path(file).is_relative_to(task.relative_path)
+            ]
+            if not task_files:
+                continue
+            if tasks_per_path[task.relative_path] > 1:
+                patterns = validate_allow_change(
+                    self.get_task_parameters(task, default_parameters).get(
+                        "allow_change"
+                    )
+                )
+                if patterns and not any(
+                    self._matches_editable_pattern(
+                        file.parts, Path(pattern).parts, pattern.endswith("/")
+                    )
+                    for file in task_files
+                    for pattern in patterns
+                ):
+                    continue
+            changed_tasks.append(task)
         print_info(
             f"Changed tasks: {[t.name for t in changed_tasks]} (changed files in last commit)",
             color="grey",
@@ -291,6 +338,30 @@ class Course:
             warnings.warn(f"No active tasks found for last commit changes {changed_files}")
 
         return changed_tasks
+
+    @staticmethod
+    def _matches_editable_pattern(
+        path: tuple[str, ...], pattern: tuple[str, ...], directory_only: bool = False
+    ) -> bool:
+        """Match task-relative glob paths, including descendants of matching folders.
+
+        Match names from the diff rather than the filesystem so deletions and
+        both sides of renames are detected too. Unlike Path.match, ** also
+        matches zero path segments, as it does with Path.glob.
+        """
+        if not pattern:
+            return bool(path) or not directory_only
+        if pattern[0] == "**":
+            return (
+                Course._matches_editable_pattern(path, pattern[1:], directory_only)
+                or bool(path)
+                and Course._matches_editable_pattern(path[1:], pattern, directory_only)
+            )
+        return (
+            bool(path)
+            and fnmatchcase(path[0], pattern[0])
+            and Course._matches_editable_pattern(path[1:], pattern[1:], directory_only)
+        )
 
     def _resolve_base_commit(self, repo: git.Repo, head: git.Commit) -> git.Commit | None:
         """Find the commit to diff HEAD against.
@@ -361,6 +432,8 @@ class Course:
     def detect_changes(
         self,
         detection_type: CheckerTestingConfig.ChangesDetectionType,
+        *,
+        default_parameters: dict[str, Any] | None = None,
     ) -> list[FileSystemTask]:
         """
         Detects changes in the repository based on the provided detection type.
@@ -370,6 +443,7 @@ class Course:
             - BRANCH_NAME_OR_COMMIT_MESSAGE: compare both sources when a non-default branch matches; reject conflicts
             - COMMIT_MESSAGE: task name in commit message (can be multiple tasks/groups)
             - LAST_COMMIT_CHANGES: task relative path in changes since base_ref, or HEAD~1 (can be multiple tasks)
+                Shared folders use each task's nonempty allow_change patterns.
         :return: list of changed tasks
         :raises CheckerException: if repository is not a git repository
         """
@@ -408,7 +482,12 @@ class Course:
         if detection_type == CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE:
             return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
 
-        if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
-            return self._detect_by_last_commit_changes(repo, potential_tasks)
+        if (
+            detection_type
+            == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES
+        ):
+            return self._detect_by_last_commit_changes(
+                repo, potential_tasks, default_parameters
+            )
 
         assert False, "Unreachable code"  # pragma: no cover

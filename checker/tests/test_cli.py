@@ -347,7 +347,7 @@ class TestGradeReporting:
         ]  # type: ignore[arg-type]
         monkeypatch.setattr(
             "checker.course.Course.detect_changes",
-            lambda self, detection_type: detected,
+            lambda self, detection_type, **kwargs: detected,
         )
 
         result = run_grade(course_root)
@@ -363,7 +363,8 @@ class TestGradeReporting:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "checker.course.Course.detect_changes", lambda self, detection_type: []
+            "checker.course.Course.detect_changes",
+            lambda self, detection_type, **kwargs: [],
         )
 
         result = run_grade(course_root)
@@ -414,7 +415,12 @@ class TestGradeBaseRef:
     def captured_base_ref(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         captured: dict[str, Any] = {}
 
-        def fake_detect_changes(self: Any, detection_type: Any) -> list[Any]:
+        def fake_detect_changes(
+            self: Any,
+            detection_type: Any,
+            *,
+            default_parameters: dict[str, Any] | None = None,
+        ) -> list[Any]:
             captured["base_ref"] = self.base_ref
             return []
 
@@ -459,6 +465,8 @@ class TestGradeBaseRef:
         result = run_grade(course_root)
         assert result.exit_code == 0, result.output
         assert captured_base_ref["base_ref"] == "mr_base"
+
+
 class TestGradeSkipUnchangedTasks:
     @pytest.fixture(autouse=True)
     def detect_changes_from_filesystem(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -468,7 +476,7 @@ class TestGradeSkipUnchangedTasks:
         """
         monkeypatch.setattr(
             "checker.course.Course.detect_changes",
-            lambda self, detection_type: self.get_tasks(enabled=True),
+            lambda self, detection_type, **kwargs: self.get_tasks(enabled=True),
         )
 
     def test_unchanged_task_is_skipped(
