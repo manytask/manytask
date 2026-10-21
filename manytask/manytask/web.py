@@ -458,6 +458,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
+            can_edit_course=app.debug
+            or app.storage_api.check_if_course_admin(course.course_name, session["manytask"]["username"]),
         )
 
     if request.method == "GET":
@@ -790,7 +792,8 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 
         if app.storage_api.edit_course(updated_settings):
             logger.info("Successfully updated course settings for: %s", sanitize_log_data(course_name))
-            return redirect(url_for("course.course_page", course_name=course_name))
+            flash("Course changes saved successfully.", category="success")
+            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         return render_template(
             "edit_course.html",
