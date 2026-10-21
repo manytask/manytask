@@ -388,6 +388,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
 def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
+    logger.info("414")
 
     def render_create_project(error_message: str | None = None) -> str:
         return render_template(
@@ -406,12 +407,13 @@ def create_project(course_name: str) -> ResponseReturnValue:
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_create_project("CSRF Error")
-
     rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
     # Set user to be course admin if they provided course token as a secret
-    is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
-    if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
+
+    is_course_admin: bool = secrets.compare_digest(request.form["secret"].encode("utf-8"), course.token.encode("utf-8"))
+    if not is_course_admin and not secrets.compare_digest(request.form["secret"].encode("utf-8"),
+                                                            course.registration_secret.encode("utf-8")):
         return render_create_project("Invalid secret")
 
     app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
