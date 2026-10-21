@@ -11,7 +11,12 @@ from zoneinfo import ZoneInfo
 
 import click
 
-from .configs import CheckerConfig, CheckerTaskFileConfig, ManytaskConfig
+from .configs import (
+    CheckerConfig,
+    CheckerTaskFileConfig,
+    CheckerTasksFileConfig,
+    ManytaskConfig,
+)
 from .course import Course, FileSystemTask
 from .exceptions import CheckerValidationError, TestingError
 from .exporter import Exporter
@@ -603,6 +608,7 @@ def schema(
     checker_schema = CheckerConfig.get_json_schema()
     manytask_schema = ManytaskConfig.get_json_schema()
     task_schema = CheckerTaskFileConfig.get_json_schema()
+    tasks_schema = CheckerTasksFileConfig.get_json_schema()
 
     with open(output_folder / "schema-checker.json", "w") as f:
         json.dump(checker_schema, f, indent=2)
@@ -610,6 +616,8 @@ def schema(
         json.dump(manytask_schema, f, indent=2)
     with open(output_folder / "schema-task.json", "w") as f:
         json.dump(task_schema, f, indent=2)
+    with open(output_folder / "schema-tasks.json", "w") as f:
+        json.dump(tasks_schema, f, indent=2)
 
 
 if __name__ == "__main__":

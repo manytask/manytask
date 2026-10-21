@@ -175,7 +175,7 @@ def _create_course(
         )
         (student / shared_path / f"{name}.txt").write_text(content)
 
-    _write_yaml(reference / shared_path / ".task.yml", task_config)
+    _write_yaml(reference / shared_path / ".tasks.yml", task_config)
     (reference / shared_path / "protected.txt").write_text("reference protected")
     (student / shared_path / "protected.txt").write_text("student tampering")
     (student / shared_path / "injected.txt").write_text("unexpected student file")
@@ -235,7 +235,7 @@ def test_mixed_shared_tasks_preserve_legacy_student_files_and_global_preparation
         }
     ]
     _write_yaml(checker_path, checker_config)
-    task_path = reference / "group/shared/.task.yml"
+    task_path = reference / "group/shared/.tasks.yml"
     task_config = yaml.safe_load(task_path.read_text())
     task_config["tasks"]["two"].pop("editable_patterns")
     task_config["tasks"]["two"]["task_pipeline"] = [
@@ -289,7 +289,7 @@ def test_skip_unchanged_checks_each_shared_task_editable_files(
     (student / "group/shared/two.txt").write_text("student two revised")
     repository.index.add(["group/shared/two.txt"])
     repository.index.commit("Revise two", author=actor, committer=actor)
-    task_config = reference / "group/shared/.task.yml"
+    task_config = reference / "group/shared/.tasks.yml"
     config = yaml.safe_load(task_config.read_text())
     config["tasks"]["two"]["parameters"]["own_content"] = "student two revised"
     _write_yaml(task_config, config)
@@ -307,7 +307,7 @@ def test_grade_inherits_file_defaults_and_uses_entry_pipeline(tmp_path: Path) ->
     student, reference = _create_course(tmp_path)
     group_path = reference / "group/.group.yml"
     group_config = yaml.safe_load(group_path.read_text())
-    task_path = reference / "group/shared/.task.yml"
+    task_path = reference / "group/shared/.tasks.yml"
     task_config = yaml.safe_load(task_path.read_text())
     task_config["task_pipeline"] = group_config.pop("task_pipeline")
     task_config["report_pipeline"] = group_config.pop("report_pipeline")

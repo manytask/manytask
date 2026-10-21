@@ -25,7 +25,7 @@ to the student's copy at grading time.
 ```yaml
 structure:
   ignore_patterns: [".git", "__pycache__", ".venv", "*.pyc"]
-  public_patterns: [".gitignore", ".gitlab-ci.yml", ".task.yml", ".group.yml"]
+  public_patterns: [".gitignore", ".gitlab-ci.yml", ".task.yml", ".tasks.yml", ".group.yml"]
   private_patterns: [".*", "*private*"]
 ```
 
@@ -119,7 +119,8 @@ structure:
     - ".gitlab-ci.yml"    # CI that runs in the student repository
     - ".checker.yml"      # `checker grade` reads it in the student checkout
     - ".manytask.yml"     # deadlines and scores
-    - ".task.yml"         # defines one or more tasks in a folder
+    - ".task.yml"         # defines one task named after its folder
+    - ".tasks.yml"        # defines several named tasks in one folder
     - ".group.yml"        # marks a group folder
     - "test_public.py"    # visible to students, but restored from here at grading time
 
@@ -155,10 +156,11 @@ Patterns are matched with `Path.match` **at each directory level individually**.
 
 ## Per-group and per-task overrides
 
-A folder becomes a **group** when it contains `.group.yml`. A `.task.yml` defines a task named
-after its folder, or uses a [`tasks` mapping](#several-tasks-in-one-folder) to define several named
-tasks in that folder. Existing empty files and files containing only `version: 1` keep their
-folder-named task. Sub-configs can override the root configuration.
+A folder becomes a **group** when it contains `.group.yml`. A `.task.yml` defines one task named
+after its folder. To define several named tasks in the same folder, use a `.tasks.yml` file with
+a [`tasks` mapping](#several-tasks-in-one-folder). Empty `.task.yml` files and files containing only
+`version: 1` keep their folder-named task. Use only one of `.task.yml` and `.tasks.yml` per folder.
+Both formats can override the root configuration.
 
 ```yaml
 # python/add/.task.yml
@@ -180,10 +182,10 @@ task_pipeline:        # optional — replaces testing.tasks_pipeline for this ta
 
 Two different merge behaviors, easy to mix up:
 
-- **`structure` fields replace, they do not merge.** Setting `private_patterns` in a `.task.yml`
+- **`structure` fields replace, they do not merge.** Setting `private_patterns` in a `.task.yml` or `.tasks.yml`
   discards the root list for that folder — repeat the entries you still need, including `".*"`.
 - **`parameters` merge**, with the narrower scope winning: `default_parameters` < `.group.yml` <
-  `.task.yml` defaults < the individual `tasks` entry.
+  task-file defaults < the individual `.tasks.yml` entry.
 
 Pipelines resolve by the same narrowest-wins rule: task config → `.group.yml` → root
 `testing.tasks_pipeline`. Note the singular key `task_pipeline` in sub-configs versus the plural
@@ -209,7 +211,7 @@ editable_patterns: ["add.py"]
 ```
 
 Patterns are relative to the task folder and use Python `Path.glob`, including recursive patterns
-such as `"src/**/*.py"`. A `tasks` entry inherits this field from the top level of its `.task.yml`
+such as `"src/**/*.py"`. A `tasks` entry inherits this field from the top level of its `.tasks.yml`
 and can replace it; `.group.yml` and `default_parameters` do not supply it. When there is no
 inherited list, omitting the field keeps the existing structure-based merge. Set it to `null` to
 select that merge explicitly, or to `[]` to use only reference files.
@@ -242,7 +244,7 @@ For example, keep two implementations and their tests in `python/arithmetic/`:
 
 ```text
 python/arithmetic/
-  .task.yml
+  .tasks.yml
   add.py
   add.py.template
   multiply.py
@@ -251,7 +253,7 @@ python/arithmetic/
 ```
 
 ```yaml
-# python/arithmetic/.task.yml
+# python/arithmetic/.tasks.yml
 version: 1
 
 parameters:                 # shared defaults
@@ -276,8 +278,9 @@ does the reverse. Both tasks inherit common top-level settings. Here `add` uses 
 lists and pipelines replace the inherited value, including an explicit empty list.
 
 Keep `version` and `structure` at the top level: one shared folder has one structure for export.
-A task entry may be empty (`add: {}`) to inherit all defaults. When `tasks` is present, it must be
-a nonempty mapping; only its named entries are created, with no extra folder-named task.
+A task entry may be empty (`add: {}`) to inherit all defaults. The `tasks` mapping is required
+in `.tasks.yml` and must be nonempty; only its named entries are created, with no extra folder-named
+task. `.task.yml` does not accept this mapping: rename a multi-task file to `.tasks.yml`.
 
 Add `add` and `multiply` separately to `.manytask.yml`. Task names must be unique across the
 course, including names from flat `.task.yml` files. `checker check --task add` and branch-name
@@ -289,7 +292,7 @@ If `ui.task_url_template` contains `$TASK_NAME`, give each schedule entry a
 [`url`](manytask_yml_reference.md#task) pointing to the actual shared folder or its statement,
 because the logical name is no longer the folder name.
 
-Allow-list `".task.yml"` in `public_patterns` when `private_patterns: [".*", ...]` hides dotfiles.
+Allow-list both `".task.yml"` and `".tasks.yml"` in `public_patterns` when `private_patterns: [".*", ...]` hides dotfiles.
 Once any enabled task in a shared folder has started, the folder is published as a whole under
 its normal file patterns. A later sibling's start date does not hide its files; use private
 patterns or separate folders for material that must remain unreleased.

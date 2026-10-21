@@ -72,7 +72,7 @@ This section controls which files are copied, hidden, or ignored when exporting 
 structure:
   ignore_patterns: [".git", ".idea", "__pycache__", "*.pyc"]
   # List only the specific dotfiles students need — do NOT use a bare "*".
-  public_patterns: [".gitignore", ".gitlab-ci-students.yml", ".task.yml", ".group.yml"]
+  public_patterns: [".gitignore", ".gitlab-ci-students.yml", ".task.yml", ".tasks.yml", ".group.yml"]
   private_patterns: [".*", "*private*", "data_private"]
 ```
 
@@ -223,8 +223,8 @@ testing:
 | `search_plugins` | `list[str]` | ➖ | `[]` | Paths (relative to repo root) to search for custom plugin Python files. |
 | `skip_unchanged_tasks` | `str` | ➖ | `null` | Name of the task parameter holding glob patterns of student-editable files (e.g. `allow_change`). If set, `checker grade` skips (does not run and does not report) any detected task whose matching files are byte-identical to the published version. `null` disables the check. See details [below](#skip_unchanged_tasks). |
 | `global_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once** per checker run, before any task pipeline. |
-| `tasks_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**. Can be overridden in `.task.yml`. |
-| `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task** only if `tasks_pipeline` succeeded. Can be overridden in `.task.yml`. |
+| `tasks_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**. Can be overridden in `.task.yml` or `.tasks.yml`. |
+| `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task** only if `tasks_pipeline` succeeded. Can be overridden in `.task.yml` or `.tasks.yml`. |
 
 ### `changes_detection`
 
@@ -246,7 +246,7 @@ shallow clone the history is deepened once to find the base.
 
 When tasks share a folder, `last_commit_changes` selects every active task in that folder for a
 change anywhere beneath it. Branch-name and commit-message selection use logical task names from
-the `tasks` mapping in `.task.yml`; `--task <name>` also selects by that logical name.
+the `tasks` mapping in `.tasks.yml`; `--task <name>` also selects by that logical name.
 
 ### `skip_unchanged_tasks`
 
@@ -370,7 +370,7 @@ Available only in `tasks_pipeline` and `report_pipeline` (not in `global_pipelin
 
 #### `parameters`
 
-Key/value pairs from [`default_parameters`](#default_parameters) merged with any overrides from `parameters` section of `.group.yml` / `.task.yml`.
+Key/value pairs from [`default_parameters`](#default_parameters) merged with any overrides from `parameters` section of `.group.yml`, `.task.yml`, or `.tasks.yml`.
 
 ```yaml
 run_if: ${{ parameters.run_linting }}
@@ -418,15 +418,18 @@ Example:
 
 ## Task and group sub-configs {#taskymltaskgroupyml-sub-configs}
 
-Place `.group.yml` in a group folder and `.task.yml` in a task folder. Without a `tasks` field,
-`.task.yml` defines one task named after the folder. This includes an empty file or a file
-containing only `version: 1`, preserving existing course configurations.
+Place `.group.yml` in a group folder. Use `.task.yml` for one task named after its folder;
+this file may be empty or contain only `version: 1`. Use `.tasks.yml` for several named tasks
+sharing one folder. Only one of `.task.yml` and `.tasks.yml` may exist in a folder.
 
-To define several tasks in one folder, add a nonempty `tasks` mapping whose keys are logical task
-names. Each entry is an object of task overrides, or `{}` to inherit all defaults. The mapping
-creates only those named tasks; it does not also create a task named after the folder. Task names
+The `.tasks.yml` format requires a nonempty `tasks` mapping whose keys are logical task names.
+A `tasks` mapping in `.task.yml` is rejected with a request to rename the file. Each entry is
+an object of task overrides, or `{}` to inherit all defaults. The mapping creates only those named tasks; it does not also create a task named after the folder. Task names
 must be unique across the course, including folder-derived names. Each logical task is listed
 separately in `.manytask.yml`.
+
+`checker schema <output_folder>` generates `schema-task.json` for `.task.yml` and
+`schema-tasks.json` for `.tasks.yml`, alongside the root configuration schemas.
 
 Example:
 
@@ -438,7 +441,7 @@ editable_patterns: ["solution.py"]  # optional, task configs only
 
 structure:           # optional — overrides inherited structure for this folder
   ignore_patterns: ["*.pyc"]
-  public_patterns: ["README.md", ".task.yml"]
+  public_patterns: ["README.md", ".task.yml", ".tasks.yml"]
   private_patterns: ["tests/", ".*"]
 
 parameters:          # optional — merged on top of default_parameters
@@ -462,7 +465,7 @@ report_pipeline:     # optional — replaces testing.report_pipeline for this ta
 |---|---|---|
 | `version` | `int` | Must be `1`. File-level only, not repeated in `tasks` entries. |
 | `structure` | object | Same fields as root [`structure`](#structure). Each supplied list replaces the inherited list for this folder. File-level only: shared by every task in the folder. |
-| `tasks` | `map[str, object]` | Optional in `.task.yml`. Nonempty mapping of logical task names to overrides; entries may contain `editable_patterns`, `parameters`, `task_pipeline`, and `report_pipeline`. |
+| `tasks` | `map[str, object]` | Required in `.tasks.yml`; not accepted in `.task.yml`. Nonempty mapping of logical task names to overrides; entries may contain `editable_patterns`, `parameters`, `task_pipeline`, and `report_pipeline`. |
 | `editable_patterns` | `list[str] \| null` | Task configs only. Student files to overlay onto a fresh reference copy before this task pipeline. A `tasks` entry inherits the file-level value when omitted; `null` selects the structure-based merge, and `[]` uses reference files only. See [details](#editable_patterns). |
 | `parameters` | `object \| null` | Merged per key on top of inherited parameters. A task entry takes precedence over file-level defaults; `null` in an entry clears the file-level defaults while retaining group/root parameters. |
 | `task_pipeline` | `list[stage] \| null` | Replaces the inherited task pipeline. Note "task", not "tasks". `[]` disables the pipeline; `null` in an entry uses the group/root pipeline instead of the file-level default. |
@@ -471,7 +474,7 @@ report_pipeline:     # optional — replaces testing.report_pipeline for this ta
 > **`structure` replaces, `parameters` merge.** Each `structure` list you set in a sub-config
 > discards the root list for that folder — if you override `private_patterns`, repeat every entry
 > you still need, including `".*"`. Parameters, by contrast, are merged
-> (`default_parameters` < `.group.yml` < `.task.yml` defaults < the `tasks` entry), so an override
+> (`default_parameters` < `.group.yml` < task-file defaults < the `.tasks.yml` entry), so an override
 > can set a single key. Pattern lists and pipelines replace their inherited values.
 
 Task config files are discovered and validated regardless of whether the task is enabled or
@@ -479,14 +482,14 @@ listed in `.manytask.yml`. Scheduling still determines which tasks are graded or
 
 If the pipeline is defined for the smaller scope, this definition overrides larger scope. The priority is then:
 
-1. The individual entry in `.task.yml`'s `tasks` mapping
-2. Top-level `.task.yml` defaults (or the flat task config when `tasks` is absent)
+1. The individual entry in `.tasks.yml`'s `tasks` mapping
+2. Top-level `.tasks.yml` defaults, or the single-task `.task.yml` config
 3. `.group.yml` in the parent group folder
 4. Root `testing.tasks_pipeline` / `testing.report_pipeline`
 
 ### `editable_patterns`
 
-An optional field directly in `.task.yml` or in one of its `tasks` entries, separate from
+An optional field directly in `.task.yml` or `.tasks.yml`, or in one of `.tasks.yml`'s entries, separate from
 `parameters`. A task entry inherits the file-level value when it omits the field. It is not
 inherited from `.group.yml` or root defaults.
 
@@ -506,7 +509,7 @@ Patterns must be nonempty, relative paths without `..` components.
 For example, two tasks in `week_1/shared/`:
 
 ```yaml
-# week_1/shared/.task.yml
+# week_1/shared/.tasks.yml
 version: 1
 
 parameters:                 # shared defaults for both tasks
@@ -530,8 +533,8 @@ opposite combination. `task.task_name` is the logical name (`parser` or `formatt
 If the Manytask task URL template uses `$TASK_NAME`, set each task's
 [`url`](manytask_yml_reference.md#task) to the actual shared folder or statement.
 
-If dotfiles are private through `".*"`, include `".task.yml"` in `public_patterns` to publish
-the task config. A released shared folder publishes all files permitted by those patterns even
+If dotfiles are private through `".*"`, include both `".task.yml"` and `".tasks.yml"` in `public_patterns` to publish
+the task configs. A released shared folder publishes all files permitted by those patterns even
 if a sibling task is not yet released.
 
 ## Complete example of the file

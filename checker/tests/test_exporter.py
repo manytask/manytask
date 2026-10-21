@@ -813,7 +813,7 @@ class TestExporterSharedTasks:
                 "group": {
                     ".group.yml": "version: 1\nstructure:\n  ignore_patterns: [ignored*, cache]\n",
                     "shared": {
-                        ".task.yml": (
+                        ".tasks.yml": (
                             "version: 1\n"
                             "tasks:\n"
                             "  alpha:\n"
@@ -885,7 +885,7 @@ class TestExporterSharedTasks:
             Course(deadlines, student, reference),
             CheckerStructureConfig(
                 ignore_patterns=["global_ignore"],
-                public_patterns=[".task.yml", "test_public.py"],
+                public_patterns=[".tasks.yml", "test_public.py"],
                 private_patterns=[".*"],
             ),
             CheckerExportConfig(destination="https://example.com", templates="search"),

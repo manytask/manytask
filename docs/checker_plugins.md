@@ -9,7 +9,7 @@ The example below copies files listed in the `allow_change` parameter **from the
 repository** (`global.repo_dir`) into the testing tree. It leaves other files already in the tree
 untouched, so this stage alone does not restrict which student edits can affect grading.
 
-`allow_change` is not a built-in field: it is an ordinary [parameter](./checker_yml_reference.md#default_parameters) that you define yourself in `default_parameters` and can narrow per task in `.task.yml`, including individual entries in its `tasks` mapping.
+`allow_change` is not a built-in field: it is an ordinary [parameter](./checker_yml_reference.md#default_parameters) that you define yourself in `default_parameters` and can narrow per task in `.task.yml`, or in individual entries of a `.tasks.yml` file's `tasks` mapping.
 
 ```yaml
 - name: "Take the student's allowed files"

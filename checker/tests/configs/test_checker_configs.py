@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from checker.configs import CheckerExportConfig, CheckerSubConfig, CheckerTaskFileConfig
+from checker.configs import (
+    CheckerExportConfig,
+    CheckerSubConfig,
+    CheckerTaskFileConfig,
+    CheckerTasksFileConfig,
+)
 from checker.exceptions import BadConfig
 
 
@@ -19,7 +24,7 @@ def test_editable_patterns_stay_in_task_folder(patterns: list[str]) -> None:
 
 
 def test_task_file_merges_common_defaults_with_entry_overrides() -> None:
-    config = CheckerTaskFileConfig.model_validate(
+    config = CheckerTasksFileConfig.model_validate(
         {
             "version": 1,
             "structure": {"private_patterns": [".*"]},
@@ -56,7 +61,7 @@ def test_task_file_merges_common_defaults_with_entry_overrides() -> None:
 def test_task_file_preserves_explicit_null_and_empty_lists(
     override: list[str] | None,
 ) -> None:
-    config = CheckerTaskFileConfig.model_validate(
+    config = CheckerTasksFileConfig.model_validate(
         {
             "version": 1,
             "editable_patterns": ["common.py"],
@@ -101,32 +106,41 @@ def test_task_file_preserves_explicit_null_and_empty_lists(
 )
 def test_task_file_rejects_invalid_task_definitions(tasks: object) -> None:
     with pytest.raises(ValidationError):
+        CheckerTasksFileConfig.model_validate({"version": 1, "tasks": tasks})
+
+
+@pytest.mark.parametrize("tasks", [None, {}, {"parse": {}}])
+def test_single_task_file_rejects_tasks_mapping(tasks: object) -> None:
+    with pytest.raises(ValidationError, match="Use .tasks.yml"):
         CheckerTaskFileConfig.model_validate({"version": 1, "tasks": tasks})
 
 
 def test_task_file_rejects_duplicate_yaml_task_names(tmp_path: Path) -> None:
-    path = tmp_path / ".task.yml"
+    path = tmp_path / ".tasks.yml"
     path.write_text("version: 1\ntasks:\n  parse: {}\n  parse: {}\n")
     with pytest.raises(BadConfig, match="Duplicate YAML key 'parse'"):
-        CheckerTaskFileConfig.from_yaml(path)
+        CheckerTasksFileConfig.from_yaml(path)
 
 
 def test_task_file_supports_yaml_merge_defaults(tmp_path: Path) -> None:
-    path = tmp_path / ".task.yml"
+    path = tmp_path / ".tasks.yml"
     path.write_text(
         "version: 1\nparameters: &common\n  timeout: 10\n  shared: common\n"
         "tasks:\n  parse:\n    parameters:\n      <<: *common\n      timeout: 20\n"
     )
 
-    task = CheckerTaskFileConfig.from_yaml(path).resolve_tasks("folder")["parse"]
+    task = CheckerTasksFileConfig.from_yaml(path).resolve_tasks("folder")["parse"]
 
     assert task.parameters.root == {"timeout": 20, "shared": "common"}
 
 
 def test_task_file_schema_describes_named_entries() -> None:
-    schema = CheckerTaskFileConfig.get_json_schema()
+    schema = CheckerTasksFileConfig.get_json_schema()
     tasks = schema["properties"]["tasks"]
     assert tasks["minProperties"] == 1
+    assert "tasks" in schema["required"]
+    assert "tasks" not in CheckerTaskFileConfig.get_json_schema()["properties"]
+    assert CheckerTaskFileConfig.get_json_schema()["not"] == {"required": ["tasks"]}
     entry = schema["$defs"]["CheckerTaskOverrides"]
     assert entry["additionalProperties"] is False
     assert "editable_patterns" in entry["properties"]
@@ -148,11 +162,12 @@ def test_task_file_yaml_roundtrip_preserves_inheritance(
             "parse": {},
             "render": {"parameters": None, "task_pipeline": []},
         }
-    original = CheckerTaskFileConfig.model_validate(data)
-    path = tmp_path / ".task.yml"
+    model = CheckerTasksFileConfig if named else CheckerTaskFileConfig
+    original = model.model_validate(data)
+    path = tmp_path / (".tasks.yml" if named else ".task.yml")
 
     original.to_yaml(path)
-    restored = CheckerTaskFileConfig.from_yaml(path)
+    restored = model.from_yaml(path)
 
     assert original.resolve_tasks("folder") == restored.resolve_tasks("folder")
 

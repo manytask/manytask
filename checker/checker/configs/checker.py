@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Self, Union
 
 import yaml
 from pydantic import (
@@ -12,6 +12,7 @@ from pydantic import (
     RootModel,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 from checker.exceptions import BadConfig
@@ -227,26 +228,11 @@ class _TaskConfigYamlLoader(yaml.SafeLoader):
         return super().construct_mapping(node, deep=deep)
 
 
-class CheckerTaskFileConfig(CheckerSubConfig):
-    """A legacy single-task file or a file containing named tasks."""
-
-    tasks: dict[str, CheckerTaskOverrides] = Field(
-        default_factory=dict, min_length=1, validate_default=False
-    )
-
-    @field_validator("tasks")
-    @classmethod
-    def check_task_names(
-        cls, tasks: dict[str, CheckerTaskOverrides]
-    ) -> dict[str, CheckerTaskOverrides]:
-        if any(not name.strip() or name != name.strip() for name in tasks):
-            raise ValueError(
-                "Task names must be nonempty and have no surrounding whitespace"
-            )
-        return tasks
+class _CheckerTaskFileConfig(CheckerSubConfig):
+    """Common task-file loading and serialization."""
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "CheckerTaskFileConfig":
+    def from_yaml(cls, path: Path) -> Self:
         try:
             with path.open() as file:
                 return cls.model_validate(yaml.load(file, Loader=_TaskConfigYamlLoader))
@@ -260,10 +246,46 @@ class CheckerTaskFileConfig(CheckerSubConfig):
             yaml.safe_dump(self.model_dump(mode="json", exclude_unset=True), file)
 
     def resolve_tasks(self, folder_name: str) -> dict[str, CheckerSubConfig]:
-        common = self.model_dump(exclude={"tasks"})
-        if not self.tasks:
-            return {folder_name: CheckerSubConfig.model_validate(common)}
+        return {folder_name: CheckerSubConfig.model_validate(self.model_dump())}
 
+
+class CheckerTaskFileConfig(_CheckerTaskFileConfig):
+    """A .task.yml file defining one task named after its folder."""
+
+    model_config = ConfigDict(
+        extra="ignore",
+        validate_default=True,
+        json_schema_extra={"not": {"required": ["tasks"]}},
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_named_tasks(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "tasks" in data:
+            raise ValueError(
+                "Use .tasks.yml for a tasks mapping; .task.yml defines one task"
+            )
+        return data
+
+
+class CheckerTasksFileConfig(_CheckerTaskFileConfig):
+    """A .tasks.yml file defining named tasks with shared defaults."""
+
+    tasks: dict[str, CheckerTaskOverrides] = Field(min_length=1)
+
+    @field_validator("tasks")
+    @classmethod
+    def check_task_names(
+        cls, tasks: dict[str, CheckerTaskOverrides]
+    ) -> dict[str, CheckerTaskOverrides]:
+        if any(not name.strip() or name != name.strip() for name in tasks):
+            raise ValueError(
+                "Task names must be nonempty and have no surrounding whitespace"
+            )
+        return tasks
+
+    def resolve_tasks(self, folder_name: str) -> dict[str, CheckerSubConfig]:
+        common = self.model_dump(exclude={"tasks"})
         resolved = {}
         for name, task in self.tasks.items():
             overrides = task.model_dump(exclude_unset=True)

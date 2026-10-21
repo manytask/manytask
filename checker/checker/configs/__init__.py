@@ -4,6 +4,7 @@ from .checker import (  # noqa: F401
     CheckerStructureConfig,
     CheckerSubConfig,
     CheckerTaskFileConfig,
+    CheckerTasksFileConfig,
     CheckerTestingConfig,
     PipelineStageConfig,
 )

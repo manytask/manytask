@@ -12,6 +12,7 @@ import git
 from .configs import (
     CheckerSubConfig,
     CheckerTaskFileConfig,
+    CheckerTasksFileConfig,
     CheckerTestingConfig,
     ManytaskConfig,
 )
@@ -41,6 +42,7 @@ class Course:
     """
 
     TASK_CONFIG_NAME = ".task.yml"
+    TASKS_CONFIG_NAME = ".tasks.yml"
     SHALLOW_DEEPEN_BY = 100
     GROUP_CONFIG_NAME = ".group.yml"
 
@@ -129,13 +131,25 @@ class Course:
     def _search_for_tasks_by_configs(
         root: Path,
     ) -> Generator[FileSystemTask, Any, None]:
-        for task_config_path in sorted(root.glob(f"**/{Course.TASK_CONFIG_NAME}")):
+        config_paths = sorted(
+            set(root.glob(f"**/{Course.TASK_CONFIG_NAME}"))
+            | set(root.glob(f"**/{Course.TASKS_CONFIG_NAME}"))
+        )
+        for task_config_path in config_paths:
             relative_task_path = task_config_path.parent.relative_to(root)
+            if all(
+                (task_config_path.parent / name).exists()
+                for name in (Course.TASK_CONFIG_NAME, Course.TASKS_CONFIG_NAME)
+            ):
+                raise BadConfig(
+                    f"Folder {relative_task_path} contains both .task.yml and .tasks.yml; use only one"
+                )
 
-            # if empty file - use default
-            if task_config_path.read_text().strip() == "":
+            task_file: CheckerTaskFileConfig | CheckerTasksFileConfig
+            if task_config_path.name == Course.TASKS_CONFIG_NAME:
+                task_file = CheckerTasksFileConfig.from_yaml(task_config_path)
+            elif task_config_path.read_text().strip() == "":
                 task_file = CheckerTaskFileConfig(version=1)
-            # if any content - read yml
             else:
                 task_file = CheckerTaskFileConfig.from_yaml(task_config_path)
 
