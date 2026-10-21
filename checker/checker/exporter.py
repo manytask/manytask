@@ -278,64 +278,131 @@ class Exporter:
         if commit and not self.dry_run:
             self._commit_and_push_repo(target, commit_message)
 
-    def export_for_testing(
+    def export_for_testing(self, target: Path) -> None:
+        self.prepare_task_for_testing(target)
+
+    def _structure_for_path(
         self,
-        target: Path,
-    ) -> None:
-        if not self.dry_run:
-            target.mkdir(parents=True, exist_ok=True)
+        relative_path: Path,
+        parent_config: CheckerStructureConfig | None = None,
+    ) -> CheckerStructureConfig:
+        """Resolve structure rules using the current parent or the full ancestry."""
+        config = parent_config
+        if config is None:
+            config = self.structure_config
+            for parent in reversed(relative_path.parents):
+                config = self._structure_for_path(parent, config)
 
-        print_info(f"Copy from {self.repository_root} to {target}", color="grey")
-        self._copy_files_with_config(
-            self.repository_root,
-            target,
-            self.structure_config,
-            copy_public=False,
-            copy_private=False,
-            copy_other=True,
-            fill_templates=False,
+        declared = self.sub_config_files.get(relative_path)
+        if declared is None:
+            return config
+        return CheckerStructureConfig(
+            ignore_patterns=(
+                declared.ignore_patterns
+                if declared.ignore_patterns is not None
+                else config.ignore_patterns
+            ),
+            private_patterns=(
+                declared.private_patterns
+                if declared.private_patterns is not None
+                else config.private_patterns
+            ),
+            public_patterns=(
+                declared.public_patterns
+                if declared.public_patterns is not None
+                else config.public_patterns
+            ),
         )
 
-        print_info(f"Copy from {self.reference_root} to {target}", color="grey")
-        self._copy_files_with_config(
-            self.reference_root,
-            target,
-            self.structure_config,
-            copy_public=True,
-            copy_private=True,
-            copy_other=False,
-            fill_templates=False,
-        )
-
-    def _structure_for_path(self, relative_path: Path) -> CheckerStructureConfig:
-        config = self.structure_config
-        for parent in [*reversed(relative_path.parents), relative_path]:
-            config = self._get_sub_config(
-                self.reference_root / parent, config, self.reference_root
+    def _path_is_ignored(
+        self, path: Path, parent_config: CheckerStructureConfig | None = None
+    ) -> bool:
+        """Check a path in the copy context, or a reference-relative path's ancestry."""
+        if parent_config is not None:
+            return any(
+                path.match(pattern) for pattern in parent_config.ignore_patterns or []
             )
-        return config
 
-    def _task_path_is_ignored(self, task_path: Path, relative_path: Path) -> bool:
-        for path in [*reversed(relative_path.parents), relative_path]:
-            if path == Path("."):
+        for relative in [*reversed(path.parents), path]:
+            if relative == Path("."):
                 continue
-            config = self._structure_for_path(task_path / path.parent)
-            if any(
-                (self.reference_root / task_path / path).match(pattern)
-                for pattern in config.ignore_patterns or []
-            ):
+            config = self._structure_for_path(relative.parent)
+            if self._path_is_ignored(self.reference_root / relative, config):
                 return True
         return False
 
-    def prepare_task_for_testing(
-        self, target: Path, task: FileSystemTask, patterns: list[str] | None = None
+    def prepare_tasks_for_testing(
+        self,
+        target: Path,
+        tasks: list[FileSystemTask],
+        allowed_patterns: dict[str, list[str] | None],
     ) -> None:
-        """Reset a task folder, then overlay files matched by relative patterns.
+        """Prepare each selected folder once using the union of its task patterns.
 
-        The caller supplies validated patterns independently of the course config
-        format. None leaves the existing workspace untouched; an empty list uses
-        reference files only. Dry runs leave the workspace untouched as well.
+        An unrestricted task (None) keeps the existing structure-based export for
+        its entire folder. Empty lists contribute no student files.
         """
+        folders: dict[str, tuple[FileSystemTask, set[str] | None]] = {}
+        for task in tasks:
+            patterns = allowed_patterns[task.name]
+            if task.relative_path not in folders:
+                folders[task.relative_path] = (
+                    task,
+                    None if patterns is None else set(patterns),
+                )
+                continue
+            first_task, combined = folders[task.relative_path]
+            if patterns is None:
+                folders[task.relative_path] = (first_task, None)
+            elif combined is not None:
+                combined.update(patterns)
+
+        for task, combined_patterns in folders.values():
+            self.prepare_task_for_testing(
+                target,
+                task,
+                None if combined_patterns is None else sorted(combined_patterns),
+            )
+
+    def prepare_task_for_testing(
+        self,
+        target: Path,
+        task: FileSystemTask | None = None,
+        patterns: list[str] | None = None,
+    ) -> None:
+        """Prepare the full grading workspace, or reset one task with explicit patterns.
+
+        Without a task, use the existing student/reference export rules. For a
+        task, the caller supplies validated relative patterns: None preserves the
+        current folder; an empty list uses reference files only.
+        """
+        if task is None:
+            if not self.dry_run:
+                target.mkdir(parents=True, exist_ok=True)
+
+            print_info(f"Copy from {self.repository_root} to {target}", color="grey")
+            self._copy_files_with_config(
+                self.repository_root,
+                target,
+                self.structure_config,
+                copy_public=False,
+                copy_private=False,
+                copy_other=True,
+                fill_templates=False,
+            )
+
+            print_info(f"Copy from {self.reference_root} to {target}", color="grey")
+            self._copy_files_with_config(
+                self.reference_root,
+                target,
+                self.structure_config,
+                copy_public=True,
+                copy_private=True,
+                copy_other=False,
+                fill_templates=False,
+            )
+            return
+
         if patterns is None or self.dry_run:
             return
 
@@ -363,17 +430,14 @@ class Exporter:
             return {
                 name
                 for name in names
-                if any(
-                    (directory_path / name).match(pattern)
-                    for pattern in config.ignore_patterns or []
-                )
+                if self._path_is_ignored(directory_path / name, config)
             }
 
         if destination.is_dir() and not destination.is_symlink():
             shutil.rmtree(destination)
         elif destination.exists() or destination.is_symlink():
             destination.unlink()
-        if self._task_path_is_ignored(Path("."), task_path):
+        if self._path_is_ignored(task_path):
             return
         shutil.copytree(source, destination, ignore=ignored_entries)
 
@@ -390,7 +454,7 @@ class Exporter:
         for relative in self._collect_student_files(
             student_source, patterns, restrict_to_task=True
         ):
-            if self._task_path_is_ignored(task_path, relative):
+            if self._path_is_ignored(task_path / relative):
                 continue
             student_file = student_source / relative
             if not student_file.resolve().is_relative_to(student_source.resolve()):
@@ -636,7 +700,7 @@ class Exporter:
             return True, False, False
 
         # ignore if match ignore patterns
-        if config.ignore_patterns and any(path.match(ignore_pattern) for ignore_pattern in config.ignore_patterns):
+        if self._path_is_ignored(path, config):
             if self.verbose:
                 print_info(
                     f"    - Skip <{path.relative_to(global_root)}> because of ignore patterns",
@@ -646,7 +710,10 @@ class Exporter:
 
         # If matches public patterns AND copy_public is False - skip
         is_public = bool(
-            config.public_patterns and any(path.match(public_pattern) for public_pattern in config.public_patterns)
+            config.public_patterns
+            and any(
+                path.match(public_pattern) for public_pattern in config.public_patterns
+            )
         )
         if is_public and not copy_public:
             if self.verbose:
@@ -661,7 +728,10 @@ class Exporter:
         is_private = bool(
             not is_public
             and config.private_patterns
-            and any(path.match(private_pattern) for private_pattern in config.private_patterns)
+            and any(
+                path.match(private_pattern)
+                for private_pattern in config.private_patterns
+            )
         )
         if is_private and not copy_private:
             if self.verbose:
@@ -683,7 +753,9 @@ class Exporter:
 
         # if file is empty file/folder - just do not copy (delete original file due to exclude_paths)
         if fill_templates and is_path_template_file:
-            if path.is_dir() and not any((path_destination / file).exists() for file in path.iterdir()):
+            if path.is_dir() and not any(
+                (path_destination / file).exists() for file in path.iterdir()
+            ):
                 if self.verbose:
                     print_info(
                         f"    - Skip <{path.relative_to(global_root)}> because it is empty folder and "
@@ -701,34 +773,6 @@ class Exporter:
                 return True, is_public, is_private
 
         return False, is_public, is_private
-
-    def _get_sub_config(self, path: Path, config: CheckerStructureConfig, global_root: Path) -> CheckerStructureConfig:
-        """Get sub-config for a directory if exists, otherwise return current config.
-
-        If have sub-config - update config with sub-config.
-        """
-        relative_path = path.relative_to(global_root)
-        if relative_path not in self.sub_config_files:
-            return config
-
-        declared_sub_config = self.sub_config_files[relative_path]
-        return CheckerStructureConfig(
-            ignore_patterns=(
-                declared_sub_config.ignore_patterns
-                if declared_sub_config.ignore_patterns is not None
-                else config.ignore_patterns
-            ),
-            private_patterns=(
-                declared_sub_config.private_patterns
-                if declared_sub_config.private_patterns is not None
-                else config.private_patterns
-            ),
-            public_patterns=(
-                declared_sub_config.public_patterns
-                if declared_sub_config.public_patterns is not None
-                else config.public_patterns
-            ),
-        )
 
     def _copy_directory(  # noqa: PLR0913
         self,
@@ -776,7 +820,7 @@ class Exporter:
         if fill_templates and is_path_template_file:
             path_destination = path_destination.parent / path_destination.stem
 
-        sub_config = self._get_sub_config(path, config, global_root)
+        sub_config = self._structure_for_path(path.relative_to(global_root), config)
 
         # Recursively call this function
         if self.verbose:

@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import os
-import shutil
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -215,37 +211,6 @@ class Tester:
             self._get_task_report_pipeline_runner(task).validate(context, validate_placeholders=True)
 
             print_info("  ok")
-
-    @staticmethod
-    @contextmanager
-    def _snapshot_task_folders(
-        origin: Path, paths: set[str], *, dry_run: bool = False
-    ) -> Iterator[dict[str, Path | None]]:
-        """Keep temporary copies of selected task folders for later restoration."""
-        if dry_run or not paths:
-            yield {}
-            return
-
-        with TemporaryDirectory() as backup:
-            snapshots: dict[str, Path | None] = {}
-            for index, path in enumerate(sorted(paths)):
-                initial_folder = origin / path
-                snapshot = Path(backup) / str(index)
-                snapshots[path] = None
-                if initial_folder.exists():
-                    shutil.copytree(initial_folder, snapshot, symlinks=True)
-                    snapshots[path] = snapshot
-            yield snapshots
-
-    @staticmethod
-    def _restore_task_folder(destination: Path, snapshot: Path | None) -> None:
-        """Restore a saved folder, or remove a folder absent from the snapshot."""
-        if destination.is_dir() and not destination.is_symlink():
-            shutil.rmtree(destination)
-        elif destination.exists() or destination.is_symlink():
-            destination.unlink()
-        if snapshot is not None:
-            shutil.copytree(snapshot, destination, symlinks=True)
 
     def _run_task(
         self,
