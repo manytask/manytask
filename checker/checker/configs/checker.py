@@ -179,16 +179,12 @@ class CheckerSubConfig(CustomBaseModel, YamlLoaderMixin["CheckerSubConfig"]):
 
     @field_validator("editable_patterns")
     @classmethod
-    def check_editable_patterns(
-        cls, patterns: Optional[list[str]]
-    ) -> Optional[list[str]]:
+    def check_editable_patterns(cls, patterns: Optional[list[str]]) -> Optional[list[str]]:
         if patterns is not None:
             for pattern in patterns:
                 path = Path(pattern)
                 if not pattern or path.is_absolute() or ".." in path.parts:
-                    raise ValueError(
-                        "editable_patterns must stay inside the task folder"
-                    )
+                    raise ValueError("editable_patterns must stay inside the task folder")
         return patterns
 
     @field_validator("version")

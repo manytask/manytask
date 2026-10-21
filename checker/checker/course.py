@@ -53,27 +53,13 @@ class Course:
         self.repository_root = repository_root
         self.reference_root = reference_root or repository_root
 
-        self.potential_groups = {
-            group.name: group
-            for group in self._search_for_groups_by_configs(self.reference_root)
-        }
-        self.potential_tasks: dict[str, FileSystemTask] = {}
-        for task in self._search_for_tasks_by_configs(self.reference_root):
-            if task.name in self.potential_tasks:
-                previous = self.potential_tasks[task.name]
-                raise BadConfig(
-                    f"Duplicate task name {task.name!r} in {previous.relative_path!r} and {task.relative_path!r}"
-                )
-            self.potential_tasks[task.name] = task
+        self.potential_groups = {group.name: group for group in self._search_for_groups_by_configs(self.reference_root)}
+        self.potential_tasks = {task.name: task for task in self._search_for_tasks_by_configs(self.reference_root)}
 
         self.branch_name = branch_name
         self.base_ref = base_ref
 
-        self.task_to_group = {
-            task.name: group
-            for group in self.potential_groups.values()
-            for task in group.tasks
-        }
+        self.task_to_group = {task.name: group for group in self.potential_groups.values() for task in group.tasks}
 
     def get_group_for_task(self, task_name: str) -> FileSystemGroup | None:
         """Get the group that contains the given task, or None if not found."""
@@ -122,39 +108,40 @@ class Course:
         ]
 
     @staticmethod
-    def _load_sub_config(path: Path) -> CheckerSubConfig:
-        if path.read_text().strip() == "":
-            return CheckerSubConfig.default()
-        return CheckerSubConfig.from_yaml(path)
-
-    @staticmethod
-    def _load_tasks_from_config(root: Path, path: Path) -> list[FileSystemTask]:
-        relative_path = path.parent.relative_to(root)
-        task_name = (
-            path.parent.name
-            if path.name == Course.TASK_CONFIG_NAME
-            else path.name.removeprefix(".task.").removesuffix(".yml")
-        )
-        if not task_name or task_name.isspace():
-            raise BadConfig(f"Empty task name in {path}")
-        return [
-            FileSystemTask(
-                name=task_name,
-                relative_path=str(relative_path),
-                config=Course._load_sub_config(path),
-            )
-        ]
-
-    @staticmethod
     def _search_for_tasks_by_configs(
         root: Path,
     ) -> Generator[FileSystemTask, Any, None]:
         config_paths = sorted(
-            set(root.glob(f"**/{Course.TASK_CONFIG_NAME}"))
-            | set(root.glob(f"**/{Course.NAMED_TASK_CONFIG_PATTERN}"))
+            set(root.glob(f"**/{Course.TASK_CONFIG_NAME}")) | set(root.glob(f"**/{Course.NAMED_TASK_CONFIG_PATTERN}"))
         )
+        task_paths: dict[str, str] = {}
         for task_config_path in config_paths:
-            yield from Course._load_tasks_from_config(root, task_config_path)
+            relative_task_path = task_config_path.parent.relative_to(root)
+
+            # if empty file - use default
+            if task_config_path.read_text().strip() == "":
+                task_config = CheckerSubConfig.default()
+            # if any content - read yml
+            else:
+                task_config = CheckerSubConfig.from_yaml(task_config_path)
+
+            if task_config_path.name == Course.TASK_CONFIG_NAME:
+                task_name = task_config_path.parent.name
+            else:
+                task_name = task_config_path.name.removeprefix(".task.").removesuffix(".yml")
+            if not task_name or task_name.isspace():
+                raise BadConfig(f"Empty task name in {task_config_path}")
+            if task_name in task_paths:
+                raise BadConfig(
+                    f"Duplicate task name {task_name!r} in {task_paths[task_name]!r} and {str(relative_task_path)!r}"
+                )
+            task_paths[task_name] = str(relative_task_path)
+
+            yield FileSystemTask(
+                name=task_name,
+                relative_path=str(relative_task_path),
+                config=task_config,
+            )
 
     @staticmethod
     def _search_for_groups_by_configs(
@@ -163,11 +150,14 @@ class Course:
         for group_config_path in root.glob(f"**/{Course.GROUP_CONFIG_NAME}"):
             relative_group_path = group_config_path.parent.relative_to(root)
 
-            group_config = Course._load_sub_config(group_config_path)
+            # if empty file - use default
+            if group_config_path.read_text().strip() == "" or group_config_path.read_text().strip() == "\n":
+                group_config = CheckerSubConfig.default()
+            # if any content - read yml
+            else:
+                group_config = CheckerSubConfig.from_yaml(group_config_path)
 
-            group_tasks = list(
-                Course._search_for_tasks_by_configs(group_config_path.parent)
-            )
+            group_tasks = list(Course._search_for_tasks_by_configs(group_config_path.parent))
             for task in group_tasks:
                 task.relative_path = str(relative_group_path / task.relative_path)
 
