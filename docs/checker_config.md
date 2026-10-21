@@ -196,11 +196,16 @@ there. Only tasks enabled in `.manytask.yml` are selected for grading or publish
 
 ## Explicit editable files
 
-Set `parameters.allow_change` to specify which student files are used for a task. Before **each**
-task pipeline, the checker rebuilds its folder from the reference repository, including working
-solutions and excluding ignored files, then overlays only the matching student files. This resets
-changes left by a previous task pipeline when several tasks share a folder. Matching reference
-files are removed first, so a student-deleted solution stays absent instead of using the reference solution.
+Set `parameters.allow_change` in a task config to select student files for grading. Before the global
+and task pipelines run, the checker prepares each detected task folder **once**. If all detected
+tasks in a folder provide pattern lists, it rebuilds the folder from the reference repository,
+including working solutions and excluding ignored files, then overlays student files matched by
+the **union** of those lists. Only detected tasks contribute patterns. Matching reference files
+are removed first, so student-deleted files remain absent.
+
+All detected tasks sharing the folder use this same prepared workspace. Files generated or
+modified by the global pipeline and earlier task pipelines remain available to later pipelines;
+the checker does not reset the folder between tasks.
 
 ```yaml
 # python/add/.task.yml
@@ -213,8 +218,9 @@ Patterns are relative to the task folder and use Python `Path.glob`, including r
 such as `"src/**/*.py"`. The list follows ordinary parameter inheritance:
 `default_parameters` → `.group.yml` → task-file defaults → the individual `.tasks.yml` entry.
 An explicitly supplied list replaces the inherited list. Set `allow_change: null` to use the
-existing structure-based merge, or `allow_change: []` to use only reference files. If no level
-sets `allow_change`, the structure-based merge remains in effect.
+existing structure-based merge, or `allow_change: []` to contribute no student files. If any
+detected task in a shared folder has no effective list, the whole folder keeps the structure-based
+merge. If all detected tasks in the folder have empty lists, only reference files are used.
 
 ### Using `allow_change` with plugins {#optional-an-explicit-allow-list-with-allow_change}
 
@@ -441,8 +447,9 @@ grade:
 ```
 
 `checker grade STUDENT_ROOT REFERENCE_ROOT` builds the merged tree from those two roots — the same
-two passes described [above](#where-student-edits-actually-go), followed by each task's
-[`parameters.allow_change`](#explicit-editable-files) reset when configured.
+two passes described [above](#where-student-edits-actually-go), followed by one preparation per
+detected folder using the combined [`parameters.allow_change`](#explicit-editable-files) patterns when configured.
+This preparation finishes before the global pipeline runs.
 
 ### Required CI/CD variables
 

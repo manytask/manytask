@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import sys
 from pathlib import Path
 from textwrap import dedent
@@ -14,20 +16,24 @@ from checker.__main__ import cli
 
 
 CHECK_TASK = dedent("""\
+    import json
     import sys
     from pathlib import Path
 
     name, expected, inherited, shared, repository = sys.argv[1:]
-    sibling = 'two' if name == 'one' else 'one'
     assert inherited == 'group value'
     assert shared == 'file value'
     assert Path(name + '.txt').read_text() == expected
-    assert Path(sibling + '.txt').read_text() == 'reference ' + sibling
-    assert Path('protected.txt').read_text() == 'reference protected'
-    assert not Path('injected.txt').exists()
-    assert not Path('generated.txt').exists()
+    for filename, content in json.loads(Path('expected_workspace.json').read_text()).items():
+        assert Path(filename).read_text() == content
+    assert Path('global.txt').read_text() == 'global preparation'
+    executed = Path(repository) / 'executed.txt'
+    previous = executed.read_text().splitlines() if executed.exists() else []
+    if previous:
+        assert Path('generated.txt').read_text() == previous[-1]
+    else:
+        assert not Path('generated.txt').exists()
     Path('generated.txt').write_text(name)
-    Path(sibling + '.txt').write_text('changed by previous pipeline')
     with (Path(repository) / 'executed.txt').open('a') as output:
         output.write(name + '\\n')
 """)
@@ -45,6 +51,43 @@ REPORT_TASK = dedent("""\
 
 def _write_yaml(path: Path, config: dict[str, Any]) -> None:
     path.write_text(yaml.safe_dump(config))
+
+
+def _expect_workspace(
+    reference: Path, expected: dict[str, str], *, injected: bool = False
+) -> None:
+    path = reference / ".checker.yml"
+    config = yaml.safe_load(path.read_text())
+    config["testing"]["global_pipeline"] = [
+        {
+            "name": "Check all selected files before task pipelines",
+            "run": "run_script",
+            "args": {
+                "origin": "${{ global.temp_dir }}/group/shared",
+                "script": [
+                    sys.executable,
+                    "-c",
+                    dedent("""\
+                        import base64
+                        import json
+                        import sys
+                        from pathlib import Path
+
+                        expected = json.loads(base64.b64decode(sys.argv[1]))
+                        for filename, content in expected.items():
+                            assert Path(filename).read_text() == content, filename
+                        assert Path('injected.txt').exists() == (sys.argv[2] == 'present')
+                        Path('expected_workspace.json').write_text(json.dumps(expected))
+                        Path('global.txt').write_text('global preparation')
+                    """),
+                    # Keep the argument renderer from interpreting JSON as a mapping.
+                    base64.b64encode(json.dumps(expected).encode()).decode(),
+                    "present" if injected else "absent",
+                ],
+            },
+        }
+    ]
+    _write_yaml(path, config)
 
 
 def _create_course(
@@ -112,7 +155,7 @@ def _create_course(
             },
             "task_pipeline": [
                 {
-                    "name": "Check isolated student files",
+                    "name": "Check shared student files",
                     "run": "run_script",
                     "args": {
                         "origin": task_origin,
@@ -178,6 +221,14 @@ def _create_course(
     (reference / shared_path / "protected.txt").write_text("reference protected")
     (student / shared_path / "protected.txt").write_text("student tampering")
     (student / shared_path / "injected.txt").write_text("unexpected student file")
+    _expect_workspace(
+        reference,
+        {
+            "one.txt": "reference one" if unchanged_one else "student one",
+            "two.txt": "student two",
+            "protected.txt": "reference protected",
+        },
+    )
     return student, reference
 
 
@@ -186,7 +237,7 @@ def _grade(student: Path, reference: Path, *args: str) -> Result:
 
 
 @pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
-def test_grade_shared_folder_tasks_are_isolated_in_either_order(
+def test_grade_shared_folder_tasks_use_one_workspace_in_either_order(
     tmp_path: Path, order: tuple[str, str]
 ) -> None:
     student, reference = _create_course(tmp_path, order)
@@ -203,6 +254,15 @@ def test_grade_shared_folder_tasks_are_isolated_in_either_order(
 
 def test_grade_selects_one_logical_task_from_a_shared_folder(tmp_path: Path) -> None:
     student, reference = _create_course(tmp_path)
+
+    _expect_workspace(
+        reference,
+        {
+            "one.txt": "reference one",
+            "two.txt": "student two",
+            "protected.txt": "reference protected",
+        },
+    )
 
     result = _grade(student, reference, "--task", "two", "--submit-score")
 
@@ -242,56 +302,19 @@ def test_mixed_shared_tasks_preserve_legacy_student_files_and_global_preparation
     tmp_path: Path, order: tuple[str, str]
 ) -> None:
     student, reference = _create_course(tmp_path, order)
-    checker_path = reference / ".checker.yml"
-    checker_config = yaml.safe_load(checker_path.read_text())
-    checker_config["testing"]["global_pipeline"] = [
-        {
-            "name": "Prepare the merged task folder",
-            "run": "run_script",
-            "args": {
-                "origin": "${{ global.temp_dir }}/group/shared",
-                "script": [
-                    sys.executable,
-                    "-c",
-                    "from pathlib import Path; "
-                    "Path('global.txt').write_text('global preparation')",
-                ],
-            },
-        }
-    ]
-    _write_yaml(checker_path, checker_config)
     task_path = reference / "group/shared/.tasks.yml"
-    task_config = yaml.safe_load(task_path.read_text())
-    task_config["tasks"]["two"]["parameters"].pop("allow_change")
-    task_config["tasks"]["two"]["task_pipeline"] = [
+    config = yaml.safe_load(task_path.read_text())
+    config["tasks"]["two"]["parameters"].pop("allow_change")
+    _write_yaml(task_path, config)
+    _expect_workspace(
+        reference,
         {
-            "name": "Check the original merged student folder",
-            "run": "run_script",
-            "args": {
-                "origin": "${{ global.temp_dir }}/${{ task.task_sub_path }}",
-                "script": [
-                    sys.executable,
-                    "-c",
-                    dedent("""\
-                        import sys
-                        from pathlib import Path
-
-                        assert Path('one.txt').read_text() == 'student one'
-                        assert Path('two.txt').read_text() == 'student two'
-                        assert Path('protected.txt').read_text() == 'student tampering'
-                        assert Path('injected.txt').read_text() == 'unexpected student file'
-                        assert Path('global.txt').read_text() == 'global preparation'
-                        assert not Path('generated.txt').exists()
-                        Path('generated.txt').write_text('two')
-                        with (Path(sys.argv[1]) / 'executed.txt').open('a') as output:
-                            output.write('two\\n')
-                    """),
-                    "${{ global.repo_dir }}",
-                ],
-            },
-        }
-    ]
-    _write_yaml(task_path, task_config)
+            "one.txt": "student one",
+            "two.txt": "student two",
+            "protected.txt": "student tampering",
+        },
+        injected=True,
+    )
 
     result = _grade(student, reference, "--all-tasks", "--submit-score")
 
@@ -318,6 +341,15 @@ def test_skip_unchanged_checks_each_shared_task_editable_files(
     config = yaml.safe_load(task_config.read_text())
     config["tasks"]["two"]["parameters"]["own_content"] = "student two revised"
     _write_yaml(task_config, config)
+
+    _expect_workspace(
+        reference,
+        {
+            "one.txt": "reference one",
+            "two.txt": "student two revised",
+            "protected.txt": "reference protected",
+        },
+    )
 
     result = _grade(student, reference)
 
@@ -354,7 +386,9 @@ def test_grade_inherits_file_defaults_and_uses_entry_pipeline(tmp_path: Path) ->
                         assert own == 'student two'
                         assert inherited == 'group value'
                         assert Path('two.txt').read_text() == own
-                        assert Path('one.txt').read_text() == 'reference one'
+                        assert Path('one.txt').read_text() == 'student one'
+                        assert Path('generated.txt').read_text() == 'one'
+                        assert Path('global.txt').read_text() == 'global preparation'
                         Path('generated.txt').write_text('two')
                         repository = Path(repository)
                         (repository / 'custom_pipeline.txt').write_text(shared + '|' + own)
@@ -378,3 +412,41 @@ def test_grade_inherits_file_defaults_and_uses_entry_pipeline(tmp_path: Path) ->
     assert (student / "executed.txt").read_text().splitlines() == ["one", "two"]
     assert (student / "reported.txt").read_text().splitlines() == ["one", "two"]
     assert (student / "custom_pipeline.txt").read_text() == "file value|student two"
+
+
+@pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
+def test_empty_patterns_task_uses_the_same_selected_file_union(
+    tmp_path: Path, order: tuple[str, str]
+) -> None:
+    student, reference = _create_course(tmp_path, order)
+    path = reference / "group/shared/.tasks.yml"
+    config = yaml.safe_load(path.read_text())
+    config["tasks"]["one"]["parameters"].update(
+        allow_change=[], own_content="reference one"
+    )
+    _write_yaml(path, config)
+    _expect_workspace(
+        reference,
+        {
+            "one.txt": "reference one",
+            "two.txt": "student two",
+            "protected.txt": "reference protected",
+        },
+    )
+
+    result = _grade(student, reference, "--all-tasks", "--submit-score")
+
+    assert result.exit_code == 0, result.output
+    assert (student / "executed.txt").read_text().splitlines() == list(order)
+    assert (student / "reported.txt").read_text().splitlines() == list(order)
+
+
+def test_shared_workspace_dry_run_does_not_execute_pipelines(tmp_path: Path) -> None:
+    student, reference = _create_course(tmp_path)
+
+    result = _grade(student, reference, "--all-tasks", "--dry-run")
+
+    assert result.exit_code == 0, result.output
+    assert not (student / "executed.txt").exists()
+    assert not (student / "reported.txt").exists()
+    assert (student / "group/shared/protected.txt").read_text() == "student tampering"

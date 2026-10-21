@@ -490,12 +490,19 @@ An optional list of student-editable file patterns inside `parameters` in `.task
 `.tasks.yml`, or an individual `tasks` entry. It follows parameter inheritance from root
 `default_parameters` through `.group.yml`, task-file defaults, and the task entry. A more specific
 list replaces the inherited list. Set the parameter itself to `null` to use the structure-based
-merge; omit it at every level for the same behavior. An empty list uses reference files only.
+merge; omit it at every level for the same behavior. An empty list contributes no student files
+to the shared folder.
 
-When a list is configured, the checker resets the task folder before each task pipeline to the
-reference files, including reference solutions and excluding ignored files. It removes matching
-reference files and overlays only matching student files, so deletions stay absent. Student edits
-outside the list and changes left by a previous sibling task pipeline cannot affect this task.
+Before the global and task pipelines run, the checker prepares each detected folder once.
+It combines the `parameters.allow_change` lists of all detected tasks sharing that folder, copies the
+reference files (including solutions and excluding ignored files), and overlays student files
+matched by the combined patterns. Matching reference files are removed first so deleted student
+files remain absent. Undetected tasks do not contribute patterns.
+
+All pipelines use the shared workspace without resets between tasks. An empty list contributes
+no student files. If all detected lists in a folder are empty, only reference files are used.
+If any detected task has no effective list (omitted or `null`), the whole folder retains the
+existing `structure`-based preparation.
 
 Patterns use Python `Path.glob` relative to the task folder, for example `"solution.py"`,
 `"src/*.cpp"`, or `"src/**/*.py"`. Patterns must be nonempty relative paths without `..` components.

@@ -11,8 +11,9 @@ untouched, so this stage alone does not restrict which student edits can affect 
 
 `allow_change` is configured inside [parameters](./checker_yml_reference.md#default_parameters),
 with defaults in `default_parameters` and overrides in `.group.yml`, `.task.yml`, or `.tasks.yml`.
-The checker applies this list when preparing each task, before the pipeline starts. The copy stage
-below can reuse the same parameter, although it is not required for the initial preparation.
+The checker combines the effective lists of detected tasks per folder and prepares that folder
+once, before the global and task pipelines run. All pipelines share the prepared files. The copy
+stage below can reuse the same parameter, although it is not required for the initial preparation.
 
 ```yaml
 - name: "Take the student's allowed files"
