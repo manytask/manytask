@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 import shutil
-from contextlib import ExitStack
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -226,6 +227,37 @@ class Tester:
 
             print_info("  ok")
 
+    @staticmethod
+    @contextmanager
+    def _snapshot_task_folders(
+        origin: Path, paths: set[str], *, dry_run: bool = False
+    ) -> Iterator[dict[str, Path | None]]:
+        """Keep temporary copies of selected task folders for later restoration."""
+        if dry_run or not paths:
+            yield {}
+            return
+
+        with TemporaryDirectory() as backup:
+            snapshots: dict[str, Path | None] = {}
+            for index, path in enumerate(sorted(paths)):
+                initial_folder = origin / path
+                snapshot = Path(backup) / str(index)
+                snapshots[path] = None
+                if initial_folder.exists():
+                    shutil.copytree(initial_folder, snapshot, symlinks=True)
+                    snapshots[path] = snapshot
+            yield snapshots
+
+    @staticmethod
+    def _restore_task_folder(destination: Path, snapshot: Path | None) -> None:
+        """Restore a saved folder, or remove a folder absent from the snapshot."""
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        elif destination.exists() or destination.is_symlink():
+            destination.unlink()
+        if snapshot is not None:
+            shutil.copytree(snapshot, destination, symlinks=True)
+
     def _run_task(
         self,
         task: FileSystemTask,
@@ -310,18 +342,9 @@ class Tester:
             for task in tasks
             if task.config.editable_patterns is not None
         }
-        with ExitStack() as backups:
-            legacy_snapshots: dict[str, Path | None] = {}
-            if not self.dry_run and (mixed_paths := legacy_paths & explicit_paths):
-                backup_root = Path(backups.enter_context(TemporaryDirectory()))
-                for index, path in enumerate(sorted(mixed_paths)):
-                    initial_folder = origin / path
-                    snapshot = backup_root / str(index)
-                    legacy_snapshots[path] = None
-                    if initial_folder.exists():
-                        shutil.copytree(initial_folder, snapshot, symlinks=True)
-                        legacy_snapshots[path] = snapshot
-
+        with self._snapshot_task_folders(
+            origin, legacy_paths & explicit_paths, dry_run=self.dry_run
+        ) as legacy_snapshots:
             for task in tasks:
                 if task.config.editable_patterns is not None:
                     if task_exporter is None:
@@ -332,16 +355,14 @@ class Tester:
                             verbose=self.verbose,
                             dry_run=self.dry_run,
                         )
-                    task_exporter.prepare_task_for_testing(origin, task)
+                    task_exporter.prepare_task_for_testing(
+                        origin, task, task.config.editable_patterns
+                    )
                 elif task.relative_path in legacy_snapshots:
-                    destination = origin / task.relative_path
-                    if destination.is_dir() and not destination.is_symlink():
-                        shutil.rmtree(destination)
-                    elif destination.exists() or destination.is_symlink():
-                        destination.unlink()
-                    legacy_snapshot = legacy_snapshots[task.relative_path]
-                    if legacy_snapshot is not None:
-                        shutil.copytree(legacy_snapshot, destination, symlinks=True)
+                    self._restore_task_folder(
+                        origin / task.relative_path,
+                        legacy_snapshots[task.relative_path],
+                    )
 
                 task_result, report_result = self._run_task(
                     task, global_variables, outputs, report, timestamp
