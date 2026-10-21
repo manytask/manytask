@@ -24,8 +24,10 @@ untouched, so this stage alone does not restrict which student edits can affect 
 > This stage is **optional**. By default, `checker check` / `checker grade` restore files classified
 > as public or private from the reference repository; unclassified student files remain.
 > Use the built-in task-level [`editable_patterns`](./checker_config.md#explicit-editable-files)
-> list to enforce which student files enter a task's grading folder. A `copy_files` stage is not
-> needed for that overlay and can override it if configured to copy additional files.
+> lists to select student files for the detected tasks' shared grading folder. A `copy_files` stage is not
+> needed for that overlay. Detected tasks in a folder contribute their combined patterns before
+> the global pipeline runs; later pipelines share the workspace. A stage that copies additional
+> files can extend that prepared set.
 
 | Arg | Type | Required | Description |
 |---|---|---|---|

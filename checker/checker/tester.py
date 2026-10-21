@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import os
-import shutil
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -227,37 +223,6 @@ class Tester:
 
             print_info("  ok")
 
-    @staticmethod
-    @contextmanager
-    def _snapshot_task_folders(
-        origin: Path, paths: set[str], *, dry_run: bool = False
-    ) -> Iterator[dict[str, Path | None]]:
-        """Keep temporary copies of selected task folders for later restoration."""
-        if dry_run or not paths:
-            yield {}
-            return
-
-        with TemporaryDirectory() as backup:
-            snapshots: dict[str, Path | None] = {}
-            for index, path in enumerate(sorted(paths)):
-                initial_folder = origin / path
-                snapshot = Path(backup) / str(index)
-                snapshots[path] = None
-                if initial_folder.exists():
-                    shutil.copytree(initial_folder, snapshot, symlinks=True)
-                    snapshots[path] = snapshot
-            yield snapshots
-
-    @staticmethod
-    def _restore_task_folder(destination: Path, snapshot: Path | None) -> None:
-        """Restore a saved folder, or remove a folder absent from the snapshot."""
-        if destination.is_dir() and not destination.is_symlink():
-            shutil.rmtree(destination)
-        elif destination.exists() or destination.is_symlink():
-            destination.unlink()
-        if snapshot is not None:
-            shutil.copytree(snapshot, destination, symlinks=True)
-
     def _run_task(
         self,
         task: FileSystemTask,
@@ -311,6 +276,16 @@ class Tester:
     ) -> None:
         # get all tasks
         tasks = tasks or self.course.get_tasks(enabled=True)
+        allowed_patterns = {task.name: task.config.editable_patterns for task in tasks}
+        if any(patterns is not None for patterns in allowed_patterns.values()):
+            task_exporter = Exporter(
+                self.course,
+                self.structure_config,
+                self.checker_config.export,
+                verbose=self.verbose,
+                dry_run=self.dry_run,
+            )
+            task_exporter.prepare_tasks_for_testing(origin, tasks, allowed_patterns)
 
         # create outputs to pass to pipeline
         outputs: dict[str, PipelineStageResult] = {}
@@ -331,46 +306,14 @@ class Tester:
 
         failed_tasks = []
         failed_reports = []
-        task_exporter: Exporter | None = None
-        legacy_paths = {
-            task.relative_path
-            for task in tasks
-            if task.config.editable_patterns is None
-        }
-        explicit_paths = {
-            task.relative_path
-            for task in tasks
-            if task.config.editable_patterns is not None
-        }
-        with self._snapshot_task_folders(
-            origin, legacy_paths & explicit_paths, dry_run=self.dry_run
-        ) as legacy_snapshots:
-            for task in tasks:
-                if task.config.editable_patterns is not None:
-                    if task_exporter is None:
-                        task_exporter = Exporter(
-                            self.course,
-                            self.structure_config,
-                            self.checker_config.export,
-                            verbose=self.verbose,
-                            dry_run=self.dry_run,
-                        )
-                    task_exporter.prepare_task_for_testing(
-                        origin, task, task.config.editable_patterns
-                    )
-                elif task.relative_path in legacy_snapshots:
-                    self._restore_task_folder(
-                        origin / task.relative_path,
-                        legacy_snapshots[task.relative_path],
-                    )
-
-                task_result, report_result = self._run_task(
-                    task, global_variables, outputs, report, timestamp
-                )
-                if not task_result:
-                    failed_tasks.append(task.name)
-                elif report_result is not None and not report_result:
-                    failed_reports.append(task.name)
+        for task in tasks:
+            task_result, report_result = self._run_task(
+                task, global_variables, outputs, report, timestamp
+            )
+            if not task_result:
+                failed_tasks.append(task.name)
+            elif report_result is not None and not report_result:
+                failed_reports.append(task.name)
 
         if failed_tasks:
             raise TestingError(f"Task pipelines failed: {failed_tasks}")

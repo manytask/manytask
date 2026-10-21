@@ -194,13 +194,16 @@ there. Only tasks enabled in `.manytask.yml` are selected for grading or publish
 
 ## Explicit editable files
 
-Set `editable_patterns` directly in a task config to enforce which student files are used for
-that task. Before **each** task pipeline, the checker rebuilds its folder from the reference
-repository, including working solutions and excluding ignored files, then overlays only the
-matching student files. Edits to all other files are discarded. This also resets changes left
-by a previous task pipeline when several tasks share a folder.
-Matching reference files are removed before the overlay, so a student-deleted solution file
-stays absent rather than falling back to the working reference solution.
+Set `editable_patterns` in a task config to select student files for grading. Before the global
+and task pipelines run, the checker prepares each detected task folder **once**. If all detected
+tasks in a folder provide pattern lists, it rebuilds the folder from the reference repository,
+including working solutions and excluding ignored files, then overlays student files matched by
+the **union** of those lists. Only detected tasks contribute patterns. Matching reference files
+are removed first, so student-deleted files remain absent.
+
+All detected tasks sharing the folder use this same prepared workspace. Files generated or
+modified by the global pipeline and earlier task pipelines remain available to later pipelines;
+the checker does not reset the folder between tasks.
 
 ```yaml
 # python/add/.task.yml
@@ -211,7 +214,9 @@ editable_patterns: ["add.py"]
 Patterns are relative to the task folder and use Python `Path.glob`, including recursive patterns
 such as `"src/**/*.py"`. Declare this field separately for each task; it is not inherited from
 `.group.yml` or `default_parameters`. Omit it (or set it to `null`) to keep the existing
-structure-based merge. An empty list, `editable_patterns: []`, uses only reference files.
+structure-based merge for the whole shared folder when that task is detected. An empty list,
+`editable_patterns: []`, contributes no student files; reference files alone are used when all
+detected tasks in the folder have empty lists.
 
 ### Using `allow_change` with plugins {#optional-an-explicit-allow-list-with-allow_change}
 
@@ -438,8 +443,9 @@ grade:
 ```
 
 `checker grade STUDENT_ROOT REFERENCE_ROOT` builds the merged tree from those two roots — the same
-two passes described [above](#where-student-edits-actually-go), followed by each task's
-[`editable_patterns`](#explicit-editable-files) reset when configured.
+two passes described [above](#where-student-edits-actually-go), followed by one preparation per
+detected folder using the combined [`editable_patterns`](#explicit-editable-files) patterns when configured.
+This preparation finishes before the global pipeline runs.
 
 ### Required CI/CD variables
 

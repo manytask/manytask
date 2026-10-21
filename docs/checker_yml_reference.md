@@ -462,7 +462,7 @@ report_pipeline:     # optional — replaces testing.report_pipeline for this ta
 |---|---|---|
 | `version` | `int` | Must be `1`. |
 | `structure` | object | Same fields as root [`structure`](#structure). Each supplied list replaces the inherited list for this folder. Must be identical across tasks sharing a folder. |
-| `editable_patterns` | `list[str] \| null` | Task configs only. Student files to overlay onto a fresh reference copy before this task pipeline. Omitted/`null` preserves the structure-based merge; `[]` uses reference files only. See [details](#editable_patterns). |
+| `editable_patterns` | `list[str] \| null` | Task configs only. Contributes student-file patterns to the detected tasks' shared folder, prepared once before pipelines. Omitted/`null` keeps that folder's structure-based merge; `[]` contributes no files. See [details](#editable_patterns). |
 | `parameters` | object | Merged on top of `default_parameters`. Task-level values take precedence. |
 | `task_pipeline` | `list[stage]` | Replaces `testing.tasks_pipeline` for this task. Note "task", not "tasks".|
 | `report_pipeline` | `list[stage]` | Replaces `testing.report_pipeline` for this task. |
@@ -486,12 +486,16 @@ If the pipeline is defined for the smaller scope, this definition overrides larg
 An optional field directly in `.task.yml` or `.task.<name>.yml`, separate from `parameters`.
 It is not inherited from `.group.yml` or root defaults.
 
-For a configured list, the checker resets the task folder before each task pipeline to the
-reference files, including reference solutions and excluding ignored files. It then overlays
-only student files matched by the list, first removing matching reference files so deleted
-student files remain absent. This prevents other student edits and changes from a
-previous sibling task pipeline from affecting this task. `[]` overlays nothing; omitted or
-`null` retains the existing `structure`-based preparation.
+Before the global and task pipelines run, the checker prepares each detected folder once.
+It combines the `editable_patterns` lists of all detected tasks sharing that folder, copies the
+reference files (including solutions and excluding ignored files), and overlays student files
+matched by the combined patterns. Matching reference files are removed first so deleted student
+files remain absent. Undetected tasks do not contribute patterns.
+
+All pipelines use the shared workspace without resets between tasks. An empty list contributes
+no student files. If all detected lists in a folder are empty, only reference files are used.
+If any detected task has no effective list (omitted or `null`), the whole folder retains the
+existing `structure`-based preparation.
 
 Patterns use Python `Path.glob` relative to the task folder, for example `"solution.py"`,
 `"src/*.cpp"`, or `"src/**/*.py"`. Include only files students are intended to control.

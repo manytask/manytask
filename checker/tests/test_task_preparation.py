@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -8,7 +9,6 @@ from checker.configs import CheckerExportConfig, CheckerStructureConfig, Manytas
 from checker.course import Course
 from checker.exceptions import BadStructure
 from checker.exporter import Exporter
-from checker.tester import Tester
 
 T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
 
@@ -95,20 +95,25 @@ class TestExporterTaskPreparation:
             CheckerExportConfig(destination="https://example.com", templates="search"),
         )
 
-    def test_prepare_task_limits_student_files_and_resets_between_preparations(
-        self, task_exporter: Exporter
+    @pytest.mark.parametrize(
+        "selected", [("alpha",), ("beta",), ("alpha", "beta"), ("beta", "alpha")]
+    )
+    def test_prepare_selected_tasks_combines_patterns_in_a_shared_folder(
+        self, task_exporter: Exporter, selected: tuple[str, ...]
     ) -> None:
         target = task_exporter.temporary_dir
-        tasks = task_exporter.course.potential_tasks
-        folder = target / "group/shared"
+        task = task_exporter.course.potential_tasks["shared"]
+        tasks = [replace(task, name=name) for name in selected]
         task_exporter.export_for_testing(target)
 
-        task_exporter.prepare_task_for_testing(
-            target, tasks["shared"], ["alpha.py", "src"]
+        task_exporter.prepare_tasks_for_testing(
+            target, tasks, {name: [f"{name}.py", "src"] for name in selected}
         )
 
-        assert (folder / "alpha.py").read_text() == "student alpha"
-        assert (folder / "beta.py").read_text() == "reference beta"
+        folder = target / task.relative_path
+        for name in ("alpha", "beta"):
+            expected = "student" if name in selected else "reference"
+            assert (folder / f"{name}.py").read_text() == f"{expected} {name}"
         assert (folder / "test_public.py").read_text() == "reference tests"
         assert (folder / ".private").read_text() == "reference private"
         assert (folder / "src/extra.py").read_text() == "student extra"
@@ -117,13 +122,55 @@ class TestExporterTaskPreparation:
         assert not (folder / "cache").exists()
         assert not (folder / "extra.txt").exists()
 
-        (folder / "generated.txt").write_text("artifact from alpha")
-        task_exporter.prepare_task_for_testing(target, tasks["shared"], ["beta.py"])
+    @pytest.mark.parametrize("order", [("alpha", "beta"), ("beta", "alpha")])
+    def test_unrestricted_task_preserves_the_shared_legacy_export(
+        self, task_exporter: Exporter, order: tuple[str, str]
+    ) -> None:
+        target = task_exporter.temporary_dir
+        task = task_exporter.course.potential_tasks["shared"]
+        task_exporter.export_for_testing(target)
+        folder = target / task.relative_path
+        (folder / "prepared.txt").write_text("keep existing preparation")
 
-        assert (folder / "alpha.py").read_text() == "reference alpha"
+        task_exporter.prepare_tasks_for_testing(
+            target,
+            [replace(task, name=name) for name in order],
+            {"alpha": ["alpha.py"], "beta": None},
+        )
+
+        assert (folder / "alpha.py").read_text() == "student alpha"
         assert (folder / "beta.py").read_text() == "student beta"
-        assert (folder / "src/extra.py").read_text() == "reference extra"
-        assert not (folder / "generated.txt").exists()
+        assert (folder / "extra.txt").read_text() == "student extra"
+        assert (folder / "prepared.txt").read_text() == "keep existing preparation"
+
+    def test_preparation_keeps_patterns_separate_between_folders(
+        self, task_exporter: Exporter
+    ) -> None:
+        task = task_exporter.course.potential_tasks["shared"]
+        other = replace(task, name="other", relative_path="group/other")
+        for root, content in (
+            (task_exporter.reference_root, "reference"),
+            (task_exporter.repository_root, "student"),
+        ):
+            folder = root / other.relative_path
+            folder.mkdir()
+            for name in ("alpha", "beta"):
+                (folder / f"{name}.py").write_text(f"{content} other {name}")
+        target = task_exporter.temporary_dir
+        task_exporter.export_for_testing(target)
+
+        task_exporter.prepare_tasks_for_testing(
+            target, [task, other], {task.name: ["alpha.py"], other.name: ["beta.py"]}
+        )
+
+        assert (target / task.relative_path / "alpha.py").read_text() == "student alpha"
+        assert (target / task.relative_path / "beta.py").read_text() == "reference beta"
+        assert (
+            target / other.relative_path / "alpha.py"
+        ).read_text() == "reference other alpha"
+        assert (
+            target / other.relative_path / "beta.py"
+        ).read_text() == "student other beta"
 
     def test_prepare_task_empty_patterns_uses_reference_verbatim(
         self, task_exporter: Exporter
@@ -230,57 +277,3 @@ class TestExporterTaskPreparation:
         assert set(files) == expected
         if not restrict_to_task:
             assert task_exporter._collect_student_files(folder, patterns) == files
-
-
-@pytest.mark.parametrize("dry_run", [False, True])
-@pytest.mark.parametrize("replacement", ["directory", "file", "symlink"])
-def test_folder_snapshots_restore_contents_and_absence(
-    tmp_path: Path, dry_run: bool, replacement: str
-) -> None:
-    origin = tmp_path / "workspace"
-    folder = origin / "present"
-    folder.mkdir(parents=True)
-    (folder / "original.txt").write_text("original")
-    (folder / "link.txt").symlink_to("original.txt")
-
-    with Tester._snapshot_task_folders(
-        origin, {"present", "missing"}, dry_run=dry_run
-    ) as snapshots:
-        if dry_run:
-            assert snapshots == {}
-            assert (folder / "original.txt").read_text() == "original"
-            return
-        backup = snapshots["present"]
-        assert backup is not None
-        (folder / "original.txt").write_text("changed")
-        (folder / "generated.txt").write_text("artifact")
-        if replacement != "directory":
-            for entry in folder.iterdir():
-                entry.unlink()
-            folder.rmdir()
-            if replacement == "file":
-                folder.write_text("replaced by pipeline")
-            else:
-                folder.symlink_to(backup, target_is_directory=True)
-        missing = origin / "missing"
-        missing.mkdir()
-        (missing / "generated.txt").write_text("artifact")
-
-        Tester._restore_task_folder(folder, backup)
-        Tester._restore_task_folder(missing, snapshots["missing"])
-
-        assert (folder / "original.txt").read_text() == "original"
-        assert (folder / "link.txt").is_symlink()
-        assert not (folder / "generated.txt").exists()
-        assert not missing.exists()
-    assert not backup.exists()
-
-
-def test_folder_snapshots_cleanup_after_pipeline_error(tmp_path: Path) -> None:
-    (tmp_path / "task").mkdir()
-    with pytest.raises(RuntimeError, match="pipeline failed"):
-        with Tester._snapshot_task_folders(tmp_path, {"task"}) as snapshots:
-            backup = snapshots["task"]
-            assert backup is not None and backup.exists()
-            raise RuntimeError("pipeline failed")
-    assert not backup.exists()
