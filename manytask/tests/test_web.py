@@ -1,5 +1,6 @@
 import os
 from http import HTTPStatus
+from typing import Any
 from unittest.mock import patch
 
 import gitlab
@@ -520,6 +521,8 @@ def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
             # can_edit is serialized into the embedded courses JSON; a regular
             # user (no namespace access) can never edit.
             assert '"can_edit": true' not in body
+            assert "createNamespaceModal" not in body
+            assert "create-namespace.js" not in body
 
 
 def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
@@ -568,9 +571,12 @@ def test_index_renders_namespace_table_for_namespace_admin(app, mock_gitlab_oaut
     assert 'title: "Edit"' in body
     assert "Test namespace" in body
     assert "/instance_admin/namespaces/1" in body
+    assert "createNamespaceModal" not in body
+    assert "create-namespace.js" not in body
 
 
-def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth):
+@pytest.mark.parametrize("with_namespace", [True, False], ids=["existing_namespace", "first_namespace"])
+def test_index_namespace_creation_for_instance_admin(app: Any, mock_gitlab_oauth: Any, with_namespace: bool) -> None:
     CSRFProtect(app)
     namespace = MockCourseBase()
     namespace.id = 1
@@ -580,7 +586,7 @@ def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth
     namespace.gitlab_group_id = 1
 
     app.storage_api.stored_user.instance_admin = True
-    app.storage_api.get_all_namespaces = lambda: [namespace]
+    app.storage_api.get_all_namespaces = lambda: [namespace] if with_namespace else []
     app.storage_api.get_namespace_users = lambda _namespace_id: []
     app.storage_api.get_namespace_courses = lambda _namespace_id: []
 
@@ -593,7 +599,16 @@ def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth
             response = client.get("/")
 
     assert response.status_code == HTTPStatus.OK
-    assert "Namespaces you administer" in response.data.decode()
+    body = response.data.decode()
+    soup = BeautifulSoup(body, "html.parser")
+    create_button = soup.find("button", attrs={"data-bs-target": "#createNamespaceModal"})
+    assert create_button is not None
+    assert create_button.get_text(" ", strip=True) == "Create namespace"
+    assert soup.find("div", id="createNamespaceModal") is not None
+    assert "create-namespace.js" in body
+    if with_namespace:
+        assert "Namespaces you administer" in body
+        assert body.index('id="admin-namespaces-table"') < body.index('data-bs-target="#createNamespaceModal"')
 
 
 def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
