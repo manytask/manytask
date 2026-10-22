@@ -388,7 +388,6 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
 def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
-    logger.info("414")
 
     def render_create_project(error_message: str | None = None) -> str:
         return render_template(
