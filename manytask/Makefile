@@ -16,11 +16,12 @@ export TESTCONTAINERS_RYUK_DISABLED
 
 .PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests run-js-tests
 .PHONY: test-e2e
+E2E_BUILD_TIMEOUT ?= 3600
 
 # Explicit socket required: e2e/run.py refuses a daemon with existing containers.
 test-e2e:
 	@test -n "$(E2E_DOCKER_HOST)" || { echo "Set E2E_DOCKER_HOST to a dedicated, empty Docker daemon"; exit 1; }
-	.venv/bin/python e2e/run.py --docker-host "$(E2E_DOCKER_HOST)" --toolchain-image "$(E2E_TOOLCHAIN_IMAGE)"
+	.venv/bin/python e2e/run.py --docker-host "$(E2E_DOCKER_HOST)" --toolchain-image "$(E2E_TOOLCHAIN_IMAGE)" --build-timeout "$(E2E_BUILD_TIMEOUT)"
 
 check: lint test
 

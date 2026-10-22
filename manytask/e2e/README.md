@@ -8,7 +8,7 @@ and `uv`. Internet access is needed for toolchain/dependency images.
 On macOS, create a separate Colima profile:
 
 ```sh
-colima start manytask-e2e --activate=false --ssh-config=false --cpu 4 --memory 8 --disk 35 --edit
+colima start manytask-e2e --activate=false --ssh-config=false --cpu 4 --memory 8 --disk 35 --edit --editor nano
 ```
 
 In that profile's editor, set the existing `docker` section to:
@@ -27,6 +27,11 @@ profile. No host ports are published, and the active Docker context is unchanged
 make test-e2e E2E_DOCKER_HOST="unix://${HOME}/.colima/manytask-e2e/docker.sock"
 ```
 
+The launcher builds the Manytask and test-driver images before starting GitLab, so
+cold builds have the VM's resources available. Image builds have a separate one-hour
+timeout; override it with `E2E_BUILD_TIMEOUT=<seconds>` if needed. Failed and timed-out
+commands retain their redacted output in `command-error.log` in the run's artifact directory.
+
 An optional `E2E_TOOLCHAIN_IMAGE=<preloaded-image>` reuses a compiler/toolchain image
 already present on the dedicated daemon. It must match the template's `base.docker`
 environment, including the checker dependencies and pytest. The fixture uses it for
@@ -41,6 +46,19 @@ GitLab, PostgreSQL, registry storage, application cache, and runner configuratio
 loads development `.env` files or mounts development databases/configuration. The launcher
 refuses a daemon that already has containers, including stopped containers. It does not
 switch Docker contexts, run Docker prune commands, or alter existing images.
+
+Plaintext credential storage is intentional and **test-only**. Every run generates
+fresh passwords and tokens for its disposable GitLab, PostgreSQL, and Manytask services.
+`credentials.json` passes these credentials to the test driver, while `app.env` supplies
+them to Docker Compose. These files must only contain credentials for the isolated test
+stack; never supply development or production credentials. The run directory has mode
+`0700`, and `credentials.json` and `app.env` are set to mode `0600`. These permissions
+restrict access but do not encrypt the files.
+
+Default cleanup removes the generated credential files and the stack's volumes on
+success or failure. `--keep-on-failure` deliberately retains both for debugging; a forced
+termination that prevents cleanup can also leave them behind. Keep retained run directories
+private and share only redacted logs, rather than uploading the entire artifact directory.
 
 The test migrates the empty Manytask database and bootstraps a GitLab OAuth application,
 root PAT, and runner. Teacher and student authentication then use real GitLab login/OAuth

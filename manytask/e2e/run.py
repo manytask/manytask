@@ -36,9 +36,10 @@ def command(args: list[str], *, stdin: str | None = None, timeout: int = 1200) -
 
 
 class Stack:
-    def __init__(self, docker_host: str, toolchain_image: str = "") -> None:
+    def __init__(self, docker_host: str, toolchain_image: str = "", build_timeout: int = 3600) -> None:
         self.docker = ["docker", "--host", docker_host]
         self.toolchain_image = toolchain_image
+        self.build_timeout = build_timeout
         self.project = f"manytask-e2e-{secrets.token_hex(5)}"
         artifacts = COMPONENT / ".tmp" / "e2e"
         artifacts.mkdir(parents=True, exist_ok=True)
@@ -227,6 +228,7 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
             next(line for line in reversed(output.splitlines()) if line.startswith('{"admin_token"'))
         )
         credentials |= {"password": self.password, "course_token": self.course_token}
+        # Test-only plaintext handoff to the driver; see the credential policy in e2e/README.md.
         path = self.directory / "credentials.json"
         path.write_text(json.dumps(credentials))
         path.chmod(0o600)
@@ -242,6 +244,8 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
             "GITLAB_CLIENT_ID": credentials["client_id"],
             "GITLAB_CLIENT_SECRET": credentials["client_secret"],
         }
+        # Intentional test-only plaintext for Compose: private 0700 directory, 0600 file,
+        # deleted by default cleanup. --keep-on-failure retains it for debugging (see e2e/README.md).
         path = self.directory / "app.env"
         path.write_text("".join(f"{key}={value}\n" for key, value in environment.items()))
         path.chmod(0o600)
@@ -278,13 +282,14 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
     def run(self) -> None:
         print(f"Isolated test project: {self.project}\nArtifacts: {self.directory}", flush=True)
         self.prepare()
+        print("Building the checked-out Manytask and test driver before starting services.", flush=True)
+        command(self.compose + ["build", "manytask", "driver"], timeout=self.build_timeout)
         print("Starting fresh GitLab and Postgres (no host ports or development mounts).", flush=True)
         command(self.compose + ["up", "-d", "gitlab", "postgres", "runner"])
         self.wait_gitlab()
         self.bootstrap()
-        print("Building the checked-out Manytask and starting migrations.", flush=True)
-        command(self.compose + ["up", "-d", "--build", "manytask"])
-        command(self.compose + ["build", "driver"])
+        print("Starting Manytask and applying migrations.", flush=True)
+        command(self.compose + ["up", "-d", "--no-build", "manytask"])
         # Stream only the test's intentionally sanitized output.
         process = subprocess.Popen(self.compose + ["run", "--rm", "driver"])
         deadline = time.monotonic() + 2700
@@ -348,14 +353,19 @@ def main() -> None:
     parser.add_argument(
         "--toolchain-image", default="", help="Optional preloaded toolchain image for dependency caching"
     )
+    parser.add_argument(
+        "--build-timeout", type=int, default=3600, help="Image build timeout in seconds (default: 3600)"
+    )
     args = parser.parse_args()
+    if args.build_timeout <= 0:
+        parser.error("--build-timeout must be positive")
 
     def interrupt(signum: int, frame: Any) -> None:
         raise KeyboardInterrupt("Lifecycle interrupted; cleaning up its isolated stack")
 
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGINT, interrupt)
-    stack = Stack(args.docker_host, args.toolchain_image)
+    stack = Stack(args.docker_host, args.toolchain_image, args.build_timeout)
     failed = False
     try:
         stack.run()
@@ -365,8 +375,10 @@ def main() -> None:
         evidence = json.loads(result_path.read_text()) if result_path.exists() else {"project": stack.project}
         evidence.update(status="failed", failure_type=type(error).__name__)
         stack.write_manifest(evidence)
-        if isinstance(error, CommandFailed):
-            output = error.output.replace(stack.password, "<redacted>").replace(stack.course_token, "<redacted>")
+        if isinstance(error, (CommandFailed, subprocess.TimeoutExpired)):
+            parts = (error.output,) if isinstance(error, CommandFailed) else (error.stdout, error.stderr)
+            output = "".join(part.decode(errors="replace") if isinstance(part, bytes) else part or "" for part in parts)
+            output = output.replace(stack.password, "<redacted>").replace(stack.course_token, "<redacted>")
             output = re.sub(r"[a-fA-F0-9]{32,}|glpat-[\w-]+", "<redacted>", output)
             (stack.directory / "command-error.log").write_text(output)
             print(output[-6000:], flush=True)
