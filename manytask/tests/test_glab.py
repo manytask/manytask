@@ -1,7 +1,9 @@
+import json
 from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 from gitlab import GitlabCreateError, GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 
@@ -58,6 +60,7 @@ def create_mock_gitlab_group(group_id: int, name_short: str, name_full: str) -> 
     group.id = group_id
     group.name = name_short
     group.full_name = name_full
+    group.variables = MagicMock()
     return group
 
 
@@ -172,6 +175,9 @@ def gitlab(
 ):
     """Fixture to set up the GitLabApi with mocked GitLab objects."""
     mock_gitlab_instance = mock_gitlab.return_value
+    deploy_token = mock_gitlab_instance.projects.create.return_value.deploytokens.create.return_value
+    deploy_token.username = "gitlab+deploy-token-1"
+    deploy_token.token = "registry-token"
     mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group, mock_gitlab_group_student]
     mock_gitlab_instance.projects.list.return_value = [mock_gitlab_project, mock_gitlab_public_project]
 
@@ -237,7 +243,118 @@ def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab
 
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
+    mock_gitlab_instance.projects.list.assert_called_once_with(get_all=True, search=TEST_GROUP_PUBLIC_NAME_SHORT)
     mock_gitlab_instance.projects.create.assert_not_called()
+
+
+def test_create_private_repo_is_private(gitlab, mock_gitlab_group):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.list.return_value = []
+    project = mock_gitlab_instance.projects.create.return_value
+    deploy_token = project.deploytokens.create.return_value
+    deploy_token.username = "gitlab+deploy-token-1"
+    deploy_token.token = "registry-token"
+
+    gitlab_api.create_private_repo(
+        TEST_GROUP_NAME, "private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example"
+    )
+
+    params = mock_gitlab_instance.projects.create.call_args.args[0]
+    assert params["visibility"] == "private"
+    assert params["path"] == "private"
+    assert params["namespace_id"] == mock_gitlab_group.id
+    mock_gitlab_instance.projects.get.assert_not_called()
+    project.deploytokens.create.assert_called_once_with(
+        {"name": "manytask-registry", "scopes": ["read_registry", "write_registry"]}
+    )
+    docker_auth_config = mock_gitlab_group.variables.create.call_args.args[0]["value"]
+    assert json.loads(docker_auth_config) == {
+        "auths": {"example.com:5050": {"auth": "Z2l0bGFiK2RlcGxveS10b2tlbi0xOnJlZ2lzdHJ5LXRva2Vu"}}
+    }
+
+
+def test_create_private_repo_deletes_project_when_registry_credentials_fail(gitlab, mock_gitlab_group):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.list.return_value = []
+    project = mock_gitlab_instance.projects.create.return_value
+    project.deploytokens.create.side_effect = RuntimeError("GitLab deploy token API failed")
+
+    with pytest.raises(RuntimeError, match="deploy token API failed"):
+        gitlab_api.create_private_repo(
+            TEST_GROUP_NAME, "private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example"
+        )
+
+    project.delete.assert_called_once_with()
+
+
+@pytest.mark.parametrize("language", ["python", "cpp", "bash", "go", "rust"])
+def test_create_private_repo_from_template_selects_language(gitlab, mock_gitlab_group, language):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.list.return_value = []
+    target = mock_gitlab_instance.projects.create.return_value
+    target.default_branch = "main"
+
+    gitlab_api.create_private_repo(
+        TEST_GROUP_NAME, "private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example", language
+    )
+
+    mock_gitlab_instance.projects.get.assert_not_called()
+    actions = target.commits.create.call_args.args[0]["actions"]
+    paths = {action["file_path"] for action in actions}
+    assert f"{language}/.group.yml" in paths
+    assert {path.split("/", 1)[0] for path in paths if "/" in path} == {language}
+    config = next(action["content"] for action in actions if action["file_path"] == ".manytask.yml")
+    settings = yaml.safe_load(config)
+    assert settings["settings"]["course_name"] == "example"
+    assert settings["settings"]["public_repo"] == TEST_GROUP_PUBLIC_NAME
+    assert [group["group"] for group in settings["deadlines"]["schedule"]] == [language]
+    readme = next(action["content"] for action in actions if action["file_path"] == "README.md")
+    assert "snapshot" in readme
+    pyproject = next(action["content"] for action in actions if action["file_path"] == "pyproject.toml")
+    assert 'name = "manytask-example"' in pyproject
+    assert 'description = "Course example for Manytask"' in pyproject
+    public_ci = next(action["content"] for action in actions if action["file_path"] == ".gitlab-ci.yml")
+    assert "sandbox/" not in public_ci
+    assert TEST_GROUP_PUBLIC_NAME in public_ci
+    assert f"{TEST_GROUP_NAME}/private" in public_ci
+
+
+def test_create_private_repo_reports_missing_bundled_template(gitlab, mock_gitlab_group, tmp_path):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.list.return_value = []
+    gitlab_api._course_template_dir = tmp_path / "missing"
+
+    with pytest.raises(RmsApiException, match="files are missing"):
+        gitlab_api.create_private_repo(
+            TEST_GROUP_NAME, "private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example", "python"
+        )
+
+    mock_gitlab_instance.projects.create.assert_not_called()
+
+
+def test_create_private_repo_in_nested_group(gitlab, mock_gitlab_group):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.side_effect = [mock_gitlab_group, GitlabGetError("not found")]
+    mock_gitlab_instance.groups.list.return_value = []
+    mock_gitlab_instance.projects.list.return_value = []
+    mock_gitlab_group.full_path = TEST_GROUP_NAME
+    nested_group = mock_gitlab_instance.groups.create.return_value
+    nested_group.id = 42
+
+    gitlab_api.create_private_repo(
+        TEST_GROUP_NAME, "materials/private", TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "example"
+    )
+
+    mock_gitlab_instance.groups.create.assert_called_once_with(
+        {"name": "materials", "path": "materials", "parent_id": mock_gitlab_group.id, "visibility": "private"}
+    )
+    params = mock_gitlab_instance.projects.create.call_args.args[0]
+    assert params["path"] == "private"
+    assert params["namespace_id"] == nested_group.id
 
 
 def test_create_students_group(gitlab, mock_gitlab_group):
@@ -253,6 +370,35 @@ def test_create_students_group(gitlab, mock_gitlab_group):
     gitlab_api.create_students_group(TEST_GROUP_NAME)
 
     mock_gitlab_instance.groups.create.assert_called_once_with(_make_students_group_params(short_name))
+
+
+def test_configure_course_manytask_token(gitlab, mock_gitlab_group_student, mock_gitlab_public_project):
+    gitlab_api, mock_gitlab_instance = gitlab
+    private_project = create_mock_gitlab_project(TEST_PROJECT_ID + 3, f"{TEST_GROUP_NAME}/private")
+    mock_gitlab_instance.projects.list.return_value = [private_project, mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group_student
+
+    gitlab_api.configure_course_manytask_token(
+        TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "course-token", f"{TEST_GROUP_NAME}/private"
+    )
+
+    expected = {"key": "MANYTASK_TOKEN", "value": "course-token", "masked": True, "masked_and_hidden": True}
+    private_project.variables.create.assert_called_once_with(expected)
+    mock_gitlab_public_project.variables.create.assert_called_once_with(expected)
+    mock_gitlab_group_student.variables.create.assert_called_once_with(expected)
+
+
+def test_configure_course_manytask_token_without_private_repo(
+    gitlab, mock_gitlab_public_project, mock_gitlab_group_student
+):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.projects.list.return_value = [mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group_student
+
+    gitlab_api.configure_course_manytask_token(TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "course-token")
+
+    mock_gitlab_public_project.variables.create.assert_called_once()
+    mock_gitlab_group_student.variables.create.assert_called_once()
 
 
 def test_get_group_by_name_success(gitlab, mock_gitlab_group):

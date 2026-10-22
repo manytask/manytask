@@ -72,6 +72,35 @@
                     <label for="default_branch" class="form-label">{{ labels.default_branch_label }}</label>
                     <input type="text" class="form-control" id="default_branch" name="default_branch" value="main" required>
                 </div>
+                {% if rms == 'gitlab' %}
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="create_private_repo" name="create_private_repo">
+                    <label class="form-check-label" for="create_private_repo">Create private repository</label>
+                </div>
+                <div id="private-repo-options" hidden>
+                    <div class="mb-3">
+                        <label for="private_repo_path" class="form-label">GitLab Private Repo</label>
+                        <input type="text" class="form-control" id="private_repo_path" name="private_repo_path"
+                               pattern="[a-zA-Z0-9][a-zA-Z0-9._-]*(/[a-zA-Z0-9][a-zA-Z0-9._-]*)+">
+                        <div class="form-text">Private visibility. The path must be in the same course group as the public repository.</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="use_course_template" name="use_course_template">
+                        <label class="form-check-label" for="use_course_template">Create from course template</label>
+                    </div>
+                    <div class="mb-3" id="template-language-options" hidden>
+                        <label for="template_language" class="form-label">Programming language</label>
+                        <select class="form-select" id="template_language" name="template_language">
+                            <option value="">Select a language</option>
+                            <option value="python">Python</option>
+                            <option value="cpp">C++</option>
+                            <option value="bash">Bash</option>
+                            <option value="go">Go</option>
+                            <option value="rust">Rust</option>
+                        </select>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -107,6 +136,41 @@ document.addEventListener('DOMContentLoaded', function () {
     const namespaceSelect = document.getElementById('namespace_id');
     const namespaceError = document.getElementById('namespace-error');
     const form = document.querySelector('.needs-validation');
+    let updatePrivateRepoOptions = () => {};
+    const privateRepoCheckbox = document.getElementById('create_private_repo');
+    if (privateRepoCheckbox) {
+        const options = document.getElementById('private-repo-options');
+        const path = document.getElementById('private_repo_path');
+        const fromTemplate = document.getElementById('use_course_template');
+        const languageOptions = document.getElementById('template-language-options');
+        const language = document.getElementById('template_language');
+        let privateRepoPathChanged = false;
+        path.addEventListener('input', function () {
+            privateRepoPathChanged = true;
+        });
+        updatePrivateRepoOptions = function () {
+            options.hidden = !privateRepoCheckbox.checked;
+            path.required = privateRepoCheckbox.checked;
+            languageOptions.hidden = !privateRepoCheckbox.checked || !fromTemplate.checked;
+            language.required = privateRepoCheckbox.checked && fromTemplate.checked;
+            const publicPath = publicRepoField.value;
+            const publicName = publicPath.substring(publicPath.lastIndexOf('/') + 1);
+            const groupPath = publicPath.substring(0, publicPath.lastIndexOf('/'));
+            if (!privateRepoPathChanged) {
+                const privateName = /^public($|[-_.])/.test(publicName)
+                    ? `private${publicName.substring('public'.length)}`
+                    : (publicName ? `${publicName}-private` : 'private');
+                path.value = groupPath ? `${groupPath}/${privateName}` : '';
+            }
+            const validPath = path.value.startsWith(`${groupPath}/`) && path.value !== publicPath;
+            path.setCustomValidity(privateRepoCheckbox.checked && !validPath
+                ? 'Choose a private repository path in the same course group as the public repository.'
+                : '');
+        };
+        [privateRepoCheckbox, fromTemplate, path, publicRepoField, gitlabGroupField, namespaceSelect]
+            .forEach(field => field.addEventListener('input', updatePrivateRepoOptions));
+        updatePrivateRepoOptions();
+    }
     
     let publicRepoChanged = false;
     let studentsGroupChanged = false;
@@ -226,6 +290,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 studentsGroupField.value = `${fullGroupPath}/students-${year}-${semester}`;
             }
         }
+        updatePrivateRepoOptions();
     }
 
     // Check if namespace_id is provided in URL

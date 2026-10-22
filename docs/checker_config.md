@@ -412,7 +412,7 @@ two passes described [above](#where-student-edits-actually-go).
 | Variable | Where | Description |
 |---|---|---|
 | `GITLAB_API_TOKEN` | private repo | Push access to the public repo (`write_repository`, Maintainer) |
-| `MANYTASK_TOKEN` | group | Course token used by `report_score_manytask` |
+| `MANYTASK_TOKEN` | students group | Course token used by `report_score_manytask` |
 | `DOCKER_AUTH_CONFIG` | group | Registry credentials so student repos can pull the test image |
 
 ## Adding a new task

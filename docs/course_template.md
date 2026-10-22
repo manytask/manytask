@@ -123,6 +123,25 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
 
 ## Using the template for your own course
 
+On GitLab, the **Create course** form can create a private repository in the new
+course group. Select **Create private repository**; the path field shows a full
+path beside the public repository (for example, `<your-course>/private`). You can
+edit that path within the same course group, then optionally select **Create
+from course template** and a programming language. The template is copied from
+the `course-template/` snapshot bundled with the running Manytask image; it
+does not depend on a template project in the course's GitLab instance. Rebuild
+the app image after updating the template. Only the selected language's
+task directory and schedule entry are copied. The repository is private, and a
+link appears on the course page. By default, its name follows the public repo
+(`public-2026-fall` → `private-2026-fall`) in the same group.
+
+The generated configuration fills in the course name, public repository, student
+group, and private repository links. Review the CI settings and add the required
+credentials before releasing assignments. SourceCraft course creation does not
+offer private repository provisioning yet.
+
+For a course created outside the form, use the manual setup below.
+
 1. Create two empty GitLab projects — `<your-course>/private` (template clone) and `<your-course>/public` (auto-generated for students) — plus an empty `<your-course>/students` group.
 2. Clone the monorepo, then deploy the template to your private GitLab project:
 
@@ -142,14 +161,17 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
     ```
 
 3. Edit `.checker.yml` (`export.destination`), `.manytask.yml` (`settings`, `ui`, `deadlines.schedule`), and `.releaser-ci.yml` (`REGISTRY`, `MANYTASK_URL`, `COURSE_NAME`, and `PUBLIC_REPO_URL`).
-4. Add CI/CD variables in **Group → Settings → CI/CD → Variables**:
+4. Add registry and API credentials in **Group → Settings → CI/CD → Variables**.
+   Manytask provisions `MANYTASK_TOKEN` as a hidden, masked variable on the public
+   repository, students group, and any private repository it creates. For a
+   repository created separately, add the course token as `MANYTASK_TOKEN` there.
 
     | Variable | Purpose |
     |---|---|
     | `GITLAB_API_TOKEN` | Lets `checker export --commit` push to the public repo. Group access token, role `Maintainer`, scope `write_repository`. |
     | `DOCKER_AUTH_CONFIG` | Lets the private pipeline push course images and student repos pull them. Set it to deploy/group-token credentials with `read_registry` + `write_registry` on the private project. |
     | `TESTENV_IMAGE` | Absolute registry path to the testenv image used by the student `grade` job; host must match the private project's `CI_REGISTRY` (e.g. `gitlab.manytask.org:5050/<course>/private/testenv-image:latest`). Defaults to the sandbox path in `.gitlab-ci.yml`; override for your course. |
-    | `MANYTASK_TOKEN` | Course token used by the optional `report_score_manytask` pipeline in `.checker.yml` and by `.releaser-ci.yml` to send `.manytask.yml` to Manytask. |
+    | `MANYTASK_TOKEN` | Course token used by `.checker.yml` and `.releaser-ci.yml`. |
 
 5. Create a **deploy token** with `read_registry` + `write_registry` on the private
    project and store its Docker auth JSON in `DOCKER_AUTH_CONFIG`. The release jobs
