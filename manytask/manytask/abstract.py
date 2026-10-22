@@ -301,6 +301,9 @@ class StorageApi(ABC):
     def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
 
     @abstractmethod
+    def update_namespace(self, namespace_id: int, name: str, description: str | None) -> Any: ...
+
+    @abstractmethod
     def add_user_to_namespace(
         self,
         namespace_id: int,
