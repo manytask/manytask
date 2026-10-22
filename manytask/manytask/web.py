@@ -400,12 +400,12 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     if request.method == "GET":
         return render_create_project()
-
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
         app.logger.error("CSRF validation failed: %s", e)
         return render_create_project("CSRF Error")
+
     rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
 
     # Set user to be course admin if they provided course token as a secret
