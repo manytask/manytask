@@ -46,6 +46,19 @@ class AddUserToNamespaceRequest(BaseModel):
     role: Literal["namespace_admin", "program_manager"]
 
 
+class UpdateNamespaceRequest(BaseModel):
+    name: str
+    description: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, name: str) -> str:
+        name = name.strip()
+        if not name:
+            raise ValueError("Namespace name must not be empty")
+        return name
+
+
 ROLE_STUDENT = "student"
 
 

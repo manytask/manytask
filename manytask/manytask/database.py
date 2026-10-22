@@ -2051,6 +2051,17 @@ class DataBaseApi(StorageApi):
                 logger.error("Failed to create namespace slug=%s: %s", slug, str(e))
                 raise
 
+    def update_namespace(self, namespace_id: int, name: str, description: str | None) -> models.Namespace:
+        """Update the display name and description of an existing namespace."""
+        with self._session_create() as session:
+            namespace = self._get(session, models.Namespace, id=namespace_id)
+            namespace.name = name
+            namespace.description = description
+            session.commit()
+            session.refresh(namespace)
+            session.expunge(namespace)
+            return namespace
+
     def get_all_namespaces(self) -> list[models.Namespace]:
         """Get all namespaces (for Instance Admin).
 

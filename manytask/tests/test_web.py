@@ -1,5 +1,6 @@
 import os
 from http import HTTPStatus
+from typing import Any
 from unittest.mock import patch
 
 import gitlab
@@ -13,6 +14,7 @@ from sqlalchemy.exc import NoResultFound
 
 from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
+from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ProtectedBranchSettings
 from manytask.database import UserIdentityConflictError
 from manytask.local_config import LocalConfig
@@ -62,6 +64,7 @@ def app(mock_storage_api):
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(namespace_bp)
     app.register_blueprint(instance_admin_bp)
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
@@ -613,13 +616,16 @@ def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth
     assert "Namespaces you administer" in response.data.decode()
 
 
-def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
+@pytest.mark.parametrize("description", [None, "Namespace <description>\nMore details"])
+def test_namespace_admin_can_access_namespace_panel(
+    app: Flask, mock_gitlab_oauth: Any, description: str | None
+) -> None:
     """Namespace admins can open the panel where they manage their namespace."""
     namespace = MockCourseBase()
     namespace.id = 1
     namespace.name = "Test namespace"
     namespace.slug = "test-namespace"
-    namespace.description = None
+    namespace.description = description
     namespace.gitlab_group_id = 1
 
     app.storage_api.get_namespace_by_id = lambda _namespace_id, _username: (namespace, "namespace_admin")
@@ -636,6 +642,19 @@ def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
             response = client.get(f"/instance_admin/namespaces/{namespace.id}")
 
     assert response.status_code == HTTPStatus.OK
+    form = BeautifulSoup(response.data, "html.parser").find("form", id="namespaceSettingsForm")
+    assert form is not None
+    assert form["data-update-url"] == f"/api/namespaces/{namespace.id}"
+    name_input = form.find("input", id="namespaceName", attrs={"name": "name"})
+    assert name_input is not None
+    assert name_input["value"] == namespace.name
+    assert name_input.has_attr("required")
+    description_input = form.find("textarea", id="namespaceDescription", attrs={"name": "description"})
+    assert description_input is not None
+    assert description_input.get_text() == (description or "")
+    submit = form.find("button", attrs={"type": "submit"})
+    assert submit is not None
+    assert submit.get_text(strip=True) == "Save Changes"
 
 
 def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_oauth):

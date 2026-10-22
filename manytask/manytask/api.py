@@ -41,6 +41,7 @@ from .config import (
     NamespaceWithRoleResponse,
     PingResponse,
     SetCourseAdminRequest,
+    UpdateNamespaceRequest,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
@@ -1098,6 +1099,25 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
 
     except Exception as e:
         logger.error("Error fetching namespace id=%s for user=%s: %s", namespace_id, username, str(e), exc_info=True)
+        return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@namespace_bp.put("/namespaces/<int:namespace_id>")
+@requires_auth
+@requires_json_validation(UpdateNamespaceRequest)
+@requires_namespace_admin(return_404_if_not_found=True)
+def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNamespaceRequest) -> ResponseReturnValue:
+    """Update namespace details as an instance admin or an admin of this namespace."""
+    app: CustomFlask = current_app  # type: ignore
+
+    try:
+        namespace = app.storage_api.update_namespace(namespace_id, validated_data.name, validated_data.description)
+        result = NamespaceResponse.model_validate(namespace, from_attributes=True)
+        return jsonify(result.model_dump()), HTTPStatus.OK
+    except NoResultFound:
+        return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
+    except Exception:
+        logger.exception("Error updating namespace id=%s", namespace_id)
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
