@@ -283,6 +283,94 @@ class TestCourse:
         assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
 
     @pytest.mark.parametrize(
+        "branch_name, commit_message, expected_changed_tasks",
+        [
+            ("task1_1", "fixes", ["task1_1"]),
+            ("group1", "fixes", ["task1_1", "task1_2"]),
+            ("task1_1", "fix task1_1", ["task1_1"]),
+            ("group1", "fix task1_1 and task1_2", ["task1_1", "task1_2"]),
+            ("feature-work", "task1_1 and root_task_1", ["task1_1", "root_task_1"]),
+            ("task2_1", "task4_1", ["task4_1"]),  # disabled branch task
+            ("group3", "task4_1", ["task4_1"]),  # empty branch group
+            ("main", "task4_1", ["task4_1"]),
+            ("master", "task4_1", ["task4_1"]),
+            ("feature-work", "no matching task", []),
+        ],
+    )
+    def test_detect_changes_by_branch_name_or_commit_message(
+        self,
+        git_init_repository_root: Path,
+        branch_name: str,
+        commit_message: str,
+        expected_changed_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        if repo.active_branch.name != branch_name:
+            repo.git.checkout("-b", branch_name)
+        repo.git.commit("-m", commit_message, "--allow-empty")
+        course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+
+        detection_type = CheckerTestingConfig.model_validate(
+            {"changes_detection": "branch_name_or_commit_message"}
+        ).changes_detection
+        changed_tasks = course.detect_changes(detection_type)
+
+        assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+
+    @pytest.mark.parametrize(
+        "branch_name, commit_message, branch_tasks, commit_tasks",
+        [
+            ("task1_1", "task4_1", ["task1_1"], ["task4_1"]),
+            ("group1", "task4_1", ["task1_1", "task1_2"], ["task4_1"]),
+            ("task1_1", "task1_1 and task4_1", ["task1_1"], ["task1_1", "task4_1"]),
+        ],
+    )
+    def test_detect_changes_by_branch_name_or_commit_message_rejects_ambiguity(
+        self,
+        git_init_repository_root: Path,
+        branch_name: str,
+        commit_message: str,
+        branch_tasks: list[str],
+        commit_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        repo.git.checkout("-b", branch_name)
+        repo.git.commit("-m", commit_message, "--allow-empty")
+        course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=git_init_repository_root)
+
+        with pytest.raises(CheckerException, match="Ambiguous task detection") as error:
+            course.detect_changes(CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE)
+
+        assert branch_name in str(error.value)
+        assert str(sorted(branch_tasks)) in str(error.value)
+        assert str(sorted(commit_tasks)) in str(error.value)
+
+    @pytest.mark.parametrize(
+        "branch_override, expected_changed_tasks",
+        [(None, ["task4_1"]), ("task4_1", ["task4_1"]), ("main", ["task4_1"]), ("master", ["task4_1"])],
+    )
+    def test_detect_changes_by_branch_name_or_commit_message_detached_head(
+        self,
+        git_init_repository_root: Path,
+        branch_override: str | None,
+        expected_changed_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        repo.git.commit("-m", "task4_1", "--allow-empty")
+        repo.git.checkout(repo.head.commit.hexsha)
+        course = Course(
+            manytask_config=TEST_MANYTASK_CONFIG,
+            repository_root=git_init_repository_root,
+            branch_name=branch_override,
+        )
+
+        changed_tasks = course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE
+        )
+
+        assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+
+    @pytest.mark.parametrize(
         "commit_message, changed_files, expected_changed_tasks",
         [
             ("task1_1", ["group1/task1_1/file1_1_1"], ["task1_1"]),

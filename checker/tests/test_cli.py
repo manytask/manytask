@@ -374,6 +374,26 @@ class TestGradeReporting:
 
 
 class TestExport:
+    @pytest.mark.parametrize("command", ["export", "export-private"])
+    def test_copy_details_are_opt_in(self, course_root: Path, command: str) -> None:
+        export_root = course_root.parent / command
+
+        result = CliRunner().invoke(cli, [command, str(course_root), str(export_root)])
+
+        assert result.exit_code == 0, result.output
+        assert "Copy from " in result.output
+        assert "Copy files from <" not in result.output
+        assert "    - Copy <" not in result.output
+        assert (export_root / "group1" / "task1_1" / "solution.py").exists()
+
+        verbose_result = CliRunner().invoke(
+            cli, [command, str(course_root), str(export_root), "--verbose-copy"]
+        )
+
+        assert verbose_result.exit_code == 0, verbose_result.output
+        assert "Copy files from <" in verbose_result.output
+        assert "    - Copy <" in verbose_result.output
+
     def test_dry_run_does_not_modify_export_root(self, course_root: Path) -> None:
         export_root = course_root.parent / "export"
         export_root.mkdir()

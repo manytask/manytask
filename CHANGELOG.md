@@ -1,5 +1,33 @@
 # Changelog
 
+## [26.0.6](https://github.com/manytask/manytask/releases/tag/26.0.6) - 2026-10-01
+
+This release expands course and namespace administration, improves checker grading and the course template release pipeline, and fixes several export and web errors.
+
+### Features
+
+- Add personal task group ordering and the option to skip unchanged tasks during grading ([#1092](https://github.com/manytask/manytask/pull/1092)).
+- Check all tasks changed across a multi-commit push during grading ([#1110](https://github.com/manytask/manytask/pull/1110)).
+- Add course access API endpoints and course administrator management ([#1063](https://github.com/manytask/manytask/pull/1063), [#1064](https://github.com/manytask/manytask/pull/1064)).
+- Add namespace editing and prompt for a username when adding a user ([#1106](https://github.com/manytask/manytask/pull/1106), [#1107](https://github.com/manytask/manytask/pull/1107)).
+- Hide teachers, administrators, and project managers from the scores table ([#1079](https://github.com/manytask/manytask/pull/1079)).
+- Round scores after applying a deadline multiplier instead of truncating them ([#1124](https://github.com/manytask/manytask/pull/1124)).
+
+### Fixes
+
+- Allow namespace administrators to open the namespace editing page ([#1105](https://github.com/manytask/manytask/pull/1105)).
+- Handle RMS failures during project creation and anonymous requests to the course not-ready page ([#1096](https://github.com/manytask/manytask/pull/1096), [#1088](https://github.com/manytask/manytask/pull/1088)).
+- Make checker export honor dry-run mode and leave commit creation disabled by default ([#1099](https://github.com/manytask/manytask/pull/1099), [#1100](https://github.com/manytask/manytask/pull/1100)).
+- Use Docker Compose v2 for local development ([#1101](https://github.com/manytask/manytask/pull/1101)).
+
+### Other changes
+
+- Redesign the course template release pipeline ([#1109](https://github.com/manytask/manytask/pull/1109)).
+- Simplify test targets, add test arguments, and avoid a shell call for Git status ([#1104](https://github.com/manytask/manytask/pull/1104), [#1103](https://github.com/manytask/manytask/pull/1103), [#1102](https://github.com/manytask/manytask/pull/1102)).
+- Update dependencies and development documentation, including the urllib3 minimum and uv lockfiles ([#1123](https://github.com/manytask/manytask/pull/1123)).
+
+**Full Changelog**: [26.0.5...26.0.6](https://github.com/manytask/manytask/compare/26.0.5...26.0.6)
+
 ## [26.0.5](https://github.com/manytask/manytask/releases/tag/26.0.5) - 2026-09-11
 
 UI updates, bug fixes and minor optimizations.

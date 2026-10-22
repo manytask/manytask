@@ -8,7 +8,7 @@ from flask import Flask, json
 
 from manytask.abstract import RmsUser, StoredUser
 from manytask.api import namespace_bp
-from manytask.course import CourseStatus, ManytaskDeadlinesType
+from manytask.course import CourseStatus, ManytaskDeadlinesType, ProtectedBranchSettings
 from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
 from manytask.mock_rms import MockRmsApi
 from manytask.models import Namespace, User, UserOnNamespace
@@ -247,6 +247,27 @@ class MockCourseBase:
         self.gitlab_default_branch = "main"
         self.deadlines_type = ManytaskDeadlinesType.HARD
         self.namespace_id = None
+        self._ci_config_path: str | None = None
+        self._protected_branches: list[ProtectedBranchSettings] | None = None
+
+    @property
+    def ci_config_path(self) -> str:
+        if self._ci_config_path:
+            return self._ci_config_path
+        return f".gitlab-ci.yml@{getattr(self, 'gitlab_course_public_repo', '')}"
+
+    @property
+    def protected_branches(self) -> list[ProtectedBranchSettings]:
+        if self._protected_branches:
+            return self._protected_branches
+        return [
+            ProtectedBranchSettings(
+                name=self.gitlab_default_branch,
+                push_access_level="developer",
+                merge_access_level="developer",
+                allow_force_push=True,
+            )
+        ]
 
 
 class MockFinalGradeConfig:

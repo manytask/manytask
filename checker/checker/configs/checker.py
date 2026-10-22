@@ -105,6 +105,7 @@ class PipelineStageConfig(CustomBaseModel):
 class CheckerTestingConfig(CustomBaseModel):
     class ChangesDetectionType(Enum):
         BRANCH_NAME = "branch_name"
+        BRANCH_NAME_OR_COMMIT_MESSAGE = "branch_name_or_commit_message"
         COMMIT_MESSAGE = "commit_message"
         LAST_COMMIT_CHANGES = "last_commit_changes"
         FILES_CHANGED = "files_changed"

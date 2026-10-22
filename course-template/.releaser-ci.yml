@@ -17,7 +17,7 @@ variables:
   TESTENV_IMAGE: "$CI_REGISTRY_IMAGE/testenv-image:$CI_COMMIT_REF_SLUG"
   # The checker is installed from the monorepo because the PyPI release does
   # not yet contain the `validate` and `export-private` commands.
-  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@26.0.5#subdirectory=checker"
+  CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@26.0.6#subdirectory=checker"
 
 stages:
   - verify
@@ -29,6 +29,9 @@ stages:
 .docker:
   image: docker:20.10.18
   before_script:
+    # Local runners mount the host Docker socket instead of providing a Docker-in-Docker service.
+    # Override any inherited DOCKER_HOST (for example tcp://docker:2375).
+    - export DOCKER_HOST="unix:///var/run/docker.sock"
     # Register config.json so Docker can pull and push course images.
     - mkdir -p "$HOME/.docker"
     - printf '%s' "$DOCKER_AUTH_CONFIG" > "$HOME/.docker/config.json"

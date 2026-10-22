@@ -20,11 +20,13 @@ from manytask.config import (
     ManytaskDeadlinesConfig,
     ManytaskFinalGradeConfig,
     ManytaskGroupConfig,
+    ManytaskRmsConfig,
     ManytaskUiConfig,
+    ProtectedBranchConfig,
 )
 from manytask.course import Course as ManytaskCourse
-from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
-from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
+from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType, ProtectedBranchSettings
+from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError, UserIdentityConflictError
 from manytask.models import (
     Course,
     Deadline,
@@ -265,9 +267,12 @@ def update_course(
     ui_config: ManytaskUiConfig,
     deadlines_config: ManytaskDeadlinesConfig,
     final_grade_config: ManytaskFinalGradeConfig | None = None,
+    rms_config: ManytaskRmsConfig | None = None,
 ) -> None:
     """Update created course"""
-    config = ManytaskConfig(version=1, ui=ui_config, deadlines=deadlines_config, grades=final_grade_config)
+    config = ManytaskConfig(
+        version=1, ui=ui_config, deadlines=deadlines_config, grades=final_grade_config, rms=rms_config
+    )
 
     db_api.update_course(course_name=course_name, config=config)
 
@@ -697,6 +702,104 @@ def test_updating_course(
         disabled_groups=disabled_groups,
         disabled_tasks=disabled_tasks,
     )
+
+
+def test_create_course_resolves_rms_defaults_and_sets_pending(db_api_with_initialized_first_course, session):
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+
+    assert course.ci_config_path == ".gitlab-ci.yml@test_course_public_repo"
+    assert course.protected_branches == [
+        {
+            "name": "test_default_branch",
+            "push_access_level": "developer",
+            "merge_access_level": "developer",
+            "allow_force_push": True,
+        }
+    ]
+    assert course.rms_settings_pending is True
+
+
+def test_update_course_unchanged_rms_keeps_pending_until_cleared(
+    db_api_with_initialized_first_course, first_course_deadlines_config, session
+):
+    db_api_with_initialized_first_course.clear_rms_settings_pending(FIRST_COURSE_NAME)
+
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+    )
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.rms_settings_pending is False
+    assert db_api_with_initialized_first_course.rms_settings_reconcile_needed(FIRST_COURSE_NAME) is False
+
+
+def test_update_course_rms_change_sets_pending_again(
+    db_api_with_initialized_first_course, first_course_deadlines_config, session
+):
+    db_api_with_initialized_first_course.clear_rms_settings_pending(FIRST_COURSE_NAME)
+
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+        rms_config=ManytaskRmsConfig(ci_config_path=".gitlab-ci.yml@other/repo"),
+    )
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.ci_config_path == ".gitlab-ci.yml@other/repo"
+    assert course.rms_settings_pending is True
+    assert db_api_with_initialized_first_course.rms_settings_reconcile_needed(FIRST_COURSE_NAME) is True
+
+
+def test_update_course_rms_still_pending_when_reapplied_unchanged(
+    db_api_with_initialized_first_course, first_course_deadlines_config, session
+):
+    # rms_settings_pending is already True from course creation (NULL -> resolved defaults).
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+    )
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.rms_settings_pending is True
+
+
+def test_update_course_protected_branches_order_insensitive_no_change(
+    db_api_with_initialized_first_course, first_course_deadlines_config, session
+):
+    branches = [
+        ProtectedBranchConfig(name="a", push_access_level="developer"),
+        ProtectedBranchConfig(name="b", push_access_level="maintainer"),
+    ]
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+        rms_config=ManytaskRmsConfig(protected_branches=branches),
+    )
+    db_api_with_initialized_first_course.clear_rms_settings_pending(FIRST_COURSE_NAME)
+
+    reordered_branches = [
+        ProtectedBranchConfig(name="b", push_access_level="maintainer"),
+        ProtectedBranchConfig(name="a", push_access_level="developer"),
+    ]
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+        rms_config=ManytaskRmsConfig(protected_branches=reordered_branches),
+    )
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.rms_settings_pending is False
 
 
 def test_resync_with_changed_task_name(
@@ -1279,11 +1382,31 @@ def test_store_score_update_error(db_api_with_two_initialized_courses, session):
 
 
 def test_get_course_success(db_api_with_two_initialized_courses, first_course_config, second_course_config):
+    # update_course resolves and persists the effective (defaults-resolved) rms settings, so the
+    # freshly-loaded course carries those instead of the None the config fixtures start with.
     first_course_config.status = CourseStatus.HIDDEN
+    first_course_config.ci_config_path = f".gitlab-ci.yml@{first_course_config.gitlab_course_public_repo}"
+    first_course_config.protected_branches = [
+        ProtectedBranchSettings(
+            name=first_course_config.gitlab_default_branch,
+            push_access_level="developer",
+            merge_access_level="developer",
+            allow_force_push=True,
+        )
+    ]
     course = db_api_with_two_initialized_courses.get_course(FIRST_COURSE_NAME)
     assert course.__dict__ == ManytaskCourse(first_course_config).__dict__
 
     second_course_config.status = CourseStatus.HIDDEN
+    second_course_config.ci_config_path = f".gitlab-ci.yml@{second_course_config.gitlab_course_public_repo}"
+    second_course_config.protected_branches = [
+        ProtectedBranchSettings(
+            name=second_course_config.gitlab_default_branch,
+            push_access_level="developer",
+            merge_access_level="developer",
+            allow_force_push=True,
+        )
+    ]
     course = db_api_with_two_initialized_courses.get_course(SECOND_COURSE_NAME)
     assert course.__dict__ == ManytaskCourse(second_course_config).__dict__
 
@@ -1544,6 +1667,39 @@ def test_update_or_create_user_existing(db_api_with_two_initialized_courses, ses
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
     create_user(db_api_with_two_initialized_courses)
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
+
+
+def test_update_or_create_user_binds_initial_admin(db_api, session):
+    admin = session.query(User).filter_by(username="instance_admin").one()
+    admin_id = admin.id
+    assert (admin.rms_id, admin.auth_id, admin.is_instance_admin) == ("-1", -1, True)
+
+    db_api.update_or_create_user("instance_admin", TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
+
+    admin = session.query(User).filter_by(username="instance_admin").one()
+    assert admin.id == admin_id
+    assert (admin.first_name, admin.last_name) == (TEST_FIRST_NAME, TEST_LAST_NAME)
+    assert (admin.rms_id, admin.auth_id, admin.is_instance_admin) == (TEST_RMS_ID, TEST_AUTH_ID, True)
+    assert db_api.get_stored_user_by_auth_id(TEST_AUTH_ID).instance_admin is True
+
+    with pytest.raises(UserIdentityConflictError):
+        db_api.update_or_create_user("instance_admin", TEST_FIRST_NAME, TEST_LAST_NAME, "other", TEST_AUTH_ID + 1)
+
+
+def test_update_or_create_user_rejects_different_identity(db_api_with_two_initialized_courses, session):
+    user = make_user(id=2, is_instance_admin=True)
+    session.add(user)
+    session.commit()
+
+    with pytest.raises(UserIdentityConflictError):
+        db_api_with_two_initialized_courses.update_or_create_user(
+            TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, "different-rms-id", TEST_AUTH_ID + 1
+        )
+
+    stored_user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    assert stored_user.rms_id == TEST_RMS_ID
+    assert stored_user.auth_id == TEST_AUTH_ID
+    assert stored_user.is_instance_admin is True
 
 
 def test_update_or_create_user_nonexisting(db_api_with_two_initialized_courses, session):
