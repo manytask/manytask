@@ -216,7 +216,8 @@ pat = user.personal_access_tokens.create!(
 pat.set_token(SecureRandom.hex(32)); pat.save!
 app = Doorkeeper::Application.create!(
   name: 'manytask-e2e', redirect_uri: 'http://manytask:5050/login_finish',
-  scopes: 'openid email profile read_user', confidential: true, trusted: true
+  scopes: 'openid email profile read_user', confidential: true, trusted: true,
+  organization_id: Organizations::Organization.default_organization.id
 )
 ApplicationSetting.current.update!(require_admin_approval_after_user_signup: false)
 puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_json)
