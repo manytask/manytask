@@ -56,7 +56,7 @@ ensure_env_file() {
 
 start_containers() {
     log "Starting Docker containers..."
-    docker compose -f "${COMPOSE_FILE}" up -d
+    docker compose --env-file .env -f "${COMPOSE_FILE}" up -d
     log "Containers started."
 }
 
@@ -99,7 +99,7 @@ setup_gitlab() {
 
 restart_manytask() {
     log "Restarting Manytask with new environment variables..."
-    docker compose -f "${COMPOSE_FILE}" up -d manytask
+    docker compose --env-file .env -f "${COMPOSE_FILE}" up -d manytask
     log "Manytask restarted."
 }
 
@@ -119,14 +119,14 @@ show_success_message() {
     echo "  Password:    changeme123!"
     echo ""
     echo "Commands:"
-    echo "  Check status: docker compose -f ${COMPOSE_FILE} ps"
+    echo "  Check status: docker compose --env-file .env -f ${COMPOSE_FILE} ps"
     echo "  View logs:    docker logs -f test-manytask"
     echo "                docker logs -f manytask_gitlab"
     echo "  Restart Manytask:"
     echo "                docker restart test-manytask"
     echo "  Rebuild and restart Manytask:"
-    echo "                docker compose -f ${COMPOSE_FILE} up --build --no-deps -d manytask"
-    echo "  Stop all:     docker compose -f ${COMPOSE_FILE} down"
+    echo "                docker compose --env-file .env -f ${COMPOSE_FILE} up --build --no-deps -d manytask"
+    echo "  Stop all:     docker compose --env-file .env -f ${COMPOSE_FILE} down"
     echo ""
 }
 

@@ -18,6 +18,7 @@ from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
+from .utils.rms_settings import schedule_rms_settings_reconcile
 
 MAX_AGE_IN_SECONDS = 86400
 
@@ -96,6 +97,9 @@ class CustomFlask(Flask):
 
         # Update course settings
         self.storage_api.update_course(course_name, manytask_config)
+
+        if self.storage_api.rms_settings_reconcile_needed(course_name):
+            schedule_rms_settings_reconcile(self.storage_api, self.rms_api, course_name)
 
 
 def _load_common_example_course_yaml() -> dict[str, Any]:
@@ -195,10 +199,9 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app.register_blueprint(web.course_bp)
     app.register_blueprint(web.instance_admin_bp)
 
-    from .utils.flask import get_user_roles, has_role
+    from .utils.flask import has_role
     from .utils.generic import format_remaining
 
-    app.jinja_env.globals["get_user_roles"] = get_user_roles
     app.jinja_env.globals["has_role"] = has_role
     app.jinja_env.globals["format_remaining"] = format_remaining
 

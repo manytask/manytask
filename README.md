@@ -56,6 +56,7 @@ Current developers:
 
 * [Sofia Anokhovskaya](https://github.com/cin-bun)
 * [Dzmitry Charnushevich](https://github.com/Dmi4er4)
+* [Vlad Chebakov](https://github.com/Teranikys)
 * [Olga Gorbunova](https://github.com/elyaishere)
 * [Ivan Gorobets](https://github.com/KIoppert)
 * [Dmitrii Kiselev](https://github.com/kanmir)
@@ -63,6 +64,7 @@ Current developers:
 * [Alexander Kostrikov](https://github.com/akostrikov)
 * [Ivan Luchsh](https://github.com/Ch0p1k3)
 * [Daniil Maslov](https://github.com/dmasloff)
+* [Igor Mineev](https://github.com/ObjatieGroba)
 * [Ivan Samsonov](https://github.com/D1sney)
 * [Alexey Seliverstov](https://github.com/prawwtocol)
 * [Oleg Shatov](https://github.com/domwst)

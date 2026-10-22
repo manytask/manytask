@@ -156,14 +156,12 @@ class Course:
         repo: git.Repo,
         potential_tasks: list[FileSystemTask],
         enabled_groups: list[Any],
+        branch_name: str | None = None,
     ) -> list[FileSystemTask]:
         """Detect changes by matching branch name to task/group name."""
-        try:
-            branch_name = repo.active_branch.name
-        except TypeError:
-            if self.branch_name is None:
-                raise CheckerException("Detached HEAD state and no branch name provided")
-            branch_name = self.branch_name
+        branch_name = branch_name or self._get_branch_name(repo)
+        if branch_name is None:
+            raise CheckerException("Detached HEAD state and no branch name provided")
         print_info(f"Branch name: {branch_name}", color="grey")
 
         # try to get groups first
@@ -181,6 +179,14 @@ class Course:
             print_info(f"No active task/group found for branch {branch_name}", color="yellow")
 
         return changed_tasks
+
+    def _get_branch_name(self, repo: git.Repo) -> str | None:
+        if self.branch_name is not None:
+            return self.branch_name
+        try:
+            return repo.active_branch.name
+        except TypeError:
+            return None
 
     def _detect_by_commit_message(
         self,
@@ -323,6 +329,7 @@ class Course:
 
         :param detection_type: detection type, see CheckerTestingConfig.ChangesDetectionType
             - BRANCH_NAME: task name == branch name (single task/group)
+            - BRANCH_NAME_OR_COMMIT_MESSAGE: compare both sources when a non-default branch matches; reject conflicts
             - COMMIT_MESSAGE: task name in commit message (can be multiple tasks/groups)
             - LAST_COMMIT_CHANGES: task relative path in changes since base_ref, or HEAD~1 (can be multiple tasks)
         :return: list of changed tasks
@@ -341,6 +348,24 @@ class Course:
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME:
             return self._detect_by_branch_name(repo, potential_tasks, enabled_groups)
+
+        if detection_type == CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE:
+            branch_name = self._get_branch_name(repo)
+            branch_tasks: list[FileSystemTask] = []
+            if branch_name is not None and branch_name not in ("main", "master"):
+                branch_tasks = self._detect_by_branch_name(repo, potential_tasks, enabled_groups, branch_name)
+            commit_tasks = self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
+
+            branch_task_names = {task.name for task in branch_tasks}
+            commit_task_names = {task.name for task in commit_tasks}
+            if branch_task_names and commit_task_names and branch_task_names != commit_task_names:
+                raise CheckerException(
+                    f"Ambiguous task detection: branch {branch_name!r} selects "
+                    f"{sorted(branch_task_names)}, but the commit message selects {sorted(commit_task_names)}. "
+                    "Make the names agree, or select explicitly with --task/--group "
+                    "(and --submit-score when reporting is needed)."
+                )
+            return branch_tasks or commit_tasks
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE:
             return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)

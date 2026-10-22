@@ -198,6 +198,7 @@ def _select_tasks(
     help="Num of processes parallel checking",
 )
 @click.option("--no-clean", is_flag=True, help="Clean or not check tmp folders")
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.option(
     "-v/-s",
     "--verbose/--silent",
@@ -218,6 +219,7 @@ def check(  # noqa: PLR0913
     parallelize: bool,
     num_processes: int,
     no_clean: bool,
+    verbose_copy: bool,
     verbose: bool,
     dry_run: bool,
 ) -> None:
@@ -247,7 +249,7 @@ def check(  # noqa: PLR0913
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         cleanup=not no_clean,
         dry_run=dry_run,
     )
@@ -503,6 +505,7 @@ def grade(  # noqa: PLR0913
 @click.option(
     "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
 )
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.pass_context
 def export(
     ctx: click.Context,
@@ -510,6 +513,7 @@ def export(
     export_root: Path,
     commit: bool,
     dry_run: bool,
+    verbose_copy: bool,
 ) -> None:
     """Export tasks from reference to public repository."""
     # get configs paths
@@ -538,7 +542,7 @@ def export(
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         dry_run=dry_run,
     )
     if not dry_run:
@@ -554,12 +558,14 @@ def export(
 @click.option(
     "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
 )
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.pass_context
 def export_private(
     ctx: click.Context,
     reference_root: Path,
     export_root: Path,
     dry_run: bool,
+    verbose_copy: bool,
 ) -> None:
     """Export files to testing directory."""
     # get configs paths
@@ -578,7 +584,7 @@ def export_private(
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         dry_run=dry_run,
     )
     if not dry_run:

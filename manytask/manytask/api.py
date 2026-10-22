@@ -166,7 +166,7 @@ def _check_course_admin_access(course_name: str) -> ResponseReturnValue | None:
     username = session["manytask"]["username"]
     storage_api = app.storage_api
 
-    if storage_api.check_if_instance_admin(username) or storage_api.check_if_course_admin(course_name, username):
+    if storage_api.check_if_course_admin(course_name, username):
         return None
 
     logger.warning(
@@ -410,7 +410,7 @@ def _update_score(
 
 @bp.get("/healthcheck")
 @requires_ready
-def healthcheck() -> ResponseReturnValue:
+def healthcheck(course_name: str) -> ResponseReturnValue:
     return "OK", HTTPStatus.OK
 
 

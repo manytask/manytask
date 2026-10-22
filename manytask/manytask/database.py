@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Type, TypeVar, cast
@@ -27,7 +27,12 @@ from .config import (
 )
 from .course import Course as AppCourse
 from .course import CourseConfig as AppCourseConfig
-from .course import CourseStatus
+from .course import (
+    CourseStatus,
+    ProtectedBranchSettings,
+    resolve_effective_ci_config_path,
+    resolve_effective_protected_branches,
+)
 from .models import (
     ROLE_COURSE_ADMIN,
     ROLE_INSTANCE_ADMIN,
@@ -46,10 +51,16 @@ from .utils.generic import calculate_percent
 ModelType = TypeVar("ModelType", bound=models.Base)
 
 logger = logging.getLogger(__name__)
+UNBOUND_INSTANCE_ADMIN_RMS_ID = "-1"
+UNBOUND_INSTANCE_ADMIN_AUTH_ID = -1
 
 
 class TaskDisabledError(Exception):
     pass
+
+
+class UserIdentityConflictError(Exception):
+    """A username already belongs to a different authentication account."""
 
 
 def calculate_effective_grade(
@@ -89,6 +100,32 @@ def calculate_effective_grade(
         return capped_grade
 
     return calculated_grade
+
+
+def _protected_branches_key(branches: Iterable[Any]) -> dict[str, tuple[Any, Any, Any]]:
+    """Order-insensitive comparison key: branch name -> (push, merge, allow_force_push)."""
+    result = {}
+    for branch in branches:
+        if isinstance(branch, dict):
+            result[branch["name"]] = (
+                branch["push_access_level"],
+                branch["merge_access_level"],
+                branch["allow_force_push"],
+            )
+        else:
+            result[branch.name] = (branch.push_access_level, branch.merge_access_level, branch.allow_force_push)
+    return result
+
+
+def _rms_settings_changed(
+    stored_ci_config_path: Optional[str],
+    stored_protected_branches: Optional[list[dict[str, Any]]],
+    new_ci_config_path: str,
+    new_protected_branches: list[ProtectedBranchSettings],
+) -> bool:
+    if stored_ci_config_path != new_ci_config_path:
+        return True
+    return _protected_branches_key(stored_protected_branches or []) != _protected_branches_key(new_protected_branches)
 
 
 @dataclass
@@ -137,7 +174,12 @@ class DataBaseApi(StorageApi):
                 models.User,
                 username=config.instance_admin_username,
                 defaults={"is_instance_admin": True},
-                create_defaults={"first_name": "Instance", "last_name": "Admin", "rms_id": "-1", "auth_id": -1},
+                create_defaults={
+                    "first_name": "Instance",
+                    "last_name": "Admin",
+                    "rms_id": UNBOUND_INSTANCE_ADMIN_RMS_ID,
+                    "auth_id": UNBOUND_INSTANCE_ADMIN_AUTH_ID,
+                },
             )
             session.commit()
 
@@ -326,96 +368,11 @@ class DataBaseApi(StorageApi):
         :return: if the user is an admin on the course
         """
 
-        with self._session_create() as session:
-            try:
-                user = self._get(
-                    session,
-                    models.User,
-                    username=username,
-                )
-                if user.is_instance_admin:
-                    return True
-
-                course = self._get(session, models.Course, name=course_name)
-
-                if self._is_user_namespace_admin(session, user.id, course.namespace_id):
-                    return True
-
-                try:
-                    user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-                except NoResultFound:
-                    return False
-                return user_on_course.is_course_admin
-            except NoResultFound as e:
-                logger.info("No user found with username '%s' when checking admin status: %s", username, e)
-                return False
-
-    @staticmethod
-    def _is_user_namespace_admin(session: Session, user_id: int, namespace_id: int | None) -> bool:
-        """Check if a user is a namespace admin for the given namespace.
-
-        A user is a namespace admin if they are the namespace owner (creator) or
-        have the namespace_admin role in it. This matches the definition used in
-        ``get_namespace_admin_namespaces``.
-
-        :param session: SQLAlchemy session
-        :param user_id: Database User.id
-        :param namespace_id: Namespace id (may be None if the course has no namespace)
-        :return: True if the user is a namespace admin for the given namespace
-        """
-        if namespace_id is None:
-            return False
-
-        is_owner = (
-            session.query(models.Namespace)
-            .filter(
-                and_(
-                    models.Namespace.id == namespace_id,
-                    models.Namespace.created_by_id == user_id,
-                )
-            )
-            .first()
-            is not None
+        admin_levels = {ROLE_INSTANCE_ADMIN, ROLE_NAMESPACE_ADMIN, ROLE_COURSE_ADMIN}
+        return any(
+            access_user.username == username and bool(admin_levels.intersection(access_user.access_levels))
+            for access_user in self.get_course_access_users(course_name)
         )
-        if is_owner:
-            return True
-
-        is_admin = (
-            session.query(models.UserOnNamespace)
-            .filter(
-                and_(
-                    models.UserOnNamespace.user_id == user_id,
-                    models.UserOnNamespace.namespace_id == namespace_id,
-                    models.UserOnNamespace.role == models.UserOnNamespaceRole.NAMESPACE_ADMIN,
-                )
-            )
-            .first()
-            is not None
-        )
-        return is_admin
-
-    def check_if_program_manager(
-        self,
-        course_name: str,
-        username: str,
-    ) -> bool:
-        with self._session_create() as session:
-            try:
-                user = self._get(session, models.User, username=username)
-                course = self._get(session, models.Course, name=course_name)
-
-                if course.namespace_id is None:
-                    return False
-
-                user_on_namespace = self._get(
-                    session,
-                    models.UserOnNamespace,
-                    user_id=user.id,
-                    namespace_id=course.namespace_id,
-                )
-                return user_on_namespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER
-            except NoResultFound:
-                return False
 
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None:
         """Method for sync user's gitlab and stored data
@@ -497,11 +454,7 @@ class DataBaseApi(StorageApi):
             for row in rows:
                 student = scores_and_names.get(row.username)
                 if student is None:
-                    is_admin = (
-                        bool(row.is_instance_admin)
-                        or bool(row.is_course_admin)
-                        or row.user_id in admin_user_ids
-                    )
+                    is_admin = bool(row.is_instance_admin) or bool(row.is_course_admin) or row.user_id in admin_user_ids
                     student = StudentCourseScores(
                         username=row.username,
                         first_name=row.first_name,
@@ -737,6 +690,33 @@ class DataBaseApi(StorageApi):
         logger.info("Updating course settings for course '%s'", course_name)
 
         with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+
+            configured_branches = (
+                [
+                    ProtectedBranchSettings(
+                        name=branch.name,
+                        push_access_level=branch.push_access_level,
+                        merge_access_level=branch.merge_access_level,
+                        allow_force_push=branch.allow_force_push,
+                    )
+                    for branch in config.rms.protected_branches
+                ]
+                if config.rms and config.rms.protected_branches
+                else None
+            )
+            new_ci_config_path = resolve_effective_ci_config_path(
+                config.rms.ci_config_path if config.rms else None,
+                course.gitlab_course_public_repo,
+            )
+            new_protected_branches = resolve_effective_protected_branches(
+                configured_branches,
+                course.gitlab_default_branch,
+            )
+            rms_settings_changed = _rms_settings_changed(
+                course.ci_config_path, course.protected_branches, new_ci_config_path, new_protected_branches
+            )
+
             self._update(
                 session,
                 models.Course,
@@ -744,6 +724,9 @@ class DataBaseApi(StorageApi):
                     "task_url_template": config.ui.task_url_template,
                     "links": config.ui.links,
                     "deadlines_type": config.deadlines.deadlines,
+                    "ci_config_path": new_ci_config_path,
+                    "protected_branches": [asdict(branch) for branch in new_protected_branches],
+                    "rms_settings_pending": course.rms_settings_pending or rms_settings_changed,
                 },
                 name=course_name,
             )
@@ -753,6 +736,15 @@ class DataBaseApi(StorageApi):
         self._sync_grades_config(course_name, config.grades)
 
         logger.info("Successfully updated course '%s'", course_name)
+
+    def rms_settings_reconcile_needed(self, course_name: str) -> bool:
+        with self._session_create() as session:
+            course = self._get(session, models.Course, name=course_name)
+            return bool(course.rms_settings_pending)
+
+    def clear_rms_settings_pending(self, course_name: str) -> None:
+        with self._session_create() as session:
+            self._update(session, models.Course, defaults={"rms_settings_pending": False}, name=course_name)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[AppCourse, ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
@@ -952,28 +944,55 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' isn't enrolled in course '%s'", username, course_name)
                 return False
 
+    @staticmethod
+    def _bind_or_validate_existing_user(
+        session: Session, user: models.User, first_name: str, last_name: str, rms_id: str, auth_id: int
+    ) -> None:
+        if (
+            user.is_instance_admin
+            and user.rms_id == UNBOUND_INSTANCE_ADMIN_RMS_ID
+            and user.auth_id == UNBOUND_INSTANCE_ADMIN_AUTH_ID
+        ):
+            user.first_name = first_name
+            user.last_name = last_name
+            user.rms_id = rms_id
+            user.auth_id = auth_id
+            session.commit()
+        elif user.rms_id != rms_id or user.auth_id != auth_id:
+            raise UserIdentityConflictError(f"Username '{user.username}' belongs to a different account")
+
     def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int) -> None:
-        """Update or create user in DB"""
+        """Create a user, bind the initial admin, or keep an existing provider identity."""
 
         with self._session_create() as session:
             logger.debug(
                 f"Creating or updating user '{username}' "
                 f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id}, auth_id={auth_id})"
             )
-            self._update_or_create(
-                session,
-                models.User,
-                defaults=dict[str, Any](
-                    rms_id=rms_id,
-                    auth_id=auth_id,
-                ),
-                create_defaults=dict[str, Any](
+            existing_user = self._query_with_for_update(session, models.User, username=username)
+            if existing_user is not None:
+                self._bind_or_validate_existing_user(session, existing_user, first_name, last_name, rms_id, auth_id)
+                return
+
+            session.add(
+                models.User(
+                    username=username,
                     first_name=first_name,
                     last_name=last_name,
-                ),
-                username=username,
+                    rms_id=rms_id,
+                    auth_id=auth_id,
+                )
             )
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                # A concurrent insert may have claimed this username after our first lookup.
+                existing_user = self._query_with_for_update(session, models.User, username=username)
+                if existing_user is not None:
+                    self._bind_or_validate_existing_user(session, existing_user, first_name, last_name, rms_id, auth_id)
+                    return
+                raise
             logger.info("User '%s' created or updated in database", username)
 
     def get_user_courses_names_with_statuses(self, username: str) -> list[tuple[str, CourseStatus]]:
@@ -1133,7 +1152,7 @@ class DataBaseApi(StorageApi):
         once with all levels listed:
 
         * instance admins (:attr:`models.User.is_instance_admin`)
-        * namespace admins of the course's namespace
+        * namespace owner and admins of the course's namespace
         * program managers of the course's namespace
         * course admins of the course itself
 
@@ -1167,6 +1186,8 @@ class DataBaseApi(StorageApi):
                 add(user, ROLE_INSTANCE_ADMIN)
 
             if course.namespace_id is not None:
+                namespace = self._get(session, models.Namespace, id=course.namespace_id)
+                add(namespace.created_by, ROLE_NAMESPACE_ADMIN)
                 namespace_roles = {
                     models.UserOnNamespaceRole.NAMESPACE_ADMIN: ROLE_NAMESPACE_ADMIN,
                     models.UserOnNamespaceRole.PROGRAM_MANAGER: ROLE_PROGRAM_MANAGER,

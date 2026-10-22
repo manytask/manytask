@@ -15,6 +15,7 @@ from manytask.abstract import CourseAccessUser, RmsUser
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
+from manytask.course import ProtectedBranchSettings
 from manytask.database import DataBaseApi
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -233,7 +234,17 @@ def authenticated_client(app, mock_gitlab_oauth):
         rms_user: RmsUser = app.rms_api.register_new_user(
             TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD
         )
-        app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+        app.rms_api.create_project(
+            rms_user,
+            TEST_STUDENTS_GROUP,
+            TEST_PUBLIC_REPO,
+            f".gitlab-ci.yml@{TEST_PUBLIC_REPO}",
+            [
+                ProtectedBranchSettings(
+                    name="main", push_access_level="developer", merge_access_level="developer", allow_force_push=True
+                )
+            ],
+        )
 
         mock_authorize_access_token.return_value = {
             "access_token": "test_token",
@@ -244,6 +255,32 @@ def authenticated_client(app, mock_gitlab_oauth):
             build_test_session(include_manytask=True, access_token="", refresh_token=""),
         )
         yield client
+
+
+@pytest.mark.parametrize("course_name", [TEST_COURSE_NAME, "another-course"])
+def test_healthcheck_success(app, mock_course, course_name):
+    with patch.object(app.storage_api, "get_course", return_value=mock_course) as mock_get_course:
+        response = app.test_client().get(f"/api/{course_name}/healthcheck")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.get_data(as_text=True) == "OK"
+    mock_get_course.assert_called_once_with(course_name)
+
+
+def test_healthcheck_unknown_course(app):
+    with patch.object(app.storage_api, "get_course", return_value=None):
+        response = app.test_client().get("/api/unknown-course/healthcheck")
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == "/"
+
+
+def test_healthcheck_not_ready(app):
+    with patch.object(app.storage_api, "get_course", return_value=make_created_course_mock()):
+        response = app.test_client().get(f"/api/{TEST_COURSE_NAME}/healthcheck")
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == f"/{TEST_COURSE_NAME}/not_ready"
 
 
 def test_parse_flags_no_flags():

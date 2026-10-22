@@ -223,8 +223,6 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
     @requires_auth
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        from .utils.flask import can_access_course
-
         app: CustomFlask = current_app  # type: ignore
 
         if app.debug:
@@ -241,14 +239,6 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         username = stored_user.username
         logger.info("User %s accessing course=%s", username, course.course_name)
 
-        if not can_access_course(app, username, course.course_name):
-            logger.warning(
-                "User %s attempted to access course %s without permission",
-                username,
-                course.course_name,
-            )
-            abort(HTTPStatus.FORBIDDEN)
-
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
         if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(course.course_name, username):
             flash("course is hidden!", "course_hidden")
@@ -258,13 +248,16 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         # login (auth_user.username): on SourceCraft the two may differ (e.g. when the desired slug is
         # already taken the platform assigns a fallback like "ps5-1" for a Yandex login "Ps5"), and
         # student repos are created under the RMS-native username. Passing the auth-provider login here
-        # would produce a false negative on the existence check, redirect the user to /create_project,
-        # and 500 with SlugIsNotAvailable when the create call tries to re-create the existing repo.
-        if not handle_course_membership(app, course, username) or not app.rms_api.check_project_exists(
+        # would produce a false negative and send a user with an existing repo to recovery.
+        if not handle_course_membership(app, course, username):
+            logger.info("User %s is not enrolled in course %s", username, course.course_name)
+            abort(redirect(url_for("course.create_project", course_name=course.course_name)))
+
+        if not app.rms_api.check_project_exists(
             project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
         ):
-            logger.info("User %s missing membership or project", username)
-            abort(redirect(url_for("course.create_project", course_name=course.course_name)))
+            logger.info("User %s is enrolled but missing a repository in course %s", username, course.course_name)
+            abort(redirect(url_for("course.recover_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_user_on_course(

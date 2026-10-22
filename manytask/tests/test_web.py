@@ -6,12 +6,15 @@ import gitlab
 import pytest
 from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
-from flask import Flask, url_for
+from flask import Flask, render_template, url_for
+from flask.testing import FlaskClient
 from flask_wtf import CSRFProtect
+from sqlalchemy.exc import NoResultFound
 
-from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
+from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
-from manytask.course import CourseStatus
+from manytask.course import CourseStatus, ProtectedBranchSettings
+from manytask.database import UserIdentityConflictError
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -118,7 +121,17 @@ def app(mock_storage_api):
     app.register_blueprint(instance_admin_bp)
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
-    app.rms_api.create_project(rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO)
+    app.rms_api.create_project(
+        rms_user,
+        TEST_STUDENTS_GROUP,
+        TEST_PUBLIC_REPO,
+        f".gitlab-ci.yml@{TEST_PUBLIC_REPO}",
+        [
+            ProtectedBranchSettings(
+                name="main", push_access_level="developer", merge_access_level="developer", allow_force_push=True
+            )
+        ],
+    )
     app.auth_api = MockAuthApi()
     app.auth_api.user = AuthenticatedUser(id=TEST_USER_ID, username=TEST_USERNAME)
     app.storage_api = mock_storage_api
@@ -195,6 +208,23 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def check_if_course_admin(self, _course_name, _username):
             return self.course_admin
+
+        def get_course_access_users(self, _course_name):
+            levels = []
+            if self.stored_user.instance_admin:
+                levels.append("instance_admin")
+            if self.course_admin:
+                levels.append("course_admin")
+            if not levels:
+                return []
+            return [
+                CourseAccessUser(
+                    username=self.stored_user.username,
+                    first_name=self.stored_user.first_name,
+                    last_name=self.stored_user.last_name,
+                    access_levels=levels,
+                )
+            ]
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.course_admin = self.course_admin or course_admin
@@ -301,8 +331,8 @@ def test_course_page_uses_rms_username_for_project_existence_check(app, mock_git
     ``check_project_exists`` must be called with the RMS-native username (as stored in
     ``session['rms']['username']``), not the auth-provider login (``session['auth']['username']``).
     Otherwise, for users whose SC username differs from their Yandex login (e.g. Yandex ``Ps5``
-    -> SC ``ps5-1``), the existence check produces a false negative and the flow redirects to
-    ``create_project``, which 500s trying to re-create the already-existing repo.
+    -> SC ``ps5-1``), the existence check produces a false negative and sends them to recovery
+    even though their repository exists.
     """
     CSRFProtect(app)
     with app.test_request_context():
@@ -331,6 +361,104 @@ def test_course_page_uses_rms_username_for_project_existence_check(app, mock_git
                 "Existence check must use the RMS-native username so the slug matches what "
                 "create_project builds; got the auth login instead, which is the reported bug."
             )
+
+
+@pytest.mark.parametrize("page", ["", "database", "create_project"])
+def test_enrolled_user_with_missing_repository_sees_recovery(app, mock_gitlab_oauth, page):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.rms_api.projects.pop(f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}")
+
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == f"/{TEST_COURSE_NAME}/recover_project"
+
+        recovery = client.get(response.location)
+        assert recovery.status_code == HTTPStatus.OK
+        assert b"Your course repository has been lost or deleted" in recovery.data
+        soup = BeautifulSoup(recovery.data, "html.parser")
+        form = soup.find("form", action=f"/{TEST_COURSE_NAME}/recover_project")
+        assert form.find("button", type="submit").get_text(strip=True) == "Re-create repository"
+        assert form.find("input", {"name": "csrf_token"}) is not None
+
+
+def test_recovery_recreates_repository_from_current_public_repo(app, mock_course, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.rms_api.projects.pop(f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}")
+    mock_course.gitlab_course_public_repo = "course/current-public"
+
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+
+        with (
+            patch.object(app.rms_api, "create_project", wraps=app.rms_api.create_project) as create_repo,
+            patch.object(app.storage_api, "sync_user_on_course") as sync_membership,
+        ):
+            response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == f"/{TEST_COURSE_NAME}/"
+        create_repo.assert_called_once()
+        rms_user, students_group, public_repo, ci_config_path, protected_branches = create_repo.call_args.args
+        assert rms_user.username == TEST_USERNAME
+        assert students_group == TEST_STUDENTS_GROUP
+        assert public_repo == "course/current-public"
+        assert ci_config_path == mock_course.ci_config_path
+        assert protected_branches == mock_course.protected_branches
+        sync_membership.assert_not_called()
+        assert app.rms_api.check_project_exists(TEST_USERNAME, TEST_STUDENTS_GROUP)
+        assert client.get(f"/{TEST_COURSE_NAME}/").status_code == HTTPStatus.OK
+
+
+def test_recovery_requires_existing_enrollment(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", return_value=False),
+        patch.object(app.rms_api, "create_project") as create_repo,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        enrollment = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        csrf_token = BeautifulSoup(enrollment.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+        assert response.status_code == HTTPStatus.FORBIDDEN
+        create_repo.assert_not_called()
+
+
+def test_recovery_skips_creation_when_repository_has_returned(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == f"/{TEST_COURSE_NAME}/"
+
+
+def test_recovery_shows_rms_error_without_leaking_backend_details(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.rms_api.projects.pop(f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}")
+
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "create_project", side_effect=RmsApiException("ResourceExhausted")),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        recovery = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        csrf_token = BeautifulSoup(recovery.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+
+        response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+        assert response.status_code == HTTPStatus.OK
+        assert b"course staff" in response.data
+        assert b"ResourceExhausted" not in response.data
+        assert not app.rms_api.check_project_exists(TEST_USERNAME, TEST_STUDENTS_GROUP)
 
 
 def test_signup_get(app):
@@ -439,6 +567,16 @@ def test_index_renders_list_and_table_views(app, mock_gitlab_oauth):
             # Tabulator assets are loaded.
             assert "tabulator" in body
             assert "tabulator-theme.js" in body
+
+
+def test_courses_template_without_admin_namespaces(app):
+    """An older route without namespace data can still render the course list."""
+    with app.test_request_context():
+        body = render_template(
+            "courses.html", courses=[], status_order=[], can_create_courses=False, is_instance_admin=False
+        )
+
+    assert "const adminNamespacesData = [];" in body
 
 
 def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
@@ -684,6 +822,7 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
     with (
         patch.object(mock_gitlab_oauth.auth_provider, "authorize_access_token") as mock_authorize_access_token,
         patch.object(mock_storage_api, "update_or_create_user") as mock_register_new_mt_user,
+        patch.object(mock_storage_api, "get_stored_user_by_username", side_effect=NoResultFound),
         # app.test_request_context(),
     ):
         app.oauth = mock_gitlab_oauth
@@ -709,6 +848,83 @@ def test_signup_post_success(app, mock_gitlab_oauth, mock_storage_api, mock_cour
                 rms_id=rms_user.id,
                 auth_id=int(rms_user.id),
             )
+
+
+def _signup_form_data(client: FlaskClient, username: str) -> dict[str, str]:
+    response = client.get("/signup")
+    csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+    return {
+        "csrf_token": csrf_token,
+        "username": username,
+        "firstname": TEST_FIRST_NAME,
+        "lastname": TEST_LAST_NAME,
+        "email": TEST_EMAIL,
+        "password": TEST_PASSWORD,
+        "password2": TEST_PASSWORD,
+    }
+
+
+def test_signup_rejects_missing_gitlab_account_for_existing_manytask_username(app):
+    CSRFProtect(app)
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "get_rms_user_by_username", side_effect=RmsApiException("User not found")),
+        patch.object(app.rms_api, "register_new_user") as register_new_user,
+        patch.object(app.storage_api, "update_or_create_user") as update_or_create_user,
+    ):
+        response = client.post("/signup", data=_signup_form_data(client, TEST_USERNAME))
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"The GitLab account for this Manytask username is missing." in response.data
+    assert b"Please contact Manytask support." in response.data
+    register_new_user.assert_not_called()
+    update_or_create_user.assert_not_called()
+
+
+def test_signup_rejects_existing_username_with_gitlab_account(app):
+    CSRFProtect(app)
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "register_new_user") as register_new_user,
+    ):
+        response = client.post("/signup", data=_signup_form_data(client, TEST_USERNAME))
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"This username is already registered. Please log in." in response.data
+    register_new_user.assert_not_called()
+
+
+def test_signup_allows_unbound_initial_admin(app):
+    CSRFProtect(app)
+    admin = app.storage_api.stored_user
+    admin.username = TEST_USERNAME_1
+    admin.instance_admin = True
+    admin.rms_id = "-1"
+    admin.auth_id = -1
+
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "update_or_create_user") as update_or_create_user,
+    ):
+        response = client.post("/signup", data=_signup_form_data(client, TEST_USERNAME_1))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == "/login"
+    update_or_create_user.assert_called_once()
+
+
+def test_signup_shows_support_message_if_username_is_claimed_during_registration(app):
+    CSRFProtect(app)
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_stored_user_by_username", side_effect=NoResultFound),
+        patch.object(app.storage_api, "update_or_create_user", side_effect=UserIdentityConflictError("conflict")),
+    ):
+        response = client.post("/signup", data=_signup_form_data(client, TEST_USERNAME_1))
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"The GitLab account for this Manytask username is missing." in response.data
+    assert b"Please contact Manytask support." in response.data
 
 
 def test_login_get_redirect_to_gitlab(app, mock_gitlab_oauth):
@@ -821,6 +1037,57 @@ def test_signup_finish_existing_user_uses_rms_username_not_auth_login(app, mock_
                 assert sess["auth"]["username"] == TEST_USERNAME  # sanity: auth login unchanged
 
 
+def test_signup_finish_rejects_different_gitlab_account_for_existing_username(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_stored_user_by_auth_id", return_value=None),
+        patch.object(app.storage_api, "update_or_create_user") as update_or_create_user,
+    ):
+        set_session(client, build_test_session(include_rms=False))
+        response = client.get("/signup_finish")
+
+    assert response.status_code == HTTPStatus.OK
+    assert b"The GitLab account for this Manytask username is missing." in response.data
+    assert b"Please contact Manytask support." in response.data
+    update_or_create_user.assert_not_called()
+
+
+def test_signup_finish_allows_unbound_initial_admin(app, mock_gitlab_oauth):
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    admin = app.storage_api.stored_user
+    admin.instance_admin = True
+    admin.rms_id = "-1"
+    admin.auth_id = -1
+
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_stored_user_by_auth_id", side_effect=[None, None, admin]),
+        patch.object(app.storage_api, "update_or_create_user") as update_or_create_user,
+    ):
+        set_session(client, build_test_session(include_rms=False))
+        response = client.get("/signup_finish")
+        assert response.status_code == HTTPStatus.OK
+        assert b"The GitLab account for this Manytask username is missing." not in response.data
+
+        csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(
+            "/signup_finish", data={"firstname": "Test", "lastname": "User", "csrf_token": csrf_token}
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == "/"
+    update_or_create_user.assert_called_once_with(
+        username=TEST_USERNAME,
+        first_name="Test",
+        last_name="User",
+        rms_id=TEST_RMS_ID,
+        auth_id=TEST_USER_ID,
+    )
+
+
 def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
     CSRFProtect(app)
     data = {
@@ -832,6 +1099,7 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
         with (
             app.test_client() as client,
             patch.object(app.storage_api, "get_stored_user_by_auth_id") as mock_get_stored_user_by_auth_id,
+            patch.object(app.storage_api, "get_stored_user_by_username", side_effect=NoResultFound),
             patch.object(app.storage_api, "update_or_create_user") as mock_update_or_create_user,
         ):
             set_session(client, build_test_session(include_rms=False))
@@ -900,6 +1168,37 @@ def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
     assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
 
 
+@pytest.mark.parametrize("can_edit", [True, False])
+@pytest.mark.parametrize("invalid_secret", [True, False])
+def test_enrollment_edit_link_permissions(
+    app: Flask, mock_gitlab_oauth: object, can_edit: bool, invalid_secret: bool
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.course_admin = can_edit
+    app.storage_api.get_course(TEST_COURSE_NAME).token = TEST_TOKEN
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", return_value=False),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        if invalid_secret:
+            csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": "invalid-secret"},
+            )
+            assert b"Invalid secret" in response.data
+
+        assert response.status_code == HTTPStatus.OK
+        soup = BeautifulSoup(response.data, "html.parser")
+        edit_link = soup.find("a", href=f"/instance_admin/courses/{TEST_COURSE_NAME}/edit")
+        assert (edit_link is not None) == can_edit
+        if can_edit:
+            assert edit_link.get_text(strip=True) == "Back to editing course"
+
+
 def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):
     """Regression: a failing RMS must not blow up the enrollment form with a 500.
 
@@ -913,6 +1212,7 @@ def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_co
     with app.test_request_context():
         with (
             app.test_client() as client,
+            patch.object(app.storage_api, "check_user_on_course", return_value=False),
             patch.object(
                 app.rms_api,
                 "create_project",
@@ -947,6 +1247,7 @@ def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitla
     with app.test_request_context():
         with (
             app.test_client() as client,
+            patch.object(app.storage_api, "check_user_on_course", return_value=False),
             patch.object(
                 app.rms_api,
                 "create_project",
