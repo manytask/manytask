@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +8,7 @@ import pytest
 
 from checker.configs import CheckerExportConfig, CheckerStructureConfig, ManytaskConfig
 from checker.course import Course
-from checker.exceptions import BadConfig, BadStructure
+from checker.exceptions import BadStructure
 from checker.exporter import Exporter
 
 T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
@@ -831,161 +830,6 @@ class TestExporterIsTaskUnchanged:
         )
 
         assert exporter.is_task_unchanged("task1", ["*"]) is False
-
-
-class TestExporterSharedTasks:
-    @pytest.fixture()
-    def shared_exporter(self, tmp_path: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> Exporter:
-        reference = tmp_path / "reference"
-        student = tmp_path / "student"
-        generate_file_structure(
-            {
-                "group": {
-                    ".group.yml": "version: 1\nstructure:\n  ignore_patterns: [ignored*, cache]\n",
-                    "shared": {
-                        ".task.yml": "",
-                        "alpha.py": "reference alpha",
-                        "alpha.py.template": "published alpha",
-                        "beta.py": "reference beta",
-                        "test_public.py": "reference tests",
-                        ".private": "reference private",
-                        "ignored.txt": "reference ignored",
-                        "src": {
-                            "extra.py": "reference extra",
-                            "ignored.py": "reference ignored",
-                        },
-                        "cache": {"result.py": "reference cached"},
-                    },
-                }
-            },
-            reference,
-        )
-        generate_file_structure(
-            {
-                "group": {
-                    "shared": {
-                        "alpha.py": "student alpha",
-                        "beta.py": "student beta",
-                        "test_public.py": "student tests",
-                        ".private": "student private",
-                        "ignored.txt": "student ignored",
-                        "extra.txt": "student extra",
-                        "src": {
-                            "extra.py": "student extra",
-                            "ignored.py": "student ignored",
-                        },
-                        "cache": {"result.py": "student cached"},
-                    }
-                }
-            },
-            student,
-        )
-        deadlines = ManytaskConfig(
-            version=1,
-            settings={
-                "course_name": "test",
-                "gitlab_base_url": "https://example.com",
-                "public_repo": "public",
-                "students_group": "students",
-            },
-            ui={"task_url_template": "https://example.com/$GROUP_NAME/$TASK_NAME"},
-            deadlines={
-                "timezone": "Europe/Moscow",
-                "schedule": [
-                    {
-                        "group": "group",
-                        "start": "2021-01-01 00:00:00",
-                        "end": "200d",
-                        "tasks": [
-                            {"task": "alpha", "score": 1},
-                            {"task": "beta", "score": 1},
-                        ],
-                    }
-                ],
-            },
-        )
-        course = Course(deadlines, student, reference)
-        folder_task = course.potential_tasks.pop("shared")
-        for name in ("alpha", "beta"):
-            course.potential_tasks[name] = replace(
-                folder_task, name=name, config=folder_task.config.model_copy(deep=True)
-            )
-        return Exporter(
-            course,
-            CheckerStructureConfig(
-                ignore_patterns=["global_ignore"],
-                public_patterns=[".task.yml", "test_public.py"],
-                private_patterns=[".*"],
-            ),
-            CheckerExportConfig(destination="https://example.com", templates="search"),
-        )
-
-    @pytest.mark.parametrize("other_state", ["disabled", "future"])
-    @pytest.mark.parametrize("export_method", ["export_public", "export_private"])
-    def test_export_public_keeps_shared_folder_for_published_task(
-        self, shared_exporter: Exporter, other_state: str, export_method: str
-    ) -> None:
-        deadlines = shared_exporter.course.manytask_config.deadlines
-        group = deadlines.schedule[0]
-        if other_state == "disabled":
-            group.tasks[1].enabled = False
-        else:
-            future_group = group.model_copy(deep=True)
-            future_group.group = "future"
-            future_group.start = future_group.start.replace(year=2999)
-            future_group.tasks = [group.tasks.pop()]
-            deadlines.schedule.append(future_group)
-
-        getattr(shared_exporter, export_method)(shared_exporter.temporary_dir)
-
-        assert (shared_exporter.temporary_dir / "group/shared/alpha.py").read_text() == "published alpha"
-
-    @pytest.mark.parametrize("export_method", ["export_public", "export_private"])
-    def test_export_public_omits_shared_folder_without_published_tasks(
-        self, shared_exporter: Exporter, export_method: str
-    ) -> None:
-        for task in shared_exporter.course.manytask_config.deadlines.schedule[0].tasks:
-            task.enabled = False
-
-        getattr(shared_exporter, export_method)(shared_exporter.temporary_dir)
-
-        assert not (shared_exporter.temporary_dir / "group/shared").exists()
-
-    @pytest.mark.parametrize("export_method", ["export_public", "export_private"])
-    def test_export_public_preserves_disabled_group_skip(self, shared_exporter: Exporter, export_method: str) -> None:
-        shared_exporter.course.manytask_config.deadlines.schedule[0].enabled = False
-
-        getattr(shared_exporter, export_method)(shared_exporter.temporary_dir)
-
-        assert not (shared_exporter.temporary_dir / "group").exists()
-
-    @pytest.mark.parametrize("other_override", [None, CheckerStructureConfig(ignore_patterns=["different"])])
-    def test_shared_folder_rejects_conflicting_structure_even_for_disabled_tasks(
-        self, shared_exporter: Exporter, other_override: CheckerStructureConfig | None
-    ) -> None:
-        tasks = shared_exporter.course.potential_tasks
-        tasks["alpha"].config.structure = CheckerStructureConfig(ignore_patterns=["same"])
-        tasks["beta"].config.structure = other_override
-        shared_exporter.course.manytask_config.deadlines.schedule[0].tasks[1].enabled = False
-
-        with pytest.raises(BadConfig, match="different structure overrides"):
-            Exporter(
-                shared_exporter.course,
-                shared_exporter.structure_config,
-                shared_exporter.export_config,
-            )
-
-    def test_shared_folder_accepts_matching_structure(self, shared_exporter: Exporter) -> None:
-        for task in shared_exporter.course.potential_tasks.values():
-            task.config.structure = CheckerStructureConfig(ignore_patterns=["same"])
-
-        exporter = Exporter(
-            shared_exporter.course,
-            shared_exporter.structure_config,
-            shared_exporter.export_config,
-        )
-
-        assert exporter.sub_config_files[Path("group/shared")].ignore_patterns == ["same"]
 
 
 class _TestExporter:

@@ -10,7 +10,6 @@ from .configs.checker import CheckerConfig, CheckerSubConfig
 from .configs.manytask import ManytaskDeadlinesType
 from .course import Course, FileSystemTask
 from .exceptions import TestingError
-from .exporter import Exporter
 from .pipeline import (
     GlobalPipelineVariables,
     PipelineContext,
@@ -53,7 +52,6 @@ class Tester:
         :raises exception.ValidationError: if config is invalid or repo structure is wrong
         """
         self.course = course
-        self.checker_config = checker_config
 
         self.testing_config = checker_config.testing
         self.structure_config = checker_config.structure
@@ -249,24 +247,6 @@ class Tester:
             print_separator("-")
 
         return task_pipeline_result, task_report_result
-
-    def _prepare_task_workspaces(
-        self,
-        origin: Path,
-        tasks: list[FileSystemTask],
-        allowed_patterns: dict[str, list[str] | None],
-    ) -> None:
-        """Reset the folders of tasks that restrict the student's editable files to the reference ones."""
-        if all(patterns is None for patterns in allowed_patterns.values()):
-            return
-        task_exporter = Exporter(
-            self.course,
-            self.structure_config,
-            self.checker_config.export,
-            verbose=self.verbose,
-            dry_run=self.dry_run,
-        )
-        task_exporter.prepare_tasks_for_testing(origin, tasks, allowed_patterns)
 
     def run(
         self,
