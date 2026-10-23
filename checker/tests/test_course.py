@@ -7,6 +7,7 @@ from typing import Any
 
 import git
 import pytest
+import yaml
 
 from checker.configs import CheckerTestingConfig
 from checker.configs.manytask import ManytaskConfig
@@ -160,6 +161,104 @@ class TestCourse:
         for task in tasks:
             assert isinstance(task, FileSystemTask)
             assert (repository_root / task.relative_path).exists()
+
+    def test_tasks_in_one_file_share_folder(self, repository_root: Path) -> None:
+        shared = repository_root / "group1" / "shared"
+        shared.mkdir()
+        for name in ("task1_1", "task1_2"):
+            (repository_root / "group1" / name / ".task.yml").unlink()
+        (shared / ".tasks.yml").write_text(
+            yaml.safe_dump(
+                {
+                    "version": 1,
+                    "tasks": {
+                        name: {
+                            "parameters": {
+                                "solution": f"{name}.py",
+                                "allow_change": [f"{name}.py"],
+                            },
+                        }
+                        for name in ("task1_1", "task1_2")
+                    },
+                }
+            )
+        )
+
+        course = Course(TEST_MANYTASK_CONFIG, repository_root)
+        course.validate()
+        tasks = [
+            task for task in course.get_tasks() if task.name in ("task1_1", "task1_2")
+        ]
+        assert {task.name for task in tasks} == {"task1_1", "task1_2"}
+        for task in tasks:
+            assert task.relative_path == "group1/shared"
+            assert task.config.parameters is not None
+            assert task.config.parameters["allow_change"] == [f"{task.name}.py"]
+            assert task.config.parameters["solution"] == f"{task.name}.py"
+            group = course.get_group_for_task(task.name)
+            assert group is not None and group.name == "group1"
+
+    @pytest.mark.parametrize("content", ["", " \n \n", "version: 1"])
+    def test_named_and_legacy_tasks_coexist(
+        self, repository_root: Path, content: str
+    ) -> None:
+        (repository_root / "root_task_1" / ".task.yml").write_text(content)
+        (repository_root / ".tasks.yml").write_text(
+            "version: 1\ntasks:\n  extra: {}\n  root: {}\n"
+        )
+
+        tasks = Course(TEST_MANYTASK_CONFIG, repository_root).potential_tasks
+        assert tasks["root_task_1"].relative_path == "root_task_1"
+        assert tasks["root"].relative_path == tasks["extra"].relative_path == "."
+        assert repository_root.name not in tasks
+
+    @pytest.mark.parametrize(
+        "relative_path, content",
+        [
+            ("group2/.tasks.yml", "version: 1\ntasks:\n  task1_1: {}\n"),
+            ("group2/task1_1/.task.yml", ""),
+        ],
+    )
+    def test_duplicate_task_names_rejected(
+        self, repository_root: Path, relative_path: str, content: str
+    ) -> None:
+        config_path = repository_root / relative_path
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(content)
+        with pytest.raises(BadConfig, match="Duplicate task name 'task1_1'"):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
+    def test_named_config_files_are_not_discovered(self, repository_root: Path) -> None:
+        (repository_root / ".task.extra.yml").write_text("version: 1")
+        assert (
+            "extra" not in Course(TEST_MANYTASK_CONFIG, repository_root).potential_tasks
+        )
+
+    @pytest.mark.parametrize(
+        "filename, content",
+        [
+            (".task.yml", "version: 1\ntasks:\n  parse: {}\n"),
+            (".tasks.yml", ""),
+            (".tasks.yml", "version: 1\n"),
+        ],
+    )
+    def test_task_filename_requires_matching_format(
+        self, repository_root: Path, filename: str, content: str
+    ) -> None:
+        (repository_root / filename).write_text(content)
+        with pytest.raises(
+            BadConfig, match="Use .tasks.yml|Field required|validation error"
+        ):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
+    def test_single_and_plural_files_cannot_share_folder(
+        self, repository_root: Path
+    ) -> None:
+        (repository_root / "root_task_1/.tasks.yml").write_text(
+            "version: 1\ntasks:\n  extra: {}\n"
+        )
+        with pytest.raises(BadConfig, match="contains both .task.yml and .tasks.yml"):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
 
     def test_validate_missing_task(self, repository_root: Path) -> None:
         shutil.rmtree(repository_root / "group1" / "task1_1")

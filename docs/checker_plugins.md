@@ -5,9 +5,15 @@
 
 Copy files matching glob patterns from one directory to another. Used to collect the student's solution and the private tests in one place in preparation for testing.
 
-The example below takes **from the student repository** (`global.repo_dir`) only the files listed in the `allow_change` parameter, and puts them into the testing tree. Anything the student changed outside that list — the tests, for instance — is simply not copied, so it cannot affect grading in CI.
+The example below copies files listed in the `allow_change` parameter **from the student
+repository** (`global.repo_dir`) into the testing tree. It leaves other files already in the tree
+untouched, so this stage alone does not restrict which student edits can affect grading.
 
-`allow_change` is not a built-in field: it is an ordinary [parameter](./checker_yml_reference.md#default_parameters) that you define yourself in `default_parameters` and can narrow per task in `.task.yml`.
+`allow_change` is configured inside [parameters](./checker_yml_reference.md#default_parameters),
+with defaults in `default_parameters` and overrides in `.group.yml`, `.task.yml`, or `.tasks.yml`.
+The checker combines the effective lists of detected tasks per folder and prepares that folder
+once, before the global and task pipelines run. All pipelines share the prepared files. The copy
+stage below can reuse the same parameter, although it is not required for the initial preparation.
 
 ```yaml
 - name: "Take the student's allowed files"
@@ -19,7 +25,10 @@ The example below takes **from the student repository** (`global.repo_dir`) only
     ignore_patterns: ["*.pyc"]
 ```
 
-> Note that this stage is **optional**. `checker check` / `checker grade` already build the testing tree by overlaying the reference repo's public and private files on top of the student's files, so tests are protected without any `copy_files` stage. Use this plugin when you want an explicit, per-task allow-list — see [the configuration guide](./checker_config.md#optional-an-explicit-allow-list-with-allow_change).
+> This stage is **optional**. By default, `checker check` / `checker grade` restore files classified
+> as public or private from the reference repository; unclassified student files remain.
+> See [`parameters.allow_change`](./checker_config.md#explicit-editable-files) for editable-file
+> preparation and inheritance.
 
 | Arg | Type | Required | Description |
 |---|---|---|---|

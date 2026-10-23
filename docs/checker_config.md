@@ -25,7 +25,7 @@ to the student's copy at grading time.
 ```yaml
 structure:
   ignore_patterns: [".git", "__pycache__", ".venv", "*.pyc"]
-  public_patterns: [".gitignore", ".gitlab-ci.yml", ".task.yml", ".group.yml"]
+  public_patterns: [".gitignore", ".gitlab-ci.yml", ".task.yml", ".tasks.yml", ".group.yml"]
   private_patterns: [".*", "*private*"]
 ```
 
@@ -36,10 +36,13 @@ structure:
 | **private** | `private_patterns` | no | the **private** repo (student never had it) |
 | **other** | nothing above | yes | the **student's** repo |
 
-> **The "other" class is the student-editable set.** This is the single most important consequence
-> of the model and it is the inverse of how most people first read it: you do not list the files a
+> **By default, the "other" class is the student-editable set.** This is the main consequence
+> of the model: you do not list the files a
 > student may change — you list the files they may *not* change, and everything left over is
 > theirs.
+
+Tasks can also declare an explicit [`parameters.allow_change`](#explicit-editable-files) list. That
+list controls which student files enter that task's grading folder; `structure` still controls export.
 
 Precedence when a file matches several lists is `ignore_patterns` > `public_patterns` >
 `private_patterns`. A public match wins over a private one, which is why an over-broad
@@ -71,9 +74,9 @@ never overwrites it.
 > it. If you want the student's edits to it discarded at grading time, you must put it in
 > `public_patterns` explicitly.
 
-Gold solutions never enter the merged tree, because on export they were replaced by their
-`.template` counterparts (see [Templates](#templates)) and at grading time `add.py` is an "other"
-file, taken from the student.
+Without `parameters.allow_change`, gold solutions never enter the merged tree: export replaces them
+with their `.template` counterparts (see [Templates](#templates)), and grading takes `add.py`
+from the student because it is an "other" file.
 
 ## Procedure: designing `structure` for a course
 
@@ -116,7 +119,8 @@ structure:
     - ".gitlab-ci.yml"    # CI that runs in the student repository
     - ".checker.yml"      # `checker grade` reads it in the student checkout
     - ".manytask.yml"     # deadlines and scores
-    - ".task.yml"         # marks a task folder
+    - ".task.yml"         # defines one task named after its folder
+    - ".tasks.yml"        # defines several named tasks in one folder
     - ".group.yml"        # marks a group folder
     - "test_public.py"    # visible to students, but restored from here at grading time
 
@@ -152,9 +156,11 @@ Patterns are matched with `Path.match` **at each directory level individually**.
 
 ## Per-group and per-task overrides
 
-A folder becomes a **group** when it contains `.group.yml` and a **task** when it contains
-`.task.yml`. Both files may be as short as `version: 1`, and both can override the root
-configuration for their own folder and everything below it.
+A folder becomes a **group** when it contains `.group.yml`. A `.task.yml` defines one task named
+after its folder. To define several named tasks in the same folder, use a `.tasks.yml` file with
+a [`tasks` mapping](#several-tasks-in-one-folder). Empty `.task.yml` files and files containing only
+`version: 1` keep their folder-named task. Use only one of `.task.yml` and `.tasks.yml` per folder.
+Both formats can override the root configuration.
 
 ```yaml
 # python/add/.task.yml
@@ -176,81 +182,121 @@ task_pipeline:        # optional — replaces testing.tasks_pipeline for this ta
 
 Two different merge behaviors, easy to mix up:
 
-- **`structure` fields replace, they do not merge.** Setting `private_patterns` in a `.task.yml`
+- **`structure` fields replace, they do not merge.** Setting `private_patterns` in a `.task.yml` or `.tasks.yml`
   discards the root list for that folder — repeat the entries you still need, including `".*"`.
 - **`parameters` merge**, with the narrower scope winning: `default_parameters` < `.group.yml` <
-  `.task.yml`.
+  task-file defaults < the individual `.tasks.yml` entry.
 
-Pipelines resolve by the same narrowest-wins rule: `.task.yml` → `.group.yml` → root
+Pipelines resolve by the same narrowest-wins rule: task config → `.group.yml` → root
 `testing.tasks_pipeline`. Note the singular key `task_pipeline` in sub-configs versus the plural
 `tasks_pipeline` in the root file.
 
-> Sub-configs are only read for **enabled** groups and tasks, i.e. those listed in `.manytask.yml`
-> with `enabled: true`.
+Task config files are discovered and validated even for tasks absent from the schedule or disabled
+there. Only tasks enabled in `.manytask.yml` are selected for grading or publishing.
 
-## Optional: an explicit allow-list with `allow_change`
+## Explicit editable files
 
-The structure model above is implicit — the editable set is whatever is left over. If you prefer to
-name the editable files per task, use the `allow_change` convention.
+Set `parameters.allow_change` in a task config to select student files for grading. Before the global
+and task pipelines run, the checker prepares each detected task folder **once**. If all detected
+tasks in a folder provide pattern lists, it rebuilds the folder from the reference repository,
+including working solutions and excluding ignored files, then overlays student files matched by
+the **union** of those lists. Only detected tasks contribute patterns. Matching reference files
+are removed first, so student-deleted files remain absent.
 
-`allow_change` is **not** a built-in field. It is an ordinary user-defined parameter that becomes
-meaningful only because a pipeline stage reads it. Declare a default and override it per task:
-
-```yaml
-# .checker.yml
-default_parameters:
-  allow_change: ["*.py"]
-```
+All detected tasks sharing the folder use this same prepared workspace. Files generated or
+modified by the global pipeline and earlier task pipelines remain available to later pipelines;
+the checker does not reset the folder between tasks.
 
 ```yaml
 # python/add/.task.yml
 version: 1
 parameters:
-  allow_change: ["add.py"]      # only this file may come from the student
+  allow_change: ["add.py"]
 ```
 
-Then copy exactly those files from the student checkout on top of the reference tree, as the first
-stage of the task pipeline:
+Patterns are relative to the task folder and use Python `Path.glob`, including recursive patterns
+such as `"src/**/*.py"`. The list follows ordinary parameter inheritance:
+`default_parameters` → `.group.yml` → task-file defaults → the individual `.tasks.yml` entry.
+An explicitly supplied list replaces the inherited list. Set `allow_change: null` to use the
+existing structure-based merge, or `allow_change: []` to contribute no student files. If any
+detected task in a shared folder has no effective list, the whole folder keeps the structure-based
+merge. If all detected tasks in the folder have empty lists, only reference files are used.
 
-```yaml
-testing:
-  tasks_pipeline:
-    - name: "Take the student's allowed files"
-      run: "copy_files"
-      args:
-        source_dir: ${{ global.repo_dir }}/${{ task.task_sub_path }}
-        target_dir: ${{ global.temp_dir }}/${{ task.task_sub_path }}
-        patterns: ${{ parameters.allow_change }}
-        ignore_patterns: ["*.pyc"]
-```
+### Using `allow_change` with plugins {#optional-an-explicit-allow-list-with-allow_change}
 
-The same parameter can drive other stages, which is the real benefit — one list, several uses:
-
-```yaml
-    - name: "Check forbidden constructs"
-      run: "check_regexps"
-      args:
-        origin: ${{ global.temp_dir }}/${{ task.task_sub_path }}
-        patterns: ${{ parameters.allow_change }}
-        regexps: ["exit\\(0\\)", "import solution"]
-```
-
-Use this when a task has an unusual shape — several solution files, generated artefacts, a data
-folder — and you want the reviewable list to sit next to the task instead of in the root config.
-For a uniform course the structure patterns alone are simpler and harder to get wrong.
-
-The same parameter name can also be pointed at by `testing.skip_unchanged_tasks`, so that a freshly
-pulled, untouched task is skipped instead of graded against its own template — see
-[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks):
+The same `parameters.allow_change` list is available to plugins and
+[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks). No separate editable-file
+setting or `copy_files` stage is required for the checker to apply the list.
 
 ```yaml
 # .checker.yml
-default_parameters:
-  allow_change: ["add.py"]
-
 testing:
   skip_unchanged_tasks: allow_change
 ```
+
+## Several tasks in one folder
+
+For example, keep two implementations and their tests in `python/arithmetic/`:
+
+```text
+python/arithmetic/
+  .tasks.yml
+  add.py
+  add.py.template
+  multiply.py
+  multiply.py.template
+  test_private.py
+```
+
+```yaml
+# python/arithmetic/.tasks.yml
+version: 1
+
+parameters:                 # shared defaults
+  timeout: 30
+
+tasks:
+  add:
+    parameters:
+      allow_change: ["add.py"]
+  multiply:
+    parameters:
+      allow_change: ["multiply.py"]
+      timeout: 60
+```
+
+Grading `add` uses the student's `add.py` and the reference `multiply.py`; grading `multiply`
+does the reverse. Both tasks inherit common top-level settings. Here `add` uses a timeout of
+30 seconds and `multiply` uses 60 seconds. A `tasks` entry can override `parameters`,
+`task_pipeline` and `report_pipeline`. Set `allow_change` inside `parameters` to choose editable files. Parameters merge per key; pattern
+lists and pipelines replace the inherited value, including an explicit empty list.
+
+Keep `version` and `structure` at the top level: one shared folder has one structure for export.
+A task entry may be empty (`add: {}`) to inherit all defaults. The `tasks` mapping is required
+in `.tasks.yml` and must be nonempty; only its named entries are created, with no extra folder-named
+task. `.task.yml` does not accept this mapping: rename a multi-task file to `.tasks.yml`.
+
+Add `add` and `multiply` separately to `.manytask.yml`. Task names must be unique across the
+course, including names from flat `.task.yml` files. `checker check --task add` and branch-name
+selection address the logical task name; `task.task_sub_path` still points to `python/arithmetic`.
+With `last_commit_changes`, a task sharing a folder is selected only when the commit diff changes
+a file matching its effective, nonempty `parameters.allow_change` list. Patterns are relative to
+the shared folder and follow the same inheritance as grading. In this example, changing only
+`add.py` selects `add`; an older solution in `multiply.py` does not cause `multiply` to run again.
+A shared file listed by both tasks selects both. Tasks without a nonempty list keep folder-based
+detection: any change beneath the folder selects them. Single-task folders keep that behavior too.
+
+`skip_unchanged_tasks` is a separate check after commit selection: it compares the selected task's
+editable files to the published templates and can skip a newly pulled, untouched task.
+
+If `ui.task_url_template` contains `$TASK_NAME`, give each schedule entry a
+[`url`](manytask_yml_reference.md#task) pointing to the actual shared folder or its statement,
+because the logical name is no longer the folder name.
+
+Allow-list both `".task.yml"` and `".tasks.yml"` in `public_patterns` when `private_patterns: [".*", ...]` hides dotfiles.
+Once any enabled task in a shared folder has started, the folder is published as a whole under
+its normal file patterns. A later sibling's start date does not hide its files; use private
+patterns or separate folders for material that must remain unreleased.
 
 ## Templates
 
@@ -312,6 +358,8 @@ Set it to `[]` on servers that do not support push options, such as SourceCraft.
 
 Tasks and groups marked `enabled: false`, or whose `start` date has not arrived, are skipped —
 scheduling in `.manytask.yml` doubles as the release mechanism for task text.
+For shared folders, any enabled, started task releases the folder; per-task schedules do not
+separate the files of sibling tasks.
 
 Run it from the private repository root:
 
@@ -370,6 +418,8 @@ runs the report pipeline in dry-run mode, so local runs never report a score.
 
 `changes_detection: last_commit_changes` means `checker grade` tests only the tasks touched by the
 pushed commits (diff against `CI_COMMIT_BEFORE_SHA` in GitLab CI, or `--base-ref`; `HEAD~1` otherwise).
+In shared folders, each task's nonempty `parameters.allow_change` list narrows detection to its
+matching files; see [Several tasks in one folder](#several-tasks-in-one-folder).
 `checker check` always tests everything.
 
 See [Checker pipelines and plugins](./checker_pipelines_and_plugins.md) and the
@@ -405,7 +455,9 @@ grade:
 ```
 
 `checker grade STUDENT_ROOT REFERENCE_ROOT` builds the merged tree from those two roots — the same
-two passes described [above](#where-student-edits-actually-go).
+two passes described [above](#where-student-edits-actually-go), followed by one preparation per
+detected folder using the combined [`parameters.allow_change`](#explicit-editable-files) patterns when configured.
+This preparation finishes before the global pipeline runs.
 
 ### Required CI/CD variables
 
@@ -431,7 +483,8 @@ checker check --task new_task
 
 ## Pre-flight checklist
 
-- [ ] `add.py` (and every other solution file) matches **no** pattern list.
+- [ ] Without `parameters.allow_change`, solution files match **no** structure pattern list; with it,
+      only intended student files match the editable list.
 - [ ] Every file that contributes to the score — including visible tests — is in
       `public_patterns` or `private_patterns`. Being exported is not protection.
 - [ ] Every task has a `.template` file or a `SOLUTION BEGIN`/`SOLUTION END` pair.

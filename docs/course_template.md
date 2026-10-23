@@ -67,8 +67,9 @@ course-template/
     └── add_rust/         # add.rs(.template) · test_public.rs · test_private.rs
 ```
 
-Task folder names are globally unique (`add`, `add_cpp`, `add_bash`, `add_go`,
-`add_rust`) because the checker requires unique task names across all groups.
+Task names are globally unique (`add`, `add_cpp`, `add_bash`, `add_go`, `add_rust`) across all
+groups. A single-task `.task.yml` takes its name from the folder; a `.tasks.yml` file takes names
+from its `tasks` mapping.
 
 This is the smallest end-to-end example that:
 
@@ -76,6 +77,9 @@ This is the smallest end-to-end example that:
 - demonstrates the `.template` strategy for hiding reference solutions,
 - separates public and private tests,
 - reports its score back to the Manytask web app once the report pipeline is enabled in CI.
+
+For several tasks in one folder, replace its `.task.yml` with `.tasks.yml` and define a nonempty
+`tasks` mapping. See [the shared-folder example](checker_config.md#several-tasks-in-one-folder).
 
 ## How grading works (testenv image)
 
