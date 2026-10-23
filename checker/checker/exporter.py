@@ -7,8 +7,8 @@ import tempfile
 from pathlib import Path
 
 from checker.configs import CheckerExportConfig, CheckerStructureConfig
-from checker.course import Course
-from checker.exceptions import BadStructure
+from checker.course import Course, FileSystemTask
+from checker.exceptions import BadConfig, BadStructure
 from checker.utils import print_info
 
 
@@ -47,6 +47,15 @@ class Exporter:
         self.temporary_dir = Path(self._temporary_dir_manager.name)
 
         self.sub_config_files = {}
+        tasks_by_path: dict[str, FileSystemTask] = {}
+        for task in self.course.potential_tasks.values():
+            other_task = tasks_by_path.get(task.relative_path)
+            if other_task is not None and other_task.config.structure != task.config.structure:
+                raise BadConfig(
+                    f"Tasks {other_task.name!r} and {task.name!r} share folder "
+                    f"{task.relative_path!r} but have different structure overrides"
+                )
+            tasks_by_path[task.relative_path] = task
         for group in self.course.get_groups(enabled=True):
             relative_path = Path(group.relative_path)
             if group.config.structure:
@@ -250,6 +259,19 @@ class Exporter:
 
         return exclude_paths
 
+    def _unpublished_paths(self) -> list[str]:
+        """Group and task folders to skip; a folder shared by tasks is published if any of them is."""
+        published_task_paths = {task.relative_path for task in self.course.get_tasks(enabled=True, started=True)}
+        return [
+            *[group.relative_path for group in self.course.get_groups(enabled=False)],
+            *[group.relative_path for group in self.course.get_groups(started=False)],
+            *[
+                task.relative_path
+                for task in self.course.get_tasks()
+                if task.relative_path not in published_task_paths
+            ],
+        ]
+
     def export_public(
         self,
         target: Path,
@@ -259,12 +281,7 @@ class Exporter:
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
-        disabled_groups_and_tasks_to_skip = [
-            *[group.relative_path for group in self.course.get_groups(enabled=False)],
-            *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
-            *[task.relative_path for task in self.course.get_tasks(started=False)],
-        ]
+        disabled_groups_and_tasks_to_skip = self._unpublished_paths()
 
         print_info(f"Copy from {self.reference_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -346,12 +363,7 @@ class Exporter:
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
-        disabled_groups_and_tasks_to_skip = [
-            *[group.relative_path for group in self.course.get_groups(enabled=False)],
-            *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
-            *[task.relative_path for task in self.course.get_tasks(started=False)],
-        ]
+        disabled_groups_and_tasks_to_skip = self._unpublished_paths()
 
         print_info(f"Copy from {self.reference_root} to {target}", color="grey")
         self._copy_files_with_config(
