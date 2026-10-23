@@ -140,15 +140,7 @@ class Tester:
 
     def get_task_parameters(self, task: FileSystemTask) -> dict[str, Any]:
         """Merge default, group and task parameters (task takes precedence over group over default)."""
-        parameters = self.default_params.__dict__.copy()
-
-        group_config = self._get_group_config(task)
-        if group_config and group_config.parameters:
-            parameters = parameters | group_config.parameters.__dict__
-        if task.config and task.config.parameters:
-            parameters = parameters | task.config.parameters.__dict__
-
-        return parameters
+        return self.course.get_task_parameters(task, self.default_params.root)
 
     def _build_task_context(
         self,
@@ -212,6 +204,50 @@ class Tester:
 
             print_info("  ok")
 
+    def _run_task(
+        self,
+        task: FileSystemTask,
+        global_variables: GlobalPipelineVariables,
+        outputs: dict[str, PipelineStageResult],
+        report: bool,
+        timestamp: datetime | None,
+    ) -> tuple[PipelineResult, PipelineResult | None]:
+        # run task pipeline
+        print_header_info(f"Run <{task.name}> task pipeline:", color="pink")
+
+        # create task context
+        task_score = self._get_task_score_percent(task.name, timestamp)
+        task_variables = self._get_task_pipeline_parameters(task, task_score)
+        context = self._build_task_context(
+            global_variables, outputs, task, task_variables
+        )
+
+        task_pipeline_result: PipelineResult = self._get_task_pipeline_runner(task).run(
+            context, dry_run=self.dry_run
+        )
+        print_separator("-")
+
+        print_info(str(task_pipeline_result), color="pink")
+        print_separator("-")
+
+        task_report_result: PipelineResult | None = None
+        # Report score if task pipeline succeeded
+        if task_pipeline_result:
+            report_pipeline = self._get_task_report_pipeline_runner(task)
+            print_info(f"Reporting <{task.name}> task tests:", color="pink")
+            if report:
+                task_report_result = report_pipeline.run(context, dry_run=self.dry_run)
+                if task_report_result:
+                    print_info("->Reporting succeeded")
+                else:
+                    print_info("->Reporting failed")
+            else:
+                _: PipelineResult = report_pipeline.run(context, dry_run=True)
+                print_info("->Reporting disabled (dry-run)")
+            print_separator("-")
+
+        return task_pipeline_result, task_report_result
+
     def run(
         self,
         origin: Path,
@@ -230,7 +266,9 @@ class Tester:
         if len(self.global_pipeline) > 0 or self.verbose:
             print_header_info("Run global pipeline:", color="pink")
             context = self._build_global_context(global_variables, outputs)
-            global_pipeline_result: PipelineResult = self.global_pipeline.run(context, dry_run=self.dry_run)
+            global_pipeline_result: PipelineResult = self.global_pipeline.run(
+                context, dry_run=self.dry_run
+            )
             print_separator("-")
             print_info(str(global_pipeline_result), color="pink")
 
@@ -240,39 +278,13 @@ class Tester:
         failed_tasks = []
         failed_reports = []
         for task in tasks:
-            # run task pipeline
-            print_header_info(f"Run <{task.name}> task pipeline:", color="pink")
-
-            # create task context
-            task_score = self._get_task_score_percent(task.name, timestamp)
-            task_variables = self._get_task_pipeline_parameters(task, task_score)
-            context = self._build_task_context(global_variables, outputs, task, task_variables)
-
-            task_pipeline_result: PipelineResult = self._get_task_pipeline_runner(task).run(
-                context, dry_run=self.dry_run
+            task_result, report_result = self._run_task(
+                task, global_variables, outputs, report, timestamp
             )
-            print_separator("-")
-
-            print_info(str(task_pipeline_result), color="pink")
-            print_separator("-")
-
-            # Report score if task pipeline succeeded
-            if task_pipeline_result:
-                report_pipeline = self._get_task_report_pipeline_runner(task)
-                print_info(f"Reporting <{task.name}> task tests:", color="pink")
-                if report:
-                    task_report_result: PipelineResult = report_pipeline.run(context, dry_run=self.dry_run)
-                    if task_report_result:
-                        print_info("->Reporting succeeded")
-                    else:
-                        print_info("->Reporting failed")
-                        failed_reports.append(task.name)
-                else:
-                    _: PipelineResult = report_pipeline.run(context, dry_run=True)
-                    print_info("->Reporting disabled (dry-run)")
-                print_separator("-")
-            else:
+            if not task_result:
                 failed_tasks.append(task.name)
+            elif report_result is not None and not report_result:
+                failed_reports.append(task.name)
 
         errors = []
         if failed_tasks:
