@@ -57,9 +57,9 @@ linear systems directly rather than forming an inverse.
 From the course repository root:
 
 ```bash
-python -m pytest python/linear_system/test_public_matrix_vector.py
-python -m pytest python/linear_system/test_public_matrix_inverse.py
-python -m pytest python/linear_system/test_public_solve_system.py
+python -m pytest linear_system/test_public_matrix_vector.py
+python -m pytest linear_system/test_public_matrix_inverse.py
+python -m pytest linear_system/test_public_solve_system.py
 ```
 
 Local solver tests use your implementations of tasks 1 and 2, so complete those first.
@@ -68,7 +68,8 @@ The grader also runs hidden `test_private_<task_name>.py` tests.
 ## How this shared-folder example works
 
 `.tasks.yml` defines three logical task names instead of a folder-named `linear_system` task.
-All three are registered separately in `.manytask.yml`, each worth 100 points. The shared
+All three are registered separately in `.manytask.yml` under the `linear_system` group,
+each worth 100 points. `.group.yml` declares the group in this same folder. The shared
 pipeline selects public and private test files using `task.task_name`.
 
 Each task's `parameters.allow_change` accepts only its own solution file. When checking one
