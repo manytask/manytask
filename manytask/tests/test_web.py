@@ -1,18 +1,20 @@
 import os
 from http import HTTPStatus
+from typing import Any
 from unittest.mock import patch
 
 import gitlab
 import pytest
 from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
-from flask import Flask, url_for
+from flask import Flask, render_template, url_for
 from flask.testing import FlaskClient
 from flask_wtf import CSRFProtect
 from sqlalchemy.exc import NoResultFound
 
-from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
+from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
+from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ProtectedBranchSettings
 from manytask.database import UserIdentityConflictError
 from manytask.local_config import LocalConfig
@@ -62,6 +64,7 @@ def app(mock_storage_api):
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(namespace_bp)
     app.register_blueprint(instance_admin_bp)
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
@@ -152,6 +155,23 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def check_if_course_admin(self, _course_name, _username):
             return self.course_admin
+
+        def get_course_access_users(self, _course_name):
+            levels = []
+            if self.stored_user.instance_admin:
+                levels.append("instance_admin")
+            if self.course_admin:
+                levels.append("course_admin")
+            if not levels:
+                return []
+            return [
+                CourseAccessUser(
+                    username=self.stored_user.username,
+                    first_name=self.stored_user.first_name,
+                    last_name=self.stored_user.last_name,
+                    access_levels=levels,
+                )
+            ]
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.course_admin = self.course_admin or course_admin
@@ -496,6 +516,16 @@ def test_index_renders_list_and_table_views(app, mock_gitlab_oauth):
             assert "tabulator-theme.js" in body
 
 
+def test_courses_template_without_admin_namespaces(app):
+    """An older route without namespace data can still render the course list."""
+    with app.test_request_context():
+        body = render_template(
+            "courses.html", courses=[], status_order=[], can_create_courses=False, is_instance_admin=False
+        )
+
+    assert "const adminNamespacesData = [];" in body
+
+
 def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
     """A regular user must not receive an editable course in the table data."""
     CSRFProtect(app)
@@ -510,6 +540,8 @@ def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
             # can_edit is serialized into the embedded courses JSON; a regular
             # user (no namespace access) can never edit.
             assert '"can_edit": true' not in body
+            assert "createNamespaceModal" not in body
+            assert "create-namespace.js" not in body
 
 
 def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
@@ -558,9 +590,12 @@ def test_index_renders_namespace_table_for_namespace_admin(app, mock_gitlab_oaut
     assert 'title: "Edit"' in body
     assert "Test namespace" in body
     assert "/instance_admin/namespaces/1" in body
+    assert "createNamespaceModal" not in body
+    assert "create-namespace.js" not in body
 
 
-def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth):
+@pytest.mark.parametrize("with_namespace", [True, False], ids=["existing_namespace", "first_namespace"])
+def test_index_namespace_creation_for_instance_admin(app: Any, mock_gitlab_oauth: Any, with_namespace: bool) -> None:
     CSRFProtect(app)
     namespace = MockCourseBase()
     namespace.id = 1
@@ -570,7 +605,7 @@ def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth
     namespace.gitlab_group_id = 1
 
     app.storage_api.stored_user.instance_admin = True
-    app.storage_api.get_all_namespaces = lambda: [namespace]
+    app.storage_api.get_all_namespaces = lambda: [namespace] if with_namespace else []
     app.storage_api.get_namespace_users = lambda _namespace_id: []
     app.storage_api.get_namespace_courses = lambda _namespace_id: []
 
@@ -583,16 +618,28 @@ def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth
             response = client.get("/")
 
     assert response.status_code == HTTPStatus.OK
-    assert "Namespaces you administer" in response.data.decode()
+    body = response.data.decode()
+    soup = BeautifulSoup(body, "html.parser")
+    create_button = soup.find("button", attrs={"data-bs-target": "#createNamespaceModal"})
+    assert create_button is not None
+    assert create_button.get_text(" ", strip=True) == "Create namespace"
+    assert soup.find("div", id="createNamespaceModal") is not None
+    assert "create-namespace.js" in body
+    if with_namespace:
+        assert "Namespaces you administer" in body
+        assert body.index('id="admin-namespaces-table"') < body.index('data-bs-target="#createNamespaceModal"')
 
 
-def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
+@pytest.mark.parametrize("description", [None, "Namespace <description>\nMore details"])
+def test_namespace_admin_can_access_namespace_panel(
+    app: Flask, mock_gitlab_oauth: Any, description: str | None
+) -> None:
     """Namespace admins can open the panel where they manage their namespace."""
     namespace = MockCourseBase()
     namespace.id = 1
     namespace.name = "Test namespace"
     namespace.slug = "test-namespace"
-    namespace.description = None
+    namespace.description = description
     namespace.gitlab_group_id = 1
 
     app.storage_api.get_namespace_by_id = lambda _namespace_id, _username: (namespace, "namespace_admin")
@@ -609,6 +656,19 @@ def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
             response = client.get(f"/instance_admin/namespaces/{namespace.id}")
 
     assert response.status_code == HTTPStatus.OK
+    form = BeautifulSoup(response.data, "html.parser").find("form", id="namespaceSettingsForm")
+    assert form is not None
+    assert form["data-update-url"] == f"/api/namespaces/{namespace.id}"
+    name_input = form.find("input", id="namespaceName", attrs={"name": "name"})
+    assert name_input is not None
+    assert name_input["value"] == namespace.name
+    assert name_input.has_attr("required")
+    description_input = form.find("textarea", id="namespaceDescription", attrs={"name": "description"})
+    assert description_input is not None
+    assert description_input.get_text() == (description or "")
+    submit = form.find("button", attrs={"type": "submit"})
+    assert submit is not None
+    assert submit.get_text(strip=True) == "Save Changes"
 
 
 def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_oauth):

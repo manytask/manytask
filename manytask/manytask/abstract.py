@@ -152,13 +152,6 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
-    def check_if_program_manager(
-        self,
-        course_name: str,
-        username: str,
-    ) -> bool: ...
-
-    @abstractmethod
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
@@ -299,6 +292,9 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
+
+    @abstractmethod
+    def update_namespace(self, namespace_id: int, name: str, description: str | None) -> Any: ...
 
     @abstractmethod
     def add_user_to_namespace(

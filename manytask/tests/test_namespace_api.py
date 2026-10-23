@@ -1,10 +1,13 @@
 """Tests for namespace API endpoints."""
 
 from http import HTTPStatus
+from typing import Any
 
 import pytest
 from authlib.integrations.flask_client import OAuth
 from flask import json
+from flask.testing import FlaskClient
+from sqlalchemy.orm import Session
 
 from manytask.abstract import AuthApi, AuthenticatedUser
 from manytask.models import (
@@ -508,6 +511,152 @@ def test_get_namespace_by_id_nonexistent(client_with_db, mock_session_admin):
     data = json.loads(response.data)
     assert "error" in data
     assert data["error"] == "Access denied"
+
+
+@pytest.mark.parametrize("as_namespace_admin", [False, True])
+def test_update_namespace_metadata(
+    client_with_db: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    mock_session_regular: dict[str, Any],
+    as_namespace_admin: bool,
+) -> None:
+    set_session(client_with_db, mock_session_admin)
+    original = create_namespace(client_with_db, name="HSE", slug="hse", description="Original description")
+    if as_namespace_admin:
+        assign_namespace_role_for_user(
+            session,
+            username="regular_user",
+            namespace_id=original["id"],
+            role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+        )
+        set_session(client_with_db, mock_session_regular, clear=True)
+
+    response = client_with_db.put(
+        f"/api/namespaces/{original['id']}",
+        json={"name": "  Updated namespace  ", "description": "Updated description"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.get_json()
+    assert data["name"] == "Updated namespace"
+    assert data["description"] == "Updated description"
+    assert data["id"] == original["id"]
+    assert data["slug"] == original["slug"]
+    assert data["gitlab_group_id"] == original["gitlab_group_id"]
+    namespace = session.query(Namespace).filter_by(id=original["id"]).one()
+    assert namespace.name == data["name"]
+    assert namespace.description == data["description"]
+    assert namespace.slug == original["slug"]
+    assert namespace.gitlab_group_id == original["gitlab_group_id"]
+
+
+@pytest.mark.parametrize("description", [None, "", "omitted"])
+def test_update_namespace_can_clear_description(
+    client_with_db: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    description: str | None,
+) -> None:
+    set_session(client_with_db, mock_session_admin)
+    original = create_namespace(client_with_db, name="HSE", slug="hse", description="Original description")
+    payload: dict[str, Any] = {"name": "HSE"}
+    if description != "omitted":
+        payload["description"] = description
+
+    response = client_with_db.put(f"/api/namespaces/{original['id']}", json=payload)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.get_json()["description"] == payload.get("description")
+    namespace = session.query(Namespace).filter_by(id=original["id"]).one()
+    assert namespace.description == payload.get("description")
+
+
+@pytest.mark.parametrize("role", [None, UserOnNamespaceRole.PROGRAM_MANAGER])
+def test_update_namespace_forbidden_without_admin_role(
+    client_with_db: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    mock_session_regular: dict[str, Any],
+    role: UserOnNamespaceRole | None,
+) -> None:
+    set_session(client_with_db, mock_session_admin)
+    original = create_namespace(client_with_db, name="HSE", slug="hse", description="Original description")
+    if role is not None:
+        assign_namespace_role_for_user(session, username="regular_user", namespace_id=original["id"], role=role)
+    set_session(client_with_db, mock_session_regular, clear=True)
+
+    response = client_with_db.put(
+        f"/api/namespaces/{original['id']}", json={"name": "Changed", "description": "Changed"}
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    namespace = session.query(Namespace).filter_by(id=original["id"]).one()
+    assert namespace.name == original["name"]
+    assert namespace.description == original["description"]
+
+
+def test_namespace_admin_cannot_update_another_namespace(
+    client_with_db: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    mock_session_regular: dict[str, Any],
+) -> None:
+    set_session(client_with_db, mock_session_admin)
+    own_namespace = create_namespace(client_with_db, name="Own", slug="own")
+    other_namespace = create_namespace(client_with_db, name="Other", slug="other", description="Original description")
+    assign_namespace_role_for_user(
+        session,
+        username="regular_user",
+        namespace_id=own_namespace["id"],
+        role=UserOnNamespaceRole.NAMESPACE_ADMIN,
+    )
+    set_session(client_with_db, mock_session_regular, clear=True)
+
+    response = client_with_db.put(
+        f"/api/namespaces/{other_namespace['id']}", json={"name": "Changed", "description": "Changed"}
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    namespace = session.query(Namespace).filter_by(id=other_namespace["id"]).one()
+    assert namespace.name == other_namespace["name"]
+    assert namespace.description == other_namespace["description"]
+
+
+def test_update_namespace_rejects_invalid_metadata(
+    client_with_db: FlaskClient, session: Session, mock_session_admin: dict[str, Any]
+) -> None:
+    set_session(client_with_db, mock_session_admin)
+    original = create_namespace(client_with_db, name="HSE", slug="hse", description="Original description")
+    invalid_payloads = [
+        {},
+        {"name": ""},
+        {"name": " \t\n "},
+        {"name": None},
+        {"name": 42},
+        {"name": True},
+        {"name": ["HSE"]},
+        {"name": "HSE", "description": 42},
+    ]
+    for payload in invalid_payloads:
+        response = client_with_db.put(f"/api/namespaces/{original['id']}", json=payload)
+        assert response.status_code == HTTPStatus.BAD_REQUEST, payload
+        assert "error" in response.get_json()
+
+    response = client_with_db.put(f"/api/namespaces/{original['id']}", data="not json", content_type="text/plain")
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    namespace = session.query(Namespace).filter_by(id=original["id"]).one()
+    assert namespace.name == original["name"]
+    assert namespace.description == original["description"]
+
+
+def test_update_namespace_nonexistent(client_with_db: FlaskClient, mock_session_admin: dict[str, Any]) -> None:
+    set_session(client_with_db, mock_session_admin)
+
+    response = client_with_db.put("/api/namespaces/99999", json={"name": "HSE"})
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.get_json()["error"] == "Namespace not found"
 
 
 def test_add_user_to_namespace_as_instance_admin(client_with_db, session, mock_session_admin):
