@@ -4,6 +4,7 @@ import warnings
 from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
