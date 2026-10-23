@@ -178,6 +178,36 @@ class TestCourse:
         with pytest.raises(BadConfig):
             Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
 
+    @pytest.mark.parametrize("marker", [".task.yml", ".group.yml"])
+    @pytest.mark.parametrize(
+        "content", ["", " \n \n", "version: 1\nparameters:\n  timeout: 12\n"]
+    )
+    def test_sub_config_loading_preserves_empty_and_nonempty_files(
+        self, repository_root: Path, marker: str, content: str
+    ) -> None:
+        folder = repository_root / "group1"
+        if marker == ".task.yml":
+            folder /= "task1_1"
+        (folder / marker).write_text(content)
+        course = Course(TEST_MANYTASK_CONFIG, repository_root)
+        config = (
+            course.potential_tasks["task1_1"].config
+            if marker == ".task.yml"
+            else course.potential_groups["group1"].config
+        )
+        assert (config.parameters["timeout"] if config.parameters else None) == (
+            12 if content.startswith("version") else None
+        )
+
+    @pytest.mark.parametrize("marker", [".task.yml", ".group.yml"])
+    def test_null_sub_configs_remain_invalid(
+        self, repository_root: Path, marker: str
+    ) -> None:
+        folder = repository_root / "group1"
+        (folder / marker).write_text("null\n")
+        with pytest.raises(BadConfig):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
     @pytest.mark.parametrize(
         "enabled, expected_num_groups",
         [
