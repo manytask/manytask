@@ -11,7 +11,12 @@ from zoneinfo import ZoneInfo
 
 import click
 
-from .configs import CheckerConfig, CheckerSubConfig, ManytaskConfig
+from .configs import (
+    CheckerConfig,
+    CheckerTaskFileConfig,
+    CheckerTasksFileConfig,
+    ManytaskConfig,
+)
 from .course import Course, FileSystemTask
 from .exceptions import CheckerValidationError, TestingError
 from .exporter import Exporter
@@ -432,7 +437,8 @@ def grade(  # noqa: PLR0913
     else:
         try:
             tasks_to_grade = course.detect_changes(
-                checker_config.testing.changes_detection
+                checker_config.testing.changes_detection,
+                default_parameters=checker_config.default_parameters.root,
             )
         except Exception as e:
             print_info("DETECT CHANGES FAILED", color="red")
@@ -602,7 +608,8 @@ def schema(
     """Generate json schema for the checker configs."""
     checker_schema = CheckerConfig.get_json_schema()
     manytask_schema = ManytaskConfig.get_json_schema()
-    task_schema = CheckerSubConfig.get_json_schema()
+    task_schema = CheckerTaskFileConfig.get_json_schema()
+    tasks_schema = CheckerTasksFileConfig.get_json_schema()
 
     with open(output_folder / "schema-checker.json", "w") as f:
         json.dump(checker_schema, f, indent=2)
@@ -610,6 +617,8 @@ def schema(
         json.dump(manytask_schema, f, indent=2)
     with open(output_folder / "schema-task.json", "w") as f:
         json.dump(task_schema, f, indent=2)
+    with open(output_folder / "schema-tasks.json", "w") as f:
+        json.dump(tasks_schema, f, indent=2)
 
 
 if __name__ == "__main__":

@@ -2,15 +2,46 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Self, Union
 
-from pydantic import AnyUrl, Field, RootModel, ValidationError, field_validator
+import yaml
+from pydantic import (
+    AnyUrl,
+    ConfigDict,
+    Field,
+    RootModel,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
+from checker.exceptions import BadConfig
 from .utils import CustomBaseModel, YamlLoaderMixin
 
 # Note: old Union style in definition for backward compatibility
 TParamType = Union[bool, int, float, str, list[Union[int, float, str, None]], None]
 TTemplate = Union[str, list[Union[TParamType, str]], dict[str, Union[TParamType, str]]]
+
+
+def validate_allow_change(value: object) -> list[str] | None:
+    if value is None:
+        return None
+    message = (
+        "allow_change must be a list of relative glob patterns inside the task folder"
+    )
+    if not isinstance(value, list):
+        raise ValueError(message)
+    patterns = []
+    for pattern in value:
+        if (
+            not isinstance(pattern, str)
+            or not pattern
+            or Path(pattern).is_absolute()
+            or ".." in Path(pattern).parts
+        ):
+            raise ValueError(message)
+        patterns.append(pattern)
+    return patterns
 
 
 class CheckerStructureConfig(CustomBaseModel):
@@ -23,6 +54,14 @@ class CheckerStructureConfig(CustomBaseModel):
 
 class CheckerParametersConfig(RootModel[dict[str, TParamType]]):
     root: dict[str, TParamType]
+
+    @field_validator("root")
+    @classmethod
+    def check_allow_change(
+        cls, parameters: dict[str, TParamType]
+    ) -> dict[str, TParamType]:
+        validate_allow_change(parameters.get("allow_change"))
+        return parameters
 
     def __getitem__(self, item: str) -> TParamType:
         return self.root[item]
@@ -151,48 +190,121 @@ class CheckerConfig(CustomBaseModel, YamlLoaderMixin["CheckerConfig"]):
             raise ValidationError(f"Only version 1 is supported for {cls.__name__}")
 
 
-class CheckerSubConfig(CustomBaseModel, YamlLoaderMixin["CheckerSubConfig"]):
-    """
-    Configuration file overwriting CheckerConfig for some folder and subfolders
+class CheckerTaskOverrides(CustomBaseModel):
+    """Options shared by a task file and its named task entries."""
 
-    :ivar version: config version
-    :ivar structure: describe the structure of the repo - private/public and allowed for change files
-    :ivar parameters: parameters for task pipeline
-    :ivar task_pipeline: pipeline run for each task
-    :ivar report_pipeline: pipeline run for each task if task_pipeline succeeded
-    """
-
-    version: int  # if config exists, version is always present
-
+    model_config = ConfigDict(extra="forbid", validate_default=True)
     # Note: use Optional[...] instead of ... | None as pydantic does not support | in older python versions
-    structure: Optional[CheckerStructureConfig] = None
-    # Task-folder-relative globs. None keeps the legacy structure-based merge;
-    # a list rebuilds the task from reference and takes only these student files.
-    editable_patterns: Optional[list[str]] = None
     parameters: Optional[CheckerParametersConfig] = None
     task_pipeline: Optional[list[PipelineStageConfig]] = None
     report_pipeline: Optional[list[PipelineStageConfig]] = None
+
+
+class CheckerSubConfig(CheckerTaskOverrides, YamlLoaderMixin["CheckerSubConfig"]):
+    """Folder overrides, or the resolved configuration of one task."""
+
+    model_config = ConfigDict(extra="ignore", validate_default=True)
+    version: int  # if config exists, version is always present
+    structure: Optional[CheckerStructureConfig] = None
 
     @classmethod
     def default(cls) -> "CheckerSubConfig":
         return CheckerSubConfig(version=1)
 
-    @field_validator("editable_patterns")
-    @classmethod
-    def check_editable_patterns(
-        cls, patterns: Optional[list[str]]
-    ) -> Optional[list[str]]:
-        if patterns is not None:
-            for pattern in patterns:
-                path = Path(pattern)
-                if not pattern or path.is_absolute() or ".." in path.parts:
-                    raise ValueError(
-                        "editable_patterns must stay inside the task folder"
-                    )
-        return patterns
-
     @field_validator("version")
     @classmethod
-    def check_version(cls, v: int) -> None:
+    def check_version(cls, v: int) -> int:
         if v != 1:
-            raise ValidationError(f"Only version 1 is supported for {cls.__name__}")
+            raise ValueError(f"Only version 1 is supported for {cls.__name__}")
+        return v
+
+
+class _TaskConfigYamlLoader(yaml.SafeLoader):
+    def construct_mapping(
+        self, node: yaml.MappingNode, deep: bool = False
+    ) -> dict[Any, Any]:
+        keys: set[Any] = set()
+        for key_node, _ in node.value:
+            # YAML merge keys may intentionally override inherited values.
+            if key_node.tag == "tag:yaml.org,2002:merge":
+                continue
+            key = self.construct_object(key_node, deep=deep)
+            if key in keys:
+                raise yaml.constructor.ConstructorError(
+                    "while reading task configuration",
+                    node.start_mark,
+                    f"Duplicate YAML key {key!r}",
+                    key_node.start_mark,
+                )
+            keys.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+class _CheckerTaskFileConfig(CheckerSubConfig):
+    """Common task-file loading and serialization."""
+
+    @classmethod
+    def from_yaml(cls, path: Path) -> Self:
+        try:
+            with path.open() as file:
+                return cls.model_validate(yaml.load(file, Loader=_TaskConfigYamlLoader))
+        except FileNotFoundError as error:
+            raise BadConfig(f"File {path} not found") from error
+        except (TypeError, yaml.YAMLError, ValidationError) as error:
+            raise BadConfig(f"Task config {path} is invalid:\n{error}") from error
+
+    def to_yaml(self, path: Path) -> None:
+        with path.open("w") as file:
+            yaml.safe_dump(self.model_dump(mode="json", exclude_unset=True), file)
+
+    def resolve_tasks(self, folder_name: str) -> dict[str, CheckerSubConfig]:
+        return {folder_name: CheckerSubConfig.model_validate(self.model_dump())}
+
+
+class CheckerTaskFileConfig(_CheckerTaskFileConfig):
+    """A .task.yml file defining one task named after its folder."""
+
+    model_config = ConfigDict(
+        extra="ignore",
+        validate_default=True,
+        json_schema_extra={"not": {"required": ["tasks"]}},
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_named_tasks(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "tasks" in data:
+            raise ValueError(
+                "Use .tasks.yml for a tasks mapping; .task.yml defines one task"
+            )
+        return data
+
+
+class CheckerTasksFileConfig(_CheckerTaskFileConfig):
+    """A .tasks.yml file defining named tasks with shared defaults."""
+
+    tasks: dict[str, CheckerTaskOverrides] = Field(min_length=1)
+
+    @field_validator("tasks")
+    @classmethod
+    def check_task_names(
+        cls, tasks: dict[str, CheckerTaskOverrides]
+    ) -> dict[str, CheckerTaskOverrides]:
+        if any(not name.strip() or name != name.strip() for name in tasks):
+            raise ValueError(
+                "Task names must be nonempty and have no surrounding whitespace"
+            )
+        return tasks
+
+    def resolve_tasks(self, folder_name: str) -> dict[str, CheckerSubConfig]:
+        common = self.model_dump(exclude={"tasks"})
+        resolved = {}
+        for name, task in self.tasks.items():
+            overrides = task.model_dump(exclude_unset=True)
+            merged = common | overrides
+            if overrides.get("parameters") is not None:
+                merged["parameters"] = (common["parameters"] or {}) | overrides[
+                    "parameters"
+                ]
+            resolved[name] = CheckerSubConfig.model_validate(merged)
+        return resolved

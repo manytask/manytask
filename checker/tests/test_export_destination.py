@@ -173,34 +173,70 @@ def test_invalid_metadata_in_nested_output_is_not_loaded(
         assert not (target / relative_target).exists()
 
 
-@pytest.mark.parametrize("named_tasks", [False, True])
 def test_excluded_output_does_not_replace_real_task_and_group_paths(
     tmp_path: Path,
-    named_tasks: bool,
 ) -> None:
     root = _create_course(tmp_path)
-    expected_paths = {"group/seq-read", "group/seq-write"}
-    if named_tasks:
-        shared = root / "group/shared"
-        shared.mkdir()
-        for name in ("seq-read", "seq-write"):
-            (root / "group" / name / ".task.yml").rename(shared / f".task.{name}.yml")
-        expected_paths = {"group/shared"}
     target = _seed_export(root, "group/generated/output")
-    for marker in (".group.yml", ".task.yml", ".task.seq-read.yml"):
+    for marker in (".group.yml", ".task.yml"):
         (target / marker).write_text("invalid: [yaml")
     manytask_config = ManytaskConfig.from_yaml(root / ".manytask.yml")
 
     course = Course(manytask_config, root, excluded_paths=[target / ".." / "output"])
 
-    assert set(course.potential_tasks) == {"seq-read", "seq-write"}
-    assert {
-        task.relative_path for task in course.potential_tasks.values()
-    } == expected_paths
+    assert {task.relative_path for task in course.potential_tasks.values()} == {
+        "group/seq-read",
+        "group/seq-write",
+    }
     assert set(course.potential_groups) == {"group"}
     group = course.get_groups(enabled=True)[0]
     assert group.relative_path == "group"
-    assert {task.name for task in group.tasks} == {"seq-read", "seq-write"}
-    assert {task.relative_path for task in group.tasks} == expected_paths
+    assert {task.relative_path for task in group.tasks} == {
+        "group/seq-read",
+        "group/seq-write",
+    }
     for name in ("seq-read", "seq-write"):
         assert course.get_group_for_task(name) is group
+
+
+@pytest.mark.parametrize("command", ["export", "export-private"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_existing_nested_export_with_shared_tasks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    dry_run: bool,
+) -> None:
+    root = _create_course(tmp_path)
+    for name in ("seq-read", "seq-write"):
+        shutil.rmtree(root / "group" / name)
+    shared = root / "group" / "shared"
+    shared.mkdir()
+    _write_yaml(
+        shared / ".tasks.yml",
+        {"version": 1, "tasks": {"seq-read": {}, "seq-write": {}}},
+    )
+    (shared / "solution.cpp").write_text("shared source")
+    target = _seed_export(root, "export")
+    source_files = _files(root / "group")
+    before = _files(target)
+    monkeypatch.chdir(root)
+
+    for _ in range(2):
+        result = _export(command, "export", dry_run=dry_run)
+        assert result.exit_code == 0, (result.output, result.exception)
+        if dry_run:
+            assert _files(target) == before
+        else:
+            assert _files(target / "group") == source_files
+            assert not (target / "export").exists()
+
+    course = Course(
+        ManytaskConfig.from_yaml(root / ".manytask.yml"),
+        root,
+        excluded_paths=[target],
+    )
+    assert set(course.potential_tasks) == {"seq-read", "seq-write"}
+    for task in course.potential_tasks.values():
+        assert task.relative_path == "group/shared"
+        assert course.get_group_for_task(task.name) is course.potential_groups["group"]

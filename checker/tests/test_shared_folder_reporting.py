@@ -90,12 +90,12 @@ def _grade_shared_tasks(
                 ],
             },
         },
-        **{
-            f"disk_measurement/.task.{name}.yml": {
-                "version": 1,
-                "editable_patterns": [f"{name}.cpp", "common.cpp"],
-            }
-            for name in TASK_NAMES
+        "disk_measurement/.tasks.yml": {
+            "version": 1,
+            "tasks": {
+                name: {"parameters": {"allow_change": [f"{name}.cpp", "common.cpp"]}}
+                for name in TASK_NAMES
+            },
         },
     }
     for path, config in files.items():

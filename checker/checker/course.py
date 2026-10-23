@@ -11,7 +11,14 @@ from typing import Any
 
 import git
 
-from .configs import CheckerSubConfig, CheckerTestingConfig, ManytaskConfig
+from .configs import (
+    CheckerSubConfig,
+    CheckerTaskFileConfig,
+    CheckerTasksFileConfig,
+    CheckerTestingConfig,
+    ManytaskConfig,
+)
+from .configs.checker import validate_allow_change
 from .exceptions import BadConfig, CheckerException
 from .utils import print_info
 
@@ -38,7 +45,7 @@ class Course:
     """
 
     TASK_CONFIG_NAME = ".task.yml"
-    NAMED_TASK_CONFIG_PATTERN = ".task.*.yml"
+    TASKS_CONFIG_NAME = ".tasks.yml"
     SHALLOW_DEEPEN_BY = 100
     GROUP_CONFIG_NAME = ".group.yml"
 
@@ -78,7 +85,11 @@ class Course:
         self.branch_name = branch_name
         self.base_ref = base_ref
 
-        self.task_to_group = {task.name: group for group in self.potential_groups.values() for task in group.tasks}
+        self.task_to_group = {
+            task.name: group
+            for group in self.potential_groups.values()
+            for task in group.tasks
+        }
 
     def get_group_for_task(self, task_name: str) -> FileSystemGroup | None:
         """Get the group that contains the given task, or None if not found."""
@@ -149,19 +160,31 @@ class Course:
     @staticmethod
     def _load_tasks_from_config(root: Path, path: Path) -> list[FileSystemTask]:
         relative_path = path.parent.relative_to(root)
-        task_name = (
-            path.parent.name
-            if path.name == Course.TASK_CONFIG_NAME
-            else path.name.removeprefix(".task.").removesuffix(".yml")
-        )
-        if not task_name or task_name.isspace():
-            raise BadConfig(f"Empty task name in {path}")
+        if all(
+            (path.parent / name).exists()
+            for name in (Course.TASK_CONFIG_NAME, Course.TASKS_CONFIG_NAME)
+        ):
+            raise BadConfig(
+                f"Folder {relative_path} contains both .task.yml and .tasks.yml; use only one"
+            )
+
+        task_file: CheckerTaskFileConfig | CheckerTasksFileConfig
+        if path.name == Course.TASKS_CONFIG_NAME:
+            task_file = CheckerTasksFileConfig.from_yaml(path)
+        elif path.read_text().strip() == "":
+            task_file = CheckerTaskFileConfig(version=1)
+        else:
+            task_file = CheckerTaskFileConfig.from_yaml(path)
+
         return [
             FileSystemTask(
                 name=task_name,
                 relative_path=str(relative_path),
-                config=Course._load_sub_config(path),
+                config=task_config,
             )
+            for task_name, task_config in task_file.resolve_tasks(
+                path.parent.name
+            ).items()
         ]
 
     @staticmethod
@@ -189,14 +212,13 @@ class Course:
         root: Path,
         excluded_paths: tuple[Path, ...] = (),
     ) -> Generator[FileSystemTask, Any, None]:
-        config_paths = sorted(
+        for task_config_path in sorted(
             Course._search_config_paths(
                 root,
-                (Course.TASK_CONFIG_NAME, Course.NAMED_TASK_CONFIG_PATTERN),
+                (Course.TASK_CONFIG_NAME, Course.TASKS_CONFIG_NAME),
                 excluded_paths,
             )
-        )
-        for task_config_path in config_paths:
+        ):
             yield from Course._load_tasks_from_config(root, task_config_path)
 
     @staticmethod
@@ -308,7 +330,10 @@ class Course:
         head = repo.head.commit
         base = self._resolve_base_commit(repo, head)
         if base is not None:
-            print_info(f"Detecting changes in range {base.hexsha[:8]}..{head.hexsha[:8]}", color="grey")
+            print_info(
+                f"Detecting changes in range {base.hexsha[:8]}..{head.hexsha[:8]}",
+                color="grey",
+            )
             diff = head.diff(base)
         else:
             print_info("No base commit found, using all files of HEAD", color="grey")
@@ -354,7 +379,9 @@ class Course:
             color="grey",
         )
         if not changed_tasks:
-            warnings.warn(f"No active tasks found for last commit changes {changed_files}")
+            warnings.warn(
+                f"No active tasks found for last commit changes {changed_files}"
+            )
 
         return changed_tasks
 
@@ -453,6 +480,7 @@ class Course:
         detection_type: CheckerTestingConfig.ChangesDetectionType,
         *,
         task_patterns: dict[str, list[str] | None] | None = None,
+        default_parameters: dict[str, Any] | None = None,
     ) -> list[FileSystemTask]:
         """
         Detects changes in the repository based on the provided detection type.
@@ -465,6 +493,7 @@ class Course:
         :return: list of changed tasks
         :param task_patterns: optional task-relative globs supplied by a configuration adapter;
             nonempty lists narrow file-based detection for tasks sharing a folder
+        :param default_parameters: global defaults used when resolving parameters.allow_change
         :raises CheckerException: if repository is not a git repository
         """
         print_info(f"Detecting changes by {detection_type}")
@@ -505,7 +534,12 @@ class Course:
         if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
             if task_patterns is None:
                 task_patterns = {
-                    task.name: task.config.editable_patterns for task in potential_tasks
+                    task.name: validate_allow_change(
+                        self.get_task_parameters(task, default_parameters).get(
+                            "allow_change"
+                        )
+                    )
+                    for task in potential_tasks
                 }
             return self._detect_by_last_commit_changes(
                 repo, potential_tasks, task_patterns

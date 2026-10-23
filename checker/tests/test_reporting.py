@@ -37,6 +37,7 @@ def _create_tester(
     course.repository_root = course.reference_root = tmp_path
     course.get_tasks.return_value = tasks
     course.get_group_for_task.return_value = None
+    course.get_task_parameters.return_value = {}
     course.manytask_config = mocker.Mock()
     group = mocker.Mock()
     group.tasks = tasks

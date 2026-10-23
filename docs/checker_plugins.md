@@ -9,7 +9,11 @@ The example below copies files listed in the `allow_change` parameter **from the
 repository** (`global.repo_dir`) into the testing tree. It leaves other files already in the tree
 untouched, so this stage alone does not restrict which student edits can affect grading.
 
-`allow_change` is not a built-in field: it is an ordinary [parameter](./checker_yml_reference.md#default_parameters) that you define yourself in `default_parameters` and can narrow per task in `.task.yml`.
+`allow_change` is configured inside [parameters](./checker_yml_reference.md#default_parameters),
+with defaults in `default_parameters` and overrides in `.group.yml`, `.task.yml`, or `.tasks.yml`.
+The checker combines the effective lists of detected tasks per folder and prepares that folder
+once, before the global and task pipelines run. All pipelines share the prepared files. The copy
+stage below can reuse the same parameter, although it is not required for the initial preparation.
 
 ```yaml
 - name: "Take the student's allowed files"
@@ -23,11 +27,8 @@ untouched, so this stage alone does not restrict which student edits can affect 
 
 > This stage is **optional**. By default, `checker check` / `checker grade` restore files classified
 > as public or private from the reference repository; unclassified student files remain.
-> Use the built-in task-level [`editable_patterns`](./checker_config.md#explicit-editable-files)
-> lists to select student files for the detected tasks' shared grading folder. A `copy_files` stage is not
-> needed for that overlay. Detected tasks in a folder contribute their combined patterns before
-> the global pipeline runs; later pipelines share the workspace. A stage that copies additional
-> files can extend that prepared set.
+> See [`parameters.allow_change`](./checker_config.md#explicit-editable-files) for editable-file
+> preparation and inheritance.
 
 | Arg | Type | Required | Description |
 |---|---|---|---|

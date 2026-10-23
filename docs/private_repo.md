@@ -9,13 +9,16 @@ Assume that you already have a task that you want to add, including tests and so
 
 ## Layout
 
-The general requirements are to have `.checker.yml` and `.manytask.yml` in the root of the repo, `.task.yml` and `.group.yml` in each tasks and group (can be empty). 
+The general requirements are to have `.checker.yml` and `.manytask.yml` in the root of the repo, `.group.yml` in group folders, and either `.task.yml` or `.tasks.yml` in task folders.
+`.task.yml` and `.group.yml` may be empty; `.tasks.yml` requires `version: 1` and a nonempty `tasks` mapping.
 
-The private repository layout is crucial for the checker to function correctly. 
-Each task should be organized into dedicated folders within group directories. 
+The private repository layout is crucial for the checker to function correctly.
+Tasks can have dedicated folders within group directories, or several tasks can share one folder.
 Also, there are 2 config files `.checker.yml` and `.manytask.yml` that are required for checker to work.
 
-Each task location detected by `.task.yml` file (can be just empty). Each group, if any, detected by `.group.yml` file (can be empty). 
+A `.task.yml` file defines one task named after its folder. A `.tasks.yml` file defines several named tasks
+in the same folder; see [the shared-folder example](checker_config.md#several-tasks-in-one-folder).
+Use only one of these two task files in a folder. Each group, if any, is detected by `.group.yml`.
 
 Here's a breakdown:
 
@@ -86,7 +89,7 @@ version: 1
 
 structure:
   ignore_patterns: [".git", ".github", "__pycache__", ".venv"]
-  public_patterns: [".task.yml", ".group.yml", "README.md", ".gitignore", "test_public.py", "pyrefly.toml"]
+  public_patterns: [".task.yml", ".tasks.yml", ".group.yml", "README.md", ".gitignore", "test_public.py", "pyrefly.toml"]
   private_patterns: [".*", "test_private.py"]
 
 export:
@@ -129,7 +132,7 @@ Briefly, we set up patterns for the files that should be ignored by checker, fil
 
 Note what is deliberately **missing** from the lists above: the solution file (`solution.py` and friends). A file matching none of the three lists is the only kind a student can actually change — at grading time the checker takes such files from the student repository, then overwrites everything public and private with your originals. This cuts both ways: listing a solution file as public would grade every student against your reference solution, while *omitting* `test_public.py` from `public_patterns` would let a student's edited tests run in CI. That is why `test_public.py` is listed above even though ordinary files are exported without being listed. The [configuration guide](./checker_config.md#the-file-classification-model) walks through this model in detail.
 
-One can override these settings for a group of tasks or even for single task using `.group.yml` and `.task.yml` files:
+One can override these settings for a group of tasks or even for single task using `.group.yml`, `.task.yml`, and `.tasks.yml` files:
 
 * **Group Configuration** (`.group.yml`):  
     Optional file located in group directory, this file allows for task-specific settings. It can override default parameters, private/public files and pipelines set in .checker.yml for individual groups.  
@@ -137,6 +140,10 @@ One can override these settings for a group of tasks or even for single task usi
 
 * **Task Configuration** (`.task.yml`):
     Optional file located in task directory, this file allows for task-specific settings. It can override default parameters, private/public files and pipelines set in .checker.yml for individual tasks.
+
+* **Shared-Folder Task Configuration** (`.tasks.yml`):
+    Defines named tasks in a required `tasks` mapping. Top-level settings are shared defaults; each entry
+    can override its editable files, parameters, and pipelines. Register each logical task separately in `.manytask.yml`.
 
 ## Manytask configuration (`.manytask.yml`)
 

@@ -13,8 +13,6 @@ import yaml
 from click.testing import CliRunner, Result
 
 from checker.__main__ import cli
-from checker.configs import CheckerTestingConfig, ManytaskConfig
-from checker.course import Course
 
 
 CHECK_TASK = dedent("""\
@@ -22,8 +20,9 @@ CHECK_TASK = dedent("""\
     import sys
     from pathlib import Path
 
-    name, expected, inherited, repository = sys.argv[1:]
+    name, expected, inherited, shared, repository = sys.argv[1:]
     assert inherited == 'group value'
+    assert shared == 'file value'
     assert Path(name + '.txt').read_text() == expected
     for filename, content in json.loads(Path('expected_workspace.json').read_text()).items():
         assert Path(filename).read_text() == content
@@ -167,6 +166,7 @@ def _create_course(
                             "${{ task.task_name }}",
                             "${{ parameters.own_content }}",
                             "${{ parameters.inherited }}",
+                            "${{ parameters.shared }}",
                             "${{ global.repo_dir }}",
                         ],
                     },
@@ -191,29 +191,33 @@ def _create_course(
         },
     )
 
+    task_config: dict[str, Any] = {
+        "version": 1,
+        "parameters": {
+            "shared": "file value",
+            "own_content": "file default overridden by task",
+        },
+        "tasks": {},
+    }
     for name in ("one", "two"):
         content = (
             f"reference {name}"
             if unchanged_one and name == "one"
             else f"student {name}"
         )
-        _write_yaml(
-            reference / shared_path / f".task.{name}.yml",
-            {
-                "version": 1,
-                "editable_patterns": [f"{name}.txt"],
-                "parameters": {
-                    "allow_change": [f"{name}.txt"],
-                    "own_content": content,
-                },
+        task_config["tasks"][name] = {
+            "parameters": {
+                "allow_change": [f"{name}.txt"],
+                "own_content": content,
             },
-        )
+        }
         (reference / shared_path / f"{name}.txt").write_text(f"reference {name}")
         (reference / shared_path / f"{name}.txt.template").write_text(
             f"reference {name}"
         )
         (student / shared_path / f"{name}.txt").write_text(content)
 
+    _write_yaml(reference / shared_path / ".tasks.yml", task_config)
     (reference / shared_path / "protected.txt").write_text("reference protected")
     (student / shared_path / "protected.txt").write_text("student tampering")
     (student / shared_path / "injected.txt").write_text("unexpected student file")
@@ -267,14 +271,40 @@ def test_grade_selects_one_logical_task_from_a_shared_folder(tmp_path: Path) -> 
     assert (student / "reported.txt").read_text().splitlines() == ["two"]
 
 
+@pytest.mark.parametrize("scope", ["global", "group", "file"])
+def test_allow_change_is_inherited_before_task_file_preparation(
+    tmp_path: Path, scope: str
+) -> None:
+    student, reference = _create_course(tmp_path)
+    task_path = reference / "group/shared/.tasks.yml"
+    task_config = yaml.safe_load(task_path.read_text())
+    task_config["tasks"]["one"]["parameters"].pop("allow_change")
+    if scope == "file":
+        task_config["parameters"]["allow_change"] = ["one.txt"]
+    else:
+        path = reference / (".checker.yml" if scope == "global" else "group/.group.yml")
+        config = yaml.safe_load(path.read_text())
+        config["default_parameters" if scope == "global" else "parameters"][
+            "allow_change"
+        ] = ["one.txt"]
+        _write_yaml(path, config)
+    _write_yaml(task_path, task_config)
+
+    result = _grade(student, reference, "--all-tasks", "--submit-score")
+
+    assert result.exit_code == 0, result.output
+    assert (student / "executed.txt").read_text().splitlines() == ["one", "two"]
+    assert (student / "reported.txt").read_text().splitlines() == ["one", "two"]
+
+
 @pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
 def test_mixed_shared_tasks_preserve_legacy_student_files_and_global_preparation(
     tmp_path: Path, order: tuple[str, str]
 ) -> None:
     student, reference = _create_course(tmp_path, order)
-    task_path = reference / "group/shared/.task.two.yml"
+    task_path = reference / "group/shared/.tasks.yml"
     config = yaml.safe_load(task_path.read_text())
-    config.pop("editable_patterns")
+    config["tasks"]["two"]["parameters"].pop("allow_change")
     _write_yaml(task_path, config)
     _expect_workspace(
         reference,
@@ -309,9 +339,9 @@ def test_skip_unchanged_checks_each_shared_task_editable_files(
     (student / "group/shared/two.txt").write_text("student two revised")
     repository.index.add(["group/shared/one.txt", "group/shared/two.txt"])
     repository.index.commit("Reset one and revise two", author=actor, committer=actor)
-    task_config = reference / "group/shared/.task.two.yml"
+    task_config = reference / "group/shared/.tasks.yml"
     config = yaml.safe_load(task_config.read_text())
-    config["parameters"]["own_content"] = "student two revised"
+    config["tasks"]["two"]["parameters"]["own_content"] = "student two revised"
     _write_yaml(task_config, config)
 
     _expect_workspace(
@@ -332,15 +362,103 @@ def test_skip_unchanged_checks_each_shared_task_editable_files(
     assert ("Skipping <one>" in result.output) is skip_unchanged
 
 
+@pytest.mark.parametrize("skip_unchanged", [False, True])
+def test_grade_only_reports_shared_task_changed_since_previous_commit(
+    tmp_path: Path, skip_unchanged: bool
+) -> None:
+    student, reference = _create_course(tmp_path, skip_unchanged=skip_unchanged)
+    repository = git.Repo.init(student)
+    actor = git.Actor("Checker tests", "checker@example.com")
+    repository.index.add(["group/shared"])
+    repository.index.commit("Both tasks already solved", author=actor, committer=actor)
+    (student / "group/shared/two.txt").write_text("student two revised")
+    repository.index.add(["group/shared/two.txt"])
+    repository.index.commit("Revise only two", author=actor, committer=actor)
+    task_path = reference / "group/shared/.tasks.yml"
+    config = yaml.safe_load(task_path.read_text())
+    config["tasks"]["two"]["parameters"]["own_content"] = "student two revised"
+    _write_yaml(task_path, config)
+    _expect_workspace(
+        reference,
+        {
+            "one.txt": "reference one",
+            "two.txt": "student two revised",
+            "protected.txt": "reference protected",
+        },
+    )
+
+    result = _grade(student, reference)
+
+    assert result.exit_code == 0, result.output
+    assert (student / "executed.txt").read_text().splitlines() == ["two"]
+    assert (student / "reported.txt").read_text().splitlines() == ["two"]
+    assert "Skipping <one>" not in result.output
+
+
+def test_grade_inherits_file_defaults_and_uses_entry_pipeline(tmp_path: Path) -> None:
+    student, reference = _create_course(tmp_path)
+    group_path = reference / "group/.group.yml"
+    group_config = yaml.safe_load(group_path.read_text())
+    task_path = reference / "group/shared/.tasks.yml"
+    task_config = yaml.safe_load(task_path.read_text())
+    task_config["task_pipeline"] = group_config.pop("task_pipeline")
+    task_config["report_pipeline"] = group_config.pop("report_pipeline")
+    task_config["tasks"]["two"]["task_pipeline"] = [
+        {
+            "name": "Check the entry-specific pipeline and merged parameters",
+            "run": "run_script",
+            "args": {
+                "origin": "${{ global.temp_dir }}/${{ task.task_sub_path }}",
+                "script": [
+                    sys.executable,
+                    "-c",
+                    dedent("""\
+                        import sys
+                        from pathlib import Path
+
+                        shared, own, inherited, repository = sys.argv[1:]
+                        assert shared == 'file value'
+                        assert own == 'student two'
+                        assert inherited == 'group value'
+                        assert Path('two.txt').read_text() == own
+                        assert Path('one.txt').read_text() == 'student one'
+                        assert Path('generated.txt').read_text() == 'one'
+                        assert Path('global.txt').read_text() == 'global preparation'
+                        Path('generated.txt').write_text('two')
+                        repository = Path(repository)
+                        (repository / 'custom_pipeline.txt').write_text(shared + '|' + own)
+                        with (repository / 'executed.txt').open('a') as output:
+                            output.write('two\\n')
+                    """),
+                    "${{ parameters.shared }}",
+                    "${{ parameters.own_content }}",
+                    "${{ parameters.inherited }}",
+                    "${{ global.repo_dir }}",
+                ],
+            },
+        }
+    ]
+    _write_yaml(group_path, group_config)
+    _write_yaml(task_path, task_config)
+
+    result = _grade(student, reference, "--all-tasks", "--submit-score")
+
+    assert result.exit_code == 0, result.output
+    assert (student / "executed.txt").read_text().splitlines() == ["one", "two"]
+    assert (student / "reported.txt").read_text().splitlines() == ["one", "two"]
+    assert (student / "custom_pipeline.txt").read_text() == "file value|student two"
+
+
 @pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
 def test_empty_patterns_task_uses_the_same_selected_file_union(
     tmp_path: Path, order: tuple[str, str]
 ) -> None:
     student, reference = _create_course(tmp_path, order)
-    path = reference / "group/shared/.task.one.yml"
+    path = reference / "group/shared/.tasks.yml"
     config = yaml.safe_load(path.read_text())
-    config["editable_patterns"] = []
-    config["parameters"]["own_content"] = "reference one"
+    config["tasks"]["one"]["parameters"].update(
+        allow_change=[], own_content="reference one"
+    )
     _write_yaml(path, config)
     _expect_workspace(
         reference,
@@ -367,72 +485,3 @@ def test_shared_workspace_dry_run_does_not_execute_pipelines(tmp_path: Path) -> 
     assert not (student / "executed.txt").exists()
     assert not (student / "reported.txt").exists()
     assert (student / "group/shared/protected.txt").read_text() == "student tampering"
-
-
-@pytest.mark.parametrize("skip_unchanged", [False, True])
-def test_grade_only_reports_the_named_task_changed_since_previous_commit(
-    tmp_path: Path, skip_unchanged: bool
-) -> None:
-    student, reference = _create_course(tmp_path, skip_unchanged=skip_unchanged)
-    repository = git.Repo.init(student)
-    actor = git.Actor("Checker tests", "checker@example.com")
-    repository.index.add(["group/shared"])
-    repository.index.commit("Both tasks already solved", author=actor, committer=actor)
-    (student / "group/shared/two.txt").write_text("student two revised")
-    repository.index.add(["group/shared/two.txt"])
-    repository.index.commit("Revise only two", author=actor, committer=actor)
-    task_path = reference / "group/shared/.task.two.yml"
-    config = yaml.safe_load(task_path.read_text())
-    config["parameters"]["own_content"] = "student two revised"
-    _write_yaml(task_path, config)
-    _expect_workspace(
-        reference,
-        {
-            "one.txt": "reference one",
-            "two.txt": "student two revised",
-            "protected.txt": "reference protected",
-        },
-    )
-
-    result = _grade(student, reference)
-
-    assert result.exit_code == 0, result.output
-    assert (student / "executed.txt").read_text().splitlines() == ["two"]
-    assert (student / "reported.txt").read_text().splitlines() == ["two"]
-    assert "Skipping <one>" not in result.output
-
-
-@pytest.mark.parametrize(
-    "changed_file, expected",
-    [
-        ("one.txt", ["one"]),
-        ("two.txt", ["two"]),
-        ("common.hpp", ["one", "two"]),
-        ("readme.md", []),
-    ],
-)
-def test_named_task_detection_uses_each_configs_editable_patterns(
-    tmp_path: Path, changed_file: str, expected: list[str]
-) -> None:
-    student, reference = _create_course(tmp_path)
-    for name in ("one", "two"):
-        path = reference / "group/shared" / f".task.{name}.yml"
-        config = yaml.safe_load(path.read_text())
-        config["editable_patterns"].append("common.hpp")
-        _write_yaml(path, config)
-    repository = git.Repo.init(student)
-    actor = git.Actor("Checker tests", "checker@example.com")
-    repository.index.add(["group/shared"])
-    repository.index.commit("Previous solutions", author=actor, committer=actor)
-    (student / "group/shared" / changed_file).write_text("new submission")
-    repository.index.add(["group/shared"])
-    repository.index.commit("Change one file", author=actor, committer=actor)
-    course = Course(
-        ManytaskConfig.from_yaml(reference / ".manytask.yml"), student, reference
-    )
-
-    selected = course.detect_changes(
-        CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES
-    )
-
-    assert [task.name for task in selected] == expected
