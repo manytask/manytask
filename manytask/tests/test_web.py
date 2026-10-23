@@ -1247,3 +1247,85 @@ def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitla
             body = response.data.decode()
             assert "boom" in body
             assert "Secret Code" in body
+
+
+@pytest.mark.parametrize("page", ["", "database", "create_project"])
+def test_enrolled_user_without_repo_access_is_sent_to_recovery(app, mock_gitlab_oauth, page: str) -> None:
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client, patch.object(app.rms_api, "check_user_has_repo_access", return_value=False):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == f"/{TEST_COURSE_NAME}/recover_project"
+
+
+def test_recovery_repairs_access_to_an_existing_repository(app, mock_gitlab_oauth) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    project_path = f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"
+    original_project = app.rms_api.projects[project_path]
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "check_user_has_repo_access", return_value=False),
+        patch.object(app.rms_api, "create_project", wraps=app.rms_api.create_project) as create_repo,
+        patch.object(app.storage_api, "sync_user_on_course") as sync_membership,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        recovery = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        assert b"Restore repository access" in recovery.data
+        assert b"lost or deleted" not in recovery.data
+        assert create_repo.call_count == 0
+        csrf_token = BeautifulSoup(recovery.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+    assert response.status_code == HTTPStatus.FOUND
+    create_repo.assert_called_once()
+    sync_membership.assert_not_called()
+    assert app.rms_api.projects[project_path] is original_project
+
+
+def test_failed_enrollment_can_retry_existing_repository_before_membership_is_saved(
+    app, mock_course, mock_gitlab_oauth
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    mock_course.token = TEST_TOKEN
+    project_path = f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"
+    original_project = app.rms_api.projects[project_path]
+    enrolled = False
+
+    def save_membership(*args: Any) -> None:
+        nonlocal enrolled
+        enrolled = True
+
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", side_effect=lambda *args: enrolled),
+        patch.object(app.storage_api, "sync_user_on_course", side_effect=save_membership) as sync_membership,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        enrollment = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        csrf_token = BeautifulSoup(enrollment.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        payload = {"csrf_token": csrf_token, "secret": mock_course.registration_secret}
+        with patch.object(app.rms_api, "create_project", side_effect=RmsApiException("role grant failed")):
+            first = client.post(f"/{TEST_COURSE_NAME}/create_project", data=payload)
+        assert first.status_code == HTTPStatus.OK
+        assert b"course staff" in first.data
+        assert not enrolled
+        sync_membership.assert_not_called()
+        second = client.post(f"/{TEST_COURSE_NAME}/create_project", data=payload)
+    assert second.status_code == HTTPStatus.FOUND
+    sync_membership.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME, False)
+    assert enrolled
+    assert app.rms_api.projects[project_path] is original_project
+
+
+def test_sourcecraft_pending_invitation_still_shows_course_instructions(app, mock_gitlab_oauth) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.app_config.rms = "sourcecraft"
+    with app.test_client() as client, patch.object(app.rms_api, "check_user_has_repo_access", return_value=False):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+    assert response.status_code == HTTPStatus.OK
+    assert b"SourceCraft" in response.data
+    assert b"invitation" in response.data
