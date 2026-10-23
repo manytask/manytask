@@ -1,0 +1,2 @@
+def matrix_inverse(matrix: list[list[float]]) -> list[list[float]]:
+    raise NotImplementedError("Invert a 3 x 3 matrix; reject singular matrices")
