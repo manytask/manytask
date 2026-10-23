@@ -46,14 +46,27 @@ class Course:
         reference_root: Path | None = None,
         branch_name: str | None = None,
         base_ref: str | None = None,
+        *,
+        excluded_paths: list[Path] | None = None,
     ):
         self.manytask_config = manytask_config
 
         self.repository_root = repository_root
         self.reference_root = reference_root or repository_root
+        discovery_exclusions = tuple(path.resolve() for path in excluded_paths or [])
 
-        self.potential_groups = {group.name: group for group in self._search_for_groups_by_configs(self.reference_root)}
-        self.potential_tasks = {task.name: task for task in self._search_for_tasks_by_configs(self.reference_root)}
+        self.potential_groups = {
+            group.name: group
+            for group in self._search_for_groups_by_configs(
+                self.reference_root, discovery_exclusions
+            )
+        }
+        self.potential_tasks = {
+            task.name: task
+            for task in self._search_for_tasks_by_configs(
+                self.reference_root, discovery_exclusions
+            )
+        }
 
         self.branch_name = branch_name
         self.base_ref = base_ref
@@ -138,23 +151,51 @@ class Course:
         ]
 
     @staticmethod
+    def _search_config_paths(
+        root: Path,
+        config_patterns: tuple[str, ...],
+        excluded_paths: tuple[Path, ...],
+    ) -> Generator[Path, None, None]:
+        """Find metadata without descending into explicitly excluded output trees."""
+        for folder, directories, files in root.walk():
+            directories[:] = [
+                name
+                for name in directories
+                if not any(
+                    (folder / name).resolve().is_relative_to(excluded)
+                    for excluded in excluded_paths
+                )
+            ]
+            for name in files:
+                if any(fnmatchcase(name, pattern) for pattern in config_patterns):
+                    yield folder / name
+
+    @staticmethod
     def _search_for_tasks_by_configs(
         root: Path,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> Generator[FileSystemTask, Any, None]:
-        for task_config_path in root.glob(f"**/{Course.TASK_CONFIG_NAME}"):
+        for task_config_path in Course._search_config_paths(
+            root, (Course.TASK_CONFIG_NAME,), excluded_paths
+        ):
             yield from Course._load_tasks_from_config(root, task_config_path)
 
     @staticmethod
     def _search_for_groups_by_configs(
         root: Path,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> Generator[FileSystemGroup, Any, None]:
-        for group_config_path in root.glob(f"**/{Course.GROUP_CONFIG_NAME}"):
+        for group_config_path in Course._search_config_paths(
+            root, (Course.GROUP_CONFIG_NAME,), excluded_paths
+        ):
             relative_group_path = group_config_path.parent.relative_to(root)
 
             group_config = Course._load_sub_config(group_config_path)
 
             group_tasks = list(
-                Course._search_for_tasks_by_configs(group_config_path.parent)
+                Course._search_for_tasks_by_configs(
+                    group_config_path.parent, excluded_paths
+                )
             )
             for task in group_tasks:
                 task.relative_path = str(relative_group_path / task.relative_path)
@@ -252,7 +293,14 @@ class Course:
         else:
             print_info("No base commit found, using all files of HEAD", color="grey")
             diff = head.diff(git.NULL_TREE)
-        changed_files = [item.a_path or item.b_path for item in diff]
+        changed_files = sorted(
+            {
+                path
+                for item in diff
+                for path in (item.a_path, item.b_path)
+                if path is not None
+            }
+        )
         print_info(f"Last commit changes: {changed_files}", color="grey")
 
         changed_tasks = [

@@ -46,8 +46,8 @@ class LocalConfig:
             gitlab_client_id=os.environ.get("GITLAB_CLIENT_ID", ""),
             gitlab_client_secret=os.environ.get("GITLAB_CLIENT_SECRET", ""),
             # sourcecraft
-            sourcecraft_url=os.environ.get("SOURCRAFT_URL", "https://sourcecraft.dev"),
-            sourcecraft_api_url=os.environ.get("SOURCRAFT_API_URL", "https://api.sourcecraft.tech"),
+            sourcecraft_url=os.environ.get("SOURCECRAFT_URL", "https://sourcecraft.dev"),
+            sourcecraft_api_url=os.environ.get("SOURCECRAFT_API_URL", "https://api.sourcecraft.tech"),
             sourcecraft_sa_key_json=os.environ.get("SOURCECRAFT_SA_KEY_JSON", ""),
             sourcecraft_oauth_token=os.environ.get("SOURCECRAFT_OAUTH_TOKEN", ""),
             sourcecraft_org_slug=os.environ.get("SOURCECRAFT_ORG_SLUG", ""),

@@ -133,9 +133,6 @@ deploy-manytask:
        -H "Authorization: Bearer $MANYTASK_TOKEN"
        -H "Content-Type: application/x-yaml"
        "https://$MANYTASK_API/update_config"'
-    - 'curl --fail -X POST
-       -H "Authorization: Bearer $MANYTASK_TOKEN"
-       "https://$MANYTASK_API/update_cache"'
 
 deploy-public:
   image: "$BASE_IMAGE"

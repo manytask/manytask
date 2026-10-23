@@ -1,0 +1,41 @@
+<div class="modal fade" id="createNamespaceModal" tabindex="-1" aria-labelledby="createNamespaceModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createNamespaceModalLabel">Create Namespace</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createNamespaceForm">
+                    <div class="mb-3">
+                        <label for="namespaceName" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="namespaceName" name="name" required
+                               placeholder="HSE">
+                    </div>
+                    <div class="mb-3">
+                        <label for="namespaceSlug" class="form-label">Slug *</label>
+                        <input type="text" class="form-control" id="namespaceSlug" name="slug" required
+                               placeholder="hse-namespace"
+                               pattern="^[a-zA-Z0-9._-]+$"
+                               title="Only letters, digits, underscores, dots, or dashes">
+                        <small class="form-text text-muted">Must start/end with alphanumeric, no consecutive special chars</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="namespaceDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="namespaceDescription" name="description" rows="3"
+                                  placeholder="Namespace for Higher School of Economics courses"></textarea>
+                    </div>
+                    <div id="createNamespaceError" class="alert alert-danger d-none" role="alert"></div>
+                    <div id="createNamespaceSuccess" class="alert alert-success d-none" role="alert"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createNamespace()">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/create-namespace.js') }}"></script>
