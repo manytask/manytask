@@ -7,8 +7,8 @@ import tempfile
 from pathlib import Path
 
 from checker.configs import CheckerExportConfig, CheckerStructureConfig
-from checker.course import Course
-from checker.exceptions import BadStructure
+from checker.course import Course, FileSystemTask
+from checker.exceptions import BadConfig, BadStructure
 from checker.utils import print_info
 
 
@@ -47,6 +47,15 @@ class Exporter:
         self.temporary_dir = Path(self._temporary_dir_manager.name)
 
         self.sub_config_files = {}
+        tasks_by_path: dict[str, FileSystemTask] = {}
+        for task in self.course.potential_tasks.values():
+            other_task = tasks_by_path.get(task.relative_path)
+            if other_task is not None and other_task.config.structure != task.config.structure:
+                raise BadConfig(
+                    f"Tasks {other_task.name!r} and {task.name!r} share folder "
+                    f"{task.relative_path!r} but have different structure overrides"
+                )
+            tasks_by_path[task.relative_path] = task
         for group in self.course.get_groups(enabled=True):
             relative_path = Path(group.relative_path)
             if group.config.structure:
@@ -250,6 +259,19 @@ class Exporter:
 
         return exclude_paths
 
+    def _unpublished_paths(self) -> list[str]:
+        """Group and task folders to skip; a folder shared by tasks is published if any of them is."""
+        published_task_paths = {task.relative_path for task in self.course.get_tasks(enabled=True, started=True)}
+        return [
+            *[group.relative_path for group in self.course.get_groups(enabled=False)],
+            *[group.relative_path for group in self.course.get_groups(started=False)],
+            *[
+                task.relative_path
+                for task in self.course.get_tasks()
+                if task.relative_path not in published_task_paths
+            ],
+        ]
+
     def export_public(
         self,
         target: Path,
@@ -259,12 +281,7 @@ class Exporter:
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
-        disabled_groups_and_tasks_to_skip = [
-            *[group.relative_path for group in self.course.get_groups(enabled=False)],
-            *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
-            *[task.relative_path for task in self.course.get_tasks(started=False)],
-        ]
+        disabled_groups_and_tasks_to_skip = self._unpublished_paths()
 
         print_info(f"Copy from {self.reference_root} to {target}", color="grey")
         self._copy_files_with_config(
@@ -310,6 +327,105 @@ class Exporter:
             fill_templates=False,
         )
 
+    def prepare_tasks_for_testing(
+        self,
+        target: Path,
+        tasks: list[FileSystemTask],
+        allowed_patterns: dict[str, list[str] | None],
+    ) -> None:
+        """Prepare each selected folder once using the union of its task patterns.
+
+        An unrestricted task (None) keeps the existing structure-based export for
+        its entire folder. Empty lists contribute no student files.
+        """
+        folders: dict[str, tuple[FileSystemTask, set[str] | None]] = {}
+        for task in tasks:
+            patterns = allowed_patterns[task.name]
+            if task.relative_path not in folders:
+                folders[task.relative_path] = (task, None if patterns is None else set(patterns))
+                continue
+            first_task, combined = folders[task.relative_path]
+            if patterns is None:
+                folders[task.relative_path] = (first_task, None)
+            elif combined is not None:
+                combined.update(patterns)
+
+        for task, combined_patterns in folders.values():
+            self.prepare_task_for_testing(
+                target, task, None if combined_patterns is None else sorted(combined_patterns)
+            )
+
+    def prepare_task_for_testing(
+        self,
+        target: Path,
+        task: FileSystemTask,
+        patterns: list[str] | None,
+    ) -> None:
+        """Reset one task folder in `target` to the reference, then copy the student's files matching `patterns`.
+
+        The caller supplies validated relative patterns: None preserves the current folder
+        (as does a dry run); an empty list uses reference files only.
+        """
+        if patterns is None or self.dry_run:
+            return
+
+        task_path = Path(task.relative_path)
+        source = self.reference_root / task_path
+        destination = target / task_path
+        student_source = self.repository_root / task_path
+
+        def ignored_entries(directory: str, names: list[str]) -> set[str]:
+            directory_path = Path(directory)
+            config = self._structure_config_for(directory_path.relative_to(self.reference_root))
+            return {name for name in names if self._matches_ignore_patterns(directory_path / name, config)}
+
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        elif destination.exists() or destination.is_symlink():
+            destination.unlink()
+        if self._is_ignored(task_path):
+            return
+        shutil.copytree(source, destination, ignore=ignored_entries)
+
+        for pattern in patterns:
+            for reference_entry in source.glob(pattern):
+                destination_entry = destination / reference_entry.relative_to(source)
+                if destination_entry.is_dir():
+                    shutil.rmtree(destination_entry)
+                elif destination_entry.exists() or destination_entry.is_symlink():
+                    destination_entry.unlink()
+
+        for relative in self._collect_student_files(student_source, patterns):
+            if self._is_ignored(task_path / relative):
+                continue
+            destination_file = destination / relative
+            destination_file.parent.mkdir(parents=True, exist_ok=True)
+            if destination_file.is_dir():
+                shutil.rmtree(destination_file)
+            shutil.copyfile(student_source / relative, destination_file)
+            shutil.copymode(student_source / relative, destination_file)
+
+    def _structure_config_for(self, relative_path: Path) -> CheckerStructureConfig:
+        """Structure rules in effect inside `relative_path`: sub-configs of its ancestors, then its own."""
+        config = self.structure_config
+        for path in [*reversed(relative_path.parents), relative_path]:
+            config = self._get_sub_config(self.reference_root / path, config, self.reference_root)
+        return config
+
+    @staticmethod
+    def _matches_ignore_patterns(path: Path, config: CheckerStructureConfig) -> bool:
+        return any(path.match(pattern) for pattern in config.ignore_patterns or [])
+
+    def _is_ignored(self, relative_path: Path) -> bool:
+        """Check whether a reference-relative path, or any of its ancestors, is ignored by the structure rules."""
+        for path in [*reversed(relative_path.parents), relative_path]:
+            if path == Path("."):
+                continue
+            parent_config = self._structure_config_for(path.parent)
+            if self._matches_ignore_patterns(self.reference_root / path, parent_config):
+                return True
+        return False
+
     def export_for_contribution(
         self,
         target: Path,
@@ -346,12 +462,7 @@ class Exporter:
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
-        disabled_groups_and_tasks_to_skip = [
-            *[group.relative_path for group in self.course.get_groups(enabled=False)],
-            *[group.relative_path for group in self.course.get_groups(started=False)],
-            *[task.relative_path for task in self.course.get_tasks(enabled=False)],
-            *[task.relative_path for task in self.course.get_tasks(started=False)],
-        ]
+        disabled_groups_and_tasks_to_skip = self._unpublished_paths()
 
         print_info(f"Copy from {self.reference_root} to {target}", color="grey")
         self._copy_files_with_config(
