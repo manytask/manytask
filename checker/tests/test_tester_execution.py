@@ -138,3 +138,41 @@ def test_pipeline_execution_order_and_reporting(
     else:
         tester.run(tmp_path, report=report, timestamp=TIMESTAMP)
     assert events == expected_events
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize(
+    "allowed_patterns, prepared",
+    [({"a": None, "b": None}, False), ({"a": None, "b": ["x"]}, True)],
+)
+def test_task_workspaces_are_prepared_only_for_restricted_tasks(
+    mocker: MockerFixture,
+    tmp_path: Path,
+    dry_run: bool,
+    allowed_patterns: dict[str, list[str] | None],
+    prepared: bool,
+) -> None:
+    exporter_class = mocker.patch("checker.tester.Exporter")
+    tester = Tester.__new__(Tester)
+    tester.course = mocker.Mock(spec=Course)
+    tester.checker_config = mocker.Mock()
+    tester.structure_config = mocker.Mock()
+    tester.verbose = True
+    tester.dry_run = dry_run
+    tasks = [FileSystemTask(name, name, CheckerSubConfig.default()) for name in allowed_patterns]
+
+    tester._prepare_task_workspaces(tmp_path, tasks, allowed_patterns)
+
+    if not prepared:
+        exporter_class.assert_not_called()
+        return
+    exporter_class.assert_called_once_with(
+        tester.course,
+        tester.structure_config,
+        tester.checker_config.export,
+        verbose=True,
+        dry_run=dry_run,
+    )
+    exporter_class.return_value.prepare_tasks_for_testing.assert_called_once_with(
+        tmp_path, tasks, allowed_patterns
+    )
