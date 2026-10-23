@@ -624,6 +624,46 @@ class TestCourse:
         assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
 
 
+class TestRenameDetection:
+    @pytest.mark.parametrize(
+        "source_folder, destination_folder, expected_tasks",
+        [
+            ("group1/task1_1", "group1/task1_2", ["task1_1", "task1_2"]),
+            ("group1/task1_1", "root_task_1", ["root_task_1", "task1_1"]),
+            ("group1/task1_1", "group2/task2_1", ["task1_1"]),
+            ("group2/task2_1", "group1/task1_1", ["task1_1"]),
+            ("group2/task2_1", "group2/task2_2", []),
+        ],
+    )
+    def test_rename_selects_enabled_source_and_destination_tasks(
+        self,
+        git_init_repository_root: Path,
+        source_folder: str,
+        destination_folder: str,
+        expected_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        source = git_init_repository_root / source_folder / "submission.cpp"
+        destination = git_init_repository_root / destination_folder / "renamed.cpp"
+        source.write_text("unique student solution to preserve across the rename")
+        repo.git.add(".")
+        repo.git.commit("-m", "Add student solution")
+        before_rename = repo.head.commit
+        source.rename(destination)
+        repo.git.add("--all")
+        repo.git.commit("-m", "Move solution between task folders")
+        assert (
+            len(list(repo.head.commit.diff(before_rename).iter_change_type("R"))) == 1
+        )
+
+        course = Course(TEST_MANYTASK_CONFIG, git_init_repository_root)
+        tasks = course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES
+        )
+
+        assert sorted(task.name for task in tasks) == expected_tasks
+
+
 class TestDetectChangesWithBaseRef:
     """last_commit_changes with base_ref: all commits of a multi-commit push are taken into account."""
 

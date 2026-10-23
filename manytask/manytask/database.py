@@ -368,96 +368,11 @@ class DataBaseApi(StorageApi):
         :return: if the user is an admin on the course
         """
 
-        with self._session_create() as session:
-            try:
-                user = self._get(
-                    session,
-                    models.User,
-                    username=username,
-                )
-                if user.is_instance_admin:
-                    return True
-
-                course = self._get(session, models.Course, name=course_name)
-
-                if self._is_user_namespace_admin(session, user.id, course.namespace_id):
-                    return True
-
-                try:
-                    user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
-                except NoResultFound:
-                    return False
-                return user_on_course.is_course_admin
-            except NoResultFound as e:
-                logger.info("No user found with username '%s' when checking admin status: %s", username, e)
-                return False
-
-    @staticmethod
-    def _is_user_namespace_admin(session: Session, user_id: int, namespace_id: int | None) -> bool:
-        """Check if a user is a namespace admin for the given namespace.
-
-        A user is a namespace admin if they are the namespace owner (creator) or
-        have the namespace_admin role in it. This matches the definition used in
-        ``get_namespace_admin_namespaces``.
-
-        :param session: SQLAlchemy session
-        :param user_id: Database User.id
-        :param namespace_id: Namespace id (may be None if the course has no namespace)
-        :return: True if the user is a namespace admin for the given namespace
-        """
-        if namespace_id is None:
-            return False
-
-        is_owner = (
-            session.query(models.Namespace)
-            .filter(
-                and_(
-                    models.Namespace.id == namespace_id,
-                    models.Namespace.created_by_id == user_id,
-                )
-            )
-            .first()
-            is not None
+        admin_levels = {ROLE_INSTANCE_ADMIN, ROLE_NAMESPACE_ADMIN, ROLE_COURSE_ADMIN}
+        return any(
+            access_user.username == username and bool(admin_levels.intersection(access_user.access_levels))
+            for access_user in self.get_course_access_users(course_name)
         )
-        if is_owner:
-            return True
-
-        is_admin = (
-            session.query(models.UserOnNamespace)
-            .filter(
-                and_(
-                    models.UserOnNamespace.user_id == user_id,
-                    models.UserOnNamespace.namespace_id == namespace_id,
-                    models.UserOnNamespace.role == models.UserOnNamespaceRole.NAMESPACE_ADMIN,
-                )
-            )
-            .first()
-            is not None
-        )
-        return is_admin
-
-    def check_if_program_manager(
-        self,
-        course_name: str,
-        username: str,
-    ) -> bool:
-        with self._session_create() as session:
-            try:
-                user = self._get(session, models.User, username=username)
-                course = self._get(session, models.Course, name=course_name)
-
-                if course.namespace_id is None:
-                    return False
-
-                user_on_namespace = self._get(
-                    session,
-                    models.UserOnNamespace,
-                    user_id=user.id,
-                    namespace_id=course.namespace_id,
-                )
-                return user_on_namespace.role == models.UserOnNamespaceRole.PROGRAM_MANAGER
-            except NoResultFound:
-                return False
 
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None:
         """Method for sync user's gitlab and stored data
@@ -1237,7 +1152,7 @@ class DataBaseApi(StorageApi):
         once with all levels listed:
 
         * instance admins (:attr:`models.User.is_instance_admin`)
-        * namespace admins of the course's namespace
+        * namespace owner and admins of the course's namespace
         * program managers of the course's namespace
         * course admins of the course itself
 
@@ -1271,6 +1186,8 @@ class DataBaseApi(StorageApi):
                 add(user, ROLE_INSTANCE_ADMIN)
 
             if course.namespace_id is not None:
+                namespace = self._get(session, models.Namespace, id=course.namespace_id)
+                add(namespace.created_by, ROLE_NAMESPACE_ADMIN)
                 namespace_roles = {
                     models.UserOnNamespaceRole.NAMESPACE_ADMIN: ROLE_NAMESPACE_ADMIN,
                     models.UserOnNamespaceRole.PROGRAM_MANAGER: ROLE_PROGRAM_MANAGER,
@@ -2133,6 +2050,17 @@ class DataBaseApi(StorageApi):
                 session.rollback()
                 logger.error("Failed to create namespace slug=%s: %s", slug, str(e))
                 raise
+
+    def update_namespace(self, namespace_id: int, name: str, description: str | None) -> models.Namespace:
+        """Update the display name and description of an existing namespace."""
+        with self._session_create() as session:
+            namespace = self._get(session, models.Namespace, id=namespace_id)
+            namespace.name = name
+            namespace.description = description
+            session.commit()
+            session.refresh(namespace)
+            session.expunge(namespace)
+            return namespace
 
     def get_all_namespaces(self) -> list[models.Namespace]:
         """Get all namespaces (for Instance Admin).

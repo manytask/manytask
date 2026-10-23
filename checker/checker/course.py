@@ -56,15 +56,25 @@ class Course:
         reference_root: Path | None = None,
         branch_name: str | None = None,
         base_ref: str | None = None,
+        *,
+        excluded_paths: list[Path] | None = None,
     ):
         self.manytask_config = manytask_config
 
         self.repository_root = repository_root
         self.reference_root = reference_root or repository_root
+        discovery_exclusions = tuple(path.resolve() for path in excluded_paths or [])
 
-        self.potential_groups = {group.name: group for group in self._search_for_groups_by_configs(self.reference_root)}
+        self.potential_groups = {
+            group.name: group
+            for group in self._search_for_groups_by_configs(
+                self.reference_root, discovery_exclusions
+            )
+        }
         self.potential_tasks: dict[str, FileSystemTask] = {}
-        for task in self._search_for_tasks_by_configs(self.reference_root):
+        for task in self._search_for_tasks_by_configs(
+            self.reference_root, discovery_exclusions
+        ):
             if task.name in self.potential_tasks:
                 previous = self.potential_tasks[task.name]
                 raise BadConfig(
@@ -75,7 +85,11 @@ class Course:
         self.branch_name = branch_name
         self.base_ref = base_ref
 
-        self.task_to_group = {task.name: group for group in self.potential_groups.values() for task in group.tasks}
+        self.task_to_group = {
+            task.name: group
+            for group in self.potential_groups.values()
+            for task in group.tasks
+        }
 
     def get_group_for_task(self, task_name: str) -> FileSystemGroup | None:
         """Get the group that contains the given task, or None if not found."""
@@ -174,27 +188,55 @@ class Course:
         ]
 
     @staticmethod
+    def _search_config_paths(
+        root: Path,
+        config_patterns: tuple[str, ...],
+        excluded_paths: tuple[Path, ...],
+    ) -> Generator[Path, None, None]:
+        """Find metadata without descending into explicitly excluded output trees."""
+        for folder, directories, files in root.walk():
+            directories[:] = [
+                name
+                for name in directories
+                if not any(
+                    (folder / name).resolve().is_relative_to(excluded)
+                    for excluded in excluded_paths
+                )
+            ]
+            for name in files:
+                if any(fnmatchcase(name, pattern) for pattern in config_patterns):
+                    yield folder / name
+
+    @staticmethod
     def _search_for_tasks_by_configs(
         root: Path,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> Generator[FileSystemTask, Any, None]:
-        config_paths = sorted(
-            set(root.glob(f"**/{Course.TASK_CONFIG_NAME}"))
-            | set(root.glob(f"**/{Course.TASKS_CONFIG_NAME}"))
-        )
-        for task_config_path in config_paths:
+        for task_config_path in sorted(
+            Course._search_config_paths(
+                root,
+                (Course.TASK_CONFIG_NAME, Course.TASKS_CONFIG_NAME),
+                excluded_paths,
+            )
+        ):
             yield from Course._load_tasks_from_config(root, task_config_path)
 
     @staticmethod
     def _search_for_groups_by_configs(
         root: Path,
+        excluded_paths: tuple[Path, ...] = (),
     ) -> Generator[FileSystemGroup, Any, None]:
-        for group_config_path in root.glob(f"**/{Course.GROUP_CONFIG_NAME}"):
+        for group_config_path in Course._search_config_paths(
+            root, (Course.GROUP_CONFIG_NAME,), excluded_paths
+        ):
             relative_group_path = group_config_path.parent.relative_to(root)
 
             group_config = Course._load_sub_config(group_config_path)
 
             group_tasks = list(
-                Course._search_for_tasks_by_configs(group_config_path.parent)
+                Course._search_for_tasks_by_configs(
+                    group_config_path.parent, excluded_paths
+                )
             )
             for task in group_tasks:
                 task.relative_path = str(relative_group_path / task.relative_path)
@@ -288,12 +330,22 @@ class Course:
         head = repo.head.commit
         base = self._resolve_base_commit(repo, head)
         if base is not None:
-            print_info(f"Detecting changes in range {base.hexsha[:8]}..{head.hexsha[:8]}", color="grey")
+            print_info(
+                f"Detecting changes in range {base.hexsha[:8]}..{head.hexsha[:8]}",
+                color="grey",
+            )
             diff = head.diff(base)
         else:
             print_info("No base commit found, using all files of HEAD", color="grey")
             diff = head.diff(git.NULL_TREE)
-        changed_files = [item.a_path or item.b_path for item in diff]
+        changed_files = sorted(
+            {
+                path
+                for item in diff
+                for path in (item.a_path, item.b_path)
+                if path is not None
+            }
+        )
         print_info(f"Last commit changes: {changed_files}", color="grey")
 
         tasks_per_path = Counter(
@@ -327,7 +379,9 @@ class Course:
             color="grey",
         )
         if not changed_tasks:
-            warnings.warn(f"No active tasks found for last commit changes {changed_files}")
+            warnings.warn(
+                f"No active tasks found for last commit changes {changed_files}"
+            )
 
         return changed_tasks
 
