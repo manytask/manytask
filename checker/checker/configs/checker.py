@@ -262,7 +262,7 @@ class _CheckerTaskFileConfig(CheckerSubConfig):
 
 
 class CheckerTaskFileConfig(_CheckerTaskFileConfig):
-    """A .task.yml file defining one task named after its folder."""
+    """A .task.yml or .task.<name>.yml file defining one task."""
 
     model_config = ConfigDict(
         extra="ignore",

@@ -90,12 +90,27 @@ def _expect_workspace(
     _write_yaml(path, config)
 
 
+def _split_task_file(folder: Path) -> None:
+    path = folder / ".tasks.yml"
+    config = yaml.safe_load(path.read_text())
+    tasks = config.pop("tasks")
+    for name, overrides in tasks.items():
+        _write_yaml(
+            folder / f".task.{name}.yml",
+            config
+            | overrides
+            | {"parameters": config["parameters"] | overrides["parameters"]},
+        )
+    path.unlink()
+
+
 def _create_course(
     tmp_path: Path,
     order: tuple[str, str] = ("one", "two"),
     *,
     unchanged_one: bool = False,
     skip_unchanged: bool = False,
+    named_task_files: bool = False,
 ) -> tuple[Path, Path]:
     student = tmp_path / "student"
     reference = tmp_path / "reference"
@@ -218,6 +233,8 @@ def _create_course(
         (student / shared_path / f"{name}.txt").write_text(content)
 
     _write_yaml(reference / shared_path / ".tasks.yml", task_config)
+    if named_task_files:
+        _split_task_file(reference / shared_path)
     (reference / shared_path / "protected.txt").write_text("reference protected")
     (student / shared_path / "protected.txt").write_text("student tampering")
     (student / shared_path / "injected.txt").write_text("unexpected student file")
@@ -237,10 +254,13 @@ def _grade(student: Path, reference: Path, *args: str) -> Result:
 
 
 @pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
+@pytest.mark.parametrize("named_task_files", [False, True])
 def test_grade_shared_folder_tasks_use_one_workspace_in_either_order(
-    tmp_path: Path, order: tuple[str, str]
+    tmp_path: Path, order: tuple[str, str], named_task_files: bool
 ) -> None:
-    student, reference = _create_course(tmp_path, order)
+    student, reference = _create_course(
+        tmp_path, order, named_task_files=named_task_files
+    )
 
     result = _grade(student, reference, "--all-tasks", "--submit-score")
 
@@ -252,8 +272,11 @@ def test_grade_shared_folder_tasks_use_one_workspace_in_either_order(
     assert (student / "group/shared/protected.txt").read_text() == "student tampering"
 
 
-def test_grade_selects_one_logical_task_from_a_shared_folder(tmp_path: Path) -> None:
-    student, reference = _create_course(tmp_path)
+@pytest.mark.parametrize("named_task_files", [False, True])
+def test_grade_selects_one_logical_task_from_a_shared_folder(
+    tmp_path: Path, named_task_files: bool
+) -> None:
+    student, reference = _create_course(tmp_path, named_task_files=named_task_files)
 
     _expect_workspace(
         reference,
@@ -363,8 +386,9 @@ def test_skip_unchanged_checks_each_shared_task_editable_files(
 
 
 @pytest.mark.parametrize("skip_unchanged", [False, True])
+@pytest.mark.parametrize("named_task_files", [False, True])
 def test_grade_only_reports_shared_task_changed_since_previous_commit(
-    tmp_path: Path, skip_unchanged: bool
+    tmp_path: Path, skip_unchanged: bool, named_task_files: bool
 ) -> None:
     student, reference = _create_course(tmp_path, skip_unchanged=skip_unchanged)
     repository = git.Repo.init(student)
@@ -378,6 +402,8 @@ def test_grade_only_reports_shared_task_changed_since_previous_commit(
     config = yaml.safe_load(task_path.read_text())
     config["tasks"]["two"]["parameters"]["own_content"] = "student two revised"
     _write_yaml(task_path, config)
+    if named_task_files:
+        _split_task_file(task_path.parent)
     _expect_workspace(
         reference,
         {

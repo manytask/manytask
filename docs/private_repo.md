@@ -9,8 +9,8 @@ Assume that you already have a task that you want to add, including tests and so
 
 ## Layout
 
-The general requirements are to have `.checker.yml` and `.manytask.yml` in the root of the repo, `.group.yml` in group folders, and either `.task.yml` or `.tasks.yml` in task folders.
-`.task.yml` and `.group.yml` may be empty; `.tasks.yml` requires `version: 1` and a nonempty `tasks` mapping.
+The general requirements are to have `.checker.yml` and `.manytask.yml` in the root of the repo, `.group.yml` in group folders, and `.task.yml`, `.task.<name>.yml`, or `.tasks.yml` in task folders.
+Single-task files and `.group.yml` may be empty; `.tasks.yml` requires `version: 1` and a nonempty `tasks` mapping.
 
 The private repository layout is crucial for the checker to function correctly.
 Tasks can have dedicated folders within group directories, or several tasks can share one folder.
@@ -89,7 +89,7 @@ version: 1
 
 structure:
   ignore_patterns: [".git", ".github", "__pycache__", ".venv"]
-  public_patterns: [".task.yml", ".tasks.yml", ".group.yml", "README.md", ".gitignore", "test_public.py", "pyrefly.toml"]
+  public_patterns: [".task.yml", ".task.*.yml", ".tasks.yml", ".group.yml", "README.md", ".gitignore", "test_public.py", "pyrefly.toml"]
   private_patterns: [".*", "test_private.py"]
 
 export:
@@ -144,6 +144,11 @@ One can override these settings for a group of tasks or even for single task usi
 * **Shared-Folder Task Configuration** (`.tasks.yml`):
     Defines named tasks in a required `tasks` mapping. Top-level settings are shared defaults; each entry
     can override its editable files, parameters, and pipelines. Register each logical task separately in `.manytask.yml`.
+
+* **Named Task Configuration** (`.task.<name>.yml`):
+    Defines one task named `<name>` using the same fields as `.task.yml`. Several named files may
+    share a folder and inherit group/root settings. All tasks in that folder must use identical
+    `structure` overrides; logical task names must be unique across the course.
 
 ## Manytask configuration (`.manytask.yml`)
 
