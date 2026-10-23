@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections import Counter
 from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime
@@ -78,6 +79,20 @@ class Course:
         """Get the group that contains the given task, or None if not found."""
         return self.task_to_group.get(task_name)
 
+    def get_task_parameters(
+        self,
+        task: FileSystemTask,
+        default_parameters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Resolve the same parameter inheritance for detection and grading."""
+        parameters = (default_parameters or {}).copy()
+        group = self.get_group_for_task(task.name)
+        if group and group.config.parameters:
+            parameters.update(group.config.parameters.root)
+        if task.config.parameters:
+            parameters.update(task.config.parameters.root)
+        return parameters
+
     def validate(self) -> None:
         # check all groups and tasks mentioned in deadlines exists
         deadlines_groups = self.manytask_config.get_groups(enabled=True)
@@ -121,6 +136,23 @@ class Course:
         ]
 
     @staticmethod
+    def _load_sub_config(path: Path) -> CheckerSubConfig:
+        if path.read_text().strip() == "":
+            return CheckerSubConfig.default()
+        return CheckerSubConfig.from_yaml(path)
+
+    @staticmethod
+    def _load_tasks_from_config(root: Path, path: Path) -> list[FileSystemTask]:
+        relative_path = path.parent.relative_to(root)
+        return [
+            FileSystemTask(
+                name=path.parent.name,
+                relative_path=str(relative_path),
+                config=Course._load_sub_config(path),
+            )
+        ]
+
+    @staticmethod
     def _search_config_paths(
         root: Path,
         config_patterns: tuple[str, ...],
@@ -148,20 +180,7 @@ class Course:
         for task_config_path in Course._search_config_paths(
             root, (Course.TASK_CONFIG_NAME,), excluded_paths
         ):
-            relative_task_path = task_config_path.parent.relative_to(root)
-
-            # if empty file - use default
-            if task_config_path.read_text().strip() == "":
-                task_config = CheckerSubConfig.default()
-            # if any content - read yml
-            else:
-                task_config = CheckerSubConfig.from_yaml(task_config_path)
-
-            yield FileSystemTask(
-                name=task_config_path.parent.name,
-                relative_path=str(relative_task_path),
-                config=task_config,
-            )
+            yield from Course._load_tasks_from_config(root, task_config_path)
 
     @staticmethod
     def _search_for_groups_by_configs(
@@ -173,12 +192,7 @@ class Course:
         ):
             relative_group_path = group_config_path.parent.relative_to(root)
 
-            # if empty file - use default
-            if group_config_path.read_text().strip() == "" or group_config_path.read_text().strip() == "\n":
-                group_config = CheckerSubConfig.default()
-            # if any content - read yml
-            else:
-                group_config = CheckerSubConfig.from_yaml(group_config_path)
+            group_config = Course._load_sub_config(group_config_path)
 
             group_tasks = list(
                 Course._search_for_tasks_by_configs(
@@ -267,6 +281,7 @@ class Course:
         self,
         repo: git.Repo,
         potential_tasks: list[FileSystemTask],
+        task_patterns: dict[str, list[str] | None] | None = None,
     ) -> list[FileSystemTask]:
         """Detect changes by matching file changes since the base commit to task paths.
 
@@ -291,11 +306,32 @@ class Course:
         )
         print_info(f"Last commit changes: {changed_files}", color="grey")
 
-        changed_tasks = [
-            task
-            for task in potential_tasks
-            if any(file is not None and Path(file).is_relative_to(task.relative_path) for file in changed_files)
-        ]
+        tasks_per_path = Counter(
+            task.relative_path for task in self.potential_tasks.values()
+        )
+        changed_tasks = []
+        for task in potential_tasks:
+            task_files = [
+                Path(file).relative_to(task.relative_path)
+                for file in changed_files
+                if file is not None and Path(file).is_relative_to(task.relative_path)
+            ]
+            if not task_files:
+                continue
+            patterns = (task_patterns or {}).get(task.name)
+            if (
+                tasks_per_path[task.relative_path] > 1
+                and patterns
+                and not any(
+                    self._matches_editable_pattern(
+                        file.parts, Path(pattern).parts, pattern.endswith("/")
+                    )
+                    for file in task_files
+                    for pattern in patterns
+                )
+            ):
+                continue
+            changed_tasks.append(task)
         print_info(
             f"Changed tasks: {[t.name for t in changed_tasks]} (changed files in last commit)",
             color="grey",
@@ -304,6 +340,30 @@ class Course:
             warnings.warn(f"No active tasks found for last commit changes {changed_files}")
 
         return changed_tasks
+
+    @staticmethod
+    def _matches_editable_pattern(
+        path: tuple[str, ...], pattern: tuple[str, ...], directory_only: bool = False
+    ) -> bool:
+        """Match task-relative globs, including descendants of matching folders.
+
+        Match diff names so deleted files are detected too. Unlike Path.match,
+        ** matches zero path segments, as it does with Path.glob.
+        """
+        if not pattern:
+            return bool(path) or not directory_only
+        if pattern[0] == "**":
+            return Course._matches_editable_pattern(
+                path, pattern[1:], directory_only
+            ) or (
+                bool(path)
+                and Course._matches_editable_pattern(path[1:], pattern, directory_only)
+            )
+        return (
+            bool(path)
+            and fnmatchcase(path[0], pattern[0])
+            and Course._matches_editable_pattern(path[1:], pattern[1:], directory_only)
+        )
 
     def _resolve_base_commit(self, repo: git.Repo, head: git.Commit) -> git.Commit | None:
         """Find the commit to diff HEAD against.
@@ -374,6 +434,8 @@ class Course:
     def detect_changes(
         self,
         detection_type: CheckerTestingConfig.ChangesDetectionType,
+        *,
+        task_patterns: dict[str, list[str] | None] | None = None,
     ) -> list[FileSystemTask]:
         """
         Detects changes in the repository based on the provided detection type.
@@ -384,6 +446,8 @@ class Course:
             - COMMIT_MESSAGE: task name in commit message (can be multiple tasks/groups)
             - LAST_COMMIT_CHANGES: task relative path in changes since base_ref, or HEAD~1 (can be multiple tasks)
         :return: list of changed tasks
+        :param task_patterns: optional task-relative globs supplied by a configuration adapter;
+            nonempty lists narrow file-based detection for tasks sharing a folder
         :raises CheckerException: if repository is not a git repository
         """
         print_info(f"Detecting changes by {detection_type}")
@@ -422,6 +486,8 @@ class Course:
             return self._detect_by_commit_message(repo, potential_tasks, enabled_groups)
 
         if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
-            return self._detect_by_last_commit_changes(repo, potential_tasks)
+            return self._detect_by_last_commit_changes(
+                repo, potential_tasks, task_patterns
+            )
 
         assert False, "Unreachable code"  # pragma: no cover
