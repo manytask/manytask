@@ -11,9 +11,11 @@ untouched, so this stage alone does not restrict which student edits can affect 
 
 `allow_change` is configured inside [parameters](./checker_yml_reference.md#default_parameters),
 with defaults in `default_parameters` and overrides in `.group.yml`, `.task.yml`, or `.tasks.yml`.
-The checker combines the effective lists of detected tasks per folder and prepares that folder
+For tasks defined in `.tasks.yml`, the checker combines the effective lists of detected tasks per folder and prepares that folder
 once, before the global and task pipelines run. All pipelines share the prepared files. The copy
 stage below can reuse the same parameter, although it is not required for the initial preparation.
+Legacy `.task.yml` tasks leave interpretation of this parameter to the course pipeline, including
+sibling-relative patterns; they do not trigger automatic workspace preparation.
 
 ```yaml
 - name: "Take the student's allowed files"

@@ -9,6 +9,7 @@ from pydantic import (
     AnyUrl,
     ConfigDict,
     Field,
+    PrivateAttr,
     RootModel,
     ValidationError,
     field_validator,
@@ -54,14 +55,6 @@ class CheckerStructureConfig(CustomBaseModel):
 
 class CheckerParametersConfig(RootModel[dict[str, TParamType]]):
     root: dict[str, TParamType]
-
-    @field_validator("root")
-    @classmethod
-    def check_allow_change(
-        cls, parameters: dict[str, TParamType]
-    ) -> dict[str, TParamType]:
-        validate_allow_change(parameters.get("allow_change"))
-        return parameters
 
     def __getitem__(self, item: str) -> TParamType:
         return self.root[item]
@@ -206,6 +199,18 @@ class CheckerSubConfig(CheckerTaskOverrides, YamlLoaderMixin["CheckerSubConfig"]
     model_config = ConfigDict(extra="ignore", validate_default=True)
     version: int  # if config exists, version is always present
     structure: Optional[CheckerStructureConfig] = None
+    # Runtime provenance, never a setting accepted from legacy YAML files.
+    _folder_local_allow_change: bool = PrivateAttr(default=False)
+
+    def get_editable_patterns(self, parameters: dict[str, Any]) -> list[str] | None:
+        """Interpret allow_change only for tasks resolved from .tasks.yml.
+
+        Legacy .task.yml parameters belong to course-defined pipelines and may
+        refer to sibling folders. They do not opt into workspace preparation.
+        """
+        if not self._folder_local_allow_change:
+            return None
+        return validate_allow_change(parameters.get("allow_change"))
 
     @classmethod
     def default(cls) -> "CheckerSubConfig":
@@ -285,6 +290,14 @@ class CheckerTasksFileConfig(_CheckerTaskFileConfig):
 
     tasks: dict[str, CheckerTaskOverrides] = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def check_allow_change(self) -> Self:
+        configs: list[CheckerTaskOverrides] = [self, *self.tasks.values()]
+        for config in configs:
+            if config.parameters is not None:
+                validate_allow_change(config.parameters.root.get("allow_change"))
+        return self
+
     @field_validator("tasks")
     @classmethod
     def check_task_names(
@@ -307,4 +320,5 @@ class CheckerTasksFileConfig(_CheckerTaskFileConfig):
                     "parameters"
                 ]
             resolved[name] = CheckerSubConfig.model_validate(merged)
+            resolved[name]._folder_local_allow_change = True
         return resolved

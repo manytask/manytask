@@ -58,7 +58,7 @@ These defaults can be overridden per-task or per-group in task config / `.group.
 
 Parameters are substituted into stage `args` and `run_if`; `testing.skip_unchanged_tasks` can
 also name a parameter to read. The optional [`parameters.allow_change`](#allow_change) list controls
-which student files the checker uses when preparing each task's grading folder. Plugins can reuse
+which student files the checker uses when preparing grading folders for tasks defined in `.tasks.yml`. Plugins can reuse
 the same list, for example `patterns: ${{ parameters.allow_change }}` in
 [`copy_files`](./checker_plugins.md#copy_files) or [`check_regexps`](./checker_plugins.md#check_regexps).
 
@@ -244,7 +244,7 @@ are pushed at once, the tasks from all of them are graded, not only from the las
 null sha, unknown or equal to `HEAD`, `HEAD~1` is used; after a force-push the merge-base is used; in a
 shallow clone the history is deepened once to find the base.
 
-When tasks share a folder, `last_commit_changes` selects a task with a nonempty effective
+When tasks defined in `.tasks.yml` share a folder, `last_commit_changes` selects a task with a nonempty effective
 `parameters.allow_change` list only if the commit diff changes a file matching that list. Patterns
 are relative to the shared folder and inherit from `default_parameters` through `.group.yml`,
 task-file defaults, and the individual task entry, as they do for grading. A changed shared file
@@ -498,8 +498,8 @@ If the pipeline is defined for the smaller scope, this definition overrides larg
 
 ### `parameters.allow_change` {#allow_change}
 
-An optional list of student-editable file patterns inside `parameters` in `.task.yml`,
-`.tasks.yml`, or an individual `tasks` entry. It follows parameter inheritance from root
+For tasks defined in `.tasks.yml`, an optional list of student-editable file patterns inside
+`parameters` at file level or in an individual `tasks` entry. It follows parameter inheritance from root
 `default_parameters` through `.group.yml`, task-file defaults, and the task entry. A more specific
 list replaces the inherited list. Set the parameter itself to `null` to use the structure-based
 merge; omit it at every level for the same behavior. An empty list contributes no student files
@@ -520,6 +520,11 @@ Patterns use Python `Path.glob` relative to the task folder, for example `"solut
 `"src/*.cpp"`, or `"src/**/*.py"`. Patterns must be nonempty relative paths without `..` components.
 `structure` still controls publication; `allow_change` does not expose private files.
 The same list remains available to pipeline plugins and `skip_unchanged_tasks`.
+
+In legacy `.task.yml` files, this parameter is interpreted by course-defined pipelines.
+Sibling-relative globs such as `../sibling/*.cpp` remain supported, including values inherited from
+global or group defaults. These tasks keep structure-based merging and folder-based change detection;
+they do not use automatic folder-local workspace preparation or its pattern validation.
 
 For example, two tasks in `week_1/shared/`:
 

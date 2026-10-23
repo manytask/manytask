@@ -41,7 +41,7 @@ structure:
 > student may change — you list the files they may *not* change, and everything left over is
 > theirs.
 
-Tasks can also declare an explicit [`parameters.allow_change`](#explicit-editable-files) list. That
+Tasks defined in `.tasks.yml` can also declare an explicit [`parameters.allow_change`](#explicit-editable-files) list. That
 list controls which student files enter that task's grading folder; `structure` still controls export.
 
 Precedence when a file matches several lists is `ignore_patterns` > `public_patterns` >
@@ -196,7 +196,7 @@ there. Only tasks enabled in `.manytask.yml` are selected for grading or publish
 
 ## Explicit editable files
 
-Set `parameters.allow_change` in a task config to select student files for grading. Before the global
+Set `parameters.allow_change` in `.tasks.yml` to select student files for grading. Before the global
 and task pipelines run, the checker prepares each detected task folder **once**. If all detected
 tasks in a folder provide pattern lists, it rebuilds the folder from the reference repository,
 including working solutions and excluding ignored files, then overlays student files matched by
@@ -208,14 +208,17 @@ modified by the global pipeline and earlier task pipelines remain available to l
 the checker does not reset the folder between tasks.
 
 ```yaml
-# python/add/.task.yml
+# python/add/.tasks.yml
 version: 1
-parameters:
-  allow_change: ["add.py"]
+tasks:
+  add:
+    parameters:
+      allow_change: ["add.py"]
 ```
 
 Patterns are relative to the task folder and use Python `Path.glob`, including recursive patterns
-such as `"src/**/*.py"`. The list follows ordinary parameter inheritance:
+such as `"src/**/*.py"`. Patterns must be nonempty, must not be absolute, and must not contain `..` components.
+The list follows ordinary parameter inheritance:
 `default_parameters` → `.group.yml` → task-file defaults → the individual `.tasks.yml` entry.
 An explicitly supplied list replaces the inherited list. Set `allow_change: null` to use the
 existing structure-based merge, or `allow_change: []` to contribute no student files. If any
@@ -225,8 +228,14 @@ merge. If all detected tasks in the folder have empty lists, only reference file
 ### Using `allow_change` with plugins {#optional-an-explicit-allow-list-with-allow_change}
 
 The same `parameters.allow_change` list is available to plugins and
-[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks). No separate editable-file
-setting or `copy_files` stage is required for the checker to apply the list.
+[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks).
+
+In legacy `.task.yml` files, `allow_change` remains a course-defined pipeline parameter.
+Sibling-relative globs such as `../clang-fun/checker/*.cpp`, including inherited values, remain
+supported. The checker uses the existing structure-based merge and folder-based change detection;
+it does not validate these patterns as folder-local or automatically prepare a workspace from them.
+Course pipelines retain responsibility for interpreting the parameter. Automatic preparation applies
+only to tasks defined in `.tasks.yml`.
 
 ```yaml
 # .checker.yml
@@ -418,7 +427,7 @@ runs the report pipeline in dry-run mode, so local runs never report a score.
 
 `changes_detection: last_commit_changes` means `checker grade` tests only the tasks touched by the
 pushed commits (diff against `CI_COMMIT_BEFORE_SHA` in GitLab CI, or `--base-ref`; `HEAD~1` otherwise).
-In shared folders, each task's nonempty `parameters.allow_change` list narrows detection to its
+In shared `.tasks.yml` folders, each task's nonempty `parameters.allow_change` list narrows detection to its
 matching files; see [Several tasks in one folder](#several-tasks-in-one-folder).
 `checker check` always tests everything.
 
@@ -456,7 +465,7 @@ grade:
 
 `checker grade STUDENT_ROOT REFERENCE_ROOT` builds the merged tree from those two roots — the same
 two passes described [above](#where-student-edits-actually-go), followed by one preparation per
-detected folder using the combined [`parameters.allow_change`](#explicit-editable-files) patterns when configured.
+detected `.tasks.yml` folder using the combined [`parameters.allow_change`](#explicit-editable-files) patterns when configured.
 This preparation finishes before the global pipeline runs.
 
 ### Required CI/CD variables

@@ -323,6 +323,29 @@ def test_mixed_shared_tasks_preserve_legacy_student_files_and_global_preparation
     assert (student / "reported.txt").read_text().splitlines() == list(order)
 
 
+@pytest.mark.parametrize("scope", ["global", "group"])
+def test_shared_task_grading_rejects_inherited_sibling_patterns(
+    tmp_path: Path, scope: str
+) -> None:
+    student, reference = _create_course(tmp_path)
+    task_path = reference / "group/shared/.tasks.yml"
+    config = yaml.safe_load(task_path.read_text())
+    config["tasks"]["one"]["parameters"].pop("allow_change")
+    _write_yaml(task_path, config)
+    path = reference / (".checker.yml" if scope == "global" else "group/.group.yml")
+    config = yaml.safe_load(path.read_text())
+    config["default_parameters" if scope == "global" else "parameters"][
+        "allow_change"
+    ] = ["../sibling/*.cpp"]
+    _write_yaml(path, config)
+
+    result = _grade(student, reference, "--all-tasks")
+
+    assert result.exit_code == 1
+    assert "inside the task folder" in result.output
+    assert not (student / "executed.txt").exists()
+
+
 @pytest.mark.parametrize("skip_unchanged", [False, True])
 def test_skip_unchanged_checks_each_shared_task_editable_files(
     tmp_path: Path, skip_unchanged: bool

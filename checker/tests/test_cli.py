@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
+import git
 import pytest
+import yaml
 from click.testing import CliRunner, Result
 
 from checker.__main__ import cli
@@ -132,6 +136,81 @@ def course_root(tmp_path: Path) -> Path:
             (task_dir / "solution.py").write_text("")
 
     return root
+
+
+@pytest.mark.parametrize("scope", ["global", "group", "task"])
+@pytest.mark.parametrize("sibling", [False, True])
+def test_legacy_allow_change_exports_and_grades_student_implementation(
+    course_root: Path, tmp_path: Path, scope: str, sibling: bool
+) -> None:
+    task_dir = course_root / "group1/task1_1"
+    source_dir = course_root / "group1/task1_2" if sibling else task_dir
+    pattern = "../task1_2/*.cpp" if sibling else "*.cpp"
+    (source_dir / "solution.cpp").write_text("reference implementation")
+    config_path = course_root / CHECKER_YML_NAME
+    config = yaml.safe_load(config_path.read_text())
+    config["structure"]["public_patterns"] = [".task.yml", ".group.yml"]
+    config_path.write_text(yaml.safe_dump(config))
+
+    parameter_path = {
+        "global": config_path,
+        "group": course_root / "group1/.group.yml",
+        "task": task_dir / ".task.yml",
+    }[scope]
+    parameters_config = yaml.safe_load(parameter_path.read_text()) or {"version": 1}
+    parameters_config["default_parameters" if scope == "global" else "parameters"] = {
+        "allow_change": [pattern]
+    }
+    parameter_path.write_text(yaml.safe_dump(parameters_config))
+
+    task_path = task_dir / ".task.yml"
+    task_config = yaml.safe_load(task_path.read_text()) or {"version": 1}
+    task_config["task_pipeline"] = [
+        {
+            "name": "Grade the implementation selected by the course parameter",
+            "run": "run_script",
+            "args": {
+                "origin": "${{ global.temp_dir }}/${{ task.task_sub_path }}",
+                "script": [
+                    sys.executable,
+                    "-c",
+                    "import glob, sys; from pathlib import Path; "
+                    "files = glob.glob(sys.argv[1]); assert len(files) == 1; "
+                    "assert Path(files[0]).read_text() == 'student implementation'; "
+                    "assert Path('unlisted.txt').read_text() == 'student file'; "
+                    "Path(sys.argv[2], 'graded.txt').write_text('graded student')",
+                    "${{ parameters.allow_change[0] }}",
+                    "${{ global.repo_dir }}",
+                ],
+            },
+        }
+    ]
+    task_path.write_text(yaml.safe_dump(task_config))
+
+    exported = tmp_path / "exported"
+    result = CliRunner().invoke(
+        cli, ["export-private", str(course_root), str(exported)]
+    )
+    assert result.exit_code == 0, result.output
+    assert (exported / "group1/task1_1/.task.yml").exists()
+
+    student = tmp_path / "student"
+    shutil.copytree(course_root, student)
+    repository = git.Repo.init(student)
+    actor = git.Actor("Checker tests", "checker@example.com")
+    repository.git.add("--all")
+    repository.index.commit("Initial files", author=actor, committer=actor)
+    student_source = student / source_dir.relative_to(course_root) / "solution.cpp"
+    student_source.write_text("student implementation")
+    # Keep the legacy folder-based task selection, even for files outside allow_change.
+    (student / "group1/task1_1/unlisted.txt").write_text("student file")
+    repository.git.add("--all")
+    repository.index.commit("Student submission", author=actor, committer=actor)
+
+    result = CliRunner().invoke(cli, ["grade", str(student), str(exported)])
+
+    assert result.exit_code == 0, result.output
+    assert (student / "graded.txt").read_text() == "graded student"
 
 
 @pytest.fixture()
@@ -465,6 +544,8 @@ class TestGradeBaseRef:
         result = run_grade(course_root)
         assert result.exit_code == 0, result.output
         assert captured_base_ref["base_ref"] == "mr_base"
+
+
 class TestGradeSkipUnchangedTasks:
     @pytest.fixture(autouse=True)
     def detect_changes_from_filesystem(self, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -10,7 +10,6 @@ from checker.configs import (
     CheckerTaskFileConfig,
     CheckerTasksFileConfig,
 )
-from checker.configs.checker import CheckerParametersConfig
 from checker.exceptions import BadConfig
 
 
@@ -18,9 +17,25 @@ from checker.exceptions import BadConfig
     "patterns",
     [["../solution.py"], ["/tmp/solution.py"], ["src/../../solution.py"], [""]],
 )
-def test_allow_change_stays_in_task_folder(patterns: list[str]) -> None:
+@pytest.mark.parametrize("scope", ["file", "entry"])
+def test_allow_change_stays_in_task_folder(patterns: list[str], scope: str) -> None:
+    data = {"version": 1, "tasks": {"parse": {}}}
+    target = data if scope == "file" else data["tasks"]["parse"]
+    target["parameters"] = {"allow_change": patterns}
     with pytest.raises(ValidationError, match="inside the task folder"):
-        CheckerParametersConfig(root={"allow_change": patterns})
+        CheckerTasksFileConfig.model_validate(data)
+
+
+def test_resolved_tasks_preserve_allow_change_semantics() -> None:
+    parameters = {"allow_change": ["../sibling/*.cpp"]}
+    legacy = CheckerTaskFileConfig(version=1).resolve_tasks("legacy")["legacy"]
+    named = CheckerTasksFileConfig(version=1, tasks={"named": {}}).resolve_tasks(
+        "folder"
+    )["named"]
+
+    assert legacy.get_editable_patterns(parameters) is None
+    with pytest.raises(ValueError, match="inside the task folder"):
+        named.get_editable_patterns(parameters)
 
 
 def test_task_file_merges_common_defaults_with_entry_overrides() -> None:
