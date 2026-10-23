@@ -72,7 +72,7 @@ This section controls which files are copied, hidden, or ignored when exporting 
 structure:
   ignore_patterns: [".git", ".idea", "__pycache__", "*.pyc"]
   # List only the specific dotfiles students need — do NOT use a bare "*".
-  public_patterns: [".gitignore", ".gitlab-ci-students.yml", ".task.yml", ".tasks.yml", ".group.yml"]
+  public_patterns: [".gitignore", ".gitlab-ci-students.yml", ".task.yml", ".task.*.yml", ".tasks.yml", ".group.yml"]
   private_patterns: [".*", "*private*", "data_private"]
 ```
 
@@ -431,7 +431,9 @@ Example:
 
 Place `.group.yml` in a group folder. Use `.task.yml` for one task named after its folder;
 this file may be empty or contain only `version: 1`. Use `.tasks.yml` for several named tasks
-sharing one folder. Only one of `.task.yml` and `.tasks.yml` may exist in a folder.
+sharing one folder, or use separate `.task.<name>.yml` files, one per named task.
+Named files may coexist with either format; `.task.yml` and `.tasks.yml` cannot coexist.
+All tasks in one folder must have identical `structure` overrides, including omission.
 
 The `.tasks.yml` format requires a nonempty `tasks` mapping whose keys are logical task names.
 A `tasks` mapping in `.task.yml` is rejected with a request to rename the file. Each entry is
@@ -439,7 +441,12 @@ an object of task overrides, or `{}` to inherit all defaults. The mapping create
 must be unique across the course, including folder-derived names. Each logical task is listed
 separately in `.manytask.yml`.
 
-`checker schema <output_folder>` generates `schema-task.json` for `.task.yml` and
+Named `.task.<name>.yml` files use the same fields as `.task.yml`; the filename supplies the
+logical name. They may be empty or contain only `version: 1`, and cannot contain a `tasks` mapping.
+Names must be nonempty without surrounding whitespace and unique across all task formats.
+Named files inherit group/root settings, not defaults from sibling `.task.yml` or `.tasks.yml` files.
+
+`checker schema <output_folder>` generates `schema-task.json` for `.task.yml` and `.task.<name>.yml`, and
 `schema-tasks.json` for `.tasks.yml`, alongside the root configuration schemas.
 
 Example:
@@ -450,7 +457,7 @@ version: 1
 
 structure:           # optional — overrides inherited structure for this folder
   ignore_patterns: ["*.pyc"]
-  public_patterns: ["README.md", ".task.yml", ".tasks.yml"]
+  public_patterns: ["README.md", ".task.yml", ".task.*.yml", ".tasks.yml"]
   private_patterns: ["tests/", ".*"]
 
 parameters:          # optional — merged on top of default_parameters
@@ -492,13 +499,13 @@ listed in `.manytask.yml`. Scheduling still determines which tasks are graded or
 If the pipeline is defined for the smaller scope, this definition overrides larger scope. The priority is then:
 
 1. The individual entry in `.tasks.yml`'s `tasks` mapping
-2. Top-level `.tasks.yml` defaults, or the single-task `.task.yml` config
+2. Top-level `.tasks.yml` defaults, or the single-task `.task.yml` / `.task.<name>.yml` config
 3. `.group.yml` in the parent group folder
 4. Root `testing.tasks_pipeline` / `testing.report_pipeline`
 
 ### `parameters.allow_change` {#allow_change}
 
-An optional list of student-editable file patterns inside `parameters` in `.task.yml`,
+An optional list of student-editable file patterns inside `parameters` in `.task.yml`, `.task.<name>.yml`,
 `.tasks.yml`, or an individual `tasks` entry. It follows parameter inheritance from root
 `default_parameters` through `.group.yml`, task-file defaults, and the task entry. A more specific
 list replaces the inherited list. Set the parameter itself to `null` to use the structure-based
@@ -546,7 +553,7 @@ opposite combination. `task.task_name` is the logical name (`parser` or `formatt
 If the Manytask task URL template uses `$TASK_NAME`, set each task's
 [`url`](manytask_yml_reference.md#task) to the actual shared folder or statement.
 
-If dotfiles are private through `".*"`, include both `".task.yml"` and `".tasks.yml"` in `public_patterns` to publish
+If dotfiles are private through `".*"`, include `".task.yml"`, `".task.*.yml"`, and `".tasks.yml"` in `public_patterns` to publish
 the task configs. A released shared folder publishes all files permitted by those patterns even
 if a sibling task is not yet released.
 

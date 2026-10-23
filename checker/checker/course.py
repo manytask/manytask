@@ -46,6 +46,7 @@ class Course:
 
     TASK_CONFIG_NAME = ".task.yml"
     TASKS_CONFIG_NAME = ".tasks.yml"
+    NAMED_TASK_CONFIG_PATTERN = ".task.*.yml"
     SHALLOW_DEEPEN_BY = 100
     GROUP_CONFIG_NAME = ".group.yml"
 
@@ -160,6 +161,11 @@ class Course:
     @staticmethod
     def _load_tasks_from_config(root: Path, path: Path) -> list[FileSystemTask]:
         relative_path = path.parent.relative_to(root)
+        task_name = path.parent.name
+        if path.name not in (Course.TASK_CONFIG_NAME, Course.TASKS_CONFIG_NAME):
+            task_name = path.name.removeprefix(".task.").removesuffix(".yml")
+            if not task_name.strip() or task_name != task_name.strip():
+                raise BadConfig(f"Invalid task name {task_name!r} in {path}")
         if all(
             (path.parent / name).exists()
             for name in (Course.TASK_CONFIG_NAME, Course.TASKS_CONFIG_NAME)
@@ -178,13 +184,11 @@ class Course:
 
         return [
             FileSystemTask(
-                name=task_name,
+                name=resolved_name,
                 relative_path=str(relative_path),
                 config=task_config,
             )
-            for task_name, task_config in task_file.resolve_tasks(
-                path.parent.name
-            ).items()
+            for resolved_name, task_config in task_file.resolve_tasks(task_name).items()
         ]
 
     @staticmethod
@@ -215,7 +219,11 @@ class Course:
         for task_config_path in sorted(
             Course._search_config_paths(
                 root,
-                (Course.TASK_CONFIG_NAME, Course.TASKS_CONFIG_NAME),
+                (
+                    Course.TASK_CONFIG_NAME,
+                    Course.TASKS_CONFIG_NAME,
+                    Course.NAMED_TASK_CONFIG_PATTERN,
+                ),
                 excluded_paths,
             )
         ):

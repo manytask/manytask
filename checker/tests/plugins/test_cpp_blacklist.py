@@ -6,7 +6,9 @@ import pytest
 from checker.plugins.cpp.blacklist import get_cpp_blacklist
 
 
-@pytest.mark.parametrize("filename", [".task.yml", ".tasks.yml", "test_private.cpp"])
+@pytest.mark.parametrize(
+    "filename", [".task.yml", ".tasks.yml", ".task.parse.yml", "test_private.cpp"]
+)
 @pytest.mark.parametrize("folder", ["", "group/shared/"])
 def test_cpp_blacklist_protects_task_metadata_and_private_files(
     tmp_path: Path, filename: str, folder: str

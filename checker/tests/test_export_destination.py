@@ -201,21 +201,27 @@ def test_excluded_output_does_not_replace_real_task_and_group_paths(
 
 @pytest.mark.parametrize("command", ["export", "export-private"])
 @pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize("named_task_files", [False, True])
 def test_existing_nested_export_with_shared_tasks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     command: str,
     dry_run: bool,
+    named_task_files: bool,
 ) -> None:
     root = _create_course(tmp_path)
     for name in ("seq-read", "seq-write"):
         shutil.rmtree(root / "group" / name)
     shared = root / "group" / "shared"
     shared.mkdir()
-    _write_yaml(
-        shared / ".tasks.yml",
-        {"version": 1, "tasks": {"seq-read": {}, "seq-write": {}}},
-    )
+    if named_task_files:
+        for name in ("seq-read", "seq-write"):
+            _write_yaml(shared / f".task.{name}.yml", {"version": 1})
+    else:
+        _write_yaml(
+            shared / ".tasks.yml",
+            {"version": 1, "tasks": {"seq-read": {}, "seq-write": {}}},
+        )
     (shared / "solution.cpp").write_text("shared source")
     target = _seed_export(root, "export")
     source_files = _files(root / "group")

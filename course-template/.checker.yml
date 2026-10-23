@@ -26,6 +26,7 @@ structure:
     - ".checker.yml"    # `checker grade` reads it in the student repo
     - ".manytask.yml"   # course/deadlines config, also read by grade
     - ".task.yml"       # one task named after its folder
+    - ".task.*.yml"     # one named task per file, sharing a folder
     - ".tasks.yml"      # several named tasks sharing a folder
     - ".group.yml"      # per-group structure (checker/course.py)
 

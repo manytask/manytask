@@ -217,6 +217,8 @@ class TestCourse:
         [
             ("group2/.tasks.yml", "version: 1\ntasks:\n  task1_1: {}\n"),
             ("group2/task1_1/.task.yml", ""),
+            ("group2/.task.task1_1.yml", "version: 1"),
+            ("group1/task1_1/.task.task1_1.yml", ""),
         ],
     )
     def test_duplicate_task_names_rejected(
@@ -228,16 +230,48 @@ class TestCourse:
         with pytest.raises(BadConfig, match="Duplicate task name 'task1_1'"):
             Course(TEST_MANYTASK_CONFIG, repository_root)
 
-    def test_named_config_files_are_not_discovered(self, repository_root: Path) -> None:
-        (repository_root / ".task.extra.yml").write_text("version: 1")
-        assert (
-            "extra" not in Course(TEST_MANYTASK_CONFIG, repository_root).potential_tasks
+    @pytest.mark.parametrize("content", ["", " \n \n", "version: 1"])
+    @pytest.mark.parametrize("filename", [".task.yml", ".tasks.yml"])
+    def test_named_config_files_coexist_with_other_formats(
+        self, repository_root: Path, filename: str, content: str
+    ) -> None:
+        folder = repository_root / "shared"
+        folder.mkdir()
+        (folder / filename).write_text(
+            "version: 1\ntasks:\n  mapped: {}\n"
+            if filename == ".tasks.yml"
+            else "version: 1"
         )
+        (folder / ".task.extra.yml").write_text(content)
+        (repository_root / ".task.root.yml").write_text(content)
+
+        tasks = Course(TEST_MANYTASK_CONFIG, repository_root).potential_tasks
+
+        other = "mapped" if filename == ".tasks.yml" else "shared"
+        assert tasks["extra"].relative_path == tasks[other].relative_path == "shared"
+        assert tasks["root"].relative_path == "."
+
+    @pytest.mark.parametrize("name", ["", " ", " extra", "extra "])
+    def test_invalid_named_task_rejected(
+        self, repository_root: Path, name: str
+    ) -> None:
+        (repository_root / f".task.{name}.yml").write_text("version: 1")
+        with pytest.raises(BadConfig, match="Invalid task name"):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
+    def test_named_task_cannot_duplicate_mapping_entry(
+        self, repository_root: Path
+    ) -> None:
+        (repository_root / ".task.extra.yml").write_text("version: 1")
+        (repository_root / ".tasks.yml").write_text("version: 1\ntasks:\n  extra: {}\n")
+        with pytest.raises(BadConfig, match="Duplicate task name 'extra'"):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
 
     @pytest.mark.parametrize(
         "filename, content",
         [
             (".task.yml", "version: 1\ntasks:\n  parse: {}\n"),
+            (".task.parse.yml", "version: 1\ntasks:\n  parse: {}\n"),
             (".tasks.yml", ""),
             (".tasks.yml", "version: 1\n"),
         ],
