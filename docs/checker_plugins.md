@@ -9,14 +9,17 @@ The example below copies files listed in the `allow_change` parameter **from the
 repository** (`global.repo_dir`) into the testing tree. It leaves other files already in the tree
 untouched, so this stage alone does not restrict which student edits can affect grading.
 
-`allow_change` is configured inside [parameters](./checker_yml_reference.md#default_parameters),
-with defaults in `default_parameters` and overrides in `.group.yml`, `.task.yml`, or `.tasks.yml`.
+`allow_change` is an optional parameter supported in both `.task.yml` and `.tasks.yml`. Configure
+it inside [parameters](./checker_yml_reference.md#default_parameters), with defaults in
+`default_parameters` and overrides in `.group.yml` or either task format. In `.task.yml`, it is
+useful for passing a file selection to plugins such as `copy_files` and `check_regexps`, or to
+the optional `skip_unchanged_tasks` check. The general `structure` rules still control file merging.
+
 For tasks defined in `.tasks.yml`, the checker combines the effective lists of detected tasks per folder and prepares that folder
 once, before the global and task pipelines run. All pipelines share the prepared files. The copy
 stage below can reuse the same parameter, although it is not required for the initial preparation.
-The primary `.task.yml` format uses general `structure` rules for its task folder without requiring
-`allow_change`. When supplied, this parameter is interpreted by the course pipeline, including
-sibling-relative patterns; it does not trigger automatic workspace preparation.
+In `.task.yml`, plugins interpret `allow_change` patterns, including sibling-relative ones;
+supplying the parameter does not trigger automatic workspace preparation.
 
 ```yaml
 - name: "Take the student's allowed files"

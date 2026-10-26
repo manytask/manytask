@@ -41,8 +41,11 @@ structure:
 > student may change — you list the files they may *not* change, and everything left over is
 > theirs.
 
-Tasks defined in `.tasks.yml` can also declare an explicit [`parameters.allow_change`](#explicit-editable-files) list. That
-list controls which student files enter that task's grading folder; `structure` still controls export.
+Both `.task.yml` and `.tasks.yml` support an optional
+[`parameters.allow_change`](#explicit-editable-files) list. In `.task.yml`, plugins and optional
+unchanged-task skipping can use it; the grading tree still follows `structure` rules. In `.tasks.yml`,
+the checker also uses the list to prepare the shared grading folder. `structure` controls export
+in both formats.
 
 Precedence when a file matches several lists is `ignore_patterns` > `public_patterns` >
 `private_patterns`. A public match wins over a private one, which is why an over-broad
@@ -74,9 +77,10 @@ never overwrites it.
 > it. If you want the student's edits to it discarded at grading time, you must put it in
 > `public_patterns` explicitly.
 
-Without `parameters.allow_change`, gold solutions never enter the merged tree: export replaces them
+With structure-based merging, gold solutions never enter the merged tree: export replaces them
 with their `.template` counterparts (see [Templates](#templates)), and grading takes `add.py`
-from the student because it is an "other" file.
+from the student because it is an "other" file. This applies to `.task.yml` whether or not it
+defines `allow_change`, and to `.tasks.yml` when automatic preparation is not enabled.
 
 ## Procedure: designing `structure` for a course
 
@@ -198,8 +202,32 @@ there. Only tasks enabled in `.manytask.yml` are selected for grading or publish
 
 ## Explicit editable files
 
-Set `parameters.allow_change` in `.tasks.yml` to select student files for grading. Before the global
-and task pipelines run, the checker prepares each detected task folder **once**. If all detected
+`parameters.allow_change` is optional and supported in **both `.task.yml` and `.tasks.yml`**.
+It can be useful even when each task has its own folder: pipeline plugins can use it to copy or
+inspect selected files, and [`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks)
+can use it to skip untouched submissions. Defining the parameter in `.task.yml` does not change
+the general `structure` rules for merging student and reference files.
+
+For example, a task can provide file patterns to its pipeline:
+
+```yaml
+# clang-dict/.task.yml
+version: 1
+parameters:
+  allow_change:
+    - ../clang-fun/checker/*.cpp
+    - ../clang-fun/checker/*.h
+```
+
+The list follows ordinary parameter inheritance from root `default_parameters` through `.group.yml`
+to the task config. Plugins consuming the list interpret its patterns, including sibling-relative
+globs. A task that needs no such file selection can omit `allow_change` entirely.
+
+### Automatic workspace preparation for `.tasks.yml`
+
+For tasks defined in `.tasks.yml`, the list also selects student files for automatic workspace
+preparation. Before the global and task pipelines run, the checker prepares each detected task
+folder **once**. If all detected
 tasks in a folder provide pattern lists, it rebuilds the folder from the reference repository,
 including working solutions and excluding ignored files, then overlays student files matched by
 the **union** of those lists. Only detected tasks contribute patterns. Matching reference files
@@ -229,17 +257,10 @@ merge. If all detected tasks in the folder have empty lists, only reference file
 
 ### Using `allow_change` with plugins {#optional-an-explicit-allow-list-with-allow_change}
 
-The same `parameters.allow_change` list is available to plugins and
-[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks).
-
-With `.task.yml`, each task has its own folder and uses the general `structure` rules to select
-student files and protect reference files. `allow_change` is optional; course-defined pipelines
-may use it for their own file selection. Sibling-relative globs such as `../clang-fun/checker/*.cpp`,
-including inherited values, are supported. The checker uses structure-based merging and
-folder-based change detection;
-it does not validate these patterns as folder-local or automatically prepare a workspace from them.
-Course pipelines retain responsibility for interpreting the parameter. Automatic preparation applies
-only to tasks defined in `.tasks.yml`.
+In both formats, plugins can read `parameters.allow_change`, for example via
+`patterns: ${{ parameters.allow_change }}` in [`copy_files`](checker_plugins.md#copy_files) or
+[`check_regexps`](checker_plugins.md#check_regexps). The optional
+[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks) setting can read the same list:
 
 ```yaml
 # .checker.yml
@@ -496,8 +517,11 @@ checker check --task new_task
 
 ## Pre-flight checklist
 
-- [ ] Without `parameters.allow_change`, solution files match **no** structure pattern list; with it,
-      only intended student files match the editable list.
+- [ ] With `.task.yml`, solution files match **no** structure pattern list, including when an optional
+      `parameters.allow_change` list is supplied. The same rule applies to `.tasks.yml` without
+      automatic workspace preparation.
+- [ ] When `.tasks.yml` uses automatic workspace preparation, only intended student files match
+      the effective `parameters.allow_change` lists.
 - [ ] Every file that contributes to the score — including visible tests — is in
       `public_patterns` or `private_patterns`. Being exported is not protection.
 - [ ] Every task has a `.template` file or a `SOLUTION BEGIN`/`SOLUTION END` pair.
