@@ -298,7 +298,7 @@ def test_allow_change_is_inherited_before_task_file_preparation(
 
 
 @pytest.mark.parametrize("order", [("one", "two"), ("two", "one")])
-def test_mixed_shared_tasks_preserve_legacy_student_files_and_global_preparation(
+def test_mixed_shared_tasks_preserve_structure_based_merge_and_global_preparation(
     tmp_path: Path, order: tuple[str, str]
 ) -> None:
     student, reference = _create_course(tmp_path, order)

@@ -28,12 +28,12 @@ def test_allow_change_stays_in_task_folder(patterns: list[str], scope: str) -> N
 
 def test_resolved_tasks_preserve_allow_change_semantics() -> None:
     parameters = {"allow_change": ["../sibling/*.cpp"]}
-    legacy = CheckerTaskFileConfig(version=1).resolve_tasks("legacy")["legacy"]
+    folder_task = CheckerTaskFileConfig(version=1).resolve_tasks("folder")["folder"]
     named = CheckerTasksFileConfig(version=1, tasks={"named": {}}).resolve_tasks(
         "folder"
     )["named"]
 
-    assert legacy.get_editable_patterns(parameters) is None
+    assert folder_task.get_editable_patterns(parameters) is None
     with pytest.raises(ValueError, match="inside the task folder"):
         named.get_editable_patterns(parameters)
 

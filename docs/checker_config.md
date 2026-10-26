@@ -156,9 +156,11 @@ Patterns are matched with `Path.match` **at each directory level individually**.
 
 ## Per-group and per-task overrides
 
-A folder becomes a **group** when it contains `.group.yml`. A `.task.yml` defines one task named
-after its folder. To define several named tasks in the same folder, use a `.tasks.yml` file with
-a [`tasks` mapping](#several-tasks-in-one-folder). Empty `.task.yml` files and files containing only
+A folder becomes a **group** when it contains `.group.yml`. The primary task format is `.task.yml`:
+one task per folder, named after that folder. Its files follow the general `structure` rules,
+so `parameters.allow_change` is not required. To define several named tasks in the same folder,
+use a `.tasks.yml` file with a [`tasks` mapping](#several-tasks-in-one-folder).
+Empty `.task.yml` files and files containing only
 `version: 1` keep their folder-named task. Use only one of `.task.yml` and `.tasks.yml` per folder.
 Both formats can override the root configuration.
 
@@ -230,9 +232,11 @@ merge. If all detected tasks in the folder have empty lists, only reference file
 The same `parameters.allow_change` list is available to plugins and
 [`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks).
 
-In legacy `.task.yml` files, `allow_change` remains a course-defined pipeline parameter.
-Sibling-relative globs such as `../clang-fun/checker/*.cpp`, including inherited values, remain
-supported. The checker uses the existing structure-based merge and folder-based change detection;
+With `.task.yml`, each task has its own folder and uses the general `structure` rules to select
+student files and protect reference files. `allow_change` is optional; course-defined pipelines
+may use it for their own file selection. Sibling-relative globs such as `../clang-fun/checker/*.cpp`,
+including inherited values, are supported. The checker uses structure-based merging and
+folder-based change detection;
 it does not validate these patterns as folder-local or automatically prepare a workspace from them.
 Course pipelines retain responsibility for interpreting the parameter. Automatic preparation applies
 only to tasks defined in `.tasks.yml`.

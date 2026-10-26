@@ -521,9 +521,11 @@ Patterns use Python `Path.glob` relative to the task folder, for example `"solut
 `structure` still controls publication; `allow_change` does not expose private files.
 The same list remains available to pipeline plugins and `skip_unchanged_tasks`.
 
-In legacy `.task.yml` files, this parameter is interpreted by course-defined pipelines.
-Sibling-relative globs such as `../sibling/*.cpp` remain supported, including values inherited from
-global or group defaults. These tasks keep structure-based merging and folder-based change detection;
+The primary `.task.yml` format defines one task per folder. Its files follow the general
+`structure` rules, so `allow_change` is not required. When supplied, it is interpreted by
+course-defined pipelines. Sibling-relative globs such as `../sibling/*.cpp` are supported,
+including values inherited from global or group defaults. These tasks use structure-based merging
+and folder-based change detection;
 they do not use automatic folder-local workspace preparation or its pattern validation.
 
 For example, two tasks in `week_1/shared/`:

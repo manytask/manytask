@@ -138,36 +138,42 @@ def course_root(tmp_path: Path) -> Path:
     return root
 
 
-@pytest.mark.parametrize("scope", ["global", "group", "task"])
+@pytest.mark.parametrize("scope", ["none", "global", "group", "task"])
 @pytest.mark.parametrize("sibling", [False, True])
-def test_legacy_allow_change_exports_and_grades_student_implementation(
+def test_task_folder_exports_and_grades_using_structure_rules(
     course_root: Path, tmp_path: Path, scope: str, sibling: bool
 ) -> None:
     task_dir = course_root / "group1/task1_1"
     source_dir = course_root / "group1/task1_2" if sibling else task_dir
     pattern = "../task1_2/*.cpp" if sibling else "*.cpp"
     (source_dir / "solution.cpp").write_text("reference implementation")
+    (task_dir / "protected.txt").write_text("reference test")
     config_path = course_root / CHECKER_YML_NAME
     config = yaml.safe_load(config_path.read_text())
-    config["structure"]["public_patterns"] = [".task.yml", ".group.yml"]
+    config["structure"]["public_patterns"] = [
+        ".task.yml",
+        ".group.yml",
+        "protected.txt",
+    ]
     config_path.write_text(yaml.safe_dump(config))
 
-    parameter_path = {
-        "global": config_path,
-        "group": course_root / "group1/.group.yml",
-        "task": task_dir / ".task.yml",
-    }[scope]
-    parameters_config = yaml.safe_load(parameter_path.read_text()) or {"version": 1}
-    parameters_config["default_parameters" if scope == "global" else "parameters"] = {
-        "allow_change": [pattern]
-    }
-    parameter_path.write_text(yaml.safe_dump(parameters_config))
+    if scope != "none":
+        parameter_path = {
+            "global": config_path,
+            "group": course_root / "group1/.group.yml",
+            "task": task_dir / ".task.yml",
+        }[scope]
+        parameters_config = yaml.safe_load(parameter_path.read_text()) or {"version": 1}
+        parameters_config[
+            "default_parameters" if scope == "global" else "parameters"
+        ] = {"allow_change": [pattern]}
+        parameter_path.write_text(yaml.safe_dump(parameters_config))
 
     task_path = task_dir / ".task.yml"
     task_config = yaml.safe_load(task_path.read_text()) or {"version": 1}
     task_config["task_pipeline"] = [
         {
-            "name": "Grade the implementation selected by the course parameter",
+            "name": "Grade student files with structure-based protection",
             "run": "run_script",
             "args": {
                 "origin": "${{ global.temp_dir }}/${{ task.task_sub_path }}",
@@ -178,8 +184,9 @@ def test_legacy_allow_change_exports_and_grades_student_implementation(
                     "files = glob.glob(sys.argv[1]); assert len(files) == 1; "
                     "assert Path(files[0]).read_text() == 'student implementation'; "
                     "assert Path('unlisted.txt').read_text() == 'student file'; "
+                    "assert Path('protected.txt').read_text() == 'reference test'; "
                     "Path(sys.argv[2], 'graded.txt').write_text('graded student')",
-                    "${{ parameters.allow_change[0] }}",
+                    pattern if scope == "none" else "${{ parameters.allow_change[0] }}",
                     "${{ global.repo_dir }}",
                 ],
             },
@@ -202,8 +209,9 @@ def test_legacy_allow_change_exports_and_grades_student_implementation(
     repository.index.commit("Initial files", author=actor, committer=actor)
     student_source = student / source_dir.relative_to(course_root) / "solution.cpp"
     student_source.write_text("student implementation")
-    # Keep the legacy folder-based task selection, even for files outside allow_change.
+    # Folder-based selection includes changes outside an optional allow_change list.
     (student / "group1/task1_1/unlisted.txt").write_text("student file")
+    (student / "group1/task1_1/protected.txt").write_text("student tampering")
     repository.git.add("--all")
     repository.index.commit("Student submission", author=actor, committer=actor)
 
