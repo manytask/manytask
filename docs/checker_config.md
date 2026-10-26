@@ -41,11 +41,17 @@ structure:
 > student may change — you list the files they may *not* change, and everything left over is
 > theirs.
 
-Both `.task.yml` and `.tasks.yml` support an optional
-[`parameters.allow_change`](#explicit-editable-files) list. In `.task.yml`, plugins and optional
-unchanged-task skipping can use it; the grading tree still follows `structure` rules. In `.tasks.yml`,
-the checker also uses the list to prepare the shared grading folder. `structure` controls export
-in both formats.
+[`allow_change`](#explicit-editable-files) is optional in both formats, but has different effects:
+
+- **`.task.yml`:** `structure` determines which files come from the student and which come from
+  the reference repository. Plugins can use `allow_change` for copying or checking selected files.
+  It can also support `skip_unchanged_tasks` when enabled. Defining it alone does not change file merging.
+- **`.tasks.yml`:** the checker additionally uses `allow_change` to rebuild the shared folder from
+  reference files, then overlay matching student files. It combines the lists of selected tasks
+  sharing that folder. If any selected task has no effective list, the folder keeps the normal
+  `structure`-based merge.
+
+In both formats, `structure` determines which files are published during export.
 
 Precedence when a file matches several lists is `ignore_patterns` > `public_patterns` >
 `private_patterns`. A public match wins over a private one, which is why an over-broad
