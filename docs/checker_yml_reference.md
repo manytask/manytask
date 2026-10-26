@@ -57,11 +57,8 @@ default_parameters:
 These defaults can be overridden per-task or per-group in task config / `.group.yml` files, more parameters can be added for task groups or individual tasks (see [sub-configs](#taskymltaskgroupyml-sub-configs)).
 
 Parameters are substituted into stage `args` and `run_if`; `testing.skip_unchanged_tasks` can
-also name a parameter to read. The optional [`parameters.allow_change`](#allow_change) list is
-supported in both `.task.yml` and `.tasks.yml`. For `.tasks.yml`, it also controls which student
-files the checker uses for automatic workspace preparation. Plugins can use the list in either
-format, for example `patterns: ${{ parameters.allow_change }}` in
-[`copy_files`](./checker_plugins.md#copy_files) or [`check_regexps`](./checker_plugins.md#check_regexps).
+also name a parameter to read. See [`parameters.allow_change`](#allow_change) for the optional
+file-pattern list available in either task format.
 
 
 
@@ -85,11 +82,10 @@ structure:
 
 ### The fourth, implicit class: student-editable files
 
-A file that matches **none** of the three lists belongs to an unnamed fourth class — "other" — and
-by default that class is what students are allowed to change. Solution files must land here unless
-the task is defined in `.tasks.yml` and uses an explicit
-[`parameters.allow_change`](#allow_change) list for automatic preparation. In `.task.yml`, this
-rule applies even when `allow_change` is supplied.
+A file that matches **none** of the three lists belongs to an unnamed fourth class — "other" —
+and is taken from the student during the default structure-based merge. Solution files should
+belong to this class. Shared-folder tasks can additionally use
+[automatic workspace preparation](checker_config.md#shared-folder-preparation).
 
 | Class | Exported to public repo? | At grading time taken from |
 |---|---|---|
@@ -106,8 +102,7 @@ pass 1 — student repo:    other files only        → the solution
 pass 2 — reference repo:  public + private files  → overwrite pass 1
 ```
 
-The following behavior applies to `.task.yml` with or without `parameters.allow_change`, and to
-`.tasks.yml` when automatic workspace preparation is not enabled:
+For this structure-based merge:
 
 - Marking a file public or private is what makes it **tamper-proof** — pass 2 overwrites the
   student's copy. A visible test that is *not* listed in `public_patterns` is an "other" file, so
@@ -126,9 +121,8 @@ pattern lists are not re-applied to its contents. `public_patterns: ["tools"]` t
 `tools/test_private.py` as well. Match individual files when a folder holds a mix.
 
 > **Warning:** `**` (double-star recursive glob) is **not supported in `structure` patterns**.
-> These patterns are applied at each directory level individually. Automatic preparation in
-> `.tasks.yml` uses `Path.glob` for `parameters.allow_change`, supporting recursive patterns.
-> In `.task.yml`, the plugin consuming `allow_change` determines how its patterns are matched.
+> These patterns are applied at each directory level individually. Editable-file patterns have
+> [separate matching rules](checker_config.md#explicit-editable-files).
 
 > **Warning — never put a bare `"*"` in `public_patterns`.** The exporter
 > classifies a file as *public* before it considers `private_patterns`, and a
@@ -279,9 +273,8 @@ byte-identical to the published version is skipped entirely: not run, not report
 This check happens after commit selection and compares against the published version, not the
 commit's base. It can skip newly pulled templates; it does not select tasks or rerun older solutions.
 
-Set `testing.skip_unchanged_tasks: allow_change` to skip untouched submissions using an optional
-file list. This works with both `.task.yml` and `.tasks.yml`. For shared `.tasks.yml` folders,
-the list can also be reused for change detection and automatic workspace preparation:
+Set `testing.skip_unchanged_tasks: allow_change` to read the optional file list from either
+task format:
 
 ```yaml
 # .checker.yml
@@ -504,81 +497,19 @@ If the pipeline is defined for the smaller scope, this definition overrides larg
 
 ### `parameters.allow_change` {#allow_change}
 
-An optional file-pattern list supported in **both `.task.yml` and `.tasks.yml`**. It follows
-parameter inheritance from root `default_parameters` through `.group.yml`, task-file defaults,
-and the individual `.tasks.yml` entry. A more specific list replaces the inherited list.
+Optional file-pattern list, inherited like other parameters and supported in both task formats.
+See [Explicit editable files](checker_config.md#explicit-editable-files) for the format comparison,
+plugin usage, and shared-folder examples.
 
-#### One task per folder: `.task.yml`
+For `.task.yml`, plugins and [`skip_unchanged_tasks`](#skip_unchanged_tasks) can consume the list;
+file merging continues to follow `structure`. For `.tasks.yml`, the list also controls automatic
+workspace preparation. Its patterns must be nonempty relative `Path.glob` patterns without `..`
+components. A more specific list replaces the inherited list, including an explicit empty list.
 
-The primary `.task.yml` format supports defining `allow_change` directly or inheriting it from
-global or group defaults. Plugins can use it to select files for copying or checks, and
-[`skip_unchanged_tasks`](#skip_unchanged_tasks) can use it to skip untouched submissions.
-
-```yaml
-# clang-dict/.task.yml
-version: 1
-parameters:
-  allow_change:
-    - ../clang-fun/checker/*.cpp
-    - ../clang-fun/checker/*.h
-```
-
-The general `structure` rules still determine which files come from the student or reference
-repository. `allow_change` is not required and does not itself enable automatic workspace
-preparation or narrow folder-based change detection. Plugins interpret the patterns they consume;
-sibling-relative globs are supported.
-
-#### Shared-folder tasks: `.tasks.yml`
-
-In `.tasks.yml`, `allow_change` also selects student files for automatic workspace preparation.
-It can be set in file-level `parameters` or in an individual `tasks` entry. Set it to `null` to
-use the structure-based merge; omit it at every level for the same behavior. An empty list
-contributes no student files to the shared folder.
-
-Before the global and task pipelines run, the checker prepares each detected folder once.
-It combines the `parameters.allow_change` lists of all detected tasks sharing that folder, copies the
-reference files (including solutions and excluding ignored files), and overlays student files
-matched by the combined patterns. Matching reference files are removed first so deleted student
-files remain absent. Undetected tasks do not contribute patterns.
-
-All pipelines use the shared workspace without resets between tasks. An empty list contributes
-no student files. If all detected lists in a folder are empty, only reference files are used.
-If any detected task has no effective list (omitted or `null`), the whole folder retains the
-existing `structure`-based preparation.
-
-Patterns use Python `Path.glob` relative to the task folder, for example `"solution.py"`,
-`"src/*.cpp"`, or `"src/**/*.py"`. Patterns must be nonempty relative paths without `..` components.
-`structure` still controls publication; `allow_change` does not expose private files.
-The same list remains available to pipeline plugins and `skip_unchanged_tasks`.
-
-For example, two tasks in `week_1/shared/`:
-
-```yaml
-# week_1/shared/.tasks.yml
-version: 1
-
-parameters:                 # shared defaults for both tasks
-  timeout: 30
-
-tasks:
-  parser:
-    parameters:
-      allow_change: ["parser.py"]
-  formatter:
-    parameters:
-      allow_change: ["formatter.py"]
-      timeout: 60
-```
-
-`parser` uses the student's `parser.py` with the reference `formatter.py`; `formatter` uses the
-opposite combination. `task.task_name` is the logical name (`parser` or `formatter`), while
-`task.task_sub_path` is `week_1/shared` for both. They are scheduled and reported separately.
-If the Manytask task URL template uses `$TASK_NAME`, set each task's
-[`url`](manytask_yml_reference.md#task) to the actual shared folder or statement.
-
-If dotfiles are private through `".*"`, include both `".task.yml"` and `".tasks.yml"` in `public_patterns` to publish
-the task configs. A released shared folder publishes all files permitted by those patterns even
-if a sibling task is not yet released.
+In `.tasks.yml`, a missing or `null` effective list keeps the structure-based merge for the folder; `[]`
+contributes no student files. All selected tasks share one prepared workspace using their combined
+lists. See the [preparation rules](checker_config.md#shared-folder-preparation) for ordering,
+student deletions, and the effect of an unrestricted task.
 
 ## Complete example of the file
 

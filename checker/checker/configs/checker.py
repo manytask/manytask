@@ -199,15 +199,14 @@ class CheckerSubConfig(CheckerTaskOverrides, YamlLoaderMixin["CheckerSubConfig"]
     model_config = ConfigDict(extra="ignore", validate_default=True)
     version: int  # if config exists, version is always present
     structure: Optional[CheckerStructureConfig] = None
-    # Runtime provenance of .tasks.yml resolution, not a user-configurable setting.
+    # Remember the task-file format after resolving entries to CheckerSubConfig.
     _folder_local_allow_change: bool = PrivateAttr(default=False)
 
     def get_editable_patterns(self, parameters: dict[str, Any]) -> list[str] | None:
-        """Interpret allow_change only for tasks resolved from .tasks.yml.
+        """Return folder-local patterns for automatic preparation and selection.
 
-        The primary .task.yml format uses structure rules for its task folder;
-        allow_change is optional and interpreted by course-defined pipelines,
-        which may use sibling-relative patterns.
+        Only .tasks.yml opts into these rules. In .task.yml, allow_change stays
+        available to plugins and unchanged-task checks without this validation.
         """
         if not self._folder_local_allow_change:
             return None
@@ -268,7 +267,7 @@ class _CheckerTaskFileConfig(CheckerSubConfig):
 
 
 class CheckerTaskFileConfig(_CheckerTaskFileConfig):
-    """The primary task format: one .task.yml per task folder, named after it."""
+    """A .task.yml file defining one task named after its folder."""
 
     model_config = ConfigDict(
         extra="ignore",
