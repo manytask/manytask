@@ -272,6 +272,17 @@ class SourceCraftApi(RmsApi):
 
         self._update_repo(course_public_repo, {"template_type": "organizational"})
 
+    def create_private_repo(
+        self,
+        course_group: str,
+        repo_path: str,
+        public_repo: str,
+        students_group: str,
+        course_name: str,
+        template_language: str | None = None,
+    ) -> None:
+        raise RmsApiException("Private course repository creation is not supported on SourceCraft")
+
     def create_students_group(
         self,
         course_students_group: str,
@@ -282,6 +293,11 @@ class SourceCraftApi(RmsApi):
         :param course_students_group: UNUSED
         """
         logger.info("Will skip students group creation, SourceCraft doesn't have user groups yet")
+
+    def configure_course_manytask_token(
+        self, public_repo: str, students_group: str, token: str, private_repo: str | None = None
+    ) -> None:
+        """SourceCraft course CI variables are not managed by this adapter."""
 
     def check_project_exists(
         self,

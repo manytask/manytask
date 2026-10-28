@@ -1581,6 +1581,10 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                 show_allscores=True,
             )
 
+            rms_api.configure_course_manytask_token(
+                gitlab_course_public_repo, gitlab_course_students_group, course_config.token
+            )
+
             success = storage_api.create_course(course_config)
 
             if not success:

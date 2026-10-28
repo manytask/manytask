@@ -391,6 +391,17 @@ class RmsApi(ABC):
     ) -> None: ...
 
     @abstractmethod
+    def create_private_repo(
+        self,
+        course_group: str,
+        repo_path: str,
+        public_repo: str,
+        students_group: str,
+        course_name: str,
+        template_language: str | None = None,
+    ) -> None: ...
+
+    @abstractmethod
     def create_students_group(
         self,
         course_students_group: str,
@@ -400,6 +411,11 @@ class RmsApi(ABC):
         :returns: Group object or None
         """
         ...
+
+    @abstractmethod
+    def configure_course_manytask_token(
+        self, public_repo: str, students_group: str, token: str, private_repo: str | None = None
+    ) -> None: ...
 
     @abstractmethod
     def create_namespace_group(

@@ -170,12 +170,12 @@ Review the target migration's `downgrade()` implementation first: reverse migrat
 From the repository root (so `@common.example.yml` resolves):
 
 ```bash
-export TESTER_TOKEN=<course_token>
+export MANYTASK_TOKEN=<course_token>
 ```
 
 ```bash
 curl -X POST \
-  -H "Authorization: Bearer $TESTER_TOKEN" \
+  -H "Authorization: Bearer $MANYTASK_TOKEN" \
   -H "Content-type: application/x-yaml" \
   --data-binary "@common.example.yml" \
   "http://localhost:8081/api/<course_name>/update_config"
