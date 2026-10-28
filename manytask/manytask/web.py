@@ -464,7 +464,6 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     if request.method == "GET":
         return render_create_project()
-
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
@@ -472,8 +471,10 @@ def create_project(course_name: str) -> ResponseReturnValue:
         return render_create_project("CSRF Error")
 
     # Set user to be course admin if they provided course token as a secret
-    is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
-    if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
+
+    is_course_admin: bool = secrets.compare_digest(request.form["secret"].encode("utf-8"), course.token.encode("utf-8"))
+    if not is_course_admin and not secrets.compare_digest(request.form["secret"].encode("utf-8"),
+                                                            course.registration_secret.encode("utf-8")):
         return render_create_project("Invalid secret")
 
     app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
