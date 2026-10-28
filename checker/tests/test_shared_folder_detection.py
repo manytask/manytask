@@ -182,6 +182,27 @@ def test_shared_task_without_patterns_keeps_folder_detection(
     assert _detect(course) == ["seq-read", "seq-write"]
 
 
+@pytest.mark.parametrize("scope", ["default", "group"])
+def test_shared_folder_detection_rejects_inherited_sibling_patterns(
+    tmp_path: Path, scope: str
+) -> None:
+    course, repository, folder = _make_course(tmp_path)
+    path = folder / ".tasks.yml"
+    config = yaml.safe_load(path.read_text())
+    config["tasks"]["seq-read"].pop("parameters")
+    path.write_text(yaml.safe_dump(config))
+    parameters = {"allow_change": ["../sibling/*.cpp"]}
+    if scope == "group":
+        (folder / ".group.yml").write_text(
+            yaml.safe_dump({"version": 1, "parameters": parameters})
+        )
+    _commit(repository)
+    course = Course(course.manytask_config, tmp_path)
+
+    with pytest.raises(ValueError, match="inside the task folder"):
+        _detect(course, parameters if scope == "default" else None)
+
+
 def test_shared_folder_detection_includes_all_commits_since_base(
     tmp_path: Path,
 ) -> None:
