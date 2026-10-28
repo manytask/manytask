@@ -1,0 +1,2 @@
+def matrix_vector(matrix: list[list[float]], vector: list[float]) -> list[float]:
+    raise NotImplementedError("Multiply a 3 x 3 matrix by a three-element vector")
