@@ -9,11 +9,9 @@ The example below copies files listed in the `allow_change` parameter **from the
 repository** (`global.repo_dir`) into the testing tree. It leaves other files already in the tree
 untouched, so this stage alone does not restrict which student edits can affect grading.
 
-`allow_change` is configured inside [parameters](./checker_yml_reference.md#default_parameters),
-with defaults in `default_parameters` and overrides in `.group.yml`, `.task.yml`, or `.tasks.yml`.
-The checker combines the effective lists of detected tasks per folder and prepares that folder
-once, before the global and task pipelines run. All pipelines share the prepared files. The copy
-stage below can reuse the same parameter, although it is not required for the initial preparation.
+The example reads its patterns from the optional `parameters.allow_change` list, supported in
+both task formats. See [Explicit editable files](checker_config.md#explicit-editable-files) for
+inheritance and the difference between plugin use and automatic shared-folder preparation.
 
 ```yaml
 - name: "Take the student's allowed files"
@@ -25,10 +23,8 @@ stage below can reuse the same parameter, although it is not required for the in
     ignore_patterns: ["*.pyc"]
 ```
 
-> This stage is **optional**. By default, `checker check` / `checker grade` restore files classified
-> as public or private from the reference repository; unclassified student files remain.
-> See [`parameters.allow_change`](./checker_config.md#explicit-editable-files) for editable-file
-> preparation and inheritance.
+> This stage is **optional**: the checker already builds the grading tree before running plugins.
+> Use it when a pipeline needs to copy additional files or arrange them differently.
 
 | Arg | Type | Required | Description |
 |---|---|---|---|
