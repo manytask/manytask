@@ -39,6 +39,34 @@
         <div id="database-table" style="max-width: 800px; width: 100%; overflow-x: auto;"></div>
 
         {% if is_course_admin %}
+            <div class="modal fade" id="removeStudentModal" tabindex="-1" aria-labelledby="removeStudentModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <form class="modal-content" id="removeStudentForm" method="post" action="{{ url_for('course.remove_student', course_name=course_name) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="username" id="removeStudentUsername">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="removeStudentModalLabel">Remove student from course?</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-danger" role="alert">
+                                All scores, bonus points and the final grade for this student in this course
+                                will be permanently lost. This action cannot be undone.
+                            </div>
+                            <p>Remove <strong id="removeStudentName"></strong> from <strong>{{ course_name }}</strong>?</p>
+                            <label for="removeStudentConfirmation" class="form-label">Type the student's exact username to confirm</label>
+                            <input type="text" class="form-control" id="removeStudentConfirmation" name="confirm_username"
+                                   autocomplete="off" spellcheck="false" required aria-describedby="removeStudentHint">
+                            <div class="form-text" id="removeStudentHint">The username must match exactly, including case.</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger" id="removeStudentSubmit" disabled>Remove student and all scores</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
                 <div class="modal-dialog">
                     <div class="modal-content">
@@ -125,6 +153,9 @@
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
+    {% if is_course_admin %}
+    <script src="{{ url_for('static', filename='js/database-student-removal.js') }}"></script>
+    {% endif %}
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
           id="light-theme">
     <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
@@ -379,6 +410,7 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             {% if is_course_admin %}
+                const openStudentRemoval = initStudentRemoval();
                 editModal = new bootstrap.Modal(document.getElementById('editModal'));
                 editCommentModal = new bootstrap.Modal(document.getElementById('editCommentModal'));
                 editGradeModal = new bootstrap.Modal(document.getElementById('editGradeModal'));
@@ -502,7 +534,30 @@
                             field: "last_name",
                             frozen: true,
                             minWidth: 1,
-                            headerTooltip: "Last Name"
+                            headerTooltip: "Last Name",
+                            formatter: function(cell) {
+                                const student = cell.getRow().getData();
+                                const container = document.createElement('span');
+                                container.className = 'd-inline-flex align-items-center gap-1 mw-100';
+                                const name = document.createElement('span');
+                                name.className = 'text-truncate';
+                                name.textContent = cell.getValue() || '';
+                                container.appendChild(name);
+                                if (!student.is_admin) {
+                                    const button = document.createElement('button');
+                                    button.type = 'button';
+                                    button.className = 'btn btn-link btn-sm text-danger p-0 lh-1 flex-shrink-0 text-decoration-none';
+                                    button.textContent = '×';
+                                    button.title = 'Remove student from course';
+                                    button.setAttribute('aria-label', `Remove ${student.username} from course`);
+                                    button.addEventListener('click', function(event) {
+                                        event.stopPropagation();
+                                        openStudentRemoval(student.username);
+                                    });
+                                    container.appendChild(button);
+                                }
+                                return container;
+                            },
                         },
                         {% endif %}
                         {

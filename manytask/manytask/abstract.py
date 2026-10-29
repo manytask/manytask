@@ -155,6 +155,11 @@ class StorageApi(ABC):
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
+    def remove_student_from_course(self, course_name: str, username: str) -> None:
+        """Delete enrollment and grades; raise NoResultFound if absent or PermissionError for staff."""
+        ...
+
+    @abstractmethod
     def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]: ...
 
     @abstractmethod
