@@ -897,7 +897,7 @@ def create_namespace() -> ResponseReturnValue:
 
         {
             "name": "HSE",
-            "slug": "hse-namespace",
+            "slug": "hse",
             "description": "Namespace for Higher School of Economics courses"
         }
 
