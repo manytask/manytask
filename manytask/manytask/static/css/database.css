@@ -110,21 +110,18 @@
 }
 
 /* Rows for users with admin access (course/namespace/instance admin, program manager),
-   shown grayed out to admin viewers so they can be distinguished from real students. */
+   shown grayed out to admin viewers so they can be distinguished from real students.
+   Keep a subtle fade alongside theme-specific text colors so scores remain readable. */
 .tabulator-row.db-admin-row {
-    color: #adb5bd !important;
-    opacity: 0.75;
+    opacity: 0.8;
 }
 
+.tabulator-row.db-admin-row,
 .tabulator-row.db-admin-row .tabulator-cell {
-    color: #adb5bd !important;
-}
-
-[data-bs-theme="dark"] .tabulator-row.db-admin-row {
     color: #6c757d !important;
-    opacity: 0.65;
 }
 
+[data-bs-theme="dark"] .tabulator-row.db-admin-row,
 [data-bs-theme="dark"] .tabulator-row.db-admin-row .tabulator-cell {
-    color: #6c757d !important;
+    color: #adb5bd !important;
 }
