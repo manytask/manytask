@@ -656,7 +656,8 @@ def test_namespace_admin_can_access_namespace_panel(
             response = client.get(f"/instance_admin/namespaces/{namespace.id}")
 
     assert response.status_code == HTTPStatus.OK
-    form = BeautifulSoup(response.data, "html.parser").find("form", id="namespaceSettingsForm")
+    soup = BeautifulSoup(response.data, "html.parser")
+    form = soup.find("form", id="namespaceSettingsForm")
     assert form is not None
     assert form["data-update-url"] == f"/api/namespaces/{namespace.id}"
     name_input = form.find("input", id="namespaceName", attrs={"name": "name"})
@@ -669,6 +670,16 @@ def test_namespace_admin_can_access_namespace_panel(
     submit = form.find("button", attrs={"type": "submit"})
     assert submit is not None
     assert submit.get_text(strip=True) == "Save Changes"
+    assert form.find("button", attrs={"data-bs-target": "#deleteNamespaceModal"}) is not None
+    delete_form = soup.find("form", id="deleteNamespaceForm")
+    assert delete_form is not None
+    assert delete_form["data-delete-url"] == f"/api/namespaces/{namespace.id}"
+    assert delete_form["data-redirect-url"] == "/"
+    assert delete_form.find("input", id="deleteNamespaceName").has_attr("required")
+    assert delete_form.find("button", attrs={"type": "submit"}).has_attr("disabled")
+    assert soup.find(id="deleteNamespaceExpectedName").get_text() == namespace.name
+    assert soup.find(id="deleteNamespaceError")["role"] == "alert"
+    assert "namespace-delete.js" in response.text
 
 
 def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_oauth):
