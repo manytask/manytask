@@ -182,6 +182,11 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
+    def delete_course(self, course_name: str) -> bool:
+        """Delete an empty course; return False if missing, raise if users are registered."""
+        ...
+
+    @abstractmethod
     def update_course(
         self,
         course_name: str,

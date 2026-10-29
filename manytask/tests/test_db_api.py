@@ -26,12 +26,20 @@ from manytask.config import (
 )
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType, ProtectedBranchSettings
-from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError, UserIdentityConflictError
+from manytask.database import (
+    CourseNotEmptyError,
+    DataBaseApi,
+    DatabaseConfig,
+    TaskDisabledError,
+    UserIdentityConflictError,
+)
 from manytask.models import (
+    ComplexFormula,
     Course,
     Deadline,
     Grade,
     Namespace,
+    PrimaryFormula,
     Task,
     TaskGroup,
     User,
@@ -1883,6 +1891,44 @@ def test_get_groups_with_resync(  # noqa: PLR0913
     check_get_groups(
         db_api_with_two_initialized_courses, FIRST_COURSE_NAME, course_deadlines_config, enabled, started, now
     )
+
+
+def test_delete_empty_course(db_api_with_two_initialized_courses: DataBaseApi, session: Session) -> None:
+    db_api = db_api_with_two_initialized_courses
+    course_id = session.query(Course.id).filter_by(name=FIRST_COURSE_NAME).scalar()
+    assert session.query(TaskGroup).filter_by(course_id=course_id).count() > 0
+    assert session.query(ComplexFormula).filter_by(course_id=course_id).count() > 0
+    remaining_task_count = session.query(Task).join(TaskGroup).filter(TaskGroup.course_id != course_id).count()
+    remaining_formula_count = (
+        session.query(PrimaryFormula).join(ComplexFormula).filter(ComplexFormula.course_id != course_id).count()
+    )
+
+    assert db_api.delete_course(FIRST_COURSE_NAME)
+
+    assert db_api.get_course(FIRST_COURSE_NAME) is None
+    assert db_api.get_course(SECOND_COURSE_NAME) is not None
+    assert session.query(TaskGroup).filter_by(course_id=course_id).count() == 0
+    assert session.query(ComplexFormula).filter_by(course_id=course_id).count() == 0
+    assert session.query(Task).count() == remaining_task_count
+    assert session.query(PrimaryFormula).count() == remaining_formula_count
+    assert not db_api.delete_course(FIRST_COURSE_NAME)
+
+
+@pytest.mark.parametrize("is_admin", [False, True])
+def test_delete_course_with_registered_user(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, is_admin: bool
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    db_api.update_or_create_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, is_admin)
+    task_count = session.query(Task).count()
+
+    with pytest.raises(CourseNotEmptyError, match="users are already registered"):
+        db_api.delete_course(FIRST_COURSE_NAME)
+
+    assert db_api.get_course(FIRST_COURSE_NAME) is not None
+    assert db_api.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert session.query(Task).count() == task_count
 
 
 def test_edit_course(db_api_with_initialized_first_course, edited_first_course_config, session):
