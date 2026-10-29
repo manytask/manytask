@@ -927,6 +927,11 @@ def create_namespace() -> ResponseReturnValue:
     slug = request_data.slug
     description = request_data.description
 
+    if slug.isdigit():
+        return jsonify(
+            ErrorResponse(error="Namespace slug cannot consist only of digits. Use a slug such as 'mipt'.").model_dump()
+        ), HTTPStatus.BAD_REQUEST
+
     gitlab_group_id = None
 
     try:
