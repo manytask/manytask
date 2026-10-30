@@ -63,6 +63,10 @@ class UserIdentityConflictError(Exception):
     """A username already belongs to a different authentication account."""
 
 
+class NamespaceNotEmptyError(ValueError):
+    """A namespace still contains courses and cannot be deleted."""
+
+
 def calculate_effective_grade(
     course_status: CourseStatus,
     grades_config: ManytaskFinalGradeConfig,
@@ -2061,6 +2065,18 @@ class DataBaseApi(StorageApi):
             session.refresh(namespace)
             session.expunge(namespace)
             return namespace
+
+    def delete_namespace(self, namespace_id: int, name: str) -> None:
+        """Delete an empty namespace after confirming its current name."""
+        with self._session_create() as session:
+            # Block concurrent renames and FK inserts while checking and deleting.
+            namespace = session.query(models.Namespace).filter_by(id=namespace_id).with_for_update().one()
+            if name != namespace.name:
+                raise ValueError("Namespace name does not match")
+            if session.query(models.Course.id).filter_by(namespace_id=namespace_id).first() is not None:
+                raise NamespaceNotEmptyError("Cannot delete namespace: it still contains courses")
+            session.delete(namespace)
+            session.commit()
 
     def get_all_namespaces(self) -> list[models.Namespace]:
         """Get all namespaces (for Instance Admin).

@@ -46,6 +46,10 @@ class AddUserToNamespaceRequest(BaseModel):
     role: Literal["namespace_admin", "program_manager"]
 
 
+class DeleteNamespaceRequest(BaseModel):
+    name: str
+
+
 class UpdateNamespaceRequest(BaseModel):
     name: str
     description: str | None = None

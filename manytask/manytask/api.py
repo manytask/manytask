@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
 from manytask.abstract import RmsApiException, StorageApi, StoredUser
-from manytask.database import TaskDisabledError
+from manytask.database import NamespaceNotEmptyError, TaskDisabledError
 
 from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
@@ -29,6 +29,7 @@ from .config import (
     CreateNamespaceRequest,
     DeadlineItem,
     DeadlinesResponse,
+    DeleteNamespaceRequest,
     ErrorResponse,
     IsAdminResponse,
     ManytaskGroupConfig,
@@ -1125,6 +1126,30 @@ def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNa
     except Exception:
         logger.exception("Error updating namespace id=%s", namespace_id)
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@namespace_bp.delete("/namespaces/<int:namespace_id>")
+@requires_auth
+@requires_json_validation(DeleteNamespaceRequest)
+@requires_namespace_admin(return_404_if_not_found=True)
+def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNamespaceRequest) -> ResponseReturnValue:
+    """Delete an empty Manytask namespace, preserving the linked RMS group."""
+    app: CustomFlask = current_app  # type: ignore
+
+    try:
+        app.storage_api.delete_namespace(namespace_id, validated_data.name)
+        return "", HTTPStatus.NO_CONTENT
+    except NoResultFound:
+        return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
+    except NamespaceNotEmptyError as error:
+        return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.CONFLICT
+    except ValueError as error:
+        return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.BAD_REQUEST
+    except Exception:
+        logger.exception("Error deleting namespace id=%s", namespace_id)
+        return jsonify(
+            ErrorResponse(error="Failed to delete namespace. Please try again.").model_dump()
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @namespace_bp.post("/namespaces/<int:namespace_id>/users")
