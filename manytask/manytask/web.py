@@ -584,6 +584,32 @@ def not_ready(course_name: str) -> ResponseReturnValue:
     )
 
 
+@course_bp.post("/database/remove_student")
+@requires_course_admin
+@requires_ready
+def remove_student(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    username = request.form.get("username")
+    if not username or request.form.get("confirm_username") != username:
+        abort(HTTPStatus.BAD_REQUEST, "Enter the student's exact username to confirm removal")
+
+    try:
+        app.storage_api.remove_student_from_course(course_name, username)
+    except NoResultFound:
+        abort(HTTPStatus.NOT_FOUND, "Student is not enrolled in this course")
+    except PermissionError:
+        abort(HTTPStatus.FORBIDDEN, "Staff accounts cannot be removed as students")
+
+    logger.info(
+        "User %s removed student %s and all their scores from course %s",
+        sanitize_log_data(session.get("manytask", {}).get("username", "guest")),
+        sanitize_log_data(username),
+        sanitize_log_data(course_name),
+    )
+    flash(f"Student {username} removed from the course. All their scores in this course have been deleted.", "success")
+    return redirect(url_for("course.show_database", course_name=course_name))
+
+
 @course_bp.get("/database")
 @requires_course_access
 def show_database(course_name: str) -> ResponseReturnValue:

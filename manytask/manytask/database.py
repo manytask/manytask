@@ -390,6 +390,23 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
+    def remove_student_from_course(self, course_name: str, username: str) -> None:
+        """Remove a student's enrollment and all its grades, preserving other courses and the user."""
+        if any(user.username == username for user in self.get_course_access_users(course_name)):
+            raise PermissionError("Staff accounts cannot be removed as students")
+
+        with self._session_create() as session:
+            enrollment = (
+                session.query(models.UserOnCourse)
+                .join(models.UserOnCourse.user)
+                .join(models.UserOnCourse.course)
+                .filter(models.User.username == username, models.Course.name == course_name)
+                .one()
+            )
+            # ORM deletion cascades to task grades, including bonus scores.
+            session.delete(enrollment)
+            session.commit()
+
     def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]:
         """Get all users' scores with names and grade data for the given course.
 

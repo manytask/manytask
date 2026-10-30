@@ -726,6 +726,102 @@ def check_admin_status_code(response, check_true):
 
 
 @pytest.mark.parametrize(
+    "confirmation, expected_status",
+    [(TEST_USERNAME_1, HTTPStatus.FOUND), ("", HTTPStatus.BAD_REQUEST), ("wrong", HTTPStatus.BAD_REQUEST)],
+)
+def test_remove_student_confirmation(app, mock_gitlab_oauth, confirmation: str, expected_status: int) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.course_admin = True
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        page = client.get(f"/{TEST_COURSE_NAME}/database")
+        form = BeautifulSoup(page.data, "html.parser").find("form", id="removeStudentForm")
+        assert form is not None
+        assert "will be permanently lost" in form.get_text()
+        assert form.find("button", id="removeStudentSubmit").has_attr("disabled")
+        csrf_token = form.find("input", {"name": "csrf_token"})["value"]
+        with patch.object(app.storage_api, "remove_student_from_course", create=True) as remove:
+            response = client.post(
+                form["action"],
+                data={"username": TEST_USERNAME_1, "confirm_username": confirmation, "csrf_token": csrf_token},
+            )
+            assert response.status_code == expected_status
+            if expected_status == HTTPStatus.FOUND:
+                remove.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME_1)
+                assert response.location == f"/{TEST_COURSE_NAME}/database"
+                with client.session_transaction() as sess:
+                    assert "All their scores" in sess["_flashes"][0][1]
+            else:
+                remove.assert_not_called()
+
+
+@pytest.mark.parametrize("authenticated, admin", [(False, False), (True, False), (True, True)])
+def test_remove_student_authorization(app, mock_gitlab_oauth, authenticated: bool, admin: bool) -> None:
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client:
+        if authenticated:
+            set_session(client, build_test_session(include_manytask=True))
+        with (
+            patch.object(app.storage_api, "check_if_course_admin", return_value=admin) as check_admin,
+            patch.object(app.storage_api, "remove_student_from_course", create=True) as remove,
+        ):
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/database/remove_student",
+                data={"username": TEST_USERNAME_1, "confirm_username": TEST_USERNAME_1},
+            )
+            if authenticated and admin:
+                assert response.status_code == HTTPStatus.FOUND
+                check_admin.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME)
+                remove.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME_1)
+            else:
+                assert response.status_code == (HTTPStatus.FORBIDDEN if authenticated else HTTPStatus.FOUND)
+                remove.assert_not_called()
+
+
+def test_remove_student_requires_csrf(app, mock_gitlab_oauth) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.course_admin = True
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        with patch.object(app.storage_api, "remove_student_from_course", create=True) as remove:
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/database/remove_student",
+                data={"username": TEST_USERNAME_1, "confirm_username": TEST_USERNAME_1},
+            )
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            remove.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error, status", [(NoResultFound, HTTPStatus.NOT_FOUND), (PermissionError, HTTPStatus.FORBIDDEN)]
+)
+def test_remove_student_storage_error(app, mock_gitlab_oauth, error: type[Exception], status: int) -> None:
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.course_admin = True
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        with patch.object(app.storage_api, "remove_student_from_course", create=True, side_effect=error):
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/database/remove_student",
+                data={"username": TEST_USERNAME_1, "confirm_username": TEST_USERNAME_1},
+            )
+            assert response.status_code == status
+
+
+def test_remove_student_controls_hidden_from_students(app, mock_gitlab_oauth) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/database")
+        assert response.status_code == HTTPStatus.OK
+        assert b'id="removeStudentForm"' not in response.data
+        assert b"database-student-removal.js" not in response.data
+
+
+@pytest.mark.parametrize(
     "path_and_func",
     [
         [f"/{TEST_COURSE_NAME}/", check_admin_in_data],

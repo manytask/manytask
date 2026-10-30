@@ -1211,6 +1211,71 @@ def test_many_courses(db_api_with_two_initialized_courses, session):
     )
 
 
+def test_remove_student_preserves_other_courses(
+    db_api_with_two_initialized_courses: DataBaseApi, session: Session
+) -> None:
+    db = db_api_with_two_initialized_courses
+    create_user(db)
+    db.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(30))
+    db.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_1_3", update_func(10))
+    db.store_score(SECOND_COURSE_NAME, TEST_USERNAME, "task_1_3", update_func(40))
+    db.update_student_comment(FIRST_COURSE_NAME, TEST_USERNAME, "Student comment")
+    db.override_grade(FIRST_COURSE_NAME, TEST_USERNAME, 5)
+    user_id = session.query(User).filter_by(username=TEST_USERNAME).one().id
+    enrollment_id = session.query(UserOnCourse).join(Course).filter(Course.name == FIRST_COURSE_NAME).one().id
+
+    db.remove_student_from_course(FIRST_COURSE_NAME, TEST_USERNAME)
+
+    assert not db.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert TEST_USERNAME not in db.get_all_scores_with_names(FIRST_COURSE_NAME)
+    assert session.query(Grade).filter_by(user_on_course_id=enrollment_id).count() == 0
+    assert session.query(User).filter_by(id=user_id).one().username == TEST_USERNAME
+    assert db.get_scores(SECOND_COURSE_NAME, TEST_USERNAME) == {"task_1_3": 40}
+    # Re-enrollment starts with no scores, comment, or grade override.
+    db.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+    student = db.get_all_scores_with_names(FIRST_COURSE_NAME)[TEST_USERNAME]
+    assert student.total_score == 0
+    assert student.comment is None
+    assert student.final_grade_override is None
+
+
+def test_remove_student_not_enrolled(db_api_with_initialized_first_course: DataBaseApi, session: Session) -> None:
+    db = db_api_with_initialized_first_course
+    create_user(db)
+    with pytest.raises(NoResultFound):
+        db.remove_student_from_course(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert session.query(User).filter_by(username=TEST_USERNAME).count() == 1
+
+
+@pytest.mark.parametrize("level", ["course_admin", "namespace_admin", "program_manager", "owner", "instance_admin"])
+def test_remove_student_rejects_staff(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, level: str
+) -> None:
+    db = db_api_with_initialized_first_course
+    create_user(db)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    owner = session.query(User).filter_by(username="instance_admin").one()
+    db.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, level == "course_admin")
+    if level == "instance_admin":
+        db.set_instance_admin_status(TEST_USERNAME, True)
+    elif level in {"namespace_admin", "program_manager", "owner"}:
+        namespace = _create_namespace_with_course(session, created_by_id=user.id if level == "owner" else owner.id)
+        if level != "owner":
+            session.add(
+                UserOnNamespace(
+                    user_id=user.id,
+                    namespace_id=namespace.id,
+                    role=UserOnNamespaceRole(level),
+                    assigned_by_id=owner.id,
+                )
+            )
+    session.commit()
+
+    with pytest.raises(PermissionError):
+        db.remove_student_from_course(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert db.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
+
+
 def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_score_1 = 22
     expected_score_2 = 15
