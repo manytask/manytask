@@ -566,13 +566,14 @@ def report_score(course_name: str) -> ResponseReturnValue:
         total_score = sum(student_scores.values()) + bonus_score
         percent = calculate_percent(total_score, max_score)
 
-        # Count large tasks solved
+        # Count large tasks solved (see StudentCourseScores.count_solved_large_tasks)
+        solved_tasks = app.storage_api.get_solved_tasks(course.course_name, manytask_username)
         large_count = 0
         for group_config in app.storage_api.get_groups(course.course_name, enabled=True, started=True):
             for task_config in group_config.tasks:
                 if task_config.is_large and task_config.enabled:
                     task_score = student_scores.get(task_config.name, 0)
-                    if task_score >= task_config.min_score:
+                    if task_config.name in solved_tasks or task_score >= task_config.min_score:
                         large_count += 1
 
         student_data = {

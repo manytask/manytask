@@ -1700,3 +1700,34 @@ def test_assign_program_manager_allowed_for_namespace_admin(app, authenticated_c
     assert response.status_code == HTTPStatus.CREATED
     assert added == [(1, TEST_USERNAME, "program_manager")]
     assert json.loads(response.data)["role"] == "program_manager"
+
+
+@pytest.mark.parametrize("solved_tasks, expected_large_count", [({"vm"}, 1), (set(), 0)])
+def test_report_score_counts_large_task_marked_solved(app, solved_tasks, expected_large_count):
+    """A large task marked is_solved counts even if min_score was raised above the student's score."""
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    storage = app.storage_api
+    storage.stored_user.rms_id = rms_user.id
+
+    storage.groups_override = [
+        ManytaskGroupConfig(
+            group="hw",
+            start=datetime.now() - timedelta(days=10),
+            end=datetime.now() + timedelta(days=10),
+            tasks=[ManytaskTaskConfig(task="vm", score=450, is_large=True, min_score=10000)],
+        )
+    ]
+    storage.get_scores = lambda _course_name, _username: {"vm": 330}
+    storage.get_solved_tasks = lambda _course_name, _username: solved_tasks
+    storage.get_bonus_score = lambda _course_name, _username: 0
+    rows = []
+    storage.calculate_and_save_grade = lambda _course_name, _username, row: rows.append(row)
+
+    data = {"task": TEST_TASK_NAME, "user_id": rms_user.id, "score": "90", "check_deadline": "False"}
+    headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
+    with app.test_request_context():
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert len(rows) == 1
+    assert rows[0]["large_count"] == expected_large_count
