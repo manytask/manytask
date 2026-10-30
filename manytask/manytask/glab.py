@@ -457,7 +457,7 @@ class GitLabApi(RmsApi, AuthApi):
     ) -> bool:
         project = self._gitlab.projects.get(f"{project_group}/{project_name}")
         try:
-            project.members.get(rms_user_id)
+            project.members_all.get(rms_user_id)
             return True
         except GitlabGetError:
             return False
@@ -643,7 +643,9 @@ class GitLabApi(RmsApi, AuthApi):
                 logger.info(
                     "Access %s granted on %s for user=%s", access_level, target.path_with_namespace, rms_user.username
                 )
-            except gitlab.GitlabCreateError:
+            except gitlab.GitlabCreateError as ex:
+                if ex.response_code != HTTPStatus.CONFLICT:
+                    raise
                 logger.warning(
                     "Access already granted or conflict on %s for user=%s",
                     target.path_with_namespace,

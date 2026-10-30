@@ -269,7 +269,7 @@ class MockRmsApi(RmsApi):
             course_group_path = f"{parent_path}/{course_slug}"
 
         if course_group_path in self.namespace_groups:
-            raise RuntimeError(f"Course group with path {course_group_path} already exists")
+            return self.namespace_groups[course_group_path]
 
         self.last_group_id += 1
         group_id = self.last_group_id
