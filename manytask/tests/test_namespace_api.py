@@ -7,10 +7,12 @@ import pytest
 from authlib.integrations.flask_client import OAuth
 from flask import json
 from flask.testing import FlaskClient
+from pytest_mock import MockerFixture
 from sqlalchemy.orm import Session
 
 from manytask.abstract import AuthApi, AuthenticatedUser
 from manytask.course import CourseStatus
+from manytask.main import CustomFlask
 from manytask.models import (
     ROLE_NAMESPACE_ADMIN,
     ROLE_PROGRAM_MANAGER,
@@ -190,6 +192,26 @@ def test_create_namespace_invalid_slug(client_with_db, mock_session_admin):
     )
 
 
+@pytest.mark.parametrize("slug", ["0", "123", "00123"])
+def test_create_namespace_numeric_slug(
+    client_with_db: FlaskClient,
+    app_with_db: CustomFlask,
+    mock_session_admin: dict[str, Any],
+    mocker: MockerFixture,
+    slug: str,
+) -> None:
+    set_session(client_with_db, mock_session_admin)
+    create_group = mocker.patch.object(app_with_db.rms_api, "create_namespace_group")
+    create_record = mocker.patch.object(app_with_db.storage_api, "create_namespace")
+
+    response = post_json(client_with_db, "/api/namespaces", {"name": "Test", "slug": slug})
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert response.get_json()["error"] == ("Namespace slug cannot consist only of digits. Use a slug such as 'mipt'.")
+    create_group.assert_not_called()
+    create_record.assert_not_called()
+
+
 def test_create_namespace_missing_fields(client_with_db, mock_session_admin):
     """Test that missing required fields returns 400 Bad Request."""
 
@@ -265,6 +287,7 @@ def test_create_namespace_valid_slugs(client_with_db, session, mock_session_admi
         "with.dots",
         "MixedCase123",
         "123numeric",
+        "mipt",
     ]
 
     for i, valid_slug in enumerate(valid_slugs):

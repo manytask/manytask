@@ -16,6 +16,7 @@ from manytask.abstract import RmsApiException, RmsUser, StoredUser
 from .abstract import ClientProfile
 from .auth import (
     handle_oauth_callback,
+    has_course_repository_access,
     redirect_to_login_with_bad_session,
     requires_auth,
     requires_course_access,
@@ -36,6 +37,7 @@ from .utils.flask import check_if_current_user_is_instance_admin, get_courses, h
 from .utils.generic import (
     check_course_creation_namespace_permission,
     generate_token_hex,
+    get_course_creation_conflict,
     sanitize_log_data,
     validate_name,
 )
@@ -228,11 +230,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
     sourcecraft_accept_invite_required = False
     if app.app_config.rms == "sourcecraft" and not app.debug:
-        sourcecraft_accept_invite_required = not app.rms_api.check_user_has_repo_access(
-            rms_user_id=session["rms"]["rms_id"],
-            project_name=student_username,
-            project_group=course.gitlab_course_students_group,
-        )
+        sourcecraft_accept_invite_required = not has_course_repository_access(app, course)
 
     return render_template(
         "tasks.html",
@@ -476,12 +474,11 @@ def create_project(course_name: str) -> ResponseReturnValue:
     if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
         return render_create_project("Invalid secret")
 
-    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
-
     error_message = _create_student_project(app, course)
     if error_message is not None:
         return render_create_project(error_message)
 
+    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
     return redirect(url_for("course.course_page", course_name=course_name))
 
 
@@ -491,6 +488,8 @@ def _redirect_existing_enrollment(app: CustomFlask, course: Course) -> ResponseR
     if not app.rms_api.check_project_exists(
         project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
     ):
+        return redirect(url_for("course.recover_project", course_name=course.course_name))
+    if not has_course_repository_access(app, course):
         return redirect(url_for("course.recover_project", course_name=course.course_name))
     return redirect(url_for("course.course_page", course_name=course.course_name))
 
@@ -530,9 +529,10 @@ def recover_project(course_name: str) -> ResponseReturnValue:
     if not app.storage_api.check_user_on_course(course.course_name, username):
         abort(HTTPStatus.FORBIDDEN)
 
-    if app.rms_api.check_project_exists(
+    repository_exists = app.rms_api.check_project_exists(
         project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
-    ):
+    )
+    if repository_exists and has_course_repository_access(app, course):
         return redirect(url_for("course.course_page", course_name=course_name))
 
     error_message = None
@@ -549,6 +549,7 @@ def recover_project(course_name: str) -> ResponseReturnValue:
 
     return render_template(
         "recover_project.html",
+        repository_exists=repository_exists,
         course_name=course.course_name,
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
@@ -697,6 +698,16 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
         gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
 
+        conflict = get_course_creation_conflict(app.storage_api, course_name, gitlab_course_group_full_path)
+        if conflict is not None:
+            return render_template(
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message=conflict,
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
+            )
+
         try:
             logger.info(
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
@@ -747,6 +758,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             generated_token=generate_token_hex(24),
             error_message=f"Course '{settings.course_name}' already exists.",
             rms=app.app_config.rms,
+            labels=app.create_course_labels,
         )
 
     return render_template(

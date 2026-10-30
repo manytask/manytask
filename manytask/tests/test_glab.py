@@ -1,3 +1,4 @@
+from http import HTTPStatus
 from unittest import mock
 from unittest.mock import MagicMock, patch
 
@@ -613,3 +614,27 @@ def test_wait_fork_imported_polls_until_finished(mock_sleep, gitlab):
 
     assert result is finished
     assert mock_sleep.call_args_list == [mock.call(1), mock.call(1)]
+
+
+@pytest.mark.parametrize("status", [403, 409, 500])
+def test_grant_student_access_only_ignores_duplicate_membership(gitlab, mock_rms_user, status: int) -> None:
+    api, _ = gitlab
+    student_project = MagicMock()
+    public_project = MagicMock()
+    student_project.members.create.side_effect = GitlabCreateError("grant failed", response_code=status)
+    if status == HTTPStatus.CONFLICT:
+        api._grant_student_access(mock_rms_user, student_project, public_project)
+        public_project.members.create.assert_called_once()
+    else:
+        with pytest.raises(GitlabCreateError):
+            api._grant_student_access(mock_rms_user, student_project, public_project)
+        public_project.members.create.assert_not_called()
+
+
+def test_repository_access_includes_inherited_membership(gitlab) -> None:
+    api, client = gitlab
+    project = client.projects.get.return_value
+    project.members.get.side_effect = GitlabGetError("not a direct member", response_code=404)
+    assert api.check_user_has_repo_access("123", "student", "course/students")
+    project.members_all.get.assert_called_once_with("123")
+    project.members.get.assert_not_called()
