@@ -1,4 +1,4 @@
-from manytask.abstract import StoredUser
+from manytask.abstract import StoredUser, StudentCourseScores, TaskScore
 from tests.constants import (
     TEST_AUTH_ID_1,
     TEST_AUTH_ID_2,
@@ -40,3 +40,24 @@ def test_stored_user():
 
     assert stored_user2.instance_admin
     assert repr(stored_user2) == f"StoredUser(username={TEST_USERNAME_2})"
+
+
+def test_count_solved_large_tasks_uses_is_solved():
+    student = StudentCourseScores(
+        username="u",
+        first_name="f",
+        last_name="l",
+        task_scores={
+            "solved_flag": TaskScore(score=300, is_solved=True),  # below min_score, but marked solved
+            "by_score": TaskScore(score=330, is_solved=False),  # reaches min_score
+            "not_solved": TaskScore(score=319, is_solved=False),
+        },
+    )
+
+    assert student.count_solved_large_tasks([("solved_flag", 320)]) == 1
+    assert student.count_solved_large_tasks([("by_score", 320)]) == 1
+    assert student.count_solved_large_tasks([("not_solved", 320)]) == 0
+    # raising min_score does not take away a task marked as solved
+    assert student.count_solved_large_tasks([("solved_flag", 10000), ("by_score", 10000)]) == 1
+    # no score at all: counted only when min_score is 0, as before
+    assert student.count_solved_large_tasks([("missing", 0), ("missing2", 1)]) == 1
