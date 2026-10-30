@@ -36,6 +36,7 @@ from .utils.flask import check_if_current_user_is_instance_admin, get_courses, h
 from .utils.generic import (
     check_course_creation_namespace_permission,
     generate_token_hex,
+    get_course_creation_conflict,
     sanitize_log_data,
     validate_name,
 )
@@ -697,6 +698,16 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
         gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
 
+        conflict = get_course_creation_conflict(app.storage_api, course_name, gitlab_course_group_full_path)
+        if conflict is not None:
+            return render_template(
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message=conflict,
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
+            )
+
         try:
             logger.info(
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
@@ -747,6 +758,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             generated_token=generate_token_hex(24),
             error_message=f"Course '{settings.course_name}' already exists.",
             rms=app.app_config.rms,
+            labels=app.create_course_labels,
         )
 
     return render_template(

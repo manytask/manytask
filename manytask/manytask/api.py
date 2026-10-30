@@ -53,6 +53,7 @@ from .utils.database import get_database_table_data
 from .utils.generic import (
     calculate_percent,
     check_course_creation_namespace_permission,
+    get_course_creation_conflict,
     sanitize_and_validate_comment,
     sanitize_log_data,
 )
@@ -1467,10 +1468,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         owner_rms_ids,
     )
 
-    course_group_id = None
-    public_project_id = None
-    students_group_id = None
-
     try:
         is_instance_admin = storage_api.check_if_instance_admin(username)
 
@@ -1506,6 +1503,12 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         namespace_slug = namespace.slug if namespace is not None else ""
         gitlab_course_group = f"{namespace_slug}/{course_slug}" if namespace_slug else course_slug
 
+        conflict = get_course_creation_conflict(storage_api, course_name, gitlab_course_group)
+        if conflict is not None:
+            return jsonify(ErrorResponse(error=conflict).model_dump()), HTTPStatus.CONFLICT
+
+        # RMS setup is retryable and may reuse existing resources. Preserve partial
+        # setup on failure: the RMS interface does not identify resources we own.
         from datetime import datetime as dt
 
         now = dt.now()
@@ -1540,27 +1543,19 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         try:
             logger.info("Creating public repo %s", gitlab_course_public_repo)
             rms_api.create_public_repo(gitlab_course_group, gitlab_course_public_repo)
-            public_project_id = 1  # Placeholder
             logger.info("Created public repo")
         except Exception as e:
             logger.error("Failed to create public repo: %s", str(e))
-            if course_group_id:
-                rms_api.delete_group(course_group_id)
             return jsonify(
                 ErrorResponse(error=f"Failed to create public repo: {str(e)}").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
 
         try:
             logger.info("Creating students group %s", gitlab_course_students_group)
-            rms_api.create_students_group(gitlab_course_students_group)
-            students_group_id = 1  # Placeholder
+            rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
             logger.info("Created students group")
         except Exception as e:
             logger.error("Failed to create students group: %s", str(e))
-            if public_project_id:
-                rms_api.delete_project(public_project_id)
-            if course_group_id:
-                rms_api.delete_group(course_group_id)
             return jsonify(
                 ErrorResponse(error=f"Failed to create students group: {str(e)}").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1585,12 +1580,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
 
             if not success:
                 logger.error("Course with name=%s already exists in database", course_name)
-                if students_group_id:
-                    rms_api.delete_group(students_group_id)
-                if public_project_id:
-                    rms_api.delete_project(public_project_id)
-                if course_group_id:
-                    rms_api.delete_group(course_group_id)
                 return jsonify(
                     ErrorResponse(error=f"Course with name '{course_name}' already exists").model_dump()
                 ), HTTPStatus.CONFLICT
@@ -1599,12 +1588,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
 
         except Exception as e:
             logger.error("Failed to create course in database: %s", str(e), exc_info=True)
-            if students_group_id:
-                rms_api.delete_group(students_group_id)
-            if public_project_id:
-                rms_api.delete_project(public_project_id)
-            if course_group_id:
-                rms_api.delete_group(course_group_id)
             return jsonify(
                 ErrorResponse(error=f"Failed to create course in database: {str(e)}").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1667,16 +1650,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             str(e),
             exc_info=True,
         )
-        try:
-            if students_group_id:
-                rms_api.delete_group(students_group_id)
-            if public_project_id:
-                rms_api.delete_project(public_project_id)
-            if course_group_id:
-                rms_api.delete_group(course_group_id)
-        except Exception as rollback_error:
-            logger.error("Error during rollback: %s", str(rollback_error))
-
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
 

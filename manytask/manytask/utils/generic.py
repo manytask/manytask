@@ -4,13 +4,16 @@ import re
 import secrets
 from datetime import datetime
 from http import HTTPStatus
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from authlib.integrations.base_client import OAuthError
 from flask import session
 from requests import Response
 from requests.exceptions import HTTPError
 from sqlalchemy.exc import NoResultFound
+
+if TYPE_CHECKING:
+    from manytask.abstract import StorageApi
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +111,17 @@ def check_course_creation_namespace_permission(
             )
 
     return namespace, role, None, None
+
+
+def get_course_creation_conflict(storage_api: "StorageApi", course_name: str, course_group: str) -> str | None:
+    """Reject registered courses before touching reusable RMS resources."""
+    if storage_api.get_course_id_by_name(course_name) is not None:
+        return f"Course with name '{course_name}' already exists"
+    for name, _ in storage_api.get_all_courses_names_with_statuses():
+        course = storage_api.get_course(name)
+        if course is not None and course.gitlab_course_group == course_group:
+            return f"Course group '{course_group}' is already used by another course"
+    return None
 
 
 def check_oauth_authenticated(
