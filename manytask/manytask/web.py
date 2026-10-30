@@ -31,7 +31,12 @@ from .auth import (
     valid_rms_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
-from .database import UNBOUND_INSTANCE_ADMIN_AUTH_ID, UNBOUND_INSTANCE_ADMIN_RMS_ID, UserIdentityConflictError
+from .database import (
+    UNBOUND_INSTANCE_ADMIN_AUTH_ID,
+    UNBOUND_INSTANCE_ADMIN_RMS_ID,
+    CourseNotEmptyError,
+    UserIdentityConflictError,
+)
 from .main import CustomFlask
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
@@ -821,6 +826,30 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         course_users=course_users,
         rms=app.app_config.rms,
     )
+
+
+@instance_admin_bp.post("/courses/<course_name>/delete")
+@requires_course_admin
+def delete_course(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        abort(HTTPStatus.BAD_REQUEST, "CSRF validation failed")
+
+    if request.form.get("confirmation_name") != course_name:
+        flash("Course name does not match. Type the exact course name to confirm deletion.", category="error")
+    else:
+        try:
+            if app.storage_api.delete_course(course_name):
+                flash(f"Course '{course_name}' deleted successfully.", category="success")
+            else:
+                flash("Course not found.", category="course_not_found")
+            return redirect(url_for("root.index"))
+        except CourseNotEmptyError as e:
+            flash(str(e), category="error")
+
+    return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
 
 @instance_admin_bp.route("/panel", methods=["GET", "POST"])

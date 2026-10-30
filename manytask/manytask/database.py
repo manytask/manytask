@@ -63,6 +63,10 @@ class UserIdentityConflictError(Exception):
     """A username already belongs to a different authentication account."""
 
 
+class CourseNotEmptyError(Exception):
+    """A course cannot be deleted while users are registered on it."""
+
+
 def calculate_effective_grade(
     course_status: CourseStatus,
     grades_config: ManytaskFinalGradeConfig,
@@ -676,6 +680,19 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 logger.error("Failed to update course: course '%s' not found", settings_config.course_name)
                 return False
+
+    def delete_course(self, course_name: str) -> bool:
+        """Delete the course and its configuration only when nobody is registered."""
+        with self._session_create() as session:
+            # Block new registrations (FK key-share locks) until deletion commits.
+            course = session.scalar(select(Course).where(Course.name == course_name).with_for_update())
+            if course is None:
+                return False
+            if session.scalar(select(UserOnCourse.id).where(UserOnCourse.course_id == course.id).limit(1)) is not None:
+                raise CourseNotEmptyError("Cannot delete this course because users are already registered.")
+            session.delete(course)
+            session.commit()
+            return True
 
     def update_course(
         self,
