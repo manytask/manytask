@@ -898,7 +898,7 @@ def create_namespace() -> ResponseReturnValue:
 
         {
             "name": "HSE",
-            "slug": "hse-namespace",
+            "slug": "hse",
             "description": "Namespace for Higher School of Economics courses"
         }
 
@@ -927,6 +927,11 @@ def create_namespace() -> ResponseReturnValue:
     name = request_data.name
     slug = request_data.slug
     description = request_data.description
+
+    if slug.isdigit():
+        return jsonify(
+            ErrorResponse(error="Namespace slug cannot consist only of digits. Use a slug such as 'mipt'.").model_dump()
+        ), HTTPStatus.BAD_REQUEST
 
     gitlab_group_id = None
 
