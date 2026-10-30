@@ -1,6 +1,9 @@
 """Tests for course creation API endpoint."""
 
+from datetime import datetime
 from http import HTTPStatus
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 from flask import json
@@ -354,7 +357,7 @@ def test_create_course_with_invalid_owners_not_namespace_admin(
     assert "namespace_admin" in data["error"]
 
 
-def test_create_course_duplicate_course_name(client_with_db, session, mock_session_admin, test_namespace):
+def test_create_course_duplicate_course_name(client_with_db, session, mock_session_admin, test_namespace, mocker):
     """Test that creating course with duplicate name returns 409 Conflict."""
 
     namespace_id = test_namespace["id"]
@@ -372,6 +375,11 @@ def test_create_course_duplicate_course_name(client_with_db, session, mock_sessi
     )
     assert response1.status_code == HTTPStatus.CREATED
 
+    rms = client_with_db.application.rms_api
+    create_group = mocker.spy(rms, "create_course_group")
+    delete_group = mocker.spy(rms, "delete_group")
+    delete_project = mocker.spy(rms, "delete_project")
+
     # Try to create second course with same name but different slug
     response2 = post_json(
         client_with_db,
@@ -387,8 +395,12 @@ def test_create_course_duplicate_course_name(client_with_db, session, mock_sessi
     data = json.loads(response2.data)
     assert "error" in data
 
+    create_group.assert_not_called()
+    delete_group.assert_not_called()
+    delete_project.assert_not_called()
 
-def test_create_course_duplicate_slug(client_with_db, session, mock_session_admin, test_namespace):
+
+def test_create_course_duplicate_slug(client_with_db, session, mock_session_admin, test_namespace, mocker):
     """Test that creating course with duplicate slug returns 409 Conflict."""
 
     namespace_id = test_namespace["id"]
@@ -406,6 +418,11 @@ def test_create_course_duplicate_slug(client_with_db, session, mock_session_admi
     )
     assert response1.status_code == HTTPStatus.CREATED
 
+    rms = client_with_db.application.rms_api
+    create_group = mocker.spy(rms, "create_course_group")
+    delete_group = mocker.spy(rms, "delete_group")
+    delete_project = mocker.spy(rms, "delete_project")
+
     # Try to create second course with same slug but different name
     response2 = post_json(
         client_with_db,
@@ -420,6 +437,10 @@ def test_create_course_duplicate_slug(client_with_db, session, mock_session_admi
     assert response2.status_code == HTTPStatus.CONFLICT
     data = json.loads(response2.data)
     assert "error" in data
+
+    create_group.assert_not_called()
+    delete_group.assert_not_called()
+    delete_project.assert_not_called()
 
 
 def test_create_course_invalid_slug(client_with_db, mock_session_admin, test_namespace):
@@ -523,3 +544,62 @@ def test_create_course_with_nonexistent_owner(client_with_db, mock_session_admin
     assert response.status_code == HTTPStatus.BAD_REQUEST
     data = json.loads(response.data)
     assert "error" in data
+
+
+@pytest.mark.parametrize("failure", ["public", "students", "database", "conflict", "response"])
+def test_failed_course_setup_preserves_reused_resources(
+    client_with_db, mock_session_admin, test_namespace, failure: str
+) -> None:
+    app = client_with_db.application
+    rms = app.rms_api
+    group = f"{test_namespace['slug']}/reused-course"
+    group_id = rms.create_course_group(test_namespace["gitlab_group_id"], "Reused Course", "reused-course")
+    now = datetime.now()
+    last_spring_month = 6
+    semester = "spring" if now.month <= last_spring_month else "fall"
+    rms.create_public_repo(group, f"{group}/public-{now.year}-{semester}")
+    rms.create_students_group(f"{group}/students-{now.year}-{semester}", parent_group_id=group_id)
+    groups_before = dict(rms.groups)
+    projects_before = dict(rms.projects)
+    targets = {
+        "public": (rms, "create_public_repo"),
+        "students": (rms, "create_students_group"),
+        "database": (app.storage_api, "create_course"),
+        "conflict": (app.storage_api, "create_course"),
+        "response": (app.storage_api, "get_course_id_by_name"),
+    }
+    target, method = targets[failure]
+    outcome: dict[str, Any] = {"side_effect": RuntimeError("setup failed")}
+    if failure == "conflict":
+        outcome = {"return_value": False}
+    elif failure == "response":
+        outcome = {"side_effect": [None, RuntimeError("response failed")]}
+    with (
+        patch.object(target, method, **outcome),
+        patch.object(rms, "delete_group", wraps=rms.delete_group) as delete_group,
+        patch.object(rms, "delete_project", wraps=rms.delete_project) as delete_project,
+    ):
+        response = post_json_as(
+            client_with_db,
+            mock_session_admin,
+            "/api/admin/courses",
+            {"namespace_id": test_namespace["id"], "course_name": "Reused Course", "slug": "reused-course"},
+        )
+    expected_status = HTTPStatus.CONFLICT if failure == "conflict" else HTTPStatus.INTERNAL_SERVER_ERROR
+    assert response.status_code == expected_status
+    delete_group.assert_not_called()
+    delete_project.assert_not_called()
+    assert rms.groups == groups_before
+    assert rms.projects == projects_before
+
+
+def test_retry_course_creation_reuses_partial_setup(client_with_db, mock_session_admin, test_namespace) -> None:
+    app = client_with_db.application
+    payload = {"namespace_id": test_namespace["id"], "course_name": "Retry Course", "slug": "retry-course"}
+    with patch.object(app.rms_api, "create_students_group", side_effect=RuntimeError("temporary failure")):
+        first = post_json_as(client_with_db, mock_session_admin, "/api/admin/courses", payload)
+    assert first.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    group_id = app.rms_api.namespace_groups[f"{test_namespace['slug']}/retry-course"]
+    second = post_json(client_with_db, "/api/admin/courses", payload)
+    assert second.status_code == HTTPStatus.CREATED
+    assert app.rms_api.namespace_groups[f"{test_namespace['slug']}/retry-course"] == group_id

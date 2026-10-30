@@ -16,10 +16,11 @@
                     <div class="mb-3">
                         <label for="namespaceSlug" class="form-label">Slug *</label>
                         <input type="text" class="form-control" id="namespaceSlug" name="slug" required
-                               placeholder="hse-namespace"
+                               placeholder="hse"
                                pattern="^[a-zA-Z0-9._-]+$"
                                title="Only letters, digits, underscores, dots, or dashes">
-                        <small class="form-text text-muted">Must start/end with alphanumeric, no consecutive special chars</small>
+                        <small class="form-text text-muted">Must start/end with alphanumeric, no consecutive special chars.
+                            Cannot consist only of digits (e.g. use mipt).</small>
                     </div>
                     <div class="mb-3">
                         <label for="namespaceDescription" class="form-label">Description</label>
