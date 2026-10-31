@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -26,6 +27,8 @@ class CppRunTestsPlugin(PluginABC):
         args: list[str]
         paths_whitelist: list[str]
         lock_network: bool = True
+        cuda_compute_sanitizer: bool = False
+        env_whitelist: list[str] = list()
 
     @staticmethod
     def _get_sanitizers_env(args: Args, path: Path) -> dict[str, str]:
@@ -47,11 +50,20 @@ class CppRunTestsPlugin(PluginABC):
 
     @staticmethod
     def _run_tests(args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool) -> None:
+        # Dump the GPU device we use to test CUDA code if one is set
+        if "CUDA_VISIBLE_DEVICES" in args.env_whitelist:
+            print_info(f"CUDA_VISIBLE_DEVICES is set to `{os.getenv('CUDA_VISIBLE_DEVICES')}`")
+
         env = CppRunTestsPlugin._get_sanitizers_env(args, tmp_dir)
         paths_whitelist = [str(args.root / p) for p in args.paths_whitelist]
         run_args = SafeRunScriptPlugin.Args(
             origin=str(build_dir),
-            script=[
+            script=(
+                ["/usr/local/cuda/bin/compute-sanitizer", "--leak-check", "full", "--error-exitcode", "1"]
+                if args.cuda_compute_sanitizer
+                else []
+            )
+            + [
                 str(build_dir / target),
                 "-r",
                 f"console::out={tmp_dir / CppRunTestsPlugin._REPORT}::colour-mode=ansi",
@@ -61,6 +73,7 @@ class CppRunTestsPlugin(PluginABC):
             timeout=args.timeout,
             paths_whitelist=paths_whitelist,
             lock_network=args.lock_network,
+            env_whitelist=args.env_whitelist,
         )
         try:
             SafeRunScriptPlugin()._run(run_args, verbose=verbose)
