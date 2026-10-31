@@ -2151,3 +2151,75 @@ def test_constant_queries(  # noqa: PLR0913
     queries_scaled = counter.value
 
     assert queries_initial == queries_scaled
+
+
+def _with_min_score(deadlines_config: ManytaskDeadlinesConfig, task_name: str, min_score: int):
+    config = deadlines_config.model_copy(deep=True)
+    for group in config.schedule:
+        for task in group.tasks:
+            if task.name == task_name:
+                task.min_score = min_score
+    return config
+
+
+def _set_value(value: int):
+    return lambda _flags, _old_score: value
+
+
+def test_store_score_marks_large_task_solved(
+    db_api_with_initialized_first_course, first_course_deadlines_config, first_course_grade_config
+):
+    db_api = db_api_with_initialized_first_course
+    ui_config = ManytaskUiConfig(task_url_template="https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME")
+    large_task = "task_5_0"
+
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ui_config,
+        _with_min_score(first_course_deadlines_config, large_task, 30),
+        first_course_grade_config,
+    )
+    create_user(db_api, STUDENT_1)
+    create_user(db_api, STUDENT_2)
+
+    # below min_score: not solved; regular tasks are never marked
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(20))
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", _set_value(1))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == set()
+
+    # reaches min_score: solved
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(30))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == {large_task}
+
+    # raise min_score: already solved task stays solved, new submissions can't solve it anymore
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ui_config,
+        _with_min_score(first_course_deadlines_config, large_task, 10000),
+        first_course_grade_config,
+    )
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_2, large_task, _set_value(50))
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(25))  # e.g. reduced by admin
+
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == {large_task}
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_2) == set()
+
+    all_scores = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)
+    assert all_scores[TEST_USERNAME_1].task_scores[large_task] == TaskScore(score=25, is_solved=True)
+    assert all_scores[TEST_USERNAME_2].task_scores[large_task] == TaskScore(score=50, is_solved=False)
+    assert all_scores[TEST_USERNAME_1].count_solved_large_tasks([(large_task, 10000)]) == 1
+    assert all_scores[TEST_USERNAME_2].count_solved_large_tasks([(large_task, 10000)]) == 0
+
+
+def test_store_zero_score_does_not_mark_large_task_solved(db_api_with_initialized_first_course):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    # task_5_0 is large with min_score 0: zero score must not be remembered as solved
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(0))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME) == set()
+
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(1))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME) == {"task_5_0"}

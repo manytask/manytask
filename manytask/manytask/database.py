@@ -208,6 +208,15 @@ class DataBaseApi(StorageApi):
 
         return scores
 
+    def get_solved_tasks(self, course_name: str, username: str) -> set[str]:
+        """Names of the user's enabled and started tasks marked as `is_solved`."""
+
+        with self._session_create() as session:
+            grades = self._get_scores(session, course_name, username, enabled=True, started=True, only_bonus=False)
+            if grades is None:
+                return set()
+            return {grade.task.name for grade in grades if grade.is_solved}
+
     def get_bonus_score(
         self,
         course_name: str,
@@ -568,6 +577,11 @@ class DataBaseApi(StorageApi):
                 new_score = update_fn("", grade.score)
                 grade.score = new_score
                 grade.last_submit_date = datetime.now(timezone.utc)
+
+                # Remember that a large task was solved under the min_score in force right now,
+                # so that raising min_score later does not take it away. Never reset automatically.
+                if task.is_large and new_score > 0 and new_score >= task.min_score:
+                    grade.is_solved = True
 
                 session.commit()
                 logger.info(
