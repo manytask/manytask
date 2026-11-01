@@ -26,7 +26,7 @@ colima list
 
 ## Quick start (recommended)
 
-The fastest way to get a fully working stack — Manytask + local GitLab in Docker — is the bundled startup script:
+The fastest way to get a fully working stack — Manytask, documentation, and local GitLab in Docker — is the bundled startup script:
 
 ```bash
 cd manytask
@@ -37,7 +37,7 @@ If `.env` is missing, the script creates it from `.env.example`.
 
 The script does the following:
 
-1. Starts the Docker containers (Manytask, Postgres, local GitLab). The local GitLab uses the same Postgres container as Manytask, with its own role and database.
+1. Builds and starts the Docker containers (Manytask, documentation, Postgres, local GitLab). The local GitLab uses the same Postgres container as Manytask, with its own role and database. Documentation is built with Diplodoc and served by Nginx; no local Node.js installation is needed.
 2. Waits for GitLab to become ready.
 3. Runs `scripts/setup_local_gitlab.sh`, which:
    - creates or reuses an admin Personal Access Token (`manytask-admin`),
@@ -51,7 +51,7 @@ The script does the following:
    - `GITLAB_CLIENT_SECRET`
 5. Restarts Manytask to pick up the updated environment variables.
 
-After the script finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/), the local GitLab at [http://localhost:8929/](http://localhost:8929/), and its container registry at `localhost:5050`.
+After the script finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/), documentation at [http://localhost:8082/](http://localhost:8082/), the local GitLab at [http://localhost:8929/](http://localhost:8929/), and its container registry at `localhost:5050`.
 
 Continue with [Adding a course](#adding-a-course) below.
 
@@ -309,6 +309,12 @@ Rebuild and restart only Manytask:
 
 ```bash
 docker compose --env-file .env -f compose/docker-compose.development.yml up --build --no-deps -d manytask
+```
+
+Rebuild and restart documentation after editing files in `docs/`:
+
+```bash
+docker compose --env-file .env -f compose/docker-compose.development.yml up --build --no-deps -d docs
 ```
 
 Stop the stack:

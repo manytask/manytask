@@ -97,12 +97,21 @@ class StudentCourseScores:
         return sum(task_score.score for task_score in self.task_scores.values())
 
     def count_solved_large_tasks(self, large_tasks: Iterable[tuple[str, int]]) -> int:
-        """Count large tasks where the student reached the required minimal score.
+        """Count solved large tasks.
+
+        A large task is solved if it is marked `is_solved` (the student reached min_score at the
+        moment of submission, so raising min_score later does not take it away) or if the current
+        score reaches the current min_score.
 
         :param large_tasks: iterable of (task_name, min_score) pairs
         """
-        scores = self.scores
-        return sum(1 for task_name, min_score in large_tasks if scores.get(task_name, 0) >= min_score)
+        return sum(1 for task_name, min_score in large_tasks if self.is_task_solved(task_name, min_score))
+
+    def is_task_solved(self, task_name: str, min_score: int) -> bool:
+        task_score = self.task_scores.get(task_name)
+        if task_score is None:
+            return 0 >= min_score
+        return task_score.is_solved or task_score.score >= min_score
 
 
 class StorageApi(ABC):
@@ -112,6 +121,11 @@ class StorageApi(ABC):
         course_name: str,
         username: str,
     ) -> dict[str, int]: ...
+
+    @abstractmethod
+    def get_solved_tasks(self, course_name: str, username: str) -> set[str]:
+        """Names of the user's tasks marked as `is_solved`."""
+        ...
 
     @abstractmethod
     def get_bonus_score(
