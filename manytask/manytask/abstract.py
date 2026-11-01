@@ -311,6 +311,9 @@ class StorageApi(ABC):
     def update_namespace(self, namespace_id: int, name: str, description: str | None) -> Any: ...
 
     @abstractmethod
+    def delete_namespace(self, namespace_id: int, name: str) -> None: ...
+
+    @abstractmethod
     def add_user_to_namespace(
         self,
         namespace_id: int,
