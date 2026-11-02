@@ -11,7 +11,7 @@ from flask import json, url_for
 from pytest import approx
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import CourseAccessUser, RmsUser
+from manytask.abstract import CourseAccessUser, RmsUser, StudentCourseScores, TaskScore
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
@@ -73,6 +73,10 @@ def mock_task():
         def __init__(self):
             self.name = TEST_TASK_NAME
             self.score = 100
+            self.min_score = 50
+            self.enabled = True
+            self.is_large = True
+            self.is_bonus = False
 
     return MockTask()
 
@@ -100,17 +104,34 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
         def __init__(self):
             super().__init__()
             self.scores = {}
+            self.solved = {}
             self.non_admin_users: set[str] = set()
 
-        def store_score(self, _course_name, username, task_name, update_fn):
+        def store_score(self, _course_name, username, task_name, update_fn, *, is_solved=None):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
             new_score = update_fn("", old_score)
             self.scores[f"{username}_{task_name}"] = new_score
+            if is_solved is not None:
+                self.solved[f"{username}_{task_name}"] = is_solved
             return new_score
 
         @staticmethod
         def get_scores(_course_name, _username):
             return {"task1": 100, "task2": 90, "test_task": 80}
+
+        def get_all_scores_with_names(self, _course_name, *, username=None) -> dict[str, StudentCourseScores]:
+            username = self.stored_user.username
+            return {
+                username: StudentCourseScores(
+                    username=username,
+                    first_name=self.stored_user.first_name,
+                    last_name=self.stored_user.last_name,
+                    task_scores={
+                        key.removeprefix(f"{username}_"): TaskScore(score, self.solved.get(key, False))
+                        for key, score in self.scores.items()
+                    },
+                )
+            }
 
         @staticmethod
         def get_course(_name):
@@ -543,7 +564,11 @@ def test_update_database_missing_fields(app, authenticated_client):
     assert "Invalid request data" in data["message"]
 
 
-def test_update_database_success(app, authenticated_client):
+@pytest.mark.parametrize("is_solved", [True, False, None])
+@pytest.mark.parametrize("score", [0, 90])
+def test_update_database_success(app, authenticated_client, is_solved: bool | None, score: int) -> None:
+    score_key = f"{TEST_USERNAME}_task1"
+    app.storage_api.solved[score_key] = True
     test_data = {
         "row_data": {
             "username": TEST_USERNAME,
@@ -552,13 +577,55 @@ def test_update_database_success(app, authenticated_client):
             "percent": 0,
             "large_count": 0,
             "scores": {},
+            "solved": {"task1": True},
         },
-        "new_scores": {"task1": 90, "task2": 85},
+        "new_scores": {"task1": score, "task2": 85},
     }
+    if is_solved is not None:
+        test_data["new_solved"] = {"task1": is_solved}
     response = authenticated_client.post(f"/api/{TEST_COURSE_NAME}/database/update", json=test_data)
     assert response.status_code == HTTPStatus.OK
     data = json.loads(response.data)
     assert data["success"]
+    row = json.loads(data["row_data"])
+    expected_solved = True if is_solved is None else is_solved
+    assert app.storage_api.scores[score_key] == score
+    assert app.storage_api.solved[score_key] is expected_solved
+    assert row["scores"] == {"task1": score, "task2": 85}
+    assert row["solved"] == {"task1": expected_solved, "task2": False}
+    assert row["total_score"] == score + 85
+
+
+@pytest.mark.parametrize("invalid_solved", ["true", 1, None])
+def test_update_database_invalid_solved(app, authenticated_client, invalid_solved: object) -> None:
+    response = authenticated_client.post(
+        f"/api/{TEST_COURSE_NAME}/database/update",
+        json={
+            "row_data": {
+                "username": TEST_USERNAME,
+                "total_score": 0,
+                "grade": 0,
+                "percent": 0,
+                "large_count": 0,
+                "scores": {},
+            },
+            "new_scores": {"task1": 0},
+            "new_solved": {"task1": invalid_solved},
+        },
+    )
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert app.storage_api.scores == {}
+    assert app.storage_api.solved == {}
+
+
+def test_update_database_solved_requires_admin(app, authenticated_client) -> None:
+    app.storage_api.non_admin_users.add(TEST_USERNAME)
+    response = authenticated_client.post(
+        f"/api/{TEST_COURSE_NAME}/database/update",
+        json={"new_scores": {"task1": 0}, "new_solved": {"task1": True}},
+    )
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert app.storage_api.solved == {}
 
 
 def test_update_database_invalid_score_type(app, authenticated_client):
@@ -1717,9 +1784,14 @@ def test_report_score_counts_large_task_marked_solved(app, solved_tasks, expecte
             tasks=[ManytaskTaskConfig(task="vm", score=450, is_large=True, min_score=10000)],
         )
     ]
-    storage.get_scores = lambda _course_name, _username: {"vm": 330}
-    storage.get_solved_tasks = lambda _course_name, _username: solved_tasks
-    storage.get_bonus_score = lambda _course_name, _username: 0
+    storage.get_all_scores_with_names = lambda _course_name, **_kwargs: {
+        TEST_USERNAME: StudentCourseScores(
+            username=TEST_USERNAME,
+            first_name=TEST_FIRST_NAME,
+            last_name=TEST_LAST_NAME,
+            task_scores={"vm": TaskScore(330, "vm" in solved_tasks)},
+        )
+    }
     rows = []
     storage.calculate_and_save_grade = lambda _course_name, _username, row: rows.append(row)
 
