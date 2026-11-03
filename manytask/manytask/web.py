@@ -848,6 +848,11 @@ def delete_course(course_name: str) -> ResponseReturnValue:
     except CourseNotEmptyError as e:
         return {"error": str(e)}, HTTPStatus.CONFLICT
 
+    logger.info(
+        "Successfully deleted course '%s' by user '%s'",
+        sanitize_log_data(course_name),
+        sanitize_log_data(session.get("manytask", {}).get("username")),
+    )
     flash(f"Course '{course_name}' deleted successfully.", category="success")
     return {"redirect_url": url_for("root.index")}
 
