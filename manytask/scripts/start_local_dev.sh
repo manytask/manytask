@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # This script starts the full local development environment:
-# 1. Starts all Docker containers
+# 1. Builds and starts all Docker containers, including the documentation site
 # 2. Waits for GitLab to be ready
 # 3. Sets up GitLab OAuth and tokens
 # 4. Restarts Manytask with new environment variables
@@ -55,8 +55,8 @@ ensure_env_file() {
 }
 
 start_containers() {
-    log "Starting Docker containers..."
-    docker compose --env-file .env -f "${COMPOSE_FILE}" up -d
+    log "Building and starting Docker containers..."
+    docker compose --env-file .env -f "${COMPOSE_FILE}" up --build -d
     log "Containers started."
 }
 
@@ -111,6 +111,7 @@ show_success_message() {
     echo ""
     echo "Services:"
     echo "  Manytask:    http://localhost:8081"
+    echo "  Docs:        http://localhost:8082"
     echo "  GitLab:      http://localhost:8929"
     echo "  Registry:    localhost:5050"
     echo ""
@@ -126,6 +127,8 @@ show_success_message() {
     echo "                docker restart test-manytask"
     echo "  Rebuild and restart Manytask:"
     echo "                docker compose --env-file .env -f ${COMPOSE_FILE} up --build --no-deps -d manytask"
+    echo "  Rebuild and restart docs:"
+    echo "                docker compose --env-file .env -f ${COMPOSE_FILE} up --build --no-deps -d docs"
     echo "  Stop all:     docker compose --env-file .env -f ${COMPOSE_FILE} down"
     echo ""
 }

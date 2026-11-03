@@ -1,6 +1,9 @@
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from http import HTTPStatus
+from importlib import import_module
 from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -8,6 +11,8 @@ from zoneinfo import ZoneInfo
 import pytest
 import yaml
 from alembic import command
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import event
@@ -15,6 +20,7 @@ from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
 from manytask.abstract import StudentCourseScores, TaskScore
+from manytask.api import bp as api_bp
 from manytask.config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -33,6 +39,7 @@ from manytask.database import (
     TaskDisabledError,
     UserIdentityConflictError,
 )
+from manytask.mock_rms import MockRmsApi
 from manytask.models import (
     ComplexFormula,
     Course,
@@ -79,6 +86,7 @@ from tests.constants import (
     TEST_USERNAME_2,
     USER_EXPECTED,
 )
+from tests.helpers import make_flask_app
 
 
 class TestException(Exception):
@@ -899,6 +907,110 @@ def test_store_score(db_api_with_initialized_first_course, session):
         0,
         {"task_0_0": 1},
     )
+
+
+def test_store_score_solved_status(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    task = session.query(Task).filter_by(name="task_0_0").one()
+    task.min_score = 50
+    task.is_large = True
+    session.commit()
+
+    # Automatic reports preserve earned completion; explicit edits may override it.
+    updates = [
+        (0, True, True),
+        (50, None, True),
+        (50, False, False),
+        (50, None, False),
+        (49, None, False),
+        (50, None, True),
+        (49, None, True),
+    ]
+    for score, is_solved, expected_solved in updates:
+        saved_score = db_api.store_score(
+            FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", lambda _flags, _old_score: score, is_solved=is_solved
+        )
+        assert saved_score == score
+        session.expire_all()
+        grade = session.query(Grade).one()
+        assert grade.score == score
+        assert grade.is_solved is expected_solved
+        student = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)[TEST_USERNAME]
+        assert student.task_scores["task_0_0"] == TaskScore(score, expected_solved)
+
+
+def test_database_solved_round_trip(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    course = session.query(Course).one()
+    course.status = CourseStatus.IN_PROGRESS
+    task = session.query(Task).filter_by(name="task_0_0").one()
+    task.is_large = True
+    task.min_score = 50
+    session.commit()
+    db_api._sync_grades_config(
+        FIRST_COURSE_NAME,
+        ManytaskFinalGradeConfig(grades={5: [{Path("large_count"): 1}], 2: [{Path("total_score"): 0}]}),
+    )
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, task.name, lambda _flags, _old_score: 0)
+    app = make_flask_app(api_bp)
+    app.storage_api = db_api
+    app.rms_api = MockRmsApi("https://gitlab.test.com")
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {course.token}"}
+    url = f"/api/{FIRST_COURSE_NAME}/database"
+
+    for score, is_solved in [(0, True), (0, False), (50, False), (50, True)]:
+        snapshot = client.get(url, headers=headers).get_json()
+        row = next(row for row in snapshot["students"] if row["username"] == TEST_USERNAME)
+        # Stale browser counters must never determine the saved grade or response.
+        row["large_count"] = 99
+        response = client.post(
+            f"{url}/update",
+            headers=headers,
+            json={"row_data": row, "new_scores": {task.name: score}, "new_solved": {task.name: is_solved}},
+        )
+        assert response.status_code == HTTPStatus.OK
+        payload = response.get_json()
+        assert payload["success"] is True
+        saved_row = json.loads(payload["row_data"])
+        assert saved_row["scores"][task.name] == score
+        assert saved_row["solved"][task.name] is is_solved
+        assert saved_row["large_count"] == int(is_solved)
+        assert saved_row["grade"] == (5 if is_solved else 2)
+        session.expire_all()
+        assert session.query(Grade).one().is_solved is is_solved
+        reloaded = client.get(url, headers=headers).get_json()
+        reloaded_row = next(row for row in reloaded["students"] if row["username"] == TEST_USERNAME)
+        assert reloaded_row["solved"][task.name] is is_solved
+        assert reloaded_row["large_count"] == int(is_solved)
+        assert reloaded_row["grade"] == saved_row["grade"]
+        db_api.recalculate_all_grades(FIRST_COURSE_NAME)
+        assert db_api.get_effective_grade(FIRST_COURSE_NAME, TEST_USERNAME) == saved_row["grade"]
+
+
+def test_completion_flag_backfill(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    old_scores = {"task_0_0": (50, False), "task_0_1": (49, False), "task_0_2": (0, True)}
+    for task_name, (score, is_solved) in old_scores.items():
+        session.query(Task).filter_by(name=task_name).one().min_score = 50
+        session.commit()
+        db_api.store_score(
+            FIRST_COURSE_NAME, TEST_USERNAME, task_name, lambda _flags, _old_score: score, is_solved=is_solved
+        )
+
+    migration = import_module("manytask.migrations.versions.d2e3f4a5b6c7_backfill_task_completion")
+    with Operations.context(MigrationContext.configure(session.connection())):
+        migration.upgrade()
+    session.expire_all()
+    student = db_api.get_all_scores_with_names(FIRST_COURSE_NAME, username=TEST_USERNAME)[TEST_USERNAME]
+    assert student.task_scores == {
+        "task_0_0": TaskScore(50, True),
+        "task_0_1": TaskScore(49, False),
+        "task_0_2": TaskScore(0, True),
+    }
 
 
 def test_store_bonus_score(db_api_with_initialized_first_course, session):
@@ -2197,3 +2309,75 @@ def test_constant_queries(  # noqa: PLR0913
     queries_scaled = counter.value
 
     assert queries_initial == queries_scaled
+
+
+def _with_min_score(deadlines_config: ManytaskDeadlinesConfig, task_name: str, min_score: int):
+    config = deadlines_config.model_copy(deep=True)
+    for group in config.schedule:
+        for task in group.tasks:
+            if task.name == task_name:
+                task.min_score = min_score
+    return config
+
+
+def _set_value(value: int):
+    return lambda _flags, _old_score: value
+
+
+def test_store_score_marks_large_task_solved(
+    db_api_with_initialized_first_course, first_course_deadlines_config, first_course_grade_config
+):
+    db_api = db_api_with_initialized_first_course
+    ui_config = ManytaskUiConfig(task_url_template="https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME")
+    large_task = "task_5_0"
+
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ui_config,
+        _with_min_score(first_course_deadlines_config, large_task, 30),
+        first_course_grade_config,
+    )
+    create_user(db_api, STUDENT_1)
+    create_user(db_api, STUDENT_2)
+
+    # below min_score: not solved; regular tasks are never marked
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(20))
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", _set_value(1))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == set()
+
+    # reaches min_score: solved
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(30))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == {large_task}
+
+    # raise min_score: already solved task stays solved, new submissions can't solve it anymore
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ui_config,
+        _with_min_score(first_course_deadlines_config, large_task, 10000),
+        first_course_grade_config,
+    )
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_2, large_task, _set_value(50))
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(25))  # e.g. reduced by admin
+
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == {large_task}
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_2) == set()
+
+    all_scores = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)
+    assert all_scores[TEST_USERNAME_1].task_scores[large_task] == TaskScore(score=25, is_solved=True)
+    assert all_scores[TEST_USERNAME_2].task_scores[large_task] == TaskScore(score=50, is_solved=False)
+    assert all_scores[TEST_USERNAME_1].count_solved_large_tasks([large_task]) == 1
+    assert all_scores[TEST_USERNAME_2].count_solved_large_tasks([large_task]) == 0
+
+
+def test_store_zero_score_does_not_mark_large_task_solved(db_api_with_initialized_first_course):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    # task_5_0 is large with min_score 0: zero score must not be remembered as solved
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(0))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME) == set()
+
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(1))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME) == {"task_5_0"}
