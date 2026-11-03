@@ -1177,6 +1177,7 @@ def test_course_admin_can_delete_empty_course(app: Flask, course_admin_client: F
     form = _course_delete_form(course_admin_client)
     assert form.find("input", {"name": "confirmation_name"})["required"] == ""
     assert form.find("button", {"type": "submit"}).has_attr("disabled")
+    assert form.find(id="deleteCourseError")["role"] == "alert"
     with patch.object(app.storage_api, "delete_course", create=True, return_value=True) as delete:
         response = course_admin_client.post(
             form["action"],
@@ -1186,8 +1187,8 @@ def test_course_admin_can_delete_empty_course(app: Flask, course_admin_client: F
             },
         )
     delete.assert_called_once_with(TEST_COURSE_NAME)
-    assert response.status_code == HTTPStatus.FOUND
-    assert response.location == "/"
+    assert response.status_code == HTTPStatus.OK
+    assert response.json == {"redirect_url": "/"}
     with course_admin_client.session_transaction() as session:
         assert ("success", f"Course '{TEST_COURSE_NAME}' deleted successfully.") in session["_flashes"]
 
@@ -1201,9 +1202,10 @@ def test_delete_course_requires_exact_name(
     if confirmation is not None:
         data["confirmation_name"] = confirmation
     with patch.object(app.storage_api, "delete_course", create=True) as delete:
-        response = course_admin_client.post(form["action"], data=data, follow_redirects=True)
+        response = course_admin_client.post(form["action"], data=data)
     delete.assert_not_called()
-    assert b"Course name does not match" in response.data
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "Course name does not match" in response.json["error"]
 
 
 def test_delete_populated_course_shows_error(app: Flask, course_admin_client: FlaskClient) -> None:
@@ -1218,10 +1220,12 @@ def test_delete_populated_course_shows_error(app: Flask, course_admin_client: Fl
                 "csrf_token": form.find("input", {"name": "csrf_token"})["value"],
                 "confirmation_name": TEST_COURSE_NAME,
             },
-            follow_redirects=True,
         )
     delete.assert_called_once_with(TEST_COURSE_NAME)
-    assert message.encode() in response.data
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json == {"error": message}
+    with course_admin_client.session_transaction() as session:
+        assert not session.get("_flashes")
 
 
 def test_delete_course_requires_admin(app: Flask, course_admin_client: FlaskClient) -> None:

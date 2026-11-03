@@ -835,21 +835,21 @@ def delete_course(course_name: str) -> ResponseReturnValue:
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError:
-        abort(HTTPStatus.BAD_REQUEST, "CSRF validation failed")
+        return {"error": "CSRF validation failed"}, HTTPStatus.BAD_REQUEST
 
     if request.form.get("confirmation_name") != course_name:
-        flash("Course name does not match. Type the exact course name to confirm deletion.", category="error")
-    else:
-        try:
-            if app.storage_api.delete_course(course_name):
-                flash(f"Course '{course_name}' deleted successfully.", category="success")
-            else:
-                flash("Course not found.", category="course_not_found")
-            return redirect(url_for("root.index"))
-        except CourseNotEmptyError as e:
-            flash(str(e), category="error")
+        return {
+            "error": "Course name does not match. Type the exact course name to confirm deletion."
+        }, HTTPStatus.BAD_REQUEST
 
-    return redirect(url_for("instance_admin.edit_course", course_name=course_name))
+    try:
+        if not app.storage_api.delete_course(course_name):
+            return {"error": "Course not found."}, HTTPStatus.NOT_FOUND
+    except CourseNotEmptyError as e:
+        return {"error": str(e)}, HTTPStatus.CONFLICT
+
+    flash(f"Course '{course_name}' deleted successfully.", category="success")
+    return {"redirect_url": url_for("root.index")}
 
 
 @instance_admin_bp.route("/panel", methods=["GET", "POST"])

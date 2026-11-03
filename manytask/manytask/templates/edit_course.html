@@ -191,7 +191,7 @@
 <div class="modal fade" id="deleteCourseModal" tabindex="-1" aria-labelledby="deleteCourseModalLabel"
      aria-hidden="true">
     <div class="modal-dialog">
-        <form class="modal-content" method="POST"
+        <form id="deleteCourseForm" class="modal-content" method="POST"
               action="{{ url_for('instance_admin.delete_course', course_name=course.course_name) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="modal-header">
@@ -205,7 +205,9 @@
                     Type <strong>{{ course.course_name }}</strong> to confirm deletion.
                 </label>
                 <input type="text" class="form-control" id="delete-course-name" name="confirmation_name"
-                       data-course-name="{{ course.course_name }}" required autocomplete="off" spellcheck="false">
+                       data-course-name="{{ course.course_name }}" required autocomplete="off" spellcheck="false"
+                       aria-describedby="deleteCourseError">
+                <div id="deleteCourseError" class="alert alert-danger d-none mt-3" role="alert"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -257,23 +259,13 @@
 <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
 <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
+<script src="{{ url_for('static', filename='js/course-delete.js') }}"></script>
 <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
       id="light-theme">
 <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
       id="dark-theme" disabled>
 
 <script>
-
-    const deleteCourseName = document.getElementById('delete-course-name');
-    const deleteCourseSubmit = document.getElementById('delete-course-submit');
-    function validateDeleteCourseName() {
-        deleteCourseSubmit.disabled = deleteCourseName.value !== deleteCourseName.dataset.courseName;
-    }
-    deleteCourseName.addEventListener('input', validateDeleteCourseName);
-    document.getElementById('deleteCourseModal').addEventListener('hidden.bs.modal', function () {
-        deleteCourseName.value = '';
-        validateDeleteCourseName();
-    });
 
     function toggleSecret(fieldId, btn) {
         const input = document.getElementById(fieldId);
