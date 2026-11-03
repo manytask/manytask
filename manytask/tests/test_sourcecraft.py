@@ -251,10 +251,14 @@ def test_create_project_is_idempotent_when_repo_already_exists(sourcecraft_api: 
 
 
 @pytest.mark.parametrize("status", [HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT, HTTPStatus.UNPROCESSABLE_ENTITY])
-def test_existing_student_repo_recovery_grants_role_to_invitee(sourcecraft_api: SourceCraftApi, status: int) -> None:
+@pytest.mark.parametrize("error_code", ["FailedPrecondition", "UserNotOrganizationMember"])
+def test_existing_student_repo_recovery_grants_role_to_invitee(
+    sourcecraft_api: SourceCraftApi, status: int, error_code: str
+) -> None:
     rms_user = RmsUser(id=TEST_RMS_ID, username=SOURCECRAFT_USERNAME, name="Test User")
     repo_slug = f"{TEST_STUDENTS_GROUP}-{SOURCECRAFT_USERNAME}"
     role_subjects: list[dict[str, str]] = []
+    invitations: list[dict[str, Any]] = []
 
     def respond(method: str, path: str, **kwargs: Any) -> httpx.Response:
         if method == "GET" and path == f"repos/{TEST_ORG}/{TEST_PUBLIC_REPO}":
@@ -267,19 +271,26 @@ def test_existing_student_repo_recovery_grants_role_to_invitee(sourcecraft_api: 
             subject = kwargs["json"]["subject_roles"][0]["subject"].copy()
             role_subjects.append(subject)
             if subject["type"] == "user":
-                return httpx.Response(HTTPStatus.BAD_REQUEST, json={"error_code": "FailedPrecondition"})
+                return httpx.Response(HTTPStatus.BAD_REQUEST, json={"error_code": error_code})
             return httpx.Response(HTTPStatus.OK)
+        if method == "POST" and path == f"orgs/{TEST_ORG}/invites":
+            invitations.append(kwargs["json"])
+            return httpx.Response(
+                HTTPStatus.ACCEPTED,
+                json={"status": "success", "response": {"invites": [{"subject": {"id": "test-invitee"}}]}},
+            )
         raise AssertionError(f"Unexpected request {method} {path}")
 
     with (
         patch.object(sourcecraft_api, "_request", side_effect=respond),
-        patch.object(sourcecraft_api, "_invite_user", return_value="test-invitee") as invite_user,
+        patch.object(sourcecraft_api, "get_rms_user_by_id", return_value=rms_user) as get_user,
     ):
         sourcecraft_api.create_project(
             rms_user, TEST_STUDENTS_GROUP, TEST_PUBLIC_REPO, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES
         )
 
-    invite_user.assert_called_once_with(TEST_RMS_ID)
+    get_user.assert_called_once_with(TEST_RMS_ID)
+    assert invitations == [{"invitees": [{"slug": SOURCECRAFT_USERNAME}]}]
     assert role_subjects == [{"type": "user", "id": TEST_RMS_ID}, {"type": "invitee", "id": "test-invitee"}]
 
 

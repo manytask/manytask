@@ -212,7 +212,7 @@ class SourceCraftApi(RmsApi):
         response = self._post_repo_role(repo_slug, payload)
         if response.status_code != HTTPStatus.OK:
             data = response.json()
-            if data.get("error_code", "") == "FailedPrecondition":
+            if data.get("error_code", "") in {"FailedPrecondition", "UserNotOrganizationMember"}:
                 logger.info(f"User {user_id} not found in org {self._org_slug}, inviting them")
                 invitee_id = self._invite_user(user_id)
                 payload["subject_roles"][0]["subject"] = {
