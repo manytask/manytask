@@ -403,7 +403,9 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]:
+    def get_all_scores_with_names(
+        self, course_name: str, *, username: str | None = None
+    ) -> dict[str, StudentCourseScores]:
         """Get all users' scores with names and grade data for the given course.
 
         Returns:
@@ -456,6 +458,8 @@ class DataBaseApi(StorageApi):
                 )
             )
 
+            if username is not None:
+                statement = statement.where(User.username == username)
             rows = session.execute(statement).all()
 
             admin_user_ids: set[int] = set()
@@ -551,13 +555,22 @@ class DataBaseApi(StorageApi):
             }
             # fmt: on
 
-    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int:
+    def store_score(
+        self,
+        course_name: str,
+        username: str,
+        task_name: str,
+        update_fn: Callable[..., Any],
+        *,
+        is_solved: bool | None = None,
+    ) -> int:
         """Method for storing user's task score
 
         :param course_name: course name
         :param username: user name
         :param task_name: task name
         :param update_fn: function for updating the score
+        :param is_solved: explicit solved status; otherwise preserve completion earned by large tasks
 
         :return: saved score
         """
@@ -579,13 +592,13 @@ class DataBaseApi(StorageApi):
 
                 grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
                 new_score = update_fn("", grade.score)
+                if is_solved is not None:
+                    grade.is_solved = is_solved
+                elif new_score != grade.score and task.is_large and new_score > 0 and new_score >= task.min_score:
+                    # Preserve completion earned under an earlier min_score unless explicitly overridden.
+                    grade.is_solved = True
                 grade.score = new_score
                 grade.last_submit_date = datetime.now(timezone.utc)
-
-                # Remember that a large task was solved under the min_score in force right now,
-                # so that raising min_score later does not take it away. Never reset automatically.
-                if task.is_large and new_score > 0 and new_score >= task.min_score:
-                    grade.is_solved = True
 
                 session.commit()
                 logger.info(
@@ -2645,7 +2658,7 @@ class DataBaseApi(StorageApi):
                     if not task.is_bonus:
                         max_score += task.score
                     if task.is_large:
-                        large_tasks.append((task.name, task.min_score))
+                        large_tasks.append(task.name)
 
         grades_to_save: dict[str, int] = {}
 
