@@ -3,6 +3,8 @@ from .checker import (  # noqa: F401
     CheckerExportConfig,
     CheckerStructureConfig,
     CheckerSubConfig,
+    CheckerTaskFileConfig,
+    CheckerTasksFileConfig,
     CheckerTestingConfig,
     PipelineStageConfig,
 )

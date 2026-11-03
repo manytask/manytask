@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import zoneinfo
+from collections.abc import Generator
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -8,6 +10,20 @@ import pytest
 from pydantic import ValidationError
 
 from checker.configs.manytask import ManytaskDeadlinesConfig, ManytaskGroupConfig
+
+
+@pytest.fixture(params=[False, True], ids=["default-tzpath", "package-tzdata"])
+def timezone_database(request: pytest.FixtureRequest) -> Generator[None, None, None]:
+    original_path = zoneinfo.TZPATH
+    if request.param:
+        zoneinfo.reset_tzpath(())
+    ZoneInfo.clear_cache()
+    try:
+        yield
+    finally:
+        zoneinfo.reset_tzpath(original_path)
+        ZoneInfo.clear_cache()
+
 
 class TestManytaskDeadlinesConfigGroup:
     def test_minimal_init(self) -> None:
@@ -139,6 +155,7 @@ class TestManytaskDeadlinesConfigGroup:
             0.2: datetime(2021, 1, 5, 9, 0),
         }
 
+
 class TestManytaskDeadlinesConfig:
     def test_minimal_init(self) -> None:
         ManytaskDeadlinesConfig(
@@ -199,9 +216,12 @@ class TestManytaskDeadlinesConfig:
             "Europe/Rome",
         ],
     )
+    @pytest.mark.usefixtures("timezone_database")
     def test_valid_timezone(self, timezone: str) -> None:
         real_timezone = ZoneInfo(timezone)
-        real_start = datetime.strptime("2021-01-01 00:00", "%Y-%m-%d %H:%M").replace(tzinfo=real_timezone)
+        real_start = datetime.strptime("2021-01-01 00:00", "%Y-%m-%d %H:%M").replace(
+            tzinfo=real_timezone
+        )
         real_step = real_start + timedelta(days=1)
         real_end = real_start + timedelta(days=2)
 

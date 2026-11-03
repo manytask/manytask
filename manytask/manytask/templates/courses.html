@@ -104,9 +104,15 @@
         {% endif %}
 
         {% if is_instance_admin %}
+            <button type="button" class="btn btn-success mt-3" data-bs-toggle="modal"
+                    data-bs-target="#createNamespaceModal">Create namespace</button>
             <a class="btn btn-primary mt-3" href="{{ url_for('instance_admin.instance_admin_panel') }}">Instance Admin panel</a>
         {% endif %}
     </div>
+
+    {% if is_instance_admin %}
+        {% include "_create_namespace_modal.html" %}
+    {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
