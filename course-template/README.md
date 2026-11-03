@@ -26,29 +26,33 @@ See the upstream docs:
 ├── .manytask.yml         # course settings + deadlines schedule
 ├── .gitlab-ci.yml        # CI for grading student submissions (lives in public)
 ├── .releaser-ci.yml      # CI for exporting private -> public (lives in private)
+├── .sourcecraft/ci.yaml  # SourceCraft CI for the private repository
+├── .sourcecraft.public/ci.yaml # SourceCraft CI installed in public/student repos
 ├── base.docker           # checker + language toolchains, built before checks
 ├── testenv.docker        # exports private reference in a two-stage Docker build
 ├── pyproject.toml        # python toolchain dependencies
 ├── tools/                # placeholder for shared plugins / testlib
-└── python/
-    └── add/              # the only task so far — sum of two integers
-        ├── .task.yml
-        ├── README.md
-        ├── add.py            # reference solution (NOT exported)
-        ├── add.py.template   # becomes add.py in the public repo
-        ├── test_public.py    # visible to students
-        ├── test_private.py   # hidden, used for grading
-        └── conftest.py       # makes `from add import add` work in pytest
+├── python/
+│   └── add/              # sample task — sum of two integers
+│       ├── .task.yml
+│       ├── README.md
+│       ├── add.py            # reference solution (NOT exported)
+│       ├── add.py.template   # becomes add.py in the public repo
+│       ├── test_public.py    # visible to students
+│       ├── test_private.py   # hidden, used for grading
+│       └── conftest.py       # makes `from add import add` work in pytest
+├── cpp/add_cpp/          # C++ sample task
+├── bash/add_bash/        # Bash sample task
+├── go/add_go/            # Go sample task
+└── rust/add_rust/        # Rust sample task
 ```
 
-Only **one language** (Python) and **one task** (`add`) are included on purpose:
-this is the smallest end-to-end example you can run, copy, and extend.
-Additional languages (C++, Bash, Go, Rust) will be added in follow-up iterations
-of [manytask#637](https://github.com/manytask/manytask/issues/637).
+Each language has one sample task with a reference solution, a student template,
+public tests, and hidden tests.
 
 ---
 
-## Use this template for your own course
+## Use this template for your own course on GitLab
 
 ### 1. Create two empty GitLab projects
 
@@ -111,6 +115,41 @@ Ask a Manytask admin to register your course, providing:
 3. Build and publish a testenv whose final image contains only the
    `checker export-private` result.
 4. On `main`, manually deploy the image, `.manytask.yml`, and public repo.
+
+---
+
+## Use this template on SourceCraft
+
+Create private and public SourceCraft repositories plus the student repository
+namespace. Copy this template into the private repository. The private
+`.sourcecraft/ci.yaml` runs `verify-and-build` on pushes; it validates the course,
+checks reference solutions, and builds the same two-stage testenv image used by
+the GitLab pipeline. The `grade` workflow is shared with student repositories.
+
+Before pushing, replace the example values in both SourceCraft CI files:
+
+| File | Value to configure |
+|---|---|
+| `.sourcecraft/ci.yaml` | `SERVICE_CONNECTION`, every `pkg.sourcecraft.tech` image/registry path, `PUBLIC_REPO_URL`, and `MANYTASK_API` |
+| `.sourcecraft.public/ci.yaml` | `ORG_SLUG`, `REPO_SLUG`, and `STUDENT_REPO_PREFIX` (the part before the student's Manytask username in each repository name) |
+| `.checker.yml` | `export.destination` and the optional `report_pipeline` URL |
+| `.manytask.yml` | Course settings, repository URLs, and real deadlines |
+
+The SourceCraft service connection must allow the private workflow to clone and
+push the public repository. Configure `MANYTASK_TOKEN` as a SourceCraft secret
+for updating the course and, if score reporting is enabled, for grading.
+SourceCraft's `SOURCECRAFT_TOKEN` authenticates registry access and image pulls.
+The registry path in the `grade` workflow must point to the private course's
+`testenv-image:latest`.
+
+After `verify-and-build` succeeds on the default branch, run `deploy-docker`,
+`deploy-public`, and `deploy-manytask` from that branch. `deploy-public` runs
+`checker export`, then installs `.sourcecraft.public/ci.yaml` as
+`.sourcecraft/ci.yaml` in the public repository before committing and pushing.
+Student repositories call the private shared `grade` workflow on pushes. Their
+repository name supplies `STUDENT_USERNAME`; set the prefix above to match your
+course's naming scheme. To report scores, uncomment the `report_pipeline` in
+`.checker.yml` after setting its `report_url` and `MANYTASK_TOKEN`.
 
 ---
 

@@ -42,4 +42,5 @@ grade:
       when: on_success
     - when: never
   script:
+    - export STUDENT_USERNAME="$GITLAB_USER_LOGIN"
     - checker grade . /opt/course
