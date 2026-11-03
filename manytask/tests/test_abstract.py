@@ -49,15 +49,25 @@ def test_count_solved_large_tasks_uses_is_solved():
         last_name="l",
         task_scores={
             "solved_flag": TaskScore(score=300, is_solved=True),  # below min_score, but marked solved
-            "by_score": TaskScore(score=330, is_solved=False),  # reaches min_score
+            "by_score": TaskScore(score=330, is_solved=False),  # manually marked unsolved despite reaching min_score
             "not_solved": TaskScore(score=319, is_solved=False),
         },
     )
 
-    assert student.count_solved_large_tasks([("solved_flag", 320)]) == 1
-    assert student.count_solved_large_tasks([("by_score", 320)]) == 1
-    assert student.count_solved_large_tasks([("not_solved", 320)]) == 0
-    # raising min_score does not take away a task marked as solved
-    assert student.count_solved_large_tasks([("solved_flag", 10000), ("by_score", 10000)]) == 1
-    # no score at all: counted only when min_score is 0, as before
-    assert student.count_solved_large_tasks([("missing", 0), ("missing2", 1)]) == 1
+    assert student.count_solved_large_tasks(["solved_flag"]) == 1
+    assert student.count_solved_large_tasks(["by_score"]) == 0
+    assert student.count_solved_large_tasks(["not_solved"]) == 0
+    # Completion flags remain authoritative after threshold changes or manual overrides.
+    assert student.count_solved_large_tasks(["solved_flag", "by_score"]) == 1
+    # A missing submission has no persisted completion flag.
+    assert student.count_solved_large_tasks(["missing", "missing2"]) == 0
+
+
+def test_large_count_uses_completion_flags() -> None:
+    student = StudentCourseScores(
+        username="student",
+        first_name="First",
+        last_name="Last",
+        task_scores={"low": TaskScore(0, True), "high": TaskScore(100, False), "small": TaskScore(100, True)},
+    )
+    assert student.count_solved_large_tasks(["low", "high", "missing"]) == 1

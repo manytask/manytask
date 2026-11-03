@@ -96,22 +96,11 @@ class StudentCourseScores:
         """Sum of the scores of all the tasks."""
         return sum(task_score.score for task_score in self.task_scores.values())
 
-    def count_solved_large_tasks(self, large_tasks: Iterable[tuple[str, int]]) -> int:
-        """Count solved large tasks.
-
-        A large task is solved if it is marked `is_solved` (the student reached min_score at the
-        moment of submission, so raising min_score later does not take it away) or if the current
-        score reaches the current min_score.
-
-        :param large_tasks: iterable of (task_name, min_score) pairs
-        """
-        return sum(1 for task_name, min_score in large_tasks if self.is_task_solved(task_name, min_score))
-
-    def is_task_solved(self, task_name: str, min_score: int) -> bool:
-        task_score = self.task_scores.get(task_name)
-        if task_score is None:
-            return 0 >= min_score
-        return task_score.is_solved or task_score.score >= min_score
+    def count_solved_large_tasks(self, large_tasks: Iterable[str]) -> int:
+        """Count enabled, started large tasks marked as solved."""
+        return sum(
+            1 for task_name in large_tasks if task_name in self.task_scores and self.task_scores[task_name].is_solved
+        )
 
 
 class StorageApi(ABC):
@@ -169,7 +158,9 @@ class StorageApi(ABC):
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]: ...
+    def get_all_scores_with_names(
+        self, course_name: str, *, username: str | None = None
+    ) -> dict[str, StudentCourseScores]: ...
 
     @abstractmethod
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
@@ -181,7 +172,15 @@ class StorageApi(ABC):
     def get_stats(self, course_name: str) -> dict[str, float]: ...
 
     @abstractmethod
-    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
+    def store_score(
+        self,
+        course_name: str,
+        username: str,
+        task_name: str,
+        update_fn: Callable[..., Any],
+        *,
+        is_solved: bool | None = None,
+    ) -> int: ...
 
     @abstractmethod
     def create_course(
