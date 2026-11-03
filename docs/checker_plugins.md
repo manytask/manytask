@@ -5,9 +5,13 @@
 
 Copy files matching glob patterns from one directory to another. Used to collect the student's solution and the private tests in one place in preparation for testing.
 
-The example below takes **from the student repository** (`global.repo_dir`) only the files listed in the `allow_change` parameter, and puts them into the testing tree. Anything the student changed outside that list — the tests, for instance — is simply not copied, so it cannot affect grading in CI.
+The example below copies files listed in the `allow_change` parameter **from the student
+repository** (`global.repo_dir`) into the testing tree. It leaves other files already in the tree
+untouched, so this stage alone does not restrict which student edits can affect grading.
 
-`allow_change` is not a built-in field: it is an ordinary [parameter](./checker_yml_reference.md#default_parameters) that you define yourself in `default_parameters` and can narrow per task in `.task.yml`.
+The example reads its patterns from the optional `parameters.allow_change` list, supported in
+both task formats. See [Explicit editable files](checker_config.md#explicit-editable-files) for
+inheritance and the difference between plugin use and automatic shared-folder preparation.
 
 ```yaml
 - name: "Take the student's allowed files"
@@ -19,7 +23,8 @@ The example below takes **from the student repository** (`global.repo_dir`) only
     ignore_patterns: ["*.pyc"]
 ```
 
-> Note that this stage is **optional**. `checker check` / `checker grade` already build the testing tree by overlaying the reference repo's public and private files on top of the student's files, so tests are protected without any `copy_files` stage. Use this plugin when you want an explicit, per-task allow-list — see [the configuration guide](./checker_config.md#optional-an-explicit-allow-list-with-allow_change).
+> This stage is **optional**: the checker already builds the grading tree before running plugins.
+> Use it when a pipeline needs to copy additional files or arrange them differently.
 
 | Arg | Type | Required | Description |
 |---|---|---|---|

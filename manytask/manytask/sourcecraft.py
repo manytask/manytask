@@ -23,6 +23,7 @@ from yandex.cloud.iam.v1.yandex_passport_user_account_service_pb2_grpc import Ya
 from yandexcloud._sdk import SDK
 
 from .abstract import RmsApi, RmsApiException, RmsUser
+from .course import ProtectedBranchSettings
 from .utils.sourcecraft import normalize_string
 
 logger = logging.getLogger(__name__)
@@ -156,16 +157,16 @@ class SourceCraftApi(RmsApi):
         response = self._request("POST", f"orgs/{self._org_slug}/repos", json=payload)
         if response.status_code == HTTPStatus.CREATED:
             return
-        # Idempotency: SC returns 409 with error_code=SlugIsNotAvailable when the
-        # repo already exists. This happens on any retry of create_project (e.g.
-        # after a previous run failed at _add_repo_role). Treat as success so
-        # create_project can be safely re-invoked to recover a partial setup.
-        if response.status_code == HTTPStatus.CONFLICT:
-            data = response.json()
+        data = response.json()
+        # Match the semantic error rather than assuming slug conflicts use HTTP
+        # 409. A reserved or inaccessible slug is not proof that our repo exists.
+        if HTTPStatus.BAD_REQUEST <= response.status_code < HTTPStatus.INTERNAL_SERVER_ERROR:
             if data.get("error_code") == "SlugIsNotAvailable":
-                logger.info(f"Repo {repo_slug} already exists, skipping creation")
-                return
-        raise RmsApiException(f"Failed to create repo: {response.json()}")
+                existing_repo = self._get_repo(repo_slug)
+                if existing_repo.status_code == HTTPStatus.OK:
+                    logger.info(f"Repo {repo_slug} already exists, skipping creation")
+                    return
+        raise RmsApiException(f"Failed to create repo (HTTP {response.status_code}): {data}")
 
     def _update_repo(
         self,
@@ -211,7 +212,7 @@ class SourceCraftApi(RmsApi):
         response = self._post_repo_role(repo_slug, payload)
         if response.status_code != HTTPStatus.OK:
             data = response.json()
-            if data.get("error_code", "") == "FailedPrecondition":
+            if data.get("error_code", "") in {"FailedPrecondition", "UserNotOrganizationMember"}:
                 logger.info(f"User {user_id} not found in org {self._org_slug}, inviting them")
                 invitee_id = self._invite_user(user_id)
                 payload["subject_roles"][0]["subject"] = {
@@ -324,17 +325,38 @@ class SourceCraftApi(RmsApi):
                 return True
         return False
 
+    def list_group_projects(self, group_path: str) -> list[str]:
+        logger.debug("SourceCraft does not support listing group projects yet")
+        return []
+
+    def ensure_project_settings(
+        self,
+        project: Any,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
+    ) -> bool:
+        logger.debug(
+            "SourceCraft: CI config path cannot be overridden and branch protection is declared "
+            "in .sourcecraft/branches.yaml in the repo; nothing to do"
+        )
+        return False
+
     def create_project(
         self,
         rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
     ) -> None:
         """Create a personal repo for a student.
 
         :param rms_user: User information
         :param course_students_group: repo slug prefix
         :param course_public_repo: public repo slug
+        :param ci_config_path: UNUSED, SourceCraft has no way to override the CI config path
+        :param protected_branches: UNUSED here, SourceCraft branch protection is declared in
+            .sourcecraft/branches.yaml inside the repository (so it comes with the template repo), not via the API
         """
         logger.info(f"Creating repo for user {rms_user.username}")
 

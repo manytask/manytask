@@ -138,6 +138,7 @@ main() {
         --registration-token "${RUNNERS_TOKEN}" \
         --executor "${RUNNER_EXECUTOR}" \
         --docker-image "${RUNNER_IMAGE}" \
+        --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
         --description "manytask-local-runner" \
         --locked="false" \
         --run-untagged="true" \

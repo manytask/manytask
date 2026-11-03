@@ -6,7 +6,7 @@ from typing import Any, Callable, Iterable
 from authlib.integrations.flask_client import OAuth
 
 from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
-from .course import Course, CourseConfig, CourseStatus
+from .course import Course, CourseConfig, CourseStatus, ProtectedBranchSettings
 
 
 @dataclass
@@ -96,13 +96,11 @@ class StudentCourseScores:
         """Sum of the scores of all the tasks."""
         return sum(task_score.score for task_score in self.task_scores.values())
 
-    def count_solved_large_tasks(self, large_tasks: Iterable[tuple[str, int]]) -> int:
-        """Count large tasks where the student reached the required minimal score.
-
-        :param large_tasks: iterable of (task_name, min_score) pairs
-        """
-        scores = self.scores
-        return sum(1 for task_name, min_score in large_tasks if scores.get(task_name, 0) >= min_score)
+    def count_solved_large_tasks(self, large_tasks: Iterable[str]) -> int:
+        """Count enabled, started large tasks marked as solved."""
+        return sum(
+            1 for task_name in large_tasks if task_name in self.task_scores and self.task_scores[task_name].is_solved
+        )
 
 
 class StorageApi(ABC):
@@ -112,6 +110,11 @@ class StorageApi(ABC):
         course_name: str,
         username: str,
     ) -> dict[str, int]: ...
+
+    @abstractmethod
+    def get_solved_tasks(self, course_name: str, username: str) -> set[str]:
+        """Names of the user's tasks marked as `is_solved`."""
+        ...
 
     @abstractmethod
     def get_bonus_score(
@@ -152,17 +155,12 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
-    def check_if_program_manager(
-        self,
-        course_name: str,
-        username: str,
-    ) -> bool: ...
-
-    @abstractmethod
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None: ...
 
     @abstractmethod
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]: ...
+    def get_all_scores_with_names(
+        self, course_name: str, *, username: str | None = None
+    ) -> dict[str, StudentCourseScores]: ...
 
     @abstractmethod
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None: ...
@@ -174,7 +172,15 @@ class StorageApi(ABC):
     def get_stats(self, course_name: str) -> dict[str, float]: ...
 
     @abstractmethod
-    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int: ...
+    def store_score(
+        self,
+        course_name: str,
+        username: str,
+        task_name: str,
+        update_fn: Callable[..., Any],
+        *,
+        is_solved: bool | None = None,
+    ) -> int: ...
 
     @abstractmethod
     def create_course(
@@ -194,6 +200,12 @@ class StorageApi(ABC):
         course_name: str,
         config: ManytaskConfig,
     ) -> None: ...
+
+    @abstractmethod
+    def rms_settings_reconcile_needed(self, course_name: str) -> bool: ...
+
+    @abstractmethod
+    def clear_rms_settings_pending(self, course_name: str) -> None: ...
 
     @abstractmethod
     def get_course(
@@ -293,6 +305,12 @@ class StorageApi(ABC):
 
     @abstractmethod
     def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
+
+    @abstractmethod
+    def update_namespace(self, namespace_id: int, name: str, description: str | None) -> Any: ...
+
+    @abstractmethod
+    def delete_namespace(self, namespace_id: int, name: str) -> None: ...
 
     @abstractmethod
     def add_user_to_namespace(
@@ -442,7 +460,26 @@ class RmsApi(ABC):
         rms_user: RmsUser,
         course_students_group: str,
         course_public_repo: str,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
     ) -> None: ...
+
+    @abstractmethod
+    def list_group_projects(self, group_path: str) -> list[str]: ...
+
+    @abstractmethod
+    def ensure_project_settings(
+        self,
+        project: Any,
+        ci_config_path: str,
+        protected_branches: list[ProtectedBranchSettings],
+    ) -> bool:
+        """Apply ci_config_path/protected_branches to a project, writing only what differs.
+
+        :param project: project path (str) or an already-fetched RMS project object
+        :returns: whether anything was changed
+        """
+        ...
 
     @abstractmethod
     def get_url_for_task_base(self, course_public_repo: str, default_branch: str) -> str: ...

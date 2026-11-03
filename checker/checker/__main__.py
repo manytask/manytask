@@ -11,7 +11,12 @@ from zoneinfo import ZoneInfo
 
 import click
 
-from .configs import CheckerConfig, CheckerSubConfig, ManytaskConfig
+from .configs import (
+    CheckerConfig,
+    CheckerTaskFileConfig,
+    CheckerTasksFileConfig,
+    ManytaskConfig,
+)
 from .course import Course, FileSystemTask
 from .exceptions import CheckerValidationError, TestingError
 from .exporter import Exporter
@@ -198,6 +203,7 @@ def _select_tasks(
     help="Num of processes parallel checking",
 )
 @click.option("--no-clean", is_flag=True, help="Clean or not check tmp folders")
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.option(
     "-v/-s",
     "--verbose/--silent",
@@ -218,6 +224,7 @@ def check(  # noqa: PLR0913
     parallelize: bool,
     num_processes: int,
     no_clean: bool,
+    verbose_copy: bool,
     verbose: bool,
     dry_run: bool,
 ) -> None:
@@ -247,7 +254,7 @@ def check(  # noqa: PLR0913
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         cleanup=not no_clean,
         dry_run=dry_run,
     )
@@ -430,7 +437,8 @@ def grade(  # noqa: PLR0913
     else:
         try:
             tasks_to_grade = course.detect_changes(
-                checker_config.testing.changes_detection
+                checker_config.testing.changes_detection,
+                default_parameters=checker_config.default_parameters.root,
             )
         except Exception as e:
             print_info("DETECT CHANGES FAILED", color="red")
@@ -503,6 +511,7 @@ def grade(  # noqa: PLR0913
 @click.option(
     "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
 )
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.pass_context
 def export(
     ctx: click.Context,
@@ -510,6 +519,7 @@ def export(
     export_root: Path,
     commit: bool,
     dry_run: bool,
+    verbose_copy: bool,
 ) -> None:
     """Export tasks from reference to public repository."""
     # get configs paths
@@ -521,7 +531,7 @@ def export(
     manytask_config = ManytaskConfig.from_yaml(manytask_config_path)
 
     # read filesystem, check existing tasks
-    course = Course(manytask_config, reference_root)
+    course = Course(manytask_config, reference_root, excluded_paths=[export_root])
 
     # if export_root not empty - delete all except git folder
     if export_root.exists() and not dry_run:
@@ -538,7 +548,7 @@ def export(
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         dry_run=dry_run,
     )
     if not dry_run:
@@ -554,12 +564,14 @@ def export(
 @click.option(
     "--dry-run", is_flag=True, help="Do not execute anything, only log actions"
 )
+@click.option("--verbose-copy", is_flag=True, help="Show each file copied or skipped")
 @click.pass_context
 def export_private(
     ctx: click.Context,
     reference_root: Path,
     export_root: Path,
     dry_run: bool,
+    verbose_copy: bool,
 ) -> None:
     """Export files to testing directory."""
     # get configs paths
@@ -571,14 +583,14 @@ def export_private(
     manytask_config = ManytaskConfig.from_yaml(manytask_config_path)
 
     # read filesystem, check existing tasks
-    course = Course(manytask_config, reference_root)
+    course = Course(manytask_config, reference_root, excluded_paths=[export_root])
 
     # create exporter and export files for public
     exporter = Exporter(
         course,
         checker_config.structure,
         checker_config.export,
-        verbose=True,
+        verbose=verbose_copy,
         dry_run=dry_run,
     )
     if not dry_run:
@@ -596,7 +608,8 @@ def schema(
     """Generate json schema for the checker configs."""
     checker_schema = CheckerConfig.get_json_schema()
     manytask_schema = ManytaskConfig.get_json_schema()
-    task_schema = CheckerSubConfig.get_json_schema()
+    task_schema = CheckerTaskFileConfig.get_json_schema()
+    tasks_schema = CheckerTasksFileConfig.get_json_schema()
 
     with open(output_folder / "schema-checker.json", "w") as f:
         json.dump(checker_schema, f, indent=2)
@@ -604,6 +617,8 @@ def schema(
         json.dump(manytask_schema, f, indent=2)
     with open(output_folder / "schema-task.json", "w") as f:
         json.dump(task_schema, f, indent=2)
+    with open(output_folder / "schema-tasks.json", "w") as f:
+        json.dump(tasks_schema, f, indent=2)
 
 
 if __name__ == "__main__":

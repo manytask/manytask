@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
 from manytask.abstract import RmsApiException, StorageApi, StoredUser
-from manytask.database import TaskDisabledError
+from manytask.database import NamespaceNotEmptyError, TaskDisabledError
 
 from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
@@ -29,6 +29,7 @@ from .config import (
     CreateNamespaceRequest,
     DeadlineItem,
     DeadlinesResponse,
+    DeleteNamespaceRequest,
     ErrorResponse,
     IsAdminResponse,
     ManytaskGroupConfig,
@@ -40,7 +41,9 @@ from .config import (
     NamespaceUsersListResponse,
     NamespaceWithRoleResponse,
     PingResponse,
+    RowData,
     SetCourseAdminRequest,
+    UpdateNamespaceRequest,
     UpdateUserRoleRequest,
     UserOnNamespaceResponse,
 )
@@ -50,8 +53,8 @@ from .main import CustomFlask
 from .models import ROLE_PROGRAM_MANAGER
 from .utils.database import get_database_table_data
 from .utils.generic import (
-    calculate_percent,
     check_course_creation_namespace_permission,
+    get_course_creation_conflict,
     sanitize_and_validate_comment,
     sanitize_log_data,
 )
@@ -166,7 +169,7 @@ def _check_course_admin_access(course_name: str) -> ResponseReturnValue | None:
     username = session["manytask"]["username"]
     storage_api = app.storage_api
 
-    if storage_api.check_if_instance_admin(username) or storage_api.check_if_course_admin(course_name, username):
+    if storage_api.check_if_course_admin(course_name, username):
         return None
 
     logger.warning(
@@ -410,7 +413,7 @@ def _update_score(
 
 @bp.get("/healthcheck")
 @requires_ready
-def healthcheck() -> ResponseReturnValue:
+def healthcheck(course_name: str) -> ResponseReturnValue:
     return "OK", HTTPStatus.OK
 
 
@@ -556,31 +559,9 @@ def report_score(course_name: str) -> ResponseReturnValue:
 
     # Recalculate and save student's final grade after score update
     try:
-        # Get all student scores to recalculate grade
-        student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
-        bonus_score = app.storage_api.get_bonus_score(course.course_name, manytask_username)
-        max_score = app.storage_api.max_score_started(course.course_name)
-
-        total_score = sum(student_scores.values()) + bonus_score
-        percent = calculate_percent(total_score, max_score)
-
-        # Count large tasks solved
-        large_count = 0
-        for group_config in app.storage_api.get_groups(course.course_name, enabled=True, started=True):
-            for task_config in group_config.tasks:
-                if task_config.is_large and task_config.enabled:
-                    task_score = student_scores.get(task_config.name, 0)
-                    if task_score >= task_config.min_score:
-                        large_count += 1
-
-        student_data = {
-            "username": manytask_username,
-            "scores": student_scores,
-            "total_score": total_score,
-            "percent": percent,
-            "large_count": large_count,
-        }
-
+        student_data = get_database_table_data(app, course, include_admin_data=True, username=manytask_username)[
+            "students"
+        ][0]
         app.storage_api.calculate_and_save_grade(course.course_name, manytask_username, student_data)
         logger.info("Recalculated and saved grade for user=%s after score update", manytask_username)
     except Exception as e:
@@ -788,7 +769,6 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     row_data = payload.row_data
 
     student_username = row_data.username
-    total_score = row_data.total_score
     logger.info("Updating scores for user=%s: %s", sanitize_log_data(student_username), new_scores)
 
     try:
@@ -799,9 +779,8 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
                     username=student_username,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
+                    is_solved=payload.new_solved.get(task_name),
                 )
-                total_score += new_score - row_data.scores.get(task_name, 0)
-                row_data.scores[task_name] = new_score
     except Exception as e:
         logger.error("Error updating database: %s", str(e))
         return jsonify(
@@ -809,9 +788,11 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     try:
-        row_data.total_score = total_score
-        max_score = app.storage_api.max_score_started(course.course_name)
-        row_data.percent = calculate_percent(total_score, max_score)
+        # Re-read persisted scores and completion state, including derived LHW counts.
+        table_data = get_database_table_data(app, course, include_admin_data=True, username=student_username)
+        row_data = RowData.model_validate(
+            next(row for row in table_data["students"] if row["username"] == student_username)
+        )
 
         # Calculate and save grade (applies DORESHKA logic if needed)
         # This updates final_grade but does NOT touch final_grade_override
@@ -896,7 +877,7 @@ def create_namespace() -> ResponseReturnValue:
 
         {
             "name": "HSE",
-            "slug": "hse-namespace",
+            "slug": "hse",
             "description": "Namespace for Higher School of Economics courses"
         }
 
@@ -925,6 +906,11 @@ def create_namespace() -> ResponseReturnValue:
     name = request_data.name
     slug = request_data.slug
     description = request_data.description
+
+    if slug.isdigit():
+        return jsonify(
+            ErrorResponse(error="Namespace slug cannot consist only of digits. Use a slug such as 'mipt'.").model_dump()
+        ), HTTPStatus.BAD_REQUEST
 
     gitlab_group_id = None
 
@@ -1099,6 +1085,49 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
     except Exception as e:
         logger.error("Error fetching namespace id=%s for user=%s: %s", namespace_id, username, str(e), exc_info=True)
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@namespace_bp.put("/namespaces/<int:namespace_id>")
+@requires_auth
+@requires_json_validation(UpdateNamespaceRequest)
+@requires_namespace_admin(return_404_if_not_found=True)
+def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNamespaceRequest) -> ResponseReturnValue:
+    """Update namespace details as an instance admin or an admin of this namespace."""
+    app: CustomFlask = current_app  # type: ignore
+
+    try:
+        namespace = app.storage_api.update_namespace(namespace_id, validated_data.name, validated_data.description)
+        result = NamespaceResponse.model_validate(namespace, from_attributes=True)
+        return jsonify(result.model_dump()), HTTPStatus.OK
+    except NoResultFound:
+        return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
+    except Exception:
+        logger.exception("Error updating namespace id=%s", namespace_id)
+        return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@namespace_bp.delete("/namespaces/<int:namespace_id>")
+@requires_auth
+@requires_json_validation(DeleteNamespaceRequest)
+@requires_namespace_admin(return_404_if_not_found=True)
+def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNamespaceRequest) -> ResponseReturnValue:
+    """Delete an empty Manytask namespace, preserving the linked RMS group."""
+    app: CustomFlask = current_app  # type: ignore
+
+    try:
+        app.storage_api.delete_namespace(namespace_id, validated_data.name)
+        return "", HTTPStatus.NO_CONTENT
+    except NoResultFound:
+        return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
+    except NamespaceNotEmptyError as error:
+        return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.CONFLICT
+    except ValueError as error:
+        return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.BAD_REQUEST
+    except Exception:
+        logger.exception("Error deleting namespace id=%s", namespace_id)
+        return jsonify(
+            ErrorResponse(error="Failed to delete namespace. Please try again.").model_dump()
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @namespace_bp.post("/namespaces/<int:namespace_id>/users")
@@ -1447,10 +1476,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         owner_rms_ids,
     )
 
-    course_group_id = None
-    public_project_id = None
-    students_group_id = None
-
     try:
         is_instance_admin = storage_api.check_if_instance_admin(username)
 
@@ -1486,6 +1511,12 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         namespace_slug = namespace.slug if namespace is not None else ""
         gitlab_course_group = f"{namespace_slug}/{course_slug}" if namespace_slug else course_slug
 
+        conflict = get_course_creation_conflict(storage_api, course_name, gitlab_course_group)
+        if conflict is not None:
+            return jsonify(ErrorResponse(error=conflict).model_dump()), HTTPStatus.CONFLICT
+
+        # RMS setup is retryable and may reuse existing resources. Preserve partial
+        # setup on failure: the RMS interface does not identify resources we own.
         from datetime import datetime as dt
 
         now = dt.now()
@@ -1520,27 +1551,19 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
         try:
             logger.info("Creating public repo %s", gitlab_course_public_repo)
             rms_api.create_public_repo(gitlab_course_group, gitlab_course_public_repo)
-            public_project_id = 1  # Placeholder
             logger.info("Created public repo")
         except Exception as e:
             logger.error("Failed to create public repo: %s", str(e))
-            if course_group_id:
-                rms_api.delete_group(course_group_id)
             return jsonify(
                 ErrorResponse(error=f"Failed to create public repo: {str(e)}").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
 
         try:
             logger.info("Creating students group %s", gitlab_course_students_group)
-            rms_api.create_students_group(gitlab_course_students_group)
-            students_group_id = 1  # Placeholder
+            rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
             logger.info("Created students group")
         except Exception as e:
             logger.error("Failed to create students group: %s", str(e))
-            if public_project_id:
-                rms_api.delete_project(public_project_id)
-            if course_group_id:
-                rms_api.delete_group(course_group_id)
             return jsonify(
                 ErrorResponse(error=f"Failed to create students group: {str(e)}").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1565,12 +1588,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
 
             if not success:
                 logger.error("Course with name=%s already exists in database", course_name)
-                if students_group_id:
-                    rms_api.delete_group(students_group_id)
-                if public_project_id:
-                    rms_api.delete_project(public_project_id)
-                if course_group_id:
-                    rms_api.delete_group(course_group_id)
                 return jsonify(
                     ErrorResponse(error=f"Course with name '{course_name}' already exists").model_dump()
                 ), HTTPStatus.CONFLICT
@@ -1579,12 +1596,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
 
         except Exception as e:
             logger.error("Failed to create course in database: %s", str(e), exc_info=True)
-            if students_group_id:
-                rms_api.delete_group(students_group_id)
-            if public_project_id:
-                rms_api.delete_project(public_project_id)
-            if course_group_id:
-                rms_api.delete_group(course_group_id)
             return jsonify(
                 ErrorResponse(error=f"Failed to create course in database: {str(e)}").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1647,16 +1658,6 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             str(e),
             exc_info=True,
         )
-        try:
-            if students_group_id:
-                rms_api.delete_group(students_group_id)
-            if public_project_id:
-                rms_api.delete_project(public_project_id)
-            if course_group_id:
-                rms_api.delete_group(course_group_id)
-        except Exception as rollback_error:
-            logger.error("Error during rollback: %s", str(rollback_error))
-
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
 

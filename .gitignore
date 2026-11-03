@@ -58,6 +58,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.ruff_cache/
 file::memory:
 file::memory:-journal
 
@@ -141,6 +142,18 @@ dmypy.json
 
 # tmp
 .tmp
-scripts
 # worktrees
 .worktrees/
+
+# Local component configuration
+/manytask/.manytask.yml
+/checker/.checker.yml
+
+# MR reviewer local files
+/mr-reviewer/.env.*
+!/mr-reviewer/.env.example
+!/mr-reviewer/.env.production.example
+/mr-reviewer/logs/
+/mr-reviewer/docs/
+/mr-reviewer/ticket.md
+/mr-reviewer/.claude/

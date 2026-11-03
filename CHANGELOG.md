@@ -1,5 +1,85 @@
 # Changelog
 
+## [26.1.0](https://github.com/manytask/manytask/releases/tag/26.1.0) - 2026-10-23
+
+This release adds support for several tasks in one folder, makes course and namespace administration more convenient, and improves checker reliability.
+
+### Features
+
+- Define several named tasks in one `.tasks.yml` file with shared defaults and per-task parameters and pipelines. Use inherited `parameters.allow_change` patterns to select changed tasks and prepare a shared grading workspace ([#1167](https://github.com/manytask/manytask/pull/1167)).
+- Configure student repository CI paths and protected branches through the course's `rms` settings, with reconciliation for existing repositories ([#1084](https://github.com/manytask/manytask/pull/1084)).
+- Add namespace creation from the main page, inline name and description editing, and namespace links in the table ([#1173](https://github.com/manytask/manytask/pull/1173), [#1174](https://github.com/manytask/manytask/pull/1174), [#1130](https://github.com/manytask/manytask/pull/1130), [#1165](https://github.com/manytask/manytask/pull/1165)).
+- Keep the course editing page open after saving and add navigation between course editing, registration, and the course list ([#1163](https://github.com/manytask/manytask/pull/1163), [#1161](https://github.com/manytask/manytask/pull/1161)).
+- Suppress verbose checker file-copy output by default ([#1155](https://github.com/manytask/manytask/pull/1155)).
+
+### Fixes
+
+- Preserve checker score-reporting errors across tasks ([#1170](https://github.com/manytask/manytask/pull/1170)).
+- Exclude nested export destinations from course discovery and export ([#1171](https://github.com/manytask/manytask/pull/1171)).
+- Detect both source and destination task folders when student solutions are renamed ([#1172](https://github.com/manytask/manytask/pull/1172)).
+- Accept `course_name` in course health checks ([#1156](https://github.com/manytask/manytask/pull/1156)).
+- Correct SourceCraft names in local configuration and fix the development GitLab setup ([#1176](https://github.com/manytask/manytask/pull/1176), [#1162](https://github.com/manytask/manytask/pull/1162)).
+
+### Other changes
+
+- Extract checker configuration loading, export, and execution helpers, and simplify course access checks ([#1169](https://github.com/manytask/manytask/pull/1169), [#1114](https://github.com/manytask/manytask/pull/1114)).
+- Remove the deprecated course configuration update command from the course template ([#1175](https://github.com/manytask/manytask/pull/1175)).
+- Update uv dependencies and CI setup ([#1159](https://github.com/manytask/manytask/pull/1159), [#1157](https://github.com/manytask/manytask/pull/1157)).
+
+**Upgrade note:** Apply the database migration for the new course RMS settings before running the updated web app.
+
+**Full Changelog**: [26.0.7...26.1.0](https://github.com/manytask/manytask/compare/26.0.7...26.1.0)
+
+## [26.0.7](https://github.com/manytask/manytask/releases/tag/26.0.7) - 2026-10-11
+
+This release protects existing accounts during registration, adds checker task selection from branch names and commit messages, and updates deployment and development infrastructure.
+
+### Features
+
+- Detect tasks from the branch name or commit message and reject conflicting task lists ([#1142](https://github.com/manytask/manytask/pull/1142)).
+- Allow students to recreate deleted or missing GitLab projects ([#1145](https://github.com/manytask/manytask/pull/1145)).
+- Add PgBouncer between Manytask and Postgres, a development container registry, and a shared Postgres database for the development GitLab ([#1152](https://github.com/manytask/manytask/pull/1152), [#1127](https://github.com/manytask/manytask/pull/1127), [#1153](https://github.com/manytask/manytask/pull/1153)).
+
+### Fixes
+
+- Prevent registration from taking over an existing Manytask account with a different GitLab identity ([#1146](https://github.com/manytask/manytask/pull/1146)).
+- Fix Docker configuration for the container registry ([#1131](https://github.com/manytask/manytask/pull/1131)).
+
+### Other changes
+
+- Consolidate shared files at the monorepo root and remove unused checker configuration helpers ([#1128](https://github.com/manytask/manytask/pull/1128), [#1125](https://github.com/manytask/manytask/pull/1125)).
+- Update the developers list and the CI Node.js setup action ([#1149](https://github.com/manytask/manytask/pull/1149), [#1150](https://github.com/manytask/manytask/pull/1150), [#1132](https://github.com/manytask/manytask/pull/1132)).
+
+**Full Changelog**: [26.0.6...26.0.7](https://github.com/manytask/manytask/compare/26.0.6...26.0.7)
+
+## [26.0.6](https://github.com/manytask/manytask/releases/tag/26.0.6) - 2026-10-01
+
+This release expands course and namespace administration, improves checker grading and the course template release pipeline, and fixes several export and web errors.
+
+### Features
+
+- Add personal task group ordering and the option to skip unchanged tasks during grading ([#1092](https://github.com/manytask/manytask/pull/1092)).
+- Check all tasks changed across a multi-commit push during grading ([#1110](https://github.com/manytask/manytask/pull/1110)).
+- Add course access API endpoints and course administrator management ([#1063](https://github.com/manytask/manytask/pull/1063), [#1064](https://github.com/manytask/manytask/pull/1064)).
+- Add namespace editing and prompt for a username when adding a user ([#1106](https://github.com/manytask/manytask/pull/1106), [#1107](https://github.com/manytask/manytask/pull/1107)).
+- Hide teachers, administrators, and project managers from the scores table ([#1079](https://github.com/manytask/manytask/pull/1079)).
+- Round scores after applying a deadline multiplier instead of truncating them ([#1124](https://github.com/manytask/manytask/pull/1124)).
+
+### Fixes
+
+- Allow namespace administrators to open the namespace editing page ([#1105](https://github.com/manytask/manytask/pull/1105)).
+- Handle RMS failures during project creation and anonymous requests to the course not-ready page ([#1096](https://github.com/manytask/manytask/pull/1096), [#1088](https://github.com/manytask/manytask/pull/1088)).
+- Make checker export honor dry-run mode and leave commit creation disabled by default ([#1099](https://github.com/manytask/manytask/pull/1099), [#1100](https://github.com/manytask/manytask/pull/1100)).
+- Use Docker Compose v2 for local development ([#1101](https://github.com/manytask/manytask/pull/1101)).
+
+### Other changes
+
+- Redesign the course template release pipeline ([#1109](https://github.com/manytask/manytask/pull/1109)).
+- Simplify test targets, add test arguments, and avoid a shell call for Git status ([#1104](https://github.com/manytask/manytask/pull/1104), [#1103](https://github.com/manytask/manytask/pull/1103), [#1102](https://github.com/manytask/manytask/pull/1102)).
+- Update dependencies and development documentation, including the urllib3 minimum and uv lockfiles ([#1123](https://github.com/manytask/manytask/pull/1123)).
+
+**Full Changelog**: [26.0.5...26.0.6](https://github.com/manytask/manytask/compare/26.0.5...26.0.6)
+
 ## [26.0.5](https://github.com/manytask/manytask/releases/tag/26.0.5) - 2026-09-11
 
 UI updates, bug fixes and minor optimizations.
