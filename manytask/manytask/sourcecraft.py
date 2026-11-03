@@ -157,16 +157,16 @@ class SourceCraftApi(RmsApi):
         response = self._request("POST", f"orgs/{self._org_slug}/repos", json=payload)
         if response.status_code == HTTPStatus.CREATED:
             return
-        # Idempotency: SC returns 409 with error_code=SlugIsNotAvailable when the
-        # repo already exists. This happens on any retry of create_project (e.g.
-        # after a previous run failed at _add_repo_role). Treat as success so
-        # create_project can be safely re-invoked to recover a partial setup.
-        if response.status_code == HTTPStatus.CONFLICT:
-            data = response.json()
+        data = response.json()
+        # Match the semantic error rather than assuming slug conflicts use HTTP
+        # 409. A reserved or inaccessible slug is not proof that our repo exists.
+        if HTTPStatus.BAD_REQUEST <= response.status_code < HTTPStatus.INTERNAL_SERVER_ERROR:
             if data.get("error_code") == "SlugIsNotAvailable":
-                logger.info(f"Repo {repo_slug} already exists, skipping creation")
-                return
-        raise RmsApiException(f"Failed to create repo: {response.json()}")
+                existing_repo = self._get_repo(repo_slug)
+                if existing_repo.status_code == HTTPStatus.OK:
+                    logger.info(f"Repo {repo_slug} already exists, skipping creation")
+                    return
+        raise RmsApiException(f"Failed to create repo (HTTP {response.status_code}): {data}")
 
     def _update_repo(
         self,
