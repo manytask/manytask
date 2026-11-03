@@ -1,6 +1,7 @@
 # Diplodoc: from repo root: `make -C docs`; from docs/: `make` or `make docs`.
 DOCS_DIR := .
-DOCS_HTML_DIR := html
+# Keep generated pages outside the input tree to avoid reprocessing stale output.
+DOCS_HTML_DIR := ../build/docs
 
 .PHONY: docs
 

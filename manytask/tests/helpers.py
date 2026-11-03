@@ -282,6 +282,10 @@ class MockStorageApiBase:
         self.course_admin = False
 
     @staticmethod
+    def get_solved_tasks(_course_name, _username):
+        return set()
+
+    @staticmethod
     def get_namespace_admin_namespaces(_username):
         return []
 

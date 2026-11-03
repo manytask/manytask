@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
+from pydantic import AnyUrl, BaseModel, Field, StrictBool, field_validator, model_validator
 
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.utils.generic import SECONDS_PER_DAY, format_remaining, lerp
@@ -20,11 +20,13 @@ class RowData(BaseModel):
     large_count: int
     grade: int
     scores: dict[str, int]
+    solved: dict[str, bool] = Field(default_factory=dict)
     grade_is_override: bool = False  # Indicates if grade is manually overridden by admin
 
 
 class ManytaskUpdateDatabasePayload(BaseModel):
     new_scores: dict[str, Any] = Field(...)
+    new_solved: dict[str, StrictBool] = Field(default_factory=dict)
     row_data: RowData
 
 
@@ -44,6 +46,19 @@ class CreateNamespaceRequest(BaseModel):
 class AddUserToNamespaceRequest(BaseModel):
     username: str
     role: Literal["namespace_admin", "program_manager"]
+
+
+class UpdateNamespaceRequest(BaseModel):
+    name: str
+    description: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, name: str) -> str:
+        name = name.strip()
+        if not name:
+            raise ValueError("Namespace name must not be empty")
+        return name
 
 
 ROLE_STUDENT = "student"

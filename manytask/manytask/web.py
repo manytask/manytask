@@ -16,6 +16,7 @@ from manytask.abstract import RmsApiException, RmsUser, StoredUser
 from .abstract import ClientProfile
 from .auth import (
     handle_oauth_callback,
+    has_course_repository_access,
     redirect_to_login_with_bad_session,
     requires_auth,
     requires_course_access,
@@ -36,6 +37,7 @@ from .utils.flask import check_if_current_user_is_instance_admin, get_courses, h
 from .utils.generic import (
     check_course_creation_namespace_permission,
     generate_token_hex,
+    get_course_creation_conflict,
     sanitize_log_data,
     validate_name,
 )
@@ -228,11 +230,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
     sourcecraft_accept_invite_required = False
     if app.app_config.rms == "sourcecraft" and not app.debug:
-        sourcecraft_accept_invite_required = not app.rms_api.check_user_has_repo_access(
-            rms_user_id=session["rms"]["rms_id"],
-            project_name=student_username,
-            project_group=course.gitlab_course_students_group,
-        )
+        sourcecraft_accept_invite_required = not has_course_repository_access(app, course)
 
     return render_template(
         "tasks.html",
@@ -458,6 +456,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
+            can_edit_course=app.debug
+            or app.storage_api.check_if_course_admin(course.course_name, session["manytask"]["username"]),
         )
 
     if request.method == "GET":
@@ -474,12 +474,11 @@ def create_project(course_name: str) -> ResponseReturnValue:
     if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
         return render_create_project("Invalid secret")
 
-    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
-
     error_message = _create_student_project(app, course)
     if error_message is not None:
         return render_create_project(error_message)
 
+    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
     return redirect(url_for("course.course_page", course_name=course_name))
 
 
@@ -489,6 +488,8 @@ def _redirect_existing_enrollment(app: CustomFlask, course: Course) -> ResponseR
     if not app.rms_api.check_project_exists(
         project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
     ):
+        return redirect(url_for("course.recover_project", course_name=course.course_name))
+    if not has_course_repository_access(app, course):
         return redirect(url_for("course.recover_project", course_name=course.course_name))
     return redirect(url_for("course.course_page", course_name=course.course_name))
 
@@ -528,9 +529,10 @@ def recover_project(course_name: str) -> ResponseReturnValue:
     if not app.storage_api.check_user_on_course(course.course_name, username):
         abort(HTTPStatus.FORBIDDEN)
 
-    if app.rms_api.check_project_exists(
+    repository_exists = app.rms_api.check_project_exists(
         project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
-    ):
+    )
+    if repository_exists and has_course_repository_access(app, course):
         return redirect(url_for("course.course_page", course_name=course_name))
 
     error_message = None
@@ -547,6 +549,7 @@ def recover_project(course_name: str) -> ResponseReturnValue:
 
     return render_template(
         "recover_project.html",
+        repository_exists=repository_exists,
         course_name=course.course_name,
         course_favicon=app.favicon,
         manytask_version=app.manytask_version,
@@ -695,6 +698,16 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
         gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
 
+        conflict = get_course_creation_conflict(app.storage_api, course_name, gitlab_course_group_full_path)
+        if conflict is not None:
+            return render_template(
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message=conflict,
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
+            )
+
         try:
             logger.info(
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
@@ -745,6 +758,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             generated_token=generate_token_hex(24),
             error_message=f"Course '{settings.course_name}' already exists.",
             rms=app.app_config.rms,
+            labels=app.create_course_labels,
         )
 
     return render_template(
@@ -790,7 +804,8 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 
         if app.storage_api.edit_course(updated_settings):
             logger.info("Successfully updated course settings for: %s", sanitize_log_data(course_name))
-            return redirect(url_for("course.course_page", course_name=course_name))
+            flash("Course changes saved successfully.", category="success")
+            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         return render_template(
             "edit_course.html",
@@ -806,38 +821,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         course_users=course_users,
         rms=app.app_config.rms,
     )
-
-
-@instance_admin_bp.route("/", methods=["GET"])
-@requires_auth
-def instance_admin_index() -> ResponseReturnValue:
-    """Root instance admin page that redirects based on user role.
-
-    Instance Admin -> /instance_admin/panel
-    Namespace Admin -> /instance_admin/namespaces
-    """
-    from .utils.flask import check_if_current_user_is_instance_admin, check_if_user_has_namespaces_to_admin
-
-    app: CustomFlask = current_app  # type: ignore
-
-    if app.debug:
-        return redirect(url_for("instance_admin.instance_admin_panel"))
-
-    username = session["manytask"]["username"]
-    is_instance_admin = check_if_current_user_is_instance_admin(app)
-
-    if is_instance_admin:
-        logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
-        return redirect(url_for("instance_admin.instance_admin_panel"))
-
-    is_namespace_admin = check_if_user_has_namespaces_to_admin(app)
-
-    if is_namespace_admin:
-        logger.info("Namespace Admin %s accessing instance admin root, redirecting to namespaces", username)
-        return redirect(url_for("instance_admin.namespaces_list"))
-
-    logger.warning("User %s attempted to access instance admin without privileges", username)
-    abort(HTTPStatus.FORBIDDEN)
 
 
 @instance_admin_bp.route("/panel", methods=["GET", "POST"])
@@ -936,30 +919,6 @@ def update_profile() -> ResponseReturnValue:
             return redirect(referrer)
 
     return redirect(url_for("root.index"))
-
-
-@instance_admin_bp.route("/namespaces", methods=["GET"])
-@requires_instance_or_namespace_admin
-def namespaces_list() -> ResponseReturnValue:
-    """Display list of namespaces accessible to the user.
-
-    Instance Admin sees all namespaces.
-    Namespace Admin sees only their namespaces.
-    """
-    app: CustomFlask = current_app  # type: ignore
-
-    username = session["manytask"]["username"]
-    is_instance_admin = check_if_current_user_is_instance_admin(app)
-
-    logger.info("%s %s accessing namespaces", "Instance Admin" if is_instance_admin else "Namespace Admin", username)
-    namespace_data = _get_admin_namespaces(app, username, is_instance_admin)
-
-    return render_template(
-        "namespaces_list.html",
-        namespaces=namespace_data,
-        is_instance_admin=is_instance_admin,
-        manytask_version=app.manytask_version,
-    )
 
 
 @instance_admin_bp.route("/namespaces/<int:namespace_id>", methods=["GET"])

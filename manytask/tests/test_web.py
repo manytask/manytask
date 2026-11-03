@@ -1,18 +1,20 @@
 import os
 from http import HTTPStatus
+from typing import Any
 from unittest.mock import patch
 
 import gitlab
 import pytest
 from authlib.integrations.base_client import OAuthError
 from bs4 import BeautifulSoup
-from flask import Flask, url_for
+from flask import Flask, render_template, url_for
 from flask.testing import FlaskClient
 from flask_wtf import CSRFProtect
 from sqlalchemy.exc import NoResultFound
 
-from manytask.abstract import AuthenticatedUser, RmsApiException, StudentCourseScores, TaskScore
+from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiException, StudentCourseScores, TaskScore
 from manytask.api import bp as api_bp
+from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ProtectedBranchSettings
 from manytask.database import UserIdentityConflictError
 from manytask.local_config import LocalConfig
@@ -62,6 +64,7 @@ def app(mock_storage_api):
     app.register_blueprint(root_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(namespace_bp)
     app.register_blueprint(instance_admin_bp)
     app.rms_api = MockRmsApi(GITLAB_BASE_URL)
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
@@ -152,6 +155,23 @@ def mock_storage_api(mock_course):  # noqa: C901
 
         def check_if_course_admin(self, _course_name, _username):
             return self.course_admin
+
+        def get_course_access_users(self, _course_name):
+            levels = []
+            if self.stored_user.instance_admin:
+                levels.append("instance_admin")
+            if self.course_admin:
+                levels.append("course_admin")
+            if not levels:
+                return []
+            return [
+                CourseAccessUser(
+                    username=self.stored_user.username,
+                    first_name=self.stored_user.first_name,
+                    last_name=self.stored_user.last_name,
+                    access_levels=levels,
+                )
+            ]
 
         def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
             self.course_admin = self.course_admin or course_admin
@@ -496,6 +516,16 @@ def test_index_renders_list_and_table_views(app, mock_gitlab_oauth):
             assert "tabulator-theme.js" in body
 
 
+def test_courses_template_without_admin_namespaces(app):
+    """An older route without namespace data can still render the course list."""
+    with app.test_request_context():
+        body = render_template(
+            "courses.html", courses=[], status_order=[], can_create_courses=False, is_instance_admin=False
+        )
+
+    assert "const adminNamespacesData = [];" in body
+
+
 def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
     """A regular user must not receive an editable course in the table data."""
     CSRFProtect(app)
@@ -510,6 +540,8 @@ def test_index_edit_flag_hidden_for_regular_user(app, mock_gitlab_oauth):
             # can_edit is serialized into the embedded courses JSON; a regular
             # user (no namespace access) can never edit.
             assert '"can_edit": true' not in body
+            assert "createNamespaceModal" not in body
+            assert "create-namespace.js" not in body
 
 
 def test_index_edit_flag_present_for_instance_admin(app, mock_gitlab_oauth):
@@ -558,9 +590,12 @@ def test_index_renders_namespace_table_for_namespace_admin(app, mock_gitlab_oaut
     assert 'title: "Edit"' in body
     assert "Test namespace" in body
     assert "/instance_admin/namespaces/1" in body
+    assert "createNamespaceModal" not in body
+    assert "create-namespace.js" not in body
 
 
-def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth):
+@pytest.mark.parametrize("with_namespace", [True, False], ids=["existing_namespace", "first_namespace"])
+def test_index_namespace_creation_for_instance_admin(app: Any, mock_gitlab_oauth: Any, with_namespace: bool) -> None:
     CSRFProtect(app)
     namespace = MockCourseBase()
     namespace.id = 1
@@ -570,7 +605,7 @@ def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth
     namespace.gitlab_group_id = 1
 
     app.storage_api.stored_user.instance_admin = True
-    app.storage_api.get_all_namespaces = lambda: [namespace]
+    app.storage_api.get_all_namespaces = lambda: [namespace] if with_namespace else []
     app.storage_api.get_namespace_users = lambda _namespace_id: []
     app.storage_api.get_namespace_courses = lambda _namespace_id: []
 
@@ -583,16 +618,28 @@ def test_index_renders_namespace_table_for_instance_admin(app, mock_gitlab_oauth
             response = client.get("/")
 
     assert response.status_code == HTTPStatus.OK
-    assert "Namespaces you administer" in response.data.decode()
+    body = response.data.decode()
+    soup = BeautifulSoup(body, "html.parser")
+    create_button = soup.find("button", attrs={"data-bs-target": "#createNamespaceModal"})
+    assert create_button is not None
+    assert create_button.get_text(" ", strip=True) == "Create namespace"
+    assert soup.find("div", id="createNamespaceModal") is not None
+    assert "create-namespace.js" in body
+    if with_namespace:
+        assert "Namespaces you administer" in body
+        assert body.index('id="admin-namespaces-table"') < body.index('data-bs-target="#createNamespaceModal"')
 
 
-def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
+@pytest.mark.parametrize("description", [None, "Namespace <description>\nMore details"])
+def test_namespace_admin_can_access_namespace_panel(
+    app: Flask, mock_gitlab_oauth: Any, description: str | None
+) -> None:
     """Namespace admins can open the panel where they manage their namespace."""
     namespace = MockCourseBase()
     namespace.id = 1
     namespace.name = "Test namespace"
     namespace.slug = "test-namespace"
-    namespace.description = None
+    namespace.description = description
     namespace.gitlab_group_id = 1
 
     app.storage_api.get_namespace_by_id = lambda _namespace_id, _username: (namespace, "namespace_admin")
@@ -609,6 +656,19 @@ def test_namespace_admin_can_access_namespace_panel(app, mock_gitlab_oauth):
             response = client.get(f"/instance_admin/namespaces/{namespace.id}")
 
     assert response.status_code == HTTPStatus.OK
+    form = BeautifulSoup(response.data, "html.parser").find("form", id="namespaceSettingsForm")
+    assert form is not None
+    assert form["data-update-url"] == f"/api/namespaces/{namespace.id}"
+    name_input = form.find("input", id="namespaceName", attrs={"name": "name"})
+    assert name_input is not None
+    assert name_input["value"] == namespace.name
+    assert name_input.has_attr("required")
+    description_input = form.find("textarea", id="namespaceDescription", attrs={"name": "description"})
+    assert description_input is not None
+    assert description_input.get_text() == (description or "")
+    submit = form.find("button", attrs={"type": "submit"})
+    assert submit is not None
+    assert submit.get_text(strip=True) == "Save Changes"
 
 
 def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_oauth):
@@ -1085,6 +1145,37 @@ def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
     assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
 
 
+@pytest.mark.parametrize("can_edit", [True, False])
+@pytest.mark.parametrize("invalid_secret", [True, False])
+def test_enrollment_edit_link_permissions(
+    app: Flask, mock_gitlab_oauth: object, can_edit: bool, invalid_secret: bool
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.course_admin = can_edit
+    app.storage_api.get_course(TEST_COURSE_NAME).token = TEST_TOKEN
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", return_value=False),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        if invalid_secret:
+            csrf_token = BeautifulSoup(response.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+            response = client.post(
+                f"/{TEST_COURSE_NAME}/create_project",
+                data={"csrf_token": csrf_token, "secret": "invalid-secret"},
+            )
+            assert b"Invalid secret" in response.data
+
+        assert response.status_code == HTTPStatus.OK
+        soup = BeautifulSoup(response.data, "html.parser")
+        edit_link = soup.find("a", href=f"/instance_admin/courses/{TEST_COURSE_NAME}/edit")
+        assert (edit_link is not None) == can_edit
+        if can_edit:
+            assert edit_link.get_text(strip=True) == "Back to editing course"
+
+
 def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):
     """Regression: a failing RMS must not blow up the enrollment form with a 500.
 
@@ -1156,3 +1247,85 @@ def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitla
             body = response.data.decode()
             assert "boom" in body
             assert "Secret Code" in body
+
+
+@pytest.mark.parametrize("page", ["", "database", "create_project"])
+def test_enrolled_user_without_repo_access_is_sent_to_recovery(app, mock_gitlab_oauth, page: str) -> None:
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client, patch.object(app.rms_api, "check_user_has_repo_access", return_value=False):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == f"/{TEST_COURSE_NAME}/recover_project"
+
+
+def test_recovery_repairs_access_to_an_existing_repository(app, mock_gitlab_oauth) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    project_path = f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"
+    original_project = app.rms_api.projects[project_path]
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "check_user_has_repo_access", return_value=False),
+        patch.object(app.rms_api, "create_project", wraps=app.rms_api.create_project) as create_repo,
+        patch.object(app.storage_api, "sync_user_on_course") as sync_membership,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        recovery = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        assert b"Restore repository access" in recovery.data
+        assert b"lost or deleted" not in recovery.data
+        assert create_repo.call_count == 0
+        csrf_token = BeautifulSoup(recovery.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+    assert response.status_code == HTTPStatus.FOUND
+    create_repo.assert_called_once()
+    sync_membership.assert_not_called()
+    assert app.rms_api.projects[project_path] is original_project
+
+
+def test_failed_enrollment_can_retry_existing_repository_before_membership_is_saved(
+    app, mock_course, mock_gitlab_oauth
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    mock_course.token = TEST_TOKEN
+    project_path = f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"
+    original_project = app.rms_api.projects[project_path]
+    enrolled = False
+
+    def save_membership(*args: Any) -> None:
+        nonlocal enrolled
+        enrolled = True
+
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", side_effect=lambda *args: enrolled),
+        patch.object(app.storage_api, "sync_user_on_course", side_effect=save_membership) as sync_membership,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        enrollment = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        csrf_token = BeautifulSoup(enrollment.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        payload = {"csrf_token": csrf_token, "secret": mock_course.registration_secret}
+        with patch.object(app.rms_api, "create_project", side_effect=RmsApiException("role grant failed")):
+            first = client.post(f"/{TEST_COURSE_NAME}/create_project", data=payload)
+        assert first.status_code == HTTPStatus.OK
+        assert b"course staff" in first.data
+        assert not enrolled
+        sync_membership.assert_not_called()
+        second = client.post(f"/{TEST_COURSE_NAME}/create_project", data=payload)
+    assert second.status_code == HTTPStatus.FOUND
+    sync_membership.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME, False)
+    assert enrolled
+    assert app.rms_api.projects[project_path] is original_project
+
+
+def test_sourcecraft_pending_invitation_still_shows_course_instructions(app, mock_gitlab_oauth) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.app_config.rms = "sourcecraft"
+    with app.test_client() as client, patch.object(app.rms_api, "check_user_has_repo_access", return_value=False):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+    assert response.status_code == HTTPStatus.OK
+    assert b"SourceCraft" in response.data
+    assert b"invitation" in response.data

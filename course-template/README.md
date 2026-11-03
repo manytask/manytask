@@ -158,6 +158,10 @@ For the full list of commands and config options, see the
 3. Register the task in `.manytask.yml` under `deadlines.schedule[python].tasks`.
 4. Commit and push to `main`. The pipeline does the rest.
 
+For several tasks sharing one folder, use `.tasks.yml` with a nonempty `tasks` mapping instead of
+`.task.yml`, and register each logical task name in `.manytask.yml`. See the
+[shared-folder example](https://manytask.org/checker_config.html#several-tasks-in-one-folder).
+
 ---
 
 ## License

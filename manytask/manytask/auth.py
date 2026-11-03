@@ -109,6 +109,12 @@ def handle_course_membership(app: CustomFlask, course: Course, username: str) ->
         return False
 
 
+def has_course_repository_access(app: CustomFlask, course: Course) -> bool:
+    return app.rms_api.check_user_has_repo_access(
+        session["rms"]["rms_id"], session["rms"]["username"], course.gitlab_course_students_group
+    )
+
+
 def __redirect_to_signup_finish() -> Response:
     return redirect(url_for("root.signup_finish"))
 
@@ -223,8 +229,6 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
     @requires_auth
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:
-        from .utils.flask import can_access_course
-
         app: CustomFlask = current_app  # type: ignore
 
         if app.debug:
@@ -240,14 +244,6 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             abort(HTTPStatus.FORBIDDEN)
         username = stored_user.username
         logger.info("User %s accessing course=%s", username, course.course_name)
-
-        if not can_access_course(app, username, course.course_name):
-            logger.warning(
-                "User %s attempted to access course %s without permission",
-                username,
-                course.course_name,
-            )
-            abort(HTTPStatus.FORBIDDEN)
 
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
         if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(course.course_name, username):
@@ -267,6 +263,12 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
         ):
             logger.info("User %s is enrolled but missing a repository in course %s", username, course.course_name)
+            abort(redirect(url_for("course.recover_project", course_name=course.course_name)))
+
+        # SourceCraft invitations may still need acceptance; the course page
+        # shows the invitation instructions while that is pending.
+        if app.app_config.rms != "sourcecraft" and not has_course_repository_access(app, course):
+            logger.info("User %s is enrolled but lacks repository access in course %s", username, course.course_name)
             abort(redirect(url_for("course.recover_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it

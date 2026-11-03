@@ -1,6 +1,11 @@
 allowHTML: true
 outputFormat: html
 
+# Keep checker ${{ ... }} examples literal in code blocks and inline text.
+template:
+  features:
+    substitutions: false
+
 resources:
   style:
     - _assets/style/custom.css
