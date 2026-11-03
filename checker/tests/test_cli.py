@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
+import git
 import pytest
+import yaml
 from click.testing import CliRunner, Result
 
 from checker.__main__ import cli
@@ -132,6 +136,89 @@ def course_root(tmp_path: Path) -> Path:
             (task_dir / "solution.py").write_text("")
 
     return root
+
+
+@pytest.mark.parametrize("scope", ["none", "global", "group", "task"])
+@pytest.mark.parametrize("sibling", [False, True])
+def test_task_folder_exports_and_grades_using_structure_rules(
+    course_root: Path, tmp_path: Path, scope: str, sibling: bool
+) -> None:
+    task_dir = course_root / "group1/task1_1"
+    source_dir = course_root / "group1/task1_2" if sibling else task_dir
+    pattern = "../task1_2/*.cpp" if sibling else "*.cpp"
+    (source_dir / "solution.cpp").write_text("reference implementation")
+    (task_dir / "protected.txt").write_text("reference test")
+    config_path = course_root / CHECKER_YML_NAME
+    config = yaml.safe_load(config_path.read_text())
+    config["structure"]["public_patterns"] = [
+        ".task.yml",
+        ".group.yml",
+        "protected.txt",
+    ]
+    config_path.write_text(yaml.safe_dump(config))
+
+    if scope != "none":
+        parameter_path = {
+            "global": config_path,
+            "group": course_root / "group1/.group.yml",
+            "task": task_dir / ".task.yml",
+        }[scope]
+        parameters_config = yaml.safe_load(parameter_path.read_text()) or {"version": 1}
+        parameters_config[
+            "default_parameters" if scope == "global" else "parameters"
+        ] = {"allow_change": [pattern]}
+        parameter_path.write_text(yaml.safe_dump(parameters_config))
+
+    task_path = task_dir / ".task.yml"
+    task_config = yaml.safe_load(task_path.read_text()) or {"version": 1}
+    task_config["task_pipeline"] = [
+        {
+            "name": "Grade student files with structure-based protection",
+            "run": "run_script",
+            "args": {
+                "origin": "${{ global.temp_dir }}/${{ task.task_sub_path }}",
+                "script": [
+                    sys.executable,
+                    "-c",
+                    "import glob, sys; from pathlib import Path; "
+                    "files = glob.glob(sys.argv[1]); assert len(files) == 1; "
+                    "assert Path(files[0]).read_text() == 'student implementation'; "
+                    "assert Path('unlisted.txt').read_text() == 'student file'; "
+                    "assert Path('protected.txt').read_text() == 'reference test'; "
+                    "Path(sys.argv[2], 'graded.txt').write_text('graded student')",
+                    pattern if scope == "none" else "${{ parameters.allow_change[0] }}",
+                    "${{ global.repo_dir }}",
+                ],
+            },
+        }
+    ]
+    task_path.write_text(yaml.safe_dump(task_config))
+
+    exported = tmp_path / "exported"
+    result = CliRunner().invoke(
+        cli, ["export-private", str(course_root), str(exported)]
+    )
+    assert result.exit_code == 0, result.output
+    assert (exported / "group1/task1_1/.task.yml").exists()
+
+    student = tmp_path / "student"
+    shutil.copytree(course_root, student)
+    repository = git.Repo.init(student)
+    actor = git.Actor("Checker tests", "checker@example.com")
+    repository.git.add("--all")
+    repository.index.commit("Initial files", author=actor, committer=actor)
+    student_source = student / source_dir.relative_to(course_root) / "solution.cpp"
+    student_source.write_text("student implementation")
+    # Folder-based selection includes changes outside an optional allow_change list.
+    (student / "group1/task1_1/unlisted.txt").write_text("student file")
+    (student / "group1/task1_1/protected.txt").write_text("student tampering")
+    repository.git.add("--all")
+    repository.index.commit("Student submission", author=actor, committer=actor)
+
+    result = CliRunner().invoke(cli, ["grade", str(student), str(exported)])
+
+    assert result.exit_code == 0, result.output
+    assert (student / "graded.txt").read_text() == "graded student"
 
 
 @pytest.fixture()
@@ -347,7 +434,7 @@ class TestGradeReporting:
         ]  # type: ignore[arg-type]
         monkeypatch.setattr(
             "checker.course.Course.detect_changes",
-            lambda self, detection_type: detected,
+            lambda self, detection_type, **kwargs: detected,
         )
 
         result = run_grade(course_root)
@@ -363,7 +450,8 @@ class TestGradeReporting:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "checker.course.Course.detect_changes", lambda self, detection_type: []
+            "checker.course.Course.detect_changes",
+            lambda self, detection_type, **kwargs: [],
         )
 
         result = run_grade(course_root)
@@ -374,6 +462,26 @@ class TestGradeReporting:
 
 
 class TestExport:
+    @pytest.mark.parametrize("command", ["export", "export-private"])
+    def test_copy_details_are_opt_in(self, course_root: Path, command: str) -> None:
+        export_root = course_root.parent / command
+
+        result = CliRunner().invoke(cli, [command, str(course_root), str(export_root)])
+
+        assert result.exit_code == 0, result.output
+        assert "Copy from " in result.output
+        assert "Copy files from <" not in result.output
+        assert "    - Copy <" not in result.output
+        assert (export_root / "group1" / "task1_1" / "solution.py").exists()
+
+        verbose_result = CliRunner().invoke(
+            cli, [command, str(course_root), str(export_root), "--verbose-copy"]
+        )
+
+        assert verbose_result.exit_code == 0, verbose_result.output
+        assert "Copy files from <" in verbose_result.output
+        assert "    - Copy <" in verbose_result.output
+
     def test_dry_run_does_not_modify_export_root(self, course_root: Path) -> None:
         export_root = course_root.parent / "export"
         export_root.mkdir()
@@ -394,7 +502,12 @@ class TestGradeBaseRef:
     def captured_base_ref(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         captured: dict[str, Any] = {}
 
-        def fake_detect_changes(self: Any, detection_type: Any) -> list[Any]:
+        def fake_detect_changes(
+            self: Any,
+            detection_type: Any,
+            *,
+            default_parameters: dict[str, Any] | None = None,
+        ) -> list[Any]:
             captured["base_ref"] = self.base_ref
             return []
 
@@ -439,6 +552,8 @@ class TestGradeBaseRef:
         result = run_grade(course_root)
         assert result.exit_code == 0, result.output
         assert captured_base_ref["base_ref"] == "mr_base"
+
+
 class TestGradeSkipUnchangedTasks:
     @pytest.fixture(autouse=True)
     def detect_changes_from_filesystem(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -448,7 +563,7 @@ class TestGradeSkipUnchangedTasks:
         """
         monkeypatch.setattr(
             "checker.course.Course.detect_changes",
-            lambda self, detection_type: self.get_tasks(enabled=True),
+            lambda self, detection_type, **kwargs: self.get_tasks(enabled=True),
         )
 
     def test_unchanged_task_is_skipped(

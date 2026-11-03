@@ -1,6 +1,9 @@
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from http import HTTPStatus
+from importlib import import_module
 from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -8,6 +11,8 @@ from zoneinfo import ZoneInfo
 import pytest
 import yaml
 from alembic import command
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from alembic.script import ScriptDirectory
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import event
@@ -15,16 +20,20 @@ from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
 from manytask.abstract import StudentCourseScores, TaskScore
+from manytask.api import bp as api_bp
 from manytask.config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
     ManytaskFinalGradeConfig,
     ManytaskGroupConfig,
+    ManytaskRmsConfig,
     ManytaskUiConfig,
+    ProtectedBranchConfig,
 )
 from manytask.course import Course as ManytaskCourse
-from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType
-from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError
+from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType, ProtectedBranchSettings
+from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError, UserIdentityConflictError
+from manytask.mock_rms import MockRmsApi
 from manytask.models import (
     Course,
     Deadline,
@@ -69,6 +78,7 @@ from tests.constants import (
     TEST_USERNAME_2,
     USER_EXPECTED,
 )
+from tests.helpers import make_flask_app
 
 
 class TestException(Exception):
@@ -265,9 +275,12 @@ def update_course(
     ui_config: ManytaskUiConfig,
     deadlines_config: ManytaskDeadlinesConfig,
     final_grade_config: ManytaskFinalGradeConfig | None = None,
+    rms_config: ManytaskRmsConfig | None = None,
 ) -> None:
     """Update created course"""
-    config = ManytaskConfig(version=1, ui=ui_config, deadlines=deadlines_config, grades=final_grade_config)
+    config = ManytaskConfig(
+        version=1, ui=ui_config, deadlines=deadlines_config, grades=final_grade_config, rms=rms_config
+    )
 
     db_api.update_course(course_name=course_name, config=config)
 
@@ -699,6 +712,104 @@ def test_updating_course(
     )
 
 
+def test_create_course_resolves_rms_defaults_and_sets_pending(db_api_with_initialized_first_course, session):
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+
+    assert course.ci_config_path == ".gitlab-ci.yml@test_course_public_repo"
+    assert course.protected_branches == [
+        {
+            "name": "test_default_branch",
+            "push_access_level": "developer",
+            "merge_access_level": "developer",
+            "allow_force_push": True,
+        }
+    ]
+    assert course.rms_settings_pending is True
+
+
+def test_update_course_unchanged_rms_keeps_pending_until_cleared(
+    db_api_with_initialized_first_course, first_course_deadlines_config, session
+):
+    db_api_with_initialized_first_course.clear_rms_settings_pending(FIRST_COURSE_NAME)
+
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+    )
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.rms_settings_pending is False
+    assert db_api_with_initialized_first_course.rms_settings_reconcile_needed(FIRST_COURSE_NAME) is False
+
+
+def test_update_course_rms_change_sets_pending_again(
+    db_api_with_initialized_first_course, first_course_deadlines_config, session
+):
+    db_api_with_initialized_first_course.clear_rms_settings_pending(FIRST_COURSE_NAME)
+
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+        rms_config=ManytaskRmsConfig(ci_config_path=".gitlab-ci.yml@other/repo"),
+    )
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.ci_config_path == ".gitlab-ci.yml@other/repo"
+    assert course.rms_settings_pending is True
+    assert db_api_with_initialized_first_course.rms_settings_reconcile_needed(FIRST_COURSE_NAME) is True
+
+
+def test_update_course_rms_still_pending_when_reapplied_unchanged(
+    db_api_with_initialized_first_course, first_course_deadlines_config, session
+):
+    # rms_settings_pending is already True from course creation (NULL -> resolved defaults).
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+    )
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.rms_settings_pending is True
+
+
+def test_update_course_protected_branches_order_insensitive_no_change(
+    db_api_with_initialized_first_course, first_course_deadlines_config, session
+):
+    branches = [
+        ProtectedBranchConfig(name="a", push_access_level="developer"),
+        ProtectedBranchConfig(name="b", push_access_level="maintainer"),
+    ]
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+        rms_config=ManytaskRmsConfig(protected_branches=branches),
+    )
+    db_api_with_initialized_first_course.clear_rms_settings_pending(FIRST_COURSE_NAME)
+
+    reordered_branches = [
+        ProtectedBranchConfig(name="b", push_access_level="maintainer"),
+        ProtectedBranchConfig(name="a", push_access_level="developer"),
+    ]
+    update_course(
+        db_api_with_initialized_first_course,
+        FIRST_COURSE_NAME,
+        ManytaskUiConfig(task_url_template="https://example.com/$TASK_NAME", links={}),
+        first_course_deadlines_config,
+        rms_config=ManytaskRmsConfig(protected_branches=reordered_branches),
+    )
+
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    assert course.rms_settings_pending is False
+
+
 def test_resync_with_changed_task_name(
     db_api,
     first_course_config,
@@ -788,6 +899,110 @@ def test_store_score(db_api_with_initialized_first_course, session):
         0,
         {"task_0_0": 1},
     )
+
+
+def test_store_score_solved_status(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    task = session.query(Task).filter_by(name="task_0_0").one()
+    task.min_score = 50
+    task.is_large = True
+    session.commit()
+
+    # Automatic reports preserve earned completion; explicit edits may override it.
+    updates = [
+        (0, True, True),
+        (50, None, True),
+        (50, False, False),
+        (50, None, False),
+        (49, None, False),
+        (50, None, True),
+        (49, None, True),
+    ]
+    for score, is_solved, expected_solved in updates:
+        saved_score = db_api.store_score(
+            FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", lambda _flags, _old_score: score, is_solved=is_solved
+        )
+        assert saved_score == score
+        session.expire_all()
+        grade = session.query(Grade).one()
+        assert grade.score == score
+        assert grade.is_solved is expected_solved
+        student = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)[TEST_USERNAME]
+        assert student.task_scores["task_0_0"] == TaskScore(score, expected_solved)
+
+
+def test_database_solved_round_trip(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    course = session.query(Course).one()
+    course.status = CourseStatus.IN_PROGRESS
+    task = session.query(Task).filter_by(name="task_0_0").one()
+    task.is_large = True
+    task.min_score = 50
+    session.commit()
+    db_api._sync_grades_config(
+        FIRST_COURSE_NAME,
+        ManytaskFinalGradeConfig(grades={5: [{Path("large_count"): 1}], 2: [{Path("total_score"): 0}]}),
+    )
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, task.name, lambda _flags, _old_score: 0)
+    app = make_flask_app(api_bp)
+    app.storage_api = db_api
+    app.rms_api = MockRmsApi("https://gitlab.test.com")
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {course.token}"}
+    url = f"/api/{FIRST_COURSE_NAME}/database"
+
+    for score, is_solved in [(0, True), (0, False), (50, False), (50, True)]:
+        snapshot = client.get(url, headers=headers).get_json()
+        row = next(row for row in snapshot["students"] if row["username"] == TEST_USERNAME)
+        # Stale browser counters must never determine the saved grade or response.
+        row["large_count"] = 99
+        response = client.post(
+            f"{url}/update",
+            headers=headers,
+            json={"row_data": row, "new_scores": {task.name: score}, "new_solved": {task.name: is_solved}},
+        )
+        assert response.status_code == HTTPStatus.OK
+        payload = response.get_json()
+        assert payload["success"] is True
+        saved_row = json.loads(payload["row_data"])
+        assert saved_row["scores"][task.name] == score
+        assert saved_row["solved"][task.name] is is_solved
+        assert saved_row["large_count"] == int(is_solved)
+        assert saved_row["grade"] == (5 if is_solved else 2)
+        session.expire_all()
+        assert session.query(Grade).one().is_solved is is_solved
+        reloaded = client.get(url, headers=headers).get_json()
+        reloaded_row = next(row for row in reloaded["students"] if row["username"] == TEST_USERNAME)
+        assert reloaded_row["solved"][task.name] is is_solved
+        assert reloaded_row["large_count"] == int(is_solved)
+        assert reloaded_row["grade"] == saved_row["grade"]
+        db_api.recalculate_all_grades(FIRST_COURSE_NAME)
+        assert db_api.get_effective_grade(FIRST_COURSE_NAME, TEST_USERNAME) == saved_row["grade"]
+
+
+def test_completion_flag_backfill(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    old_scores = {"task_0_0": (50, False), "task_0_1": (49, False), "task_0_2": (0, True)}
+    for task_name, (score, is_solved) in old_scores.items():
+        session.query(Task).filter_by(name=task_name).one().min_score = 50
+        session.commit()
+        db_api.store_score(
+            FIRST_COURSE_NAME, TEST_USERNAME, task_name, lambda _flags, _old_score: score, is_solved=is_solved
+        )
+
+    migration = import_module("manytask.migrations.versions.d2e3f4a5b6c7_backfill_task_completion")
+    with Operations.context(MigrationContext.configure(session.connection())):
+        migration.upgrade()
+    session.expire_all()
+    student = db_api.get_all_scores_with_names(FIRST_COURSE_NAME, username=TEST_USERNAME)[TEST_USERNAME]
+    assert student.task_scores == {
+        "task_0_0": TaskScore(50, True),
+        "task_0_1": TaskScore(49, False),
+        "task_0_2": TaskScore(0, True),
+    }
 
 
 def test_store_bonus_score(db_api_with_initialized_first_course, session):
@@ -946,6 +1161,9 @@ def test_check_if_course_admin_namespace_owner(db_api_with_initialized_first_cou
 
     # user is the namespace owner, so it is a course admin even without UserOnCourse
     assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert _access_levels_by_username(db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME))[
+        TEST_USERNAME
+    ] == {"namespace_admin"}
     # unrelated user (instance admin excluded from this check via a non-owner) is not
     assert instance_admin_id != user.id
 
@@ -1279,11 +1497,31 @@ def test_store_score_update_error(db_api_with_two_initialized_courses, session):
 
 
 def test_get_course_success(db_api_with_two_initialized_courses, first_course_config, second_course_config):
+    # update_course resolves and persists the effective (defaults-resolved) rms settings, so the
+    # freshly-loaded course carries those instead of the None the config fixtures start with.
     first_course_config.status = CourseStatus.HIDDEN
+    first_course_config.ci_config_path = f".gitlab-ci.yml@{first_course_config.gitlab_course_public_repo}"
+    first_course_config.protected_branches = [
+        ProtectedBranchSettings(
+            name=first_course_config.gitlab_default_branch,
+            push_access_level="developer",
+            merge_access_level="developer",
+            allow_force_push=True,
+        )
+    ]
     course = db_api_with_two_initialized_courses.get_course(FIRST_COURSE_NAME)
     assert course.__dict__ == ManytaskCourse(first_course_config).__dict__
 
     second_course_config.status = CourseStatus.HIDDEN
+    second_course_config.ci_config_path = f".gitlab-ci.yml@{second_course_config.gitlab_course_public_repo}"
+    second_course_config.protected_branches = [
+        ProtectedBranchSettings(
+            name=second_course_config.gitlab_default_branch,
+            push_access_level="developer",
+            merge_access_level="developer",
+            allow_force_push=True,
+        )
+    ]
     course = db_api_with_two_initialized_courses.get_course(SECOND_COURSE_NAME)
     assert course.__dict__ == ManytaskCourse(second_course_config).__dict__
 
@@ -1457,6 +1695,7 @@ def test_get_course_access_users_namespace_roles(db_api_with_initialized_first_c
 
     assert result[TEST_USERNAME_1] == {"namespace_admin"}
     assert result[TEST_USERNAME_2] == {"program_manager"}
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME_2)
 
 
 def test_get_course_access_users_merges_levels_of_one_user(db_api_with_initialized_first_course, session):
@@ -1544,6 +1783,39 @@ def test_update_or_create_user_existing(db_api_with_two_initialized_courses, ses
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
     create_user(db_api_with_two_initialized_courses)
     assert session.query(User).filter_by(username=TEST_USERNAME).one().id == user.id
+
+
+def test_update_or_create_user_binds_initial_admin(db_api, session):
+    admin = session.query(User).filter_by(username="instance_admin").one()
+    admin_id = admin.id
+    assert (admin.rms_id, admin.auth_id, admin.is_instance_admin) == ("-1", -1, True)
+
+    db_api.update_or_create_user("instance_admin", TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
+
+    admin = session.query(User).filter_by(username="instance_admin").one()
+    assert admin.id == admin_id
+    assert (admin.first_name, admin.last_name) == (TEST_FIRST_NAME, TEST_LAST_NAME)
+    assert (admin.rms_id, admin.auth_id, admin.is_instance_admin) == (TEST_RMS_ID, TEST_AUTH_ID, True)
+    assert db_api.get_stored_user_by_auth_id(TEST_AUTH_ID).instance_admin is True
+
+    with pytest.raises(UserIdentityConflictError):
+        db_api.update_or_create_user("instance_admin", TEST_FIRST_NAME, TEST_LAST_NAME, "other", TEST_AUTH_ID + 1)
+
+
+def test_update_or_create_user_rejects_different_identity(db_api_with_two_initialized_courses, session):
+    user = make_user(id=2, is_instance_admin=True)
+    session.add(user)
+    session.commit()
+
+    with pytest.raises(UserIdentityConflictError):
+        db_api_with_two_initialized_courses.update_or_create_user(
+            TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, "different-rms-id", TEST_AUTH_ID + 1
+        )
+
+    stored_user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    assert stored_user.rms_id == TEST_RMS_ID
+    assert stored_user.auth_id == TEST_AUTH_ID
+    assert stored_user.is_instance_admin is True
 
 
 def test_update_or_create_user_nonexisting(db_api_with_two_initialized_courses, session):
@@ -1991,3 +2263,75 @@ def test_constant_queries(  # noqa: PLR0913
     queries_scaled = counter.value
 
     assert queries_initial == queries_scaled
+
+
+def _with_min_score(deadlines_config: ManytaskDeadlinesConfig, task_name: str, min_score: int):
+    config = deadlines_config.model_copy(deep=True)
+    for group in config.schedule:
+        for task in group.tasks:
+            if task.name == task_name:
+                task.min_score = min_score
+    return config
+
+
+def _set_value(value: int):
+    return lambda _flags, _old_score: value
+
+
+def test_store_score_marks_large_task_solved(
+    db_api_with_initialized_first_course, first_course_deadlines_config, first_course_grade_config
+):
+    db_api = db_api_with_initialized_first_course
+    ui_config = ManytaskUiConfig(task_url_template="https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME")
+    large_task = "task_5_0"
+
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ui_config,
+        _with_min_score(first_course_deadlines_config, large_task, 30),
+        first_course_grade_config,
+    )
+    create_user(db_api, STUDENT_1)
+    create_user(db_api, STUDENT_2)
+
+    # below min_score: not solved; regular tasks are never marked
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(20))
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", _set_value(1))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == set()
+
+    # reaches min_score: solved
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(30))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == {large_task}
+
+    # raise min_score: already solved task stays solved, new submissions can't solve it anymore
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ui_config,
+        _with_min_score(first_course_deadlines_config, large_task, 10000),
+        first_course_grade_config,
+    )
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_2, large_task, _set_value(50))
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(25))  # e.g. reduced by admin
+
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == {large_task}
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_2) == set()
+
+    all_scores = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)
+    assert all_scores[TEST_USERNAME_1].task_scores[large_task] == TaskScore(score=25, is_solved=True)
+    assert all_scores[TEST_USERNAME_2].task_scores[large_task] == TaskScore(score=50, is_solved=False)
+    assert all_scores[TEST_USERNAME_1].count_solved_large_tasks([large_task]) == 1
+    assert all_scores[TEST_USERNAME_2].count_solved_large_tasks([large_task]) == 0
+
+
+def test_store_zero_score_does_not_mark_large_task_solved(db_api_with_initialized_first_course):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    # task_5_0 is large with min_score 0: zero score must not be remembered as solved
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(0))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME) == set()
+
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(1))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME) == {"task_5_0"}

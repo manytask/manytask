@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
+from pydantic import AnyUrl, BaseModel, Field, StrictBool, field_validator, model_validator
 
 from manytask.course import CourseStatus, ManytaskDeadlinesType
 from manytask.utils.generic import SECONDS_PER_DAY, format_remaining, lerp
@@ -20,11 +20,13 @@ class RowData(BaseModel):
     large_count: int
     grade: int
     scores: dict[str, int]
+    solved: dict[str, bool] = Field(default_factory=dict)
     grade_is_override: bool = False  # Indicates if grade is manually overridden by admin
 
 
 class ManytaskUpdateDatabasePayload(BaseModel):
     new_scores: dict[str, Any] = Field(...)
+    new_solved: dict[str, StrictBool] = Field(default_factory=dict)
     row_data: RowData
 
 
@@ -44,6 +46,19 @@ class CreateNamespaceRequest(BaseModel):
 class AddUserToNamespaceRequest(BaseModel):
     username: str
     role: Literal["namespace_admin", "program_manager"]
+
+
+class UpdateNamespaceRequest(BaseModel):
+    name: str
+    description: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, name: str) -> str:
+        name = name.strip()
+        if not name:
+            raise ValueError("Namespace name must not be empty")
+        return name
 
 
 ROLE_STUDENT = "student"
@@ -510,6 +525,36 @@ class ManytaskFinalGradeConfig(BaseModel):
         return False
 
 
+class ProtectedBranchConfig(BaseModel):
+    name: str
+    push_access_level: Literal["no_access", "developer", "maintainer"] = "developer"
+    merge_access_level: Literal["no_access", "developer", "maintainer"] = "developer"
+    allow_force_push: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, data: str) -> str:
+        if not data.strip():
+            raise ValueError("protected branch name cannot be empty")
+        return data
+
+
+class ManytaskRmsConfig(BaseModel):
+    ci_config_path: Optional[str] = None
+    protected_branches: Optional[list[ProtectedBranchConfig]] = None
+
+    @field_validator("protected_branches")
+    @classmethod
+    def check_branch_names_unique(cls, data: list[ProtectedBranchConfig] | None) -> list[ProtectedBranchConfig] | None:
+        if data is None:
+            return data
+        names = [branch.name for branch in data]
+        duplicates = [name for name in names if names.count(name) > 1]
+        if duplicates:
+            raise ValueError(f"Protected branch names should be unique, duplicates: {duplicates}")
+        return data
+
+
 class ManytaskConfig(BaseModel):
     """Manytask configuration."""
 
@@ -519,6 +564,7 @@ class ManytaskConfig(BaseModel):
     ui: ManytaskUiConfig
     deadlines: ManytaskDeadlinesConfig
     grades: Optional[ManytaskFinalGradeConfig] = None
+    rms: Optional[ManytaskRmsConfig] = None
 
     @field_validator("version")
     @classmethod

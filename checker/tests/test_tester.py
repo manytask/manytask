@@ -11,7 +11,7 @@ from checker.configs.checker import (
     CheckerTestingConfig,
     PipelineStageConfig,
 )
-from checker.course import FileSystemTask
+from checker.course import Course, FileSystemGroup, FileSystemTask
 from checker.pipeline import ParametersResolver
 from checker.tester import Tester
 
@@ -124,15 +124,23 @@ class TestTester:
             ({"b": 10, "c": 3}, None, {"a": 1, "b": 10, "c": 3}),
         ],
     )
-    def test_task_context_parameters_merge(self, mocker, group_params, task_params, expected):
+    def test_task_context_parameters_merge(
+        self, mocker, tmp_path, group_params, task_params, expected
+    ):
         mocker.patch("pkgutil.iter_modules", return_value=[])
-        tester = Tester(CourseMock(), CheckerConfigMock())
+        tester = Tester(Course(TEST_MANYTASK_CONFIG, tmp_path), CheckerConfigMock())
         tester.default_params = CheckerParametersConfig(root={"a": 1, "b": 2})
 
         group_config = (
             CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root=group_params)) if group_params else None
         )
-        mocker.patch.object(tester, "_get_group_config", return_value=group_config)
+        mocker.patch.object(
+            tester.course,
+            "get_group_for_task",
+            return_value=FileSystemGroup("group1", "group1", group_config, [])
+            if group_config
+            else None,
+        )
 
         task_config = (
             CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root=task_params))
@@ -153,15 +161,23 @@ class TestTester:
             ({"b": 10, "c": 3}, None, {"a": 1, "b": 10, "c": 3}),
         ],
     )
-    def test_get_task_parameters_merge(self, mocker, group_params, task_params, expected):
+    def test_get_task_parameters_merge(
+        self, mocker, tmp_path, group_params, task_params, expected
+    ):
         mocker.patch("pkgutil.iter_modules", return_value=[])
-        tester = Tester(CourseMock(), CheckerConfigMock())
+        tester = Tester(Course(TEST_MANYTASK_CONFIG, tmp_path), CheckerConfigMock())
         tester.default_params = CheckerParametersConfig(root={"a": 1, "b": 2})
 
         group_config = (
             CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root=group_params)) if group_params else None
         )
-        mocker.patch.object(tester, "_get_group_config", return_value=group_config)
+        mocker.patch.object(
+            tester.course,
+            "get_group_for_task",
+            return_value=FileSystemGroup("group1", "group1", group_config, [])
+            if group_config
+            else None,
+        )
 
         task_config = (
             CheckerSubConfig(version=1, parameters=CheckerParametersConfig(root=task_params))

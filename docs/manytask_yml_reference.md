@@ -17,6 +17,9 @@ deadlines:
 grades:               # optional
   ...
 
+rms:                  # optional
+  ...
+
 mr_review:            # optional
   ...
 ```
@@ -28,6 +31,7 @@ mr_review:            # optional
 | `ui` | object | yes | UI display settings. See [`ui`](#ui). |
 | `deadlines` | object | yes | Deadline schedule and submission rules. See [`deadlines`](#deadlines). |
 | `grades` | object | no | Final grade computation rules. See [`grades`](#grades). |
+| `rms` | object | no | GitLab CI config path and protected-branch settings applied to every student repository. See [`rms`](#rms). |
 | `mr_review` | object | no | Merge-request review bot settings. See [`mr_review`](#mr_review). |
 
 
@@ -237,6 +241,51 @@ Use an empty key `""` with value `0` to create a condition that always matches �
 2:
   - { "": 0 }
 ```
+
+## `rms`
+
+Optional section controlling two GitLab settings applied to every student repository of the course: the CI config path (which pipeline definition the student's fork runs) and protected-branch rules.
+
+```yaml
+rms:
+  ci_config_path: .gitlab-ci.yml@caos-ami/public-2026   # optional
+  protected_branches:                                    # optional
+    - name: main
+      push_access_level: developer      # no_access | developer | maintainer
+      merge_access_level: developer     # no_access | developer | maintainer
+      allow_force_push: true
+```
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ci_config_path` | string | no | `.gitlab-ci.yml@<gitlab_course_public_repo>` | External CI config path (GitLab's `ci_config_path` project setting), e.g. `.gitlab-ci.yml@group/public-repo`. |
+| `protected_branches` | list | no | a single entry for the course's default branch, `developer`/`developer`, `allow_force_push: true` | Branches to protect on every student repository. See [`rms` protected branch](#rms-protected-branch). |
+
+### `rms` protected branch
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes | — | Branch name. Must be non-empty and unique within `protected_branches`. GitLab allows protecting a branch that does not exist yet, so this does not have to be created in advance. |
+| `push_access_level` | string | no | `developer` | Minimum role allowed to push directly to the branch: `no_access`, `developer`, or `maintainer`. |
+| `merge_access_level` | string | no | `developer` | Minimum role allowed to accept merge requests into the branch: `no_access`, `developer`, or `maintainer`. |
+| `allow_force_push` | boolean | no | `true` | Whether force-pushes are allowed on the branch. |
+
+### Applying `rms` settings
+
+`rms` settings are applied to a student's GitLab repository:
+
+- when their repository is first created (enrollment / `create_project`);
+- when they are re-enrolled on an already-created repository;
+- to **every** existing student repository of the course, in the background, whenever the `rms` section's effective (defaults-resolved) value changes on a config push (`update_config`). The HTTP response does not wait for this pass; it runs in a background thread and is idempotent (it only writes settings that differ from the desired state).
+
+If the background pass fails for some repositories (e.g. a transient GitLab error), it is retried on the next `update_config` call for the course — even if the `rms` section itself did not change — or by running the manual script:
+
+```bash
+python -m manytask.scripts.reconcile_student_repos <course_name>
+```
+
+This script applies the course's current `rms` settings to every student repository synchronously, prints a per-repository summary, and exits non-zero if any repository failed.
+
 
 ## `mr_review`
 

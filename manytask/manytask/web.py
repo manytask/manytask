@@ -8,6 +8,7 @@ from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
+from sqlalchemy.exc import NoResultFound
 from wtforms import ValidationError
 
 from manytask.abstract import RmsApiException, RmsUser, StoredUser
@@ -15,6 +16,7 @@ from manytask.abstract import RmsApiException, RmsUser, StoredUser
 from .abstract import ClientProfile
 from .auth import (
     handle_oauth_callback,
+    has_course_repository_access,
     redirect_to_login_with_bad_session,
     requires_auth,
     requires_course_access,
@@ -29,11 +31,13 @@ from .auth import (
     valid_rms_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
+from .database import UNBOUND_INSTANCE_ADMIN_AUTH_ID, UNBOUND_INSTANCE_ADMIN_RMS_ID, UserIdentityConflictError
 from .main import CustomFlask
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
     generate_token_hex,
+    get_course_creation_conflict,
     sanitize_log_data,
     validate_name,
 )
@@ -41,11 +45,67 @@ from .utils.sourcecraft import normalize_string
 
 SESSION_VERSION = 1.5
 CACHE_TIMEOUT_SECONDS = 3600
+MISSING_GITLAB_ACCOUNT_MESSAGE = (
+    "The GitLab account for this Manytask username is missing. Please contact Manytask support."
+)
 
 logger = logging.getLogger(__name__)
 root_bp = Blueprint("root", __name__)
 course_bp = Blueprint("course", __name__, url_prefix="/<course_name>")
 instance_admin_bp = Blueprint("instance_admin", __name__, url_prefix="/instance_admin")
+
+
+def _manytask_username_is_claimed(app: CustomFlask, username: str) -> bool:
+    try:
+        stored_user = app.storage_api.get_stored_user_by_username(username)
+    except NoResultFound:
+        return False
+    return not _is_unbound_instance_admin(stored_user)
+
+
+def _is_unbound_instance_admin(stored_user: StoredUser) -> bool:
+    return (
+        stored_user.instance_admin
+        and stored_user.rms_id == UNBOUND_INSTANCE_ADMIN_RMS_ID
+        and stored_user.auth_id == UNBOUND_INSTANCE_ADMIN_AUTH_ID
+    )
+
+
+def _store_signup_user(
+    app: CustomFlask, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int
+) -> bool:
+    try:
+        app.storage_api.update_or_create_user(
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            rms_id=rms_id,
+            auth_id=auth_id,
+        )
+    except UserIdentityConflictError:
+        logger.warning("Registration conflicts with an existing Manytask identity")
+        return False
+    return True
+
+
+def _restore_existing_user_session(app: CustomFlask, stored_user: StoredUser) -> ResponseReturnValue:
+    # The RMS-native username may differ from the authentication login on SourceCraft.
+    try:
+        rms_username = app.rms_api.get_rms_user_by_id(stored_user.rms_id).username
+    except RmsApiException as e:
+        logger.warning(
+            "Failed to resolve RMS user for rms_id=%s (%s); falling back to auth username",
+            stored_user.rms_id,
+            e,
+        )
+        rms_username = session["auth"]["username"]
+    session.setdefault("rms", {}).update(
+        set_rms_session(ClientProfile(rms_id=stored_user.rms_id, username=rms_username))
+    )
+    session.setdefault("manytask", {}).update(
+        set_manytask_session(user_id=stored_user.user_id, username=stored_user.username)
+    )
+    return redirect(url_for("root.index"))
 
 
 @root_bp.get("/healthcheck")
@@ -170,11 +230,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
     sourcecraft_accept_invite_required = False
     if app.app_config.rms == "sourcecraft" and not app.debug:
-        sourcecraft_accept_invite_required = not app.rms_api.check_user_has_repo_access(
-            rms_user_id=session["rms"]["rms_id"],
-            project_name=student_username,
-            project_group=course.gitlab_course_students_group,
-        )
+        sourcecraft_accept_invite_required = not has_course_repository_access(app, course)
 
     return render_template(
         "tasks.html",
@@ -247,6 +303,13 @@ def signup() -> ResponseReturnValue:
         if validated_firstname is None or validated_lastname is None:
             raise Exception("Firstname and lastname must be 1-50 characters and contain only letters or hyphens.")
 
+        if _manytask_username_is_claimed(app, username):
+            try:
+                app.rms_api.get_rms_user_by_username(username)
+            except RmsApiException as e:
+                raise UserIdentityConflictError(MISSING_GITLAB_ACCOUNT_MESSAGE) from e
+            raise ValueError("This username is already registered. Please log in.")
+
         # register user in gitlab
         rms_user = app.rms_api.register_new_user(
             username,
@@ -269,7 +332,7 @@ def signup() -> ResponseReturnValue:
         logger.warning("User registration failed: %s", e)
         return render_template(
             app.signup_template,
-            error_message=str(e),
+            error_message=MISSING_GITLAB_ACCOUNT_MESSAGE if isinstance(e, UserIdentityConflictError) else str(e),
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
         )
@@ -292,26 +355,15 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         auth_id=session["auth"]["user_auth_id"],
     )
     if stored_user_or_none is not None:
-        # Resolve the RMS-native username from the RMS API. It may differ from the auth-provider
-        # login (e.g. on SourceCraft, when the desired slug is taken, the platform issues a fallback
-        # like "ps5-1" for the Yandex login "Ps5"). Storing the auth login here poisons downstream
-        # slug lookups (existence checks, repo URLs) that expect the RMS-native username.
-        try:
-            rms_username = app.rms_api.get_rms_user_by_id(stored_user_or_none.rms_id).username
-        except RmsApiException as e:
-            logger.warning(
-                "Failed to resolve RMS user for rms_id=%s (%s); falling back to auth username",
-                stored_user_or_none.rms_id,
-                e,
-            )
-            rms_username = session["auth"]["username"]
-        session.setdefault("rms", {}).update(
-            set_rms_session(ClientProfile(rms_id=stored_user_or_none.rms_id, username=rms_username))
+        return _restore_existing_user_session(app, stored_user_or_none)
+
+    if app.app_config.rms == "gitlab" and _manytask_username_is_claimed(app, session["auth"]["username"]):
+        return render_template(
+            app.signup_finish_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message=MISSING_GITLAB_ACCOUNT_MESSAGE,
         )
-        session.setdefault("manytask", {}).update(
-            set_manytask_session(user_id=stored_user_or_none.user_id, username=stored_user_or_none.username)
-        )
-        return redirect(url_for("root.index"))
 
     if request.method == "GET":
         return render_template(
@@ -362,13 +414,17 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
                 error_message=f"Failed to get RMS user: {e}",
             )
 
-    app.storage_api.update_or_create_user(
-        username=session["auth"]["username"],
-        first_name=firstname,
-        last_name=lastname,
-        rms_id=rms_user.id,
-        auth_id=session["auth"]["user_auth_id"],
-    )
+    if not _store_signup_user(
+        app, session["auth"]["username"], firstname, lastname, rms_user.id, session["auth"]["user_auth_id"]
+    ):
+        return render_template(
+            app.signup_finish_template,
+            course_favicon=app.favicon,
+            manytask_version=app.manytask_version,
+            error_message=MISSING_GITLAB_ACCOUNT_MESSAGE
+            if app.app_config.rms == "gitlab"
+            else "This username is already registered in Manytask. Please contact Manytask support.",
+        )
 
     stored_user = app.storage_api.get_stored_user_by_auth_id(auth_id=session["auth"]["user_auth_id"])
     if stored_user is None:
@@ -389,6 +445,10 @@ def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
+    existing_enrollment_redirect = _redirect_existing_enrollment(app, course)
+    if existing_enrollment_redirect is not None:
+        return existing_enrollment_redirect
+
     def render_create_project(error_message: str | None = None) -> str:
         return render_template(
             "create_project.html",
@@ -396,6 +456,8 @@ def create_project(course_name: str) -> ResponseReturnValue:
             course_name=course.course_name,
             course_favicon=app.favicon,
             base_url=app.rms_api.base_url,
+            can_edit_course=app.debug
+            or app.storage_api.check_if_course_admin(course.course_name, session["manytask"]["username"]),
         )
 
     if request.method == "GET":
@@ -406,8 +468,6 @@ def create_project(course_name: str) -> ResponseReturnValue:
         app.logger.error("CSRF validation failed: %s", e)
         return render_create_project("CSRF Error")
 
-    rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
-
     # Set user to be course admin if they provided course token as a secret
 
     is_course_admin: bool = secrets.compare_digest(request.form["secret"].encode("utf-8"), course.token.encode("utf-8"))
@@ -415,26 +475,87 @@ def create_project(course_name: str) -> ResponseReturnValue:
                                                             course.registration_secret.encode("utf-8")):
         return render_create_project("Invalid secret")
 
-    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
+    error_message = _create_student_project(app, course)
+    if error_message is not None:
+        return render_create_project(error_message)
 
-    # Create use if needed
+    app.storage_api.sync_user_on_course(course.course_name, session["manytask"]["username"], is_course_admin)
+    return redirect(url_for("course.course_page", course_name=course_name))
+
+
+def _redirect_existing_enrollment(app: CustomFlask, course: Course) -> ResponseReturnValue | None:
+    if app.debug or not app.storage_api.check_user_on_course(course.course_name, session["manytask"]["username"]):
+        return None
+    if not app.rms_api.check_project_exists(
+        project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
+    ):
+        return redirect(url_for("course.recover_project", course_name=course.course_name))
+    if not has_course_repository_access(app, course):
+        return redirect(url_for("course.recover_project", course_name=course.course_name))
+    return redirect(url_for("course.course_page", course_name=course.course_name))
+
+
+def _create_student_project(app: CustomFlask, course: Course) -> str | None:
+    """Run the RMS setup used by both enrollment and repository recovery."""
     try:
-        app.rms_api.create_project(rms_user, course.gitlab_course_students_group, course.gitlab_course_public_repo)
+        rms_user = app.rms_api.get_rms_user_by_id(session["rms"]["rms_id"])
+        app.rms_api.create_project(
+            rms_user,
+            course.gitlab_course_students_group,
+            course.gitlab_course_public_repo,
+            course.ci_config_path,
+            course.protected_branches,
+        )
         logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
-        logger.error("Project creation failed for user %s: %s", rms_user.username, ex.error_message)
-        return render_create_project(ex.error_message)
+        logger.error("Project creation failed in course %s: %s", course.course_name, ex.error_message)
+        return ex.error_message
     except RmsApiException as ex:
-        # Every RMS backend raises RmsApiException, so this is the generic path: without it a
-        # failing RMS (quota exhausted, slug taken, API down) escapes as a bare 500. The raw
-        # message is backend-internal, so it goes to the log and the user gets a readable one.
-        logger.error("Project creation failed for user %s: %s", rms_user.username, ex)
-        return render_create_project(
+        logger.error("Project creation failed in course %s: %s", course.course_name, ex)
+        return (
             "Could not create your repository. This is not something you can fix yourself - "
             "please report it to the course staff."
         )
+    return None
 
-    return redirect(url_for("course.course_page", course_name=course_name))
+
+@course_bp.route("/recover_project", methods=["GET", "POST"])
+@requires_ready
+@requires_auth
+def recover_project(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    course: Course = app.storage_api.get_course(course_name)  # type: ignore
+    username = session["manytask"]["username"]
+
+    if not app.storage_api.check_user_on_course(course.course_name, username):
+        abort(HTTPStatus.FORBIDDEN)
+
+    repository_exists = app.rms_api.check_project_exists(
+        project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
+    )
+    if repository_exists and has_course_repository_access(app, course):
+        return redirect(url_for("course.course_page", course_name=course_name))
+
+    error_message = None
+    if request.method == "POST":
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError as e:
+            app.logger.error("CSRF validation failed: %s", e)
+            error_message = "CSRF Error"
+        else:
+            error_message = _create_student_project(app, course)
+            if error_message is None:
+                return redirect(url_for("course.course_page", course_name=course_name))
+
+    return render_template(
+        "recover_project.html",
+        repository_exists=repository_exists,
+        course_name=course.course_name,
+        course_favicon=app.favicon,
+        manytask_version=app.manytask_version,
+        error_message=error_message,
+    )
 
 
 @course_bp.route("/not_ready")
@@ -578,6 +699,16 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
         gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
 
+        conflict = get_course_creation_conflict(app.storage_api, course_name, gitlab_course_group_full_path)
+        if conflict is not None:
+            return render_template(
+                app.create_course_template,
+                generated_token=generate_token_hex(24),
+                error_message=conflict,
+                rms=app.app_config.rms,
+                labels=app.create_course_labels,
+            )
+
         try:
             logger.info(
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
@@ -628,6 +759,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             generated_token=generate_token_hex(24),
             error_message=f"Course '{settings.course_name}' already exists.",
             rms=app.app_config.rms,
+            labels=app.create_course_labels,
         )
 
     return render_template(
@@ -673,7 +805,8 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 
         if app.storage_api.edit_course(updated_settings):
             logger.info("Successfully updated course settings for: %s", sanitize_log_data(course_name))
-            return redirect(url_for("course.course_page", course_name=course_name))
+            flash("Course changes saved successfully.", category="success")
+            return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
         return render_template(
             "edit_course.html",
@@ -689,38 +822,6 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         course_users=course_users,
         rms=app.app_config.rms,
     )
-
-
-@instance_admin_bp.route("/", methods=["GET"])
-@requires_auth
-def instance_admin_index() -> ResponseReturnValue:
-    """Root instance admin page that redirects based on user role.
-
-    Instance Admin -> /instance_admin/panel
-    Namespace Admin -> /instance_admin/namespaces
-    """
-    from .utils.flask import check_if_current_user_is_instance_admin, check_if_user_has_namespaces_to_admin
-
-    app: CustomFlask = current_app  # type: ignore
-
-    if app.debug:
-        return redirect(url_for("instance_admin.instance_admin_panel"))
-
-    username = session["manytask"]["username"]
-    is_instance_admin = check_if_current_user_is_instance_admin(app)
-
-    if is_instance_admin:
-        logger.info("Instance Admin %s accessing instance admin root, redirecting to panel", username)
-        return redirect(url_for("instance_admin.instance_admin_panel"))
-
-    is_namespace_admin = check_if_user_has_namespaces_to_admin(app)
-
-    if is_namespace_admin:
-        logger.info("Namespace Admin %s accessing instance admin root, redirecting to namespaces", username)
-        return redirect(url_for("instance_admin.namespaces_list"))
-
-    logger.warning("User %s attempted to access instance admin without privileges", username)
-    abort(HTTPStatus.FORBIDDEN)
 
 
 @instance_admin_bp.route("/panel", methods=["GET", "POST"])
@@ -819,30 +920,6 @@ def update_profile() -> ResponseReturnValue:
             return redirect(referrer)
 
     return redirect(url_for("root.index"))
-
-
-@instance_admin_bp.route("/namespaces", methods=["GET"])
-@requires_instance_or_namespace_admin
-def namespaces_list() -> ResponseReturnValue:
-    """Display list of namespaces accessible to the user.
-
-    Instance Admin sees all namespaces.
-    Namespace Admin sees only their namespaces.
-    """
-    app: CustomFlask = current_app  # type: ignore
-
-    username = session["manytask"]["username"]
-    is_instance_admin = check_if_current_user_is_instance_admin(app)
-
-    logger.info("%s %s accessing namespaces", "Instance Admin" if is_instance_admin else "Namespace Admin", username)
-    namespace_data = _get_admin_namespaces(app, username, is_instance_admin)
-
-    return render_template(
-        "namespaces_list.html",
-        namespaces=namespace_data,
-        is_instance_admin=is_instance_admin,
-        manytask_version=app.manytask_version,
-    )
 
 
 @instance_admin_bp.route("/namespaces/<int:namespace_id>", methods=["GET"])
