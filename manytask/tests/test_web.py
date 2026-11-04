@@ -16,7 +16,7 @@ from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiExcepti
 from manytask.api import bp as api_bp
 from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ProtectedBranchSettings
-from manytask.database import UserIdentityConflictError
+from manytask.database import CourseNotEmptyError, UserIdentityConflictError
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -656,7 +656,8 @@ def test_namespace_admin_can_access_namespace_panel(
             response = client.get(f"/instance_admin/namespaces/{namespace.id}")
 
     assert response.status_code == HTTPStatus.OK
-    form = BeautifulSoup(response.data, "html.parser").find("form", id="namespaceSettingsForm")
+    soup = BeautifulSoup(response.data, "html.parser")
+    form = soup.find("form", id="namespaceSettingsForm")
     assert form is not None
     assert form["data-update-url"] == f"/api/namespaces/{namespace.id}"
     name_input = form.find("input", id="namespaceName", attrs={"name": "name"})
@@ -669,6 +670,16 @@ def test_namespace_admin_can_access_namespace_panel(
     submit = form.find("button", attrs={"type": "submit"})
     assert submit is not None
     assert submit.get_text(strip=True) == "Save Changes"
+    assert form.find("button", attrs={"data-bs-target": "#deleteNamespaceModal"}) is not None
+    delete_form = soup.find("form", id="deleteNamespaceForm")
+    assert delete_form is not None
+    assert delete_form["data-delete-url"] == f"/api/namespaces/{namespace.id}"
+    assert delete_form["data-redirect-url"] == "/"
+    assert delete_form.find("input", id="deleteNamespaceName").has_attr("required")
+    assert delete_form.find("button", attrs={"type": "submit"}).has_attr("disabled")
+    assert soup.find(id="deleteNamespaceExpectedName").get_text() == namespace.name
+    assert soup.find(id="deleteNamespaceError")["role"] == "alert"
+    assert "namespace-delete.js" in response.text
 
 
 def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_oauth):
@@ -1145,6 +1156,114 @@ def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
     assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
 
 
+@pytest.fixture
+def course_admin_client(app: Flask, mock_gitlab_oauth: Any) -> Any:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.course_admin = True
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        yield client
+
+
+def _course_delete_form(client: FlaskClient) -> Any:
+    response = client.get(f"/instance_admin/courses/{TEST_COURSE_NAME}/edit")
+    assert response.status_code == HTTPStatus.OK
+    return BeautifulSoup(response.data, "html.parser").find(id="deleteCourseModal").find("form")
+
+
+def test_course_admin_can_delete_empty_course(app: Flask, course_admin_client: FlaskClient) -> None:
+    form = _course_delete_form(course_admin_client)
+    assert form.find("input", {"name": "confirmation_name"})["required"] == ""
+    assert form.find("button", {"type": "submit"}).has_attr("disabled")
+    assert form.find(id="deleteCourseError")["role"] == "alert"
+    with patch.object(app.storage_api, "delete_course", create=True, return_value=True) as delete:
+        response = course_admin_client.post(
+            form["action"],
+            data={
+                "csrf_token": form.find("input", {"name": "csrf_token"})["value"],
+                "confirmation_name": TEST_COURSE_NAME,
+            },
+        )
+    delete.assert_called_once_with(TEST_COURSE_NAME)
+    assert response.status_code == HTTPStatus.OK
+    assert response.json == {"redirect_url": "/"}
+    with course_admin_client.session_transaction() as session:
+        assert ("success", f"Course '{TEST_COURSE_NAME}' deleted successfully.") in session["_flashes"]
+
+
+@pytest.mark.parametrize("confirmation", [None, "", "wrong", TEST_COURSE_NAME.upper(), f" {TEST_COURSE_NAME}"])
+def test_delete_course_requires_exact_name(
+    app: Flask, course_admin_client: FlaskClient, confirmation: str | None
+) -> None:
+    form = _course_delete_form(course_admin_client)
+    data = {"csrf_token": form.find("input", {"name": "csrf_token"})["value"]}
+    if confirmation is not None:
+        data["confirmation_name"] = confirmation
+    with patch.object(app.storage_api, "delete_course", create=True) as delete:
+        response = course_admin_client.post(form["action"], data=data)
+    delete.assert_not_called()
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "Course name does not match" in response.json["error"]
+
+
+def test_delete_populated_course_shows_error(app: Flask, course_admin_client: FlaskClient) -> None:
+    form = _course_delete_form(course_admin_client)
+    message = "Cannot delete this course because users are already registered."
+    with patch.object(
+        app.storage_api, "delete_course", create=True, side_effect=CourseNotEmptyError(message)
+    ) as delete:
+        response = course_admin_client.post(
+            form["action"],
+            data={
+                "csrf_token": form.find("input", {"name": "csrf_token"})["value"],
+                "confirmation_name": TEST_COURSE_NAME,
+            },
+        )
+    delete.assert_called_once_with(TEST_COURSE_NAME)
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json == {"error": message}
+    with course_admin_client.session_transaction() as session:
+        assert not session.get("_flashes")
+
+
+def test_delete_course_requires_admin(app: Flask, course_admin_client: FlaskClient) -> None:
+    form = _course_delete_form(course_admin_client)
+    app.storage_api.course_admin = False
+    with patch.object(app.storage_api, "delete_course", create=True) as delete:
+        response = course_admin_client.post(
+            form["action"],
+            data={
+                "csrf_token": form.find("input", {"name": "csrf_token"})["value"],
+                "confirmation_name": TEST_COURSE_NAME,
+            },
+        )
+    delete.assert_not_called()
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert (
+        course_admin_client.get(f"/instance_admin/courses/{TEST_COURSE_NAME}/edit").status_code == HTTPStatus.FORBIDDEN
+    )
+
+
+@pytest.mark.parametrize("csrf_token", [None, "invalid"])
+def test_delete_course_requires_csrf(app: Flask, course_admin_client: FlaskClient, csrf_token: str | None) -> None:
+    with patch.object(app.storage_api, "delete_course", create=True) as delete:
+        response = course_admin_client.post(
+            f"/instance_admin/courses/{TEST_COURSE_NAME}/delete",
+            data={"confirmation_name": TEST_COURSE_NAME, "csrf_token": csrf_token},
+        )
+    delete.assert_not_called()
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_delete_course_is_post_only(app: Flask, course_admin_client: FlaskClient) -> None:
+    with patch.object(app.storage_api, "delete_course", create=True) as delete:
+        response = course_admin_client.get(f"/instance_admin/courses/{TEST_COURSE_NAME}/delete")
+    delete.assert_not_called()
+    assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+
+
 @pytest.mark.parametrize("can_edit", [True, False])
 @pytest.mark.parametrize("invalid_secret", [True, False])
 def test_enrollment_edit_link_permissions(
@@ -1247,3 +1366,85 @@ def test_create_project_still_reports_gitlab_errors(app, mock_course, mock_gitla
             body = response.data.decode()
             assert "boom" in body
             assert "Secret Code" in body
+
+
+@pytest.mark.parametrize("page", ["", "database", "create_project"])
+def test_enrolled_user_without_repo_access_is_sent_to_recovery(app, mock_gitlab_oauth, page: str) -> None:
+    app.oauth = mock_gitlab_oauth
+    with app.test_client() as client, patch.object(app.rms_api, "check_user_has_repo_access", return_value=False):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == f"/{TEST_COURSE_NAME}/recover_project"
+
+
+def test_recovery_repairs_access_to_an_existing_repository(app, mock_gitlab_oauth) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    project_path = f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"
+    original_project = app.rms_api.projects[project_path]
+    with (
+        app.test_client() as client,
+        patch.object(app.rms_api, "check_user_has_repo_access", return_value=False),
+        patch.object(app.rms_api, "create_project", wraps=app.rms_api.create_project) as create_repo,
+        patch.object(app.storage_api, "sync_user_on_course") as sync_membership,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        recovery = client.get(f"/{TEST_COURSE_NAME}/recover_project")
+        assert b"Restore repository access" in recovery.data
+        assert b"lost or deleted" not in recovery.data
+        assert create_repo.call_count == 0
+        csrf_token = BeautifulSoup(recovery.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(f"/{TEST_COURSE_NAME}/recover_project", data={"csrf_token": csrf_token})
+    assert response.status_code == HTTPStatus.FOUND
+    create_repo.assert_called_once()
+    sync_membership.assert_not_called()
+    assert app.rms_api.projects[project_path] is original_project
+
+
+def test_failed_enrollment_can_retry_existing_repository_before_membership_is_saved(
+    app, mock_course, mock_gitlab_oauth
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    mock_course.token = TEST_TOKEN
+    project_path = f"{TEST_STUDENTS_GROUP}/{TEST_USERNAME}"
+    original_project = app.rms_api.projects[project_path]
+    enrolled = False
+
+    def save_membership(*args: Any) -> None:
+        nonlocal enrolled
+        enrolled = True
+
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", side_effect=lambda *args: enrolled),
+        patch.object(app.storage_api, "sync_user_on_course", side_effect=save_membership) as sync_membership,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        enrollment = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        csrf_token = BeautifulSoup(enrollment.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        payload = {"csrf_token": csrf_token, "secret": mock_course.registration_secret}
+        with patch.object(app.rms_api, "create_project", side_effect=RmsApiException("role grant failed")):
+            first = client.post(f"/{TEST_COURSE_NAME}/create_project", data=payload)
+        assert first.status_code == HTTPStatus.OK
+        assert b"course staff" in first.data
+        assert not enrolled
+        sync_membership.assert_not_called()
+        second = client.post(f"/{TEST_COURSE_NAME}/create_project", data=payload)
+    assert second.status_code == HTTPStatus.FOUND
+    sync_membership.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME, False)
+    assert enrolled
+    assert app.rms_api.projects[project_path] is original_project
+
+
+def test_sourcecraft_pending_invitation_still_shows_course_instructions(app, mock_gitlab_oauth) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.app_config.rms = "sourcecraft"
+    with app.test_client() as client, patch.object(app.rms_api, "check_user_has_repo_access", return_value=False):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+    assert response.status_code == HTTPStatus.OK
+    assert b"SourceCraft" in response.data
+    assert b"invitation" in response.data

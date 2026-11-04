@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .configs.checker import CheckerConfig, CheckerSubConfig, validate_allow_change
+from .configs.checker import CheckerConfig, CheckerSubConfig
 from .configs.manytask import ManytaskDeadlinesType
 from .course import Course, FileSystemTask
 from .exceptions import TestingError
@@ -278,7 +278,8 @@ class Tester:
         # get all tasks
         tasks = tasks or self.course.get_tasks(enabled=True)
         allowed_patterns = {
-            task.name: validate_allow_change(self.get_task_parameters(task).get("allow_change")) for task in tasks
+            task.name: task.config.get_editable_patterns(self.get_task_parameters(task))
+            for task in tasks
         }
         self._prepare_task_workspaces(origin, tasks, allowed_patterns)
 

@@ -63,6 +63,14 @@ class UserIdentityConflictError(Exception):
     """A username already belongs to a different authentication account."""
 
 
+class CourseNotEmptyError(Exception):
+    """A course cannot be deleted while users are registered on it."""
+
+
+class NamespaceNotEmptyError(ValueError):
+    """A namespace still contains courses and cannot be deleted."""
+
+
 def calculate_effective_grade(
     course_status: CourseStatus,
     grades_config: ManytaskFinalGradeConfig,
@@ -207,6 +215,15 @@ class DataBaseApi(StorageApi):
                 scores[grade.task.name] = grade.score
 
         return scores
+
+    def get_solved_tasks(self, course_name: str, username: str) -> set[str]:
+        """Names of the user's enabled and started tasks marked as `is_solved`."""
+
+        with self._session_create() as session:
+            grades = self._get_scores(session, course_name, username, enabled=True, started=True, only_bonus=False)
+            if grades is None:
+                return set()
+            return {grade.task.name for grade in grades if grade.is_solved}
 
     def get_bonus_score(
         self,
@@ -390,7 +407,9 @@ class DataBaseApi(StorageApi):
 
             session.commit()
 
-    def get_all_scores_with_names(self, course_name: str) -> dict[str, StudentCourseScores]:
+    def get_all_scores_with_names(
+        self, course_name: str, *, username: str | None = None
+    ) -> dict[str, StudentCourseScores]:
         """Get all users' scores with names and grade data for the given course.
 
         Returns:
@@ -443,6 +462,8 @@ class DataBaseApi(StorageApi):
                 )
             )
 
+            if username is not None:
+                statement = statement.where(User.username == username)
             rows = session.execute(statement).all()
 
             admin_user_ids: set[int] = set()
@@ -538,13 +559,22 @@ class DataBaseApi(StorageApi):
             }
             # fmt: on
 
-    def store_score(self, course_name: str, username: str, task_name: str, update_fn: Callable[..., Any]) -> int:
+    def store_score(
+        self,
+        course_name: str,
+        username: str,
+        task_name: str,
+        update_fn: Callable[..., Any],
+        *,
+        is_solved: bool | None = None,
+    ) -> int:
         """Method for storing user's task score
 
         :param course_name: course name
         :param username: user name
         :param task_name: task name
         :param update_fn: function for updating the score
+        :param is_solved: explicit solved status; otherwise preserve completion earned by large tasks
 
         :return: saved score
         """
@@ -566,6 +596,11 @@ class DataBaseApi(StorageApi):
 
                 grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
                 new_score = update_fn("", grade.score)
+                if is_solved is not None:
+                    grade.is_solved = is_solved
+                elif new_score != grade.score and task.is_large and new_score > 0 and new_score >= task.min_score:
+                    # Preserve completion earned under an earlier min_score unless explicitly overridden.
+                    grade.is_solved = True
                 grade.score = new_score
                 grade.last_submit_date = datetime.now(timezone.utc)
 
@@ -676,6 +711,19 @@ class DataBaseApi(StorageApi):
             except NoResultFound:
                 logger.error("Failed to update course: course '%s' not found", settings_config.course_name)
                 return False
+
+    def delete_course(self, course_name: str) -> bool:
+        """Delete the course and its configuration only when nobody is registered."""
+        with self._session_create() as session:
+            # Block new registrations (FK key-share locks) until deletion commits.
+            course = session.scalar(select(Course).where(Course.name == course_name).with_for_update())
+            if course is None:
+                return False
+            if session.scalar(select(UserOnCourse.id).where(UserOnCourse.course_id == course.id).limit(1)) is not None:
+                raise CourseNotEmptyError("Cannot delete this course because users are already registered.")
+            session.delete(course)
+            session.commit()
+            return True
 
     def update_course(
         self,
@@ -2062,6 +2110,18 @@ class DataBaseApi(StorageApi):
             session.expunge(namespace)
             return namespace
 
+    def delete_namespace(self, namespace_id: int, name: str) -> None:
+        """Delete an empty namespace after confirming its current name."""
+        with self._session_create() as session:
+            # Block concurrent renames and FK inserts while checking and deleting.
+            namespace = session.query(models.Namespace).filter_by(id=namespace_id).with_for_update().one()
+            if name != namespace.name:
+                raise ValueError("Namespace name does not match")
+            if session.query(models.Course.id).filter_by(namespace_id=namespace_id).first() is not None:
+                raise NamespaceNotEmptyError("Cannot delete namespace: it still contains courses")
+            session.delete(namespace)
+            session.commit()
+
     def get_all_namespaces(self) -> list[models.Namespace]:
         """Get all namespaces (for Instance Admin).
 
@@ -2615,7 +2675,7 @@ class DataBaseApi(StorageApi):
                     if not task.is_bonus:
                         max_score += task.score
                     if task.is_large:
-                        large_tasks.append((task.name, task.min_score))
+                        large_tasks.append(task.name)
 
         grades_to_save: dict[str, int] = {}
 

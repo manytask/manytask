@@ -18,7 +18,6 @@ from .configs import (
     CheckerTestingConfig,
     ManytaskConfig,
 )
-from .configs.checker import validate_allow_change
 from .exceptions import BadConfig, CheckerException
 from .utils import print_info
 
@@ -534,10 +533,8 @@ class Course:
         if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
             if task_patterns is None:
                 task_patterns = {
-                    task.name: validate_allow_change(
-                        self.get_task_parameters(task, default_parameters).get(
-                            "allow_change"
-                        )
+                    task.name: task.config.get_editable_patterns(
+                        self.get_task_parameters(task, default_parameters)
                     )
                     for task in potential_tasks
                 }

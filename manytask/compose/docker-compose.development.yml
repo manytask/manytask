@@ -5,6 +5,15 @@ networks:
 
 services:
 
+    docs:
+        build:
+            context: ../../docs
+            target: docs
+        ports:
+            - "8082:80"
+        networks:
+            - manytask-dev-net
+
     manytask:
         build:
             context: ../..
