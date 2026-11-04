@@ -1116,6 +1116,12 @@ def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNa
 
     try:
         app.storage_api.delete_namespace(namespace_id, validated_data.name)
+        logger.info(
+            "Successfully deleted namespace '%s' (id=%s) by user '%s'",
+            sanitize_log_data(validated_data.name),
+            namespace_id,
+            sanitize_log_data(session.get("manytask", {}).get("username")),
+        )
         return "", HTTPStatus.NO_CONTENT
     except NoResultFound:
         return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
