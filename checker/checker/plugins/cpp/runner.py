@@ -56,7 +56,9 @@ def run_catch2(
         lock_network=args.lock_network,
     )
     try:
-        SafeRunScriptPlugin()._run(run_args, verbose=verbose)
+        output = SafeRunScriptPlugin()._run(run_args, verbose=verbose)
+        if output.output:
+            print_info(output.output)
     finally:
         for pattern in log_patterns:
             for path in report_dir.glob(pattern):
