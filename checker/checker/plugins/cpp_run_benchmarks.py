@@ -97,7 +97,7 @@ class CppRunBenchmarksPlugin(PluginABC):
                 f"console::out={tmp_dir / CppRunBenchmarksPlugin._REPORT}::colour-mode=ansi",
                 *args.args,
             ],
-            env_whiteslist=args.env_whitelist,
+            env_whitelist=args.env_whitelist,
             timeout=args.timeout,
         )
         try:
