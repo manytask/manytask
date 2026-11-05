@@ -2,7 +2,7 @@ fullScreen: true
 blocks:
   - type: 'header-block'
     title: 'Manytask'
-    description: 'Robust platform for managing and organizing programming language courses: test, score and store. Manytask is powered by Yandex School of Data Analysis.'
+    description: 'Robust platform for managing and organizing programming language courses: test, score and store.'
     background:
       image:
         desktop: './img/bg.png'
