@@ -106,6 +106,77 @@ Like `run_script` but wraps the command in [Firejail](https://firejail.wordpress
 | `lock_network` | `bool` | no | `true` | Disable network access inside the sandbox. |
 | `allow_fallback` | `bool` | no | `false` | If `true` and Firejail is not installed, fall back to `run_script` instead of failing. |
 
+## `cpp_run_tests` and `cpp_run_benchmarks`
+
+Run compiled Catch2 binaries, including CUDA binaries. Both plugins use the same
+execution helper and keep their existing names. They expect targets under
+`root/build-<lowercase build type>/`; benchmarks use `RelWithDebInfo`.
+
+Shared arguments:
+
+| Arg | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `root` | `Path` | yes | — | Task directory containing the build directories. |
+| `timeout` | `float` | yes | — | Execution timeout in seconds, including any command prefix. |
+| `args` | `list[str]` | yes | — | Extra arguments passed to the Catch2 binary. |
+| `command_prefix` | `list[str]` | no | `[]` | Tool executable and arguments placed before the test binary. Passed as an argv list, without a shell. |
+| `env_whitelist` | `list[str]` | no | `[]` | Host environment variables to pass into the sandbox. Values are not logged by the helper. |
+| `paths_whitelist` | `list[str]` | no | `[]` | Additional sandbox paths, resolved relative to `root`. |
+| `lock_network` | `bool` | no | `true` | Disable network access inside the sandbox. |
+
+`cpp_run_tests` also requires `tests`, a list of alternating target names and build
+types (for example `[unit_tests, Debug]`), and `no_detect_leaks`, a boolean controlling
+CPU AddressSanitizer leak detection. CPU sanitizer settings and log collection are
+preserved when a command prefix is used.
+
+`cpp_run_benchmarks` also requires `benchmark`, the target name, and
+`benchmark_values`, a list of alternating Catch2 benchmark names and thresholds in
+seconds (for example `[vector_add, "0.01"]`). A positive threshold is an upper bound;
+a negative threshold specifies a lower bound by its absolute value.
+
+### CUDA execution
+
+Use the same test plugin for ordinary correctness checks and a separate Compute
+Sanitizer stage. For example, these arguments wrap an existing test target:
+
+```yaml
+- name: CUDA memory checks
+  run: cpp_run_tests
+  args:
+    root: ${{ global.temp_dir }}/${{ task.task_sub_path }}
+    tests: [cuda_tests, RelWithDebInfo]
+    timeout: 120
+    no_detect_leaks: false
+    args: []
+    env_whitelist: [PATH, CUDA_VISIBLE_DEVICES, LD_LIBRARY_PATH]
+    command_prefix:
+      - /usr/local/cuda/bin/compute-sanitizer
+      - --tool
+      - memcheck
+      - --leak-check
+      - full
+      - --error-exitcode
+      - "1"
+```
+
+The full group configuration in `checker/examples/cuda.group.yml` shows CMake
+configuration, building, correctness, memory checks and benchmarks. Copy it to a
+course group's `.group.yml` and adapt the targets, tool path and thresholds to the
+course. It assumes a private CMake project using CUDA and Catch2 v3; it does not
+install the toolchain or provision GPUs.
+
+The worker/container must provide CUDA devices and drivers compatible with the
+toolkit, and Firejail must permit the required device and library access. The worker
+assigns a GPU and sets `CUDA_VISIBLE_DEVICES` before starting the checker; passing
+this variable selects visible devices and does not enforce device isolation.
+Environment forwarding keeps the sandbox enabled, with network access locked by
+default. Use an absolute prefix executable path, or explicitly allowlist `PATH`.
+
+Successful tool output and Catch2 reports are printed. A nonzero tool exit status
+(including sanitizer findings with `--error-exitcode 1`) fails the stage; partial
+reports are still printed. Keep `command_prefix` empty for timing benchmarks, and
+make the CUDA benchmark synchronize GPU work before reporting elapsed time.
+
 ## `aggregate`
 
 Combine multiple score percentages into a single value using a weighted strategy. Typically used in `report_pipeline` to merge scores from several `register_output` stages.
