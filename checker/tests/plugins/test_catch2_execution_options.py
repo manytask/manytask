@@ -14,7 +14,6 @@ from checker.pipeline import (
     TaskPipelineVariables,
 )
 from checker.plugins.base import PluginOutput
-from checker.plugins.cpp_build import CppBuildPlugin
 from checker.plugins.cpp_run_benchmarks import CppRunBenchmarksPlugin
 from checker.plugins.cpp_run_tests import CppRunTestsPlugin
 from checker.plugins.firejail import SafeRunScriptPlugin
@@ -139,7 +138,7 @@ def test_cuda_example_resolves_and_runs_separate_instrumented_stage(
     capsys: pytest.CaptureFixture[str],
     fail_sanitizer: bool,
 ) -> None:
-    example = Path(__file__).parents[2] / "examples" / "cuda.group.yml"
+    example = Path(__file__).parents[3] / "course-template" / "cuda" / ".group.yml"
     config = CheckerSubConfig.from_yaml(example)
     assert config.parameters is not None
     assert config.task_pipeline is not None
@@ -148,12 +147,12 @@ def test_cuda_example_resolves_and_runs_separate_instrumented_stage(
             ref_dir=str(tmp_path),
             repo_dir=str(tmp_path),
             temp_dir=str(tmp_path),
-            task_names=["vector_add"],
-            task_sub_paths=["cuda/vector_add"],
+            task_names=["vector_add_cuda"],
+            task_sub_paths=["cuda/vector_add_cuda"],
         ),
         "task": TaskPipelineVariables(
-            task_name="vector_add",
-            task_sub_path="cuda/vector_add",
+            task_name="vector_add_cuda",
+            task_sub_path="cuda/vector_add_cuda",
             task_score_percent=1,
         ),
         "parameters": config.parameters.root,
@@ -190,7 +189,6 @@ def test_cuda_example_resolves_and_runs_separate_instrumented_stage(
             plugin.name: plugin
             for plugin in (
                 SafeRunScriptPlugin,
-                CppBuildPlugin,
                 CppRunTestsPlugin,
                 CppRunBenchmarksPlugin,
             )
@@ -200,11 +198,11 @@ def test_cuda_example_resolves_and_runs_separate_instrumented_stage(
     result = runner.run(context)
 
     assert result.failed is fail_sanitizer
-    assert sandbox.call_count == (5 if fail_sanitizer else 6)
+    assert sandbox.call_count == (4 if fail_sanitizer else 5)
     calls = [call.args[0] for call in sandbox.call_args_list]
-    root = tmp_path / "cuda" / "vector_add" / "build-relwithdebinfo"
-    assert calls[3].script[0] == str(root / "cuda_tests")
-    assert calls[4].script[:8] == [
+    root = tmp_path / "cuda" / "vector_add_cuda" / "build-relwithdebinfo"
+    assert calls[2].script[0] == str(root / "cuda_tests")
+    assert calls[3].script[:8] == [
         "/usr/local/cuda/bin/compute-sanitizer",
         "--tool",
         "memcheck",
@@ -214,9 +212,9 @@ def test_cuda_example_resolves_and_runs_separate_instrumented_stage(
         "1",
         str(root / "cuda_tests"),
     ]
-    assert calls[4].timeout == 120
-    assert calls[4].env_additional["ASAN_OPTIONS"]
-    for call in calls[3:]:
+    assert calls[3].timeout == 120
+    assert calls[3].env_additional["ASAN_OPTIONS"]
+    for call in calls[2:]:
         assert call.env_whitelist == ["PATH", "CUDA_VISIBLE_DEVICES", "LD_LIBRARY_PATH"]
         assert call.lock_network is True
         assert call.allow_fallback is False
@@ -224,6 +222,6 @@ def test_cuda_example_resolves_and_runs_separate_instrumented_stage(
         assert result.stage_results[-1].name == "CUDA memory checks"
         assert "Invalid __global__ read" in capsys.readouterr().err
     else:
-        assert calls[5].script[0] == str(root / "cuda_benchmarks")
-        assert calls[5].timeout == 30
+        assert calls[4].script[0] == str(root / "cuda_benchmarks")
+        assert calls[4].timeout == 30
         assert "Compute Sanitizer: no errors" in capsys.readouterr().err

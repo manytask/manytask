@@ -1,6 +1,5 @@
-# Copy this file to a course group's .group.yml and adapt its parameters.
-# The private task must provide a CMake project using CUDA and Catch2 v3,
-# with cuda_tests and cuda_benchmarks targets. The benchmark name is vector_add.
+# Optional GPU group; enable it in ../.manytask.yml on a CUDA-capable worker.
+# vector_add_cuda supplies the CUDA/Catch2 project and reference solution.
 # Run on a Linux GPU worker with Firejail, CUDA, CMake, Ninja and Catch2 installed.
 # The worker assigns a GPU and sets CUDA_VISIBLE_DEVICES before checker starts.
 version: 1
@@ -39,11 +38,18 @@ task_pipeline:
       timeout: 120
 
   - name: Build CUDA targets
-    run: cpp_build
+    run: safe_run_script
     args:
-      root: ${{ global.temp_dir }}/${{ task.task_sub_path }}
-      tests: ${{ parameters.tests }}
-      benchmark: ${{ parameters.benchmark }}
+      origin: ${{ global.temp_dir }}/${{ task.task_sub_path }}
+      script:
+        - cmake
+        - --build
+        - build-relwithdebinfo
+        - --target
+        - cuda_tests
+        - cuda_benchmarks
+      env_whitelist: ${{ parameters.cuda_env_whitelist }}
+      timeout: 120
 
   - name: CUDA correctness
     run: cpp_run_tests
