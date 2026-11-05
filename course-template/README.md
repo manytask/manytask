@@ -30,21 +30,35 @@ See the upstream docs:
 ├── testenv.docker        # exports private reference in a two-stage Docker build
 ├── pyproject.toml        # python toolchain dependencies
 ├── tools/                # placeholder for shared plugins / testlib
-└── python/
-    └── add/              # the only task so far — sum of two integers
-        ├── .task.yml
-        ├── README.md
-        ├── add.py            # reference solution (NOT exported)
-        ├── add.py.template   # becomes add.py in the public repo
-        ├── test_public.py    # visible to students
-        ├── test_private.py   # hidden, used for grading
-        └── conftest.py       # makes `from add import add` work in pytest
+├── python/
+│   └── add/              # one task — sum of two integers
+│       ├── .task.yml
+│       ├── README.md
+│       ├── add.py            # reference solution (NOT exported)
+│       ├── add.py.template   # becomes add.py in the public repo
+│       ├── test_public.py    # visible to students
+│       ├── test_private.py   # hidden, used for grading
+│       └── conftest.py       # makes `from add import add` work in pytest
+├── linear_system/        # three tasks sharing one folder and group
+│   ├── .group.yml
+│   ├── .tasks.yml
+│   ├── README.md
+│   ├── matrix_vector.py / .py.template
+│   ├── matrix_inverse.py / .py.template
+│   ├── solve_system.py / .py.template
+│   ├── test_public_<task_name>.py
+│   ├── test_private_<task_name>.py
+│   └── conftest.py
+├── cpp/add_cpp/
+├── bash/add_bash/
+├── go/add_go/
+└── rust/add_rust/
 ```
 
-Only **one language** (Python) and **one task** (`add`) are included on purpose:
-this is the smallest end-to-end example you can run, copy, and extend.
-Additional languages (C++, Bash, Go, Rust) will be added in follow-up iterations
-of [manytask#637](https://github.com/manytask/manytask/issues/637).
+The addition examples demonstrate one task per folder in Python, C++, Bash, Go, and Rust.
+The [linear system example](linear_system/README.md) demonstrates three separately
+graded Python tasks in one folder: matrix–vector multiplication, matrix inversion, and a
+3 x 3 linear equation solver that combines them.
 
 ---
 
@@ -159,8 +173,10 @@ For the full list of commands and config options, see the
 4. Commit and push to `main`. The pipeline does the rest.
 
 For several tasks sharing one folder, use `.tasks.yml` with a nonempty `tasks` mapping instead of
-`.task.yml`, and register each logical task name in `.manytask.yml`. See the
-[shared-folder example](https://manytask.org/checker_config.html#several-tasks-in-one-folder).
+`.task.yml`, and register each logical task name in `.manytask.yml`. Give each task an explicit
+`url` to the shared statement, since its logical name differs from the folder name. Copy the
+[linear system example](linear_system/README.md) for per-task editable files and tests;
+see also the [configuration guide](https://manytask.org/checker_config.html#several-tasks-in-one-folder).
 
 ---
 

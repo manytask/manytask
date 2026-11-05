@@ -8,5 +8,5 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["python"]
+testpaths = ["python", "linear_system"]
 python_files = ["test_*.py"]

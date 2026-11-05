@@ -1,0 +1,7 @@
+from matrix_inverse import matrix_inverse
+from matrix_vector import matrix_vector
+
+
+def solve_system(matrix: list[list[float]], vector: list[float]) -> list[float]:
+    # Reuse matrix_inverse and matrix_vector from tasks 1 and 2.
+    raise NotImplementedError("Solve matrix * x = vector using x = inverse(matrix) * vector")

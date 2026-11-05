@@ -25,6 +25,22 @@ deadlines:
         - task: add
           score: 100
 
+    - group: linear_system
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: true
+      tasks:
+        # Logical names share linear_system, so link to its statement.
+        - task: matrix_vector
+          score: 100
+          url: https://gitlab.manytask.org/sandbox/public/-/blob/main/linear_system/README.md#task-1-matrix_vector
+        - task: matrix_inverse
+          score: 100
+          url: https://gitlab.manytask.org/sandbox/public/-/blob/main/linear_system/README.md#task-2-matrix_inverse
+        - task: solve_system
+          score: 100
+          url: https://gitlab.manytask.org/sandbox/public/-/blob/main/linear_system/README.md#task-3-solve_system
+
     - group: cpp
       start: 2026-01-01 00:00
       end: 2030-01-01 00:00

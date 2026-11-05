@@ -1,0 +1,48 @@
+version: 1
+
+structure:
+  # Lists replace the course defaults, so retain its dotfile/hidden-test rules.
+  # Keep gold modules in export-private for tasks that depend on reference helpers.
+  # Their .template siblings still supply the stubs in the public export.
+  private_patterns:
+    - ".*"
+    - "*private*"
+    - "matrix_vector.py"
+    - "matrix_inverse.py"
+    - "solve_system.py"
+
+# Three logical tasks share this folder, its statement, and its helper modules.
+# When selected alone, a task uses reference versions of the other modules.
+tasks:
+  matrix_vector:
+    parameters:
+      allow_change: ["matrix_vector.py"]
+  matrix_inverse:
+    parameters:
+      allow_change: ["matrix_inverse.py"]
+  solve_system:
+    parameters:
+      allow_change: ["solve_system.py"]
+
+# Override the course's single-task test filenames for all three entries.
+task_pipeline:
+  - name: "Run public tests"
+    run_if: ${{ parameters.run_testing }}
+    fail: fast
+    run: "run_pytest"
+    register_output: public_tests
+    args:
+      origin: "${{ global.temp_dir }}"
+      target: "${{ task.task_sub_path }}/test_public_${{ task.task_name }}.py"
+      timeout: ${{ parameters.timeout }}
+
+  - name: "Run private tests"
+    run_if: ${{ parameters.run_testing }}
+    fail: fast
+    run: "run_pytest"
+    register_output: private_tests
+    args:
+      origin: "${{ global.temp_dir }}"
+      target: "${{ task.task_sub_path }}/test_private_${{ task.task_name }}.py"
+      timeout: ${{ parameters.timeout }}
+      report_percentage: true
