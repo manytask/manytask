@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
 from manytask.abstract import RmsApiException, StorageApi, StoredUser
-from manytask.database import TaskDisabledError
+from manytask.database import NamespaceNotEmptyError, TaskDisabledError
 
 from .abstract import RmsApi, RmsUser
 from .auth import requires_auth, requires_ready
@@ -29,6 +29,7 @@ from .config import (
     CreateNamespaceRequest,
     DeadlineItem,
     DeadlinesResponse,
+    DeleteNamespaceRequest,
     ErrorResponse,
     IsAdminResponse,
     ManytaskGroupConfig,
@@ -40,6 +41,7 @@ from .config import (
     NamespaceUsersListResponse,
     NamespaceWithRoleResponse,
     PingResponse,
+    RowData,
     SetCourseAdminRequest,
     UpdateNamespaceRequest,
     UpdateUserRoleRequest,
@@ -51,7 +53,6 @@ from .main import CustomFlask
 from .models import ROLE_PROGRAM_MANAGER
 from .utils.database import get_database_table_data
 from .utils.generic import (
-    calculate_percent,
     check_course_creation_namespace_permission,
     get_course_creation_conflict,
     sanitize_and_validate_comment,
@@ -558,32 +559,9 @@ def report_score(course_name: str) -> ResponseReturnValue:
 
     # Recalculate and save student's final grade after score update
     try:
-        # Get all student scores to recalculate grade
-        student_scores = app.storage_api.get_scores(course.course_name, manytask_username)
-        bonus_score = app.storage_api.get_bonus_score(course.course_name, manytask_username)
-        max_score = app.storage_api.max_score_started(course.course_name)
-
-        total_score = sum(student_scores.values()) + bonus_score
-        percent = calculate_percent(total_score, max_score)
-
-        # Count large tasks solved (see StudentCourseScores.count_solved_large_tasks)
-        solved_tasks = app.storage_api.get_solved_tasks(course.course_name, manytask_username)
-        large_count = 0
-        for group_config in app.storage_api.get_groups(course.course_name, enabled=True, started=True):
-            for task_config in group_config.tasks:
-                if task_config.is_large and task_config.enabled:
-                    task_score = student_scores.get(task_config.name, 0)
-                    if task_config.name in solved_tasks or task_score >= task_config.min_score:
-                        large_count += 1
-
-        student_data = {
-            "username": manytask_username,
-            "scores": student_scores,
-            "total_score": total_score,
-            "percent": percent,
-            "large_count": large_count,
-        }
-
+        student_data = get_database_table_data(app, course, include_admin_data=True, username=manytask_username)[
+            "students"
+        ][0]
         app.storage_api.calculate_and_save_grade(course.course_name, manytask_username, student_data)
         logger.info("Recalculated and saved grade for user=%s after score update", manytask_username)
     except Exception as e:
@@ -791,7 +769,6 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     row_data = payload.row_data
 
     student_username = row_data.username
-    total_score = row_data.total_score
     logger.info("Updating scores for user=%s: %s", sanitize_log_data(student_username), new_scores)
 
     try:
@@ -802,9 +779,8 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
                     username=student_username,
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
+                    is_solved=payload.new_solved.get(task_name),
                 )
-                total_score += new_score - row_data.scores.get(task_name, 0)
-                row_data.scores[task_name] = new_score
     except Exception as e:
         logger.error("Error updating database: %s", str(e))
         return jsonify(
@@ -812,9 +788,11 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     try:
-        row_data.total_score = total_score
-        max_score = app.storage_api.max_score_started(course.course_name)
-        row_data.percent = calculate_percent(total_score, max_score)
+        # Re-read persisted scores and completion state, including derived LHW counts.
+        table_data = get_database_table_data(app, course, include_admin_data=True, username=student_username)
+        row_data = RowData.model_validate(
+            next(row for row in table_data["students"] if row["username"] == student_username)
+        )
 
         # Calculate and save grade (applies DORESHKA logic if needed)
         # This updates final_grade but does NOT touch final_grade_override
@@ -1126,6 +1104,36 @@ def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNa
     except Exception:
         logger.exception("Error updating namespace id=%s", namespace_id)
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@namespace_bp.delete("/namespaces/<int:namespace_id>")
+@requires_auth
+@requires_json_validation(DeleteNamespaceRequest)
+@requires_namespace_admin(return_404_if_not_found=True)
+def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNamespaceRequest) -> ResponseReturnValue:
+    """Delete an empty Manytask namespace, preserving the linked RMS group."""
+    app: CustomFlask = current_app  # type: ignore
+
+    try:
+        app.storage_api.delete_namespace(namespace_id, validated_data.name)
+        logger.info(
+            "Successfully deleted namespace '%s' (id=%s) by user '%s'",
+            sanitize_log_data(validated_data.name),
+            namespace_id,
+            sanitize_log_data(session.get("manytask", {}).get("username")),
+        )
+        return "", HTTPStatus.NO_CONTENT
+    except NoResultFound:
+        return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
+    except NamespaceNotEmptyError as error:
+        return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.CONFLICT
+    except ValueError as error:
+        return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.BAD_REQUEST
+    except Exception:
+        logger.exception("Error deleting namespace id=%s", namespace_id)
+        return jsonify(
+            ErrorResponse(error="Failed to delete namespace. Please try again.").model_dump()
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @namespace_bp.post("/namespaces/<int:namespace_id>/users")
