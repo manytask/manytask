@@ -159,11 +159,11 @@ Sanitizer stage. For example, these arguments wrap an existing test target:
       - "1"
 ```
 
-The full group configuration in `checker/examples/cuda.group.yml` shows CMake
-configuration, building, correctness, memory checks and benchmarks. Copy it to a
-course group's `.group.yml` and adapt the targets, tool path and thresholds to the
-course. It assumes a private CMake project using CUDA and Catch2 v3; it does not
-install the toolchain or provision GPUs.
+The complete sample in `course-template/cuda/vector_add_cuda/` includes a CMake
+project, reference solution, student stub, public and hidden tests, and a benchmark.
+Its `course-template/cuda/.group.yml` shows configuration, building, correctness,
+memory checks and benchmarks. The group is disabled by default; see
+[the course template guide](course_template.md#optional-cuda-group) for setup.
 
 The worker/container must provide CUDA devices and drivers compatible with the
 toolkit, and Firejail must permit the required device and library access. The worker
