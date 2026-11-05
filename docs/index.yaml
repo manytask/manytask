@@ -2,7 +2,7 @@ fullScreen: true
 blocks:
   - type: 'header-block'
     title: 'Manytask'
-    description: 'Robust platform for managing and organizing programming language courses: test, score and store.'
+    description: 'Robust platform for managing and organizing programming language courses: test, score and store. Manytask is powered by Yandex School of Data Analysis.'
     background:
       image:
         desktop: './img/bg.png'
@@ -31,11 +31,11 @@ blocks:
       - title: 'Score Management'
         icon: 'img/gravity-ui/display-pulse.svg'
         text: 'A centralized system for storing and presenting student scores. Edit scores and display them in a student-friendly manner'
-      - title: 'GitLab Integration'
-        icon: 'img/gravity-ui/logo-gitlab.svg'
-        text: 'Manage code, submissions, code reviews, and track progress efficiently with GitLab integration'
-      - title: 'Real-World Learning'
+      - title: 'GitLab and SourceCraft Integration'
         icon: 'img/gravity-ui/code-pull-request.svg'
+        text: 'Host course materials and student repositories on GitLab or SourceCraft and connect them to Manytask to manage submissions and track progress.'
+      - title: 'Real-World Learning'
+        icon: 'img/gravity-ui/briefcase.svg'
         text: 'Manytask simulate real-world scenarios in the learning process, it uses pytest, garber etc'
       - title: 'Isolated Test Environments'
         icon: 'img/gravity-ui/circles-5-random.svg'
