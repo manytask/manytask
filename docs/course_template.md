@@ -63,8 +63,10 @@ course-template/
 │   └── add_bash/         # add.sh(.template) · test_public.sh · test_private.sh
 ├── go/                   # .group.yml: `go run add.go test_*.go` (GOPATH mode)
 │   └── add_go/           # add.go(.template) · test_public.go · test_private.go
-└── rust/                 # .group.yml: `rustc --test` (single-file, no cargo)
-    └── add_rust/         # add.rs(.template) · test_public.rs · test_private.rs
+├── rust/                 # .group.yml: `rustc --test` (single-file, no cargo)
+│   └── add_rust/         # add.rs(.template) · test_public.rs · test_private.rs
+└── cuda/                 # optional, disabled by default; GPU worker required
+    └── vector_add_cuda/  # CMake · reference/stub · Catch2 tests · benchmark
 ```
 
 Task names are globally unique (`add`, `add_cpp`, `add_bash`, `add_go`, `add_rust`) across all
@@ -80,6 +82,26 @@ This is the smallest end-to-end example that:
 
 For several tasks in one folder, replace its `.task.yml` with `.tasks.yml` and define a nonempty
 `tasks` mapping. See [the shared-folder example](checker_config.md#several-tasks-in-one-folder).
+
+## Optional CUDA group
+
+`course-template/cuda/vector_add_cuda/` adds an optional CUDA/Catch2 v3 vector
+addition task with CMake targets, a reference `.cu` solution, an exported student
+stub, public and hidden tests, and a synchronized GPU benchmark. The group's
+`.group.yml` runs correctness, Compute Sanitizer and uninstrumented benchmarks
+through the existing Catch2 plugins. See [CUDA execution](checker_plugins.md#cuda-execution).
+
+The `cuda` schedule entry is disabled by default: the standard Alpine image and
+ordinary runners do not supply CUDA. Enable it only after providing a GPU worker
+with the toolkit, compatible drivers, CMake 3.24+, Ninja, Firejail, an installed
+Catch2 v3 package and a checker version supporting `command_prefix`. Adapt the
+sanitizer path and benchmark thresholds in `cuda/.group.yml`, set `enabled: true`
+on the `cuda` group in `.manytask.yml`, then run `checker check . . --group cuda`
+from the course root. Both private checks and student grading need this worker.
+
+The template's `cuda/README.md` documents local setup. Public export replaces the
+reference solution with its `.template` stub and excludes hidden tests. CMake also
+builds the public-only project, and local `build-*` directories are not exported.
 
 ## How grading works (testenv image)
 

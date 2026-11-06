@@ -21,6 +21,8 @@ class Catch2Args(PluginABC.Args):
     args: list[str]
     paths_whitelist: list[str] = Field(default_factory=list)
     lock_network: bool = True
+    command_prefix: list[str] = Field(default_factory=list)
+    env_whitelist: list[str] = Field(default_factory=list)
 
 
 def run_catch2(
@@ -41,14 +43,17 @@ def run_catch2(
 
     run_args = SafeRunScriptPlugin.Args(
         origin=str(build_dir),
-        script=[str(build_dir / target), *reporters, *args.args],
+        script=[*args.command_prefix, str(build_dir / target), *reporters, *args.args],
         timeout=args.timeout,
         env_additional=env_additional or {},
+        env_whitelist=args.env_whitelist,
         paths_whitelist=[str(args.root / path) for path in args.paths_whitelist],
         lock_network=args.lock_network,
     )
     try:
-        SafeRunScriptPlugin()._run(run_args, verbose=verbose)
+        output = SafeRunScriptPlugin()._run(run_args, verbose=verbose)
+        if output.output:
+            print_info(output.output)
     finally:
         for pattern in log_patterns:
             for path in report_dir.glob(pattern):

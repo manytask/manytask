@@ -13,6 +13,7 @@ structure:
     - ".venv"
     - ".*_cache"
     - "*.pyc"
+    - "build-*"  # CMake output from local CUDA development is never exported.
 
   # Precedence in checker's exporter: public > private > other.
   # `copy_other=True` during public export already copies normal files,
