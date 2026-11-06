@@ -18,6 +18,7 @@ This release adds manual task completion editing and safe cleanup of unused cour
 
 - Fix documentation build warnings and update Authlib, pylint, and CI setup ([#1198](https://github.com/manytask/manytask/pull/1198), [#1201](https://github.com/manytask/manytask/pull/1201), [#1203](https://github.com/manytask/manytask/pull/1203), [#1204](https://github.com/manytask/manytask/pull/1204)).
 - Mention GitLab and SourceCraft integration on the documentation landing page ([#1207](https://github.com/manytask/manytask/pull/1207)).
+- Pin Diplodoc 5.64.0 across documentation builds and update its installation requirements ([#1211](https://github.com/manytask/manytask/pull/1211)).
 
 **Upgrade note:** Apply database migrations before running the updated web app. Migration `d2e3f4a5b6c7` initializes completion flags for existing scores that meet the task's current `min_score`; downgrading preserves completion flags, including manual decisions.
 
