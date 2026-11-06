@@ -1,6 +1,6 @@
 # Changelog
 
-## [26.2.0](https://github.com/manytask/manytask/releases/tag/26.2.0) - 2026-11-05
+## [26.2.0](https://github.com/manytask/manytask/releases/tag/26.2.0) - 2026-11-06
 
 This release adds manual task completion editing and safe cleanup of unused courses and namespaces, fixes course path validation, and improves SourceCraft repository recovery.
 
@@ -17,6 +17,7 @@ This release adds manual task completion editing and safe cleanup of unused cour
 ### Other changes
 
 - Fix documentation build warnings and update Authlib, pylint, and CI setup ([#1198](https://github.com/manytask/manytask/pull/1198), [#1201](https://github.com/manytask/manytask/pull/1201), [#1203](https://github.com/manytask/manytask/pull/1203), [#1204](https://github.com/manytask/manytask/pull/1204)).
+- Mention GitLab and SourceCraft integration on the documentation landing page ([#1207](https://github.com/manytask/manytask/pull/1207)).
 
 **Upgrade note:** Apply database migrations before running the updated web app. Migration `d2e3f4a5b6c7` initializes completion flags for existing scores that meet the task's current `min_score`; downgrading preserves completion flags, including manual decisions.
 
