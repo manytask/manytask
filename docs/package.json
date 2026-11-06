@@ -1,0 +1,14 @@
+{
+  "name": "manytask-docs",
+  "private": true,
+  "scripts": {
+    "build": "yfm -i . --allow-custom-resources"
+  },
+  "devDependencies": {
+    "@diplodoc/cli": "5.64.0"
+  },
+  "engines": {
+    "node": ">=24",
+    "npm": ">=11.5.1"
+  }
+}

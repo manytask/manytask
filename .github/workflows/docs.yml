@@ -31,12 +31,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Build
-        uses: diplodoc-platform/docs-build-action@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
         with:
-          src-root: './docs'
-          build-root: './build'
-          lint-root: './html'
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install docs dependencies
+        working-directory: docs
+        run: npm ci
+      - name: Build
+        working-directory: docs
+        run: npm run build -- --output ../html
 
   # Deploy job runs only on push to main or manual trigger
   deploy:
@@ -50,12 +56,18 @@ jobs:
         uses: actions/checkout@v7
       - name: Setup Pages
         uses: actions/configure-pages@v6
-      - name: Build
-        uses: diplodoc-platform/docs-build-action@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
         with:
-          src-root: './docs'
-          build-root: './build'
-          lint-root: './html'
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install docs dependencies
+        working-directory: docs
+        run: npm ci
+      - name: Build
+        working-directory: docs
+        run: npm run build -- --output ../html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:

@@ -34,21 +34,21 @@ Here is the way you can go if you have 1 server with 1 manytask instance (1 cour
 1. Create docker/docker-compose script with latest manytask version  
    Note: Best practice is to use version tag (e.g. `manytask/manytask:9.9.9`) **not** `latest` tag
 
-   See [compose/docker-compose.production.yml](/compose/docker-compose.production.yml) file as an example  
+   See [compose/docker-compose.production.yml](https://github.com/manytask/manytask/blob/main/compose/docker-compose.production.yml) file as an example
    ```shell
    curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/compose/docker-compose.production.yml -o docker-compose.yml 
    ```
 
 2. Create `.env` file with production environment  
 
-   See [.env.example](../manytask/.env.example) as an example
+   See [.env.example](https://github.com/manytask/manytask/blob/main/manytask/.env.example) as an example
    ```shell
    curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/manytask/.env.example -o .env
    ```
 
 3. Setup `nginx-proxy`/`letencrypt`/`certbot` to update https certificates automatically  
    
-   If you are using [compose/docker-compose.production.yml](/compose/docker-compose.production.yml) example, it's already set up.
+   If you are using [compose/docker-compose.production.yml](https://github.com/manytask/manytask/blob/main/compose/docker-compose.production.yml) example, it's already set up.
 
 
 ### From repo (not recommended)
@@ -115,20 +115,19 @@ Please, refer to the example files and api docs.
 
 ## How to build documentation
 
-### Install NPM:
+### Install dependencies
+
+Install Node.js 24 or newer and npm 11.5.1 or newer. From the `docs/` directory,
+install the locked dependencies, including Diplodoc CLI 5.64.0:
 
 ```bash
-sudo apt install npm
+make install-deps
 ```
 
-### Install YFM and build:
+### Build HTML from YAML/Markdown files
 
 ```bash
-sudo npm i @diplodoc/cli -g
+make docs
 ```
 
-### Build html from yml/md files:
-
-```bash
-yfm -i ./docs -o ./html --allow-custom-resources
-```
+The generated site is written to `build/docs/` at the repository root.
