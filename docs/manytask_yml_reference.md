@@ -111,7 +111,7 @@ deadlines:
 | `interpolate` | Score is linearly interpolated between steps. Students receive a continuously decreasing score as time passes. |
 
 
-## `schedule` group {#schedule-group}
+## `schedule` group
 
 Each entry in `schedule` represents a logical group of tasks (e.g. a week, a topic, a homework set).
 
@@ -261,7 +261,7 @@ rms:
 | `ci_config_path` | string | no | `.gitlab-ci.yml@<gitlab_course_public_repo>` | External CI config path (GitLab's `ci_config_path` project setting), e.g. `.gitlab-ci.yml@group/public-repo`. |
 | `protected_branches` | list | no | a single entry for the course's default branch, `developer`/`developer`, `allow_force_push: true` | Branches to protect on every student repository. See [`rms` protected branch](#rms-protected-branch). |
 
-### `rms` protected branch {#rms-protected-branch}
+### `rms` protected branch
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -312,7 +312,7 @@ mr_review:
 | `score_comment_pattern` | string | no | `Score: {score}` | Template a teacher's grade comment must match. Must contain exactly one `{score}` placeholder. |
 | `tasks` | list | yes | — | Tasks the bot handles. See [`mr_review` task](#mr_review-task). |
 
-### `mr_review` task {#mr_review-task}
+### `mr_review` task
 
 Each entry ties a task (by name) to the checklist run on its merge requests. The task `name` must match the label put on the MR.
 

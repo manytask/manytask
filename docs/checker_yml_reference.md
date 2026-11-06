@@ -95,7 +95,7 @@ belong to this class. Shared-folder tasks can additionally use
 | **other** | yes | the **student's** repo |
 
 `checker check` / `checker grade` never test the student checkout in place. They build a merged
-tree in two passes ([`Exporter.export_for_testing`](https://github.com/manytask/manytask/blob/main/checker/checker/exporter.py)):
+tree in two passes ([`Exporter.export_for_testing`](../checker/checker/exporter.py)):
 
 ```text
 pass 1 — student repo:    other files only        → the solution
@@ -128,7 +128,7 @@ pattern lists are not re-applied to its contents. `public_patterns: ["tools"]` t
 > classifies a file as *public* before it considers `private_patterns`, and a
 > public match permanently disables private classification for that file
 > (`is_private = not is_public and ...` in
-> [`exporter.py`](https://github.com/manytask/manytask/blob/main/checker/checker/exporter.py) `_should_skip_path`). Python's
+> [`exporter.py`](../checker/checker/exporter.py) `_should_skip_path`). Python's
 > `Path.match("*")` matches **every** file — including `test_private.py` and even
 > dotfiles — so `public_patterns: ["*"]` marks your private tests as public and
 > **leaks them into the student repository**.
@@ -356,7 +356,7 @@ args:
 
 ### Available template variables
 
-#### `global` — [`GlobalPipelineVariables`](https://github.com/manytask/manytask/blob/main/checker/checker/pipeline.py) {#global}
+#### `global` — [`GlobalPipelineVariables`](../checker/checker/pipeline.py)
 
 Available in all three pipeline types.
 
@@ -368,7 +368,7 @@ Available in all three pipeline types.
 | `global.task_names` | `list[str]` | Names of all tasks being tested in this run. |
 | `global.task_sub_paths` | `list[str]` | Relative paths of all tasks being tested in this run. |
 
-#### `task` — [`TaskPipelineVariables`](https://github.com/manytask/manytask/blob/main/checker/checker/pipeline.py) {#task}
+#### `task` — [`TaskPipelineVariables`](../checker/checker/pipeline.py)
 
 Available only in `tasks_pipeline` and `report_pipeline` (not in `global_pipeline`).
 
@@ -399,7 +399,7 @@ args:
 
 #### `outputs`
 
-Results of previous pipeline stages that used `register_output` to save their outputs under `<key>`. Each entry is a [`PipelineStageResult`](https://github.com/manytask/manytask/blob/main/checker/checker/pipeline.py) object.
+Results of previous pipeline stages that used `register_output` to save their outputs under `<key>`. Each entry is a [`PipelineStageResult`](../checker/pipeline.py) object.
 
 | Field | Type | Description |
 |---|---|---|

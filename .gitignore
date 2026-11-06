@@ -146,7 +146,6 @@ dmypy.json
 .worktrees/
 
 # Local component configuration
-/docs/node_modules/
 /manytask/.manytask.yml
 /checker/.checker.yml
 

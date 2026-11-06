@@ -1,7 +1,5 @@
 allowHTML: true
 outputFormat: html
-ignore:
-  - html/**
 
 # Keep checker ${{ ... }} examples literal in code blocks and inline text.
 template:
