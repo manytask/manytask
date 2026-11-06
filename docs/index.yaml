@@ -88,5 +88,5 @@ blocks:
     size: s
     centered: true
     textContent:
-      text: '<footer><small>© 2017–2026 Yandex School of Data Analysis</small></footer>'
+      text: '<footer><small>Powered by Yandex School of Data Analysis · 2017–2026</small></footer>'
 animated: true
