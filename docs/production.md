@@ -115,12 +115,12 @@ Please, refer to the example files and api docs.
 
 ## How to build documentation
 
-Install Node.js 24 or newer and npm 11.5.1 or newer.
+Use Diplodoc CLI 5.64.0 or newer, with Node.js 24 or newer and npm 11.5.1 or newer.
 
 ### Install YFM and build:
 
 ```bash
-sudo npm i @diplodoc/cli@5.64.0 -g
+sudo npm i @diplodoc/cli -g
 ```
 
 ### Build html from yml/md files:
