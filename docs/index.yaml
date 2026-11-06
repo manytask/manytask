@@ -84,4 +84,9 @@ blocks:
       - src: 'img/telegram.png'
         text: 'Telegram'
         url: 'https://t.me/manytask_chat'
+  - type: content-layout-block
+    size: s
+    centered: true
+    textContent:
+      text: '<footer><small>© 2017–2026 Yandex School of Data Analysis</small></footer>'
 animated: true
