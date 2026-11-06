@@ -1,11 +1,9 @@
 FROM node:24 AS docs_builder
 
-WORKDIR /docs
-COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm i @diplodoc/cli@5.64.0 -g
 
-COPY . .
-RUN npm run build -- --output /html
+COPY . ./docs
+RUN yfm -i ./docs -o ./html --allow-custom-resources
 
 
 FROM nginx AS docs
