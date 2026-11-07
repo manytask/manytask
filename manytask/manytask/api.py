@@ -1815,10 +1815,10 @@ def get_course_access_users(course_name: str) -> ResponseReturnValue:
 @requires_auth
 @requires_json_validation(SetCourseAdminRequest)
 def set_course_admin(course_name: str, validated_data: SetCourseAdminRequest) -> ResponseReturnValue:
-    """Grant or revoke course admin rights for a member of the course.
+    """Grant or revoke course admin rights for a registered user.
 
-    The target user must already be enrolled on the course: course admin status lives
-    on the users_on_courses row, so there is nothing to update for a non-member.
+    Granting rights enrolls the user on the course if needed. Revoking rights
+    requires an existing enrollment and preserves that enrollment.
 
     Request JSON:
     {
@@ -1829,7 +1829,7 @@ def set_course_admin(course_name: str, validated_data: SetCourseAdminRequest) ->
     Returns:
         200: Status updated
         403: Forbidden (not a course admin nor an instance admin)
-        404: Course or user not found, or the user is not enrolled on the course
+        404: Course or user not found, or revoking rights for a non-member
     """
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
@@ -1850,15 +1850,15 @@ def set_course_admin(course_name: str, validated_data: SetCourseAdminRequest) ->
         logger.warning("User %s not found when setting course admin status", sanitize_log_data(target_username))
         return jsonify(ErrorResponse(error=f"User {target_username} not found").model_dump()), HTTPStatus.NOT_FOUND
 
-    if not storage_api.check_user_on_course(course_name, target_username):
+    if not validated_data.is_admin and not storage_api.check_user_on_course(course_name, target_username):
         logger.warning(
-            "User %s is not enrolled on course %s, cannot change course admin status",
+            "User %s is not enrolled on course %s, cannot revoke course admin status",
             sanitize_log_data(target_username),
             sanitize_log_data(course_name),
         )
         return jsonify(
             ErrorResponse(
-                error=f"User {target_username} is not enrolled on this course and cannot be made a course admin"
+                error=f"User {target_username} is not enrolled on this course and has no course admin role to revoke"
             ).model_dump()
         ), HTTPStatus.NOT_FOUND
 

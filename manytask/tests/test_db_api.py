@@ -1608,6 +1608,87 @@ def test_set_course_admin_status_grant(db_api_with_two_initialized_courses, sess
     assert updated_user_on_course.is_course_admin
 
 
+def test_set_course_admin_status_grant_enrolls_registered_user_once(
+    db_api_with_two_initialized_courses: DataBaseApi, session: Session
+) -> None:
+    db_api = db_api_with_two_initialized_courses
+    create_user(db_api)
+    assert not db_api.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
+
+    db_api.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
+    db_api.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
+
+    enrollment = session.query(UserOnCourse).one()
+    assert enrollment.user.username == TEST_USERNAME
+    assert enrollment.course.name == FIRST_COURSE_NAME
+    assert enrollment.is_course_admin
+    assert db_api.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert not db_api.check_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME)
+    assert session.query(Grade).count() == 0
+
+
+def test_set_course_admin_status_revoke_nonmember_does_not_enroll(
+    db_api_with_two_initialized_courses: DataBaseApi, session: Session
+) -> None:
+    create_user(db_api_with_two_initialized_courses)
+
+    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    assert session.query(UserOnCourse).count() == 0
+
+
+def test_set_course_admin_status_preserves_enrollment_data(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    score = 10
+    grade_override = 5
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(score), is_solved=True)
+    enrollment = session.query(UserOnCourse).one()
+    enrollment.comment = "Existing enrollment"
+    enrollment.final_grade_override = grade_override
+    session.commit()
+    enrollment_id = enrollment.id
+    join_date = enrollment.join_date
+
+    db_api.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+    assert db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    db_api.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
+    saved_enrollment = session.query(UserOnCourse).one()
+    assert saved_enrollment.id == enrollment_id
+    assert saved_enrollment.comment == "Existing enrollment"
+    assert saved_enrollment.final_grade_override == grade_override
+    assert saved_enrollment.join_date == join_date
+    assert not saved_enrollment.is_course_admin
+    grade = session.query(Grade).one()
+    assert grade.score == score
+    assert grade.is_solved
+    assert db_api.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
+
+
+def test_set_course_admin_status_failed_grant_does_not_leave_enrollment(
+    db_api_with_two_initialized_courses: DataBaseApi, session: Session
+) -> None:
+    db_api = db_api_with_two_initialized_courses
+    create_user(db_api)
+
+    grant_session = Session(bind=session.connection(), join_transaction_mode="create_savepoint")
+    with (
+        patch.object(db_api, "_session_create", return_value=grant_session),
+        patch.object(grant_session, "commit", side_effect=RuntimeError("commit failed")),
+    ):
+        with pytest.raises(RuntimeError, match="commit failed"):
+            db_api.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
+
+    assert session.query(UserOnCourse).count() == 0
+    db_api.set_course_admin_status(FIRST_COURSE_NAME, TEST_USERNAME, True)
+    assert session.query(UserOnCourse).one().is_course_admin
+
+
 def test_set_course_admin_status_revoke(db_api_with_two_initialized_courses, session):
     user, _ = add_user_on_course(session, is_course_admin=True)
 
@@ -1627,9 +1708,18 @@ def test_set_course_admin_status_can_revoke_last_admin(db_api_with_two_initializ
     assert not updated_user_on_course.is_course_admin
 
 
-def test_set_course_admin_status_unknown_user(db_api_with_two_initialized_courses, session):
+@pytest.mark.parametrize(
+    "course_name,username",
+    [(FIRST_COURSE_NAME, "nonexistent_user"), ("nonexistent_course", TEST_USERNAME)],
+)
+def test_set_course_admin_status_unknown_user_or_course(
+    db_api_with_two_initialized_courses: DataBaseApi, session: Session, course_name: str, username: str
+) -> None:
     # should not raise, just log an error
-    db_api_with_two_initialized_courses.set_course_admin_status(FIRST_COURSE_NAME, "nonexistent_user", True)
+    create_user(db_api_with_two_initialized_courses)
+    db_api_with_two_initialized_courses.set_course_admin_status(course_name, username, True)
+
+    assert session.query(UserOnCourse).count() == 0
 
 
 def test_get_course_users_with_admin_status(db_api_with_two_initialized_courses, session):

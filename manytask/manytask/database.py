@@ -1290,7 +1290,10 @@ class DataBaseApi(StorageApi):
                 logger.error("Failed to set admin status: user '%s' not found in database", username)
 
     def set_course_admin_status(self, course_name: str, username: str, is_admin: bool) -> None:
-        """Change user course admin status
+        """Change course admin status, enrolling a registered user when granting it.
+
+        Enrollment and the admin flag are committed together. Revocation preserves
+        existing enrollment and never enrolls a non-member.
 
         :param course_name: course name
         :param username: manytask username
@@ -1303,13 +1306,12 @@ class DataBaseApi(StorageApi):
                 course = self._get(session, models.Course, name=course_name)
                 user = self._get(session, models.User, username=username)
 
-                self._update(
-                    session,
-                    models.UserOnCourse,
-                    defaults={"is_course_admin": is_admin},
-                    user_id=user.id,
-                    course_id=course.id,
-                )
+                if is_admin:
+                    user_on_course = self._get_or_create_user_on_course(session, username, course)
+                else:
+                    user_on_course = self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+                user_on_course.is_course_admin = is_admin
+                session.commit()
                 logger.info(
                     "Successfully updated course admin status for user '%s' in course '%s' to %s",
                     username,
@@ -1323,6 +1325,9 @@ class DataBaseApi(StorageApi):
                     username,
                     course_name,
                 )
+            except Exception:
+                session.rollback()
+                raise
 
     def update_user_profile(self, username: str, new_first_name: str | None, new_last_name: str | None) -> None:
         """Update user profile information

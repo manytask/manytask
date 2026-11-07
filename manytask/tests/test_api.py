@@ -1664,7 +1664,9 @@ def test_get_access_users_forbidden_for_non_admin(app, authenticated_client):
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
-def test_set_course_admin_grants(app, authenticated_client):
+@pytest.mark.parametrize("enrolled", [True, False])
+def test_set_course_admin_grants(app: Any, authenticated_client: Any, enrolled: bool) -> None:
+    app.storage_api.check_user_on_course = lambda *_args: enrolled
     calls = []
     app.storage_api.set_course_admin_status = lambda *args: calls.append(args)
 
@@ -1690,14 +1692,13 @@ def test_set_course_admin_unknown_user(app, authenticated_client):
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-@pytest.mark.parametrize("is_admin", [True, False])
-def test_set_course_admin_rejects_non_member(app: Any, authenticated_client: Any, is_admin: bool) -> None:
-    """Course admin status lives on the enrollment row, so non-members are rejected."""
+def test_revoke_course_admin_rejects_non_member(app: Any, authenticated_client: Any) -> None:
+    """Revoking rights must not create an enrollment for a non-member."""
     app.storage_api.check_user_on_course = lambda *_args, **_kwargs: False
     calls = []
     app.storage_api.set_course_admin_status = lambda *args: calls.append(args)
 
-    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": TEST_USERNAME, "is_admin": is_admin})
+    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": TEST_USERNAME, "is_admin": False})
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert "not enrolled" in json.loads(response.data)["error"]

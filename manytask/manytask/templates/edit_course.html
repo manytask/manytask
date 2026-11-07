@@ -230,7 +230,9 @@
                 {% if eligible_course_admins %}
                 <div class="mb-3">
                     <label for="userToGrant" class="form-label">Select new course admin</label>
-                    <div class="form-text mb-2">Only users enrolled on this course can be made course admins.</div>
+                    <div class="form-text mb-2">
+                        Users who are not enrolled will be registered on this course when admin rights are granted.
+                    </div>
 
                     <div class="search-box">
                         <label for="grantSearchInput"></label>
@@ -248,8 +250,8 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info" id="grantCourseAdminEmpty" role="status">
-                    No eligible users. Users must be enrolled on this course and must not already have course admin rights.
-                    <a href="{{ url_for('course.create_project', course_name=course.course_name) }}">Course registration</a>
+                    No eligible users. All registered users already have course admin rights, or nobody has signed in yet.
+                    New users must sign in to Manytask before they can be granted admin rights.
                 </div>
                 {% endif %}
                 <div id="grantCourseAdminError" class="alert alert-danger d-none" role="alert"></div>
