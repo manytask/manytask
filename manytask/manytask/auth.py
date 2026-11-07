@@ -271,10 +271,9 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
             logger.info("User %s is enrolled but lacks repository access in course %s", username, course.course_name)
             abort(redirect(url_for("course.recover_project", course_name=course.course_name)))
 
-        # sync user's data from gitlab to database  TODO: optimize it
-        app.storage_api.sync_user_on_course(
-            course.course_name, username, app.storage_api.check_if_instance_admin(username)
-        )
+        # Visiting a course preserves explicit course roles; inherited instance
+        # admin access must not become a permanent course-admin assignment.
+        app.storage_api.sync_user_on_course(course.course_name, username, False)
         logger.info("Synced user %s on course %s", username, course.course_name)
 
         return f(*args, **kwargs)

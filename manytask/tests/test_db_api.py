@@ -1121,13 +1121,13 @@ def test_sync_user_on_course(db_api_with_initialized_first_course, session):
 
     assert_counts(session, users=USER_EXPECTED, user_on_course=1)
 
-    # admin in gitlab
+    # Explicit course-admin grant, such as enrollment with the course admin secret.
     db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, True)
 
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
     assert is_course_admin
 
-    # lost admin rules in gitlab, but in database stored that user is admin
+    # Ordinary membership sync preserves the explicit course-admin assignment.
     db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     is_course_admin = db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)

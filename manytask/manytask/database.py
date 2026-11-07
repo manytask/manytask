@@ -392,12 +392,12 @@ class DataBaseApi(StorageApi):
         )
 
     def sync_user_on_course(self, course_name: str, username: str, course_admin: bool) -> None:
-        """Method for sync user's gitlab and stored data
+        """Ensure course membership, optionally granting explicit course admin rights.
 
         :param course_name: course name
         :param username: user name
-
-        :return: created or updated StoredUser object
+        :param course_admin: explicit grant, such as enrollment with the course
+            admin secret; inherited instance or namespace rights do not belong here
         """
 
         with self._session_create() as session:
