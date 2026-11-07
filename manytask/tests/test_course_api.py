@@ -1,4 +1,4 @@
-"""Tests for course creation API endpoint."""
+"""Tests for course management API endpoints."""
 
 from datetime import datetime
 from http import HTTPStatus
@@ -7,9 +7,12 @@ from unittest.mock import patch
 
 import pytest
 from flask import json
+from flask.testing import FlaskClient
+from sqlalchemy.orm import Session
 
+from manytask.api import bp as api_bp
 from manytask.mock_auth import MockAuthApi
-from manytask.models import Course, User, UserOnNamespaceRole
+from manytask.models import Course, User, UserOnCourse, UserOnNamespaceRole
 from tests.helpers import (
     assert_forbidden_admin_only,
     assert_not_json_rejected,
@@ -31,6 +34,7 @@ from tests.helpers import (
 def app_with_db(engine, session, postgres_container):
     """Create Flask app with real database."""
     app = build_namespace_app(session, postgres_container, apply_migrations=True, auth_api=MockAuthApi())
+    app.register_blueprint(api_bp)
 
     session.add(make_user("regular_user", "Regular", "User", "2", 2))
     session.add(make_user("namespace_admin_user", "Namespace", "Admin", "3", 3))
@@ -110,6 +114,53 @@ def test_create_course_as_instance_admin(client_with_db, session, mock_session_a
     course = session.query(Course).filter_by(name="Algorithms 2024 Spring").first()
     assert course is not None
     assert course.namespace_id == namespace_id
+
+
+@pytest.mark.parametrize("authorized", [True, False])
+def test_course_admin_grant_automatically_enrolls_registered_user(
+    client_with_db: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    mock_session_regular: dict[str, Any],
+    test_namespace: dict[str, Any],
+    authorized: bool,
+) -> None:
+    course_name = "auto-enrollment"
+    response = post_json_as(
+        client_with_db,
+        mock_session_admin,
+        "/api/admin/courses",
+        {"namespace_id": test_namespace["id"], "course_name": course_name, "slug": course_name},
+    )
+    assert response.status_code == HTTPStatus.CREATED
+    course = session.query(Course).filter_by(name=course_name).one()
+    user = get_user(session, "regular_user")
+    enrollments = session.query(UserOnCourse).filter_by(course_id=course.id, user_id=user.id)
+    assert enrollments.count() == 0
+    set_session(client_with_db, mock_session_admin if authorized else mock_session_regular, clear=True)
+    url = f"/api/{course_name}/course_admin"
+
+    with patch.object(client_with_db.application.rms_api, "create_project") as create_project:
+        response = client_with_db.post(url, json={"username": user.username, "is_admin": True})
+        assert response.status_code == (HTTPStatus.OK if authorized else HTTPStatus.FORBIDDEN)
+        if authorized:
+            enrollment = enrollments.one()
+            assert enrollment.is_course_admin
+            enrollment_id = enrollment.id
+            assert (
+                client_with_db.post(url, json={"username": user.username, "is_admin": True}).status_code
+                == HTTPStatus.OK
+            )
+            assert enrollments.count() == 1
+            assert enrollments.one().id == enrollment_id
+            assert (
+                client_with_db.post(url, json={"username": user.username, "is_admin": False}).status_code
+                == HTTPStatus.OK
+            )
+            assert not enrollments.populate_existing().one().is_course_admin
+        else:
+            assert enrollments.count() == 0
+        create_project.assert_not_called()
 
 
 def test_create_course_as_namespace_admin_in_own_namespace(

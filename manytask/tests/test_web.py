@@ -102,6 +102,9 @@ def app(mock_storage_api):
 @pytest.fixture
 def mock_storage_api(mock_course):  # noqa: C901
     class MockStorageApi(MockStorageApiBase):
+        def get_all_users(self) -> list[StoredUser]:
+            return [self.stored_user]
+
         @staticmethod
         def get_all_courses_names_with_statuses():
             return [("test_course_names", CourseStatus.CREATED)]
@@ -1153,30 +1156,31 @@ def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
 
 
 @pytest.mark.parametrize("members", ["empty", "already_admin", "eligible"])
-def test_edit_course_grants_admin_only_to_eligible_members(app: Any, mock_gitlab_oauth: Any, members: str) -> None:
+def test_edit_course_can_grant_admin_to_registered_nonmembers(app: Any, mock_gitlab_oauth: Any, members: str) -> None:
     enrolled_user = replace(app.storage_api.stored_user, username="enrolled-student")
     existing_admin = replace(app.storage_api.stored_user, username="existing-admin")
     non_member = replace(app.storage_api.stored_user, username="not-enrolled")
-    app.storage_api.get_all_users = lambda: [enrolled_user, existing_admin, non_member]
+    registered_users = [] if members == "empty" else [existing_admin]
     course_users = [] if members == "empty" else [(existing_admin, True)]
     if members == "eligible":
+        registered_users.extend([non_member, enrolled_user])
         course_users.append((enrolled_user, False))
+    app.storage_api.get_all_users = lambda: registered_users
 
     soup = _get_edit_course_page(app, mock_gitlab_oauth, course_users)
     modal = soup.find(id="grantCourseAdminModal")
     assert modal is not None
     assert [option["value"] for option in modal.select("#userToGrant option")] == (
-        [enrolled_user.username] if members == "eligible" else []
+        [enrolled_user.username, non_member.username] if members == "eligible" else []
     )
     assert modal.find(id="grantCourseAdminSubmit").has_attr("disabled") == (members != "eligible")
     if members == "eligible":
-        assert "Only users enrolled on this course" in modal.get_text()
+        assert "Users who are not enrolled will be registered" in modal.get_text()
         assert modal.find(id="grantCourseAdminEmpty") is None
     else:
         empty_state = modal.find(id="grantCourseAdminEmpty")
         assert empty_state["role"] == "status"
-        assert "Users must be enrolled" in empty_state.get_text()
-        assert empty_state.find("a")["href"] == f"/{TEST_COURSE_NAME}/create_project"
+        assert "New users must sign in to Manytask" in empty_state.get_text()
 
 
 def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):

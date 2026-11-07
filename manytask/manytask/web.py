@@ -819,9 +819,13 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             rms=app.app_config.rms,
         )
 
-    eligible_course_admins = [
-        user for user, is_admin in app.storage_api.get_course_users_with_admin_status(course_name) if not is_admin
-    ]
+    course_admins = {
+        user.username for user, is_admin in app.storage_api.get_course_users_with_admin_status(course_name) if is_admin
+    }
+    eligible_course_admins = sorted(
+        (user for user in app.storage_api.get_all_users() if user.username not in course_admins),
+        key=lambda user: user.username.casefold(),
+    )
     return render_template(
         "edit_course.html",
         course=course,
