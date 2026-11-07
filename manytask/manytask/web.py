@@ -892,24 +892,7 @@ def instance_admin_panel() -> ResponseReturnValue:
 
     users = app.storage_api.get_all_users()
 
-    namespaces = app.storage_api.get_all_namespaces()
-    namespaces_data = []
-    for namespace in namespaces:
-        users_count = len(app.storage_api.get_namespace_users(namespace.id))
-        namespaces_data.append(
-            {
-                "id": namespace.id,
-                "name": namespace.name,
-                "slug": namespace.slug,
-                "description": namespace.description or "",
-                "gitlab_group_id": namespace.gitlab_group_id,
-                "users_count": users_count,
-            }
-        )
-
-    return render_template(
-        "instance_admin_panel.html", courses=get_courses(app), users=users, namespaces=namespaces_data
-    )
+    return render_template("instance_admin_panel.html", users=users)
 
 
 @root_bp.route("/update_profile", methods=["POST"])
