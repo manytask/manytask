@@ -1520,3 +1520,153 @@ def test_remove_user_from_namespace_nonexistent_namespace(client_with_db, mock_s
     data = json.loads(response.data)
     assert "error" in data
     assert data["error"] == "Access denied"
+
+
+@pytest.fixture
+def namespace_sync_target(
+    client_with_db: FlaskClient, session: Session, mock_session_admin: dict[str, Any]
+) -> tuple[int, User]:
+    set_session(client_with_db, mock_session_admin)
+    namespace = create_namespace(client_with_db, name="Synchronization", slug="synchronization")
+    return namespace["id"], get_user(session, "regular_user")
+
+
+@pytest.mark.parametrize("unsupported", [False, True])
+def test_namespace_grant_failure_rolls_back_and_allows_retry(
+    client_with_db: FlaskClient,
+    session: Session,
+    namespace_sync_target: tuple[int, User],
+    mocker: MockerFixture,
+    unsupported: bool,
+) -> None:
+    namespace_id, user = namespace_sync_target
+    failure = NotImplementedError("unsupported") if unsupported else RuntimeError("RMS unavailable")
+    grant = mocker.patch.object(client_with_db.application.rms_api, "add_user_to_namespace_group", side_effect=failure)
+    url = f"/api/namespaces/{namespace_id}/users"
+    payload = {"username": user.username, "role": ROLE_NAMESPACE_ADMIN}
+
+    response = client_with_db.post(url, json=payload)
+
+    assert response.status_code == (HTTPStatus.NOT_IMPLEMENTED if unsupported else HTTPStatus.BAD_GATEWAY)
+    assert "RMS" in response.json["error"]
+    assert session.query(UserOnNamespace).filter_by(namespace_id=namespace_id, user_id=user.id).first() is None
+
+    grant.side_effect = None
+    assert client_with_db.post(url, json=payload).status_code == HTTPStatus.CREATED
+    assert session.query(UserOnNamespace).filter_by(namespace_id=namespace_id, user_id=user.id).one().role == (
+        UserOnNamespaceRole.NAMESPACE_ADMIN
+    )
+
+
+def test_namespace_grant_rollback_failure_is_reported(
+    client_with_db: FlaskClient, namespace_sync_target: tuple[int, User], mocker: MockerFixture
+) -> None:
+    namespace_id, user = namespace_sync_target
+    mocker.patch.object(client_with_db.application.rms_api, "add_user_to_namespace_group", side_effect=RuntimeError)
+    mocker.patch.object(client_with_db.application.storage_api, "remove_user_from_namespace", side_effect=RuntimeError)
+
+    response = client_with_db.post(
+        f"/api/namespaces/{namespace_id}/users", json={"username": user.username, "role": ROLE_NAMESPACE_ADMIN}
+    )
+
+    assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert "rollback failed" in response.json["error"]
+
+
+def test_namespace_creation_reports_unsupported_creator_membership(
+    client_with_db: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    set_session(client_with_db, mock_session_admin)
+    mocker.patch.object(
+        client_with_db.application.rms_api, "add_user_to_namespace_group", side_effect=NotImplementedError
+    )
+
+    response = client_with_db.post("/api/namespaces", json={"name": "Unsupported", "slug": "unsupported"})
+
+    assert response.status_code == HTTPStatus.NOT_IMPLEMENTED
+    assert session.query(Namespace).filter_by(slug="unsupported").first() is None
+
+
+def _request_namespace_removal(client: FlaskClient, url: str, method: str) -> Any:
+    return client.delete(url) if method == "DELETE" else client.patch(url, json={"role": "student"})
+
+
+@pytest.mark.parametrize("method", ["DELETE", "PATCH"])
+@pytest.mark.parametrize("unsupported", [False, True])
+def test_namespace_revoke_failure_preserves_role_and_allows_retry(
+    client_with_db: FlaskClient,
+    session: Session,
+    namespace_sync_target: tuple[int, User],
+    mocker: MockerFixture,
+    method: str,
+    unsupported: bool,
+) -> None:
+    namespace_id, user = namespace_sync_target
+    assign_namespace_role_for_user(
+        session, username=user.username, namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN
+    )
+    failure = NotImplementedError("unsupported") if unsupported else RuntimeError("RMS unavailable")
+    revoke = mocker.patch.object(
+        client_with_db.application.rms_api, "remove_user_from_namespace_group", side_effect=failure
+    )
+    url = f"/api/namespaces/{namespace_id}/users/{user.id}"
+
+    response = _request_namespace_removal(client_with_db, url, method)
+
+    assert response.status_code == (HTTPStatus.NOT_IMPLEMENTED if unsupported else HTTPStatus.BAD_GATEWAY)
+    assert session.query(UserOnNamespace).filter_by(namespace_id=namespace_id, user_id=user.id).one().role == (
+        UserOnNamespaceRole.NAMESPACE_ADMIN
+    )
+    revoke.assert_called_once()
+    revoke.reset_mock()
+    revoke.side_effect = None
+    response = _request_namespace_removal(client_with_db, url, method)
+    assert response.status_code == (HTTPStatus.NO_CONTENT if method == "DELETE" else HTTPStatus.OK)
+    assert session.query(UserOnNamespace).filter_by(namespace_id=namespace_id, user_id=user.id).first() is None
+    revoke.assert_called_once()
+
+
+@pytest.mark.parametrize("method", ["DELETE", "PATCH"])
+def test_namespace_revoke_nonmember_does_not_change_rms(
+    client_with_db: FlaskClient,
+    namespace_sync_target: tuple[int, User],
+    mocker: MockerFixture,
+    method: str,
+) -> None:
+    namespace_id, user = namespace_sync_target
+    revoke = mocker.patch.object(client_with_db.application.rms_api, "remove_user_from_namespace_group")
+
+    response = _request_namespace_removal(client_with_db, f"/api/namespaces/{namespace_id}/users/{user.id}", method)
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    revoke.assert_not_called()
+
+
+@pytest.mark.parametrize("method", ["DELETE", "PATCH"])
+def test_namespace_revoke_database_failure_does_not_report_success(
+    client_with_db: FlaskClient,
+    session: Session,
+    namespace_sync_target: tuple[int, User],
+    mocker: MockerFixture,
+    method: str,
+) -> None:
+    namespace_id, user = namespace_sync_target
+    assign_namespace_role_for_user(
+        session, username=user.username, namespace_id=namespace_id, role=UserOnNamespaceRole.NAMESPACE_ADMIN
+    )
+    storage = client_with_db.application.storage_api
+    remove = mocker.patch.object(storage, "remove_user_from_namespace", side_effect=RuntimeError)
+    url = f"/api/namespaces/{namespace_id}/users/{user.id}"
+
+    response = _request_namespace_removal(client_with_db, url, method)
+
+    assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert session.query(UserOnNamespace).filter_by(namespace_id=namespace_id, user_id=user.id).first() is not None
+    remove.side_effect = lambda ns_id, user_id: type(storage).remove_user_from_namespace(storage, ns_id, user_id)
+    assert _request_namespace_removal(client_with_db, url, method).status_code == (
+        HTTPStatus.NO_CONTENT if method == "DELETE" else HTTPStatus.OK
+    )
+    assert session.query(UserOnNamespace).filter_by(namespace_id=namespace_id, user_id=user.id).first() is None

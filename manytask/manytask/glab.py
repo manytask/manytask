@@ -293,7 +293,9 @@ class GitLabApi(RmsApi, AuthApi):
                     existing_member.access_level = gitlab.const.AccessLevel.MAINTAINER
                     existing_member.save()
                     logger.info("Updated user id=%s access level to Maintainer", rms_id)
-            except GitlabGetError:
+            except GitlabGetError as error:
+                if error.response_code != HTTPStatus.NOT_FOUND:
+                    raise
                 group.members.create(
                     {
                         "user_id": gitlab_user_id,
@@ -322,7 +324,9 @@ class GitLabApi(RmsApi, AuthApi):
                 group.members.get(gitlab_user_id)
                 group.members.delete(gitlab_user_id)
                 logger.info("User id=%s removed from GitLab group id=%s", gitlab_user_id, gitlab_group_id)
-            except GitlabGetError:
+            except GitlabGetError as error:
+                if error.response_code != HTTPStatus.NOT_FOUND:
+                    raise
                 logger.warning(
                     "User id=%s is not a member of group id=%s, skipping removal",
                     gitlab_user_id,

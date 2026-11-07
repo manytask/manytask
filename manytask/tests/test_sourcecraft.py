@@ -59,6 +59,14 @@ def _make_response(status_code, json_body=None):
     return response
 
 
+@pytest.mark.parametrize("method", ["add_user_to_namespace_group", "remove_user_from_namespace_group"])
+def test_namespace_membership_management_is_explicitly_unsupported(
+    sourcecraft_api: SourceCraftApi, method: str
+) -> None:
+    with pytest.raises(NotImplementedError):
+        getattr(sourcecraft_api, method)(-1, TEST_RMS_ID)
+
+
 def test_check_project_exists_returns_true_on_200(sourcecraft_api):
     with patch.object(sourcecraft_api, "_request", return_value=_make_response(HTTPStatus.OK)) as mock_request:
         assert (

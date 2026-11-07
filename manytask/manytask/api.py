@@ -131,8 +131,8 @@ def _add_namespace_role(
         logger.error("Invalid role %s: %s", role, str(e))
         return None, (jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST)
 
-    # The RMS group membership is added only after the database row exists.
-    # TODO: откатить добавление в локальную БД, если добавление в группу RMS не удалось
+    # Validate and create the local assignment first, compensating if RMS fails
+    # so a retry does not get stuck on an assignment that was never synchronized.
     try:
         stored_user = storage_api.get_stored_user_by_username(username)
         rms_api.add_user_to_namespace_group(
@@ -146,12 +146,66 @@ def _add_namespace_role(
         )
     except Exception as e:
         logger.error("Failed to add user %s to RMS group: %s", sanitize_log_data(username), str(e))
-        return None, (
-            jsonify(ErrorResponse(error="Failed to add user to GitLab group").model_dump()),
-            HTTPStatus.INTERNAL_SERVER_ERROR,
-        )
+        try:
+            storage_api.remove_user_from_namespace(namespace_id, user_on_namespace.user_id)
+        except Exception:
+            logger.exception("Failed to roll back namespace role for user=%s namespace_id=%s", username, namespace_id)
+            return None, (
+                jsonify(
+                    ErrorResponse(
+                        error="RMS synchronization and local rollback failed. Review the current access before retrying."
+                    ).model_dump()
+                ),
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+        return None, _namespace_rms_error(e, "assign")
 
     return user_on_namespace, None
+
+
+def _namespace_rms_error(error: Exception, operation: str) -> ResponseReturnValue:
+    if isinstance(error, NotImplementedError):
+        message = "Namespace access management is not supported by this RMS."
+        status = HTTPStatus.NOT_IMPLEMENTED
+    else:
+        message = f"Failed to {operation} namespace access in RMS. Please retry."
+        status = HTTPStatus.BAD_GATEWAY
+    return jsonify(ErrorResponse(error=message).model_dump()), status
+
+
+def _remove_namespace_role(
+    namespace_id: int, user_id: int, namespace: Any
+) -> tuple[str | None, ResponseReturnValue | None]:
+    """Remove RMS access before the local role, preserving the role on RMS errors.
+
+    Both removal endpoints use this path. Check membership before touching RMS,
+    so an unrelated user cannot lose access that was not assigned by Manytask.
+    """
+    app: CustomFlask = current_app  # type: ignore
+    storage_api = app.storage_api
+    role = next(
+        (role for member_id, role in storage_api.get_namespace_users(namespace_id) if member_id == user_id), None
+    )
+    if role is None:
+        return None, (
+            jsonify(ErrorResponse(error="User not found in namespace").model_dump()),
+            HTTPStatus.NOT_FOUND,
+        )
+    try:
+        stored_user = storage_api.get_stored_user_by_db_id(user_id)
+    except NoResultFound:
+        stored_user = None
+    if stored_user is None:
+        return None, (jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND)
+
+    try:
+        app.rms_api.remove_user_from_namespace_group(namespace.gitlab_group_id, stored_user.rms_id)
+    except Exception as error:
+        logger.exception("Failed to remove RMS namespace access for user_id=%s namespace_id=%s", user_id, namespace_id)
+        return None, _namespace_rms_error(error, "remove")
+
+    old_role, _ = storage_api.remove_user_from_namespace(namespace_id, user_id)
+    return old_role, None
 
 
 def _check_course_admin_access(course_name: str) -> ResponseReturnValue | None:
@@ -948,6 +1002,9 @@ def create_namespace() -> ResponseReturnValue:
         )
         return jsonify(response.model_dump()), HTTPStatus.CREATED
 
+    except NotImplementedError as rms_error:
+        return _namespace_rms_error(rms_error, "assign")
+
     except RuntimeError as e:
         logger.error("Failed to create GitLab group: %s", str(e))
         return jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.CONFLICT
@@ -1163,6 +1220,8 @@ def add_user_to_namespace(
         404: Not found (user or namespace doesn't exist)
         409: Conflict (user already has a role in this namespace)
         500: Internal server error
+        501: Namespace access management is unsupported by the RMS
+        502: RMS synchronization failed
     """
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
@@ -1173,9 +1232,8 @@ def add_user_to_namespace(
     role = validated_data.role
 
     try:
-        # Сначала добавляем в локальную БД (пользователь должен был хотя бы раз
-        # залогиниться в manytask), затем в группу RMS — обе операции выполняет
-        # общий помощник, который также используется таблицей доступа к курсу.
+        # Both namespace administration and course access use the same
+        # RMS synchronization and local rollback behavior.
         user_on_namespace, error = _add_namespace_role(
             namespace_id=namespace_id,
             namespace=namespace,
@@ -1270,50 +1328,16 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
         403: Forbidden (not Instance Admin or Namespace Admin, or no access to namespace)
         404: Not found (user is not in the namespace)
         500: Internal server error
+        501: Namespace access management is unsupported by the RMS
+        502: RMS synchronization failed
     """
-    app: CustomFlask = current_app  # type: ignore
-    storage_api = app.storage_api
-    rms_api = app.rms_api
-
     username = session["manytask"]["username"]
 
     try:
-        try:
-            role, removed_rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
-            logger.info(
-                "User %s removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
-                username,
-                user_id,
-                removed_rms_id,
-                role,
-                namespace_id,
-            )
-        except NoResultFound:
-            logger.warning("User id=%s not found in namespace id=%s", user_id, namespace_id)
-            return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
-
-        try:
-            rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=removed_rms_id)
-            logger.info(
-                "User %s removed user rms_id=%s from GitLab group id=%s",
-                username,
-                removed_rms_id,
-                namespace.gitlab_group_id,
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
-                removed_rms_id,
-                namespace.gitlab_group_id,
-                str(e),
-            )
-
-        logger.info(
-            "User %s successfully removed user_id=%s from namespace id=%s",
-            username,
-            user_id,
-            namespace_id,
-        )
+        _, error = _remove_namespace_role(namespace_id, user_id, namespace)
+        if error:
+            return error
+        logger.info("User %s removed user_id=%s from namespace id=%s", username, user_id, namespace_id)
         return "", HTTPStatus.NO_CONTENT
 
     except Exception as e:
@@ -1355,46 +1379,23 @@ def update_user_role_in_namespace(
         403: Forbidden (not Instance Admin or Namespace Admin)
         404: Not found (user is not in the namespace)
         500: Internal server error (including GitLab errors)
+        501: Namespace access management is unsupported by the RMS
+        502: RMS synchronization failed
     """
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
-    rms_api = app.rms_api
 
     username = session["manytask"]["username"]
     new_role = validated_data.role
 
     try:
-        # First, get the user's rms_id before making any changes
-        try:
-            stored_user = storage_api.get_stored_user_by_db_id(user_id)
-            if stored_user is None:
-                return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
-            rms_id = stored_user.rms_id
-        except Exception as e:
-            logger.error("Failed to get user info for user_id=%s: %s", user_id, str(e))
-            return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
-
-        # If demoting to student, we need to remove from GitLab first
-        # If GitLab fails, we don't want to change the database
         if new_role == "student":
-            try:
-                rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_id)
-                logger.info(
-                    "User %s removed user rms_id=%s from GitLab group id=%s (role change to student)",
-                    username,
-                    rms_id,
-                    namespace.gitlab_group_id,
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
-                    rms_id,
-                    namespace.gitlab_group_id,
-                    str(e),
-                )
-                return jsonify(
-                    ErrorResponse(error=f"Failed to remove user from GitLab group: {str(e)}").model_dump()
-                ), HTTPStatus.INTERNAL_SERVER_ERROR
+            old_role, error = _remove_namespace_role(namespace_id, user_id, namespace)
+            if error:
+                return error
+            return jsonify(
+                {"success": True, "old_role": old_role, "new_role": "student", "user_id": user_id}
+            ), HTTPStatus.OK
 
         # Now update the database
         try:
@@ -1897,6 +1898,8 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
         403: Forbidden (not an instance admin nor a namespace admin of the namespace)
         404: Course or user not found
         409: The user already has a role in the namespace
+        501: Namespace access management is unsupported by the RMS
+        502: RMS synchronization failed
     """
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api

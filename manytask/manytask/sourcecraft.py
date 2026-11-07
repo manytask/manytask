@@ -474,8 +474,7 @@ class SourceCraftApi(RmsApi):
         gitlab_group_id: int,
         rms_id: str,
     ) -> None:
-        # TODO: invite user to org?
-        return None
+        raise NotImplementedError("SourceCraft organization membership management is not supported")
 
     def remove_user_from_namespace_group(
         self,
