@@ -228,8 +228,8 @@ implementation without touching the worker or the checklist runner.
 
 All sync `python-gitlab` calls run on a dedicated `ThreadPoolExecutor`
 (`BOT_HOSTING_EXECUTOR_WORKERS=32` by default) so they never block FastAPI's
-default executor. Per-MR work uses `asyncio.gather` in batches of 16 to keep
-the GitLab connection pool healthy on courses with thousands of open MRs.
+default executor. Within each course, the worker processes tasks and their MRs
+sequentially, with a configurable timeout for each MR.
 
 The factory is `app.hosting.build_hosting_adapter(hosting_type, ...)`. Add a
 new provider by implementing `HostingAdapter` and extending the factory.

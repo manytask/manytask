@@ -195,29 +195,3 @@ Run [pytest](https://pytest.org/) against a task directory, with optional covera
 | `report_percentage` | `bool` | no | `true` | Compute `percentage` as `passed / total` tests and store it in the stage result. |
 
 > **Note:** When `report_percentage: true` the plugin uses a secure FIFO pipe to receive test results from a custom pytest plugin (`checker_reporter`). The `percentage` field of the registered output will be the fraction `passed_tests / total_tests`.
-
-
-## `check_gitlab_merge_request` *(WIP)*
-
-Check that a GitLab merge request is valid (no conflicts, required labels, etc.).
-
-| Arg | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `token` | `str` | yes | — | GitLab personal access token. |
-| `task_dir` | `str` | yes | — | Task directory path. |
-| `repo_url` | `AnyUrl` | yes | — | GitLab repository URL. |
-| `require_approval` | `bool` | no | `false` | Require at least one approval on the MR. |
-| `search_for_score` | `bool` | no | `false` | Search for a score comment in the MR. |
-
-
-### `collect_score_gitlab_merge_request` *(WIP)*
-
-Collect a score left by a tutor in a GitLab MR comment.
-
-| Arg | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `token` | `str` | yes | — | GitLab personal access token. |
-| `task_dir` | `str` | yes | — | Task directory path. |
-| `repo_url` | `AnyUrl` | yes | — | GitLab repository URL. |
-| `require_approval` | `bool` | no | `false` | Require at least one approval on the MR. |
-| `search_for_score` | `bool` | no | `false` | Search for a score comment in the MR. |

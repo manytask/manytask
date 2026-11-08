@@ -28,12 +28,6 @@ class BadStructure(CheckerValidationError):
     pass
 
 
-class ExportError(CheckerException):
-    """Export stage exception"""
-
-    pass
-
-
 class TestingError(CheckerException):
     """All testers exceptions can occur during testing stage"""
 
