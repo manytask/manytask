@@ -888,11 +888,13 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             rms=app.app_config.rms,
         )
 
-    course_users = app.storage_api.get_course_users_with_admin_status(course_name)
+    eligible_course_admins = [
+        user for user, is_admin in app.storage_api.get_course_users_with_admin_status(course_name) if not is_admin
+    ]
     return render_template(
         "edit_course.html",
         course=course,
-        course_users=course_users,
+        eligible_course_admins=eligible_course_admins,
         rms=app.app_config.rms,
     )
 

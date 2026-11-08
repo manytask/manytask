@@ -1,4 +1,5 @@
 import os
+from dataclasses import replace
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
@@ -12,7 +13,14 @@ from flask.testing import FlaskClient
 from flask_wtf import CSRFProtect
 from sqlalchemy.exc import NoResultFound
 
-from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiException, StudentCourseScores, TaskScore
+from manytask.abstract import (
+    AuthenticatedUser,
+    CourseAccessUser,
+    RmsApiException,
+    StoredUser,
+    StudentCourseScores,
+    TaskScore,
+)
 from manytask.api import bp as api_bp
 from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ProtectedBranchSettings
@@ -1176,12 +1184,14 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
 # ----- Course access table on the edit page -----
 
 
-def _get_edit_course_page(app, mock_gitlab_oauth):
+def _get_edit_course_page(
+    app: Any, mock_gitlab_oauth: Any, course_users: list[tuple[StoredUser, bool]] | None = None
+) -> BeautifulSoup:
     """Open the course edit page as an instance admin and return the parsed HTML."""
     CSRFProtect(app)  # the settings form renders a csrf_token
     app.storage_api.stored_user.instance_admin = True
     app.storage_api.course_admin = True  # required by the requires_course_admin guard
-    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: course_users or []
 
     with app.test_request_context(), app.test_client() as client:
         app.oauth = mock_gitlab_oauth
@@ -1199,10 +1209,31 @@ def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
     assert soup.find(id="access-filter-clear") is not None
 
 
-def test_edit_course_renders_grant_course_admin_modal(app, mock_gitlab_oauth):
-    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+@pytest.mark.parametrize("members", ["empty", "already_admin", "eligible"])
+def test_edit_course_grants_admin_only_to_eligible_members(app: Any, mock_gitlab_oauth: Any, members: str) -> None:
+    enrolled_user = replace(app.storage_api.stored_user, username="enrolled-student")
+    existing_admin = replace(app.storage_api.stored_user, username="existing-admin")
+    non_member = replace(app.storage_api.stored_user, username="not-enrolled")
+    app.storage_api.get_all_users = lambda: [enrolled_user, existing_admin, non_member]
+    course_users = [] if members == "empty" else [(existing_admin, True)]
+    if members == "eligible":
+        course_users.append((enrolled_user, False))
 
-    assert soup.find(id="grantCourseAdminModal") is not None
+    soup = _get_edit_course_page(app, mock_gitlab_oauth, course_users)
+    modal = soup.find(id="grantCourseAdminModal")
+    assert modal is not None
+    assert [option["value"] for option in modal.select("#userToGrant option")] == (
+        [enrolled_user.username] if members == "eligible" else []
+    )
+    assert modal.find(id="grantCourseAdminSubmit").has_attr("disabled") == (members != "eligible")
+    if members == "eligible":
+        assert "Only users enrolled on this course" in modal.get_text()
+        assert modal.find(id="grantCourseAdminEmpty") is None
+    else:
+        empty_state = modal.find(id="grantCourseAdminEmpty")
+        assert empty_state["role"] == "status"
+        assert "Users must be enrolled" in empty_state.get_text()
+        assert empty_state.find("a")["href"] == f"/{TEST_COURSE_NAME}/create_project"
 
 
 def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):

@@ -37,6 +37,7 @@ jobs:
           src-root: './docs'
           build-root: './build'
           lint-root: './html'
+          cli-version: '5.64.0'
 
   # Deploy job runs only on push to main or manual trigger
   deploy:
@@ -56,6 +57,7 @@ jobs:
           src-root: './docs'
           build-root: './build'
           lint-root: './html'
+          cli-version: '5.64.0'
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
