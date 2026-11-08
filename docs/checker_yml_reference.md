@@ -232,16 +232,24 @@ Determines which tasks are selected for grading when running `checker grade`.
 | Value | Description |
 |---|---|
 | `branch_name` | Selects the single task/group whose name matches the current Git branch name. |
-| `branch_name_or_commit_message` | On a branch other than `main` or `master`, selects the task/group matching its name. If none is selected, or the branch is `main`, `master`, or detached, selects tasks/groups named in the last commit message. If both sources select different nonempty sets of tasks, grading fails with an ambiguity error. |
-| `commit_message` | Selects all tasks/groups whose name appears in the last commit message. |
+| `branch_name_or_commit_message` | On a branch other than `main` or `master`, selects the task/group matching its name. If none is selected, or the branch is `main`, `master`, or detached, selects tasks/groups named in commit messages since the base commit. If both sources select different nonempty sets of tasks, grading fails with an ambiguity error. |
+| `commit_message` | Selects tasks/groups named in any commit message since the base commit (`--base-ref`, see below). Within each message, matching groups take precedence over individual tasks. |
 | `last_commit_changes` | Selects all tasks that have files changed since the base commit (`--base-ref`, see below), or in the last commit if there is no base. *(default)* |
 | `files_changed` | *(Not yet implemented)* Compares current state against the previous commit. |
 
-For `last_commit_changes` the base commit is taken from `checker grade --base-ref <sha>`, or from the
+For `last_commit_changes`, `commit_message`, and the message part of `branch_name_or_commit_message`,
+the base commit is taken from `checker grade --base-ref <sha>`, or from the
 `CI_MERGE_REQUEST_DIFF_BASE_SHA` / `CI_COMMIT_BEFORE_SHA` GitLab CI variables. So when several commits
 are pushed at once, the tasks from all of them are graded, not only from the last one. If the base is a
 null sha, unknown or equal to `HEAD`, `HEAD~1` is used; after a force-push the merge-base is used; in a
 shallow clone the history is deepened once to find the base.
+
+Message detection excludes the base commit itself and combines selections from all later commits.
+Each selected task is graded once using the final checkout, not each intermediate revision.
+Without a base, the range defaults to `HEAD~1..HEAD` (just `HEAD` for a root commit).
+New-branch pushes with a null base also use this fallback; the checker cannot infer their push range.
+The course CI template uses `GIT_DEPTH: "0"` so long pushes do not lose earlier messages to a shallow clone.
+Branch-only detection always uses the current branch name, regardless of the number of pushed commits.
 
 When tasks defined in `.tasks.yml` share a folder, `last_commit_changes` selects a task with a nonempty effective
 `parameters.allow_change` list only if the commit diff changes a file matching that list. Patterns
