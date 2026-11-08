@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
@@ -33,7 +34,7 @@ class Lifecycle:
         self.app = os.environ["MANYTASK_URL"]
         self.run = os.environ["E2E_RUN"]
         self.directory = Path("/run-data")
-        self.credentials = json.loads((self.directory / "credentials.json").read_text())
+        self.credentials = json.load(sys.stdin)
         self.redactions = list(self.credentials.values())
         self.api = requests.Session()
         self.api.trust_env = False
@@ -349,11 +350,14 @@ class Lifecycle:
             "POST", "user/runners", json={"runner_type": "instance_type", "description": self.run, "run_untagged": True}
         )
         self.redactions.append(runner["token"])
-        (self.directory / "runner-token").write_text(runner["token"])
-        # Host launcher notices this file and registers the runner on the dedicated daemon.
+        token_path = Path("/run-private/runner-token.pending")
+        token_path.write_text(runner["token"])
+        token_path.chmod(0o600)
+        token_path.replace("/run-private/runner-token")
+        # The launcher reads this token through Docker exec from the container-only tmpfs.
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
-            if (self.directory / "runner-ready").exists():
+            if (Path("/run-private") / "runner-ready").exists():
                 return
             time.sleep(1)
         raise TimeoutError("Launcher did not register the e2e runner")

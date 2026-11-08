@@ -47,18 +47,19 @@ loads development `.env` files or mounts development databases/configuration. Th
 refuses a daemon that already has containers, including stopped containers. It does not
 switch Docker contexts, run Docker prune commands, or alter existing images.
 
-Plaintext credential storage is intentional and **test-only**. Every run generates
-fresh passwords and tokens for its disposable GitLab, PostgreSQL, and Manytask services.
-`credentials.json` passes these credentials to the test driver, while `app.env` supplies
-them to Docker Compose. These files must only contain credentials for the isolated test
-stack; never supply development or production credentials. The run directory has mode
-`0700`, and `credentials.json` and `app.env` are set to mode `0600`. These permissions
-restrict access but do not encrypt the files.
+Every run generates fresh passwords and tokens for its disposable services. The launcher
+keeps them in memory, supplies Compose variables through the subprocess environment, and
+passes driver credentials through stdin. The saved Compose file contains variable references;
+no `app.env` or `credentials.json` is written. The runner-token handoff uses a mode-`0700`
+tmpfs directory inside the driver container, read through Docker exec and deleted after
+registration. Secret values are redacted from retained logs, including command failures.
 
-Default cleanup removes the generated credential files and the stack's volumes on
-success or failure. `--keep-on-failure` deliberately retains both for debugging; a forced
-termination that prevents cleanup can also leave them behind. Keep retained run directories
-private and share only redacted logs, rather than uploading the entire artifact directory.
+These are test-only credentials; never supply development or production credentials.
+Docker still manages service environment variables and runner configuration, so anyone with
+access to the dedicated daemon can inspect them. Default cleanup destroys the containers
+and volumes on success or failure. `--keep-on-failure` retains the isolated runtime for
+debugging; forced termination can also leave it behind. Keep the run directory private
+(mode `0700`) and share only redacted logs, rather than the entire artifact directory.
 
 The test migrates the empty Manytask database and bootstraps a GitLab OAuth application,
 root PAT, and runner. Teacher and student authentication then use real GitLab login/OAuth

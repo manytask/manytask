@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import os
 import re
 import secrets
 import shutil
@@ -27,8 +28,10 @@ class CommandFailed(RuntimeError):
         self.output = result.stdout + result.stderr
 
 
-def command(args: list[str], *, stdin: str | None = None, timeout: int = 1200) -> str:
-    result = subprocess.run(args, input=stdin, text=True, capture_output=True, timeout=timeout, check=False)
+def command(
+    args: list[str], *, stdin: str | None = None, timeout: int = 1200, env: dict[str, str] | None = None
+) -> str:
+    result = subprocess.run(args, input=stdin, text=True, capture_output=True, timeout=timeout, check=False, env=env)
     if result.returncode:
         # Commands can return freshly generated tokens. Never echo raw output here.
         raise CommandFailed(args, result)
@@ -57,17 +60,32 @@ class Stack:
         ]
         self.password = f"E2e-{secrets.token_hex(16)}!"
         self.course_token = secrets.token_hex(24)
+        self.credentials: dict[str, str] = {}
+        self.runner_token = ""
+        self.environment = dict(os.environ, E2E_STACK_PASSWORD=self.password)
+        self.driver_container = f"{self.project}-driver"
         self.network_created = False
         self.compose_created = False
 
+    def command(self, args: list[str], *, stdin: str | None = None, timeout: int = 1200) -> str:
+        return command(args, stdin=stdin, timeout=timeout, env=self.environment)
+
+    def sanitized(self, text: str) -> str:
+        values = [self.password, self.course_token, self.runner_token, *self.credentials.values()]
+        values.append(self.environment.get("E2E_FLASK_SECRET_KEY", ""))
+        for value in values:
+            if value:
+                text = text.replace(value, "<redacted>")
+        return re.sub(r"([?&](?:code|token|access_token|client_secret)=)[^\s&\"<>]+", r"\1<redacted>", text)
+
     def prepare(self) -> None:
-        if command(self.docker + ["ps", "-aq"]).strip():
+        if self.command(self.docker + ["ps", "-aq"]).strip():
             raise RuntimeError("Refusing to run: the selected daemon already has containers. Use a dedicated daemon.")
-        info = json.loads(command(self.docker + ["info", "--format", "{{json .}} "]))
+        info = json.loads(self.command(self.docker + ["info", "--format", "{{json .}} "]))
         if info["MemTotal"] < 7 * 1024**3:
             raise RuntimeError("The dedicated Docker daemon needs at least 8 GB RAM.")
         subnet_prefix = f"172.28.{secrets.randbelow(250)}"
-        command(
+        self.command(
             self.docker
             + [
                 "network",
@@ -82,11 +100,13 @@ class Stack:
             ]
         )
         self.network_created = True
-        network = json.loads(command(self.docker + ["network", "inspect", self.network]))[0]
+        network = json.loads(self.command(self.docker + ["network", "inspect", self.network]))[0]
         self.gitlab_ip = str(ipaddress.ip_address(network["IPAM"]["Config"][0]["Gateway"]) + 253)
         self.gitlab_url = f"http://{self.gitlab_ip}:8929"
         self.registry = f"{self.gitlab_ip}:5050"
-        command(["uv", "build", "--wheel", "--out-dir", str(self.directory / "wheels"), str(REPOSITORY / "checker")])
+        self.command(
+            ["uv", "build", "--wheel", "--out-dir", str(self.directory / "wheels"), str(REPOSITORY / "checker")]
+        )
         context = self.directory / "context"
         (context / "manytask").mkdir(parents=True)
         for name in ["Dockerfile", "pyproject.toml", "uv.lock", "VERSION"]:
@@ -101,7 +121,6 @@ class Stack:
                 ignore=shutil.ignore_patterns(".env*", ".git", ".venv", "__pycache__", ".tmp"),
             )
         (self.directory / "empty.env").write_text("")
-        (self.directory / "app.env").write_text("")
         config = self.configuration()
         (self.directory / "compose.yml").write_text(yaml.safe_dump(config, sort_keys=False))
         self.compose_created = True
@@ -125,7 +144,7 @@ gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']
                     "environment": {
                         "POSTGRES_USER": "manytask",
                         "POSTGRES_DB": "manytask",
-                        "POSTGRES_PASSWORD": self.password,
+                        "POSTGRES_PASSWORD": "${E2E_STACK_PASSWORD}",
                     },
                     "command": ["postgres", "-c", "max_locks_per_transaction=256"],
                     "volumes": ["postgres:/var/lib/postgresql/data"],
@@ -134,7 +153,10 @@ gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']
                 "gitlab": {
                     "image": "gitlab/gitlab-ce:latest",
                     "shm_size": "256m",
-                    "environment": {"GITLAB_ROOT_PASSWORD": self.password, "GITLAB_OMNIBUS_CONFIG": gitlab_config},
+                    "environment": {
+                        "GITLAB_ROOT_PASSWORD": "${E2E_STACK_PASSWORD}",
+                        "GITLAB_OMNIBUS_CONFIG": gitlab_config,
+                    },
                     "networks": {"default": {"ipv4_address": self.gitlab_ip}},
                     "volumes": [
                         "gitlab-config:/etc/gitlab",
@@ -148,7 +170,21 @@ gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']
                         "dockerfile": "manytask/Dockerfile",
                         "target": "app",
                     },
-                    "env_file": [str(self.directory / "app.env")],
+                    "environment": {
+                        key: f"${{E2E_{key}:-}}"
+                        for key in [
+                            "DATABASE_URL",
+                            "INITIAL_INSTANCE_ADMIN",
+                            "APPLY_MIGRATIONS",
+                            "FLASK_SECRET_KEY",
+                            "RMS",
+                            "GITLAB_URL",
+                            "GITLAB_OAUTH_URL",
+                            "GITLAB_ADMIN_TOKEN",
+                            "GITLAB_CLIENT_ID",
+                            "GITLAB_CLIENT_SECRET",
+                        ]
+                    },
                     "volumes": ["app-cache:/cache"],
                     "command": [
                         "gunicorn",
@@ -176,6 +212,7 @@ gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']
                         "PYTHONUNBUFFERED": "1",
                     },
                     "volumes": [f"{COMPONENT / 'e2e'}:/suite:ro", f"{self.directory}:/run-data"],
+                    "tmpfs": ["/run-private:mode=0700"],
                     "working_dir": "/suite",
                     "command": ["pytest", "-q", "-s", "--tb=short", "-p", "no:cacheprovider", "test_lifecycle.py"],
                 },
@@ -190,7 +227,7 @@ gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']
         (self.directory / "result.json").write_text(json.dumps(content, indent=2) + "\n")
 
     def exec(self, service: str, args: list[str], *, stdin: str | None = None) -> str:
-        return command(self.compose + ["exec", "-T", service, *args], stdin=stdin)
+        return self.command(self.compose + ["exec", "-T", service, *args], stdin=stdin)
 
     def wait_gitlab(self) -> None:
         deadline = time.monotonic() + 900
@@ -198,6 +235,7 @@ gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']
             result = subprocess.run(
                 self.compose + ["exec", "-T", "gitlab", "curl", "-fsS", "http://127.0.0.1:8929/-/readiness"],
                 capture_output=True,
+                env=self.environment,
                 timeout=20,
                 check=False,
             )
@@ -228,10 +266,7 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
             next(line for line in reversed(output.splitlines()) if line.startswith('{"admin_token"'))
         )
         credentials |= {"password": self.password, "course_token": self.course_token}
-        # Test-only plaintext handoff to the driver; see the credential policy in e2e/README.md.
-        path = self.directory / "credentials.json"
-        path.write_text(json.dumps(credentials))
-        path.chmod(0o600)
+        self.credentials = credentials
         environment = {
             "DATABASE_URL": f"postgresql://manytask:{self.password}@postgres/manytask",
             "INITIAL_INSTANCE_ADMIN": "root",
@@ -244,11 +279,7 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
             "GITLAB_CLIENT_ID": credentials["client_id"],
             "GITLAB_CLIENT_SECRET": credentials["client_secret"],
         }
-        # Intentional test-only plaintext for Compose: private 0700 directory, 0600 file,
-        # deleted by default cleanup. --keep-on-failure retains it for debugging (see e2e/README.md).
-        path = self.directory / "app.env"
-        path.write_text("".join(f"{key}={value}\n" for key, value in environment.items()))
-        path.chmod(0o600)
+        self.environment.update({f"E2E_{key}": value for key, value in environment.items()})
 
     def register_runner(self, token: str) -> None:
         self.exec(
@@ -279,27 +310,47 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
             ],
         )
 
+    def register_pending_runner(self) -> None:
+        # The handoff lives in the driver's tmpfs, never in the host artifact directory.
+        result = subprocess.run(
+            self.docker + ["exec", self.driver_container, "cat", "/run-private/runner-token"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode:
+            return
+        self.runner_token = result.stdout.strip()
+        self.register_runner(self.runner_token)
+        self.command(self.docker + ["exec", self.driver_container, "rm", "/run-private/runner-token"])
+        self.command(self.docker + ["exec", self.driver_container, "touch", "/run-private/runner-ready"])
+
     def run(self) -> None:
         print(f"Isolated test project: {self.project}\nArtifacts: {self.directory}", flush=True)
         self.prepare()
         print("Building the checked-out Manytask and test driver before starting services.", flush=True)
-        command(self.compose + ["build", "manytask", "driver"], timeout=self.build_timeout)
+        self.command(self.compose + ["build", "manytask", "driver"], timeout=self.build_timeout)
         print("Starting fresh GitLab and Postgres (no host ports or development mounts).", flush=True)
-        command(self.compose + ["up", "-d", "gitlab", "postgres", "runner"])
+        self.command(self.compose + ["up", "-d", "gitlab", "postgres", "runner"])
         self.wait_gitlab()
         self.bootstrap()
         print("Starting Manytask and applying migrations.", flush=True)
-        command(self.compose + ["up", "-d", "--no-build", "manytask"])
+        self.command(self.compose + ["up", "-d", "--no-build", "manytask"])
         # Stream only the test's intentionally sanitized output.
-        process = subprocess.Popen(self.compose + ["run", "--rm", "driver"])
+        process = subprocess.Popen(
+            self.compose + ["run", "--rm", "-T", "--name", self.driver_container, "driver"],
+            stdin=subprocess.PIPE,
+            text=True,
+            env=self.environment,
+        )
+        assert process.stdin is not None
+        process.stdin.write(json.dumps(self.credentials))
+        process.stdin.close()
         deadline = time.monotonic() + 2700
         while process.poll() is None:
-            token_path = self.directory / "runner-token"
-            if token_path.exists() and not (self.directory / "runner-ready").exists():
-                token = token_path.read_text()
-                self.register_runner(token)
-                token_path.unlink()
-                (self.directory / "runner-ready").touch()
+            if not self.runner_token:
+                self.register_pending_runner()
             if time.monotonic() > deadline:
                 process.terminate()
                 process.wait(timeout=30)
@@ -313,22 +364,14 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
 
         def attempt(args: list[str]) -> str:
             try:
-                return command(args)
+                return self.command(args)
             except (RuntimeError, subprocess.TimeoutExpired) as error:
                 errors.append(type(error).__name__)
                 return ""
 
         if self.compose_created:
-            redactions = [self.password, self.course_token]
-            credentials = self.directory / "credentials.json"
-            if credentials.exists():
-                redactions += list(json.loads(credentials.read_text()).values())
             logs = attempt(self.compose + ["logs", "--no-color", "--tail", "300"])
-            for value in redactions:
-                if value:
-                    logs = logs.replace(value, "<redacted>")
-            logs = re.sub(r"([?&](?:code|token|access_token|client_secret)=)[^\s&\"<>]+", r"\1<redacted>", logs)
-            (self.directory / "services.log").write_text(logs)
+            (self.directory / "services.log").write_text(self.sanitized(logs))
             jobs = attempt(self.docker + ["ps", "-aq", "--filter", f"label=org.manytask.e2e.run={self.project}"])
             if jobs.strip():
                 attempt(self.docker + ["rm", "-f", *jobs.split()])
@@ -378,7 +421,7 @@ def main() -> None:
         if isinstance(error, (CommandFailed, subprocess.TimeoutExpired)):
             parts = (error.output,) if isinstance(error, CommandFailed) else (error.stdout, error.stderr)
             output = "".join(part.decode(errors="replace") if isinstance(part, bytes) else part or "" for part in parts)
-            output = output.replace(stack.password, "<redacted>").replace(stack.course_token, "<redacted>")
+            output = stack.sanitized(output)
             output = re.sub(r"[a-fA-F0-9]{32,}|glpat-[\w-]+", "<redacted>", output)
             (stack.directory / "command-error.log").write_text(output)
             print(output[-6000:], flush=True)
