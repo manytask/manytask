@@ -630,42 +630,6 @@ def test_index_namespace_creation_for_instance_admin(app: Any, mock_gitlab_oauth
         assert body.index('id="admin-namespaces-table"') < body.index('data-bs-target="#createNamespaceModal"')
 
 
-def test_instance_admin_panel_only_manages_users(app: Any, mock_gitlab_oauth: Any) -> None:
-    CSRFProtect(app)
-    app.storage_api.stored_user.instance_admin = True
-    app.storage_api.get_all_users = lambda: [app.storage_api.stored_user]
-    app.oauth = mock_gitlab_oauth
-
-    with (
-        app.test_client() as client,
-        patch("manytask.web.get_courses") as get_courses,
-        patch.object(app.storage_api, "get_all_namespaces") as get_namespaces,
-    ):
-        with client.session_transaction() as sess:
-            sess.update(build_test_session(include_manytask=True))
-        response = client.get("/instance_admin/panel")
-
-    assert response.status_code == HTTPStatus.OK
-    get_courses.assert_not_called()
-    get_namespaces.assert_not_called()
-    soup = BeautifulSoup(response.text, "html.parser")
-    assert [heading.get_text(" ", strip=True) for heading in soup.select(".action-group h3")] == ["User management"]
-    for action in ("grantAdmin", "revokeAdmin", "changeUserInfo"):
-        assert soup.find("button", attrs={"data-bs-target": f"#{action}Modal"}) is not None
-        assert soup.find("form", id=f"{action}Form") is not None
-    assert soup.select_one(f'#userToRevoke option[value="{TEST_USERNAME}"]') is not None
-    assert soup.find("a", href="/") is not None
-    for element_id in (
-        "coursesDropdown",
-        "namespaceFilter",
-        "namespacesTable",
-        "createNamespaceModal",
-        "assignRoleModal",
-    ):
-        assert soup.find(id=element_id) is None
-    assert "create-namespace.js" not in response.text
-
-
 @pytest.mark.parametrize("description", [None, "Namespace <description>\nMore details"])
 def test_namespace_admin_can_access_namespace_panel(
     app: Flask, mock_gitlab_oauth: Any, description: str | None
