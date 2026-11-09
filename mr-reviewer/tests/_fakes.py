@@ -11,8 +11,7 @@ class FakeHostingAdapter:
     """Conforms structurally to HostingAdapter Protocol for unit tests.
 
     Records inputs into the public ``posted``/``added_labels``/``removed_labels``
-    lists for assertion. ``get_mr`` raises NotImplementedError — checklist tests
-    don't need that path.
+    lists for assertion.
     """
 
     def __init__(self) -> None:
@@ -27,9 +26,6 @@ class FakeHostingAdapter:
 
     async def list_open_mrs(self, group_path: str, label: str) -> list[MergeRequest]:
         return list(self.open_mrs.get((group_path, label), []))
-
-    async def get_mr(self, project_id: int, mr_iid: int) -> MergeRequest:
-        raise NotImplementedError
 
     async def get_changes(self, mr: MergeRequest) -> list[FileChange]:
         return list(self.changes)
@@ -63,9 +59,6 @@ class FakeHostingAdapter:
     async def remove_labels(self, mr: MergeRequest, labels: list[str]) -> MergeRequest:
         self.removed_labels.append(list(labels))
         return mr
-
-    def get_author_username(self, comment: Comment) -> str:
-        return comment.author_username
 
 
 class FakeManytaskClient:

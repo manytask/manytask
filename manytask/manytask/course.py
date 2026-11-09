@@ -20,27 +20,8 @@ class CourseStatus(Enum):
     FINISHED = "finished"
 
 
-def parse_time(time: str, tz: ZoneInfo = DEFAULT_TIMEZONE) -> datetime:
-    date = datetime.strptime(time, "%Y-%m-%d %H:%M")
-    date = date.replace(tzinfo=tz)
-    print("Got", time, "return", date)
-    return date
-
-
 def get_current_time(tz: ZoneInfo = DEFAULT_TIMEZONE) -> datetime:
     return datetime.now(tz=tz)
-
-
-def validate_submit_time(commit_time: datetime | None, current_time: datetime) -> datetime:
-    """Check if commit_time 'to far' from current_time, use current_time, else use commit_time"""
-    if not commit_time:
-        return current_time
-
-    if commit_time > current_time:
-        print(f"WTF: commit_time {commit_time} > current_time {current_time}")
-        return current_time
-
-    return current_time
 
 
 class ManytaskDeadlinesType(Enum):

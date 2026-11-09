@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import partial
@@ -50,7 +50,6 @@ class GitLabAdapter:
         base_url: str,
         executor: ThreadPoolExecutor,
         *,
-        batch_size: int = 16,
         retry_attempts: int = 1,
         retry_backoff_sec: float = 0.5,
         retry_max_backoff_sec: float = 10.0,
@@ -61,7 +60,6 @@ class GitLabAdapter:
         self._token = token
         self._base_url = base_url.rstrip("/")
         self._executor = executor
-        self._batch_size = batch_size
         self._rate_limit_threshold = rate_limit_threshold
         self._rate_limit_max_sleep_sec = rate_limit_max_sleep_sec
         self._rate_limit_fallback_sleep_sec = rate_limit_fallback_sleep_sec
@@ -111,17 +109,6 @@ class GitLabAdapter:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, partial(self._retrying, func, *args))
 
-    async def _gather_in_batches(
-        self,
-        coros: Iterable[Awaitable[_T]],
-    ) -> list[_T]:
-        coros_list = list(coros)
-        results: list[_T] = []
-        for start in range(0, len(coros_list), self._batch_size):
-            batch = coros_list[start : start + self._batch_size]
-            results.extend(await asyncio.gather(*batch))
-        return results
-
     @staticmethod
     def _parse_iso8601(value: str) -> datetime:
         """GitLab returns 2026-05-01T10:00:00.000Z; Python <3.11 didn't accept Z directly."""
@@ -132,28 +119,6 @@ class GitLabAdapter:
     @staticmethod
     def _summary_to_mr(summary: GroupMergeRequest) -> MergeRequest:
         attrs = summary.attributes
-        author = attrs.get("author") or {}
-        web_url = str(attrs.get("web_url", ""))
-        references = attrs.get("references") or {}
-        project_path = str(references.get("full", "")).split("!")[0] if references.get("full") else ""
-        if not project_path:
-            project_path = derive_project_path_from_web_url(web_url)
-        return MergeRequest(
-            project_id=int(attrs["project_id"]),
-            mr_iid=int(attrs["iid"]),
-            sha=str(attrs.get("sha") or ""),
-            web_url=web_url,
-            source_branch=str(attrs.get("source_branch", "")),
-            target_branch=str(attrs.get("target_branch", "")),
-            author_username=str(author.get("username", "")),
-            labels=tuple(attrs.get("labels") or ()),
-            title=str(attrs.get("title", "")),
-            project_path_with_namespace=project_path,
-        )
-
-    @staticmethod
-    def _project_mr_to_mr(obj: Any) -> MergeRequest:
-        attrs = obj.attributes
         author = attrs.get("author") or {}
         web_url = str(attrs.get("web_url", ""))
         references = attrs.get("references") or {}
@@ -194,10 +159,6 @@ class GitLabAdapter:
             project_path_with_namespace=project_path,
         )
 
-    def _get_mr_blocking(self, project_id: int, mr_iid: int) -> Any:
-        project = self._gl.projects.get(project_id, lazy=True)
-        return project.mergerequests.get(mr_iid)
-
     def _list_open_mrs_blocking(self, group_path: str, label: str) -> list[GroupMergeRequest]:
         group: Group = self._gl.groups.get(group_path, lazy=True)
         # Manually paginate with explicit page numbers for test compatibility
@@ -221,10 +182,6 @@ class GitLabAdapter:
     async def list_open_mrs(self, group_path: str, label: str) -> list[MergeRequest]:
         summaries = await self._run_in_executor(self._list_open_mrs_blocking, group_path, label)
         return [self._summary_to_mr(s) for s in summaries]
-
-    async def get_mr(self, project_id: int, mr_iid: int) -> MergeRequest:
-        obj = await self._run_in_executor(self._get_mr_blocking, project_id, mr_iid)
-        return self._project_mr_to_mr(obj)
 
     def _get_changes_blocking(self, project_id: int, mr_iid: int) -> list[dict[str, Any]]:
         project = self._gl.projects.get(project_id, lazy=True)
@@ -408,6 +365,3 @@ class GitLabAdapter:
             )
         )
         return self._attrs_dict_to_mr(attrs)
-
-    def get_author_username(self, comment: Comment) -> str:
-        return comment.author_username

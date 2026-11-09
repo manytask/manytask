@@ -426,35 +426,6 @@ class Exporter:
                 return True
         return False
 
-    def export_for_contribution(
-        self,
-        target: Path,
-    ) -> None:
-        if not self.dry_run:
-            target.mkdir(parents=True, exist_ok=True)
-
-        print_info(f"Copy from {self.repository_root} to {target}", color="grey")
-        self._copy_files_with_config(
-            self.repository_root,
-            target,
-            self.structure_config,
-            copy_public=True,
-            copy_private=False,
-            copy_other=True,
-            fill_templates=False,
-        )
-
-        print_info(f"Copy from {self.reference_root} to {target}", color="grey")
-        self._copy_files_with_config(
-            self.reference_root,
-            target,
-            self.structure_config,
-            copy_public=False,
-            copy_private=True,
-            copy_other=True,
-            fill_templates=False,
-        )
-
     def export_private(
         self,
         target: Path,

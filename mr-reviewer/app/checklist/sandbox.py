@@ -77,7 +77,6 @@ class RunSandbox:
         clone_url_builder: CloneUrlBuilder | None = None,
     ) -> None:
         self._hosting = hosting
-        self._gitlab_base_url = gitlab_base_url
         self._gitlab_token = gitlab_token
         self._manytask_base_url = manytask_base_url
         self._timeout_sec = timeout_sec

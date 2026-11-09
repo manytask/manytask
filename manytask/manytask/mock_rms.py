@@ -1,8 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
-from authlib.integrations.flask_client import OAuth
-
 from .abstract import RmsApi, RmsApiException, RmsUser
 from .course import ProtectedBranchSettings
 
@@ -231,15 +229,6 @@ class MockRmsApi(RmsApi):
         if username not in self.users_by_username:
             raise RmsApiException(f"User with username {username} not found")
         return self.users_by_username[username]
-
-    def check_user_authenticated_in_rms(
-        self,
-        oauth: OAuth,
-        oauth_access_token: str,
-        oauth_refresh_token: str,
-    ) -> bool:
-        # Mock implementation always returns True
-        return True
 
     def create_course_group(
         self,
