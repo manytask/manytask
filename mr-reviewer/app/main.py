@@ -100,9 +100,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.manytask = manytask
     app.state.course_store = course_store
     app.state.auth_cache = auth_cache
-    app.state.hosting_executor = hosting_executor
-    app.state.hosting_adapter = hosting_adapter
-    app.state.processed_store = processed_store
     app.state.metrics = metrics
     app.state.worker = worker
     app.state.worker_task = asyncio.create_task(worker.poll_forever())
