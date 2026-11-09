@@ -5,7 +5,7 @@ const {test} = require('node:test');
 const vm = require('node:vm');
 
 const template = readFileSync(path.join(__dirname, '../../manytask/templates/base.html'), 'utf8');
-const script = template.match(/<script>([\s\S]*?)<\/script>/);
+const script = template.match(/<script>([\s\S]*?)<\/script>/i);
 
 function load({storedTheme = null, dark = false, blockedStorage = false} = {}) {
     const root = {style: {}, setAttribute(name, value) { this[name] = value; }};
