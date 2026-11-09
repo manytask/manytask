@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import warnings
 from collections import Counter
 from collections.abc import Generator
@@ -290,19 +291,54 @@ class Course:
         potential_tasks: list[FileSystemTask],
         enabled_groups: list[Any],
     ) -> list[FileSystemTask]:
-        """Detect changes by matching commit message to task/group name."""
-        commit_message = repo.head.commit.message
+        """Collect tasks from every commit message since the push's base."""
+        head = repo.head.commit
+        base = self._resolve_base_commit(repo, head)
+        commits = (
+            repo.iter_commits(f"{base.hexsha}..{head.hexsha}")
+            if base is not None
+            else iter([head])
+        )
+        selected_names = {
+            task.name
+            for commit in commits
+            for task in self._tasks_from_commit_message(
+                commit, potential_tasks, enabled_groups
+            )
+        }
+        return [task for task in potential_tasks if task.name in selected_names]
+
+    def _tasks_from_commit_message(
+        self,
+        commit: git.Commit,
+        potential_tasks: list[FileSystemTask],
+        enabled_groups: list[Any],
+    ) -> list[FileSystemTask]:
+        """Match one message, preserving group precedence within that message."""
+        commit_message = commit.message
         if isinstance(commit_message, bytes):  # pragma: no cover
             commit_message = commit_message.decode("utf-8")
         print_info(f"Commit message: {commit_message}", color="grey")
 
+        def is_mentioned(name: str) -> bool:
+            # Hyphens and underscores belong to task names, so a prefix such as
+            # "sql" must not match "sql-1-ddl" or "sql_engine".
+            return (
+                re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", commit_message)
+                is not None
+            )
+
         # try to get groups first
-        changed_enabled_groups = [group for group in enabled_groups if group.name in commit_message]
+        changed_enabled_groups = [
+            group for group in enabled_groups if is_mentioned(group.name)
+        ]
         if changed_enabled_groups:
-            return self._tasks_from_groups(changed_enabled_groups, potential_tasks, "group name in commit message")
+            return self._tasks_from_groups(
+                changed_enabled_groups, potential_tasks, "group name in commit message"
+            )
 
         # if no groups found, try to get tasks
-        changed_tasks = [task for task in potential_tasks if task.name in commit_message]
+        changed_tasks = [task for task in potential_tasks if is_mentioned(task.name)]
         print_info(
             f"Changed tasks: {[t.name for t in changed_tasks]} (task name in commit message)",
             color="grey",
@@ -409,7 +445,7 @@ class Course:
         )
 
     def _resolve_base_commit(self, repo: git.Repo, head: git.Commit) -> git.Commit | None:
-        """Find the commit to diff HEAD against.
+        """Find the base for file diffs and commit-message selection.
 
         Uses `self.base_ref` if it is set, is not a null sha and is known to the repository
         (for shallow clones the history is deepened once). If the base is not an ancestor
@@ -487,7 +523,7 @@ class Course:
         :param detection_type: detection type, see CheckerTestingConfig.ChangesDetectionType
             - BRANCH_NAME: task name == branch name (single task/group)
             - BRANCH_NAME_OR_COMMIT_MESSAGE: compare both sources when a non-default branch matches; reject conflicts
-            - COMMIT_MESSAGE: task name in commit message (can be multiple tasks/groups)
+            - COMMIT_MESSAGE: task names in messages since base_ref, or HEAD~1
             - LAST_COMMIT_CHANGES: task relative path in changes since base_ref, or HEAD~1 (can be multiple tasks)
         :return: list of changed tasks
         :param task_patterns: optional task-relative globs supplied by a configuration adapter;
@@ -521,7 +557,7 @@ class Course:
             if branch_task_names and commit_task_names and branch_task_names != commit_task_names:
                 raise CheckerException(
                     f"Ambiguous task detection: branch {branch_name!r} selects "
-                    f"{sorted(branch_task_names)}, but the commit message selects {sorted(commit_task_names)}. "
+                    f"{sorted(branch_task_names)}, but the commit messages select {sorted(commit_task_names)}. "
                     "Make the names agree, or select explicitly with --task/--group "
                     "(and --submit-score when reporting is needed)."
                 )
