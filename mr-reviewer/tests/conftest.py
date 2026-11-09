@@ -153,7 +153,6 @@ def gitlab_adapter(gitlab_executor: ThreadPoolExecutor) -> GitLabAdapter:
         token="test-token",  # noqa: S106
         base_url=_GITLAB_BASE,
         executor=gitlab_executor,
-        batch_size=4,
     )
 
 
