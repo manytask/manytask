@@ -93,7 +93,7 @@ blocks:
   - type: content-layout-block
     textWidth: l
     textContent:
-      title: 'Made for teaching. Built together.'
+      title: 'Made for teaching. Built by teachers.'
       text: 'Manytask is open source. Help improve the tools, share your course experience, or ask the community a question.'
       links:
         - text: GitHub
