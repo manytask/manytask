@@ -11,11 +11,11 @@ blocks:
         <section class="mt-hero" aria-labelledby="mt-hero-title">
           <div class="mt-hero__content">
             <p class="mt-hero__eyebrow">MANYTASK / TEST STUDENTS' SOLUTIONS</p>
-            <h1 class="mt-hero__title" id="mt-hero-title"><span class="mt-hero-line">More teaching.</span><span class="mt-hero-line">Less routine.</span></h1>
-            <p class="mt-hero__description">Your course starts with a single repository. Keep tasks, tests, and deadlines in Git, automate checks, and track student progress with Manytask.</p>
+            <h1 class="mt-hero__title" id="mt-hero-title"><span class="mt-hero-line">Your course.</span><span class="mt-hero-line">As code.</span></h1>
+            <p class="mt-hero__description">Version tasks, tests, and deadlines in a single Git repository. Automate checks and track student progress with Manytask.</p>
             <div class="mt-hero__actions">
               <a class="mt-hero__button mt-hero__button_primary" href="https://app.manytask.org/">Open Manytask</a>
-              <a class="mt-hero__button" href="about.html">Explore the docs</a>
+              <a class="mt-hero__button" href="course_as_code.html">Course as code</a>
             </div>
           </div>
           <div class="mt-hero__art" aria-hidden="true">
@@ -101,7 +101,7 @@ blocks:
           theme: normal
           arrow: true
         - text: Open issues
-          url: https://github.com/manytask/manytask/issues
+          url: https://github.com/orgs/manytask/projects/3
           theme: normal
           arrow: true
         - text: Telegram community
