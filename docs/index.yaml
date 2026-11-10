@@ -18,6 +18,9 @@ blocks:
               <a class="mt-hero__button" href="about.html">Explore the docs</a>
             </div>
           </div>
+          <div class="mt-hero__art" aria-hidden="true">
+            <img class="mt-hero__ribbons" src="img/brand/hero-ribbons.svg" alt="" width="760" height="520">
+          </div>
         </section>
   - type: extended-features-block
     title:

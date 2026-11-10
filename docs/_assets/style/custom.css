@@ -67,20 +67,54 @@ button:focus-visible {
     max-width: 1248px;
 }
 
+/* These bright surfaces keep dark text when the surrounding page is dark. */
+.yfm .mt-hero,
+.pc-ExtendedFeaturesBlock__container {
+    --g-color-text-primary: #202b35;
+    --g-color-text-light-primary: #202b35;
+    --g-color-text-light-secondary: #202b35;
+    --g-color-text-link: #202b35;
+    --g-color-text-link-hover: #202b35;
+}
+
 /* The hero shares the constructor grid with every following section. */
 .yfm .mt-hero {
     box-sizing: border-box;
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+    gap: 32px;
     width: 100%;
     padding: 32px 24px;
+    overflow: hidden;
     border-radius: 16px;
     background: #ffe2b3;
     color: #202b35;
 }
 
 .mt-hero__content {
+    position: relative;
+    z-index: 1;
     width: 100%;
     max-width: 475px;
-    margin-inline: auto;
+}
+
+.mt-hero__art {
+    position: relative;
+    min-width: 0;
+}
+
+.yfm .mt-hero .mt-hero__ribbons {
+    position: absolute;
+    top: -32px;
+    left: 0;
+    display: block;
+    width: auto;
+    max-width: none;
+    height: calc(100% + 64px);
+    max-height: none;
+    margin: 0;
+    background: transparent;
 }
 
 .yfm .mt-hero .mt-hero__eyebrow {
@@ -387,7 +421,13 @@ button:focus-visible {
 
 @media (max-width: 767px) {
     .yfm .mt-hero {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
         padding: 28px 24px;
+    }
+
+    .mt-hero__art {
+        display: none;
     }
 
     .yfm .mt-hero .mt-hero__title {
