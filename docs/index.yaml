@@ -1,30 +1,24 @@
 fullScreen: true
 animated: false
 blocks:
-  - type: header-block
+  - type: content-layout-block
     indent:
-      top: '0'
+      top: m
       bottom: '0'
-    title: 'More teaching.<br>Less routine.'
-    overtitle: "MANYTASK / TEST STUDENTS' SOLUTIONS"
-    description: 'Run programming courses with automated tests, clear deadlines, and all your student scores in one place. Built around Git, shaped by your course.'
-    width: l
-    image:
-      src: img/brand/21-shape-alphabet.svg
-      alt: ''
-    imageSize: m
-    background:
-      color: '#FFE2B3'
-      fullWidth: true
-    buttons:
-      - text: Open Manytask
-        theme: action
-        size: promo
-        url: https://app.manytask.org/
-      - text: Explore the docs
-        theme: outlined
-        size: promo
-        url: about.html
+    textWidth: l
+    textContent:
+      text: |
+        <section class="mt-hero" aria-labelledby="mt-hero-title">
+          <div class="mt-hero__content">
+            <p class="mt-hero__eyebrow">MANYTASK / TEST STUDENTS' SOLUTIONS</p>
+            <h1 class="mt-hero__title" id="mt-hero-title"><span class="mt-hero-line">More teaching.</span><span class="mt-hero-line">Less routine.</span></h1>
+            <p class="mt-hero__description">Your course starts with a single repository. Keep tasks, tests, and deadlines in Git, automate checks, and track student progress with Manytask.</p>
+            <div class="mt-hero__actions">
+              <a class="mt-hero__button mt-hero__button_primary" href="https://app.manytask.org/">Open Manytask</a>
+              <a class="mt-hero__button" href="about.html">Explore the docs</a>
+            </div>
+          </div>
+        </section>
   - type: extended-features-block
     title:
       text: 'Your course. Your rules.'

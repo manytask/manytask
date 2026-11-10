@@ -67,65 +67,103 @@ button:focus-visible {
     max-width: 1248px;
 }
 
-.pc-header-block {
-    --pc-text-header-color: #202b35;
+/* The hero shares the constructor grid with every following section. */
+.yfm .mt-hero {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 32px 24px;
+    border-radius: 16px;
+    background: #ffe2b3;
     color: #202b35;
-    overflow: hidden;
 }
 
-.pc-header-block__content {
-    padding-top: 80px;
-    padding-bottom: 88px;
+.mt-hero__content {
+    width: 100%;
+    max-width: 475px;
+    margin-inline: auto;
 }
 
-.pc-header-block__overtitle {
-    font-size: 13px;
+.yfm .mt-hero .mt-hero__eyebrow {
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: .12em;
-    margin-bottom: 28px;
+    line-height: 1.5;
+    letter-spacing: .1em;
+    margin: 0 0 20px;
 }
 
-.pc-header-block .pc-header-block__title {
+.yfm .mt-hero .mt-hero__title {
     font-family: var(--g-font-family-sans);
-    font-size: clamp(40px, 4.8vw, 68px);
+    font-size: clamp(32px, 5.3vw, 64px);
     font-weight: 600;
-    line-height: 1.08;
+    line-height: 1.12;
     letter-spacing: -.045em;
+    margin: 0 0 24px -8px;
     color: #202b35;
+    isolation: isolate;
 }
 
-.pc-header-block__description .yfm {
-    max-width: 470px;
-    color: #202b35;
+.mt-hero__title .mt-hero-line {
+    display: block;
+    position: relative;
+    width: max-content;
+    max-width: 100%;
+    padding: 4px 10px 6px;
+    transform-origin: center;
+    clip-path: polygon(0 4%, 10% 1%, 19% 3%, 31% 0, 45% 2%, 58% 0, 70% 3%, 83% 0,
+        99% 3%, 100% 35%, 99% 62%, 100% 96%, 87% 99%, 75% 97%, 60% 100%, 46% 98%,
+        32% 100%, 17% 97%, 1% 100%, 0 65%, 1% 34%);
+}
+
+.mt-hero-line:first-child {
+    z-index: 2;
+    background: #17c3b2;
+    transform: rotate(-2deg);
+}
+
+.mt-hero-line:last-child {
+    z-index: 1;
+    margin: 5px 0 0 16px;
+    background: #ffcb77;
+    transform: rotate(1.4deg);
+}
+
+.yfm .mt-hero .mt-hero__description {
     font-size: 19px;
     line-height: 1.55;
+    margin: 0 0 24px;
 }
 
-.pc-header-block__media {
-    overflow: hidden;
-    border-radius: 16px;
-}
-
-.pc-header-block__image {
-    object-fit: cover;
-}
-
-.pc-header-block__buttons {
+.mt-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
     gap: 12px;
-    margin-top: 32px;
 }
 
-.pc-header-block .g-button {
-    --g-button-text-color: #202b35;
-    --g-button-background-color: transparent;
-    --g-button-background-color-hover: #ffcb77;
-    font-weight: 600;
+.yfm .mt-hero .mt-hero__button {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 12px 17px;
+    border: 1px solid #202b35;
     border-radius: 8px;
+    color: #202b35;
+    background: transparent;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-decoration: none;
 }
 
-.pc-header-block .g-button_view_action {
-    --g-button-background-color: #17c3b2;
-    --g-button-background-color-hover: #56d5c7;
+.yfm .mt-hero .mt-hero__button_primary {
+    border-color: #17c3b2;
+    background: #17c3b2;
+}
+
+.yfm .mt-hero .mt-hero__button:hover {
+    border-color: #ffcb77;
+    background: #ffcb77;
 }
 
 .pc-ExtendedFeaturesBlock,
@@ -193,21 +231,6 @@ button:focus-visible {
     margin: 0 0 16px;
 }
 
-.pc-ExtendedFeaturesBlock__item-label {
-    position: static;
-    align-self: flex-start;
-    flex-shrink: 0;
-    height: auto;
-    min-height: 20px;
-    padding: 0;
-    margin: 0;
-    font-size: 14px;
-    line-height: 20px;
-    letter-spacing: .08em;
-    color: #202b35;
-    background: none;
-}
-
 .pc-ExtendedFeaturesBlock__container .pc-content__text .yfm {
     color: #202b35;
     font-size: 17px;
@@ -233,9 +256,6 @@ button:focus-visible {
 }
 
 .pc-ExtendedFeaturesBlock__item-title-container {
-    display: flex;
-    flex-direction: column-reverse;
-    gap: 24px;
     margin: 0 0 16px;
 }
 
@@ -366,13 +386,38 @@ button:focus-visible {
 .yfm .mt-doc-paths a:hover strong { text-decoration: underline; }
 
 @media (max-width: 767px) {
-    .pc-header-block__content {
-        padding-top: 48px;
-        padding-bottom: 48px;
+    .yfm .mt-hero {
+        padding: 28px 24px;
     }
 
-    .pc-header-block__overtitle { font-size: 11px; letter-spacing: .06em; }
-    .pc-header-block__description .yfm { font-size: 18px; }
+    .yfm .mt-hero .mt-hero__title {
+        font-size: clamp(28px, 8.2vw, 44px);
+        margin-left: -5px;
+    }
+
+    .mt-hero__title .mt-hero-line {
+        padding: 4px 8px 6px;
+    }
+
+    .mt-hero-line:last-child {
+        margin-left: 6px;
+    }
+
+    .yfm .mt-hero .mt-hero__eyebrow {
+        font-size: 11px;
+        letter-spacing: .06em;
+    }
+
+    .yfm .mt-hero .mt-hero__description {
+        font-size: 16px;
+    }
+
+    .yfm .mt-hero .mt-hero__button {
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+
     .pc-ExtendedFeaturesBlock__container { padding: 28px; }
     .yfm .mt-workflow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .mt-doc-paths { grid-template-columns: 1fr; }
@@ -414,28 +459,6 @@ button:focus-visible {
 
 @media (max-width: 767px) {
     .pc-title .pc-title-item { font-size: 30px; }
-}
-
-/* Diplodoc hides header media at this breakpoint unless explicitly restored. */
-@media (max-width: 768px) {
-    .pc-header-block .pc-header-block__media {
-        display: block;
-        position: relative;
-        top: auto;
-        right: auto;
-        left: auto;
-        width: calc(100% - 48px);
-        height: auto;
-        aspect-ratio: 2 / 1;
-        margin: 0 24px 32px;
-    }
-
-    .pc-header-block .pc-header-block__image {
-        display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
 }
 
 @media (max-width: 1023px) {
