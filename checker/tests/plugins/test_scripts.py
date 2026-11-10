@@ -88,6 +88,19 @@ class TestRunScriptPlugin:
         else:
             plugin._run(args)
 
+    def test_timeout_is_reported_in_output(self) -> None:
+        plugin = RunScriptPlugin()
+        args = RunScriptPlugin.Args(origin="/tmp", script="echo started; sleep 2", timeout=0.5)
+
+        with pytest.raises(PluginExecutionFailed) as exc_info:
+            plugin._run(args)
+
+        assert "timed out" in exc_info.value.message
+        assert exc_info.value.output is not None
+        output_lines = exc_info.value.output.splitlines()
+        assert output_lines[0] == "started"
+        assert output_lines[-1] == "Script timed out after 0.5s (0.5s limit)"
+
     @pytest.mark.parametrize("env_additional", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
     @pytest.mark.parametrize("env_whitelist", [None, [], ["A"], ["A", "C"]])
     @pytest.mark.parametrize("mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
