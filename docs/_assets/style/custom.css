@@ -107,6 +107,7 @@ button:focus-visible {
 .pc-title .pc-title-item__text,
 .pc-ExtendedFeaturesBlock .pc-ExtendedFeaturesBlock__item-title,
 .yfm .mt-hero .mt-hero__title,
+.yfm .mt-hero .mt-hero-line,
 .yfm .mt-workflow strong,
 .yfm .mt-doc-paths strong {
     font-family: var(--mt-font-heading);
