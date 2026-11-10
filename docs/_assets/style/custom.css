@@ -1,4 +1,4 @@
-/* Manytask identity: Nunito Sans, paper surfaces, and the original ribbon palette. */
+/* Montserrat headings/navigation, Nunito Sans body/interface, and the Manytask palette. */
 @font-face {
     font-family: 'Nunito Sans';
     src: url('../fonts/NunitoSans-Regular.woff2') format('woff2');
@@ -15,10 +15,27 @@
     font-display: swap;
 }
 
+@font-face {
+    font-family: 'Montserrat';
+    src: url('../fonts/Montserrat-Regular.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Montserrat';
+    src: url('../fonts/Montserrat-SemiBold.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+}
+
 .g-root {
     --g-font-family-sans: 'Nunito Sans', system-ui, sans-serif;
-    --yfm-font-family: 'Nunito Sans', system-ui, sans-serif;
-    --pc-font-family: 'Nunito Sans', system-ui, sans-serif;
+    --mt-font-heading: 'Montserrat', system-ui, sans-serif;
+    --yfm-font-family: var(--g-font-family-sans);
+    --pc-font-family: var(--g-font-family-sans);
     --g-text-accent-font-weight: 600;
     --pc-text-header-color: var(--mt-ink);
     --mt-ink: #202b35;
@@ -31,6 +48,26 @@
     --g-color-text-link-hover: #174958;
     font-family: var(--g-font-family-sans);
     font-synthesis: none;
+}
+
+.g-root button,
+.g-root input,
+.g-root select,
+.g-root textarea {
+    font-family: var(--g-font-family-sans);
+}
+
+.pc-navigation,
+.dc-sidebar,
+.dc-sidebar-navigation,
+.dc-toc,
+.dc-mini-toc,
+.dc-subnavigation,
+.dc-nav-toc-panel {
+    --g-font-family-sans: var(--mt-font-heading);
+    --yfm-font-family: var(--mt-font-heading);
+    --pc-font-family: var(--mt-font-heading);
+    font-family: var(--mt-font-heading);
 }
 
 .g-root_theme_light {
@@ -54,6 +91,26 @@ a:focus-visible,
 button:focus-visible {
     outline: 3px solid #24697b;
     outline-offset: 4px;
+}
+
+/* Keep heading typography in one place, including nested constructor text. */
+.yfm h1,
+.yfm h2,
+.yfm h3,
+.yfm h4,
+.yfm h5,
+.yfm h6,
+.dc-doc-page-title,
+.pc-title,
+.pc-content .pc-content__title,
+.pc-title .pc-title-item,
+.pc-title .pc-title-item__text,
+.pc-ExtendedFeaturesBlock .pc-ExtendedFeaturesBlock__item-title,
+.yfm .mt-hero .mt-hero__title,
+.yfm .mt-workflow strong,
+.yfm .mt-doc-paths strong {
+    font-family: var(--mt-font-heading);
+    font-weight: 400;
 }
 
 /* Landing: the constructor remains responsible for navigation and controls. */
@@ -126,9 +183,7 @@ button:focus-visible {
 }
 
 .yfm .mt-hero .mt-hero__title {
-    font-family: var(--g-font-family-sans);
     font-size: clamp(32px, 5.3vw, 64px);
-    font-weight: 600;
     line-height: 1.12;
     letter-spacing: -.045em;
     margin: 0 0 24px -8px;
@@ -212,9 +267,7 @@ button:focus-visible {
 }
 
 .pc-title,
-.pc-content__title {
-    font-family: var(--g-font-family-sans);
-    font-weight: 600;
+.pc-content .pc-content__title {
     letter-spacing: -.025em;
 }
 
@@ -260,7 +313,6 @@ button:focus-visible {
 .pc-ExtendedFeaturesBlock .pc-ExtendedFeaturesBlock__item-title {
     font-size: 28px;
     line-height: 1.2;
-    font-weight: 600;
     letter-spacing: -.025em;
     margin: 0 0 16px;
 }
@@ -287,10 +339,6 @@ button:focus-visible {
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 4px;
-}
-
-.pc-ExtendedFeaturesBlock__item-title-container {
-    margin: 0 0 16px;
 }
 
 .pc-ExtendedFeaturesBlock__container .pc-content__text {
@@ -327,7 +375,6 @@ button:focus-visible {
 
 .yfm .mt-workflow strong {
     font-size: 24px;
-    font-weight: 600;
     margin-bottom: 12px;
 }
 
@@ -347,16 +394,14 @@ button:focus-visible {
 .yfm h1,
 .yfm h2,
 .yfm h3,
-.yfm h4 {
-    font-family: var(--g-font-family-sans);
-    font-weight: 600;
+.yfm h4,
+.yfm h5,
+.yfm h6 {
     letter-spacing: -.025em;
 }
 
 .yfm h1,
 .dc-doc-page-title {
-    font-family: var(--g-font-family-sans);
-    font-weight: 600;
     letter-spacing: -.025em;
     font-size: 42px;
     line-height: 1.2;
@@ -413,11 +458,32 @@ button:focus-visible {
     text-decoration: none;
 }
 
-.yfm .mt-doc-paths a:nth-child(2) { background: #ffcb77; }
-.yfm .mt-doc-paths a:nth-child(3) { background: #f4717d; }
-.mt-doc-paths strong { font-size: 20px; font-weight: 600; }
-.mt-doc-paths span { font-size: 15px; line-height: 1.5; }
-.yfm .mt-doc-paths a:hover strong { text-decoration: underline; }
+.yfm .mt-doc-paths a:nth-child(2) {
+    background: #ffcb77;
+}
+
+.yfm .mt-doc-paths a:nth-child(3) {
+    background: #f4717d;
+}
+
+.yfm .mt-doc-paths strong {
+    font-size: 20px;
+}
+
+.mt-doc-paths span {
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.yfm .mt-doc-paths a:hover strong {
+    text-decoration: underline;
+}
+
+.pc-title .pc-title-item {
+    font-size: 36px;
+    line-height: 1.2;
+    color: var(--mt-ink);
+}
 
 @media (max-width: 767px) {
     .yfm .mt-hero {
@@ -463,6 +529,7 @@ button:focus-visible {
     .mt-doc-paths { grid-template-columns: 1fr; }
     .mt-doc-intro { padding: 24px; }
     .yfm h1, .dc-doc-page-title { font-size: 32px; }
+    .pc-title .pc-title-item { font-size: 30px; }
 }
 
 @media (max-width: 420px) {
@@ -477,16 +544,34 @@ button:focus-visible {
     }
 }
 
-.pc-title .pc-title-item {
-    font-weight: 600;
-    font-size: 36px;
-    line-height: 1.2;
-    color: var(--mt-ink);
+.pc-navigation {
+    --mt-logo-width: min(430px, calc(100vw - 480px));
+    font-weight: 400;
 }
 
-.pc-navigation .pc-logo__icon {
-    width: 176px;
+/* SVG tagline baseline: .01773 × logo width below center; menu baseline: 5px. */
+.pc-navigation .pc-desktop-navigation__links .pc-content-wrapper__text {
+    position: relative;
+    top: max(0px, calc(var(--mt-logo-width) * .01773 - 5px));
+}
+
+.pc-navigation .pc-desktop-navigation__left {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.pc-navigation .pc-desktop-navigation__wrapper .pc-logo__icon {
+    width: var(--mt-logo-width);
     height: auto;
+    max-width: 100%;
+    max-height: none;
+    margin-right: 0;
+}
+
+@media (max-width: 768px) {
+    .pc-navigation {
+        --mt-logo-width: min(430px, calc(100vw - 80px));
+    }
 }
 
 .dc-toc-item__text_active {
@@ -496,10 +581,6 @@ button:focus-visible {
 }
 
 .yfm strong { font-weight: 600; }
-
-@media (max-width: 767px) {
-    .pc-title .pc-title-item { font-size: 30px; }
-}
 
 @media (max-width: 1023px) {
     .pc-ExtendedFeaturesBlock__items > .row {
