@@ -232,18 +232,6 @@ button:focus-visible {
     text-underline-offset: 4px;
 }
 
-/* Guide panels have no numbered labels and use quiet reading surfaces. */
-.pc-ExtendedFeaturesBlock:not(:has(.pc-ExtendedFeaturesBlock__item-label)) .pc-ExtendedFeaturesBlock__container {
-    --pc-text-header-color: var(--mt-ink);
-    background: transparent;
-    color: var(--mt-ink);
-    border: 1px solid var(--mt-line);
-}
-
-.pc-ExtendedFeaturesBlock:not(:has(.pc-ExtendedFeaturesBlock__item-label)) :is(.yfm, a) {
-    color: var(--mt-ink);
-}
-
 .pc-ExtendedFeaturesBlock__item-title-container {
     display: flex;
     flex-direction: column-reverse;
@@ -260,16 +248,13 @@ button:focus-visible {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 24px;
     list-style: none;
-    counter-reset: workflow;
     margin: 36px 0 24px;
     padding: 0;
 }
 
 .yfm .mt-workflow > li {
-    counter-increment: workflow;
     margin: 0;
-    padding: 24px 0 0;
-    border-top: 2px solid #17c3b2;
+    padding: 0;
 }
 
 /* YFM supplies its own numbered ::marker even when list-style is none. */
@@ -278,11 +263,7 @@ button:focus-visible {
 }
 
 .yfm .mt-workflow li::before {
-    content: '0' counter(workflow);
-    display: block;
-    color: var(--mt-muted);
-    font-size: 14px;
-    margin-bottom: 20px;
+    content: none;
 }
 
 .yfm .mt-workflow strong,
@@ -471,6 +452,7 @@ button:focus-visible {
 
 .yfm .mt-site-footer {
     border-top: 1px solid var(--mt-line);
+    margin-top: 48px;
     padding: 24px 0 32px;
     color: var(--mt-muted);
     font-size: 14px;
