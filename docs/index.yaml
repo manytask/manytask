@@ -31,7 +31,6 @@ blocks:
     description: 'Choose the language and tools. Manytask connects the everyday work.'
     items:
       - title: 'Test the code.'
-        label: '01'
         text: 'Run your own tests on student solutions. Keep reference solutions and private tests separate from the materials you share.'
         links:
           - text: Meet the checker
@@ -39,7 +38,6 @@ blocks:
             theme: normal
             arrow: true
       - title: 'See the progress.'
-        label: '02'
         text: 'Bring scores, task groups, and deadlines together. Give students a clear view of their results and what comes next.'
         links:
           - text: Explore the web app
@@ -47,7 +45,6 @@ blocks:
             theme: normal
             arrow: true
       - title: 'Keep it in Git.'
-        label: '03'
         text: 'Version your course materials and give students their own repositories. Connect your deployment to GitLab or SourceCraft.'
         links:
           - text: Course as code
@@ -118,7 +115,7 @@ blocks:
     size: s
     textWidth: l
     indent:
-      top: '0'
+      top: l
     textContent:
       text: |
         <footer class="mt-site-footer">Powered by Yandex School of Data Analysis · 2017–2026</footer>
