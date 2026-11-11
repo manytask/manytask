@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block signout %}{% endblock %}
+{% block read_only_notice %}{% endblock %}
 
 {% block body %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/user-menu.css') }}">
@@ -11,7 +12,8 @@
     {% set max_started = app.storage_api.max_score_started(course_name) %}
     {% set solved_percent = "0.0" if max_started == 0 else (solved_score / max_started * 100) | round(1, 'common') %}
 
-    <nav class="navbar navbar-expand-lg bg-body fixed-top shadow-sm">
+<header id="course-header" class="fixed-top">
+    <nav class="navbar navbar-expand-lg bg-body shadow-sm">
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar"
                     aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
@@ -123,6 +125,8 @@
             </div>
         </div>
     </nav>
+    {% include "_read_only_banner.html" %}
+</header>
 
     {% include "_user_menu_modal.html" %}
 
@@ -136,13 +140,13 @@
         <div id="course-navbar-spacer" class="container-fluid" style="height: 80px;"></div>
         <script>
             (() => {
-                const navbar = document.querySelector('nav.navbar');
+                const header = document.getElementById('course-header');
                 const spacer = document.getElementById('course-navbar-spacer');
                 const updateSpacing = () => {
-                    spacer.style.height = `${navbar.getBoundingClientRect().height + 10}px`;
+                    spacer.style.height = `${header.getBoundingClientRect().height + 10}px`;
                 };
-                // The fixed navbar can wrap to several rows on narrow screens.
-                new ResizeObserver(updateSpacing).observe(navbar);
+                // Both the menu and the notice can wrap on narrow screens.
+                new ResizeObserver(updateSpacing).observe(header);
                 updateSpacing();
             })();
         </script>

@@ -22,13 +22,17 @@ function load() {
     };
     vm.runInNewContext(script, {
         document: {
-            getElementById: () => ({textContent: message}),
+            getElementById: id => id === 'read-only-banner'
+                ? {textContent: message, getBoundingClientRect: () => ({height: 50})}
+                : null,
+            documentElement: {style: {setProperty() {}}},
             querySelectorAll: () => [form, button, link],
             addEventListener(name, handler, capture) {
                 assert.equal(capture, true);
                 listeners[name] = handler;
             },
         },
+        ResizeObserver: class { observe() {} },
     });
     function dispatch(name, mutation) {
         const event = {

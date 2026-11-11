@@ -1,6 +1,14 @@
 // Presentation only: the server and PostgreSQL enforce the restriction.
 (() => {
-    const message = document.getElementById('read-only-banner').textContent;
+    const banner = document.getElementById('read-only-banner');
+    const message = banner.textContent;
+    if (!document.getElementById('course-header')) {
+        const updateBannerOffset = () => {
+            document.documentElement.style.setProperty('--read-only-banner-offset', `${banner.getBoundingClientRect().height}px`);
+        };
+        new ResizeObserver(updateBannerOffset).observe(banner);
+        updateBannerOffset();
+    }
     const actionSelector = '[data-read-only-action], .admin-btn, .role-select, '
         + '[onclick^="save"], [onclick^="addUser"], [onclick^="createNamespace"], '
         + '[onclick^="assignRoleInNamespace"], button[form], .course-access-revoke, '

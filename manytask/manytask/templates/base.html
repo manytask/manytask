@@ -116,9 +116,7 @@
     {% endif %}
 </head>
 <body>
-    {% if read_only %}
-        <div id="read-only-banner" class="alert alert-warning mb-0" role="status">{{ read_only_message }}</div>
-    {% endif %}
+    {% block read_only_notice %}{% include "_read_only_banner.html" %}{% endblock %}
     {% block body %}
     {% endblock %}
     {% if cache_time %}
