@@ -46,6 +46,7 @@ from .models import (
     User,
     UserOnCourse,
 )
+from .read_only import require_writable
 from .utils.generic import calculate_percent
 
 ModelType = TypeVar("ModelType", bound=models.Base)
@@ -144,6 +145,7 @@ class DatabaseConfig:
     instance_admin_username: str
     apply_migrations: bool = False
     session_factory: Optional[Callable[[], Session]] = None
+    read_only: bool = False
 
 
 class DataBaseApi(StorageApi):
@@ -161,8 +163,19 @@ class DataBaseApi(StorageApi):
         """
         self.database_url = config.database_url
         self.apply_migrations = config.apply_migrations
+        self.read_only = config.read_only
+        if self.read_only and self.apply_migrations:
+            raise ValueError("MANYTASK_READ_ONLY cannot be combined with APPLY_MIGRATIONS")
+        if self.read_only and config.session_factory is not None:
+            raise ValueError("Read-only mode requires the database-managed session factory")
 
-        self.engine = create_engine(self.database_url, echo=False)
+        self.engine = create_engine(
+            self.database_url,
+            echo=False,
+            execution_options={"postgresql_readonly": True} if self.read_only else {},
+        )
+        if self.read_only and self.engine.dialect.name != "postgresql":
+            raise ValueError("Read-only mode requires PostgreSQL")
 
         if config.session_factory is None:
             self._session_create: Callable[[], Session] = sessionmaker(bind=self.engine)
@@ -170,10 +183,15 @@ class DataBaseApi(StorageApi):
             self._session_create = config.session_factory
 
         if self._check_pending_migrations(self.database_url):
+            if self.read_only:
+                raise ValueError("Apply pending migrations before starting Manytask in read-only mode")
             if self.apply_migrations:
                 self._apply_migrations(self.database_url)
             else:
                 logger.error("There are pending migrations that have not been applied")
+
+        if self.read_only:
+            return
 
         # Create the zero-instance admin user if it does not exist
         with self._session_create() as session:
@@ -398,6 +416,7 @@ class DataBaseApi(StorageApi):
 
         :return: created or updated StoredUser object
         """
+        require_writable(self.read_only)
 
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
@@ -577,6 +596,7 @@ class DataBaseApi(StorageApi):
 
         :return: saved score
         """
+        require_writable(self.read_only)
         logger.debug(
             "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
         )
@@ -644,6 +664,7 @@ class DataBaseApi(StorageApi):
 
         :return: is course created, false if course created before
         """
+        require_writable(self.read_only)
         logger.info("Attempting to create course with name '%s'", settings_config.course_name)
 
         with self._session_create() as session:
@@ -684,6 +705,7 @@ class DataBaseApi(StorageApi):
 
         :return: True if course was updated, False if course not found
         """
+        require_writable(self.read_only)
         logger.info("Attempting to edit course '%s'", settings_config.course_name)
 
         with self._session_create() as session:
@@ -713,6 +735,7 @@ class DataBaseApi(StorageApi):
 
     def delete_course(self, course_name: str) -> bool:
         """Delete the course and its configuration only when nobody is registered."""
+        require_writable(self.read_only)
         with self._session_create() as session:
             # Block new registrations (FK key-share locks) until deletion commits.
             course = session.scalar(select(Course).where(Course.name == course_name).with_for_update())
@@ -734,6 +757,7 @@ class DataBaseApi(StorageApi):
         :param course_name: course name
         :param config: ManytaskConfig object
         """
+        require_writable(self.read_only)
         logger.info("Updating course settings for course '%s'", course_name)
 
         with self._session_create() as session:
@@ -790,6 +814,7 @@ class DataBaseApi(StorageApi):
             return bool(course.rms_settings_pending)
 
     def clear_rms_settings_pending(self, course_name: str) -> None:
+        require_writable(self.read_only)
         with self._session_create() as session:
             self._update(session, models.Course, defaults={"rms_settings_pending": False}, name=course_name)
 
@@ -957,6 +982,7 @@ class DataBaseApi(StorageApi):
 
     def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
         """Sync admin flag in gitlab and db"""
+        require_writable(self.read_only)
 
         with self._session_create() as session:
             logger.debug(
@@ -1010,6 +1036,7 @@ class DataBaseApi(StorageApi):
 
     def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int) -> None:
         """Create a user, bind the initial admin, or keep an existing provider identity."""
+        require_writable(self.read_only)
 
         with self._session_create() as session:
             logger.debug(
@@ -1262,6 +1289,7 @@ class DataBaseApi(StorageApi):
         :param username: manytask username
         :param is_admin: new admin status
         """
+        require_writable(self.read_only)
         logger.info("Setting instance admin status to %s for user '%s'", is_admin, username)
 
         with self._session_create() as session:
@@ -1286,6 +1314,7 @@ class DataBaseApi(StorageApi):
         :param username: manytask username
         :param is_admin: new course admin status
         """
+        require_writable(self.read_only)
         logger.info("Setting course admin status to %s for user '%s' in course '%s'", is_admin, username, course_name)
 
         with self._session_create() as session:
@@ -1320,6 +1349,7 @@ class DataBaseApi(StorageApi):
         :param new_first_name: new first name
         :param new_last_name: new last name
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             try:
                 user = self._get(session, models.User, username=username)
@@ -1357,6 +1387,7 @@ class DataBaseApi(StorageApi):
 
         :param deadlines_config: ManytaskDeadlinesConfig object
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             logger.debug("Updating task groups from config for course '%s'", course_name)
             new_task_names = set()
@@ -1423,6 +1454,7 @@ class DataBaseApi(StorageApi):
         :param deadlines_config: ManytaskDeadlinesConfig object
         :param status: status of course
         """
+        require_writable(self.read_only)
 
         groups = deadlines_config.groups
 
@@ -1501,6 +1533,7 @@ class DataBaseApi(StorageApi):
         logger.info("Deadlines config synced for course '%s'", course_name)
 
     def _sync_grades_config(self, course_name: str, grades_config: ManytaskFinalGradeConfig | None) -> None:
+        require_writable(self.read_only)
         if grades_config is None:
             # shortcut to remove existing grade formulas
             logger.debug("No grades config provided for course=%s, skipping sync", course_name)
@@ -1626,6 +1659,7 @@ class DataBaseApi(StorageApi):
             return True
 
     def _apply_migrations(self, database_url: str) -> None:
+        require_writable(self.read_only)
         logger.info("Applying migrations for database_url=%s", database_url)
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
@@ -1642,6 +1676,10 @@ class DataBaseApi(StorageApi):
                 raise
         except DuplicateTable:  # if tables are created concurrently
             pass
+
+    def _get_user_on_course(self, session: Session, username: str, course: models.Course) -> models.UserOnCourse:
+        user = self._get(session, models.User, username=username)
+        return self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
 
     def _get_or_create_user_on_course(
         self, session: Session, username: str, course: models.Course
@@ -2019,6 +2057,7 @@ class DataBaseApi(StorageApi):
         )
 
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None:
+        require_writable(self.read_only)
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
@@ -2050,6 +2089,7 @@ class DataBaseApi(StorageApi):
         :return: Created Namespace object
         :raises IntegrityError: If slug or gitlab_group_id already exists
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             try:
                 logger.info("Creating namespace name=%s slug=%s for user=%s", name, slug, created_by_username)
@@ -2091,6 +2131,7 @@ class DataBaseApi(StorageApi):
 
     def update_namespace(self, namespace_id: int, name: str, description: str | None) -> models.Namespace:
         """Update the display name and description of an existing namespace."""
+        require_writable(self.read_only)
         with self._session_create() as session:
             namespace = self._get(session, models.Namespace, id=namespace_id)
             namespace.name = name
@@ -2102,6 +2143,7 @@ class DataBaseApi(StorageApi):
 
     def delete_namespace(self, namespace_id: int, name: str) -> None:
         """Delete an empty namespace after confirming its current name."""
+        require_writable(self.read_only)
         with self._session_create() as session:
             # Block concurrent renames and FK inserts while checking and deleting.
             namespace = session.query(models.Namespace).filter_by(id=namespace_id).with_for_update().one()
@@ -2218,6 +2260,7 @@ class DataBaseApi(StorageApi):
         :raises ValueError: If role is invalid
         :raises IntegrityError: If user already has a role in this namespace
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             logger.info(
                 "Adding user %s to namespace_id=%s with role=%s by user %s",
@@ -2328,6 +2371,7 @@ class DataBaseApi(StorageApi):
         :return: Tuple of (role_string, rms_id) of the removed user
         :raises NoResultFound: If the user is not in the namespace
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             logger.info("Removing user_id=%s from namespace_id=%s", user_id, namespace_id)
 
@@ -2375,6 +2419,7 @@ class DataBaseApi(StorageApi):
         :raises NoResultFound: If the user is not in the namespace
         :raises ValueError: If the role is invalid
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             logger.info(
                 "Updating role for user_id=%s in namespace_id=%s to %s",
@@ -2496,6 +2541,7 @@ class DataBaseApi(StorageApi):
         :raises ValueError: If any owner doesn't have namespace_admin role in the namespace
         :raises NoResultFound: If course or users not found
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             logger.info(
                 "Adding owners to course_id=%s: rms_ids=%s (validating against namespace_id=%s)",
@@ -2618,6 +2664,7 @@ class DataBaseApi(StorageApi):
         :param student_scores_data: dict with student scores, percent, large_count, etc.
         :return: calculated final grade
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
@@ -2651,6 +2698,7 @@ class DataBaseApi(StorageApi):
         Call after changing grade configuration to keep saved grades in sync.
         Skips students with final_grade_override.
         """
+        require_writable(self.read_only)
         scores_and_names = self.get_all_scores_with_names(course_name)
         grades_config = self.get_grades(course_name)
         course = self.get_course(course_name)
@@ -2699,6 +2747,7 @@ class DataBaseApi(StorageApi):
         :param course_name: course name
         :param grades: dict mapping username to new final_grade
         """
+        require_writable(self.read_only)
         if not grades:
             return
 
@@ -2738,7 +2787,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course)
 
                 # If override exists, use it
                 if user_on_course.final_grade_override is not None:
@@ -2762,6 +2811,7 @@ class DataBaseApi(StorageApi):
         :param username: student's manytask username
         :param new_grade: new grade value to set manually
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
@@ -2781,6 +2831,7 @@ class DataBaseApi(StorageApi):
         :param course_name: course name
         :param username: student's manytask username
         """
+        require_writable(self.read_only)
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
@@ -2804,7 +2855,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course)
 
                 return user_on_course.final_grade_override is not None
 

@@ -38,6 +38,7 @@ from .database import (
     UserIdentityConflictError,
 )
 from .main import CustomFlask
+from .read_only import is_read_only, require_writable
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
@@ -271,7 +272,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
 def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
 
-    if app.app_config.disable_signup:
+    if app.app_config.disable_signup or is_read_only(app):
         return redirect(url_for("root.login"))
 
     # ---- render page ---- #
@@ -362,6 +363,8 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     if stored_user_or_none is not None:
         return _restore_existing_user_session(app, stored_user_or_none)
 
+    require_writable(is_read_only(app))
+
     if app.app_config.rms == "gitlab" and _manytask_username_is_claimed(app, session["auth"]["username"]):
         return render_template(
             app.signup_finish_template,
@@ -448,6 +451,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
 @requires_auth
 def create_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
+    require_writable(is_read_only(app))
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     existing_enrollment_redirect = _redirect_existing_enrollment(app, course)
@@ -528,6 +532,7 @@ def _create_student_project(app: CustomFlask, course: Course) -> str | None:
 @requires_auth
 def recover_project(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
+    require_writable(is_read_only(app))
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
     username = session["manytask"]["username"]
 

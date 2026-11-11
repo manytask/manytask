@@ -129,7 +129,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="grantAdminForm" action="{{ url_for('instance_admin.instance_admin_panel') }}" method="POST">
+                    <form data-read-only-action id="grantAdminForm" action="{{ url_for('instance_admin.instance_admin_panel') }}" method="POST">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="grant">
                         <div class="mb-3">
@@ -168,7 +168,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="revokeAdminForm" action="{{ url_for('instance_admin.instance_admin_panel') }}" method="POST">
+                    <form data-read-only-action id="revokeAdminForm" action="{{ url_for('instance_admin.instance_admin_panel') }}" method="POST">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="revoke">
                         <div class="mb-3">
@@ -208,7 +208,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="changeUserInfoForm" action="{{ url_for('root.update_profile') }}" method="POST">
+                    <form data-read-only-action id="changeUserInfoForm" action="{{ url_for('root.update_profile') }}" method="POST">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="change">
                         <div class="mb-3">
@@ -260,7 +260,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="assignRoleForm">
+                    <form data-read-only-action id="assignRoleForm">
                         <div class="mb-3">
                             <label for="roleNamespace" class="form-label">Namespace *</label>
                             <select class="form-select" id="roleNamespace" name="namespace_id" required>
