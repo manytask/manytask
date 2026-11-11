@@ -1,8 +1,8 @@
 # Changelog
 
-## [26.2.0](https://github.com/manytask/manytask/releases/tag/26.2.0) - 2026-11-10
+## [26.2.0](https://github.com/manytask/manytask/releases/tag/26.2.0) - 2026-11-11
 
-This release adds manual task completion editing, safe cleanup of unused courses and namespaces, checker task detection across all commits in a push, and CUDA testing options. It also improves administration, SourceCraft repository recovery, and checker error reporting.
+This release adds manual task completion editing, safe cleanup of unused courses and namespaces, checker task detection across all commits in a push, and CUDA testing options. It also improves administration, SourceCraft repository recovery, and checker error reporting, and refreshes the landing and documentation pages.
 
 ### Features
 
@@ -24,6 +24,7 @@ This release adds manual task completion editing, safe cleanup of unused courses
 
 - Fix documentation build warnings and update Authlib, pylint, and CI setup ([#1198](https://github.com/manytask/manytask/pull/1198), [#1201](https://github.com/manytask/manytask/pull/1201), [#1203](https://github.com/manytask/manytask/pull/1203), [#1204](https://github.com/manytask/manytask/pull/1204)).
 - Mention GitLab and SourceCraft integration on the documentation landing page ([#1207](https://github.com/manytask/manytask/pull/1207)).
+- Redesign the landing and documentation pages with Manytask branding, local fonts, responsive feature panels, and a course-as-code introduction ([#1223](https://github.com/manytask/manytask/pull/1223)).
 - Pin Diplodoc 5.64.0 across documentation builds and update its installation requirements ([#1211](https://github.com/manytask/manytask/pull/1211)).
 - Remove unused code and unfinished merge-request checker plugins, and simplify MR reviewer internals ([#1220](https://github.com/manytask/manytask/pull/1220)).
 
