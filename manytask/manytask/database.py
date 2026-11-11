@@ -1643,6 +1643,10 @@ class DataBaseApi(StorageApi):
         except DuplicateTable:  # if tables are created concurrently
             pass
 
+    def _get_user_on_course(self, session: Session, username: str, course: models.Course) -> models.UserOnCourse:
+        user = self._get(session, models.User, username=username)
+        return self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+
     def _get_or_create_user_on_course(
         self, session: Session, username: str, course: models.Course
     ) -> models.UserOnCourse:
@@ -2738,7 +2742,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course)
 
                 # If override exists, use it
                 if user_on_course.final_grade_override is not None:
@@ -2804,7 +2808,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course)
 
                 return user_on_course.final_grade_override is not None
 
