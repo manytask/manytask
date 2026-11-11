@@ -566,7 +566,6 @@ class DataBaseApi(StorageApi):
         update_fn: Callable[..., Any],
         *,
         is_solved: bool | None = None,
-        create_enrollment: bool = True,
     ) -> int:
         """Method for storing user's task score
 
@@ -575,7 +574,6 @@ class DataBaseApi(StorageApi):
         :param task_name: task name
         :param update_fn: function for updating the score
         :param is_solved: explicit solved status; otherwise preserve completion earned by large tasks
-        :param create_enrollment: allow score reports to enroll an existing user; disable for table edits
 
         :return: saved score
         """
@@ -586,11 +584,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                if create_enrollment:
-                    user_on_course = self._get_or_create_user_on_course(session, username, course)
-                    session.commit()
-                else:
-                    user_on_course = self._get_user_on_course(session, username, course, for_update=True)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 try:
                     task = self._get_task_by_name_and_course_id(session, task_name, course.id)

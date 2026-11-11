@@ -7,12 +7,12 @@ import pytest
 from sqlalchemy import event, select
 from sqlalchemy.exc import NoResultFound, OperationalError
 
-from manytask.abstract import AuthenticatedUser
+from manytask.abstract import AuthenticatedUser, RmsUser
 from manytask.api import bp as api_bp
 from manytask.course import CourseConfig, CourseStatus
 from manytask.database import DataBaseApi, DatabaseConfig
 from manytask.mock_auth import MockAuthApi
-from manytask.models import Course, Deadline, Task, TaskGroup, UserOnCourse
+from manytask.models import Course, Deadline, Grade, Task, TaskGroup, UserOnCourse
 from manytask.web import course_bp, root_bp
 from tests.helpers import build_mock_session, make_flask_app, set_session
 
@@ -22,6 +22,7 @@ MUTATIONS = [
     ("override_grade", {"new_grade": 5}),
     ("clear_grade_override", {}),
     ("calculate_and_save_grade", {"student_scores_data": {"percent": 80, "large_count": 1}}),
+    ("store_score", {"task_name": "task", "update_fn": lambda *args: 80}),
 ]
 
 
@@ -98,10 +99,7 @@ def test_grade_mutations_never_enroll_students(enrollment_database, state, metho
         assert storage.check_user_on_course("other_course", STUDENT) is True
 
 
-@pytest.mark.parametrize(
-    "method_name, kwargs",
-    MUTATIONS + [("store_score", {"task_name": "task", "update_fn": lambda *args: 80, "create_enrollment": False})],
-)
+@pytest.mark.parametrize("method_name, kwargs", MUTATIONS)
 def test_grade_mutations_update_existing_enrollment_under_lock(course_with_task, method_name, kwargs):
     storage, course = course_with_task
     initial_override = 4
@@ -153,24 +151,6 @@ def course_with_task(enrollment_database):
         session.add(Task(name="task", group=group, score=100, min_score=50))
         session.commit()
     return storage, config
-
-
-@pytest.mark.parametrize("create_enrollment", [False, True])
-def test_score_reports_can_enroll_but_table_edits_cannot(course_with_task, create_enrollment):
-    storage, course = course_with_task
-    score = 80
-
-    def store() -> int:
-        return storage.store_score(
-            course.course_name, STUDENT, "task", lambda *args: score, create_enrollment=create_enrollment
-        )
-
-    if create_enrollment:
-        assert store() == score
-    else:
-        with pytest.raises(NoResultFound):
-            store()
-    assert storage.check_user_on_course(course.course_name, STUDENT) is create_enrollment
 
 
 @pytest.fixture
@@ -239,3 +219,39 @@ def test_table_api_can_update_existing_enrollment(enrollment_client, enrollment_
     assert response.json["success"] is True
     if endpoint == "database/update":
         assert storage.get_scores(course.course_name, STUDENT) == {"task": 80}
+
+
+def _send_score_report(client, course: CourseConfig, username: str = STUDENT):
+    rms_id = "1001" if username == STUDENT else "9999"
+    rms_user = RmsUser(id=rms_id, username=username, name="Test User")
+    client.application.rms_api.get_rms_user_by_id.return_value = rms_user
+    return client.post(
+        f"/api/{course.course_name}/report",
+        headers={"Authorization": f"Bearer {course.token}"},
+        data={"user_id": rms_id, "task": "task", "score": "80", "check_deadline": "False"},
+    )
+
+
+@pytest.mark.parametrize("state", ["not_enrolled", "unknown", "other_course"])
+def test_checker_report_rejects_missing_enrollment(enrollment_client, enrollment_database, state):
+    storage, course = enrollment_database
+    username = _prepare_missing_enrollment(storage, course, state)
+    users_before = {user.username for user in storage.get_all_users()}
+    response = _send_score_report(enrollment_client, course, username)
+    assert response.status_code == HTTPStatus.NOT_FOUND, response.data
+    if state != "unknown":
+        assert response.json["message"] == "Student is not enrolled in this course"
+    else:
+        assert b"no registered user" in response.data
+    assert storage.check_user_on_course(course.course_name, STUDENT) is False
+    assert {user.username for user in storage.get_all_users()} == users_before
+    with storage._session_create() as session:
+        assert session.query(Grade).count() == 0
+
+
+def test_checker_report_updates_already_enrolled_student(enrollment_client, enrollment_database):
+    storage, course = enrollment_database
+    storage.sync_user_on_course(course.course_name, STUDENT, False)
+    response = _send_score_report(enrollment_client, course)
+    assert response.status_code == HTTPStatus.OK, response.data
+    assert response.json["score"] == storage.get_scores(course.course_name, STUDENT)["task"]

@@ -870,6 +870,8 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME, TEST_USERNAME, "not_exist_task", update_func(1)
@@ -915,6 +917,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 def test_store_score_solved_status(db_api_with_initialized_first_course, session) -> None:
     db_api = db_api_with_initialized_first_course
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
     task = session.query(Task).filter_by(name="task_0_0").one()
     task.min_score = 50
     task.is_large = True
@@ -946,6 +949,7 @@ def test_store_score_solved_status(db_api_with_initialized_first_course, session
 def test_database_solved_round_trip(db_api_with_initialized_first_course, session) -> None:
     db_api = db_api_with_initialized_first_course
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
     course = session.query(Course).one()
     course.status = CourseStatus.IN_PROGRESS
     task = session.query(Task).filter_by(name="task_0_0").one()
@@ -996,6 +1000,7 @@ def test_database_solved_round_trip(db_api_with_initialized_first_course, sessio
 def test_completion_flag_backfill(db_api_with_initialized_first_course, session) -> None:
     db_api = db_api_with_initialized_first_course
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
     old_scores = {"task_0_0": (50, False), "task_0_1": (49, False), "task_0_2": (0, True)}
     for task_name, (score, is_solved) in old_scores.items():
         session.query(Task).filter_by(name=task_name).one().min_score = 50
@@ -1023,6 +1028,8 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
 
     assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME, TEST_USERNAME, "bonus_score", update_func(1)
@@ -1046,6 +1053,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
 
     create_user(db_api_with_initialized_first_course)
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -1082,6 +1090,7 @@ def test_store_score_with_changed_task_name(
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(10))
 
@@ -1326,6 +1335,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_stats_ratio = 0.5
 
     create_user(db_api_with_initialized_first_course, STUDENT_1)
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_1.username, False)
 
     db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", update_func(1))
     db_api_with_initialized_first_course.store_score(
@@ -1333,6 +1343,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
     )
 
     create_user(db_api_with_initialized_first_course, STUDENT_2)
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_2.username, False)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -1364,6 +1375,8 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
     create_user(db_api_with_two_initialized_courses)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+    db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME, False)
 
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(30))
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, TEST_USERNAME, "task_1_3", update_func(40))
@@ -1403,7 +1416,11 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_stats_ratio = 0.5
 
     create_user(db_api_with_two_initialized_courses, STUDENT_1)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_1.username, False)
+    db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, STUDENT_1.username, False)
     create_user(db_api_with_two_initialized_courses, STUDENT_2)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_2.username, False)
+    db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, STUDENT_2.username, False)
 
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", update_func(1))
     db_api_with_two_initialized_courses.store_score(
@@ -1545,6 +1562,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     session.commit()
 
     create_user(db_api_with_two_initialized_courses)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     score = db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(1)
@@ -1556,6 +1574,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
     create_user(db_api_with_two_initialized_courses)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     def failing_update(_, score):
         raise ValueError("Update failed")
@@ -2343,8 +2362,8 @@ def test_constant_queries(  # noqa: PLR0913
     session.commit()
 
     create_user(db_api, STUDENT_1)
-    db_api.store_score(FIRST_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_1, True)
+    db_api.store_score(FIRST_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
 
     with query_counter(engine) as counter:
         method(**method_kwargs)
@@ -2357,15 +2376,15 @@ def test_constant_queries(  # noqa: PLR0913
     session.commit()
 
     # Register 1st student on 2nd course
-    db_api.store_score(SECOND_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_1, True)
+    db_api.store_score(SECOND_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
 
     # Setup 2nd student and register on both courses
     create_user(db_api, STUDENT_2)
-    db_api.store_score(FIRST_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_2, True)
-    db_api.store_score(SECOND_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
+    db_api.store_score(FIRST_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_2, True)
+    db_api.store_score(SECOND_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
 
     with query_counter(engine) as counter:
         method(**method_kwargs)
@@ -2402,7 +2421,9 @@ def test_store_score_marks_large_task_solved(
         first_course_grade_config,
     )
     create_user(db_api, STUDENT_1)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_1.username, False)
     create_user(db_api, STUDENT_2)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_2.username, False)
 
     # below min_score: not solved; regular tasks are never marked
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(20))
@@ -2437,6 +2458,7 @@ def test_store_score_marks_large_task_solved(
 def test_store_zero_score_does_not_mark_large_task_solved(db_api_with_initialized_first_course):
     db_api = db_api_with_initialized_first_course
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     # task_5_0 is large with min_score 0: zero score must not be remembered as solved
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(0))

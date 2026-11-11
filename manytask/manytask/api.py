@@ -558,7 +558,10 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
         allow_reduction=allow_reduction,
     )
-    final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
+    try:
+        final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
+    except NoResultFound:
+        return _student_not_enrolled_response()
 
     logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
 
@@ -785,7 +788,6 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
                     task_name=task_name,
                     update_fn=lambda _flags, _old_score: int(new_score),
                     is_solved=payload.new_solved.get(task_name),
-                    create_enrollment=False,
                 )
     except NoResultFound:
         return _student_not_enrolled_response()

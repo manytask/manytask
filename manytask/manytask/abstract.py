@@ -180,7 +180,6 @@ class StorageApi(ABC):
         update_fn: Callable[..., Any],
         *,
         is_solved: bool | None = None,
-        create_enrollment: bool = True,
     ) -> int: ...
 
     @abstractmethod
