@@ -6,7 +6,7 @@ from typing import Any
 from flask import Flask, jsonify, make_response, render_template, request
 from flask.typing import ResponseReturnValue
 
-READ_ONLY_MESSAGE = "Manytask is read-only. Scores and settings cannot be changed."
+READ_ONLY_MESSAGE = "This instance of Manytask is read-only. Scores and settings cannot be changed."
 
 
 class ReadOnlyModeError(Exception):
