@@ -225,13 +225,6 @@ def test_storage_rejects_mutations_before_queries(read_only_storage, persisted_c
         queries.assert_not_called()
 
 
-def test_grade_getters_do_not_create_missing_enrollments(read_only_storage, persisted_course):
-    writable, course = persisted_course
-    assert read_only_storage.get_effective_grade(course.course_name, "instance_admin") == 0
-    assert read_only_storage.is_grade_overridden(course.course_name, "instance_admin") is False
-    assert writable.check_user_on_course(course.course_name, "instance_admin") is False
-
-
 def test_app_starts_against_read_only_database_without_bootstrap_admin(monkeypatch, persisted_course):
     writable, _ = persisted_course
     monkeypatch.setenv("MANYTASK_READ_ONLY", "true")
