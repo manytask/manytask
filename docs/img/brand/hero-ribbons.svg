@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 520" fill="none">
+  <!-- Three straight ribbons, with colour changes at their intersections. -->
+  <defs>
+    <path id="ribbon-gold" d="M-200 -300L840 740"/>
+    <path id="ribbon-teal" d="M-200 820L840 -220"/>
+    <path id="ribbon-coral" d="M510 -200V760"/>
+    <mask id="gold-crossing" maskUnits="userSpaceOnUse" x="-80" y="-80" width="800" height="680">
+      <use href="#ribbon-gold" stroke="white" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+    <mask id="coral-crossing" maskUnits="userSpaceOnUse" x="-80" y="-80" width="800" height="680">
+      <use href="#ribbon-coral" stroke="white" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g stroke-width="76" stroke-linecap="round" stroke-linejoin="round">
+    <use href="#ribbon-coral" stroke="#F4717D"/>
+    <use href="#ribbon-gold" stroke="#FFCB77"/>
+    <use href="#ribbon-teal" stroke="#17C3B2"/>
+    <use href="#ribbon-teal" stroke="#33879E" mask="url(#gold-crossing)"/>
+    <use href="#ribbon-teal" stroke="#FFCB77" mask="url(#coral-crossing)"/>
+    <use href="#ribbon-gold" stroke="#17C3B2" mask="url(#coral-crossing)"/>
+  </g>
+</svg>
