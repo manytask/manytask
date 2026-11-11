@@ -566,6 +566,7 @@ class DataBaseApi(StorageApi):
         update_fn: Callable[..., Any],
         *,
         is_solved: bool | None = None,
+        create_enrollment: bool = True,
     ) -> int:
         """Method for storing user's task score
 
@@ -574,6 +575,7 @@ class DataBaseApi(StorageApi):
         :param task_name: task name
         :param update_fn: function for updating the score
         :param is_solved: explicit solved status; otherwise preserve completion earned by large tasks
+        :param create_enrollment: allow score reports to enroll an existing user; disable for table edits
 
         :return: saved score
         """
@@ -584,8 +586,11 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
-                session.commit()
+                if create_enrollment:
+                    user_on_course = self._get_or_create_user_on_course(session, username, course)
+                    session.commit()
+                else:
+                    user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 try:
                     task = self._get_task_by_name_and_course_id(session, task_name, course.id)
@@ -1643,9 +1648,15 @@ class DataBaseApi(StorageApi):
         except DuplicateTable:  # if tables are created concurrently
             pass
 
-    def _get_user_on_course(self, session: Session, username: str, course: models.Course) -> models.UserOnCourse:
+    def _get_user_on_course(
+        self, session: Session, username: str, course: models.Course, *, for_update: bool = False
+    ) -> models.UserOnCourse:
+        """Fetch an existing enrollment; optionally lock it before changing its fields."""
         user = self._get(session, models.User, username=username)
-        return self._get(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
+        query = session.query(models.UserOnCourse).filter_by(user_id=user.id, course_id=course.id)
+        if for_update:
+            query = query.with_for_update()
+        return query.one()
 
     def _get_or_create_user_on_course(
         self, session: Session, username: str, course: models.Course
@@ -2026,7 +2037,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 user_on_course.comment = comment
                 session.commit()
@@ -2625,7 +2636,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
                 grades_config = DataBaseApi._build_grades_config(course)
 
                 final_grade = calculate_effective_grade(
@@ -2769,7 +2780,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 user_on_course.final_grade_override = new_grade
                 session.commit()
@@ -2788,7 +2799,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 user_on_course.final_grade_override = None
                 session.commit()
