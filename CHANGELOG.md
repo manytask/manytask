@@ -1,5 +1,15 @@
 # Changelog
 
+## [26.2.1](https://github.com/manytask/manytask/releases/tag/26.2.1) - 2026-11-12
+
+This patch release fixes course registration and repository recovery for GitLab users who already have access through a parent group.
+
+### Fixes
+
+- Respect existing and inherited GitLab roles when granting access to student and public course repositories. Skip adding Developer or Reporter membership when the user's effective role is already sufficient, allowing namespace administrators to join courses and recover repositories ([#1227](https://github.com/manytask/manytask/pull/1227)).
+
+**Full Changelog**: [26.2.0...26.2.1](https://github.com/manytask/manytask/compare/26.2.0...26.2.1)
+
 ## [26.2.0](https://github.com/manytask/manytask/releases/tag/26.2.0) - 2026-11-11
 
 This release adds manual task completion editing, safe cleanup of unused courses and namespaces, checker task detection across all commits in a push, and CUDA testing options. It also improves administration, SourceCraft repository recovery, and checker error reporting, and refreshes the landing and documentation pages.
