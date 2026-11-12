@@ -73,6 +73,11 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
     return course
 
 
+def _student_not_enrolled_response() -> ResponseReturnValue:
+    message = "Student is not enrolled in this course"
+    return jsonify(success=False, message=message, error=message), HTTPStatus.NOT_FOUND
+
+
 def _get_stored_user_or_not_found(storage_api: StorageApi, rms_id: str) -> StoredUser:
     stored_user = storage_api.get_stored_user_by_rms_id(rms_id)
     if stored_user is None:
@@ -553,7 +558,10 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
         allow_reduction=allow_reduction,
     )
-    final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
+    try:
+        final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
+    except NoResultFound:
+        return _student_not_enrolled_response()
 
     logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
 
@@ -781,6 +789,8 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
                     update_fn=lambda _flags, _old_score: int(new_score),
                     is_solved=payload.new_solved.get(task_name),
                 )
+    except NoResultFound:
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error updating database: %s", str(e))
         return jsonify(
@@ -813,6 +823,8 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
             }
         ), HTTPStatus.OK
 
+    except (NoResultFound, StopIteration):
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error calculating grade: %s", str(e))
         return jsonify(
@@ -858,6 +870,8 @@ def update_comment(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully updated comment for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK
 
+    except NoResultFound:
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error updating comment: %s", str(e))
         return jsonify(
@@ -1717,6 +1731,8 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully set grade override for user=%s to %d", sanitize_log_data(username), new_grade)
         return jsonify({"success": True}), HTTPStatus.OK
 
+    except NoResultFound:
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error overriding grade: %s", str(e))
         return jsonify(
@@ -1767,6 +1783,8 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully cleared grade override for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK
 
+    except NoResultFound:
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error clearing grade override: %s", str(e))
         return jsonify(
