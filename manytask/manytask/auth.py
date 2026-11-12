@@ -12,6 +12,7 @@ from werkzeug import Response
 from manytask.abstract import AuthenticatedUser, ClientProfile, StoredUser
 from manytask.course import Course, CourseStatus
 from manytask.main import CustomFlask
+from manytask.read_only import is_read_only
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,10 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         if not handle_course_membership(app, course, username):
             logger.info("User %s is not enrolled in course %s", username, course.course_name)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
+
+        # Viewing stored course data must not sync membership or require RMS repairs.
+        if is_read_only(app):
+            return f(*args, **kwargs)
 
         if not app.rms_api.check_project_exists(
             project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group

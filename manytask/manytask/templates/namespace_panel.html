@@ -25,7 +25,7 @@
 
         <div class="action-group mb-4">
             <h3><i class="fas fa-cog me-2"></i>Namespace Settings</h3>
-            <form id="namespaceSettingsForm"
+            <form data-read-only-action id="namespaceSettingsForm"
                   data-update-url="{{ url_for('namespace_api.update_namespace', namespace_id=namespace.id) }}">
                 <div class="mb-3">
                     <label for="namespaceName" class="form-label">Name *</label>
@@ -52,7 +52,7 @@
                         <h5 class="modal-title" id="deleteNamespaceTitle">Delete Namespace</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <form id="deleteNamespaceForm"
+                    <form data-read-only-action id="deleteNamespaceForm"
                           data-delete-url="{{ url_for('namespace_api.delete_namespace', namespace_id=namespace.id) }}"
                           data-redirect-url="{{ url_for('root.index') }}">
                         <div class="modal-body">
@@ -200,7 +200,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="addUserForm">
+                    <form data-read-only-action id="addUserForm">
                         <div class="mb-3">
                             <label for="userToAdd" class="form-label">Select user *</label>
                             <div class="search-box mb-3">

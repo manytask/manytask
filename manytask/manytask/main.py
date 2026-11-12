@@ -18,6 +18,7 @@ from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
+from .read_only import install_read_only_mode, is_read_only, require_writable
 from .utils.rms_settings import schedule_rms_settings_reconcile
 
 MAX_AGE_IN_SECONDS = 86400
@@ -93,6 +94,7 @@ class CustomFlask(Flask):
         return _CREATE_COURSE_LABELS.get(self.app_config.rms, _CREATE_COURSE_LABELS["gitlab"])
 
     def store_config(self, course_name: str, content: dict[str, Any]) -> None:
+        require_writable(is_read_only(self))
         manytask_config = config.ManytaskConfig(**content)
 
         # Update course settings
@@ -115,12 +117,13 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         app.debug = debug
 
     _create_app_config(app, debug, test)
+    install_read_only_mode(app)
 
     # logging
     logging.config.dictConfig(_logging_config(app))
 
     # api objects
-    app.storage_api = _database_storage_setup()
+    app.storage_api = _database_storage_setup(read_only=app.app_config.read_only)
 
     rms = app.app_config.rms
 
@@ -212,7 +215,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     logger = logging.getLogger(__name__)
 
     # debug updates
-    if app.debug:
+    if app.debug and not is_read_only(app):
         _create_debug_course(app)
 
         app.store_config("python2025", _load_common_example_course_yaml())
@@ -239,7 +242,7 @@ def _create_debug_course(app: CustomFlask) -> None:
     app.storage_api.create_course(course_config)
 
 
-def _database_storage_setup() -> abstract.StorageApi:
+def _database_storage_setup(*, read_only: bool = False) -> abstract.StorageApi:
     database_url = os.environ.get("DATABASE_URL", None)
     apply_migrations = os.environ.get("APPLY_MIGRATIONS", "false").lower() in (
         "true",
@@ -251,14 +254,15 @@ def _database_storage_setup() -> abstract.StorageApi:
 
     instance_admin_username = os.environ.get("INITIAL_INSTANCE_ADMIN", None)
 
-    if instance_admin_username is None:
+    if instance_admin_username is None and not read_only:
         raise EnvironmentError("Unable to find INITIAL_INSTANCE_ADMIN env")
 
     storage_api = database.DataBaseApi(
         database.DatabaseConfig(
             database_url=database_url,
-            instance_admin_username=instance_admin_username,
+            instance_admin_username=instance_admin_username or "",
             apply_migrations=apply_migrations,
+            read_only=read_only,
         )
     )
     return storage_api
@@ -336,6 +340,7 @@ def _create_app_config(app: CustomFlask, debug: bool | None, test: bool) -> None
         app.app_config = local_config.TestConfig()
     else:
         app.app_config = local_config.LocalConfig.from_env()  # read config from env
+    app.config["MANYTASK_READ_ONLY"] = app.app_config.read_only
     app.testing = os.environ.get("TESTING", test)
     if "FLASK_SECRET_KEY" not in os.environ and not debug:
         raise EnvironmentError("Unable to find FLASK_SECRET_KEY env in production mode")

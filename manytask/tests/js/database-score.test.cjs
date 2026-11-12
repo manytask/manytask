@@ -10,10 +10,10 @@ const source = template.slice(template.indexOf('let currentEditCell'), template.
     .replace('{{ is_course_admin|tojson }}', 'true')
     .replace('{{ url_for("api.update_database", course_name=course_name) }}', '/database/update');
 
-function load() {
+function load({readOnly = false} = {}) {
     const elements = {scoreInput: {value: ''}, isSolvedInput: {checked: false}, editModalLabel: {textContent: ''}};
     const requests = [];
-    const modal = {show() {}, hide() { this.hidden = true; }, _element: {addEventListener() {}}};
+    const modal = {show() { this.shown = true; }, hide() { this.hidden = true; }, _element: {addEventListener() {}}};
     const harness = vm.createContext({
         document: {getElementById: id => elements[id]},
         modal,
@@ -30,7 +30,8 @@ function load() {
             })};
         },
     });
-    vm.runInContext(source + '\neditModal = modal;', harness);
+    vm.runInContext(source.replace('{{ read_only|default(false)|tojson }}', JSON.stringify(readOnly))
+        + '\neditModal = modal;', harness);
     let data = {username: 'alice', scores: {task1: 0}, solved: {task1: true}};
     const cellElement = {style: {}};
     let reformatted = false;
@@ -64,6 +65,14 @@ test('opening the score editor reads the stored flag and resets the checkbox for
     delete row.getData().solved;
     harness.editCell(cell);
     assert.equal(elements.isSolvedInput.checked, false);
+});
+
+test('read-only mode prevents admins from opening the score editor', () => {
+    const {harness, elements, cell, modal, requests} = load({readOnly: true});
+    harness.editCell(cell);
+    assert.equal(modal.shown, undefined);
+    assert.equal(elements.scoreInput.value, '');
+    assert.deepEqual(requests, []);
 });
 
 test('bold styling follows solved status even at zero points and is removed when cleared', () => {

@@ -5,6 +5,7 @@ import threading
 from dataclasses import dataclass, field
 
 from manytask.abstract import RmsApi, StorageApi
+from manytask.read_only import require_writable
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ def reconcile_course_rms_settings(storage_api: StorageApi, rms_api: RmsApi, cour
 
     Clears the course's rms_settings_pending flag if (and only if) every project succeeded.
     """
+    require_writable(getattr(storage_api, "read_only", False) is True)
     course = storage_api.get_course(course_name)
     if course is None:
         raise ValueError(f"Course {course_name} not found")
@@ -78,6 +80,7 @@ def schedule_rms_settings_reconcile(storage_api: StorageApi, rms_api: RmsApi, co
 
     :returns: whether a new pass was started
     """
+    require_writable(getattr(storage_api, "read_only", False) is True)
     with _courses_in_progress_lock:
         if course_name in _courses_in_progress:
             logger.info("RMS settings reconcile already running for course=%s, skipping", course_name)

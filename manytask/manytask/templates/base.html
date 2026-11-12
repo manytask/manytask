@@ -110,8 +110,13 @@
     {% block additional_styles %}{% endblock %}
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
+    {% if read_only %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/read-only.css') }}">
+        <script src="{{ url_for('static', filename='js/read-only.js') }}" defer></script>
+    {% endif %}
 </head>
 <body>
+    {% block read_only_notice %}{% include "_read_only_banner.html" %}{% endblock %}
     {% block body %}
     {% endblock %}
     {% if cache_time %}

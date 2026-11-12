@@ -47,7 +47,7 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <form id="editForm">
+                            <form data-read-only-action id="editForm">
                                 <div class="mb-3">
                                     <label for="scoreInput" class="form-label">Score</label>
                                     <input type="number" class="form-control" id="scoreInput">
@@ -74,7 +74,7 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <form id="editCommentForm">
+                            <form data-read-only-action id="editCommentForm">
                                 <div class="mb-3">
                                     <label class="form-label">Comment for <span id="commentStudentName"></span></label>
                                     <textarea class="form-control" id="commentInput" rows="3" placeholder="Enter comment..."></textarea>
@@ -97,7 +97,7 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <form id="editGradeForm">
+                            <form data-read-only-action id="editGradeForm">
                                 <div class="mb-3">
                                     <label class="form-label">Student: <strong><span id="gradeStudentName"></span></strong></label>
                                 </div>
@@ -157,7 +157,7 @@
                 return;
             }
 
-            const isAdmin = {{ is_course_admin|tojson }};
+            const isAdmin = {{ is_course_admin|tojson }} && !{{ read_only|default(false)|tojson }};
             if (!isAdmin) {
                 return;
             }
@@ -229,7 +229,7 @@
         }
 
         function editComment(cell) {
-            const isAdmin = {{ is_course_admin|tojson }};
+            const isAdmin = {{ is_course_admin|tojson }} && !{{ read_only|default(false)|tojson }};
             if (!isAdmin) {
                 return;
             }
@@ -292,7 +292,7 @@
         }
 
         function editGrade(cell) {
-            const isAdmin = {{ is_course_admin|tojson }};
+            const isAdmin = {{ is_course_admin|tojson }} && !{{ read_only|default(false)|tojson }};
             if (!isAdmin) {
                 return;
             }
@@ -546,12 +546,12 @@
                                     const cellElement = cell.getElement();
                                     cellElement.classList.add('grade-override-cell');
                                     cellElement.title = "Grade manually set by administrator";
-                                    {% if is_course_admin %}
+                                    {% if is_course_admin and not read_only %}
                                     cellElement.classList.add('grade-cell-clickable');
                                     {% endif %}
                                     return grade + " *";
                                 } else {
-                                    {% if is_course_admin %}
+                                    {% if is_course_admin and not read_only %}
                                     cell.getElement().classList.add('grade-cell-clickable');
                                     {% endif %}
                                     return grade;
@@ -817,6 +817,9 @@
                                 try {
                                     const isAdmin = {{ is_course_admin|tojson }};
                                     const field = cell.getField();
+                                    if ({{ read_only|default(false)|tojson }} && field !== "username" && field !== "total_score") {
+                                        return {{ read_only_message|default('')|tojson }};
+                                    }
                                     if (!isAdmin && field !== "username" && field !== "total_score") {
                                         return "Only course admins can edit scores";
                                     }

@@ -19,7 +19,7 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}" class="needs-validation" novalidate>
+    <form data-read-only-action method="POST" action="{{ url_for('instance_admin.edit_course', course_name=course.course_name) }}" class="needs-validation" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row">
             <div class="col-md-6 mb-4">
@@ -191,7 +191,7 @@
 <div class="modal fade" id="deleteCourseModal" tabindex="-1" aria-labelledby="deleteCourseModalLabel"
      aria-hidden="true">
     <div class="modal-dialog">
-        <form id="deleteCourseForm" class="modal-content" method="POST"
+        <form data-read-only-action id="deleteCourseForm" class="modal-content" method="POST"
               action="{{ url_for('instance_admin.delete_course', course_name=course.course_name) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="modal-header">
@@ -437,7 +437,7 @@
                     return ACCESS_ORDER
                         .filter(level => levels.includes(level))
                         .map(level => {
-                            if (level === 'course_admin') {
+                            if (level === 'course_admin' && !{{ read_only|default(false)|tojson }}) {
                                 const username = row.getData().username;
                                 return `<span class="badge ${ACCESS_BADGES[level]} me-1">`
                                     + `${ACCESS_LABELS[level]}`

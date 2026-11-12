@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -31,6 +31,9 @@ class LocalConfig:
     yandex_id_oauth_base: str
 
     disable_signup: bool
+    read_only: bool = field(
+        default_factory=lambda: os.environ.get("MANYTASK_READ_ONLY", "false").lower() in ("true", "1", "yes")
+    )
 
     @classmethod
     def from_env(cls) -> LocalConfig:

@@ -1,0 +1,22 @@
+body {
+    flex-direction: column;
+}
+
+#read-only-banner {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    flex-shrink: 0;
+    width: 100%;
+    border-radius: 0;
+    text-align: center;
+}
+
+#course-header #read-only-banner {
+    position: static;
+}
+
+/* Keep floating user menus and notifications below the notice on pages without a navbar. */
+body > .position-fixed.top-0 {
+    top: var(--read-only-banner-offset, 0px) !important;
+}

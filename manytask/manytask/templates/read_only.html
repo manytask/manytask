@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Manytask is read-only{% endblock %}
+{% block body %}
+    <main class="container py-5 text-center">
+        <h1>Manytask is read-only</h1>
+        <p>{{ read_only_message }}</p>
+        <p>No changes were saved. Existing courses and scores are still available to view.</p>
+        <a class="btn btn-primary" href="{{ url_for('root.index') }}">View courses</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('root.login') }}">Log in</a>
+    </main>
+{% endblock %}

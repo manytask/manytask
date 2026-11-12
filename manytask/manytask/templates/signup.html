@@ -15,7 +15,7 @@
             <br>
 
 
-            <form method="post">
+            <form data-read-only-action method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 {% if error_message %}
                     <div class="alert alert-danger" role="alert">
