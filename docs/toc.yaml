@@ -4,9 +4,9 @@ navigation:
   logo:
     url: ./index.html
     dark:
-      icon: ./img/ManytaskTextFullDark.png
+      icon: ./img/brand/manytask-full-dark.svg
     light:
-      icon: ./img/ManytaskTextFull.png
+      icon: ./img/brand/manytask-full.svg
   header:
     leftItems:
       - type: link

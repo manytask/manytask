@@ -97,15 +97,6 @@ The following plugins are available out of the box, here is the list with their 
 
     > ::: checker.plugins.manytask.ManytaskPlugin.Args
 
-* `check_gitlab_merge_request` - [WIP] check gitlab MR is valid (no conflicts, no extra files, has label etc.)
-
-    > ::: checker.plugins.gitlab.CheckGitlabMergeRequestPlugin.Args
-
-* `collect_score_gitlab_merge_request` - [WIP] search for score by tutor in gitlab MR comment    
-
-    > ::: checker.plugins.gitlab.CollectScoreGitlabMergeRequestPlugin.Args
-
-
 ### How to write a custom plugin
 
 To write a custom plugin you need to create a class inheriting from `checker.plugins.PluginABC` and override `_run` method, `Args` inner class and set `name` class attribute.

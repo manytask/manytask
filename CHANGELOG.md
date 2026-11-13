@@ -1,5 +1,71 @@
 # Changelog
 
+## [26.2.1](https://github.com/manytask/manytask/releases/tag/26.2.1) - 2026-11-12
+
+This patch release fixes course registration and repository recovery for GitLab users who already have access through a parent group.
+
+### Fixes
+
+- Respect existing and inherited GitLab roles when granting access to student and public course repositories. Skip adding Developer or Reporter membership when the user's effective role is already sufficient, allowing namespace administrators to join courses and recover repositories ([#1227](https://github.com/manytask/manytask/pull/1227)).
+
+**Full Changelog**: [26.2.0...26.2.1](https://github.com/manytask/manytask/compare/26.2.0...26.2.1)
+
+## [26.2.0](https://github.com/manytask/manytask/releases/tag/26.2.0) - 2026-11-11
+
+This release adds manual task completion editing, safe cleanup of unused courses and namespaces, checker task detection across all commits in a push, and CUDA testing options. It also improves administration, SourceCraft repository recovery, and checker error reporting, and refreshes the landing and documentation pages.
+
+### Features
+
+- Edit task completion with an **Is solved** checkbox in the score modal, highlight solved scores, and recalculate large-task counts and grades from saved completion flags ([#1202](https://github.com/manytask/manytask/pull/1202)).
+- Delete courses with no registrations and delete empty namespaces, with logging for successful deletions. Course deletion leaves RMS repositories and groups intact ([#1192](https://github.com/manytask/manytask/pull/1192), [#1193](https://github.com/manytask/manytask/pull/1193), [#1206](https://github.com/manytask/manytask/pull/1206)).
+- Detect tasks from all commit messages in a push when commit-message selection is enabled, deduplicate the task list, and grade each selected task once at the final revision. The course template fetches full Git history for this mode ([#1219](https://github.com/manytask/manytask/pull/1219)).
+- Add optional CUDA Compute Sanitizer checks for C++ tests and environment-variable whitelists for C++ tests and benchmarks, including `CUDA_VISIBLE_DEVICES` ([#1200](https://github.com/manytask/manytask/pull/1200)).
+
+### Fixes
+
+- Validate course repository paths correctly when namespaces contain subgroups ([#1160](https://github.com/manytask/manytask/pull/1160)).
+- Recover SourceCraft repository access after slug conflicts ([#1205](https://github.com/manytask/manytask/pull/1205)).
+- Derive namespace administrator rights from assigned roles, so creating a namespace no longer grants permanent administrator access after the role is removed ([#1215](https://github.com/manytask/manytask/pull/1215)).
+- Explain course administrator eligibility when no enrolled users can be selected, link to course registration, and disable granting rights until an eligible user exists ([#1216](https://github.com/manytask/manytask/pull/1216)).
+- Apply the saved theme before rendering the page to prevent a white flash in dark mode ([#1221](https://github.com/manytask/manytask/pull/1221)).
+- Show script timeout reasons in normal checker output, including partial script output, without requiring verbose mode ([#1218](https://github.com/manytask/manytask/pull/1218)).
+
+### Other changes
+
+- Fix documentation build warnings and update Authlib, pylint, and CI setup ([#1198](https://github.com/manytask/manytask/pull/1198), [#1201](https://github.com/manytask/manytask/pull/1201), [#1203](https://github.com/manytask/manytask/pull/1203), [#1204](https://github.com/manytask/manytask/pull/1204)).
+- Mention GitLab and SourceCraft integration on the documentation landing page ([#1207](https://github.com/manytask/manytask/pull/1207)).
+- Redesign the landing and documentation pages with Manytask branding, local fonts, responsive feature panels, and a course-as-code introduction ([#1223](https://github.com/manytask/manytask/pull/1223)).
+- Pin Diplodoc 5.64.0 across documentation builds and update its installation requirements ([#1211](https://github.com/manytask/manytask/pull/1211)).
+- Remove unused code and unfinished merge-request checker plugins, and simplify MR reviewer internals ([#1220](https://github.com/manytask/manytask/pull/1220)).
+
+**Upgrade note:** Apply database migrations before running the updated web app. Migration `d2e3f4a5b6c7` initializes completion flags for existing scores that meet the task's current `min_score`; downgrading preserves completion flags, including manual decisions.
+
+For commit-message task selection in existing courses, set `GIT_DEPTH: "0"` in the course CI configuration so the checker can read all commits in a push. Namespace creators who need administrator access must have the namespace administrator role assigned.
+
+**Full Changelog**: [26.1.1...26.2.0](https://github.com/manytask/manytask/compare/26.1.1...26.2.0)
+
+## [26.1.1](https://github.com/manytask/manytask/releases/tag/26.1.1) - 2026-10-30
+
+This release restores single-task checker compatibility, improves course creation and repository recovery, and preserves completion of large tasks when score thresholds change.
+
+### Features
+
+- Keep large tasks solved once their score reaches the applicable threshold, even if `min_score` later changes ([#1199](https://github.com/manytask/manytask/pull/1199)).
+- Add a documentation container to the local development startup script ([#1197](https://github.com/manytask/manytask/pull/1197)).
+
+### Fixes
+
+- Restore structure-based file merging for `.task.yml` while keeping `parameters.allow_change` available to course pipelines; restrict automatic editable-file preparation to `.tasks.yml` ([#1189](https://github.com/manytask/manytask/pull/1189)).
+- Install timezone data with the checker so deadline handling works without a system timezone database ([#1191](https://github.com/manytask/manytask/pull/1191)).
+- Preserve reused resources when course creation fails and recover incomplete course repository access ([#1185](https://github.com/manytask/manytask/pull/1185), [#1186](https://github.com/manytask/manytask/pull/1186)).
+- Improve namespace creation defaults and validation errors, and make administrator names more visible in the score table ([#1194](https://github.com/manytask/manytask/pull/1194), [#1195](https://github.com/manytask/manytask/pull/1195)).
+
+### Other changes
+
+- Update certifi, uv dependencies, and CI setup ([#1187](https://github.com/manytask/manytask/pull/1187), [#1188](https://github.com/manytask/manytask/pull/1188), [#1190](https://github.com/manytask/manytask/pull/1190)).
+
+**Full Changelog**: [26.1.0...26.1.1](https://github.com/manytask/manytask/compare/26.1.0...26.1.1)
+
 ## [26.1.0](https://github.com/manytask/manytask/releases/tag/26.1.0) - 2026-10-23
 
 This release adds support for several tasks in one folder, makes course and namespace administration more convenient, and improves checker reliability.

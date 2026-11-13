@@ -885,6 +885,16 @@ class GitLabApi(RmsApi, AuthApi):
             (course_public_project, gitlab.const.AccessLevel.REPORTER),
         ):
             try:
+                existing_member = target.members_all.get(user_id)
+            except GitlabGetError as ex:
+                if ex.response_code != HTTPStatus.NOT_FOUND:
+                    raise
+            else:
+                # Effective membership includes access inherited from parent groups.
+                if existing_member.access_level >= access_level:
+                    continue
+
+            try:
                 target.members.create({"user_id": user_id, "access_level": access_level})
                 logger.info(
                     "Access %s granted on %s for user=%s", access_level, target.path_with_namespace, rms_user.username
