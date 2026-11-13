@@ -86,6 +86,7 @@ def test_create_course_provisions_selected_private_template(app, mock_gitlab_oau
         app.test_client() as client,
         patch("manytask.web.validate_csrf"),
         patch("manytask.web.check_course_creation_namespace_permission", return_value=(None, None, None, None)),
+        patch.object(app.storage_api, "get_course_id_by_name", return_value=None, create=True),
         patch.object(app.storage_api, "create_course", return_value=True, create=True) as create_course,
     ):
         set_session(client, build_test_session(include_manytask=True))

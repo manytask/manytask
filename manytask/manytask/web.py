@@ -745,7 +745,6 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
         private_repo_path = private_repo_full_path.removeprefix(f"{gitlab_course_group_full_path}/")
-        course_token = request.form["token"]
 
         conflict = get_course_creation_conflict(app.storage_api, course_name, gitlab_course_group_full_path)
         if conflict is not None:
@@ -757,6 +756,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 labels=app.create_course_labels,
             )
 
+        course_token = request.form["token"]
         try:
             logger.info(
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
