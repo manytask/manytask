@@ -7,6 +7,7 @@ from typing import Any
 
 import git
 import pytest
+import yaml
 
 from checker.configs import CheckerTestingConfig
 from checker.configs.manytask import ManytaskConfig
@@ -132,6 +133,34 @@ def git_init_repository_root(repository_root: Path) -> Path:
     return repository_root
 
 
+@pytest.fixture()
+def overlapping_names_course(git_init_repository_root: Path) -> Course:
+    groups = {
+        "sql": ["sql"],
+        "sql-engine": ["sql-1-ddl", "sql-2-expr"],
+        "sql-engine-2": ["sql-5-sort"],
+        "btree": ["btree-1-layout", "btree-2-insert-lookup"],
+        "parsers": ["calc", "cpp++"],
+    }
+    config = TEST_MANYTASK_CONFIG.model_dump(by_alias=True)
+    config["deadlines"]["schedule"] = [
+        {
+            "group": group,
+            "start": "2020-10-10 00:00:00",
+            "end": "200d",
+            "enabled": True,
+            "tasks": [{"task": name, "score": 100} for name in names],
+        }
+        for group, names in groups.items()
+    ]
+    for names in groups.values():
+        for name in names:
+            folder = git_init_repository_root / name
+            folder.mkdir()
+            (folder / ".task.yml").write_text("version: 1\n")
+    return Course(ManytaskConfig.model_validate(config), git_init_repository_root)
+
+
 class TestCourse:
     def test_init(self, repository_root: Path) -> None:
         test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
@@ -161,6 +190,104 @@ class TestCourse:
             assert isinstance(task, FileSystemTask)
             assert (repository_root / task.relative_path).exists()
 
+    def test_tasks_in_one_file_share_folder(self, repository_root: Path) -> None:
+        shared = repository_root / "group1" / "shared"
+        shared.mkdir()
+        for name in ("task1_1", "task1_2"):
+            (repository_root / "group1" / name / ".task.yml").unlink()
+        (shared / ".tasks.yml").write_text(
+            yaml.safe_dump(
+                {
+                    "version": 1,
+                    "tasks": {
+                        name: {
+                            "parameters": {
+                                "solution": f"{name}.py",
+                                "allow_change": [f"{name}.py"],
+                            },
+                        }
+                        for name in ("task1_1", "task1_2")
+                    },
+                }
+            )
+        )
+
+        course = Course(TEST_MANYTASK_CONFIG, repository_root)
+        course.validate()
+        tasks = [
+            task for task in course.get_tasks() if task.name in ("task1_1", "task1_2")
+        ]
+        assert {task.name for task in tasks} == {"task1_1", "task1_2"}
+        for task in tasks:
+            assert task.relative_path == "group1/shared"
+            assert task.config.parameters is not None
+            assert task.config.parameters["allow_change"] == [f"{task.name}.py"]
+            assert task.config.parameters["solution"] == f"{task.name}.py"
+            group = course.get_group_for_task(task.name)
+            assert group is not None and group.name == "group1"
+
+    @pytest.mark.parametrize("content", ["", " \n \n", "version: 1"])
+    def test_named_and_legacy_tasks_coexist(
+        self, repository_root: Path, content: str
+    ) -> None:
+        (repository_root / "root_task_1" / ".task.yml").write_text(content)
+        (repository_root / ".tasks.yml").write_text(
+            "version: 1\ntasks:\n  extra: {}\n  root: {}\n"
+        )
+
+        tasks = Course(TEST_MANYTASK_CONFIG, repository_root).potential_tasks
+        assert tasks["root_task_1"].relative_path == "root_task_1"
+        assert tasks["root"].relative_path == tasks["extra"].relative_path == "."
+        assert repository_root.name not in tasks
+
+    @pytest.mark.parametrize(
+        "relative_path, content",
+        [
+            ("group2/.tasks.yml", "version: 1\ntasks:\n  task1_1: {}\n"),
+            ("group2/task1_1/.task.yml", ""),
+        ],
+    )
+    def test_duplicate_task_names_rejected(
+        self, repository_root: Path, relative_path: str, content: str
+    ) -> None:
+        config_path = repository_root / relative_path
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(content)
+        with pytest.raises(BadConfig, match="Duplicate task name 'task1_1'"):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
+    def test_named_config_files_are_not_discovered(self, repository_root: Path) -> None:
+        (repository_root / ".task.extra.yml").write_text("version: 1")
+        assert (
+            "extra" not in Course(TEST_MANYTASK_CONFIG, repository_root).potential_tasks
+        )
+
+    @pytest.mark.parametrize(
+        "filename, content",
+        [
+            (".task.yml", "version: 1\ntasks:\n  parse: {}\n"),
+            (".tasks.yml", ""),
+            (".tasks.yml", "version: 1\n"),
+        ],
+    )
+    def test_task_filename_requires_matching_format(
+        self, repository_root: Path, filename: str, content: str
+    ) -> None:
+        (repository_root / filename).write_text(content)
+        with pytest.raises(
+            BadConfig, match="Use .tasks.yml|Field required|validation error"
+        ):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
+    def test_single_and_plural_files_cannot_share_folder(
+        self, repository_root: Path
+    ) -> None:
+        (repository_root / "root_task_1/.tasks.yml").write_text(
+            "version: 1\ntasks:\n  extra: {}\n"
+        )
+        with pytest.raises(BadConfig, match="contains both .task.yml and .tasks.yml"):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
+
     def test_validate_missing_task(self, repository_root: Path) -> None:
         shutil.rmtree(repository_root / "group1" / "task1_1")
         with pytest.raises(BadConfig):
@@ -177,6 +304,36 @@ class TestCourse:
 
         with pytest.raises(BadConfig):
             Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
+
+    @pytest.mark.parametrize("marker", [".task.yml", ".group.yml"])
+    @pytest.mark.parametrize(
+        "content", ["", " \n \n", "version: 1\nparameters:\n  timeout: 12\n"]
+    )
+    def test_sub_config_loading_preserves_empty_and_nonempty_files(
+        self, repository_root: Path, marker: str, content: str
+    ) -> None:
+        folder = repository_root / "group1"
+        if marker == ".task.yml":
+            folder /= "task1_1"
+        (folder / marker).write_text(content)
+        course = Course(TEST_MANYTASK_CONFIG, repository_root)
+        config = (
+            course.potential_tasks["task1_1"].config
+            if marker == ".task.yml"
+            else course.potential_groups["group1"].config
+        )
+        assert (config.parameters["timeout"] if config.parameters else None) == (
+            12 if content.startswith("version") else None
+        )
+
+    @pytest.mark.parametrize("marker", [".task.yml", ".group.yml"])
+    def test_null_sub_configs_remain_invalid(
+        self, repository_root: Path, marker: str
+    ) -> None:
+        folder = repository_root / "group1"
+        (folder / marker).write_text("null\n")
+        with pytest.raises(BadConfig):
+            Course(TEST_MANYTASK_CONFIG, repository_root)
 
     @pytest.mark.parametrize(
         "enabled, expected_num_groups",
@@ -222,6 +379,64 @@ class TestCourse:
     def test_get_group_for_task_not_found(self, repository_root: Path) -> None:
         test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
         assert test_course.get_group_for_task("task_not_exist") is None
+
+    @pytest.mark.parametrize(
+        "message, expected",
+        [
+            ("sql-1-ddl", ["sql-1-ddl"]),
+            ("Solve [sql-2-expr].", ["sql-2-expr"]),
+            ("btree-1-layout", ["btree-1-layout"]),
+            (
+                "sql-1-ddl, btree-2-insert-lookup",
+                ["sql-1-ddl", "btree-2-insert-lookup"],
+            ),
+            ("sql", ["sql"]),
+            ("btree", ["btree-1-layout", "btree-2-insert-lookup"]),
+            ("sql-engine-2", ["sql-5-sort"]),
+            ("sql-engine", ["sql-1-ddl", "sql-2-expr"]),
+            ("fix(sql-1-ddl): handle empty tables", ["sql-1-ddl"]),
+            ("sql-1-ddl-extra sql-1-ddl_extra sql-1-ddl2 nosql-1-ddl", []),
+            ("cpp++", ["cpp++"]),
+            ("cpppp", []),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "detection_type",
+        [
+            CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE,
+            CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE,
+        ],
+    )
+    def test_commit_message_matches_complete_names(
+        self,
+        overlapping_names_course: Course,
+        message: str,
+        expected: list[str],
+        detection_type: CheckerTestingConfig.ChangesDetectionType,
+    ) -> None:
+        course = overlapping_names_course
+        course.branch_name = "main"
+        repo = git.Repo(course.repository_root)
+        repo.git.commit("-m", message, "--allow-empty")
+
+        selected = course.detect_changes(detection_type)
+
+        assert {task.name for task in selected} == set(expected)
+
+    @pytest.mark.parametrize("task_name", ["sql-1-ddl", "sql-5-sort", "btree-1-layout"])
+    def test_matching_branch_and_commit_ignore_name_prefixes(
+        self, overlapping_names_course: Course, task_name: str
+    ) -> None:
+        course = overlapping_names_course
+        course.branch_name = task_name
+        repo = git.Repo(course.repository_root)
+        repo.git.commit("-m", f"Solve {task_name}", "--allow-empty")
+
+        selected = course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE
+        )
+
+        assert [task.name for task in selected] == [task_name]
 
     def test_detect_changes_not_a_repo(self, repository_root: Path) -> None:
         test_course = Course(manytask_config=TEST_MANYTASK_CONFIG, repository_root=repository_root)
@@ -493,6 +708,208 @@ class TestCourse:
         assert all(isinstance(task, FileSystemTask) for task in changed_tasks)
         assert len(changed_tasks) == len(expected_changed_tasks)
         assert sorted(task.name for task in changed_tasks) == sorted(expected_changed_tasks)
+
+
+@pytest.mark.parametrize(
+    "detection_type",
+    [
+        CheckerTestingConfig.ChangesDetectionType.COMMIT_MESSAGE,
+        CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE,
+    ],
+)
+class TestCommitMessagesWithBaseRef:
+    @pytest.mark.parametrize(
+        "messages, expected",
+        [
+            (["task1_1", "root_task_1"], ["root_task_1", "task1_1"]),
+            (["task1_1", "unrelated cleanup"], ["task1_1"]),
+            (["group1", "root_task_1"], ["root_task_1", "task1_1", "task1_2"]),
+            (["root_task_1", "group1"], ["root_task_1", "task1_1", "task1_2"]),
+            (["group1", "task1_1", "group1"], ["task1_1", "task1_2"]),
+            (["group2", "task2_1", "task1_1"], ["task1_1"]),
+            (["unrelated", "cleanup"], []),
+        ],
+    )
+    def test_selects_union_excluding_base(
+        self,
+        git_init_repository_root: Path,
+        detection_type: CheckerTestingConfig.ChangesDetectionType,
+        messages: list[str],
+        expected: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        repo.index.commit("task4_1")
+        course = Course(
+            TEST_MANYTASK_CONFIG,
+            git_init_repository_root,
+            branch_name="main",
+            base_ref=repo.head.commit.hexsha,
+        )
+        for message in messages:
+            repo.index.commit(message)
+        repo.git.checkout("--detach")
+
+        tasks = course.detect_changes(detection_type)
+
+        assert sorted(task.name for task in tasks) == expected
+
+    @pytest.mark.parametrize("base_ref", [None, "0" * 40, "missing-ref", "HEAD"])
+    def test_falls_back_to_latest_message(
+        self,
+        git_init_repository_root: Path,
+        detection_type: CheckerTestingConfig.ChangesDetectionType,
+        base_ref: str | None,
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        repo.index.commit("task1_1")
+        repo.index.commit("root_task_1")
+        course = Course(
+            TEST_MANYTASK_CONFIG,
+            git_init_repository_root,
+            branch_name="main",
+            base_ref=base_ref,
+        )
+
+        tasks = course.detect_changes(detection_type)
+
+        assert [task.name for task in tasks] == ["root_task_1"]
+
+    def test_root_commit(
+        self,
+        git_init_repository_root: Path,
+        detection_type: CheckerTestingConfig.ChangesDetectionType,
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        repo.git.commit("--amend", "-m", "task1_1")
+        course = Course(
+            TEST_MANYTASK_CONFIG, git_init_repository_root, branch_name="main"
+        )
+
+        tasks = course.detect_changes(detection_type)
+
+        assert [task.name for task in tasks] == ["task1_1"]
+
+    def test_force_push_excludes_old_history(
+        self,
+        git_init_repository_root: Path,
+        detection_type: CheckerTestingConfig.ChangesDetectionType,
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        fork = repo.head.commit.hexsha
+        old_head = repo.index.commit("task4_1")
+        repo.git.reset("--hard", fork)
+        repo.index.commit("task1_1")
+        repo.index.commit("root_task_1")
+        course = Course(
+            TEST_MANYTASK_CONFIG,
+            git_init_repository_root,
+            branch_name="main",
+            base_ref=old_head.hexsha,
+        )
+
+        tasks = course.detect_changes(detection_type)
+
+        assert sorted(task.name for task in tasks) == ["root_task_1", "task1_1"]
+
+    def test_shallow_clone(
+        self,
+        git_init_repository_root: Path,
+        tmp_path: Path,
+        detection_type: CheckerTestingConfig.ChangesDetectionType,
+    ) -> None:
+        origin = git.Repo(git_init_repository_root)
+        base_ref = origin.head.commit.hexsha
+        origin.index.commit("task1_1")
+        origin.index.commit("root_task_1")
+        clone = tmp_path / "clone"
+        git.Repo.clone_from(git_init_repository_root.as_uri(), clone, depth=1)
+        course = Course(
+            TEST_MANYTASK_CONFIG, clone, branch_name="main", base_ref=base_ref
+        )
+
+        tasks = course.detect_changes(detection_type)
+
+        assert sorted(task.name for task in tasks) == ["root_task_1", "task1_1"]
+
+
+@pytest.mark.parametrize(
+    "branch_name, messages, expected",
+    [
+        ("group1", ["task1_1", "task1_2"], ["task1_1", "task1_2"]),
+        ("task1_1", ["task1_1", "cleanup"], ["task1_1"]),
+        ("task1_1", ["root_task_1", "task1_1"], None),
+    ],
+)
+def test_branch_selection_with_push_messages(
+    git_init_repository_root: Path,
+    branch_name: str,
+    messages: list[str],
+    expected: list[str] | None,
+) -> None:
+    repo = git.Repo(git_init_repository_root)
+    course = Course(
+        TEST_MANYTASK_CONFIG,
+        git_init_repository_root,
+        branch_name=branch_name,
+        base_ref=repo.head.commit.hexsha,
+    )
+    for message in messages:
+        repo.index.commit(message)
+    detection_type = (
+        CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME_OR_COMMIT_MESSAGE
+    )
+    if expected is None:
+        with pytest.raises(CheckerException, match="Ambiguous task detection"):
+            course.detect_changes(detection_type)
+        branch_tasks = course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.BRANCH_NAME
+        )
+        assert [task.name for task in branch_tasks] == [branch_name]
+    else:
+        assert (
+            sorted(task.name for task in course.detect_changes(detection_type))
+            == expected
+        )
+
+
+class TestRenameDetection:
+    @pytest.mark.parametrize(
+        "source_folder, destination_folder, expected_tasks",
+        [
+            ("group1/task1_1", "group1/task1_2", ["task1_1", "task1_2"]),
+            ("group1/task1_1", "root_task_1", ["root_task_1", "task1_1"]),
+            ("group1/task1_1", "group2/task2_1", ["task1_1"]),
+            ("group2/task2_1", "group1/task1_1", ["task1_1"]),
+            ("group2/task2_1", "group2/task2_2", []),
+        ],
+    )
+    def test_rename_selects_enabled_source_and_destination_tasks(
+        self,
+        git_init_repository_root: Path,
+        source_folder: str,
+        destination_folder: str,
+        expected_tasks: list[str],
+    ) -> None:
+        repo = git.Repo(git_init_repository_root)
+        source = git_init_repository_root / source_folder / "submission.cpp"
+        destination = git_init_repository_root / destination_folder / "renamed.cpp"
+        source.write_text("unique student solution to preserve across the rename")
+        repo.git.add(".")
+        repo.git.commit("-m", "Add student solution")
+        before_rename = repo.head.commit
+        source.rename(destination)
+        repo.git.add("--all")
+        repo.git.commit("-m", "Move solution between task folders")
+        assert (
+            len(list(repo.head.commit.diff(before_rename).iter_change_type("R"))) == 1
+        )
+
+        course = Course(TEST_MANYTASK_CONFIG, git_init_repository_root)
+        tasks = course.detect_changes(
+            CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES
+        )
+
+        assert sorted(task.name for task in tasks) == expected_tasks
 
 
 class TestDetectChangesWithBaseRef:

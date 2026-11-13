@@ -1,6 +1,9 @@
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from http import HTTPStatus
+from importlib import import_module
 from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -8,13 +11,17 @@ from zoneinfo import ZoneInfo
 import pytest
 import yaml
 from alembic import command
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from alembic.script import ScriptDirectory
+from flask import session as flask_session
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
 from sqlalchemy.orm import Session
 
 from manytask.abstract import StudentCourseScores, TaskScore
+from manytask.api import bp as api_bp
 from manytask.config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -26,12 +33,21 @@ from manytask.config import (
 )
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType, ProtectedBranchSettings
-from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError, UserIdentityConflictError
+from manytask.database import (
+    CourseNotEmptyError,
+    DataBaseApi,
+    DatabaseConfig,
+    TaskDisabledError,
+    UserIdentityConflictError,
+)
+from manytask.mock_rms import MockRmsApi
 from manytask.models import (
+    ComplexFormula,
     Course,
     Deadline,
     Grade,
     Namespace,
+    PrimaryFormula,
     Task,
     TaskGroup,
     User,
@@ -39,6 +55,8 @@ from manytask.models import (
     UserOnNamespace,
     UserOnNamespaceRole,
 )
+from manytask.utils.flask import get_courses
+from manytask.web import course_bp, instance_admin_bp
 from tests.constants import (
     BONUS_GROUP,
     BONUS_SCORE,
@@ -71,6 +89,7 @@ from tests.constants import (
     TEST_USERNAME_2,
     USER_EXPECTED,
 )
+from tests.helpers import make_flask_app
 
 
 class TestException(Exception):
@@ -893,6 +912,110 @@ def test_store_score(db_api_with_initialized_first_course, session):
     )
 
 
+def test_store_score_solved_status(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    task = session.query(Task).filter_by(name="task_0_0").one()
+    task.min_score = 50
+    task.is_large = True
+    session.commit()
+
+    # Automatic reports preserve earned completion; explicit edits may override it.
+    updates = [
+        (0, True, True),
+        (50, None, True),
+        (50, False, False),
+        (50, None, False),
+        (49, None, False),
+        (50, None, True),
+        (49, None, True),
+    ]
+    for score, is_solved, expected_solved in updates:
+        saved_score = db_api.store_score(
+            FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", lambda _flags, _old_score: score, is_solved=is_solved
+        )
+        assert saved_score == score
+        session.expire_all()
+        grade = session.query(Grade).one()
+        assert grade.score == score
+        assert grade.is_solved is expected_solved
+        student = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)[TEST_USERNAME]
+        assert student.task_scores["task_0_0"] == TaskScore(score, expected_solved)
+
+
+def test_database_solved_round_trip(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    course = session.query(Course).one()
+    course.status = CourseStatus.IN_PROGRESS
+    task = session.query(Task).filter_by(name="task_0_0").one()
+    task.is_large = True
+    task.min_score = 50
+    session.commit()
+    db_api._sync_grades_config(
+        FIRST_COURSE_NAME,
+        ManytaskFinalGradeConfig(grades={5: [{Path("large_count"): 1}], 2: [{Path("total_score"): 0}]}),
+    )
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, task.name, lambda _flags, _old_score: 0)
+    app = make_flask_app(api_bp)
+    app.storage_api = db_api
+    app.rms_api = MockRmsApi("https://gitlab.test.com")
+    client = app.test_client()
+    headers = {"Authorization": f"Bearer {course.token}"}
+    url = f"/api/{FIRST_COURSE_NAME}/database"
+
+    for score, is_solved in [(0, True), (0, False), (50, False), (50, True)]:
+        snapshot = client.get(url, headers=headers).get_json()
+        row = next(row for row in snapshot["students"] if row["username"] == TEST_USERNAME)
+        # Stale browser counters must never determine the saved grade or response.
+        row["large_count"] = 99
+        response = client.post(
+            f"{url}/update",
+            headers=headers,
+            json={"row_data": row, "new_scores": {task.name: score}, "new_solved": {task.name: is_solved}},
+        )
+        assert response.status_code == HTTPStatus.OK
+        payload = response.get_json()
+        assert payload["success"] is True
+        saved_row = json.loads(payload["row_data"])
+        assert saved_row["scores"][task.name] == score
+        assert saved_row["solved"][task.name] is is_solved
+        assert saved_row["large_count"] == int(is_solved)
+        assert saved_row["grade"] == (5 if is_solved else 2)
+        session.expire_all()
+        assert session.query(Grade).one().is_solved is is_solved
+        reloaded = client.get(url, headers=headers).get_json()
+        reloaded_row = next(row for row in reloaded["students"] if row["username"] == TEST_USERNAME)
+        assert reloaded_row["solved"][task.name] is is_solved
+        assert reloaded_row["large_count"] == int(is_solved)
+        assert reloaded_row["grade"] == saved_row["grade"]
+        db_api.recalculate_all_grades(FIRST_COURSE_NAME)
+        assert db_api.get_effective_grade(FIRST_COURSE_NAME, TEST_USERNAME) == saved_row["grade"]
+
+
+def test_completion_flag_backfill(db_api_with_initialized_first_course, session) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    old_scores = {"task_0_0": (50, False), "task_0_1": (49, False), "task_0_2": (0, True)}
+    for task_name, (score, is_solved) in old_scores.items():
+        session.query(Task).filter_by(name=task_name).one().min_score = 50
+        session.commit()
+        db_api.store_score(
+            FIRST_COURSE_NAME, TEST_USERNAME, task_name, lambda _flags, _old_score: score, is_solved=is_solved
+        )
+
+    migration = import_module("manytask.migrations.versions.d2e3f4a5b6c7_backfill_task_completion")
+    with Operations.context(MigrationContext.configure(session.connection())):
+        migration.upgrade()
+    session.expire_all()
+    student = db_api.get_all_scores_with_names(FIRST_COURSE_NAME, username=TEST_USERNAME)[TEST_USERNAME]
+    assert student.task_scores == {
+        "task_0_0": TaskScore(50, True),
+        "task_0_1": TaskScore(49, False),
+        "task_0_2": TaskScore(0, True),
+    }
+
+
 def test_store_bonus_score(db_api_with_initialized_first_course, session):
     assert_counts(session, users=1, user_on_course=0)
 
@@ -1039,21 +1162,81 @@ def _create_namespace_with_course(
     return namespace
 
 
-def test_check_if_course_admin_namespace_owner(db_api_with_initialized_first_course, session):
-    """Namespace owner (creator) must be treated as a course admin."""
-    instance_admin_id = session.query(User).filter_by(username="instance_admin").one().id
+def test_namespace_authorship_does_not_grant_admin_access(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session
+) -> None:
+    """Authorship alone must not grant access to a namespace or its courses."""
     create_user(db_api_with_initialized_first_course)
     user = session.query(User).filter_by(username=TEST_USERNAME).one()
 
-    _create_namespace_with_course(session, created_by_id=user.id)
+    namespace = _create_namespace_with_course(session, created_by_id=user.id)
 
-    # user is the namespace owner, so it is a course admin even without UserOnCourse
-    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
-    assert _access_levels_by_username(db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME))[
-        TEST_USERNAME
-    ] == {"namespace_admin"}
-    # unrelated user (instance admin excluded from this check via a non-owner) is not
-    assert instance_admin_id != user.id
+    assert db_api_with_initialized_first_course.get_namespace_admin_namespaces(TEST_USERNAME) == []
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert TEST_USERNAME not in _access_levels_by_username(
+        db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME)
+    )
+    with pytest.raises(PermissionError):
+        db_api_with_initialized_first_course.get_namespace_by_id(namespace.id, TEST_USERNAME)
+
+
+@pytest.mark.parametrize("new_role", [None, "student", "program_manager"], ids=["remove", "student", "program_manager"])
+def test_namespace_creator_loses_admin_access_after_role_revocation(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, new_role: str | None
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    namespace = db_api.create_namespace("Test Namespace", "test-namespace", None, 1, TEST_USERNAME)
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    course.namespace_id = namespace.id
+    session.commit()
+
+    assert db_api.get_namespace_users(namespace.id) == [(user.id, "namespace_admin")]
+    assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == [namespace.id]
+    assert db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    app = make_flask_app(course_bp, instance_admin_bp)
+    app.storage_api = db_api
+    with app.test_request_context():
+        flask_session["manytask"] = {"username": TEST_USERNAME}
+        assert [course_data["name"] for course_data in get_courses(app)] == [FIRST_COURSE_NAME]
+
+        if new_role is None:
+            db_api.remove_user_from_namespace(namespace.id, user.id)
+        else:
+            db_api.update_user_role_in_namespace(namespace.id, user.id, new_role)
+
+        assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == []
+        assert not db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+        assert get_courses(app) == []
+
+    expected_levels = {"program_manager"} if new_role == "program_manager" else None
+    assert (
+        _access_levels_by_username(db_api.get_course_access_users(FIRST_COURSE_NAME)).get(TEST_USERNAME)
+        == expected_levels
+    )
+    assert session.query(Namespace).filter_by(id=namespace.id).one().created_by_id == user.id
+
+
+@pytest.mark.parametrize("remaining_role", ["instance_admin", "course_admin"])
+def test_namespace_role_revocation_preserves_independent_admin_access(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, remaining_role: str
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    user, _ = add_user_on_course(session, is_course_admin=remaining_role == "course_admin")
+    if remaining_role == "instance_admin":
+        db_api.set_instance_admin_status(TEST_USERNAME, True)
+    namespace = db_api.create_namespace("Test Namespace", "test-namespace", None, 1, TEST_USERNAME)
+    session.query(Course).filter_by(name=FIRST_COURSE_NAME).one().namespace_id = namespace.id
+    session.commit()
+
+    db_api.remove_user_from_namespace(namespace.id, user.id)
+
+    assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == []
+    assert db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert _access_levels_by_username(db_api.get_course_access_users(FIRST_COURSE_NAME))[TEST_USERNAME] == {
+        remaining_role
+    }
 
 
 def test_check_if_course_admin_namespace_admin_role(db_api_with_initialized_first_course, session):
@@ -1885,6 +2068,44 @@ def test_get_groups_with_resync(  # noqa: PLR0913
     )
 
 
+def test_delete_empty_course(db_api_with_two_initialized_courses: DataBaseApi, session: Session) -> None:
+    db_api = db_api_with_two_initialized_courses
+    course_id = session.query(Course.id).filter_by(name=FIRST_COURSE_NAME).scalar()
+    assert session.query(TaskGroup).filter_by(course_id=course_id).count() > 0
+    assert session.query(ComplexFormula).filter_by(course_id=course_id).count() > 0
+    remaining_task_count = session.query(Task).join(TaskGroup).filter(TaskGroup.course_id != course_id).count()
+    remaining_formula_count = (
+        session.query(PrimaryFormula).join(ComplexFormula).filter(ComplexFormula.course_id != course_id).count()
+    )
+
+    assert db_api.delete_course(FIRST_COURSE_NAME)
+
+    assert db_api.get_course(FIRST_COURSE_NAME) is None
+    assert db_api.get_course(SECOND_COURSE_NAME) is not None
+    assert session.query(TaskGroup).filter_by(course_id=course_id).count() == 0
+    assert session.query(ComplexFormula).filter_by(course_id=course_id).count() == 0
+    assert session.query(Task).count() == remaining_task_count
+    assert session.query(PrimaryFormula).count() == remaining_formula_count
+    assert not db_api.delete_course(FIRST_COURSE_NAME)
+
+
+@pytest.mark.parametrize("is_admin", [False, True])
+def test_delete_course_with_registered_user(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, is_admin: bool
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    db_api.update_or_create_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, is_admin)
+    task_count = session.query(Task).count()
+
+    with pytest.raises(CourseNotEmptyError, match="users are already registered"):
+        db_api.delete_course(FIRST_COURSE_NAME)
+
+    assert db_api.get_course(FIRST_COURSE_NAME) is not None
+    assert db_api.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert session.query(Task).count() == task_count
+
+
 def test_edit_course(db_api_with_initialized_first_course, edited_first_course_config, session):
     db_api_with_initialized_first_course.edit_course(edited_first_course_config)
 
@@ -2151,3 +2372,75 @@ def test_constant_queries(  # noqa: PLR0913
     queries_scaled = counter.value
 
     assert queries_initial == queries_scaled
+
+
+def _with_min_score(deadlines_config: ManytaskDeadlinesConfig, task_name: str, min_score: int):
+    config = deadlines_config.model_copy(deep=True)
+    for group in config.schedule:
+        for task in group.tasks:
+            if task.name == task_name:
+                task.min_score = min_score
+    return config
+
+
+def _set_value(value: int):
+    return lambda _flags, _old_score: value
+
+
+def test_store_score_marks_large_task_solved(
+    db_api_with_initialized_first_course, first_course_deadlines_config, first_course_grade_config
+):
+    db_api = db_api_with_initialized_first_course
+    ui_config = ManytaskUiConfig(task_url_template="https://gitlab.test.com/test/$GROUP_NAME/$TASK_NAME")
+    large_task = "task_5_0"
+
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ui_config,
+        _with_min_score(first_course_deadlines_config, large_task, 30),
+        first_course_grade_config,
+    )
+    create_user(db_api, STUDENT_1)
+    create_user(db_api, STUDENT_2)
+
+    # below min_score: not solved; regular tasks are never marked
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(20))
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", _set_value(1))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == set()
+
+    # reaches min_score: solved
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(30))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == {large_task}
+
+    # raise min_score: already solved task stays solved, new submissions can't solve it anymore
+    update_course(
+        db_api,
+        FIRST_COURSE_NAME,
+        ui_config,
+        _with_min_score(first_course_deadlines_config, large_task, 10000),
+        first_course_grade_config,
+    )
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_2, large_task, _set_value(50))
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(25))  # e.g. reduced by admin
+
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_1) == {large_task}
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME_2) == set()
+
+    all_scores = db_api.get_all_scores_with_names(FIRST_COURSE_NAME)
+    assert all_scores[TEST_USERNAME_1].task_scores[large_task] == TaskScore(score=25, is_solved=True)
+    assert all_scores[TEST_USERNAME_2].task_scores[large_task] == TaskScore(score=50, is_solved=False)
+    assert all_scores[TEST_USERNAME_1].count_solved_large_tasks([large_task]) == 1
+    assert all_scores[TEST_USERNAME_2].count_solved_large_tasks([large_task]) == 0
+
+
+def test_store_zero_score_does_not_mark_large_task_solved(db_api_with_initialized_first_course):
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+
+    # task_5_0 is large with min_score 0: zero score must not be remembered as solved
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(0))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME) == set()
+
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(1))
+    assert db_api.get_solved_tasks(FIRST_COURSE_NAME, TEST_USERNAME) == {"task_5_0"}

@@ -179,6 +179,42 @@
         <div id="course-access-error" class="alert alert-danger d-none" role="alert"></div>
         <div id="course-access-table"></div>
     </div>
+
+    <div class="border border-danger rounded p-3 my-4">
+        <h4>Delete Course</h4>
+        <p>Only courses with no registered users can be deleted. This action cannot be undone.</p>
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal"
+                data-bs-target="#deleteCourseModal">Delete course</button>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteCourseModal" tabindex="-1" aria-labelledby="deleteCourseModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <form id="deleteCourseForm" class="modal-content" method="POST"
+              action="{{ url_for('instance_admin.delete_course', course_name=course.course_name) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteCourseModalLabel">Delete Course</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>This permanently deletes the course and its configuration from Manytask.
+                    Repositories and groups in the RMS are kept.</p>
+                <label for="delete-course-name" class="form-label">
+                    Type <strong>{{ course.course_name }}</strong> to confirm deletion.
+                </label>
+                <input type="text" class="form-control" id="delete-course-name" name="confirmation_name"
+                       data-course-name="{{ course.course_name }}" required autocomplete="off" spellcheck="false"
+                       aria-describedby="deleteCourseError">
+                <div id="deleteCourseError" class="alert alert-danger d-none mt-3" role="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-danger" id="delete-course-submit" disabled>Delete course</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="modal fade" id="grantCourseAdminModal" tabindex="-1" aria-labelledby="grantCourseAdminModalLabel"
@@ -190,6 +226,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                {% set eligible_course_admins = eligible_course_admins | default([]) %}
+                {% if eligible_course_admins %}
                 <div class="mb-3">
                     <label for="userToGrant" class="form-label">Select new course admin</label>
                     <div class="form-text mb-2">Only users enrolled on this course can be made course admins.</div>
@@ -201,20 +239,25 @@
                     </div>
 
                     <select class="form-select" id="userToGrant" required size="5">
-                        {% for stored_user, is_admin in course_users|default([]) %}
-                            {% if not is_admin %}
-                                <option value="{{ stored_user.username }}">{{ stored_user.username }}
-                                    ({{ stored_user.first_name }} {{ stored_user.last_name }})
-                                </option>
-                            {% endif %}
+                        {% for stored_user in eligible_course_admins %}
+                            <option value="{{ stored_user.username }}">{{ stored_user.username }}
+                                ({{ stored_user.first_name }} {{ stored_user.last_name }})
+                            </option>
                         {% endfor %}
                     </select>
                 </div>
+                {% else %}
+                <div class="alert alert-info" id="grantCourseAdminEmpty" role="status">
+                    No eligible users. Users must be enrolled on this course and must not already have course admin rights.
+                    <a href="{{ url_for('course.create_project', course_name=course.course_name) }}">Course registration</a>
+                </div>
+                {% endif %}
                 <div id="grantCourseAdminError" class="alert alert-danger d-none" role="alert"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" id="grantCourseAdminSubmit" class="btn btn-warning">Grant Rights</button>
+                <button type="button" id="grantCourseAdminSubmit" class="btn btn-warning"
+                        {% if not eligible_course_admins %}disabled{% endif %}>Grant Rights</button>
             </div>
         </div>
     </div>
@@ -223,6 +266,7 @@
 <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
 <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/search-normalize.js') }}"></script>
+<script src="{{ url_for('static', filename='js/course-delete.js') }}"></script>
 <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator.min.css" rel="stylesheet"
       id="light-theme">
 <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/css/tabulator_midnight.min.css" rel="stylesheet"
@@ -470,7 +514,7 @@
         });
 
         document.getElementById('grantCourseAdminSubmit').addEventListener('click', function () {
-            const username = document.getElementById('userToGrant').value;
+            const username = document.getElementById('userToGrant')?.value;
             if (!username) {
                 showModalError('grantCourseAdminError', 'Select a user first');
                 return;

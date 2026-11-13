@@ -5,9 +5,13 @@
 
 Copy files matching glob patterns from one directory to another. Used to collect the student's solution and the private tests in one place in preparation for testing.
 
-The example below takes **from the student repository** (`global.repo_dir`) only the files listed in the `allow_change` parameter, and puts them into the testing tree. Anything the student changed outside that list — the tests, for instance — is simply not copied, so it cannot affect grading in CI.
+The example below copies files listed in the `allow_change` parameter **from the student
+repository** (`global.repo_dir`) into the testing tree. It leaves other files already in the tree
+untouched, so this stage alone does not restrict which student edits can affect grading.
 
-`allow_change` is not a built-in field: it is an ordinary [parameter](./checker_yml_reference.md#default_parameters) that you define yourself in `default_parameters` and can narrow per task in `.task.yml`.
+The example reads its patterns from the optional `parameters.allow_change` list, supported in
+both task formats. See [Explicit editable files](checker_config.md#explicit-editable-files) for
+inheritance and the difference between plugin use and automatic shared-folder preparation.
 
 ```yaml
 - name: "Take the student's allowed files"
@@ -19,7 +23,8 @@ The example below takes **from the student repository** (`global.repo_dir`) only
     ignore_patterns: ["*.pyc"]
 ```
 
-> Note that this stage is **optional**. `checker check` / `checker grade` already build the testing tree by overlaying the reference repo's public and private files on top of the student's files, so tests are protected without any `copy_files` stage. Use this plugin when you want an explicit, per-task allow-list — see [the configuration guide](./checker_config.md#optional-an-explicit-allow-list-with-allow_change).
+> This stage is **optional**: the checker already builds the grading tree before running plugins.
+> Use it when a pipeline needs to copy additional files or arrange them differently.
 
 | Arg | Type | Required | Description |
 |---|---|---|---|
@@ -190,29 +195,3 @@ Run [pytest](https://pytest.org/) against a task directory, with optional covera
 | `report_percentage` | `bool` | no | `true` | Compute `percentage` as `passed / total` tests and store it in the stage result. |
 
 > **Note:** When `report_percentage: true` the plugin uses a secure FIFO pipe to receive test results from a custom pytest plugin (`checker_reporter`). The `percentage` field of the registered output will be the fraction `passed_tests / total_tests`.
-
-
-## `check_gitlab_merge_request` *(WIP)*
-
-Check that a GitLab merge request is valid (no conflicts, required labels, etc.).
-
-| Arg | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `token` | `str` | yes | — | GitLab personal access token. |
-| `task_dir` | `str` | yes | — | Task directory path. |
-| `repo_url` | `AnyUrl` | yes | — | GitLab repository URL. |
-| `require_approval` | `bool` | no | `false` | Require at least one approval on the MR. |
-| `search_for_score` | `bool` | no | `false` | Search for a score comment in the MR. |
-
-
-### `collect_score_gitlab_merge_request` *(WIP)*
-
-Collect a score left by a tutor in a GitLab MR comment.
-
-| Arg | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `token` | `str` | yes | — | GitLab personal access token. |
-| `task_dir` | `str` | yes | — | Task directory path. |
-| `repo_url` | `AnyUrl` | yes | — | GitLab repository URL. |
-| `require_approval` | `bool` | no | `false` | Require at least one approval on the MR. |
-| `search_for_score` | `bool` | no | `false` | Search for a score comment in the MR. |

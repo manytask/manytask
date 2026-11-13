@@ -703,7 +703,7 @@ class GitLabApi(RmsApi, AuthApi):
     ) -> bool:
         project = self._gitlab.projects.get(f"{project_group}/{project_name}")
         try:
-            project.members.get(rms_user_id)
+            project.members_all.get(rms_user_id)
             return True
         except GitlabGetError:
             return False
@@ -885,11 +885,23 @@ class GitLabApi(RmsApi, AuthApi):
             (course_public_project, gitlab.const.AccessLevel.REPORTER),
         ):
             try:
+                existing_member = target.members_all.get(user_id)
+            except GitlabGetError as ex:
+                if ex.response_code != HTTPStatus.NOT_FOUND:
+                    raise
+            else:
+                # Effective membership includes access inherited from parent groups.
+                if existing_member.access_level >= access_level:
+                    continue
+
+            try:
                 target.members.create({"user_id": user_id, "access_level": access_level})
                 logger.info(
                     "Access %s granted on %s for user=%s", access_level, target.path_with_namespace, rms_user.username
                 )
-            except gitlab.GitlabCreateError:
+            except gitlab.GitlabCreateError as ex:
+                if ex.response_code != HTTPStatus.CONFLICT:
+                    raise
                 logger.warning(
                     "Access already granted or conflict on %s for user=%s",
                     target.path_with_namespace,

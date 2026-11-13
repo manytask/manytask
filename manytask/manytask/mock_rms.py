@@ -1,8 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
-from authlib.integrations.flask_client import OAuth
-
 from .abstract import RmsApi, RmsApiException, RmsUser
 from .course import ProtectedBranchSettings
 
@@ -270,15 +268,6 @@ class MockRmsApi(RmsApi):
             raise RmsApiException(f"User with username {username} not found")
         return self.users_by_username[username]
 
-    def check_user_authenticated_in_rms(
-        self,
-        oauth: OAuth,
-        oauth_access_token: str,
-        oauth_refresh_token: str,
-    ) -> bool:
-        # Mock implementation always returns True
-        return True
-
     def create_course_group(
         self,
         parent_group_id: int | None,
@@ -307,7 +296,7 @@ class MockRmsApi(RmsApi):
             course_group_path = f"{parent_path}/{course_slug}"
 
         if course_group_path in self.namespace_groups:
-            raise RuntimeError(f"Course group with path {course_group_path} already exists")
+            return self.namespace_groups[course_group_path]
 
         self.last_group_id += 1
         group_id = self.last_group_id

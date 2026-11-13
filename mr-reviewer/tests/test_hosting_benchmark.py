@@ -1,8 +1,8 @@
-"""End-to-end benchmark: 500 MRs through every adapter method.
+"""Adapter benchmark: sequential change and pipeline lookups for 500 MRs.
 
 Marked `benchmark` so it's deselectable: `pytest -m "not benchmark"` skips it
-in normal CI runs. The hard limit (300 s) is from the ticket DoD; in practice
-it should finish in under 10 s with mocked HTTP.
+in normal CI runs. The hard limit (300 s) is from the ticket DoD;
+HTTP responses are mocked.
 """
 
 from __future__ import annotations
@@ -45,7 +45,6 @@ def test_500_mrs_under_300_sec() -> None:
             token="t",  # noqa: S106
             base_url="https://gitlab.test",
             executor=executor,
-            batch_size=16,
         )
 
         with responses.RequestsMock(assert_all_requests_are_fired=False) as mock:
@@ -88,11 +87,11 @@ def test_500_mrs_under_300_sec() -> None:
                 mrs = await adapter.list_open_mrs(GROUP, LABEL)
                 assert len(mrs) == N_MRS
 
-                changes = await adapter._gather_in_batches([adapter.get_changes(m) for m in mrs])
-                assert len(changes) == N_MRS
-
-                statuses = await adapter._gather_in_batches([adapter.get_pipeline_status(m) for m in mrs])
-                assert all(s.state == "success" for s in statuses)
+                # Match the worker's sequential per-MR processing.
+                for mr in mrs:
+                    assert await adapter.get_changes(mr) == []
+                    status = await adapter.get_pipeline_status(mr)
+                    assert status.state == "success"
 
             t0 = time.monotonic()
             asyncio.run(run())

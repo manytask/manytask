@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -22,6 +23,7 @@ class CppRunBenchmarksPlugin(PluginABC):
         timeout: float
         args: list[str]
         benchmark_values: list[str]
+        env_whitelist: list[str] = list()
 
     @staticmethod
     def _print_logs(path: Path) -> None:
@@ -80,6 +82,10 @@ class CppRunBenchmarksPlugin(PluginABC):
 
     @staticmethod
     def _run_benchmarks(args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool) -> None:
+        # Dump the GPU device we use to benchmark CUDA code if one is set
+        if "CUDA_VISIBLE_DEVICES" in args.env_whitelist:
+            print_info(f"CUDA_VISIBLE_DEVICES is set to `{os.getenv('CUDA_VISIBLE_DEVICES')}`")
+
         xml_path = tmp_dir / CppRunBenchmarksPlugin._REPORT_XML
         run_args = SafeRunScriptPlugin.Args(
             origin=str(build_dir),
@@ -91,6 +97,7 @@ class CppRunBenchmarksPlugin(PluginABC):
                 f"console::out={tmp_dir / CppRunBenchmarksPlugin._REPORT}::colour-mode=ansi",
                 *args.args,
             ],
+            env_whitelist=args.env_whitelist,
             timeout=args.timeout,
         )
         try:
