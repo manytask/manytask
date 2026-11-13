@@ -413,19 +413,24 @@ testing:
         username: ${{ env.GITLAB_USER_LOGIN }}
         task_name: ${{ task.task_name }}
         score: ${{ outputs.private_tests.percentage }}
-        report_url: https://app.manytask.org
+        report_url: https://app.manytask.org/api/course-name/report
         report_token: ${{ env.MANYTASK_TOKEN }}
         check_deadline: true
 ```
 
 `report_pipeline` runs only when `tasks_pipeline` succeeded, and only under `checker grade` — this
-is what pushes the score to Manytask, so it needs a `MANYTASK_TOKEN` CI variable. `checker check`
-runs the report pipeline in dry-run mode, so local runs never report a score.
+is what pushes the score to Manytask, so it needs a `MANYTASK_TOKEN` CI variable. Replace
+`course-name` in `report_url` with your course slug. The GitLab CI example reads the student's
+username from `GITLAB_USER_LOGIN`; other runners must provide an appropriate RMS username.
+
+With automatic task detection, `checker grade` enables reporting by default. Selecting tasks
+explicitly with `--task`, `--group`, or `--all-tasks` disables reporting unless `--submit-score`
+is also passed. `checker check` runs the report pipeline in dry-run mode and never sends scores.
 
 `changes_detection: last_commit_changes` means `checker grade` tests only the tasks touched by the
 pushed commits (diff against `CI_COMMIT_BEFORE_SHA` in GitLab CI, or `--base-ref`; `HEAD~1` otherwise).
 See the [selection rules](checker_yml_reference.md#changes_detection) for shared folders.
-`checker check` always tests everything.
+`checker check` tests all enabled tasks by default; `--task` and `--group` narrow the selection.
 
 See [Checker pipelines and plugins](./checker_pipelines_and_plugins.md) and the
 [built-in plugin list](./checker_plugins.md) for the available stages.

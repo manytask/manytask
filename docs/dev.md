@@ -92,7 +92,6 @@ Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fil
 | `GITLAB_DB_USER`         | Postgres role used by the local GitLab (e.g. `gitlab`)                                                             |
 | `GITLAB_DB_PASSWORD`     | Password of that role (e.g. `localgitlabdbpass`)                                                                   |
 | `GITLAB_DB_NAME`         | Database of the local GitLab (e.g. `gitlab`)                                                                       |
-| `DATABASE_URL`           | Connection string used inside containers (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}`) |
 | `DATABASE_URL`           | Connection string used inside containers (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}`) |
 | `DATABASE_URL_EXTERNAL`  | Connection string used from the host (for Alembic etc.) (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}`) |
 | `DOCS_HOST`              | Host name for docs (not used in development, can be left blank)                                                    |

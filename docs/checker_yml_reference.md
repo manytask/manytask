@@ -357,7 +357,7 @@ Pipeline `args` values and `run_if` conditions support [Jinja2](https://jinja.pa
 ```yaml
 args:
   origin: "${{ global.temp_dir }}/${{ task.task_sub_path }}"
-  username: ${{ global.username }}
+  username: ${{ env.GITLAB_USER_LOGIN }}
   score: ${{ outputs.test_result.percentage }}
   run_linting: ${{ parameters.run_linting }}
 ```
@@ -597,10 +597,10 @@ testing:
     - name: "Report score"
       run: "report_score_manytask"
       args:
-        username: ${{ global.username }}
+        username: ${{ env.GITLAB_USER_LOGIN }}
         task_name: ${{ task.task_name }}
         score: ${{ outputs.test_result.percentage }}
-        report_url: https://manytask.example.com
+        report_url: https://manytask.example.com/api/course-name/report
         report_token: ${{ env.MANYTASK_TOKEN }}
         check_deadline: true
 ```

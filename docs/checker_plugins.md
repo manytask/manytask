@@ -132,16 +132,18 @@ Combine multiple score percentages into a single value using a weighted strategy
 
 ## `report_score_manytask`
 
-Send the final score to the Manytask platform via its [REST API](./api.md). Used in `report_pipeline` to send the resulting score to the Manytask. The plugin will retry 3 times on HTTP errors `408`, `500`, `502`, `503`, `504` with exponentially increasing waiting times (1, 2 and 4 seconds).
+Send the final score to the Manytask platform via its [REST API](./api.md). Used in `report_pipeline`
+after a successful task pipeline. HTTP error responses fail the stage; the current retry
+configuration does not retry POST requests on HTTP errors.
 
 ```yaml
 - name: "Report score"
   run: "report_score_manytask"
   args:
-    username: ${{ global.username }}
+    username: ${{ env.GITLAB_USER_LOGIN }}
     task_name: ${{ task.task_name }}
     score: ${{ outputs.test_result.percentage }}
-    report_url: https://manytask.example.com/api/course-name
+    report_url: https://manytask.example.com/api/course-name/report
     report_token: ${{ env.MANYTASK_TOKEN }}
     check_deadline: true
 ```
@@ -151,7 +153,7 @@ Send the final score to the Manytask platform via its [REST API](./api.md). Used
 | `username` | `str` | yes | — | Student's username in RMS. |
 | `task_name` | `str` | yes | — | Task identifier as registered in `.manytask.yml`. |
 | `score` | `float \| int \| null` | yes | — | Score to report, in `[0.0, 1.0]` (bonus scores may exceed `1.0` but float larger than `2.0` will not be accepted). |
-| `report_url` | `AnyUrl` | yes | — | Base URL of the Manytask instance. |
+| `report_url` | `AnyUrl` | yes | — | Full score endpoint URL: `https://<host>/api/<course_name>/report`. The plugin uses it as given. |
 | `report_token` | `str` | yes | — | Authentication token for the Manytask API. |
 | `check_deadline` | `bool` | yes | — | Whether Manytask should apply deadline penalties server-side. |
 | `allow_reduction` | `bool` | no | `false` | Allow replacing an existing score with a lower value. Must be enabled when reporting a negative integer. |
@@ -195,3 +197,71 @@ Run [pytest](https://pytest.org/) against a task directory, with optional covera
 | `report_percentage` | `bool` | no | `true` | Compute `percentage` as `passed / total` tests and store it in the stage result. |
 
 > **Note:** When `report_percentage: true` the plugin uses a secure FIFO pipe to receive test results from a custom pytest plugin (`checker_reporter`). The `percentage` field of the registered output will be the fraction `passed_tests / total_tests`.
+
+## `cpp_run_tests`
+
+Run already-built Catch2 test executables through `safe_run_script`. Build each target before
+this stage; the plugin looks for it under `<root>/build-<build_type in lowercase>/`.
+
+```yaml
+- name: "Run CUDA tests"
+  run: "cpp_run_tests"
+  args:
+    root: ${{ global.temp_dir }}
+    tests: ["cuda_tests", "Release"]
+    timeout: 60
+    no_detect_leaks: false
+    args: []
+    paths_whitelist: []
+    cuda_compute_sanitizer: true
+    env_whitelist: ["CUDA_VISIBLE_DEVICES"]
+```
+
+| Arg | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `root` | `Path` | yes | — | Root containing the build directories. |
+| `tests` | `list[str]` | yes | — | Alternating executable names and build types, e.g. `["tests", "Debug", "tests", "Release"]`. Must contain at least one pair. |
+| `timeout` | `float` | yes | — | Timeout in seconds for each executable. |
+| `no_detect_leaks` | `bool` | yes | — | Disable AddressSanitizer leak detection. |
+| `args` | `list[str]` | yes | — | Additional arguments passed to each test executable. |
+| `paths_whitelist` | `list[str]` | yes | — | Additional sandbox paths, resolved relative to `root`. |
+| `lock_network` | `bool` | no | `true` | Disable network access inside Firejail. |
+| `cuda_compute_sanitizer` | `bool` | no | `false` | Run each executable through `/usr/local/cuda/bin/compute-sanitizer` with full leak checking and error exit code `1`. |
+| `env_whitelist` | `list[str]` | no | `[]` | Environment variables passed into the sandbox. |
+
+Firejail must be installed. CUDA runs also require access to a GPU from the grading environment;
+enabling `cuda_compute_sanitizer` requires Compute Sanitizer at the path above. To select a GPU,
+set `CUDA_VISIBLE_DEVICES` in the runner environment and include it in `env_whitelist` as shown.
+The whitelist passes an existing variable through; it does not set its value.
+
+## `cpp_run_benchmarks`
+
+Run an already-built Catch2 benchmark executable through `safe_run_script` from
+`<root>/build-relwithdebinfo/` and check its reported mean times against configured thresholds.
+Firejail must be installed.
+
+```yaml
+default_parameters:
+  benchmark_values: ["vector_add", "0.01"]
+
+testing:
+  tasks_pipeline:
+    - name: "Run CUDA benchmarks"
+      run: "cpp_run_benchmarks"
+      args:
+        root: ${{ global.temp_dir }}
+        benchmark: "cuda_benchmarks"
+        timeout: 60
+        args: []
+        benchmark_values: ${{ parameters.benchmark_values }}
+        env_whitelist: ["CUDA_VISIBLE_DEVICES"]
+```
+
+| Arg | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `root` | `Path` | yes | — | Root containing `build-relwithdebinfo`. |
+| `benchmark` | `str` | yes | — | Benchmark executable name. Must not be `null`. |
+| `timeout` | `float` | yes | — | Timeout in seconds for the executable. |
+| `args` | `list[str]` | yes | — | Additional executable arguments. |
+| `benchmark_values` | `list[str]` | yes | — | Alternating benchmark names and thresholds in seconds. Names must exactly match the reported benchmarks. Nonnegative thresholds are upper bounds; negative thresholds specify a lower bound by their absolute value. |
+| `env_whitelist` | `list[str]` | no | `[]` | Environment variables passed into the sandbox; include `CUDA_VISIBLE_DEVICES` to pass the runner's GPU selection through. |
