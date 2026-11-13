@@ -38,7 +38,6 @@ tl;dr
 * Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
 * Limit the first line to 72 characters or less
 * Reference issues and pull requests in commit body
-* When only changing documentation, include [ci skip] in the commit title
 * Consider starting the commit message with an applicable tag:
     * `fix` - small bug fix
     * `docs` - docs changes 
