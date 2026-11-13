@@ -143,7 +143,7 @@ def mock_storage_api(mock_course):  # noqa: C901
             course_admin: bool,
         ) -> None:
             self.stored_user.username = username
-            self.course_admin = self.course_admin or self.stored_user.instance_admin
+            self.course_admin = self.course_admin or course_admin
 
         @staticmethod
         def get_groups(*_args, **_kwargs):
@@ -162,7 +162,7 @@ def mock_storage_api(mock_course):  # noqa: C901
             return self.stored_user.instance_admin
 
         def check_if_course_admin(self, _course_name, _username):
-            return self.course_admin
+            return self.course_admin or self.stored_user.instance_admin
 
         def get_course_access_users(self, _course_name):
             levels = []
@@ -258,6 +258,30 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             response = client.get(f"/{TEST_COURSE_NAME}/")
             assert response.status_code == HTTPStatus.FOUND
             assert response.location == f"/{TEST_COURSE_NAME}/create_project"
+
+
+@pytest.mark.parametrize("page", ["", "database"])
+@pytest.mark.parametrize("instance_admin", [False, True])
+@pytest.mark.parametrize("course_admin", [False, True])
+def test_visiting_course_preserves_only_explicit_course_admin_rights(
+    app: Any, mock_gitlab_oauth: Any, page: str, instance_admin: bool, course_admin: bool
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.stored_user.instance_admin = instance_admin
+    app.storage_api.course_admin = course_admin
+
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+        assert response.status_code == HTTPStatus.OK
+        assert app.storage_api.course_admin is course_admin
+
+        app.storage_api.stored_user.instance_admin = False
+        response = client.get(f"/{TEST_COURSE_NAME}/{page}")
+
+    assert response.status_code == HTTPStatus.OK
+    assert app.storage_api.check_if_course_admin(TEST_COURSE_NAME, TEST_USERNAME) is course_admin
 
 
 @pytest.mark.parametrize("page", ["", "database"])
@@ -1324,6 +1348,29 @@ def test_enrollment_edit_link_permissions(
         assert (edit_link is not None) == can_edit
         if can_edit:
             assert edit_link.get_text(strip=True) == "Back to editing course"
+
+
+@pytest.mark.parametrize("admin_secret", [False, True])
+def test_enrollment_grants_course_admin_only_for_the_admin_secret(
+    app: Any, mock_course: Any, mock_gitlab_oauth: Any, admin_secret: bool
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    mock_course.token = TEST_TOKEN
+    with app.test_client() as client, patch.object(app.storage_api, "check_user_on_course", return_value=False):
+        set_session(client, build_test_session(include_manytask=True))
+        enrollment = client.get(f"/{TEST_COURSE_NAME}/create_project")
+        csrf_token = BeautifulSoup(enrollment.data, "html.parser").find("input", {"name": "csrf_token"})["value"]
+        response = client.post(
+            f"/{TEST_COURSE_NAME}/create_project",
+            data={
+                "csrf_token": csrf_token,
+                "secret": mock_course.token if admin_secret else mock_course.registration_secret,
+            },
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert app.storage_api.course_admin is admin_secret
 
 
 def test_create_project_renders_error_instead_of_500_when_rms_fails(app, mock_course, mock_gitlab_oauth):
