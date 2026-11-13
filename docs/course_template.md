@@ -146,7 +146,11 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
     ```
 
 3. Edit `.checker.yml` (`export.destination`), `.manytask.yml` (`settings`, `ui`, `deadlines.schedule`), and `.releaser-ci.yml` (`REGISTRY`, `MANYTASK_URL`, `COURSE_NAME`, and `PUBLIC_REPO_URL`).
-4. Add CI/CD variables in **Group → Settings → CI/CD → Variables**:
+4. Add registry and API credentials in **Group → Settings → CI/CD → Variables**.
+   When a course is created through the Manytask form or API on GitLab, Manytask
+   adds `MANYTASK_TOKEN` as a hidden, masked variable to its public repository and
+   students group. Add the course token as `MANYTASK_TOKEN` to the private
+   repository separately for the release pipeline.
 
     | Variable | Purpose |
     |---|---|
