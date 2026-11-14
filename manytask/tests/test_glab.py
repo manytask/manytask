@@ -236,10 +236,14 @@ def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
 def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab_public_project):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group]
-    mock_gitlab_instance.projects.list.return_value = [mock_gitlab_public_project]
+    # GitLab searches project names; a namespace-qualified query does not match.
+    mock_gitlab_instance.projects.list.side_effect = lambda **kwargs: (
+        [mock_gitlab_public_project] if kwargs["search"] == TEST_GROUP_PUBLIC_NAME_SHORT else []
+    )
 
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
+    mock_gitlab_instance.projects.list.assert_called_once_with(get_all=True, search=TEST_GROUP_PUBLIC_NAME_SHORT)
     mock_gitlab_instance.projects.create.assert_not_called()
 
 
