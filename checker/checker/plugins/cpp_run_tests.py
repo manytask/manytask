@@ -4,6 +4,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from pydantic import Field
+
 from checker.exceptions import PluginExecutionFailed
 from checker.plugins.firejail import SafeRunScriptPlugin
 from checker.utils import print_info
@@ -27,8 +29,9 @@ class CppRunTestsPlugin(PluginABC):
         args: list[str]
         paths_whitelist: list[str]
         lock_network: bool = True
-        cuda_compute_sanitizer: bool = False
-        env_whitelist: list[str] = list()
+        run_prefix: list[str] = Field(default_factory=list)
+        env_whitelist: list[str] = Field(default_factory=list)
+        show_env_variables: list[str] = Field(default_factory=list)
 
     @staticmethod
     def _get_sanitizers_env(args: Args, path: Path) -> dict[str, str]:
@@ -49,21 +52,18 @@ class CppRunTestsPlugin(PluginABC):
                     print_info(f.read())
 
     @staticmethod
-    def _run_tests(args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool) -> None:
-        # Dump the GPU device we use to test CUDA code if one is set
-        if "CUDA_VISIBLE_DEVICES" in args.env_whitelist:
-            print_info(f"CUDA_VISIBLE_DEVICES is set to `{os.getenv('CUDA_VISIBLE_DEVICES')}`")
+    def _run_tests(
+        args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool
+    ) -> None:
+        for name in args.show_env_variables:
+            print_info(f"{name} is set to `{os.getenv(name)}`")
 
         env = CppRunTestsPlugin._get_sanitizers_env(args, tmp_dir)
         paths_whitelist = [str(args.root / p) for p in args.paths_whitelist]
         run_args = SafeRunScriptPlugin.Args(
             origin=str(build_dir),
-            script=(
-                ["/usr/local/cuda/bin/compute-sanitizer", "--leak-check", "full", "--error-exitcode", "1"]
-                if args.cuda_compute_sanitizer
-                else []
-            )
-            + [
+            script=[
+                *args.run_prefix,
                 str(build_dir / target),
                 "-r",
                 f"console::out={tmp_dir / CppRunTestsPlugin._REPORT}::colour-mode=ansi",
@@ -84,7 +84,9 @@ class CppRunTestsPlugin(PluginABC):
         targets = args.tests[::2]
         build_types = args.tests[1::2]
         if len(targets) != len(build_types):
-            raise PluginExecutionFailed("Wrong task config (len(targets) != len(build_types))")
+            raise PluginExecutionFailed(
+                "Wrong task config (len(targets) != len(build_types))"
+            )
 
         if not targets:
             raise PluginExecutionFailed("No targets")

@@ -210,10 +210,14 @@ class GitLabApi(RmsApi, AuthApi):
         group = self._get_group_by_name(course_group)
         project_name = course_public_repo.split("/")[-1]
 
-        for project in self._gitlab.projects.list(get_all=True, search=project_name):
-            if project.path_with_namespace == course_public_repo:
-                logger.info("Project %s already exists", course_public_repo)
-                return
+        try:
+            self._gitlab.projects.get(course_public_repo)
+        except GitlabGetError as exc:
+            if exc.response_code != HTTPStatus.NOT_FOUND:
+                raise
+        else:
+            logger.info("Project %s already exists", course_public_repo)
+            return
 
         self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)

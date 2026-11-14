@@ -187,8 +187,18 @@ tasks:
 | `is_bonus` | boolean | no | `false` | Marks the task as a bonus task. Bonus scores are counted separately and do not affect the base percentage. |
 | `is_large` | boolean | no | `false` | Marks the task as a large (major) task. Used in grade computation via `large_count`. |
 | `is_special` | boolean | no | `false` | Marks the task as special. Special tasks are displayed differently in the UI. |
-| `min_score` | integer | no | `0` | Minimum score required to count this task as completed (relevant for `is_large` tasks and `large_count` in grading). |
+| `min_score` | integer | no | `0` | Threshold for automatically marking a large task as solved when its score changes to a positive value at or above this threshold. See [task completion](#task-completion). |
 | `url` | string | no | `null` | Optional direct URL to the task description. Overrides the `task_url_template` for this task. Must be a valid HTTP/HTTPS URL. |
+
+### Task completion {#task-completion}
+
+Completion is stored separately from the score as `is_solved`. For a large task, a score change
+to a positive value at or above `min_score` automatically marks it as solved. Raising `min_score`
+or a later automatic score reduction does not revoke an earned completion flag.
+
+Course administrators can explicitly set or clear **Is solved** in the score table's edit dialog,
+including without changing the score. `large_count` counts enabled, started large tasks whose
+saved completion flag is true; it does not compare their scores with the current threshold.
 
 
 ## `grades`
@@ -230,7 +240,7 @@ Each grade value maps to a **list of condition sets** (disjunctive normal form):
 |---|---|---|
 | `percent` | float | Percentage of total non-bonus score earned (0–100). |
 | `total_score` | integer | Raw total score earned. |
-| `large_count` | integer | Number of large tasks (`is_large: true`) completed above their `min_score`. |
+| `large_count` | integer | Number of enabled, started large tasks (`is_large: true`) marked as solved. See [task completion](#task-completion). |
 | `scores/<task_name>` | integer | Score for a specific task, e.g. `scores/task_1_1`. |
 
 ### Catch-all (lowest grade)
