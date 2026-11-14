@@ -45,6 +45,37 @@ Course status can be changed in two ways:
 2. By specifying the desired status (`created` | `hidden` | `in_progress` | `all_tasks_issued` | `doreshka` | `finished`) in the course configuration file under the `status` field and updating it on the server.
 
 
+## Managing access
+
+On **Edit course**, the **Course Access** table shows course administrators and users with
+access inherited from instance or namespace roles. Use **Grant course admin rights** to promote
+a user who is already enrolled on the course. Users who have not enrolled are not eligible.
+Revoking course admin rights does not remove access granted by another role.
+
+Instance administrators and namespace administrators manage namespace members in the namespace
+panel. Add members by their **Manytask username**; they must have logged into Manytask at least
+once. Namespace roles apply across the namespace: a program manager role is not a course admin
+role. Only an instance administrator or an administrator of that namespace can assign namespace
+roles.
+
+## Editing scores and completion
+
+Course administrators can edit a task's score and **Is solved** flag in the score table's edit
+dialog. Check the flag before saving: changing the score also updates the checkbox based on
+the task's `min_score`, and you can then adjust it explicitly. For large tasks, this saved flag
+determines whether the task contributes to `large_count`. See
+[task completion](manytask_yml_reference.md#task-completion) for automatic completion rules.
+
+## Deleting courses and namespaces
+
+Use **Delete course** on **Edit course** to remove a course with **no registered users**.
+For a namespace, open its panel and use **Delete Namespace**; the namespace must contain
+**no courses**. Both dialogs require the exact current name as confirmation.
+
+These actions remove the corresponding Manytask records. Linked RMS repositories and groups
+are preserved. A namespace's name and description can also be changed in its panel without
+deleting it.
+
 ## How to schedule deadlines
 
 Some tips on how to schedule deadlines.
