@@ -713,6 +713,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 labels=app.create_course_labels,
             )
 
+        course_token = request.form["token"]
         try:
             logger.info(
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
@@ -732,6 +733,10 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             app.rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
             logger.info("Created students group")
 
+            app.rms_api.configure_course_manytask_token(
+                gitlab_course_public_repo, gitlab_course_students_group, course_token
+            )
+
         except Exception as e:
             logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
             return render_template(
@@ -750,7 +755,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             gitlab_course_students_group=gitlab_course_students_group,
             gitlab_default_branch=request.form["default_branch"],
             registration_secret=request.form["registration_secret"],
-            token=request.form["token"],
+            token=course_token,
             show_allscores=request.form.get("show_allscores", "off") == "on",
         )
 
