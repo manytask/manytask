@@ -745,7 +745,6 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
         private_repo_path = private_repo_full_path.removeprefix(f"{gitlab_course_group_full_path}/")
-
         conflict = get_course_creation_conflict(app.storage_api, course_name, gitlab_course_group_full_path)
         if conflict is not None:
             return render_template(
