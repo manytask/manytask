@@ -100,6 +100,28 @@ separately for the release pipeline.
 | `DOCKER_AUTH_CONFIG` | Docker auth JSON for a deploy/group token with `read_registry` + `write_registry` | push base/testenv images and let student repos pull testenv |
 | `MANYTASK_TOKEN` | course token from your Manytask admin panel | report scores and deploy `.manytask.yml` |
 
+The private pipeline builds images with **rootless BuildKit**. Registry authentication
+uses `DOCKER_AUTH_CONFIG` first, then `REGISTRY_USERNAME` / `REGISTRY_PASSWORD`, then
+GitLab's built-in job credentials when `REGISTRY` uses the current instance's
+`CI_REGISTRY` host. If you override `REGISTRY`, the base, testenv, and cache images
+all use that path. Student jobs still need `DOCKER_AUTH_CONFIG` with permission to
+pull the private testenv image; build-job credentials alone do not grant that access.
+
+No host Docker socket, Docker-in-Docker service, or privileged runner is needed.
+The runner must allow user namespaces inside the job container. On Docker executors,
+an `operation not permitted` or `newuidmap` error can require the following settings
+in the runner's `config.toml`:
+
+```toml
+[runners.docker]
+  security_opt = ["seccomp:unconfined", "apparmor:unconfined"]
+```
+
+BuildKit imports and exports the reusable base-image cache at
+`$REGISTRY/buildkit-cache:base`. The testenv build publishes only its final stage;
+it does not export intermediate stages containing the raw teacher checkout to a
+registry cache. The manual image deployment promotes the built testenv to `latest`.
+
 ### 5. Register the course on manytask.org
 
 Ask a Manytask admin to register your course, providing:
