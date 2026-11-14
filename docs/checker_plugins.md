@@ -106,6 +106,49 @@ Like `run_script` but wraps the command in [Firejail](https://firejail.wordpress
 | `lock_network` | `bool` | no | `true` | Disable network access inside the sandbox. |
 | `allow_fallback` | `bool` | no | `false` | If `true` and Firejail is not installed, fall back to `run_script` instead of failing. |
 
+## `cpp_run_tests` and `cpp_run_benchmarks`
+
+Run compiled Catch2 tests or benchmarks through `safe_run_script`. Both plugins accept
+the following optional environment settings:
+
+| Arg | Type | Default | Description |
+|---|---|---|---|
+| `env_whitelist` | `list[str]` | `[]` | Environment variables to pass through into the sandbox. This does not print their values. |
+| `show_env_variables` | `list[str]` | `[]` | Environment variables to print in the checker log before running. This does not pass them into the sandbox. Unset variables are displayed as `None`. |
+
+Only list variables whose values should be visible in student-facing logs in
+`show_env_variables`.
+
+`cpp_run_tests` also accepts `run_prefix: list[str]` (default `[]`). Its elements
+are prepended to the test executable and its Catch2 arguments as an argv list,
+without shell expansion. The wrapper runs inside the same sandbox and uses the
+same timeout as the test executable. For example, use
+`run_prefix: ["valgrind", "--error-exitcode=1"]` for Valgrind, or configure CUDA
+Compute Sanitizer as follows:
+
+```yaml
+- name: "Run CUDA tests"
+  run: "cpp_run_tests"
+  args:
+    root: ${{ global.temp_dir }}
+    tests: ["test_cuda", "Debug"]
+    timeout: 120
+    no_detect_leaks: false
+    args: []
+    paths_whitelist: []
+    run_prefix:
+      - /usr/local/cuda/bin/compute-sanitizer
+      - --leak-check
+      - full
+      - --error-exitcode
+      - "1"
+    env_whitelist: ["CUDA_VISIBLE_DEVICES"]
+    show_env_variables: ["CUDA_VISIBLE_DEVICES"]
+```
+
+The wrapper must be installed and accessible inside the sandbox. The example
+expects `test_cuda` to have been built under `root/build-debug`.
+
 ## `aggregate`
 
 Combine multiple score percentages into a single value using a weighted strategy. Typically used in `report_pipeline` to merge scores from several `register_output` stages.
