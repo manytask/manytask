@@ -1,0 +1,12 @@
+// Student stub. Implement the interface from vector_add.hpp using a CUDA kernel.
+#include "vector_add.hpp"
+
+#include <stdexcept>
+
+void vector_add(const float* a, const float* b, float* result, std::size_t count) {
+    (void)a;
+    (void)b;
+    (void)result;
+    (void)count;
+    throw std::runtime_error("Implement vector_add in vector_add.cu");
+}

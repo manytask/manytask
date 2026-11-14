@@ -57,6 +57,16 @@ deadlines:
         - task: add_rust
           score: 100
 
+    # Optional: requires a CUDA GPU, toolkit, Catch2 v3, CMake, Ninja and Firejail.
+    # Enable only after configuring a GPU worker; see cuda/README.md.
+    - group: cuda
+      start: 2026-01-01 00:00
+      end: 2030-01-01 00:00
+      enabled: false
+      tasks:
+        - task: vector_add_cuda
+          score: 100
+
 # Optional: manual code review via merge requests, handled by the mr-reviewer bot.
 # Uncomment and adapt to enable. The bot reads this same file (delivered by the
 # `deploy-mr-review` CI job) and only scans the course when this section exists.

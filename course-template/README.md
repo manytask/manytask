@@ -30,8 +30,10 @@ See the upstream docs:
 ├── testenv.docker        # exports private reference in a two-stage Docker build
 ├── pyproject.toml        # python toolchain dependencies
 ├── tools/                # placeholder for shared plugins / testlib
+├── cuda/                 # optional GPU group (disabled in .manytask.yml)
+│   └── vector_add_cuda/   # CUDA/Catch2 tests, sanitizer and benchmark
 └── python/
-    └── add/              # the only task so far — sum of two integers
+    └── add/              # Python sample — sum of two integers
         ├── .task.yml
         ├── README.md
         ├── add.py            # reference solution (NOT exported)
@@ -41,10 +43,11 @@ See the upstream docs:
         └── conftest.py       # makes `from add import add` work in pytest
 ```
 
-Only **one language** (Python) and **one task** (`add`) are included on purpose:
-this is the smallest end-to-end example you can run, copy, and extend.
-Additional languages (C++, Bash, Go, Rust) will be added in follow-up iterations
-of [manytask#637](https://github.com/manytask/manytask/issues/637).
+The enabled groups cover Python, C++, Bash, Go and Rust, each with an `add` task.
+An optional `cuda/vector_add_cuda/` sample adds CUDA vector addition with Catch2
+tests, Compute Sanitizer and a GPU benchmark. See [the CUDA group guide](cuda/README.md).
+The CUDA schedule entry is disabled by default because the ordinary Alpine image
+does not include CUDA. Enable it on a GPU-equipped worker with the required tools.
 
 ---
 
