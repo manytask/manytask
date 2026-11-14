@@ -10,7 +10,7 @@ To create a course in the Manytask interface you will need to provide the follow
 - **Registration secret** - a secret token that you will give to the student so that they will gain access to the course.
 - **RMS course group**, **public repo** and **students group** - location to create course public repo and students group in the RMS.
 
-The course creation page also contains course token (i.e. TESTER_TOKEN below), which you will need to send data to the Manytask server. Do not worry if you forget these data, you can always get back to it with `Edit course` page. Once the course is created, it will also create the public repository and students group in the RMS. Go to the RMS page and clone the public repository if you want to follow along - the instructions below show what is needed in the public repository in order for the course to work.
+The course creation page also contains course token (i.e. MANYTASK_TOKEN below), which you will need to send data to the Manytask server. Do not worry if you forget these data, you can always get back to it with `Edit course` page. Once the course is created, it will also create the public repository and students group in the RMS. Go to the RMS page and clone the public repository if you want to follow along - the instructions below show what is needed in the public repository in order for the course to work.
 
 
 ## Public repository
@@ -106,7 +106,7 @@ check_task:
 
       # Report the score to the Manytask server.
       curl --fail -X POST --show-error "${MANYTASK_URL}/api/${COURSE_NAME}/report" \
-        -H "Authorization: Bearer ${TESTER_TOKEN}" \
+        -H "Authorization: Bearer ${MANYTASK_TOKEN}" \
         -d "task=${CI_COMMIT_MESSAGE}&username=${GITLAB_USER_LOGIN}&score=1.0"
 ```
 
@@ -116,7 +116,7 @@ The script culminates by the `curl` call, which reports score to the Manytask se
 - `CI_COMMIT_MESSAGE` is the internal GitLab variable that contains commit message. When submitting the task for checking, student must write task name in the commit message (and nothing else), otherwise we will not be able to determine which task is submitted.
 - `TASK_PATH` is the path to the task folder, which in our case coincides with the task name.
 - `GITLAB_USER_LOGIN` is the internal GitLab variable that contains the username of the student, it is used when the report is sent to the Manytask server.
-- `TESTER_TOKEN` is the token that is used to authenticate with the Manytask server. It should be defined in the CI/CD settings of the course folder in GitLab.
+- `MANYTASK_TOKEN` is the token that is used to authenticate with the Manytask server. It should be defined in the CI/CD settings of the course folder in GitLab.
 
 Note that we send `score=1.0` as a score: this represents 100%, but we could set up tests and CI to send fractional score.
 
@@ -188,13 +188,13 @@ Here we set the course `status` to `in_progress`, which will make it possible to
 Once we are happy with the contents of the `.manytask.yml` file, we can send it to the Manytask server with the following command:
 
 ```bash
-export TESTER_TOKEN=???
+export MANYTASK_TOKEN=???
 export MANYTASK_URL=https://app.manytask.org
 export COURSE_NAME=basic
-curl -X POST -H "Authorization: Bearer ${TESTER_TOKEN}" -H "Content-Type: application/x-yaml"  --data-binary @.manytask.yml "${MANYTASK_URL}/api/${COURSE_NAME}/update_config"
+curl -X POST -H "Authorization: Bearer ${MANYTASK_TOKEN}" -H "Content-Type: application/x-yaml"  --data-binary @.manytask.yml "${MANYTASK_URL}/api/${COURSE_NAME}/update_config"
 ```
 
-The `TESTER_TOKEN` is the course token, that is available on the course settings page (and created with the course). Change the Manytask URL and course name to your values as well.
+The `MANYTASK_TOKEN` is the course token, that is available on the course settings page (and created with the course). Change the Manytask URL and course name to your values as well.
 
 ## Limitations
 

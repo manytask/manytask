@@ -61,6 +61,39 @@ from tests.helpers import (
 )
 
 
+def test_create_course_configures_manytask_token(app: Any, mock_gitlab_oauth: Any) -> None:
+    app.storage_api.stored_user.instance_admin = True
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch("manytask.web.validate_csrf"),
+        patch("manytask.web.check_course_creation_namespace_permission", return_value=(None, None, None, None)),
+        patch.object(app.storage_api, "get_course_id_by_name", return_value=None, create=True),
+        patch.object(app.storage_api, "create_course", return_value=True, create=True) as create_course,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post(
+            "/instance_admin/courses/new",
+            data={
+                "csrf_token": "test",
+                "namespace_id": "0",
+                "unique_course_name": "new-course",
+                "course_group": "new-course",
+                "course_public_repo": "new-course/public",
+                "course_students_group": "new-course/students",
+                "default_branch": "main",
+                "registration_secret": "secret",
+                "token": "token",
+            },
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert app.rms_api.projects["new-course/public"].ci_variables["MANYTASK_TOKEN"] == "token"
+    assert app.rms_api.groups["new-course/students"].ci_variables["MANYTASK_TOKEN"] == "token"
+    settings = create_course.call_args.args[0]
+    assert settings.token == "token"
+
+
 @pytest.fixture
 def app(mock_storage_api):
     app = Flask(
