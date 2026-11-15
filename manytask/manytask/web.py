@@ -351,7 +351,7 @@ def signup() -> ResponseReturnValue:
 def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     logger.info(
         "signup_finish requested method=%s by user=%s",
-        request.method,
+        sanitize_log_data(request.method),
         sanitize_log_data(session.get("manytask", {}).get("username")),
     )
     app: CustomFlask = current_app  # type: ignore
