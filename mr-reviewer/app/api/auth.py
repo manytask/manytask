@@ -26,6 +26,7 @@ from app.manytask import (
     ManytaskUnavailable,
     TokenAuthCache,
 )
+from app.observability.audit import set_audit_actor
 
 
 def _extract_bearer(request: Request) -> str:
@@ -47,6 +48,7 @@ async def verify_course_token(
     token = _extract_bearer(request)
 
     if await cache.is_valid(name, token):
+        set_audit_actor("course_token")
         return token
 
     try:
@@ -68,6 +70,7 @@ async def verify_course_token(
             detail="manytask is unavailable; please retry later",
         ) from None
 
+    set_audit_actor("course_token")
     await cache.remember_valid(name, token)
     return token
 
@@ -79,6 +82,7 @@ def verify_admin_token(
     token = _extract_bearer(request)
     if not settings.admin_token or token != settings.admin_token:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin token required")
+    set_audit_actor("admin_token")
 
 
 async def verify_course_or_admin_token(
@@ -91,9 +95,11 @@ async def verify_course_or_admin_token(
     token = _extract_bearer(request)
 
     if settings.admin_token and token == settings.admin_token:
+        set_audit_actor("admin_token")
         return token
 
     if await cache.is_valid(name, token):
+        set_audit_actor("course_token")
         return token
 
     try:
@@ -106,5 +112,6 @@ async def verify_course_or_admin_token(
         logger.warning("manytask /ping unavailable: {}", err)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="manytask unavailable") from None
 
+    set_audit_actor("course_token")
     await cache.remember_valid(name, token)
     return token

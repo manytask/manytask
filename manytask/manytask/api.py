@@ -8,7 +8,7 @@ from http import HTTPStatus
 from typing import Any, Callable, TypeVar
 
 import yaml
-from flask import Blueprint, abort, current_app, jsonify, request, session
+from flask import Blueprint, abort, current_app, g, jsonify, request, session
 from flask.typing import ResponseReturnValue
 from enum import Enum
 from pydantic import ValidationError
@@ -337,6 +337,8 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
             logger.warning("Invalid token for course=%s", course_name)
             abort(HTTPStatus.FORBIDDEN, "Invalid course token")
 
+        g.audit_actor = "course_token"
+        g.audit_auth_method = "course_token"
         logger.debug("Token validated for course=%s", course_name)
         return f(*args, **kwargs)
 

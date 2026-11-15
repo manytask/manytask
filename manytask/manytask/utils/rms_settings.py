@@ -5,6 +5,7 @@ import threading
 from dataclasses import dataclass, field
 
 from manytask.abstract import RmsApi, StorageApi
+from manytask.utils.audit import audit_context, audit_event, run_with_audit_context
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +85,19 @@ def schedule_rms_settings_reconcile(storage_api: StorageApi, rms_api: RmsApi, co
             return False
         _courses_in_progress.add(course_name)
 
+    context = audit_context()
+
     def _run() -> None:
         try:
             reconcile_course_rms_settings(storage_api, rms_api, course_name)
+        except Exception as error:
+            audit_event("rms.reconcile", "failed", context=context, error_type=type(error).__name__)
+            raise
         finally:
             with _courses_in_progress_lock:
                 _courses_in_progress.discard(course_name)
 
-    threading.Thread(target=_run, daemon=True, name=f"rms-reconcile-{course_name}").start()
+    threading.Thread(
+        target=run_with_audit_context, args=(context, _run), daemon=True, name=f"rms-reconcile-{course_name}"
+    ).start()
     return True

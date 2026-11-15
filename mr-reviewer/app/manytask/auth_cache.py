@@ -10,6 +10,8 @@ import hashlib
 
 from redis.asyncio import Redis
 
+from app.observability.audit import audit_write
+
 
 class TokenAuthCache:
     """Cache validated (course, token) pairs in Redis with a short TTL.
@@ -32,5 +34,6 @@ class TokenAuthCache:
     async def is_valid(self, course: str, token: str) -> bool:
         return await self._redis.exists(self._key(course, token)) > 0  # type: ignore[no-any-return]
 
+    @audit_write
     async def remember_valid(self, course: str, token: str) -> None:
         await self._redis.set(self._key(course, token), "ok", ex=self._ttl)

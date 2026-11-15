@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from redis.asyncio import Redis
 
+from app.observability.audit import audit_write
+
 PROCESSED_TTL_SECONDS: int = 60 * 24 * 60 * 60  # 60 days
 
 
@@ -23,6 +25,7 @@ class ProcessedCommentStore:
     def _key(cls, course: str, mr_id: str) -> str:
         return f"{cls.KEY_PREFIX}{course}:{mr_id}"
 
+    @audit_write
     async def mark_processed(self, course: str, mr_id: str, comment_id: str) -> None:
         key = self._key(course, mr_id)
         async with self._redis.pipeline(transaction=False) as pipe:

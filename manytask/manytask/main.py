@@ -18,6 +18,7 @@ from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
+from .utils.audit import install_request_audit
 from .utils.rms_settings import schedule_rms_settings_reconcile
 
 MAX_AGE_IN_SECONDS = 86400
@@ -118,6 +119,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     # logging
     logging.config.dictConfig(_logging_config(app))
+    install_request_audit(app)
 
     # api objects
     app.storage_api = _database_storage_setup()

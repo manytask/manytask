@@ -17,6 +17,7 @@ from app.config import Settings, get_settings
 from app.hosting import build_hosting_adapter
 from app.manytask import ManytaskClient, TokenAuthCache
 from app.observability import Metrics, configure_logging
+from app.observability.audit import install_request_audit
 from app.storage import CourseStore, ProcessedCommentStore
 from app.worker import ScoreProcessor, WorkerLoop
 
@@ -118,6 +119,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="manytask-mr-reviewer", lifespan=lifespan)
+    install_request_audit(app)
     app.include_router(health.router)
     app.include_router(courses.router)
     app.include_router(metrics_routes.router)

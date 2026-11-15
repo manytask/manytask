@@ -8,6 +8,7 @@ from loguru import logger
 from redis.asyncio import Redis
 
 from app.models import CURRENT_SCHEMA_VERSION, CourseConfig
+from app.observability.audit import audit_write
 
 
 class CourseStore:
@@ -26,6 +27,7 @@ class CourseStore:
     def _key(cls, name: str) -> str:
         return f"{cls.KEY_PREFIX}{name}"
 
+    @audit_write
     async def upsert_course(
         self,
         name: str,
@@ -75,5 +77,6 @@ class CourseStore:
             names.append(key.removeprefix(self.KEY_PREFIX))
         return names
 
+    @audit_write
     async def delete_course(self, name: str) -> None:
         await self._redis.delete(self._key(name))

@@ -12,6 +12,7 @@ from app.manytask.errors import (
     ManytaskUnavailable,
 )
 from app.observability import Metrics
+from app.observability.audit import audit_write
 
 
 class ManytaskClient:
@@ -100,6 +101,7 @@ class ManytaskClient:
             check_deadline,
         )
 
+    @audit_write
     async def _report_score_once(
         self,
         course_name: str,
