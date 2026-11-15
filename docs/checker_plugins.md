@@ -179,7 +179,8 @@ Report a submission to the Manytask platform via its [REST API](./api.md). Used 
 after each task pipeline. The checker supplies `OK` for a successful pipeline and `FAIL` for a
 failed pipeline, including tasks skipped because the global pipeline failed. No course config
 changes are needed. Failed reports use `score: 0.0` so they do not depend on missing test outputs;
-Manytask logs them without updating scores or grades. Submission history is not stored yet.
+Manytask stores every reported attempt in submission history and logs it. Only `OK` updates
+scores and grades; failed attempts are stored with their verdict and an unavailable score.
 Deploy the verdict-aware Manytask API before upgrading the checker: older servers ignore
 `verdict` and treat failed reports as score updates.
 HTTP error responses fail the stage; the current retry

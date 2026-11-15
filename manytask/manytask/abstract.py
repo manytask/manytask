@@ -65,6 +65,15 @@ class TaskScore:
     is_solved: bool
 
 
+@dataclass(frozen=True)
+class SubmissionReport:
+    """One reported attempt; score is in points before deadline penalties, or unavailable."""
+
+    submit_time: datetime
+    verdict: str = "OK"
+    score: int | None = None
+
+
 @dataclass
 class StudentCourseScores:
     """Scores, name and grade data of a single student on a single course."""
@@ -181,6 +190,21 @@ class StorageApi(ABC):
         *,
         is_solved: bool | None = None,
     ) -> int: ...
+
+    @abstractmethod
+    def store_submission(
+        self,
+        course_name: str,
+        username: str,
+        task_name: str,
+        submission: SubmissionReport,
+        update_fn: Callable[..., Any] | None = None,
+    ) -> int:
+        """Append a report for an enrolled user, atomically updating the score only for OK.
+
+        Return the resulting task score; OK reports require an update function.
+        """
+        ...
 
     @abstractmethod
     def create_course(

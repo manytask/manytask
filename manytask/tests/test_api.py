@@ -11,7 +11,7 @@ from flask import json, url_for
 from pytest import approx
 from werkzeug.exceptions import HTTPException
 
-from manytask.abstract import CourseAccessUser, RmsUser, StudentCourseScores, TaskScore
+from manytask.abstract import CourseAccessUser, RmsUser, StudentCourseScores, SubmissionReport, TaskScore
 from manytask.api import _parse_flags, _process_score, _update_score, _validate_and_extract_params
 from manytask.api import bp as api_bp
 from manytask.config import ManytaskConfig, ManytaskDeadlinesType, ManytaskGroupConfig, ManytaskTaskConfig
@@ -106,6 +106,7 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             self.scores = {}
             self.solved = {}
             self.non_admin_users: set[str] = set()
+            self.submissions: list[SubmissionReport] = []
 
         def store_score(self, _course_name, username, task_name, update_fn, *, is_solved=None):
             old_score = self.scores.get(f"{username}_{task_name}", 0)
@@ -114,6 +115,22 @@ def mock_storage_api(mock_course, mock_task, mock_group):  # noqa: C901
             if is_solved is not None:
                 self.solved[f"{username}_{task_name}"] = is_solved
             return new_score
+
+        def store_submission(
+            self,
+            course_name: str,
+            username: str,
+            task_name: str,
+            submission: SubmissionReport,
+            update_fn: Callable[..., Any] | None = None,
+        ) -> int:
+            if submission.verdict == "OK":
+                assert update_fn is not None
+                score = self.store_score(course_name, username, task_name, update_fn)
+            else:
+                score = self.scores.get(f"{username}_{task_name}", 0)
+            self.submissions.append(submission)
+            return score
 
         @staticmethod
         def get_scores(_course_name, _username):
@@ -503,11 +520,14 @@ def test_report_score_success(app: Any, caplog: pytest.LogCaptureFixture, verdic
         assert data["verdict"] == "OK"
         assert app.storage_api.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] == expected_data["score"]
         assert "verdict=OK" in caplog.text
+        assert len(app.storage_api.submissions) == 1
+        assert app.storage_api.submissions[0].verdict == "OK"
+        assert app.storage_api.submissions[0].score == expected_data["score"]
 
 
 @pytest.mark.parametrize("verdict", ["FAIL", "WA"])
 @pytest.mark.parametrize("old_score", [None, 80, -42])
-def test_report_non_ok_submission_only_logs(
+def test_report_non_ok_submission_preserves_scores(
     app: Any, caplog: pytest.LogCaptureFixture, verdict: str, old_score: int | None
 ) -> None:
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
@@ -539,6 +559,9 @@ def test_report_non_ok_submission_only_logs(
     assert f"verdict={verdict}" in caplog.text
     assert f"task={TEST_TASK_NAME}" in caplog.text
     assert "reported_score=unavailable" in caplog.text
+    assert len(storage.submissions) == 1
+    assert storage.submissions[0].verdict == verdict
+    assert storage.submissions[0].score is None
 
 
 def test_report_negative_integer_score(app):

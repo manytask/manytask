@@ -1,10 +1,11 @@
 import json
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from importlib import import_module
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -14,13 +15,14 @@ from alembic import command
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
+from flask import Response
 from flask import session as flask_session
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
-from sqlalchemy import event
-from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
-from sqlalchemy.orm import Session
+from sqlalchemy import event, inspect
+from sqlalchemy.exc import DataError, IntegrityError, NoResultFound, ProgrammingError
+from sqlalchemy.orm import Session, sessionmaker
 
-from manytask.abstract import StudentCourseScores, TaskScore
+from manytask.abstract import StudentCourseScores, SubmissionReport, TaskScore
 from manytask.api import bp as api_bp
 from manytask.config import (
     ManytaskConfig,
@@ -48,6 +50,7 @@ from manytask.models import (
     Grade,
     Namespace,
     PrimaryFormula,
+    Submission,
     Task,
     TaskGroup,
     User,
@@ -89,7 +92,7 @@ from tests.constants import (
     TEST_USERNAME_2,
     USER_EXPECTED,
 )
-from tests.helpers import make_flask_app
+from tests.helpers import make_flask_app, register_rms_user
 
 
 class TestException(Exception):
@@ -910,6 +913,183 @@ def test_store_score(db_api_with_initialized_first_course, session):
         0,
         {"task_0_0": 1},
     )
+
+
+@pytest.fixture
+def submission_app(db_api_with_initialized_first_course: DataBaseApi, session: Session) -> Any:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    course.status = CourseStatus.IN_PROGRESS
+    session.commit()
+    # Give API calls their own transactions while retaining this fixture's outer transaction.
+    db_api._session_create = sessionmaker(bind=session.get_bind(), join_transaction_mode="create_savepoint")
+    app = make_flask_app(api_bp)
+    app.storage_api = db_api
+    app.rms_api = MockRmsApi("https://gitlab.test.com")
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    register_rms_user(app, user)
+    app.rms_api.users_by_username[user.username] = app.rms_api.users[user.rms_id]
+    return app
+
+
+def _post_submission(
+    app: Any, *, verdict: str | None = "OK", score: str | None = None, task_name: str = "task_0_0"
+) -> Response:
+    course = app.storage_api.get_course(FIRST_COURSE_NAME)
+    data = {
+        "username": TEST_USERNAME,
+        "task": task_name,
+        "check_deadline": "False",
+        "submit_time": "2026-11-15 10:20:30+0530",
+    }
+    if verdict is not None:
+        data["verdict"] = verdict
+    if score is not None:
+        data["score"] = score
+    return app.test_client().post(
+        f"/api/{FIRST_COURSE_NAME}/report",
+        data=data,
+        headers={"Authorization": f"Bearer {course.token}"},
+    )
+
+
+def test_report_keeps_every_attempt_and_default_verdict(submission_app: Any, session: Session) -> None:
+    best_score = 90
+    attempts = [("OK", "90"), ("FAIL", None), ("OK", "30"), ("WA", "unavailable"), (None, "50")]
+    for verdict, score in attempts:
+        response = _post_submission(submission_app, verdict=verdict, score=score)
+        assert response.status_code == HTTPStatus.OK
+        assert response.json["score"] == best_score
+    session.expire_all()
+    submissions = session.query(Submission).order_by(Submission.id).all()
+    assert [submission.verdict for submission in submissions] == ["OK", "FAIL", "OK", "WA", "OK"]
+    assert [submission.score for submission in submissions] == [90, None, 30, None, 50]
+    assert len({submission.id for submission in submissions}) == len(attempts)
+    for submission in submissions:
+        assert submission.user_on_course.user.username == TEST_USERNAME
+        assert submission.user_on_course.course.name == FIRST_COURSE_NAME
+        assert submission.task.name == "task_0_0"
+        assert submission.task.group.course_id == submission.user_on_course.course_id
+        assert submission.submit_time == datetime(2026, 11, 15, 4, 50, 30, tzinfo=timezone.utc)
+        assert submission.received_at.tzinfo is not None
+    assert session.query(Grade).one().score == best_score
+
+
+@pytest.mark.parametrize("old_score", [None, 80])
+def test_failed_submission_preserves_grade_state(submission_app: Any, session: Session, old_score: int | None) -> None:
+    db_api = submission_app.storage_api
+    if old_score is not None:
+        db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", lambda *_: old_score, is_solved=True)
+    membership = session.query(UserOnCourse).one()
+    membership.final_grade = 4
+    membership.final_grade_override = 5
+    session.commit()
+    grade = session.query(Grade).one_or_none()
+    previous = (grade.score, grade.is_solved, grade.last_submit_date) if grade else None
+    response = _post_submission(submission_app, verdict="FAIL", score="0.0")
+    assert response.status_code == HTTPStatus.OK
+    assert response.json["score"] == (old_score or 0)
+    session.expire_all()
+    grade = session.query(Grade).one_or_none()
+    assert ((grade.score, grade.is_solved, grade.last_submit_date) if grade else None) == previous
+    membership = session.query(UserOnCourse).one()
+    assert (membership.final_grade, membership.final_grade_override) == (4, 5)
+    assert session.query(Submission).one().verdict == "FAIL"
+
+
+@pytest.mark.parametrize("verdict", ["OK", "FAIL"])
+def test_submission_requires_existing_enrollment(submission_app: Any, session: Session, verdict: str) -> None:
+    session.delete(session.query(UserOnCourse).one())
+    session.commit()
+    response = _post_submission(submission_app, verdict=verdict, score="10")
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert b"course enrollment" in response.data
+    assert session.query(UserOnCourse).count() == 0
+    assert session.query(Submission).count() == 0
+    assert session.query(Grade).count() == 0
+
+
+@pytest.mark.parametrize("payload", [{"score": "invalid"}, {"task_name": "missing-task"}])
+def test_invalid_report_does_not_create_history(submission_app: Any, session: Session, payload: dict[str, str]) -> None:
+    response = _post_submission(submission_app, **payload)
+    assert response.status_code in {HTTPStatus.BAD_REQUEST, HTTPStatus.NOT_FOUND}
+    assert session.query(Submission).count() == 0
+    assert session.query(Grade).count() == 0
+
+
+def test_submission_and_score_rollback_together(submission_app: Any, session: Session) -> None:
+    db_api = submission_app.storage_api
+    old_score = 5
+    db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", lambda *_: old_score)
+    report = SubmissionReport(submit_time=datetime.now(timezone.utc), score=2**63)
+    # The score update itself is valid; the history insert overflows PostgreSQL's integer column.
+    with pytest.raises(DataError):
+        db_api.store_submission(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", report, lambda *_: 10)
+    session.expire_all()
+    assert session.query(Grade).one().score == old_score
+    assert session.query(Submission).count() == 0
+
+
+def test_submission_callback_failure_creates_neither_grade_nor_history(submission_app: Any, session: Session) -> None:
+    def fail_update(_flags: str, _old_score: int) -> int:
+        raise RuntimeError("Score update failed")
+
+    with pytest.raises(RuntimeError, match="Score update failed"):
+        submission_app.storage_api.store_submission(
+            FIRST_COURSE_NAME,
+            TEST_USERNAME,
+            "task_0_0",
+            SubmissionReport(submit_time=datetime.now(timezone.utc), score=10),
+            fail_update,
+        )
+    assert session.query(Submission).count() == 0
+    assert session.query(Grade).count() == 0
+
+
+def test_submission_task_is_scoped_to_enrollment_course(
+    db_api_with_two_initialized_courses: DataBaseApi,
+    session: Session,
+) -> None:
+    db_api = db_api_with_two_initialized_courses
+    create_user(db_api)
+    report = SubmissionReport(submit_time=datetime.now(timezone.utc), verdict="FAIL")
+    courses = {FIRST_COURSE_NAME, SECOND_COURSE_NAME}
+    for course_name in courses:
+        db_api.sync_user_on_course(course_name, TEST_USERNAME, False)
+        db_api.store_submission(course_name, TEST_USERNAME, "task_0_0", report)
+    submissions = session.query(Submission).all()
+    assert len(submissions) == len(courses)
+    assert submissions[0].task_id != submissions[1].task_id
+    assert {submission.user_on_course.course.name for submission in submissions} == {
+        FIRST_COURSE_NAME,
+        SECOND_COURSE_NAME,
+    }
+    assert all(submission.task.group.course_id == submission.user_on_course.course_id for submission in submissions)
+
+
+@pytest.mark.parametrize("parent", ["task", "membership"])
+def test_submission_deletion_follows_its_parents(submission_app: Any, session: Session, parent: str) -> None:
+    assert _post_submission(submission_app, verdict="FAIL").status_code == HTTPStatus.OK
+    submission = session.query(Submission).one()
+    session.delete(submission.task if parent == "task" else submission.user_on_course)
+    session.commit()
+    assert session.query(Submission).count() == 0
+
+
+def test_submission_migration_preserves_existing_grades(submission_app: Any, session: Session) -> None:
+    old_score = 42
+    submission_app.storage_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", lambda *_: old_score)
+    migration = import_module("manytask.migrations.versions.e4f5a6b7c8d9_add_submission_history")
+    with Operations.context(MigrationContext.configure(session.connection())):
+        migration.downgrade()
+        assert not inspect(session.connection()).has_table("submissions")
+        assert session.query(Grade).one().score == old_score
+        migration.upgrade()
+        assert inspect(session.connection()).has_table("submissions")
+        assert session.query(Submission).count() == 0
+        assert session.query(Grade).one().score == old_score
 
 
 def test_store_score_solved_status(db_api_with_initialized_first_course, session) -> None:

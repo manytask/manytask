@@ -421,8 +421,9 @@ testing:
 `report_pipeline` runs after each task, including failures. Under `checker grade`, it reports
 `OK` or `FAIL` to Manytask, so it needs a `MANYTASK_TOKEN` CI variable. A global pipeline failure
 reports `FAIL` for all selected tasks without running their tests. Only `OK` updates scores;
-other verdicts are logged without being stored. The built-in Manytask reporting stage uses
-`score: 0.0` for failures, bypassing score templates whose test outputs may be missing.
+other verdicts are stored in submission history without changing scores or grades. The built-in
+Manytask reporting stage uses `score: 0.0` for failures, bypassing score templates whose test outputs
+may be missing.
 Custom reporting stages can use `task.verdict` to handle missing outputs. Replace
 `course-name` in `report_url` with your course slug. The GitLab CI example reads the student's
 username from `GITLAB_USER_LOGIN`; other runners must provide an appropriate RMS username.
