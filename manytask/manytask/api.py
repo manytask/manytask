@@ -14,7 +14,7 @@ from enum import Enum
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
-from manytask.abstract import RmsApiException, StorageApi, StoredUser
+from manytask.abstract import RmsApiException, StorageApi, StoredUser, SubmissionReport
 from manytask.database import NamespaceNotEmptyError, TaskDisabledError
 
 from .abstract import RmsApi, RmsUser
@@ -555,31 +555,37 @@ def report_score(course_name: str) -> ResponseReturnValue:
         "commit_time": submit_time.isoformat(sep=" "),
         "submit_time": submit_time.isoformat(sep=" "),
     }
-    if verdict != "OK":
-        # Failed submissions are logged only until submission history is implemented.
-        student = app.storage_api.get_all_scores_with_names(course.course_name, username=manytask_username).get(
-            manytask_username
+    reported_score = None
+    update_function = None
+    if verdict == "OK":
+        reported_score = _process_score(request.form, task.score)
+        if reported_score is None:
+            reported_score = task.score
+            logger.info("Got score=None; set max score for %s of %s", task.name, task.score)
+        update_function = functools.partial(
+            _update_score,
+            course,
+            group,
+            task,
+            reported_score,
+            submit_time=submit_time,
+            check_deadline=check_deadline,
+            allow_reduction=allow_reduction,
         )
-        previous_score = student.task_scores.get(task.name) if student else None
-        result["score"] = previous_score.score if previous_score else 0
+    try:
+        final_score = app.storage_api.store_submission(
+            course.course_name,
+            manytask_username,
+            task.name,
+            SubmissionReport(submit_time=submit_time, verdict=verdict, score=reported_score),
+            update_function,
+        )
+    except NoResultFound:
+        abort(HTTPStatus.NOT_FOUND, "Cannot record submission: course enrollment or task not found")
+
+    result["score"] = final_score
+    if verdict != "OK":
         return result, HTTPStatus.OK
-
-    reported_score = _process_score(request.form, task.score)
-    if reported_score is None:
-        reported_score = task.score
-        logger.info("Got score=None; set max score for %s of %s", task.name, task.score)
-
-    update_function = functools.partial(
-        _update_score,
-        course,
-        group,
-        task,
-        reported_score,
-        submit_time=submit_time,
-        check_deadline=check_deadline,
-        allow_reduction=allow_reduction,
-    )
-    final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
 
     logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
 
@@ -594,7 +600,6 @@ def report_score(course_name: str) -> ResponseReturnValue:
         logger.error("Failed to recalculate grade for user=%s: %s", manytask_username, str(e))
         # Don't fail the request if grade calculation fails
 
-    result["score"] = final_score
     return result, HTTPStatus.OK
 
 

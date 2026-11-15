@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Any, List, Optional
 
-from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, MetaData, UniqueConstraint, func
+from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, Index, MetaData, UniqueConstraint, func
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship, validates
 from sqlalchemy.types import TypeDecorator
@@ -317,6 +317,9 @@ class UserOnCourse(Base):
     user: Mapped["User"] = relationship(back_populates="users_on_courses")
     course: Mapped["Course"] = relationship(back_populates="users_on_courses")
     grades: DynamicMapped["Grade"] = relationship(back_populates="user_on_course", cascade="all, delete-orphan")
+    submissions: DynamicMapped["Submission"] = relationship(
+        back_populates="user_on_course", cascade="all, delete-orphan"
+    )
 
 
 class Deadline(Base):
@@ -369,6 +372,7 @@ class Task(Base):
     # relationships
     group: Mapped["TaskGroup"] = relationship(back_populates="tasks")
     grades: Mapped[List["Grade"]] = relationship(back_populates="task", cascade="all, delete-orphan")
+    submissions: DynamicMapped["Submission"] = relationship(back_populates="task", cascade="all, delete-orphan")
 
 
 class Grade(Base):
@@ -386,6 +390,24 @@ class Grade(Base):
     # relationships
     user_on_course: Mapped["UserOnCourse"] = relationship(back_populates="grades")
     task: Mapped["Task"] = relationship(back_populates="grades")
+
+
+class Submission(Base):
+    __tablename__ = "submissions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_on_course_id: Mapped[int] = mapped_column(ForeignKey(UserOnCourse.id))
+    task_id: Mapped[int] = mapped_column(ForeignKey(Task.id), index=True)
+    verdict: Mapped[str] = mapped_column(default="OK", server_default="OK")
+    # Reported points before deadline penalties; unavailable for non-OK reports.
+    score: Mapped[Optional[int]]
+    submit_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_submissions_user_task_time", "user_on_course_id", "task_id", "submit_time"),)
+
+    user_on_course: Mapped["UserOnCourse"] = relationship(back_populates="submissions")
+    task: Mapped["Task"] = relationship(back_populates="submissions")
 
 
 class ComplexFormula(Base):

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
 from sqlalchemy.sql.functions import coalesce, func
 
 from . import models
-from .abstract import CourseAccessUser, StorageApi, StoredUser, StudentCourseScores, TaskScore
+from .abstract import CourseAccessUser, StorageApi, StoredUser, StudentCourseScores, SubmissionReport, TaskScore
 from .config import (
     ManytaskConfig,
     ManytaskDeadlinesConfig,
@@ -594,14 +594,7 @@ class DataBaseApi(StorageApi):
                     return 0
 
                 grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
-                new_score = update_fn("", grade.score)
-                if is_solved is not None:
-                    grade.is_solved = is_solved
-                elif new_score != grade.score and task.is_large and new_score > 0 and new_score >= task.min_score:
-                    # Preserve completion earned under an earlier min_score unless explicitly overridden.
-                    grade.is_solved = True
-                grade.score = new_score
-                grade.last_submit_date = datetime.now(timezone.utc)
+                new_score = self._update_grade(grade, task, update_fn, is_solved=is_solved)
 
                 session.commit()
                 logger.info(
@@ -616,6 +609,81 @@ class DataBaseApi(StorageApi):
             except Exception as e:
                 session.rollback()
                 logger.error("Failed to update score for '%s' on '%s': %s", username, task_name, str(e))
+                raise
+
+    @staticmethod
+    def _update_grade(
+        grade: models.Grade,
+        task: models.Task,
+        update_fn: Callable[..., Any],
+        *,
+        is_solved: bool | None = None,
+    ) -> int:
+        new_score: int = update_fn("", grade.score)
+        if is_solved is not None:
+            grade.is_solved = is_solved
+        elif new_score != grade.score and task.is_large and new_score > 0 and new_score >= task.min_score:
+            # Preserve completion earned under an earlier min_score unless explicitly overridden.
+            grade.is_solved = True
+        grade.score = new_score
+        grade.last_submit_date = datetime.now(timezone.utc)
+        return new_score
+
+    def store_submission(
+        self,
+        course_name: str,
+        username: str,
+        task_name: str,
+        submission: SubmissionReport,
+        update_fn: Callable[..., Any] | None = None,
+    ) -> int:
+        """Keep every attempt; only OK can update Grade, in the same transaction.
+
+        Membership must already exist. Task lookup is scoped to that course.
+        """
+        with self._session_create() as session:
+            try:
+                course = self._get(session, models.Course, name=course_name)
+                user = self._get(session, models.User, username=username)
+                user_on_course = (
+                    session.query(models.UserOnCourse)
+                    .filter_by(user_id=user.id, course_id=course.id)
+                    .with_for_update()
+                    .one()
+                )
+                task = self._get_task_by_name_and_course_id(session, task_name, course.id)
+                if submission.verdict == "OK":
+                    if update_fn is None:
+                        raise ValueError("OK submissions require a score update function")
+                    grade = self._get_or_create_sfu_grade(session, user_on_course.id, task.id)
+                    final_score = self._update_grade(grade, task, update_fn)
+                else:
+                    previous_grade = (
+                        session.query(models.Grade)
+                        .filter_by(user_on_course_id=user_on_course.id, task_id=task.id)
+                        .one_or_none()
+                    )
+                    final_score = previous_grade.score if previous_grade else 0
+                session.add(
+                    models.Submission(
+                        user_on_course_id=user_on_course.id,
+                        task_id=task.id,
+                        verdict=submission.verdict,
+                        score=submission.score,
+                        submit_time=submission.submit_time,
+                    )
+                )
+                session.commit()
+                logger.info(
+                    "Recorded submission for user=%s, course=%s, task=%s, verdict=%s",
+                    username,
+                    course_name,
+                    task_name,
+                    submission.verdict,
+                )
+                return final_score
+            except Exception:
+                session.rollback()
                 raise
 
     def get_course(
