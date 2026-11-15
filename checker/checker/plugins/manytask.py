@@ -26,11 +26,16 @@ class ManytaskPlugin(PluginABC):
     name = "report_score_manytask"
 
     class Args(PluginABC.Args):
-        origin: Optional[str] = None  # as pydantic does not support | in older python versions
+        origin: Optional[str] = (
+            None  # as pydantic does not support | in older python versions
+        )
         patterns: list[str] = ["*"]
         username: str
         task_name: str
-        score: int | float | None  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
+        verdict: str = "OK"
+        score: (
+            int | float | None
+        )  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
         report_url: AnyUrl
         report_token: str
         check_deadline: bool
@@ -41,7 +46,9 @@ class ManytaskPlugin(PluginABC):
         output: list[str] = []
 
         if not args.send_time.tzinfo:
-            output.append("Warning: No timezone provided for send_time, possible time miscalculations")
+            output.append(
+                "Warning: No timezone provided for send_time, possible time miscalculations"
+            )
         try:
             send_time_formatted = args.send_time.strftime(self.DEFAULT_TIME_FORMAT)
         except ValueError as e:
@@ -51,6 +58,7 @@ class ManytaskPlugin(PluginABC):
         data = {
             "token": args.report_token,
             "task": args.task_name,
+            "verdict": args.verdict,
             "username": args.username,
             "score": args.score,
             "check_deadline": args.check_deadline,
@@ -71,7 +79,7 @@ class ManytaskPlugin(PluginABC):
             result = response.json()
             output.append(
                 f"Report for task '{args.task_name}' for user '{args.username}', "
-                f"requested score: {args.score}, result score: {result['score']}"
+                f"verdict: {args.verdict}, requested score: {args.score}, result score: {result['score']}"
             )
             return PluginOutput(output="\n".join(output))
         except (json.JSONDecodeError, KeyError):

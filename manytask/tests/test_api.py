@@ -478,7 +478,8 @@ def test_report_score_missing_user(app):
         assert b"user_id" in response.data
 
 
-def test_report_score_success(app):
+@pytest.mark.parametrize("verdict", [None, "OK"])
+def test_report_score_success(app: Any, caplog: pytest.LogCaptureFixture, verdict: str | None) -> None:
     rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
     app.storage_api.stored_user.rms_id = rms_user.id
     with app.test_request_context():
@@ -488,14 +489,56 @@ def test_report_score_success(app):
             "score": "90",
             "check_deadline": "True",
         }
+        if verdict is not None:
+            data["verdict"] = verdict
         headers = {"Authorization": f"Bearer {os.environ['MANYTASK_COURSE_TOKEN']}"}
         expected_data = {"username": TEST_USERNAME, "score": 90}
 
-        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
+        with caplog.at_level("INFO", logger="manytask.api"):
+            response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=headers)
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
         assert data["username"] == expected_data["username"]
         assert data["score"] == expected_data["score"]
+        assert data["verdict"] == "OK"
+        assert app.storage_api.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] == expected_data["score"]
+        assert "verdict=OK" in caplog.text
+
+
+@pytest.mark.parametrize("verdict", ["FAIL", "WA"])
+@pytest.mark.parametrize("old_score", [None, 80, -42])
+def test_report_non_ok_submission_only_logs(
+    app: Any, caplog: pytest.LogCaptureFixture, verdict: str, old_score: int | None
+) -> None:
+    rms_user = app.rms_api.register_new_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_EMAIL, TEST_PASSWORD)
+    storage = app.storage_api
+    storage.stored_user.rms_id = rms_user.id
+    if old_score is not None:
+        storage.scores[f"{TEST_USERNAME}_{TEST_TASK_NAME}"] = old_score
+    existing_scores = storage.scores.copy()
+    storage.store_score = MagicMock(side_effect=AssertionError("Failed submissions must not update scores"))
+    storage.calculate_and_save_grade = MagicMock(
+        side_effect=AssertionError("Failed submissions must not update grades")
+    )
+    data = {
+        "task": TEST_TASK_NAME,
+        "username": rms_user.username,
+        "verdict": verdict,
+        "allow_reduction": "True",
+        # Failed submissions do not need a usable score.
+        "score": "unavailable",
+    }
+    with caplog.at_level("INFO", logger="manytask.api"):
+        response = app.test_client().post(f"/api/{TEST_COURSE_NAME}/report", data=data, headers=_valid_token_headers())
+    assert response.status_code == HTTPStatus.OK
+    assert response.json["verdict"] == verdict
+    assert response.json["score"] == (old_score if old_score is not None else 0)
+    storage.store_score.assert_not_called()
+    storage.calculate_and_save_grade.assert_not_called()
+    assert storage.scores == existing_scores
+    assert f"verdict={verdict}" in caplog.text
+    assert f"task={TEST_TASK_NAME}" in caplog.text
+    assert "reported_score=unavailable" in caplog.text
 
 
 def test_report_negative_integer_score(app):

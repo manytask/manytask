@@ -36,7 +36,7 @@ TIMESTAMP = datetime(2025, 1, 1, tzinfo=timezone.utc)
             True,
             False,
             "Task pipelines failed",
-            ["global", "task:first", "task:second", "report:second"],
+            ["global", "task:first", "report:first", "task:second", "report:second"],
         ),
         (
             {"report:first"},
@@ -59,7 +59,13 @@ TIMESTAMP = datetime(2025, 1, 1, tzinfo=timezone.utc)
             None,
             ["global", "task:first", "report:first", "task:second", "report:second"],
         ),
-        ({"global"}, True, False, "Global pipeline failed", ["global"]),
+        (
+            {"global"},
+            True,
+            False,
+            "Global pipeline failed",
+            ["global", "report:first", "report:second"],
+        ),
     ],
 )
 def test_pipeline_execution_order_and_reporting(
@@ -112,7 +118,14 @@ def test_pipeline_execution_order_and_reporting(
                 assert context["task"].task_name == task_name
                 assert context["task"].task_score_percent == 1.0
             if stage == "report":
-                assert context["outputs"]["task"].name == task_name
+                if "global" not in failures:
+                    assert context["outputs"]["task"].name == task_name
+                expected_verdict = (
+                    "FAIL"
+                    if "global" in failures or f"task:{task_name}" in failures
+                    else "OK"
+                )
+                assert context["task"].verdict == expected_verdict
             context["outputs"][stage] = PipelineStageResult(task_name, False, False)
             return PipelineResult(label in failures, [])
 
@@ -130,7 +143,7 @@ def test_pipeline_execution_order_and_reporting(
     mocker.patch.object(
         tester,
         "_get_task_report_pipeline_runner",
-        side_effect=lambda task: runner("report", task.name),
+        side_effect=lambda task, verdict: runner("report", task.name),
     )
     if expected_error:
         with pytest.raises(TestingError, match=expected_error):

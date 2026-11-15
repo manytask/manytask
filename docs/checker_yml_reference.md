@@ -223,7 +223,7 @@ testing:
 | `skip_unchanged_tasks` | `str` | ➖ | `null` | Name of the task parameter holding glob patterns of student-editable files (e.g. `allow_change`). If set, `checker grade` skips (does not run and does not report) any detected task whose matching files are byte-identical to the published version. `null` disables the check. See details [below](#skip_unchanged_tasks). |
 | `global_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once** per checker run, before any task pipeline. |
 | `tasks_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**. Can be overridden in `.task.yml` or `.tasks.yml`. |
-| `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task** only if `tasks_pipeline` succeeded. Can be overridden in `.task.yml` or `.tasks.yml`. |
+| `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**, including failures. The checker reports `OK` or `FAIL`; only `OK` updates scores. Can be overridden in `.task.yml` or `.tasks.yml`. |
 
 ### `changes_detection`
 
@@ -385,6 +385,7 @@ Available only in `tasks_pipeline` and `report_pipeline` (not in `global_pipelin
 | `task.task_name` | `str` | Name of the current task (e.g. `"hello_world"`). |
 | `task.task_sub_path` | `str` | Relative path to the current task folder (e.g. `"1.FirstGroup/hello_world"`). |
 | `task.task_score_percent` | `float` | Deadline-adjusted score multiplier in `[0.0, 1.0]`. |
+| `task.verdict` | `str` | `OK` by default; in `report_pipeline`, `OK` for a successful task pipeline or `FAIL` for a failed task/global pipeline. |
 
 #### `parameters`
 

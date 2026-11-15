@@ -121,9 +121,8 @@ def test_report_rejection_names_failed_reports_alongside_task_failures(
 
     output = capsys.readouterr().err
     assert "Manytask returned HTTP 403:\nInvalid course token" in output
-    if not failed_tasks:
-        assert len(reports.request_history) == 2
-        assert "Report for task 'second'" in output
+    assert len(reports.request_history) == 2
+    assert "Report for task 'second'" in output
 
 
 def test_network_failure_does_not_prevent_later_task_and_report(
@@ -150,3 +149,75 @@ def test_network_failure_does_not_prevent_later_task_and_report(
     assert "Unable to send score to Manytask: connection interrupted" in output
     assert "Run <second> task pipeline:" in output
     assert "Report for task 'second'" in output
+
+
+@pytest.mark.parametrize("global_failure", [False, True])
+def test_failed_submissions_are_reported_without_score_outputs(
+    tmp_path: Path, mocker: MockerFixture, global_failure: bool
+) -> None:
+    tester = _create_tester(tmp_path, mocker, {"first", "second"})
+    # Simulate compilation failing before the score-producing test stage runs.
+    tester.testing_config.report_pipeline[0].args["score"] = (
+        "${{ outputs.tests.percentage }}"
+    )
+    if global_failure:
+        tester.global_pipeline = tester._get_task_pipeline_runner(
+            tester.course.get_tasks()[0]
+        )
+        tester.global_pipeline.pipeline[0].args["origin"] = str(tmp_path)
+        tester.global_pipeline.pipeline[0].args["script"] = [
+            sys.executable,
+            "-c",
+            "exit(1)",
+        ]
+    original_report_args = tester.testing_config.report_pipeline[0].args.copy()
+
+    with Mocker() as reports:
+        reports.post(REPORT_URL, json={"score": 80, "verdict": "FAIL"})
+        with pytest.raises(
+            TestingError,
+            match="Global pipeline failed"
+            if global_failure
+            else "Task pipelines failed",
+        ):
+            tester.run(tmp_path, timestamp=TIMESTAMP)
+
+    assert len(reports.request_history) == 2
+    for request, task_name in zip(reports.request_history, ("first", "second")):
+        assert request.text is not None
+        data = parse_qs(request.text)
+        assert data["task"] == [task_name]
+        assert data["verdict"] == ["FAIL"]
+        assert data["score"] == ["0.0"]
+    assert tester.testing_config.report_pipeline[0].args == original_report_args
+
+
+def test_reporting_failure_is_visible_for_a_failed_task(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    tester = _create_tester(tmp_path, mocker, {"first"})
+    with Mocker() as reports:
+        reports.post(REPORT_URL, [{"status_code": 403}, {"json": {"score": 1.0}}])
+        with pytest.raises(
+            TestingError,
+            match=re.escape(
+                "Task pipelines failed: ['first']; Reporting score failed for: ['first']"
+            ),
+        ):
+            tester.run(tmp_path, timestamp=TIMESTAMP)
+    assert len(reports.request_history) == 2
+
+
+@pytest.mark.parametrize("report,dry_run", [(False, False), (True, True)])
+def test_failed_submissions_respect_disabled_reporting_and_dry_runs(
+    tmp_path: Path, mocker: MockerFixture, report: bool, dry_run: bool
+) -> None:
+    tester = _create_tester(tmp_path, mocker, {"first"})
+    tester.dry_run = dry_run
+    with Mocker() as reports:
+        if dry_run:
+            tester.run(tmp_path, report=report, timestamp=TIMESTAMP)
+        else:
+            with pytest.raises(TestingError, match="Task pipelines failed"):
+                tester.run(tmp_path, report=report, timestamp=TIMESTAMP)
+    assert reports.request_history == []

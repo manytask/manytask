@@ -175,8 +175,14 @@ Combine multiple score percentages into a single value using a weighted strategy
 
 ## `report_score_manytask`
 
-Send the final score to the Manytask platform via its [REST API](./api.md). Used in `report_pipeline`
-after a successful task pipeline. HTTP error responses fail the stage; the current retry
+Report a submission to the Manytask platform via its [REST API](./api.md). Used in `report_pipeline`
+after each task pipeline. The checker supplies `OK` for a successful pipeline and `FAIL` for a
+failed pipeline, including tasks skipped because the global pipeline failed. No course config
+changes are needed. Failed reports use `score: 0.0` so they do not depend on missing test outputs;
+Manytask logs them without updating scores or grades. Submission history is not stored yet.
+Deploy the verdict-aware Manytask API before upgrading the checker: older servers ignore
+`verdict` and treat failed reports as score updates.
+HTTP error responses fail the stage; the current retry
 configuration does not retry POST requests on HTTP errors.
 
 ```yaml
@@ -195,6 +201,7 @@ configuration does not retry POST requests on HTTP errors.
 |---|---|---|---|---|
 | `username` | `str` | yes | — | Student's username in RMS. |
 | `task_name` | `str` | yes | — | Task identifier as registered in `.manytask.yml`. |
+| `verdict` | `str` | no | `OK` | Submission verdict. In `report_pipeline`, the checker sets this from the pipeline result. Only `OK` updates scores. |
 | `score` | `float \| int \| null` | yes | — | Score to report, in `[0.0, 1.0]` (bonus scores may exceed `1.0` but float larger than `2.0` will not be accepted). |
 | `report_url` | `AnyUrl` | yes | — | Full score endpoint URL: `https://<host>/api/<course_name>/report`. The plugin uses it as given. |
 | `report_token` | `str` | yes | — | Authentication token for the Manytask API. |

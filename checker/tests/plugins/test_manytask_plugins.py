@@ -223,6 +223,7 @@ class TestManytaskPlugin:
         expected_data = {
             "token": self.REPORT_TOKEN,
             "task": self.TEST_TASK_NAME,
+            "verdict": "OK",
             "username": self.TEST_USERNAME,
             "score": self.TEST_SCORE,
             "check_deadline": self.TEST_CHECK_DEADLINE,
@@ -233,15 +234,19 @@ class TestManytaskPlugin:
         mocker.patch.object(ManytaskPlugin, "_collect_files_to_send")
         ManytaskPlugin._collect_files_to_send.return_value = expected_files  # type: ignore[attr-defined]
         mocker.patch.object(ManytaskPlugin, "_post_with_retries")
-        ManytaskPlugin._post_with_retries.return_value.json.return_value = {"score": result_score}  # type: ignore[attr-defined]
+        ManytaskPlugin._post_with_retries.return_value.json.return_value = {
+            "score": result_score
+        }  # type: ignore[attr-defined]
         result = ManytaskPlugin().run(args_dict)
 
         assert result.output == (
             f"Report for task '{self.TEST_TASK_NAME}' for user '{self.TEST_USERNAME}', "
-            f"requested score: {self.TEST_SCORE}, result score: {result_score}"
+            f"verdict: OK, requested score: {self.TEST_SCORE}, result score: {result_score}"
         )
 
-        ManytaskPlugin._post_with_retries.assert_called_once_with(self.REPORT_URL, expected_data, expected_files)  # type: ignore[attr-defined]
+        ManytaskPlugin._post_with_retries.assert_called_once_with(
+            self.REPORT_URL, expected_data, expected_files
+        )  # type: ignore[attr-defined]
 
     def test_plugin_run_with_negative_integer_score(self, mocker: MockFixture) -> None:
         args_dict = self.get_default_args_dict()
@@ -256,6 +261,17 @@ class TestManytaskPlugin:
         assert sent_data["score"] == -42
         assert isinstance(sent_data["score"], int)
         assert sent_data["allow_reduction"] is True
+
+    def test_plugin_reports_failed_verdict(self, mocker: MockFixture) -> None:
+        args_dict = self.get_default_args_dict()
+        args_dict.update({"verdict": "FAIL", "score": 0.0})
+        post = mocker.patch.object(ManytaskPlugin, "_post_with_retries")
+        post.return_value.json.return_value = {"score": 80, "verdict": "FAIL"}
+
+        result = ManytaskPlugin().run(args_dict)
+
+        assert post.call_args.args[1]["verdict"] == "FAIL"
+        assert "verdict: FAIL" in result.output
 
     def test_verbose(self, mocker: MockFixture) -> None:
         args_dict = self.get_default_full_args_dict()

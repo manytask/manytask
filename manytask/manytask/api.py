@@ -517,11 +517,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
         request.form, app.rms_api, app.storage_api, course.course_name
     )
 
-    reported_score = _process_score(request.form, task.score)
-    if reported_score is None:
-        reported_score = task.score
-        logger.info("Got score=None; set max score for %s of %s", task.name, task.score)
-
+    verdict = request.form.get("verdict", "OK")
     check_deadline = True
     if "check_deadline" in request.form:
         check_deadline = request.form["check_deadline"] is True or request.form["check_deadline"] == "True"
@@ -539,9 +535,39 @@ def report_score(course_name: str) -> ResponseReturnValue:
     manytask_username = stored_user.username
 
     logger.info(
-        f"user={manytask_username} (rms_id={rms_user.id}), task={task.name}, "
-        f"reported_score={reported_score}, submit_time={submit_time}, check_deadline={check_deadline}"
+        "Submission: course=%s, user=%s (rms_id=%s), task=%s, verdict=%s, "
+        "reported_score=%s, submit_time=%s, check_deadline=%s",
+        sanitize_log_data(course.course_name),
+        sanitize_log_data(manytask_username),
+        sanitize_log_data(rms_user.id),
+        sanitize_log_data(task.name),
+        sanitize_log_data(verdict),
+        sanitize_log_data(request.form.get("score")),
+        submit_time,
+        check_deadline,
     )
+
+    result: dict[str, Any] = {
+        "user_id": rms_user.id,
+        "username": manytask_username,
+        "task": task.name,
+        "verdict": verdict,
+        "commit_time": submit_time.isoformat(sep=" "),
+        "submit_time": submit_time.isoformat(sep=" "),
+    }
+    if verdict != "OK":
+        # Failed submissions are logged only until submission history is implemented.
+        student = app.storage_api.get_all_scores_with_names(course.course_name, username=manytask_username).get(
+            manytask_username
+        )
+        previous_score = student.task_scores.get(task.name) if student else None
+        result["score"] = previous_score.score if previous_score else 0
+        return result, HTTPStatus.OK
+
+    reported_score = _process_score(request.form, task.score)
+    if reported_score is None:
+        reported_score = task.score
+        logger.info("Got score=None; set max score for %s of %s", task.name, task.score)
 
     update_function = functools.partial(
         _update_score,
@@ -568,14 +594,8 @@ def report_score(course_name: str) -> ResponseReturnValue:
         logger.error("Failed to recalculate grade for user=%s: %s", manytask_username, str(e))
         # Don't fail the request if grade calculation fails
 
-    return {
-        "user_id": rms_user.id,
-        "username": manytask_username,
-        "task": task.name,
-        "score": final_score,
-        "commit_time": submit_time.isoformat(sep=" ") if submit_time else "None",
-        "submit_time": submit_time.isoformat(sep=" "),
-    }, HTTPStatus.OK
+    result["score"] = final_score
+    return result, HTTPStatus.OK
 
 
 @bp.get("/score")
