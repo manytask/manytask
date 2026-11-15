@@ -8,7 +8,6 @@ from loguru import logger
 from redis.asyncio import Redis
 
 from app.models import CURRENT_SCHEMA_VERSION, CourseConfig
-from app.observability.audit import audit_write
 
 
 class CourseStore:
@@ -27,13 +26,13 @@ class CourseStore:
     def _key(cls, name: str) -> str:
         return f"{cls.KEY_PREFIX}{name}"
 
-    @audit_write
     async def upsert_course(
         self,
         name: str,
         config: CourseConfig,
         course_token: str,
     ) -> None:
+        logger.info("Saving course config name={}", name)
         await self._redis.hset(  # type: ignore[misc]
             self._key(name),
             mapping={
@@ -43,6 +42,8 @@ class CourseStore:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
+
+        logger.info("Saved course config name={}", name)
 
     async def get_course(self, name: str) -> tuple[str, CourseConfig, str] | None:
         """Return (name, config, course_token) or None if missing/incompatible."""
@@ -77,6 +78,7 @@ class CourseStore:
             names.append(key.removeprefix(self.KEY_PREFIX))
         return names
 
-    @audit_write
     async def delete_course(self, name: str) -> None:
+        logger.info("Deleting course config name={}", name)
         await self._redis.delete(self._key(name))
+        logger.info("Deleted course config name={}", name)

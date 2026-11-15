@@ -269,6 +269,8 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
 @root_bp.route("/signup", methods=["GET", "POST"])
 def signup() -> ResponseReturnValue:
+    if request.method == "POST":
+        logger.info("signup requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username")))
     app: CustomFlask = current_app  # type: ignore
 
     if app.app_config.disable_signup:
@@ -347,6 +349,11 @@ def signup() -> ResponseReturnValue:
 
 @root_bp.route("/signup_finish", methods=["GET", "POST"])
 def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
+    logger.info(
+        "signup_finish requested method=%s by user=%s",
+        request.method,
+        sanitize_log_data(session.get("manytask", {}).get("username")),
+    )
     app: CustomFlask = current_app  # type: ignore
 
     if not valid_auth_session(session):
@@ -447,6 +454,10 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
 @requires_ready
 @requires_auth
 def create_project(course_name: str) -> ResponseReturnValue:
+    if request.method == "POST":
+        logger.info(
+            "create_project requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username"))
+        )
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
@@ -643,6 +654,10 @@ def show_database(course_name: str) -> ResponseReturnValue:
 @instance_admin_bp.route("/courses/new", methods=["GET", "POST"])
 @requires_instance_or_namespace_admin
 def create_course() -> ResponseReturnValue:  # noqa: PLR0911
+    if request.method == "POST":
+        logger.info(
+            "create_course requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username"))
+        )
     app: CustomFlask = current_app  # type: ignore
 
     if request.method == "POST":
@@ -782,6 +797,8 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
 @requires_course_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
+    if request.method == "POST":
+        logger.info("edit_course requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username")))
     app: CustomFlask = current_app  # type: ignore
     course = app.storage_api.get_course(course_name)
 
@@ -839,12 +856,19 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 @requires_course_admin
 def delete_course(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
+    logger.info(
+        "Course deletion requested course=%s by user=%s",
+        sanitize_log_data(course_name),
+        sanitize_log_data(session.get("manytask", {}).get("username")),
+    )
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError:
+        logger.warning("Course deletion rejected course=%s: CSRF validation failed", sanitize_log_data(course_name))
         return {"error": "CSRF validation failed"}, HTTPStatus.BAD_REQUEST
 
     if request.form.get("confirmation_name") != course_name:
+        logger.warning("Course deletion rejected course=%s: name does not match", sanitize_log_data(course_name))
         return {
             "error": "Course name does not match. Type the exact course name to confirm deletion."
         }, HTTPStatus.BAD_REQUEST
@@ -853,6 +877,7 @@ def delete_course(course_name: str) -> ResponseReturnValue:
         if not app.storage_api.delete_course(course_name):
             return {"error": "Course not found."}, HTTPStatus.NOT_FOUND
     except CourseNotEmptyError as e:
+        logger.warning("Course deletion rejected course=%s: users are registered", sanitize_log_data(course_name))
         return {"error": str(e)}, HTTPStatus.CONFLICT
 
     logger.info(
@@ -922,6 +947,7 @@ def instance_admin_panel() -> ResponseReturnValue:
 @root_bp.route("/update_profile", methods=["POST"])
 @requires_auth
 def update_profile() -> ResponseReturnValue:
+    logger.info("Profile update requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username")))
     app: CustomFlask = current_app  # type: ignore
 
     request_username = request.form.get("username", None)

@@ -4,7 +4,7 @@ from http import HTTPStatus
 from typing import Any, Callable
 
 from authlib.integrations.flask_client import OAuth
-from flask import abort, current_app, flash, g, redirect, session, url_for
+from flask import abort, current_app, flash, redirect, session, url_for
 from flask.sessions import SessionMixin
 from sqlalchemy.exc import NoResultFound
 from werkzeug import Response
@@ -137,8 +137,6 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     session.pop("manytask", None)
     session.setdefault("auth", {}).update(set_oauth_session(auth_user, oauth_token))
     session.permanent = True
-    g.audit_actor = auth_user.username
-    g.audit_auth_method = "oauth"
     logger.info("Session set for user=%s", auth_user.username)
 
     return __redirect_to_signup_finish()
@@ -147,8 +145,6 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
 def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     """Getting student and update session"""
     auth_user = app.auth_api.get_authenticated_user(session["auth"]["access_token"])
-    g.audit_actor = auth_user.username
-    g.audit_auth_method = "oauth"
     logger.info("Authenticated user=%s", auth_user.username)
     session["auth"].update(set_oauth_session(auth_user))
     return auth_user
@@ -170,8 +166,6 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
         app: CustomFlask = current_app  # type: ignore
 
         if app.debug:
-            g.audit_actor = session.get("manytask", {}).get("username", "debug")
-            g.audit_auth_method = "debug"
             return f(*args, **kwargs)
 
         if not valid_auth_session(session):
@@ -200,8 +194,6 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
                 )
             )
 
-        g.audit_actor = session["manytask"]["username"]
-        g.audit_auth_method = "session"
         logger.debug("Auth check passed")
         return f(*args, **kwargs)
 
