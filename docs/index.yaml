@@ -14,7 +14,8 @@ blocks:
             <h1 class="mt-hero__title" id="mt-hero-title"><span class="mt-hero-line">Your course.</span><span class="mt-hero-line">As code.</span></h1>
             <p class="mt-hero__description">Version tasks, tests, and deadlines in a single Git repository. Automate checks and track student progress with Manytask.</p>
             <div class="mt-hero__actions">
-              <a class="mt-hero__button mt-hero__button_primary" href="https://app.manytask.org/">Open Manytask</a>
+              <a class="mt-hero__button mt-hero__button_primary" href="https://app.manytask.org/">Manytask (GitLab)</a>
+              <a class="mt-hero__button mt-hero__button_sourcecraft" href="https://src.manytask.org/">Manytask (SourceCraft)</a>
               <a class="mt-hero__button" href="course_as_code.html">Course as code</a>
             </div>
           </div>
