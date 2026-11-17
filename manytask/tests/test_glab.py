@@ -1,11 +1,13 @@
+from http import HTTPStatus
 from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
-from gitlab import GitlabGetError, const
+from gitlab import GitlabAuthenticationError, GitlabCreateError, GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 
 from manytask.abstract import RmsApiException
+from manytask.course import ProtectedBranchSettings
 from manytask.glab import GitLabApi, GitLabConfig, RmsUser, _make_public_repo_params, _make_students_group_params
 from tests.constants import (
     TEST_FORK_ID,
@@ -34,6 +36,13 @@ from tests.constants import (
     TEST_USERNAME,
 )
 
+TEST_CI_CONFIG_PATH = f".gitlab-ci.yml@{TEST_GROUP_PUBLIC_NAME}"
+TEST_PROTECTED_BRANCHES = [
+    ProtectedBranchSettings(
+        name="main", push_access_level="developer", merge_access_level="developer", allow_force_push=True
+    )
+]
+
 
 # Shared fixture logic
 def create_mock_gitlab_group(group_id: int, name_short: str, name_full: str) -> Group:
@@ -50,6 +59,7 @@ def create_mock_gitlab_group(group_id: int, name_short: str, name_full: str) -> 
     group.id = group_id
     group.name = name_short
     group.full_name = name_full
+    group.variables = MagicMock()
     return group
 
 
@@ -65,6 +75,7 @@ def create_mock_gitlab_project(project_id: int, namespace: str) -> Project:
     project = MagicMock()
     project.path_with_namespace = namespace
     project.id = project_id
+    project.members_all.get.side_effect = GitlabGetError("not a member", response_code=404)
     return project
 
 
@@ -212,11 +223,12 @@ def test_get_project_by_name_success(gitlab, mock_gitlab_project):
 def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
-    mock_gitlab_instance.projects.list.return_value = []
+    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("Not found", response_code=HTTPStatus.NOT_FOUND)
     mock_gitlab_instance.projects.create.return_value = mock_gitlab_project
 
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
+    mock_gitlab_instance.projects.get.assert_called_once_with(TEST_GROUP_PUBLIC_NAME)
     mock_gitlab_instance.projects.create.assert_called_once_with(
         _make_public_repo_params(TEST_GROUP_PUBLIC_NAME_SHORT, mock_gitlab_group.id)
     )
@@ -224,11 +236,36 @@ def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
 
 def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab_public_project):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group]
-    mock_gitlab_instance.projects.list.return_value = [mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.get.return_value = mock_gitlab_public_project
 
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
+    mock_gitlab_instance.projects.get.assert_called_once_with(TEST_GROUP_PUBLIC_NAME)
+    mock_gitlab_instance.projects.list.assert_not_called()
+    mock_gitlab_instance.projects.create.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        GitlabAuthenticationError("Unauthorized", response_code=HTTPStatus.UNAUTHORIZED),
+        GitlabGetError("Forbidden", response_code=HTTPStatus.FORBIDDEN),
+        GitlabGetError("Server error", response_code=HTTPStatus.INTERNAL_SERVER_ERROR),
+    ],
+)
+def test_create_public_repo_lookup_error(
+    gitlab: tuple[GitLabApi, MagicMock], mock_gitlab_group: Group, error: GitlabGetError | GitlabAuthenticationError
+) -> None:
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.get.side_effect = error
+
+    with pytest.raises(type(error)) as exc_info:
+        gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
+
+    assert exc_info.value is error
+    mock_gitlab_instance.projects.get.assert_called_once_with(TEST_GROUP_PUBLIC_NAME)
     mock_gitlab_instance.projects.create.assert_not_called()
 
 
@@ -245,6 +282,37 @@ def test_create_students_group(gitlab, mock_gitlab_group):
     gitlab_api.create_students_group(TEST_GROUP_NAME)
 
     mock_gitlab_instance.groups.create.assert_called_once_with(_make_students_group_params(short_name))
+
+
+def test_configure_course_manytask_token(
+    gitlab: tuple[GitLabApi, MagicMock], mock_gitlab_group_student: Group, mock_gitlab_public_project: Project
+) -> None:
+    gitlab_api, mock_gitlab_instance = gitlab
+    private_project = create_mock_gitlab_project(TEST_PROJECT_ID + 3, f"{TEST_GROUP_NAME}/private")
+    mock_gitlab_instance.projects.list.return_value = [private_project, mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group_student
+
+    gitlab_api.configure_course_manytask_token(
+        TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "course-token", f"{TEST_GROUP_NAME}/private"
+    )
+
+    expected = {"key": "MANYTASK_TOKEN", "value": "course-token", "masked": True, "masked_and_hidden": True}
+    private_project.variables.create.assert_called_once_with(expected)
+    mock_gitlab_public_project.variables.create.assert_called_once_with(expected)
+    mock_gitlab_group_student.variables.create.assert_called_once_with(expected)
+
+
+def test_configure_course_manytask_token_without_private_repo(
+    gitlab: tuple[GitLabApi, MagicMock], mock_gitlab_public_project: Project, mock_gitlab_group_student: Group
+) -> None:
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.projects.list.return_value = [mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group_student
+
+    gitlab_api.configure_course_manytask_token(TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "course-token")
+
+    mock_gitlab_public_project.variables.create.assert_called_once()
+    mock_gitlab_group_student.variables.create.assert_called_once()
 
 
 def test_get_group_by_name_success(gitlab, mock_gitlab_group):
@@ -283,17 +351,37 @@ def test_check_project_exists(gitlab, mock_gitlab_student_project):
     exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert exists is True
-    mock_gitlab_instance.projects.get.assert_called_with(f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.get.assert_called_once_with(f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.list.assert_not_called()
 
 
 def test_check_project_not_exists(gitlab):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("Not found")
+    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("Not found", response_code=404)
 
     exists = gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_NAME)
 
     assert exists is False
-    mock_gitlab_instance.projects.get.assert_called_with(f"{TEST_GROUP_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.get.assert_called_once_with(f"{TEST_GROUP_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.list.assert_not_called()
+
+
+def test_check_project_scheduled_for_deletion_is_missing(gitlab, mock_gitlab_student_project):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_student_project.path_with_namespace += "-deletion_scheduled-28"
+    mock_gitlab_instance.projects.get.return_value = mock_gitlab_student_project
+
+    assert gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME) is False
+    mock_gitlab_instance.projects.get.assert_called_once_with(f"{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}")
+    mock_gitlab_instance.projects.list.assert_not_called()
+
+
+def test_check_project_api_failure_is_not_reported_as_missing(gitlab):
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("GitLab unavailable", response_code=503)
+
+    with pytest.raises(GitlabGetError, match="GitLab unavailable"):
+        gitlab_api.check_project_exists(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
 
 def test_create_project_existing_project(
@@ -305,7 +393,9 @@ def test_create_project_existing_project(
     mock_gitlab_student_project.members.create.return_value = mock_gitlab_group_member
     rms_api._get_project_by_name = MagicMock(return_value=mock_gitlab_public_project)
 
-    rms_api.create_project(mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
+    rms_api.create_project(
+        mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES
+    )
 
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
     mock_gitlab_instance.projects.get.assert_called_with(mock_gitlab_student_project.id)
@@ -319,20 +409,27 @@ def test_create_project_existing_project(
 
 
 def test_create_project_no_existing_project_creates_fork(
-    gitlab, mock_rms_user, mock_gitlab_group, mock_gitlab_student_project, mock_gitlab_fork
+    gitlab, mock_rms_user, mock_gitlab_group, mock_gitlab_student_project, mock_gitlab_public_project, mock_gitlab_fork
 ):
     rms_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.projects.list.return_value = []
     rms_api._get_group_by_name = MagicMock(return_value=mock_gitlab_group)
-    rms_api._get_project_by_name = MagicMock(return_value=mock_gitlab_student_project)
-    mock_gitlab_student_project.forks.create.return_value = mock_gitlab_fork
+    rms_api._get_project_by_name = MagicMock(return_value=mock_gitlab_public_project)
+    mock_gitlab_public_project.forks.create.return_value = mock_gitlab_fork
+    mock_gitlab_instance.projects.get.return_value = mock_gitlab_student_project
+    mock_gitlab_student_project.import_status = "finished"
 
-    rms_api.create_project(mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME)
+    rms_api.create_project(
+        mock_rms_user, TEST_GROUP_STUDENT_NAME, TEST_GROUP_PUBLIC_NAME, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES
+    )
 
     mock_gitlab_instance.projects.list.assert_called_with(get_all=True, search=mock_rms_user.username)
     rms_api._get_project_by_name.assert_called_with(TEST_GROUP_PUBLIC_NAME)
     rms_api._get_group_by_name.assert_called_with(TEST_GROUP_STUDENT_NAME)
     mock_gitlab_student_project.members.create.assert_called_once_with(
+        {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.DEVELOPER}
+    )
+    mock_gitlab_public_project.members.create.assert_called_once_with(
         {"user_id": int(mock_rms_user.id), "access_level": const.AccessLevel.REPORTER}
     )
 
@@ -409,3 +506,275 @@ def test_get_url_for_repo(gitlab):
     url = gitlab_api.get_url_for_repo(TEST_USERNAME, TEST_GROUP_STUDENT_NAME)
 
     assert url == f"{gitlab_api.base_url}/{TEST_GROUP_STUDENT_NAME}/{TEST_USERNAME}"
+
+
+def _mock_protected_branch(name, push_level, merge_level, allow_force_push):
+    branch = MagicMock()
+    branch.name = name
+    branch.push_access_levels = [{"access_level": push_level}]
+    branch.merge_access_levels = [{"access_level": merge_level}]
+    branch.allow_force_push = allow_force_push
+    return branch
+
+
+def _mock_project(ci_config_path, existing_branches):
+    project = MagicMock()
+    project.ci_config_path = ci_config_path
+    project.path_with_namespace = "group/project"
+    project.protectedbranches.list.return_value = existing_branches
+    return project
+
+
+def test_ensure_project_settings_no_writes_when_matching(gitlab):
+    rms_api, _ = gitlab
+    existing_branch = _mock_protected_branch("main", const.AccessLevel.DEVELOPER, const.AccessLevel.DEVELOPER, True)
+    project = _mock_project(TEST_CI_CONFIG_PATH, [existing_branch])
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is False
+    project.save.assert_not_called()
+    existing_branch.delete.assert_not_called()
+    project.protectedbranches.create.assert_not_called()
+
+
+def test_ensure_project_settings_fixes_ci_config_path(gitlab):
+    rms_api, _ = gitlab
+    existing_branch = _mock_protected_branch("main", const.AccessLevel.DEVELOPER, const.AccessLevel.DEVELOPER, True)
+    project = _mock_project("stale/path", [existing_branch])
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is True
+    assert project.ci_config_path == TEST_CI_CONFIG_PATH
+    project.save.assert_called_once()
+    existing_branch.delete.assert_not_called()
+    project.protectedbranches.create.assert_not_called()
+
+
+def test_ensure_project_settings_fixes_mismatched_protected_branch(gitlab):
+    rms_api, _ = gitlab
+    existing_branch = _mock_protected_branch("main", const.AccessLevel.MAINTAINER, const.AccessLevel.DEVELOPER, True)
+    project = _mock_project(TEST_CI_CONFIG_PATH, [existing_branch])
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is True
+    project.save.assert_not_called()
+    existing_branch.delete.assert_called_once()
+    project.protectedbranches.create.assert_called_once_with(
+        {
+            "name": "main",
+            "push_access_level": const.AccessLevel.DEVELOPER,
+            "merge_access_level": const.AccessLevel.DEVELOPER,
+            "allow_force_push": True,
+        }
+    )
+
+
+def test_ensure_project_settings_creates_missing_branch(gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is True
+    project.protectedbranches.create.assert_called_once()
+
+
+def test_ensure_project_settings_accepts_project_path(gitlab):
+    rms_api, mock_gitlab_instance = gitlab
+    existing_branch = _mock_protected_branch("main", const.AccessLevel.DEVELOPER, const.AccessLevel.DEVELOPER, True)
+    project = _mock_project(TEST_CI_CONFIG_PATH, [existing_branch])
+    mock_gitlab_instance.projects.get.return_value = project
+
+    changed = rms_api.ensure_project_settings("group/project", TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is False
+    mock_gitlab_instance.projects.get.assert_called_with("group/project")
+
+
+def test_list_group_projects(gitlab):
+    rms_api, _ = gitlab
+    group = MagicMock()
+    project_a = MagicMock(path_with_namespace="group/a")
+    project_b = MagicMock(path_with_namespace="group/b")
+    group.projects.list.return_value = [project_a, project_b]
+    rms_api._get_group_by_name = MagicMock(return_value=group)
+
+    paths = rms_api.list_group_projects("group")
+
+    assert paths == ["group/a", "group/b"]
+    group.projects.list.assert_called_once_with(get_all=True)
+
+
+def _already_exists_error():
+    return GitlabCreateError(error_message="Protected branch 'main' already exists", response_code=409)
+
+
+@patch("manytask.glab.time.sleep")
+def test_ensure_project_settings_retries_when_branch_appears_after_listing(mock_sleep, gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+    project.protectedbranches.create.side_effect = [_already_exists_error(), MagicMock()]
+    appeared = _mock_protected_branch("main", const.AccessLevel.MAINTAINER, const.AccessLevel.MAINTAINER, False)
+    project.protectedbranches.get.return_value = appeared
+
+    changed = rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    assert changed is True
+    mock_sleep.assert_called_once()
+    project.protectedbranches.get.assert_called_once_with("main")
+    appeared.delete.assert_called_once()
+    assert project.protectedbranches.create.call_args_list == [mock.call(mock.ANY), mock.call(mock.ANY)]
+
+
+@patch("manytask.glab.time.sleep")
+def test_ensure_project_settings_keeps_branch_that_appeared_matching(mock_sleep, gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+    project.protectedbranches.create.side_effect = _already_exists_error()
+    appeared = _mock_protected_branch("main", const.AccessLevel.DEVELOPER, const.AccessLevel.DEVELOPER, True)
+    project.protectedbranches.get.return_value = appeared
+
+    rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+    appeared.delete.assert_not_called()
+    assert project.protectedbranches.create.call_count == 1
+
+
+@patch("manytask.glab.time.sleep")
+def test_ensure_project_settings_gives_up_after_retries(mock_sleep, gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+    project.protectedbranches.create.side_effect = _already_exists_error()
+    project.protectedbranches.get.return_value = _mock_protected_branch(
+        "main", const.AccessLevel.MAINTAINER, const.AccessLevel.MAINTAINER, False
+    )
+
+    with pytest.raises(GitlabCreateError):
+        rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+
+
+def test_ensure_project_settings_reraises_other_create_errors(gitlab):
+    rms_api, _ = gitlab
+    project = _mock_project(TEST_CI_CONFIG_PATH, [])
+    project.protectedbranches.create.side_effect = GitlabCreateError(error_message="forbidden", response_code=403)
+
+    with pytest.raises(GitlabCreateError):
+        rms_api.ensure_project_settings(project, TEST_CI_CONFIG_PATH, TEST_PROTECTED_BRANCHES)
+    project.protectedbranches.get.assert_not_called()
+
+
+@patch("manytask.glab.time.sleep")
+def test_wait_fork_imported_polls_until_finished(mock_sleep, gitlab):
+    rms_api, mock_gitlab_instance = gitlab
+    importing = MagicMock(id=7, import_status="started")
+    finished = MagicMock(id=7, import_status="finished")
+    mock_gitlab_instance.projects.get.side_effect = [importing, finished]
+
+    result = rms_api._wait_fork_imported(importing)
+
+    assert result is finished
+    assert mock_sleep.call_args_list == [mock.call(1), mock.call(1)]
+
+
+@pytest.fixture
+def student_access_projects() -> tuple[Project, Project]:
+    return (
+        create_mock_gitlab_project(1, "course/students/student"),
+        create_mock_gitlab_project(2, "course/public"),
+    )
+
+
+@pytest.mark.parametrize("status", [400, 403, 409, 500])
+def test_grant_student_access_only_ignores_duplicate_membership(
+    gitlab: tuple[GitLabApi, MagicMock],
+    mock_rms_user: RmsUser,
+    student_access_projects: tuple[Project, Project],
+    status: int,
+) -> None:
+    api, _ = gitlab
+    student_project, public_project = student_access_projects
+    student_project.members.create.side_effect = GitlabCreateError("grant failed", response_code=status)
+    if status == HTTPStatus.CONFLICT:
+        api._grant_student_access(mock_rms_user, student_project, public_project)
+        public_project.members.create.assert_called_once()
+    else:
+        with pytest.raises(GitlabCreateError):
+            api._grant_student_access(mock_rms_user, student_project, public_project)
+        public_project.members.create.assert_not_called()
+
+
+def test_repository_access_includes_inherited_membership(gitlab) -> None:
+    api, client = gitlab
+    project = client.projects.get.return_value
+    project.members.get.side_effect = GitlabGetError("not a direct member", response_code=404)
+    assert api.check_user_has_repo_access("123", "student", "course/students")
+    project.members_all.get.assert_called_once_with("123")
+    project.members.get.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("student_level", "public_level"),
+    [
+        (const.AccessLevel.MAINTAINER, const.AccessLevel.MAINTAINER),
+        (const.AccessLevel.OWNER, const.AccessLevel.OWNER),
+        (const.AccessLevel.DEVELOPER, const.AccessLevel.REPORTER),
+        (const.AccessLevel.REPORTER, const.AccessLevel.REPORTER),
+        (const.AccessLevel.DEVELOPER, const.AccessLevel.GUEST),
+        (None, None),
+    ],
+)
+def test_grant_student_access_respects_effective_roles(
+    gitlab: tuple[GitLabApi, MagicMock],
+    mock_rms_user: RmsUser,
+    student_access_projects: tuple[Project, Project],
+    student_level: int | None,
+    public_level: int | None,
+) -> None:
+    api, _ = gitlab
+    student_project, public_project = student_access_projects
+    targets = (
+        (student_project, student_level, const.AccessLevel.DEVELOPER),
+        (public_project, public_level, const.AccessLevel.REPORTER),
+    )
+    for project, existing_level, required_level in targets:
+        if existing_level is not None:
+            project.members_all.get.side_effect = None
+            project.members_all.get.return_value = MagicMock(access_level=existing_level)
+            if existing_level >= required_level:
+                project.members.create.side_effect = GitlabCreateError(
+                    "access_level must be at least the inherited role", response_code=400
+                )
+
+    api._grant_student_access(mock_rms_user, student_project, public_project)
+
+    for project, existing_level, required_level in targets:
+        project.members_all.get.assert_called_once_with(int(mock_rms_user.id))
+        project.members.get.assert_not_called()
+        if existing_level is not None and existing_level >= required_level:
+            project.members.create.assert_not_called()
+        else:
+            project.members.create.assert_called_once_with(
+                {"user_id": int(mock_rms_user.id), "access_level": required_level}
+            )
+
+
+@pytest.mark.parametrize("status", [403, 500])
+def test_grant_student_access_propagates_membership_lookup_failure(
+    gitlab: tuple[GitLabApi, MagicMock],
+    mock_rms_user: RmsUser,
+    student_access_projects: tuple[Project, Project],
+    status: int,
+) -> None:
+    api, _ = gitlab
+    student_project, public_project = student_access_projects
+    student_project.members_all.get.side_effect = GitlabGetError("lookup failed", response_code=status)
+
+    with pytest.raises(GitlabGetError, match="lookup failed"):
+        api._grant_student_access(mock_rms_user, student_project, public_project)
+
+    student_project.members.create.assert_not_called()
+    public_project.members_all.get.assert_not_called()
+    public_project.members.create.assert_not_called()

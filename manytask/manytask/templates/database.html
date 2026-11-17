@@ -49,8 +49,12 @@
                         <div class="modal-body">
                             <form id="editForm">
                                 <div class="mb-3">
-                                    <label class="form-label">Score</label>
+                                    <label for="scoreInput" class="form-label">Score</label>
                                     <input type="number" class="form-control" id="scoreInput">
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input type="checkbox" class="form-check-input" id="isSolvedInput">
+                                    <label for="isSolvedInput" class="form-check-label">Is solved</label>
                                 </div>
                             </form>
                         </div>
@@ -140,6 +144,13 @@
         let editGradeModal = null;
         const mincolwidth = 30;
 
+        function formatTaskScore(cell) {
+            const taskName = cell.getField().slice('scores.'.length);
+            const isSolved = cell.getRow().getData().solved?.[taskName] === true;
+            cell.getElement().style.fontWeight = isSolved ? 'bold' : 'normal';
+            return cell.getValue() ?? '';
+        }
+
         function editCell(cell) {
             const readonlyFields = {{ readonly_fields|tojson }};
             if (readonlyFields.includes(cell.getField())) {
@@ -155,6 +166,15 @@
             const value = cell.getValue() || 0;
             const scoreInput = document.getElementById('scoreInput');
             scoreInput.value = value;
+            const taskName = cell.getField().slice('scores.'.length);
+            document.getElementById('isSolvedInput').checked = cell.getRow().getData().solved?.[taskName] === true;
+            scoreInput.oninput = function () {
+                const score = parseFloat(scoreInput.value);
+                if (!isNaN(score)) {
+                    const minScore = cell.getColumn().getDefinition().formatterParams.minScore;
+                    document.getElementById('isSolvedInput').checked = score >= minScore;
+                }
+            };
             document.getElementById('editModalLabel').textContent = `Edit Score for ${cell.getColumn().getDefinition().title}`;
             editModal.show();
 
@@ -175,27 +195,29 @@
 
             const row = currentEditCell.getRow();
             const rowData = row.getData();
-            const username = rowData.username;
-            const taskName = currentEditCell.getColumn().getDefinition().field.split(".")[1];
+            const taskName = currentEditCell.getField().slice('scores.'.length);
 
             // Update database
             const newScores = {};
             newScores[taskName] = newScore;
-            fetch('{{ url_for("api.update_database", course_name=course_name) }}', {
+            return fetch('{{ url_for("api.update_database", course_name=course_name) }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     row_data: rowData,
-                    new_scores: newScores
+                    new_scores: newScores,
+                    new_solved: {[taskName]: document.getElementById('isSolvedInput').checked}
                 })
             })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        row.update(data.row_data)
-                        editModal.hide();
+                        return row.update(JSON.parse(data.row_data)).then(() => {
+                            row.reformat();
+                            editModal.hide();
+                        });
                     } else {
                         alert('Failed to update: ' + data.message);
                     }
@@ -626,6 +648,8 @@
                             sorter: "number",
                             hozAlign: "center",
                             headerTooltip: task.name,
+                            formatter: formatTaskScore,
+                            formatterParams: {minScore: task.min_score},
                             {% if is_course_admin %}
                                 cellClick: function (e, cell) {
                                     editCell(cell);

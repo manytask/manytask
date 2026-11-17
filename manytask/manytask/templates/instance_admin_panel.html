@@ -249,45 +249,7 @@
         </div>
     </div>
 
-    <div class="modal fade" id="createNamespaceModal" tabindex="-1" aria-labelledby="createNamespaceModalLabel"
-         aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="createNamespaceModalLabel">Create Namespace</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="createNamespaceForm">
-                        <div class="mb-3">
-                            <label for="namespaceName" class="form-label">Name *</label>
-                            <input type="text" class="form-control" id="namespaceName" name="name" required
-                                   placeholder="HSE">
-                        </div>
-                        <div class="mb-3">
-                            <label for="namespaceSlug" class="form-label">Slug *</label>
-                            <input type="text" class="form-control" id="namespaceSlug" name="slug" required
-                                   placeholder="hse-namespace"
-                                   pattern="^[a-zA-Z0-9._-]+$"
-                                   title="Only letters, digits, underscores, dots, or dashes">
-                            <small class="form-text text-muted">Must start/end with alphanumeric, no consecutive special chars</small>
-                        </div>
-                        <div class="mb-3">
-                            <label for="namespaceDescription" class="form-label">Description</label>
-                            <textarea class="form-control" id="namespaceDescription" name="description" rows="3"
-                                      placeholder="Namespace for Higher School of Economics courses"></textarea>
-                        </div>
-                        <div id="createNamespaceError" class="alert alert-danger d-none" role="alert"></div>
-                        <div id="createNamespaceSuccess" class="alert alert-success d-none" role="alert"></div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="createNamespace()">Create</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    {% include "_create_namespace_modal.html" %}
 
     <div class="modal fade" id="assignRoleModal" tabindex="-1" aria-labelledby="assignRoleModalLabel"
          aria-hidden="true">
@@ -371,49 +333,6 @@
                 } else {
                     items[i].style.display = (namespaceSlug === filter) ? '' : 'none';
                 }
-            }
-        }
-
-        async function createNamespace() {
-            const form = document.getElementById('createNamespaceForm');
-            const errorDiv = document.getElementById('createNamespaceError');
-            const successDiv = document.getElementById('createNamespaceSuccess');
-            
-            errorDiv.classList.add('d-none');
-            successDiv.classList.add('d-none');
-
-            const formData = {
-                name: form.querySelector('[name="name"]').value,
-                slug: form.querySelector('[name="slug"]').value,
-                description: form.querySelector('[name="description"]').value || null
-            };
-
-            try {
-                const response = await fetch('/api/namespaces', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    successDiv.textContent = `Namespace "${formData.name}" created successfully!`;
-                    successDiv.classList.remove('d-none');
-                    form.reset();
-                    
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1500);
-                } else {
-                    errorDiv.textContent = data.error || 'Failed to create namespace';
-                    errorDiv.classList.remove('d-none');
-                }
-            } catch (error) {
-                errorDiv.textContent = 'Network error: ' + error.message;
-                errorDiv.classList.remove('d-none');
             }
         }
 

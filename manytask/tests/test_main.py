@@ -1,4 +1,5 @@
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 from dotenv import load_dotenv
@@ -10,6 +11,24 @@ from tests.constants import (
     TEST_PUBLIC_REPO,
     TEST_STUDENTS_GROUP,
 )
+
+
+def _minimal_config():
+    return {
+        "version": 1,
+        "ui": {"task_url_template": "https://example.org/$GROUP_NAME/$USER_NAME/$TASK_NAME"},
+        "deadlines": {
+            "timezone": "Europe/Moscow",
+            "schedule": [
+                {
+                    "group": "week_1",
+                    "start": "2025-01-01 10:00",
+                    "end": "2025-01-15 23:59",
+                    "tasks": [{"task": "task_1", "score": 10}],
+                }
+            ],
+        },
+    }
 
 
 @pytest.fixture
@@ -85,3 +104,30 @@ def test_create_app_missing_secret_key(mock_env):
     os.environ.pop("FLASK_SECRET_KEY", None)
     with pytest.raises(EnvironmentError):
         create_app()
+
+
+def test_store_config_schedules_reconcile_when_pending():
+    app = CustomFlask(__name__)
+    app.storage_api = MagicMock()
+    app.storage_api.rms_settings_reconcile_needed.return_value = True
+    app.rms_api = MagicMock()
+
+    with patch("manytask.main.schedule_rms_settings_reconcile") as mock_schedule:
+        app.store_config(TEST_COURSE_NAME, _minimal_config())
+
+    app.storage_api.update_course.assert_called_once()
+    app.storage_api.rms_settings_reconcile_needed.assert_called_once_with(TEST_COURSE_NAME)
+    mock_schedule.assert_called_once_with(app.storage_api, app.rms_api, TEST_COURSE_NAME)
+
+
+def test_store_config_skips_reconcile_when_not_pending():
+    app = CustomFlask(__name__)
+    app.storage_api = MagicMock()
+    app.storage_api.rms_settings_reconcile_needed.return_value = False
+    app.rms_api = MagicMock()
+
+    with patch("manytask.main.schedule_rms_settings_reconcile") as mock_schedule:
+        app.store_config(TEST_COURSE_NAME, _minimal_config())
+
+    app.storage_api.update_course.assert_called_once()
+    mock_schedule.assert_not_called()

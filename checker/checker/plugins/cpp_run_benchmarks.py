@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+from pydantic import Field
 
 from checker.exceptions import PluginExecutionFailed
 from checker.plugins.firejail import SafeRunScriptPlugin
@@ -22,6 +25,8 @@ class CppRunBenchmarksPlugin(PluginABC):
         timeout: float
         args: list[str]
         benchmark_values: list[str]
+        env_whitelist: list[str] = Field(default_factory=list)
+        show_env_variables: list[str] = Field(default_factory=list)
 
     @staticmethod
     def _print_logs(path: Path) -> None:
@@ -79,7 +84,12 @@ class CppRunBenchmarksPlugin(PluginABC):
             raise PluginExecutionFailed()
 
     @staticmethod
-    def _run_benchmarks(args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool) -> None:
+    def _run_benchmarks(
+        args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool
+    ) -> None:
+        for name in args.show_env_variables:
+            print_info(f"{name} is set to `{os.getenv(name)}`")
+
         xml_path = tmp_dir / CppRunBenchmarksPlugin._REPORT_XML
         run_args = SafeRunScriptPlugin.Args(
             origin=str(build_dir),
@@ -92,6 +102,7 @@ class CppRunBenchmarksPlugin(PluginABC):
                 *args.args,
             ],
             timeout=args.timeout,
+            env_whitelist=args.env_whitelist,
         )
         try:
             SafeRunScriptPlugin()._run(run_args, verbose=verbose)

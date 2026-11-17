@@ -92,7 +92,11 @@ Change at least these fields:
 
 ### 4. Set required GitLab CI/CD variables
 
-In **Group -> Settings -> CI/CD -> Variables**:
+Set registry and API credentials in **Group -> Settings -> CI/CD -> Variables**.
+When a course is created through the Manytask form or API on GitLab, Manytask
+adds `MANYTASK_TOKEN` as a hidden, masked variable to its public repository and
+students group. Add the course token as `MANYTASK_TOKEN` to the private repository
+separately for the release pipeline.
 
 | Variable | Where to get it | Used for |
 |---|---|---|
@@ -196,6 +200,10 @@ For the full list of commands and config options, see the
    - `conftest.py` — copy from `python/add/` if you use top-level imports
 3. Register the task in `.manytask.yml` under `deadlines.schedule[python].tasks`.
 4. Commit and push to `main`. The pipeline does the rest.
+
+For several tasks sharing one folder, use `.tasks.yml` with a nonempty `tasks` mapping instead of
+`.task.yml`, and register each logical task name in `.manytask.yml`. See the
+[shared-folder example](https://manytask.org/checker_config.html#several-tasks-in-one-folder).
 
 ---
 

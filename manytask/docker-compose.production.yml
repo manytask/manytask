@@ -34,6 +34,36 @@ services:
     networks:
       - manytask-net
 
+  # Connection pooler for the gunicorn workers. Transaction pooling is safe: the app
+  # uses no session-level state (no SET, advisory locks or server-side prepared statements).
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.0-p0
+    container_name: manytask_pgbouncer
+    restart: always
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      ADMIN_USERS: ${POSTGRES_USER}
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 50
+      RESERVE_POOL_SIZE: 10
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "5432"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - manytask-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   manytask:
     build:
       context: ..
@@ -56,4 +86,6 @@ services:
       - manytask-net
     depends_on:
       postgres:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy

@@ -96,12 +96,6 @@
             <a class="btn btn-success mt-3" href="{{ url_for('instance_admin.create_course') }}">Create course</a>
         {% endif %}
 
-        {% if can_create_courses %}
-            <a class="btn btn-info mt-3" href="{{ url_for('instance_admin.namespaces_list') }}">
-                <i class="fas fa-folder me-1"></i>Namespaces
-            </a>
-        {% endif %}
-
         {% if admin_namespaces %}
             <section class="admin-namespaces mt-5">
                 <h2 class="h3 mb-3"><i class="fas fa-folder me-2"></i>Namespaces you administer</h2>
@@ -110,9 +104,15 @@
         {% endif %}
 
         {% if is_instance_admin %}
+            <button type="button" class="btn btn-success mt-3" data-bs-toggle="modal"
+                    data-bs-target="#createNamespaceModal">Create namespace</button>
             <a class="btn btn-primary mt-3" href="{{ url_for('instance_admin.instance_admin_panel') }}">Instance Admin panel</a>
         {% endif %}
     </div>
+
+    {% if is_instance_admin %}
+        {% include "_create_namespace_modal.html" %}
+    {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='js/tabulator-theme.js') }}"></script>
@@ -124,7 +124,7 @@
 
     <script>
         const coursesData = {{ courses | tojson }};
-        const adminNamespacesData = {{ admin_namespaces | tojson }};
+        const adminNamespacesData = {{ admin_namespaces | default([]) | tojson }};
         // Canonical status order, taken from the CourseStatus enum on the
         // backend, so the filter dropdown and the Status column sort follow the
         // course lifecycle rather than alphabetical order.
@@ -213,7 +213,17 @@
                     headerTooltip: "Namespace",
                     formatter: function (cell) {
                         const value = cell.getValue();
-                        return value ? value : '<em class="courses-table-muted">—</em>';
+                        if (!value) {
+                            return '<em class="courses-table-muted">—</em>';
+                        }
+                        const url = cell.getRow().getData().namespace_url;
+                        const label = document.createElement(url ? 'a' : 'span');
+                        if (url) {
+                            label.href = url;
+                            label.className = 'courses-table-link';
+                        }
+                        label.textContent = value;
+                        return label;
                     }
                 },
                 {

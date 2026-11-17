@@ -69,8 +69,9 @@ course-template/
     └── add_rust/         # add.rs(.template) · test_public.rs · test_private.rs
 ```
 
-Task folder names are globally unique (`add`, `add_cpp`, `add_bash`, `add_go`,
-`add_rust`) because the checker requires unique task names across all groups.
+Task names are globally unique (`add`, `add_cpp`, `add_bash`, `add_go`, `add_rust`) across all
+groups. A single-task `.task.yml` takes its name from the folder; a `.tasks.yml` file takes names
+from its `tasks` mapping.
 
 This is the smallest end-to-end example that:
 
@@ -78,6 +79,9 @@ This is the smallest end-to-end example that:
 - demonstrates the `.template` strategy for hiding reference solutions,
 - separates public and private tests,
 - reports its score back to the Manytask web app once the report pipeline is enabled in CI.
+
+For several tasks in one folder, replace its `.task.yml` with `.tasks.yml` and define a nonempty
+`tasks` mapping. See [the shared-folder example](checker_config.md#several-tasks-in-one-folder).
 
 ## How grading works (testenv image)
 
@@ -104,9 +108,11 @@ The template wires this in two GitLab pipelines:
    testenv image (`image: "$TESTENV_IMAGE"`) and runs `checker grade . /opt/course`:
    the student's solution comes from the checkout (`.`), the hidden tests come from the
    baked `/opt/course`. To report the score to the web app, enable the
-   `report_pipeline` (`report_score_manytask`) in `.checker.yml` — `checker grade`
-   always runs it — and provide a `MANYTASK_TOKEN` CI variable. (The grade
-   `--submit-score` flag is currently a no-op in checker, so it does not report.)
+   `report_pipeline` (`report_score_manytask`) in `.checker.yml`, set `report_url` to
+   `https://<host>/api/<course_name>/report`, and provide a `MANYTASK_TOKEN` CI variable.
+   `checker grade` enables reporting by default when detecting tasks automatically.
+   Runs with `--task`, `--group`, or `--all-tasks` report only with `--submit-score`;
+   `checker check` never sends scores.
 
 Because the image lives in the **private** project's registry but student repos are
 forks of the **public** project, students pull it across projects via a
@@ -144,7 +150,11 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
     ```
 
 3. Edit `.checker.yml` (`export.destination`), `.manytask.yml` (`settings`, `ui`, `deadlines.schedule`), and `.releaser-ci.yml` (`REGISTRY`, `MANYTASK_URL`, `COURSE_NAME`, and `PUBLIC_REPO_URL`).
-4. Add CI/CD variables in **Group → Settings → CI/CD → Variables**:
+4. Add registry and API credentials in **Group → Settings → CI/CD → Variables**.
+   When a course is created through the Manytask form or API on GitLab, Manytask
+   adds `MANYTASK_TOKEN` as a hidden, masked variable to its public repository and
+   students group. Add the course token as `MANYTASK_TOKEN` to the private
+   repository separately for the release pipeline.
 
     | Variable | Purpose |
     |---|---|

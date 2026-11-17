@@ -18,6 +18,11 @@
                     <label for="floatingCode">Secret Code</label>
                 </div>
                 <button class="btn btn-primary w-100 py-2 mt-3" type="submit" value="CreateRepo">Join course</button>
+                {% if can_edit_course %}
+                    <a href="{{ url_for('instance_admin.edit_course', course_name=course_name) }}" class="btn btn-success w-100 py-2 mt-2">
+                        Back to editing course
+                    </a>
+                {% endif %}
                 <a href="{{ url_for('root.index') }}" class="btn btn-outline-secondary w-100 py-2 mt-2">
                     <i class="fas fa-arrow-left me-1"></i>Back to courses
                 </a>

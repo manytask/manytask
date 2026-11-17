@@ -11,6 +11,7 @@ def get_database_table_data(
     course: Course,
     include_admin_data: bool = False,
     is_program_manager: bool = False,
+    username: str | None = None,
 ) -> dict[str, Any]:
     """Get the database table data structure used by both web and API endpoints.
 
@@ -25,7 +26,11 @@ def get_database_table_data(
 
     course_name = course.course_name
     storage_api = app.storage_api
-    scores_and_names = storage_api.get_all_scores_with_names(course_name)
+    scores_and_names = (
+        storage_api.get_all_scores_with_names(course_name)
+        if username is None
+        else storage_api.get_all_scores_with_names(course_name, username=username)
+    )
     grades_config = storage_api.get_grades(course_name)
 
     all_tasks = []
@@ -34,15 +39,15 @@ def get_database_table_data(
     for group in storage_api.get_groups(course_name, enabled=True, started=True):
         for task in group.tasks:
             if task.enabled:
-                all_tasks.append({"name": task.name, "score": 0, "group": group.name})
+                all_tasks.append({"name": task.name, "score": 0, "group": group.name, "min_score": task.min_score})
                 if not task.is_bonus:
                     max_score += task.score
                 if task.is_large:
-                    large_tasks.append((task.name, task.min_score))
+                    large_tasks.append(task.name)
 
     table_data: dict[str, Any] = {"tasks": all_tasks, "students": []}
 
-    for username, student in scores_and_names.items():
+    for student_username, student in scores_and_names.items():
         if student.is_admin and not include_admin_data:
             # Hide admin/staff accounts from non-admin viewers.
             continue
@@ -50,8 +55,9 @@ def get_database_table_data(
         total_score = student.total_score
 
         row: dict[str, Any] = {
-            "username": username,
+            "username": student_username,
             "scores": student.scores,
+            "solved": {task_name: task_score.is_solved for task_name, task_score in student.task_scores.items()},
             "total_score": total_score,
             "percent": calculate_percent(total_score, max_score),
             "large_count": student.count_solved_large_tasks(large_tasks),
@@ -68,7 +74,7 @@ def get_database_table_data(
             row.update(
                 {
                     "repo_url": app.rms_api.get_url_for_repo(
-                        username=username,
+                        username=student_username,
                         course_students_group=course.gitlab_course_students_group,
                     ),
                     "comment": student.comment,

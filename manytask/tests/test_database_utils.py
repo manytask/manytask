@@ -182,6 +182,7 @@ def test_get_database_table_data(app):
             }
             assert student["grade"] == expected_grades[student_id]
             assert student["grade_is_override"] is expected_overrides[student_id]
+            assert student["solved"] == {TASK_1: False, TASK_2: False, TASK_LARGE: student_id == STUDENT_1}
 
 
 def test_get_database_table_data_with_admin_data(app):
@@ -227,6 +228,7 @@ def test_get_database_table_data_with_admin_data(app):
             }
             assert student["grade"] == expected_grades[student_id]
             assert student["grade_is_override"] is expected_overrides[student_id]
+            assert student["solved"] == {TASK_1: False, TASK_2: False, TASK_LARGE: student_id == STUDENT_1}
 
 
 def test_get_database_table_data_hides_admins_from_students(app):
