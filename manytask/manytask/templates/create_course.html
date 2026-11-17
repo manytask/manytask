@@ -131,16 +131,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById(feedbackId).style.display = 'block';
             }
         } else {
-            // GitLab: validate against namespace path + course group
-            const namespacePath = getSelectedNamespacePath();
-            
-            let validPrefix = "";
-            if (namespacePath) {
-                validPrefix = validPrefix + namespacePath + '/';
-            }
-            if (groupName) {
-                validPrefix = validPrefix + groupName + '/';
-            }
+            const fullGroupPath = getGitLabGroupPath();
+            const validPrefix = fullGroupPath ? `${fullGroupPath}/` : '';
             
             if (validPrefix === '' || field.value.startsWith(validPrefix)) {
                 field.classList.remove('is-invalid');
@@ -170,12 +162,18 @@ document.addEventListener('DOMContentLoaded', function () {
         const selectedNamespace = namespacesData.find(ns => ns.id === selectedNamespaceId);
         return selectedNamespace?.gitlab_group_path || null;
     }
+
+    function getGitLabGroupPath() {
+        const groupName = gitlabGroupField.value.trim();
+        const namespacePath = getSelectedNamespacePath();
+        if (namespacePath && groupName && !groupName.includes('/')) {
+            return `${namespacePath}/${groupName}`;
+        }
+        return groupName || namespacePath || '';
+    }
     
     // Update fields when namespace changes
     namespaceSelect.addEventListener('change', function () {
-        if (!gitlabGroupField.value) {
-            return;
-        }
         updateGitLabFields();
     });
 
@@ -202,21 +200,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 studentsGroupField.value = `${groupName}-st-${shortYear}${semLetter}`;
             }
         } else {
-            // GitLab: namespace path + course group naming
-            const namespacePath = getSelectedNamespacePath();
-            const isNoNamespace = namespaceSelect.value === '0';
-            
-            // Determine the full group path
-            let fullGroupPath = groupName;
-            if (isNoNamespace) {
-                fullGroupPath = groupName;
-            } else if (namespacePath && groupName && !groupName.includes('/')) {
-                // If group name doesn't contain '/', prepend namespace path
-                fullGroupPath = `${namespacePath}/${groupName}`;
-            } else if (!groupName && namespacePath) {
-                // If only namespace is selected, use it as base
-                fullGroupPath = namespacePath;
-            }
+            const fullGroupPath = getGitLabGroupPath();
 
             if (!publicRepoChanged && fullGroupPath) {
                 publicRepoField.value = `${fullGroupPath}/public-${year}-${semester}`;
@@ -226,6 +210,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 studentsGroupField.value = `${fullGroupPath}/students-${year}-${semester}`;
             }
         }
+        validatePrefix(publicRepoField, "public-repo-feedback");
+        validatePrefix(studentsGroupField, "students-group-feedback");
     }
 
     // Check if namespace_id is provided in URL

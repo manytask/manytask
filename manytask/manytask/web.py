@@ -31,7 +31,12 @@ from .auth import (
     valid_rms_session,
 )
 from .course import Course, CourseConfig, CourseStatus, get_current_time
-from .database import UNBOUND_INSTANCE_ADMIN_AUTH_ID, UNBOUND_INSTANCE_ADMIN_RMS_ID, UserIdentityConflictError
+from .database import (
+    UNBOUND_INSTANCE_ADMIN_AUTH_ID,
+    UNBOUND_INSTANCE_ADMIN_RMS_ID,
+    CourseNotEmptyError,
+    UserIdentityConflictError,
+)
 from .main import CustomFlask
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
@@ -709,6 +714,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 labels=app.create_course_labels,
             )
 
+        course_token = request.form["token"]
         try:
             logger.info(
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
@@ -728,6 +734,10 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             app.rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
             logger.info("Created students group")
 
+            app.rms_api.configure_course_manytask_token(
+                gitlab_course_public_repo, gitlab_course_students_group, course_token
+            )
+
         except Exception as e:
             logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
             return render_template(
@@ -746,7 +756,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             gitlab_course_students_group=gitlab_course_students_group,
             gitlab_default_branch=request.form["default_branch"],
             registration_secret=request.form["registration_secret"],
-            token=request.form["token"],
+            token=course_token,
             show_allscores=request.form.get("show_allscores", "off") == "on",
         )
 
@@ -815,13 +825,44 @@ def edit_course(course_name: str) -> ResponseReturnValue:
             rms=app.app_config.rms,
         )
 
-    course_users = app.storage_api.get_course_users_with_admin_status(course_name)
+    eligible_course_admins = [
+        user for user, is_admin in app.storage_api.get_course_users_with_admin_status(course_name) if not is_admin
+    ]
     return render_template(
         "edit_course.html",
         course=course,
-        course_users=course_users,
+        eligible_course_admins=eligible_course_admins,
         rms=app.app_config.rms,
     )
+
+
+@instance_admin_bp.post("/courses/<course_name>/delete")
+@requires_course_admin
+def delete_course(course_name: str) -> ResponseReturnValue:
+    app: CustomFlask = current_app  # type: ignore
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        return {"error": "CSRF validation failed"}, HTTPStatus.BAD_REQUEST
+
+    if request.form.get("confirmation_name") != course_name:
+        return {
+            "error": "Course name does not match. Type the exact course name to confirm deletion."
+        }, HTTPStatus.BAD_REQUEST
+
+    try:
+        if not app.storage_api.delete_course(course_name):
+            return {"error": "Course not found."}, HTTPStatus.NOT_FOUND
+    except CourseNotEmptyError as e:
+        return {"error": str(e)}, HTTPStatus.CONFLICT
+
+    logger.info(
+        "Successfully deleted course '%s' by user '%s'",
+        sanitize_log_data(course_name),
+        sanitize_log_data(session.get("manytask", {}).get("username")),
+    )
+    flash(f"Course '{course_name}' deleted successfully.", category="success")
+    return {"redirect_url": url_for("root.index")}
 
 
 @instance_admin_bp.route("/panel", methods=["GET", "POST"])

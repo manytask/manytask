@@ -1,4 +1,5 @@
 import os
+from dataclasses import replace
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
@@ -12,11 +13,18 @@ from flask.testing import FlaskClient
 from flask_wtf import CSRFProtect
 from sqlalchemy.exc import NoResultFound
 
-from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiException, StudentCourseScores, TaskScore
+from manytask.abstract import (
+    AuthenticatedUser,
+    CourseAccessUser,
+    RmsApiException,
+    StoredUser,
+    StudentCourseScores,
+    TaskScore,
+)
 from manytask.api import bp as api_bp
 from manytask.api import namespace_bp
 from manytask.course import CourseStatus, ProtectedBranchSettings
-from manytask.database import UserIdentityConflictError
+from manytask.database import CourseNotEmptyError, UserIdentityConflictError
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
@@ -51,6 +59,39 @@ from tests.helpers import (
     raise_for_invalid_task,
     set_session,
 )
+
+
+def test_create_course_configures_manytask_token(app: Any, mock_gitlab_oauth: Any) -> None:
+    app.storage_api.stored_user.instance_admin = True
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch("manytask.web.validate_csrf"),
+        patch("manytask.web.check_course_creation_namespace_permission", return_value=(None, None, None, None)),
+        patch.object(app.storage_api, "get_course_id_by_name", return_value=None, create=True),
+        patch.object(app.storage_api, "create_course", return_value=True, create=True) as create_course,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post(
+            "/instance_admin/courses/new",
+            data={
+                "csrf_token": "test",
+                "namespace_id": "0",
+                "unique_course_name": "new-course",
+                "course_group": "new-course",
+                "course_public_repo": "new-course/public",
+                "course_students_group": "new-course/students",
+                "default_branch": "main",
+                "registration_secret": "secret",
+                "token": "token",
+            },
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert app.rms_api.projects["new-course/public"].ci_variables["MANYTASK_TOKEN"] == "token"
+    assert app.rms_api.groups["new-course/students"].ci_variables["MANYTASK_TOKEN"] == "token"
+    settings = create_course.call_args.args[0]
+    assert settings.token == "token"
 
 
 @pytest.fixture
@@ -656,7 +697,8 @@ def test_namespace_admin_can_access_namespace_panel(
             response = client.get(f"/instance_admin/namespaces/{namespace.id}")
 
     assert response.status_code == HTTPStatus.OK
-    form = BeautifulSoup(response.data, "html.parser").find("form", id="namespaceSettingsForm")
+    soup = BeautifulSoup(response.data, "html.parser")
+    form = soup.find("form", id="namespaceSettingsForm")
     assert form is not None
     assert form["data-update-url"] == f"/api/namespaces/{namespace.id}"
     name_input = form.find("input", id="namespaceName", attrs={"name": "name"})
@@ -669,6 +711,16 @@ def test_namespace_admin_can_access_namespace_panel(
     submit = form.find("button", attrs={"type": "submit"})
     assert submit is not None
     assert submit.get_text(strip=True) == "Save Changes"
+    assert form.find("button", attrs={"data-bs-target": "#deleteNamespaceModal"}) is not None
+    delete_form = soup.find("form", id="deleteNamespaceForm")
+    assert delete_form is not None
+    assert delete_form["data-delete-url"] == f"/api/namespaces/{namespace.id}"
+    assert delete_form["data-redirect-url"] == "/"
+    assert delete_form.find("input", id="deleteNamespaceName").has_attr("required")
+    assert delete_form.find("button", attrs={"type": "submit"}).has_attr("disabled")
+    assert soup.find(id="deleteNamespaceExpectedName").get_text() == namespace.name
+    assert soup.find(id="deleteNamespaceError")["role"] == "alert"
+    assert "namespace-delete.js" in response.text
 
 
 def test_namespace_admin_cannot_access_another_namespace_panel(app, mock_gitlab_oauth):
@@ -1108,12 +1160,14 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
 # ----- Course access table on the edit page -----
 
 
-def _get_edit_course_page(app, mock_gitlab_oauth):
+def _get_edit_course_page(
+    app: Any, mock_gitlab_oauth: Any, course_users: list[tuple[StoredUser, bool]] | None = None
+) -> BeautifulSoup:
     """Open the course edit page as an instance admin and return the parsed HTML."""
     CSRFProtect(app)  # the settings form renders a csrf_token
     app.storage_api.stored_user.instance_admin = True
     app.storage_api.course_admin = True  # required by the requires_course_admin guard
-    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: course_users or []
 
     with app.test_request_context(), app.test_client() as client:
         app.oauth = mock_gitlab_oauth
@@ -1131,10 +1185,31 @@ def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
     assert soup.find(id="access-filter-clear") is not None
 
 
-def test_edit_course_renders_grant_course_admin_modal(app, mock_gitlab_oauth):
-    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+@pytest.mark.parametrize("members", ["empty", "already_admin", "eligible"])
+def test_edit_course_grants_admin_only_to_eligible_members(app: Any, mock_gitlab_oauth: Any, members: str) -> None:
+    enrolled_user = replace(app.storage_api.stored_user, username="enrolled-student")
+    existing_admin = replace(app.storage_api.stored_user, username="existing-admin")
+    non_member = replace(app.storage_api.stored_user, username="not-enrolled")
+    app.storage_api.get_all_users = lambda: [enrolled_user, existing_admin, non_member]
+    course_users = [] if members == "empty" else [(existing_admin, True)]
+    if members == "eligible":
+        course_users.append((enrolled_user, False))
 
-    assert soup.find(id="grantCourseAdminModal") is not None
+    soup = _get_edit_course_page(app, mock_gitlab_oauth, course_users)
+    modal = soup.find(id="grantCourseAdminModal")
+    assert modal is not None
+    assert [option["value"] for option in modal.select("#userToGrant option")] == (
+        [enrolled_user.username] if members == "eligible" else []
+    )
+    assert modal.find(id="grantCourseAdminSubmit").has_attr("disabled") == (members != "eligible")
+    if members == "eligible":
+        assert "Only users enrolled on this course" in modal.get_text()
+        assert modal.find(id="grantCourseAdminEmpty") is None
+    else:
+        empty_state = modal.find(id="grantCourseAdminEmpty")
+        assert empty_state["role"] == "status"
+        assert "Users must be enrolled" in empty_state.get_text()
+        assert empty_state.find("a")["href"] == f"/{TEST_COURSE_NAME}/create_project"
 
 
 def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
@@ -1143,6 +1218,114 @@ def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):
 
     assert soup.find(id="assignProgramManagerModal") is None
     assert soup.find("button", {"data-bs-target": "#assignProgramManagerModal"}) is None
+
+
+@pytest.fixture
+def course_admin_client(app: Flask, mock_gitlab_oauth: Any) -> Any:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.course_admin = True
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+    with app.test_client() as client:
+        set_session(client, build_test_session(include_manytask=True))
+        yield client
+
+
+def _course_delete_form(client: FlaskClient) -> Any:
+    response = client.get(f"/instance_admin/courses/{TEST_COURSE_NAME}/edit")
+    assert response.status_code == HTTPStatus.OK
+    return BeautifulSoup(response.data, "html.parser").find(id="deleteCourseModal").find("form")
+
+
+def test_course_admin_can_delete_empty_course(app: Flask, course_admin_client: FlaskClient) -> None:
+    form = _course_delete_form(course_admin_client)
+    assert form.find("input", {"name": "confirmation_name"})["required"] == ""
+    assert form.find("button", {"type": "submit"}).has_attr("disabled")
+    assert form.find(id="deleteCourseError")["role"] == "alert"
+    with patch.object(app.storage_api, "delete_course", create=True, return_value=True) as delete:
+        response = course_admin_client.post(
+            form["action"],
+            data={
+                "csrf_token": form.find("input", {"name": "csrf_token"})["value"],
+                "confirmation_name": TEST_COURSE_NAME,
+            },
+        )
+    delete.assert_called_once_with(TEST_COURSE_NAME)
+    assert response.status_code == HTTPStatus.OK
+    assert response.json == {"redirect_url": "/"}
+    with course_admin_client.session_transaction() as session:
+        assert ("success", f"Course '{TEST_COURSE_NAME}' deleted successfully.") in session["_flashes"]
+
+
+@pytest.mark.parametrize("confirmation", [None, "", "wrong", TEST_COURSE_NAME.upper(), f" {TEST_COURSE_NAME}"])
+def test_delete_course_requires_exact_name(
+    app: Flask, course_admin_client: FlaskClient, confirmation: str | None
+) -> None:
+    form = _course_delete_form(course_admin_client)
+    data = {"csrf_token": form.find("input", {"name": "csrf_token"})["value"]}
+    if confirmation is not None:
+        data["confirmation_name"] = confirmation
+    with patch.object(app.storage_api, "delete_course", create=True) as delete:
+        response = course_admin_client.post(form["action"], data=data)
+    delete.assert_not_called()
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "Course name does not match" in response.json["error"]
+
+
+def test_delete_populated_course_shows_error(app: Flask, course_admin_client: FlaskClient) -> None:
+    form = _course_delete_form(course_admin_client)
+    message = "Cannot delete this course because users are already registered."
+    with patch.object(
+        app.storage_api, "delete_course", create=True, side_effect=CourseNotEmptyError(message)
+    ) as delete:
+        response = course_admin_client.post(
+            form["action"],
+            data={
+                "csrf_token": form.find("input", {"name": "csrf_token"})["value"],
+                "confirmation_name": TEST_COURSE_NAME,
+            },
+        )
+    delete.assert_called_once_with(TEST_COURSE_NAME)
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json == {"error": message}
+    with course_admin_client.session_transaction() as session:
+        assert not session.get("_flashes")
+
+
+def test_delete_course_requires_admin(app: Flask, course_admin_client: FlaskClient) -> None:
+    form = _course_delete_form(course_admin_client)
+    app.storage_api.course_admin = False
+    with patch.object(app.storage_api, "delete_course", create=True) as delete:
+        response = course_admin_client.post(
+            form["action"],
+            data={
+                "csrf_token": form.find("input", {"name": "csrf_token"})["value"],
+                "confirmation_name": TEST_COURSE_NAME,
+            },
+        )
+    delete.assert_not_called()
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert (
+        course_admin_client.get(f"/instance_admin/courses/{TEST_COURSE_NAME}/edit").status_code == HTTPStatus.FORBIDDEN
+    )
+
+
+@pytest.mark.parametrize("csrf_token", [None, "invalid"])
+def test_delete_course_requires_csrf(app: Flask, course_admin_client: FlaskClient, csrf_token: str | None) -> None:
+    with patch.object(app.storage_api, "delete_course", create=True) as delete:
+        response = course_admin_client.post(
+            f"/instance_admin/courses/{TEST_COURSE_NAME}/delete",
+            data={"confirmation_name": TEST_COURSE_NAME, "csrf_token": csrf_token},
+        )
+    delete.assert_not_called()
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_delete_course_is_post_only(app: Flask, course_admin_client: FlaskClient) -> None:
+    with patch.object(app.storage_api, "delete_course", create=True) as delete:
+        response = course_admin_client.get(f"/instance_admin/courses/{TEST_COURSE_NAME}/delete")
+    delete.assert_not_called()
+    assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
 
 
 @pytest.mark.parametrize("can_edit", [True, False])

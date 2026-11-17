@@ -115,6 +115,8 @@ Please, refer to the example files and api docs.
 
 ## How to build documentation
 
+Use Diplodoc CLI 5.64.0 or newer, with Node.js 24 or newer and npm 11.5.1 or newer.
+
 ### Install NPM:
 
 ```bash

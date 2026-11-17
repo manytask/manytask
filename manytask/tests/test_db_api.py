@@ -14,6 +14,7 @@ from alembic import command
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
+from flask import session as flask_session
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
@@ -32,13 +33,21 @@ from manytask.config import (
 )
 from manytask.course import Course as ManytaskCourse
 from manytask.course import CourseConfig, CourseStatus, ManytaskDeadlinesType, ProtectedBranchSettings
-from manytask.database import DataBaseApi, DatabaseConfig, TaskDisabledError, UserIdentityConflictError
+from manytask.database import (
+    CourseNotEmptyError,
+    DataBaseApi,
+    DatabaseConfig,
+    TaskDisabledError,
+    UserIdentityConflictError,
+)
 from manytask.mock_rms import MockRmsApi
 from manytask.models import (
+    ComplexFormula,
     Course,
     Deadline,
     Grade,
     Namespace,
+    PrimaryFormula,
     Task,
     TaskGroup,
     User,
@@ -46,6 +55,8 @@ from manytask.models import (
     UserOnNamespace,
     UserOnNamespaceRole,
 )
+from manytask.utils.flask import get_courses
+from manytask.web import course_bp, instance_admin_bp
 from tests.constants import (
     BONUS_GROUP,
     BONUS_SCORE,
@@ -1151,21 +1162,81 @@ def _create_namespace_with_course(
     return namespace
 
 
-def test_check_if_course_admin_namespace_owner(db_api_with_initialized_first_course, session):
-    """Namespace owner (creator) must be treated as a course admin."""
-    instance_admin_id = session.query(User).filter_by(username="instance_admin").one().id
+def test_namespace_authorship_does_not_grant_admin_access(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session
+) -> None:
+    """Authorship alone must not grant access to a namespace or its courses."""
     create_user(db_api_with_initialized_first_course)
     user = session.query(User).filter_by(username=TEST_USERNAME).one()
 
-    _create_namespace_with_course(session, created_by_id=user.id)
+    namespace = _create_namespace_with_course(session, created_by_id=user.id)
 
-    # user is the namespace owner, so it is a course admin even without UserOnCourse
-    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
-    assert _access_levels_by_username(db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME))[
-        TEST_USERNAME
-    ] == {"namespace_admin"}
-    # unrelated user (instance admin excluded from this check via a non-owner) is not
-    assert instance_admin_id != user.id
+    assert db_api_with_initialized_first_course.get_namespace_admin_namespaces(TEST_USERNAME) == []
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert TEST_USERNAME not in _access_levels_by_username(
+        db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME)
+    )
+    with pytest.raises(PermissionError):
+        db_api_with_initialized_first_course.get_namespace_by_id(namespace.id, TEST_USERNAME)
+
+
+@pytest.mark.parametrize("new_role", [None, "student", "program_manager"], ids=["remove", "student", "program_manager"])
+def test_namespace_creator_loses_admin_access_after_role_revocation(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, new_role: str | None
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    namespace = db_api.create_namespace("Test Namespace", "test-namespace", None, 1, TEST_USERNAME)
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    course.namespace_id = namespace.id
+    session.commit()
+
+    assert db_api.get_namespace_users(namespace.id) == [(user.id, "namespace_admin")]
+    assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == [namespace.id]
+    assert db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    app = make_flask_app(course_bp, instance_admin_bp)
+    app.storage_api = db_api
+    with app.test_request_context():
+        flask_session["manytask"] = {"username": TEST_USERNAME}
+        assert [course_data["name"] for course_data in get_courses(app)] == [FIRST_COURSE_NAME]
+
+        if new_role is None:
+            db_api.remove_user_from_namespace(namespace.id, user.id)
+        else:
+            db_api.update_user_role_in_namespace(namespace.id, user.id, new_role)
+
+        assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == []
+        assert not db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+        assert get_courses(app) == []
+
+    expected_levels = {"program_manager"} if new_role == "program_manager" else None
+    assert (
+        _access_levels_by_username(db_api.get_course_access_users(FIRST_COURSE_NAME)).get(TEST_USERNAME)
+        == expected_levels
+    )
+    assert session.query(Namespace).filter_by(id=namespace.id).one().created_by_id == user.id
+
+
+@pytest.mark.parametrize("remaining_role", ["instance_admin", "course_admin"])
+def test_namespace_role_revocation_preserves_independent_admin_access(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, remaining_role: str
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    user, _ = add_user_on_course(session, is_course_admin=remaining_role == "course_admin")
+    if remaining_role == "instance_admin":
+        db_api.set_instance_admin_status(TEST_USERNAME, True)
+    namespace = db_api.create_namespace("Test Namespace", "test-namespace", None, 1, TEST_USERNAME)
+    session.query(Course).filter_by(name=FIRST_COURSE_NAME).one().namespace_id = namespace.id
+    session.commit()
+
+    db_api.remove_user_from_namespace(namespace.id, user.id)
+
+    assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == []
+    assert db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert _access_levels_by_username(db_api.get_course_access_users(FIRST_COURSE_NAME))[TEST_USERNAME] == {
+        remaining_role
+    }
 
 
 def test_check_if_course_admin_namespace_admin_role(db_api_with_initialized_first_course, session):
@@ -1995,6 +2066,44 @@ def test_get_groups_with_resync(  # noqa: PLR0913
     check_get_groups(
         db_api_with_two_initialized_courses, FIRST_COURSE_NAME, course_deadlines_config, enabled, started, now
     )
+
+
+def test_delete_empty_course(db_api_with_two_initialized_courses: DataBaseApi, session: Session) -> None:
+    db_api = db_api_with_two_initialized_courses
+    course_id = session.query(Course.id).filter_by(name=FIRST_COURSE_NAME).scalar()
+    assert session.query(TaskGroup).filter_by(course_id=course_id).count() > 0
+    assert session.query(ComplexFormula).filter_by(course_id=course_id).count() > 0
+    remaining_task_count = session.query(Task).join(TaskGroup).filter(TaskGroup.course_id != course_id).count()
+    remaining_formula_count = (
+        session.query(PrimaryFormula).join(ComplexFormula).filter(ComplexFormula.course_id != course_id).count()
+    )
+
+    assert db_api.delete_course(FIRST_COURSE_NAME)
+
+    assert db_api.get_course(FIRST_COURSE_NAME) is None
+    assert db_api.get_course(SECOND_COURSE_NAME) is not None
+    assert session.query(TaskGroup).filter_by(course_id=course_id).count() == 0
+    assert session.query(ComplexFormula).filter_by(course_id=course_id).count() == 0
+    assert session.query(Task).count() == remaining_task_count
+    assert session.query(PrimaryFormula).count() == remaining_formula_count
+    assert not db_api.delete_course(FIRST_COURSE_NAME)
+
+
+@pytest.mark.parametrize("is_admin", [False, True])
+def test_delete_course_with_registered_user(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, is_admin: bool
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    db_api.update_or_create_user(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME, TEST_RMS_ID, TEST_AUTH_ID)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, is_admin)
+    task_count = session.query(Task).count()
+
+    with pytest.raises(CourseNotEmptyError, match="users are already registered"):
+        db_api.delete_course(FIRST_COURSE_NAME)
+
+    assert db_api.get_course(FIRST_COURSE_NAME) is not None
+    assert db_api.check_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert session.query(Task).count() == task_count
 
 
 def test_edit_course(db_api_with_initialized_first_course, edited_first_course_config, session):

@@ -53,9 +53,15 @@ class RunScriptPlugin(PluginABC):
             output = output if isinstance(output, str) else output.decode("utf-8")
 
             if isinstance(e, subprocess.TimeoutExpired):
+                timeout_message = f"Script timed out after {e.timeout}s ({args.timeout}s limit)"
+                # The pipeline prints `output` unconditionally but `message` only in
+                # verbose mode, so append the timeout notice to the output as well.
+                # Otherwise a timed-out run looks like an ordinary failure.
+                if output and not output.endswith("\n"):
+                    output += "\n"
                 raise PluginExecutionFailed(
-                    f"Script timed out after {e.timeout}s ({args.timeout}s limit)",
-                    output=output,
+                    timeout_message,
+                    output=f"{output}{timeout_message}",
                 ) from e
             else:
                 raise PluginExecutionFailed(

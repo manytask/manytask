@@ -351,7 +351,7 @@ def _parse_timestamp(
     default=None,
     envvar=["CI_MERGE_REQUEST_DIFF_BASE_SHA", "CI_COMMIT_BEFORE_SHA"],
     show_envvar=True,
-    help="Commit to detect changes from (last_commit_changes), "
+    help="Commit to detect file changes and task names in commit messages from, "
     "e.g. branch state before the push; defaults to HEAD~1",
 )
 @click.option("--no-clean", is_flag=True, help="Clean or not check tmp folders")

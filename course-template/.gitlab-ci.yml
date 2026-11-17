@@ -6,6 +6,8 @@ stages:
   - grade
 
 variables:
+  # Task detection reads every commit since CI_COMMIT_BEFORE_SHA.
+  GIT_DEPTH: "0"
   # Full registry path to the course testenv image built by the PRIVATE repo's
   # .releaser-ci.yml (build-testenv job). This file is exported verbatim into the
   # public/student repository, so the image must be referenced by its absolute

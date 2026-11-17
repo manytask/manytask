@@ -4,9 +4,9 @@ navigation:
   logo:
     url: ./index.html
     dark:
-      icon: ./img/ManytaskTextFullDark.png
+      icon: ./img/brand/manytask-full-dark.svg
     light:
-      icon: ./img/ManytaskTextFull.png
+      icon: ./img/brand/manytask-full.svg
   header:
     leftItems:
       - type: link
@@ -50,7 +50,7 @@ items:
         href: running_course.md
       - name: Checker pipelines and plugins
         href: checker_pipelines_and_plugins.md
-  - name: For system administrators
+  - name: For institutions
     items:
       - name: Production setup
         href: system_setup.md

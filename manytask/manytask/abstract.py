@@ -195,6 +195,11 @@ class StorageApi(ABC):
     ) -> bool: ...
 
     @abstractmethod
+    def delete_course(self, course_name: str) -> bool:
+        """Delete an empty course; return False if missing, raise if users are registered."""
+        ...
+
+    @abstractmethod
     def update_course(
         self,
         course_name: str,
@@ -310,6 +315,9 @@ class StorageApi(ABC):
     def update_namespace(self, namespace_id: int, name: str, description: str | None) -> Any: ...
 
     @abstractmethod
+    def delete_namespace(self, namespace_id: int, name: str) -> None: ...
+
+    @abstractmethod
     def add_user_to_namespace(
         self,
         namespace_id: int,
@@ -413,6 +421,11 @@ class RmsApi(ABC):
         :returns: Group object or None
         """
         ...
+
+    @abstractmethod
+    def configure_course_manytask_token(
+        self, public_repo: str, students_group: str, token: str, private_repo: str | None = None
+    ) -> None: ...
 
     @abstractmethod
     def create_namespace_group(

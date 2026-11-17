@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from typing import Callable
+from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -1690,13 +1690,14 @@ def test_set_course_admin_unknown_user(app, authenticated_client):
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_set_course_admin_rejects_non_member(app, authenticated_client):
+@pytest.mark.parametrize("is_admin", [True, False])
+def test_set_course_admin_rejects_non_member(app: Any, authenticated_client: Any, is_admin: bool) -> None:
     """Course admin status lives on the enrollment row, so non-members are rejected."""
     app.storage_api.check_user_on_course = lambda *_args, **_kwargs: False
     calls = []
     app.storage_api.set_course_admin_status = lambda *args: calls.append(args)
 
-    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": TEST_USERNAME, "is_admin": True})
+    response = authenticated_client.post(COURSE_ADMIN_URL, json={"username": TEST_USERNAME, "is_admin": is_admin})
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert "not enrolled" in json.loads(response.data)["error"]
