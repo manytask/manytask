@@ -14,7 +14,8 @@ blocks:
             <h1 class="mt-hero__title" id="mt-hero-title"><span class="mt-hero-line">Your course.</span><span class="mt-hero-line">As code.</span></h1>
             <p class="mt-hero__description">Version tasks, tests, and deadlines in a single Git repository. Automate checks and track student progress with Manytask.</p>
             <div class="mt-hero__actions">
-              <a class="mt-hero__button mt-hero__button_primary" href="https://app.manytask.org/">Open Manytask</a>
+              <a class="mt-hero__button mt-hero__button_primary" href="https://app.manytask.org/">Manytask (GitLab)</a>
+              <a class="mt-hero__button mt-hero__button_sourcecraft" href="https://src.manytask.org/">Manytask (SourceCraft)</a>
               <a class="mt-hero__button" href="course_as_code.html">Course as code</a>
             </div>
           </div>
@@ -83,11 +84,18 @@ blocks:
             url: basic_example.html
             theme: normal
             arrow: true
-      - title: 'Make it your own'
-        text: 'Deploy an instance, explore the API, or contribute to the open-source project.'
+      - title: 'Customize and contribute'
+        text: 'Explore the API, set up a local development environment, or contribute to the open-source project.'
         links:
           - text: Developer guide
             url: dev.html
+            theme: normal
+            arrow: true
+      - title: 'Run your own instance'
+        text: 'Run your own Manytask instance for your university, school, or training program. Connect your repositories and host your courses on your infrastructure.'
+        links:
+          - text: Deploy your own instance
+            url: deploy_guide.html
             theme: normal
             arrow: true
   - type: content-layout-block
