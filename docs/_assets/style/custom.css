@@ -247,13 +247,20 @@ button:focus-visible {
 }
 
 .yfm .mt-hero .mt-hero__button_primary {
+    --mt-hero-button-color: #17c3b2;
     border-color: #17c3b2;
     background: #17c3b2;
 }
 
+.yfm .mt-hero .mt-hero__button_sourcecraft {
+    --mt-hero-button-color: #f4717d;
+    border-color: #f4717d;
+    background: #f4717d;
+}
+
 .yfm .mt-hero .mt-hero__button:hover {
-    border-color: #ffcb77;
-    background: #ffcb77;
+    border-color: #202b35;
+    background: var(--mt-hero-button-color, #ffcb77);
 }
 
 .pc-ExtendedFeaturesBlock,
