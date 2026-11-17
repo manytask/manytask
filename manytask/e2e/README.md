@@ -73,6 +73,14 @@ checked-out checker. These are fixture setup steps, not assertions that course c
 automatically configures them. The actual release jobs build and push images, deploy the
 course configuration, and export the public repository. The test checks the export for
 private-file leaks and matches the published `latest` and release image digests.
+
+The fixture supports both Docker-based and rootless BuildKit templates. For a template
+with a `.buildkit` job, it configures BuildKit to use the isolated HTTP registry and
+registers the runner with `seccomp:unconfined` and `apparmor:unconfined` for rootless
+user namespaces. CI jobs receive no host Docker socket in this mode. Docker-based
+templates retain the socket mount needed by their build jobs. The runner service itself
+uses the dedicated daemon's socket to manage job containers in either mode.
+
 The initial template push can asynchronously queue a pipeline using the unconfigured CI
 file. The fixture cancels those setup pipelines in its own private project so they cannot
 occupy the runner; the explicitly triggered release pipeline is preserved and checked.

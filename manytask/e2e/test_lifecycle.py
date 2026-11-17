@@ -28,6 +28,17 @@ FULL_SCORE = 100
 pytestmark = pytest.mark.skipif(not os.getenv("E2E_RUN"), reason="Requires the dedicated e2e stack")
 
 
+def configure_buildkit_registry(releaser: dict[str, Any]) -> None:
+    if ".buildkit" not in releaser:
+        return
+    # The disposable registry uses HTTP inside the isolated E2E network.
+    buildkit = releaser[".buildkit"]
+    buildkit["before_script"].append(
+        'printf \'[registry."%s"]\\n  http = true\\n\' "$CI_REGISTRY" > /home/user/buildkitd.toml'
+    )
+    buildkit["variables"]["BUILDKITD_FLAGS"] += " --config=/home/user/buildkitd.toml"
+
+
 class Lifecycle:
     def __init__(self) -> None:
         self.gitlab = os.environ["GITLAB_URL"]
@@ -163,6 +174,7 @@ class Lifecycle:
     def configure_teacher_release(self) -> None:
         project = self.private["id"]
         releaser = yaml.safe_load(self.file(project, ".releaser-ci.yml"))
+        configure_buildkit_registry(releaser)
         checker = yaml.safe_load(self.file(project, ".checker.yml"))
         schedule = yaml.safe_load(self.file(project, ".manytask.yml"))
         wheel = next((self.directory / "wheels").glob("*.whl"))

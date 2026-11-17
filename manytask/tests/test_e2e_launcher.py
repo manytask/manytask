@@ -84,3 +84,29 @@ def test_runner_handoff_waits_until_token_exists(stack: run.Stack, monkeypatch: 
 
     register.assert_not_called()
     assert not stack.runner_token
+
+
+@pytest.mark.parametrize("job_type", [".docker", ".buildkit"])
+def test_runner_matches_template_requirements(
+    stack: run.Stack, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job_type: str
+) -> None:
+    monkeypatch.setattr(run, "REPOSITORY", tmp_path)
+    template = tmp_path / "course-template"
+    template.mkdir()
+    (template / ".releaser-ci.yml").write_text(yaml.safe_dump({job_type: {}}))
+    execute = Mock()
+    monkeypatch.setattr(stack, "exec", execute)
+
+    stack.register_runner("fixture-runner-token")
+
+    service, args = execute.call_args.args
+    assert service == "runner"
+    socket = "/var/run/docker.sock:/var/run/docker.sock"
+    if job_type == ".buildkit":
+        assert socket not in args
+        assert "--docker-volumes" not in args
+        assert "seccomp:unconfined" in args
+        assert "apparmor:unconfined" in args
+    else:
+        assert args[args.index("--docker-volumes") + 1] == socket
+        assert "--docker-security-opt" not in args

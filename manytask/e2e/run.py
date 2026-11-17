@@ -282,6 +282,15 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
         self.environment.update({f"E2E_{key}": value for key, value in environment.items()})
 
     def register_runner(self, token: str) -> None:
+        releaser = yaml.safe_load((REPOSITORY / "course-template" / ".releaser-ci.yml").read_text())
+        docker_options = ["--docker-volumes", "/var/run/docker.sock:/var/run/docker.sock"]
+        if ".buildkit" in releaser:
+            docker_options = [
+                "--docker-security-opt",
+                "seccomp:unconfined",
+                "--docker-security-opt",
+                "apparmor:unconfined",
+            ]
         self.exec(
             "runner",
             [
@@ -298,8 +307,7 @@ puts({admin_token: pat.token, client_id: app.uid, client_secret: app.secret}.to_
                 "alpine:3.20",
                 "--docker-network-mode",
                 self.network,
-                "--docker-volumes",
-                "/var/run/docker.sock:/var/run/docker.sock",
+                *docker_options,
                 "--docker-pull-policy",
                 "if-not-present",
                 "--docker-disable-cache",
