@@ -1,5 +1,6 @@
 import os
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
@@ -23,6 +24,7 @@ from manytask.abstract import (
 )
 from manytask.api import bp as api_bp
 from manytask.api import namespace_bp
+from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
 from manytask.course import CourseStatus, ProtectedBranchSettings
 from manytask.database import CourseNotEmptyError, UserIdentityConflictError
 from manytask.local_config import LocalConfig
@@ -311,6 +313,54 @@ def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oau
     assert control.get_text(strip=True) == "Show oldest first"
     assert control["data-username"] == TEST_USERNAME
     assert control["data-course-name"] == TEST_COURSE_NAME
+
+
+@pytest.mark.parametrize(
+    ("scores", "max_scores", "fully_solved"),
+    [
+        ({"task1": 100, "task2": 100}, [100, 100], True),
+        ({"task1": 120, "task2": 110}, [100, 100], True),
+        ({"task1": 200, "task2": 90}, [100, 100], False),
+        ({"task1": 100, "task2": 0}, [100, 100], False),
+        ({"task1": 100}, [100, 100], False),
+        ({}, [0], True),
+        ({}, [], False),
+    ],
+)
+def test_course_page_marks_only_fully_solved_groups(
+    app: Any, mock_gitlab_oauth: Any, scores: dict[str, int], max_scores: list[int], fully_solved: bool
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    group = ManytaskGroupConfig(
+        group="Homework",
+        start=start,
+        end=start + timedelta(days=7),
+        tasks=[
+            ManytaskTaskConfig(task=f"task{index}", score=score, is_bonus=index > 1)
+            for index, score in enumerate(max_scores, start=1)
+        ],
+    )
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_groups", return_value=[group]),
+        patch.object(app.storage_api, "get_scores", return_value=scores),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+
+    assert response.status_code == HTTPStatus.OK
+    soup = BeautifulSoup(response.data, "html.parser")
+    control = soup.find("button", id="solved-last")
+    assert control is not None
+    assert control.get_text(strip=True) == "Hide solved"
+    assert control["aria-pressed"] == "false"
+    rendered_group = soup.select_one("#task-groups > [data-group-solved]")
+    assert rendered_group is not None
+    assert rendered_group["data-group-solved"] == str(fully_solved).lower()
+    assert not rendered_group.has_attr("hidden")
+    assert soup.find("script", src="/static/js/solved-last.js?v=2") is not None
 
 
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
