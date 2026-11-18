@@ -1,4 +1,6 @@
 import os
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
@@ -12,9 +14,17 @@ from flask.testing import FlaskClient
 from flask_wtf import CSRFProtect
 from sqlalchemy.exc import NoResultFound
 
-from manytask.abstract import AuthenticatedUser, CourseAccessUser, RmsApiException, StudentCourseScores, TaskScore
+from manytask.abstract import (
+    AuthenticatedUser,
+    CourseAccessUser,
+    RmsApiException,
+    StoredUser,
+    StudentCourseScores,
+    TaskScore,
+)
 from manytask.api import bp as api_bp
 from manytask.api import namespace_bp
+from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
 from manytask.course import CourseStatus, ProtectedBranchSettings
 from manytask.database import CourseNotEmptyError, UserIdentityConflictError
 from manytask.local_config import LocalConfig
@@ -51,6 +61,39 @@ from tests.helpers import (
     raise_for_invalid_task,
     set_session,
 )
+
+
+def test_create_course_configures_manytask_token(app: Any, mock_gitlab_oauth: Any) -> None:
+    app.storage_api.stored_user.instance_admin = True
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch("manytask.web.validate_csrf"),
+        patch("manytask.web.check_course_creation_namespace_permission", return_value=(None, None, None, None)),
+        patch.object(app.storage_api, "get_course_id_by_name", return_value=None, create=True),
+        patch.object(app.storage_api, "create_course", return_value=True, create=True) as create_course,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post(
+            "/instance_admin/courses/new",
+            data={
+                "csrf_token": "test",
+                "namespace_id": "0",
+                "unique_course_name": "new-course",
+                "course_group": "new-course",
+                "course_public_repo": "new-course/public",
+                "course_students_group": "new-course/students",
+                "default_branch": "main",
+                "registration_secret": "secret",
+                "token": "token",
+            },
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert app.rms_api.projects["new-course/public"].ci_variables["MANYTASK_TOKEN"] == "token"
+    assert app.rms_api.groups["new-course/students"].ci_variables["MANYTASK_TOKEN"] == "token"
+    settings = create_course.call_args.args[0]
+    assert settings.token == "token"
 
 
 @pytest.fixture
@@ -270,6 +313,54 @@ def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oau
     assert control.get_text(strip=True) == "Show oldest first"
     assert control["data-username"] == TEST_USERNAME
     assert control["data-course-name"] == TEST_COURSE_NAME
+
+
+@pytest.mark.parametrize(
+    ("scores", "max_scores", "fully_solved"),
+    [
+        ({"task1": 100, "task2": 100}, [100, 100], True),
+        ({"task1": 120, "task2": 110}, [100, 100], True),
+        ({"task1": 200, "task2": 90}, [100, 100], False),
+        ({"task1": 100, "task2": 0}, [100, 100], False),
+        ({"task1": 100}, [100, 100], False),
+        ({}, [0], True),
+        ({}, [], False),
+    ],
+)
+def test_course_page_marks_only_fully_solved_groups(
+    app: Any, mock_gitlab_oauth: Any, scores: dict[str, int], max_scores: list[int], fully_solved: bool
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    group = ManytaskGroupConfig(
+        group="Homework",
+        start=start,
+        end=start + timedelta(days=7),
+        tasks=[
+            ManytaskTaskConfig(task=f"task{index}", score=score, is_bonus=index > 1)
+            for index, score in enumerate(max_scores, start=1)
+        ],
+    )
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_groups", return_value=[group]),
+        patch.object(app.storage_api, "get_scores", return_value=scores),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+
+    assert response.status_code == HTTPStatus.OK
+    soup = BeautifulSoup(response.data, "html.parser")
+    control = soup.find("button", id="solved-last")
+    assert control is not None
+    assert control.get_text(strip=True) == "Hide solved"
+    assert control["aria-pressed"] == "false"
+    rendered_group = soup.select_one("#task-groups > [data-group-solved]")
+    assert rendered_group is not None
+    assert rendered_group["data-group-solved"] == str(fully_solved).lower()
+    assert not rendered_group.has_attr("hidden")
+    assert soup.find("script", src="/static/js/solved-last.js?v=2") is not None
 
 
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):
@@ -1119,12 +1210,14 @@ def test_signup_finish_with_new_user_in_db(app, mock_gitlab_oauth):
 # ----- Course access table on the edit page -----
 
 
-def _get_edit_course_page(app, mock_gitlab_oauth):
+def _get_edit_course_page(
+    app: Any, mock_gitlab_oauth: Any, course_users: list[tuple[StoredUser, bool]] | None = None
+) -> BeautifulSoup:
     """Open the course edit page as an instance admin and return the parsed HTML."""
     CSRFProtect(app)  # the settings form renders a csrf_token
     app.storage_api.stored_user.instance_admin = True
     app.storage_api.course_admin = True  # required by the requires_course_admin guard
-    app.storage_api.get_course_users_with_admin_status = lambda _course_name: []
+    app.storage_api.get_course_users_with_admin_status = lambda _course_name: course_users or []
 
     with app.test_request_context(), app.test_client() as client:
         app.oauth = mock_gitlab_oauth
@@ -1142,10 +1235,31 @@ def test_edit_course_renders_access_table(app, mock_gitlab_oauth):
     assert soup.find(id="access-filter-clear") is not None
 
 
-def test_edit_course_renders_grant_course_admin_modal(app, mock_gitlab_oauth):
-    soup = _get_edit_course_page(app, mock_gitlab_oauth)
+@pytest.mark.parametrize("members", ["empty", "already_admin", "eligible"])
+def test_edit_course_grants_admin_only_to_eligible_members(app: Any, mock_gitlab_oauth: Any, members: str) -> None:
+    enrolled_user = replace(app.storage_api.stored_user, username="enrolled-student")
+    existing_admin = replace(app.storage_api.stored_user, username="existing-admin")
+    non_member = replace(app.storage_api.stored_user, username="not-enrolled")
+    app.storage_api.get_all_users = lambda: [enrolled_user, existing_admin, non_member]
+    course_users = [] if members == "empty" else [(existing_admin, True)]
+    if members == "eligible":
+        course_users.append((enrolled_user, False))
 
-    assert soup.find(id="grantCourseAdminModal") is not None
+    soup = _get_edit_course_page(app, mock_gitlab_oauth, course_users)
+    modal = soup.find(id="grantCourseAdminModal")
+    assert modal is not None
+    assert [option["value"] for option in modal.select("#userToGrant option")] == (
+        [enrolled_user.username] if members == "eligible" else []
+    )
+    assert modal.find(id="grantCourseAdminSubmit").has_attr("disabled") == (members != "eligible")
+    if members == "eligible":
+        assert "Only users enrolled on this course" in modal.get_text()
+        assert modal.find(id="grantCourseAdminEmpty") is None
+    else:
+        empty_state = modal.find(id="grantCourseAdminEmpty")
+        assert empty_state["role"] == "status"
+        assert "Users must be enrolled" in empty_state.get_text()
+        assert empty_state.find("a")["href"] == f"/{TEST_COURSE_NAME}/create_project"
 
 
 def test_edit_course_has_no_program_manager_control(app, mock_gitlab_oauth):

@@ -280,3 +280,15 @@ class TestManytaskPlugin:
             ManytaskPlugin().run(args_dict)
 
         assert str(exc.value) == "Unable to decode response"
+
+
+    def test_report_for_unenrolled_student_fails_with_visible_error(self) -> None:
+        message = "Student is not enrolled in this course"
+        with Mocker() as network:
+            network.post(str(self.REPORT_URL), status_code=404, json={"error": message})
+            with pytest.raises(PluginExecutionFailed) as failure:
+                ManytaskPlugin().run(self.get_default_args_dict())
+            assert failure.value.output is not None
+            assert "404" in failure.value.output
+            assert message in failure.value.output
+            assert network.call_count == 1

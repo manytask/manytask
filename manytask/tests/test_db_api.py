@@ -14,6 +14,7 @@ from alembic import command
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
+from flask import session as flask_session
 from psycopg2.errors import DuplicateColumn, DuplicateTable, UndefinedTable, UniqueViolation
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
@@ -54,6 +55,8 @@ from manytask.models import (
     UserOnNamespace,
     UserOnNamespaceRole,
 )
+from manytask.utils.flask import get_courses
+from manytask.web import course_bp, instance_admin_bp
 from tests.constants import (
     BONUS_GROUP,
     BONUS_SCORE,
@@ -867,6 +870,8 @@ def test_store_score(db_api_with_initialized_first_course, session):
 
     assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME, TEST_USERNAME, "not_exist_task", update_func(1)
@@ -912,6 +917,7 @@ def test_store_score(db_api_with_initialized_first_course, session):
 def test_store_score_solved_status(db_api_with_initialized_first_course, session) -> None:
     db_api = db_api_with_initialized_first_course
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
     task = session.query(Task).filter_by(name="task_0_0").one()
     task.min_score = 50
     task.is_large = True
@@ -943,6 +949,7 @@ def test_store_score_solved_status(db_api_with_initialized_first_course, session
 def test_database_solved_round_trip(db_api_with_initialized_first_course, session) -> None:
     db_api = db_api_with_initialized_first_course
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
     course = session.query(Course).one()
     course.status = CourseStatus.IN_PROGRESS
     task = session.query(Task).filter_by(name="task_0_0").one()
@@ -993,6 +1000,7 @@ def test_database_solved_round_trip(db_api_with_initialized_first_course, sessio
 def test_completion_flag_backfill(db_api_with_initialized_first_course, session) -> None:
     db_api = db_api_with_initialized_first_course
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
     old_scores = {"task_0_0": (50, False), "task_0_1": (49, False), "task_0_2": (0, True)}
     for task_name, (score, is_solved) in old_scores.items():
         session.query(Task).filter_by(name=task_name).one().min_score = 50
@@ -1020,6 +1028,8 @@ def test_store_bonus_score(db_api_with_initialized_first_course, session):
 
     assert_counts(session, users=USER_EXPECTED, user_on_course=0)
 
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+
     assert (
         db_api_with_initialized_first_course.store_score(
             FIRST_COURSE_NAME, TEST_USERNAME, "bonus_score", update_func(1)
@@ -1043,6 +1053,7 @@ def test_store_score_bonus_task(db_api_with_initialized_first_course, session):
     expected_score = 22
 
     create_user(db_api_with_initialized_first_course)
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -1079,6 +1090,7 @@ def test_store_score_with_changed_task_name(
     create_course(db_api, first_course_config, first_course_deadlines_config)
 
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(10))
 
@@ -1159,21 +1171,81 @@ def _create_namespace_with_course(
     return namespace
 
 
-def test_check_if_course_admin_namespace_owner(db_api_with_initialized_first_course, session):
-    """Namespace owner (creator) must be treated as a course admin."""
-    instance_admin_id = session.query(User).filter_by(username="instance_admin").one().id
+def test_namespace_authorship_does_not_grant_admin_access(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session
+) -> None:
+    """Authorship alone must not grant access to a namespace or its courses."""
     create_user(db_api_with_initialized_first_course)
     user = session.query(User).filter_by(username=TEST_USERNAME).one()
 
-    _create_namespace_with_course(session, created_by_id=user.id)
+    namespace = _create_namespace_with_course(session, created_by_id=user.id)
 
-    # user is the namespace owner, so it is a course admin even without UserOnCourse
-    assert db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
-    assert _access_levels_by_username(db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME))[
-        TEST_USERNAME
-    ] == {"namespace_admin"}
-    # unrelated user (instance admin excluded from this check via a non-owner) is not
-    assert instance_admin_id != user.id
+    assert db_api_with_initialized_first_course.get_namespace_admin_namespaces(TEST_USERNAME) == []
+    assert not db_api_with_initialized_first_course.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert TEST_USERNAME not in _access_levels_by_username(
+        db_api_with_initialized_first_course.get_course_access_users(FIRST_COURSE_NAME)
+    )
+    with pytest.raises(PermissionError):
+        db_api_with_initialized_first_course.get_namespace_by_id(namespace.id, TEST_USERNAME)
+
+
+@pytest.mark.parametrize("new_role", [None, "student", "program_manager"], ids=["remove", "student", "program_manager"])
+def test_namespace_creator_loses_admin_access_after_role_revocation(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, new_role: str | None
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    create_user(db_api)
+    user = session.query(User).filter_by(username=TEST_USERNAME).one()
+    namespace = db_api.create_namespace("Test Namespace", "test-namespace", None, 1, TEST_USERNAME)
+    course = session.query(Course).filter_by(name=FIRST_COURSE_NAME).one()
+    course.namespace_id = namespace.id
+    session.commit()
+
+    assert db_api.get_namespace_users(namespace.id) == [(user.id, "namespace_admin")]
+    assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == [namespace.id]
+    assert db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    app = make_flask_app(course_bp, instance_admin_bp)
+    app.storage_api = db_api
+    with app.test_request_context():
+        flask_session["manytask"] = {"username": TEST_USERNAME}
+        assert [course_data["name"] for course_data in get_courses(app)] == [FIRST_COURSE_NAME]
+
+        if new_role is None:
+            db_api.remove_user_from_namespace(namespace.id, user.id)
+        else:
+            db_api.update_user_role_in_namespace(namespace.id, user.id, new_role)
+
+        assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == []
+        assert not db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+        assert get_courses(app) == []
+
+    expected_levels = {"program_manager"} if new_role == "program_manager" else None
+    assert (
+        _access_levels_by_username(db_api.get_course_access_users(FIRST_COURSE_NAME)).get(TEST_USERNAME)
+        == expected_levels
+    )
+    assert session.query(Namespace).filter_by(id=namespace.id).one().created_by_id == user.id
+
+
+@pytest.mark.parametrize("remaining_role", ["instance_admin", "course_admin"])
+def test_namespace_role_revocation_preserves_independent_admin_access(
+    db_api_with_initialized_first_course: DataBaseApi, session: Session, remaining_role: str
+) -> None:
+    db_api = db_api_with_initialized_first_course
+    user, _ = add_user_on_course(session, is_course_admin=remaining_role == "course_admin")
+    if remaining_role == "instance_admin":
+        db_api.set_instance_admin_status(TEST_USERNAME, True)
+    namespace = db_api.create_namespace("Test Namespace", "test-namespace", None, 1, TEST_USERNAME)
+    session.query(Course).filter_by(name=FIRST_COURSE_NAME).one().namespace_id = namespace.id
+    session.commit()
+
+    db_api.remove_user_from_namespace(namespace.id, user.id)
+
+    assert db_api.get_namespace_admin_namespaces(TEST_USERNAME) == []
+    assert db_api.check_if_course_admin(FIRST_COURSE_NAME, TEST_USERNAME)
+    assert _access_levels_by_username(db_api.get_course_access_users(FIRST_COURSE_NAME))[TEST_USERNAME] == {
+        remaining_role
+    }
 
 
 def test_check_if_course_admin_namespace_admin_role(db_api_with_initialized_first_course, session):
@@ -1263,6 +1335,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
     expected_stats_ratio = 0.5
 
     create_user(db_api_with_initialized_first_course, STUDENT_1)
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_1.username, False)
 
     db_api_with_initialized_first_course.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", update_func(1))
     db_api_with_initialized_first_course.store_score(
@@ -1270,6 +1343,7 @@ def test_many_users(db_api_with_initialized_first_course, session):
     )
 
     create_user(db_api_with_initialized_first_course, STUDENT_2)
+    db_api_with_initialized_first_course.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_2.username, False)
 
     assert (
         db_api_with_initialized_first_course.store_score(
@@ -1301,6 +1375,8 @@ def test_many_users(db_api_with_initialized_first_course, session):
 
 def test_many_courses(db_api_with_two_initialized_courses, session):
     create_user(db_api_with_two_initialized_courses)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
+    db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME, False)
 
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(30))
     db_api_with_two_initialized_courses.store_score(SECOND_COURSE_NAME, TEST_USERNAME, "task_1_3", update_func(40))
@@ -1340,7 +1416,11 @@ def test_many_users_and_courses(db_api_with_two_initialized_courses, session):
     expected_stats_ratio = 0.5
 
     create_user(db_api_with_two_initialized_courses, STUDENT_1)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_1.username, False)
+    db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, STUDENT_1.username, False)
     create_user(db_api_with_two_initialized_courses, STUDENT_2)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_2.username, False)
+    db_api_with_two_initialized_courses.sync_user_on_course(SECOND_COURSE_NAME, STUDENT_2.username, False)
 
     db_api_with_two_initialized_courses.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, "task_0_0", update_func(1))
     db_api_with_two_initialized_courses.store_score(
@@ -1482,6 +1562,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
     session.commit()
 
     create_user(db_api_with_two_initialized_courses)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     score = db_api_with_two_initialized_courses.store_score(
         FIRST_COURSE_NAME, TEST_USERNAME, "task_0_0", update_func(1)
@@ -1493,6 +1574,7 @@ def test_store_score_integrity_error(db_api_with_two_initialized_courses, sessio
 
 def test_store_score_update_error(db_api_with_two_initialized_courses, session):
     create_user(db_api_with_two_initialized_courses)
+    db_api_with_two_initialized_courses.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     def failing_update(_, score):
         raise ValueError("Update failed")
@@ -2280,8 +2362,8 @@ def test_constant_queries(  # noqa: PLR0913
     session.commit()
 
     create_user(db_api, STUDENT_1)
-    db_api.store_score(FIRST_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_1, True)
+    db_api.store_score(FIRST_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
 
     with query_counter(engine) as counter:
         method(**method_kwargs)
@@ -2294,15 +2376,15 @@ def test_constant_queries(  # noqa: PLR0913
     session.commit()
 
     # Register 1st student on 2nd course
-    db_api.store_score(SECOND_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_1, True)
+    db_api.store_score(SECOND_COURSE_NAME, STUDENT_1.username, "task_0_0", update_func(1))
 
     # Setup 2nd student and register on both courses
     create_user(db_api, STUDENT_2)
-    db_api.store_score(FIRST_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME_2, True)
-    db_api.store_score(SECOND_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
+    db_api.store_score(FIRST_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
     db_api.sync_user_on_course(SECOND_COURSE_NAME, TEST_USERNAME_2, True)
+    db_api.store_score(SECOND_COURSE_NAME, STUDENT_2.username, "task_0_0", update_func(1))
 
     with query_counter(engine) as counter:
         method(**method_kwargs)
@@ -2339,7 +2421,9 @@ def test_store_score_marks_large_task_solved(
         first_course_grade_config,
     )
     create_user(db_api, STUDENT_1)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_1.username, False)
     create_user(db_api, STUDENT_2)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, STUDENT_2.username, False)
 
     # below min_score: not solved; regular tasks are never marked
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME_1, large_task, _set_value(20))
@@ -2374,6 +2458,7 @@ def test_store_score_marks_large_task_solved(
 def test_store_zero_score_does_not_mark_large_task_solved(db_api_with_initialized_first_course):
     db_api = db_api_with_initialized_first_course
     create_user(db_api)
+    db_api.sync_user_on_course(FIRST_COURSE_NAME, TEST_USERNAME, False)
 
     # task_5_0 is large with min_score 0: zero score must not be remembered as solved
     db_api.store_score(FIRST_COURSE_NAME, TEST_USERNAME, "task_5_0", _set_value(0))

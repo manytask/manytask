@@ -375,8 +375,7 @@ class DataBaseApi(StorageApi):
 
         A user is considered a course admin if any of the following holds:
         - the user is an instance admin;
-        - the user is a namespace admin (namespace owner or user with the
-          namespace_admin role) for the namespace the course belongs to;
+        - the user has a namespace_admin membership in the course's namespace;
         - the user has the course admin flag set for this course.
 
         :param course_name: course name
@@ -585,8 +584,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
-                session.commit()
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 try:
                     task = self._get_task_by_name_and_course_id(session, task_name, course.id)
@@ -1079,7 +1077,7 @@ class DataBaseApi(StorageApi):
             return result
 
     def get_namespace_admin_namespaces(self, username: str) -> list[int]:
-        """Get list of namespace IDs where user is Namespace Admin or Owner
+        """Get namespace IDs where the user has a namespace_admin membership.
 
         :param username: manytask username
         :return: list of namespace IDs
@@ -1092,11 +1090,6 @@ class DataBaseApi(StorageApi):
                 logger.warning("User '%s' not found when fetching namespace admin namespaces", username)
                 return []
 
-            namespace_ids: set[int] = set()
-
-            owned_namespaces = session.query(models.Namespace).filter(models.Namespace.created_by_id == user.id).all()
-            namespace_ids.update(ns.id for ns in owned_namespaces)
-
             admin_namespaces = (
                 session.query(models.UserOnNamespace)
                 .filter(
@@ -1107,9 +1100,7 @@ class DataBaseApi(StorageApi):
                 )
                 .all()
             )
-            namespace_ids.update(un.namespace_id for un in admin_namespaces)
-
-            result = list[int](namespace_ids)
+            result = [membership.namespace_id for membership in admin_namespaces]
             logger.info("User '%s' is namespace admin in %d namespaces", username, len(result))
             return result
 
@@ -1200,7 +1191,7 @@ class DataBaseApi(StorageApi):
         once with all levels listed:
 
         * instance admins (:attr:`models.User.is_instance_admin`)
-        * namespace owner and admins of the course's namespace
+        * admins of the course's namespace
         * program managers of the course's namespace
         * course admins of the course itself
 
@@ -1234,8 +1225,6 @@ class DataBaseApi(StorageApi):
                 add(user, ROLE_INSTANCE_ADMIN)
 
             if course.namespace_id is not None:
-                namespace = self._get(session, models.Namespace, id=course.namespace_id)
-                add(namespace.created_by, ROLE_NAMESPACE_ADMIN)
                 namespace_roles = {
                     models.UserOnNamespaceRole.NAMESPACE_ADMIN: ROLE_NAMESPACE_ADMIN,
                     models.UserOnNamespaceRole.PROGRAM_MANAGER: ROLE_PROGRAM_MANAGER,
@@ -1653,6 +1642,16 @@ class DataBaseApi(StorageApi):
         except DuplicateTable:  # if tables are created concurrently
             pass
 
+    def _get_user_on_course(
+        self, session: Session, username: str, course: models.Course, *, for_update: bool = False
+    ) -> models.UserOnCourse:
+        """Fetch an existing enrollment; optionally lock it before changing its fields."""
+        user = self._get(session, models.User, username=username)
+        query = session.query(models.UserOnCourse).filter_by(user_id=user.id, course_id=course.id)
+        if for_update:
+            query = query.with_for_update()
+        return query.one()
+
     def _get_or_create_user_on_course(
         self, session: Session, username: str, course: models.Course
     ) -> models.UserOnCourse:
@@ -2032,7 +2031,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 user_on_course.comment = comment
                 session.commit()
@@ -2631,7 +2630,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
                 grades_config = DataBaseApi._build_grades_config(course)
 
                 final_grade = calculate_effective_grade(
@@ -2748,7 +2747,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course)
 
                 # If override exists, use it
                 if user_on_course.final_grade_override is not None:
@@ -2775,7 +2774,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 user_on_course.final_grade_override = new_grade
                 session.commit()
@@ -2794,7 +2793,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course, for_update=True)
 
                 user_on_course.final_grade_override = None
                 session.commit()
@@ -2814,7 +2813,7 @@ class DataBaseApi(StorageApi):
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, username, course)
+                user_on_course = self._get_user_on_course(session, username, course)
 
                 return user_on_course.final_grade_override is not None
 

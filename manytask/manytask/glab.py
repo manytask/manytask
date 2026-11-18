@@ -165,13 +165,16 @@ class GitLabApi(RmsApi, AuthApi):
     def create_public_repo(self, course_group: str, course_public_repo: str) -> None:
         logger.info("Creating public repo course_group=%s repo=%s", course_group, course_public_repo)
         group = self._get_group_by_name(course_group)
-
-        for project in self._gitlab.projects.list(get_all=True, search=course_public_repo):
-            if project.path_with_namespace == course_public_repo:
-                logger.info("Project %s already exists", course_public_repo)
-                return
-
         project_name = course_public_repo.split("/")[-1]
+
+        try:
+            self._gitlab.projects.get(course_public_repo)
+        except GitlabGetError as exc:
+            if exc.response_code != HTTPStatus.NOT_FOUND:
+                raise
+        else:
+            logger.info("Project %s already exists", course_public_repo)
+            return
 
         self._gitlab.projects.create(_make_public_repo_params(project_name, group.id))
         logger.info("Public repo %s created successfully", course_public_repo)
@@ -236,6 +239,16 @@ class GitLabApi(RmsApi, AuthApi):
                         f"group already exists but cannot be retrieved. Please try again in a moment."
                     )
             raise
+
+    def configure_course_manytask_token(
+        self, public_repo: str, students_group: str, token: str, private_repo: str | None = None
+    ) -> None:
+        """Install the course token as a hidden, masked CI variable on its GitLab resources."""
+        variable = {"key": "MANYTASK_TOKEN", "value": token, "masked": True, "masked_and_hidden": True}
+        if private_repo is not None:
+            self._get_project_by_name(private_repo).variables.create(variable.copy())
+        self._get_project_by_name(public_repo).variables.create(variable.copy())
+        self._get_group_by_name(students_group).variables.create(variable.copy())
 
     def create_namespace_group(self, name: str, path: str, description: str | None = None) -> int:
         """Create a top-level GitLab group for a namespace.
@@ -638,6 +651,16 @@ class GitLabApi(RmsApi, AuthApi):
             (project, gitlab.const.AccessLevel.DEVELOPER),
             (course_public_project, gitlab.const.AccessLevel.REPORTER),
         ):
+            try:
+                existing_member = target.members_all.get(user_id)
+            except GitlabGetError as ex:
+                if ex.response_code != HTTPStatus.NOT_FOUND:
+                    raise
+            else:
+                # Effective membership includes access inherited from parent groups.
+                if existing_member.access_level >= access_level:
+                    continue
+
             try:
                 target.members.create({"user_id": user_id, "access_level": access_level})
                 logger.info(

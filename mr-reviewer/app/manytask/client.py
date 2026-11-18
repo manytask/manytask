@@ -11,7 +11,6 @@ from app.manytask.errors import (
     ManytaskTokenForbidden,
     ManytaskUnavailable,
 )
-from app.manytask.models import DeadlineEntry, parse_manytask_datetime
 from app.observability import Metrics
 
 
@@ -157,35 +156,3 @@ class ManytaskClient:
             raise ManytaskTokenForbidden(f"manytask rejected token for course {course_name}")
         self._record_error("is_admin")
         raise ManytaskUnavailable(f"manytask /is_admin returned {response.status_code}: {response.text[:200]}")
-
-    async def get_deadlines(self, course_name: str, *, token: str) -> list[DeadlineEntry]:
-        return await self._retrying(self._get_deadlines_once, course_name, token)
-
-    async def _get_deadlines_once(self, course_name: str, token: str) -> list[DeadlineEntry]:
-        try:
-            response = await self._client.get(
-                f"/api/{course_name}/deadlines",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        except (httpx.TimeoutException, httpx.TransportError) as err:
-            self._record_error("deadlines")
-            raise ManytaskUnavailable(str(err)) from err
-
-        if response.status_code == 403:
-            raise ManytaskTokenForbidden(f"manytask rejected token for course {course_name}")
-        if response.status_code != 200:
-            self._record_error("deadlines")
-            raise ManytaskUnavailable(f"manytask /deadlines returned {response.status_code}: {response.text[:200]}")
-
-        payload = response.json()
-        return [
-            DeadlineEntry(
-                task_name=item["task_name"],
-                group=item["group"],
-                deadline=parse_manytask_datetime(item["deadline"]),
-                score=int(item["score"]),
-                is_bonus=bool(item["is_bonus"]),
-                is_large=bool(item["is_large"]),
-            )
-            for item in payload["tasks"]
-        ]

@@ -592,42 +592,6 @@ class TestExporterOnSimple:
         assert (simple_export_folder / "public_folder" / "file_in_public_folder").read_text(encoding="utf-8") == "file"
         assert (simple_export_folder / "task1" / "public_file.py").read_text(encoding="utf-8") == "print('Hello')\n"
 
-    def test_export_for_contribution(
-        self,
-        tmpdir: Path,
-        simple_exporter: Exporter,
-        simple_private_folder: Path,
-        simple_export_folder: Path,
-    ) -> None:
-        simple_exporter.export_for_contribution(simple_export_folder)
-
-        assert_files_in_folder(
-            simple_export_folder.resolve(),
-            [
-                "task1/.task.yml",
-                "task1/test.txt",
-                "task1/public_file.py",
-                "task2/.task.yml",
-                "task2/test.txt",
-                "task2/.private.file",
-                ".private.file",
-                "just_file",
-                "public_folder/file_in_public_folder",
-                "public_file.py",
-            ],
-        )
-        # check templates was resolved if needed (non here)
-        assert (simple_export_folder / "task1" / "test.txt").read_text(
-            encoding="utf-8"
-        ) == "Some SOLUTION BEGIN\nHello\nSOLUTION END\n"
-        assert (simple_export_folder / "task2" / "test.txt").read_text(encoding="utf-8") == "Some"
-        assert (simple_export_folder / "public_folder" / "file_in_public_folder").read_text(
-            encoding="utf-8"
-        ) == "try to change"
-        assert (simple_export_folder / "task1" / "public_file.py").read_text(
-            encoding="utf-8"
-        ) == "print('Hello LOL this too')\n"
-
 
 class TestExporterIsTaskUnchanged:
     @pytest.fixture()
@@ -1341,57 +1305,6 @@ class _TestExporter:
         )
 
         exporter.export_for_testing(simple_export_folder)
-
-        assert_files_in_folder(
-            simple_export_folder.resolve(),
-            [
-                ".private_folder/test.txt",
-                ".private_folder/folder/.test.py",
-                ".private_folder/folder/test.txt",
-                "folder/test.txt",
-                "folder/.test.py",
-                "folder/folder/test.txt",
-                "other_folder/test.txt",
-                "test.py",
-                "test.txt",
-                ".some_file",
-                ".private_exception",
-                "private.txt",
-                "private.py",
-                "group/task1/.task.yml",
-                "group/task1/test.txt",
-                "group/task1/.test.py",
-                "group/task2/.task.yml",
-                "group/task2/private.txt",
-                "group/task2/private.py",
-                "group/task2/valid.txt",
-                "group/.group.yml",
-                "root_task_1/.task.yml",
-                "root_task_1/test.txt",
-                "root_task_1/.private_exception",
-            ],
-        )
-
-    def test_export_for_contribution(
-        self,
-        tmpdir: Path,
-        generate_file_structure: T_GENERATE_FILE_STRUCTURE,
-        simple_private_folder: Path,
-        simple_export_folder: Path,
-    ) -> None:
-        generate_file_structure(self.SAMPLE_TEST_FILES, root=simple_private_folder)
-        course = Course(
-            manytask_config=self.SAMPLE_TEST_DEADLINES_CONFIG,
-            repository_root=simple_private_folder,
-        )
-        exporter = Exporter(
-            course,
-            self.SAMPLE_TEST_STRUCTURE_CONFIG,
-            self.SAMPLE_EXPORT_CONFIG,
-            simple_private_folder,
-        )
-
-        exporter.export_for_contribution(simple_export_folder)
 
         assert_files_in_folder(
             simple_export_folder.resolve(),

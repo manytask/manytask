@@ -19,7 +19,6 @@ def retrying_adapter() -> GitLabAdapter:
         token="t",
         base_url=GITLAB,
         executor=executor,
-        batch_size=4,
         retry_attempts=3,
         retry_backoff_sec=0.0,
         retry_max_backoff_sec=0.0,

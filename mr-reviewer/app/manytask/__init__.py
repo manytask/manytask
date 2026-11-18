@@ -9,11 +9,9 @@ from app.manytask.errors import (
     ManytaskTokenForbidden,
     ManytaskUnavailable,
 )
-from app.manytask.models import DeadlineEntry, parse_manytask_datetime
 from app.manytask.protocol import ManytaskReporter
 
 __all__ = [
-    "DeadlineEntry",
     "ManytaskClient",
     "ManytaskCourseNotFound",
     "ManytaskError",
@@ -22,5 +20,4 @@ __all__ = [
     "ManytaskTokenForbidden",
     "ManytaskUnavailable",
     "TokenAuthCache",
-    "parse_manytask_datetime",
 ]

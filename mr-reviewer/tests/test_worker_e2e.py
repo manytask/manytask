@@ -115,7 +115,7 @@ def _register_gitlab_mocks(gitlab_mock: responses.RequestsMock) -> None:
 
 async def test_full_cycle_reviews_and_reports_override() -> None:
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="e2e-gitlab")
-    hosting = GitLabAdapter(token="t", base_url=GITLAB, executor=executor, batch_size=4)
+    hosting = GitLabAdapter(token="t", base_url=GITLAB, executor=executor)
 
     redis = FakeRedis(decode_responses=True)
     course_store = CourseStore(redis)

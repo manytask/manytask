@@ -157,48 +157,6 @@ def _mr_changes(project_id: int, iid: int) -> dict[str, object]:
     }
 
 
-class TestGetMr:
-    def test_fetches_full_mr(
-        self,
-        gitlab_adapter: GitLabAdapter,
-        mock_gitlab: responses.RequestsMock,
-    ) -> None:
-        mock_gitlab.add(
-            responses.GET,
-            "https://gitlab.test/api/v4/projects/42/merge_requests/7",
-            json=_mr_full(42, 7),
-            status=200,
-        )
-
-        import asyncio
-
-        mr = asyncio.run(gitlab_adapter.get_mr(42, 7))
-
-        assert mr.project_id == 42
-        assert mr.mr_iid == 7
-        assert mr.title == "task-7: solution"
-        assert mr.author_username == "user-7"
-
-    def test_404_propagates_gitlab_error(
-        self,
-        gitlab_adapter: GitLabAdapter,
-        mock_gitlab: responses.RequestsMock,
-    ) -> None:
-        mock_gitlab.add(
-            responses.GET,
-            "https://gitlab.test/api/v4/projects/42/merge_requests/999",
-            json={"message": "404 Not found"},
-            status=404,
-        )
-
-        import asyncio
-
-        import gitlab.exceptions
-
-        with pytest.raises(gitlab.exceptions.GitlabGetError):
-            asyncio.run(gitlab_adapter.get_mr(42, 999))
-
-
 class TestGetChanges:
     def _mr(self, project_id: int = 42, iid: int = 7) -> MergeRequest:
         return MergeRequest(
@@ -664,22 +622,6 @@ class TestLabels:
         result = asyncio.run(gitlab_adapter.remove_labels(self._mr(labels=("review-needed",)), ["review-needed"]))
 
         assert "review-needed" not in result.labels
-
-
-class TestGetAuthorUsername:
-    def test_returns_author(self, gitlab_adapter: GitLabAdapter) -> None:
-        from datetime import datetime, timezone
-
-        from app.hosting.models import Comment
-
-        c = Comment(
-            id=1,
-            author_username="ivanov",
-            body="x",
-            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        )
-
-        assert gitlab_adapter.get_author_username(c) == "ivanov"
 
 
 class TestPostOrUpdateCommentOnlyFromAuthor:

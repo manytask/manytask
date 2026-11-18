@@ -4,20 +4,26 @@ navigation:
   logo:
     url: ./index.html
     dark:
-      icon: ./img/ManytaskTextFullDark.png
+      icon: ./img/brand/manytask-full-dark.svg
     light:
-      icon: ./img/ManytaskTextFull.png
+      icon: ./img/brand/manytask-full.svg
   header:
     leftItems:
-      - type: link
-        text: App
-        url: https://app.manytask.org/
+      - type: dropdown
+        text: Open Manytask
+        items:
+          - type: link
+            text: Manytask (GitLab)
+            url: https://app.manytask.org/
+          - type: link
+            text: Manytask (SourceCraft)
+            url: https://src.manytask.org/
       - type: link
         text: Documentation
         url: ./about.html
       - type: link
         text: GitHub
-        url: https://github.com/manytask
+        url: https://github.com/manytask/manytask
       - type: link
         text: Telegram
         url: https://t.me/manytask_chat
@@ -50,7 +56,7 @@ items:
         href: running_course.md
       - name: Checker pipelines and plugins
         href: checker_pipelines_and_plugins.md
-  - name: For system administrators
+  - name: For institutions
     items:
       - name: Production setup
         href: system_setup.md

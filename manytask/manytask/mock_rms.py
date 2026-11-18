@@ -1,8 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
-from authlib.integrations.flask_client import OAuth
-
 from .abstract import RmsApi, RmsApiException, RmsUser
 from .course import ProtectedBranchSettings
 
@@ -13,6 +11,7 @@ class MockRmsProject:
     group: str
     visibility: str = "private"
     members: List[str] = field(default_factory=list)  # List of user IDs
+    ci_variables: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -20,6 +19,7 @@ class MockRmsGroup:
     name: str
     projects: Dict[str, MockRmsProject] = field(default_factory=dict)
     members: List[str] = field(default_factory=list)
+    ci_variables: Dict[str, str] = field(default_factory=dict)
 
 
 class MockRmsApi(RmsApi):
@@ -61,7 +61,11 @@ class MockRmsApi(RmsApi):
         course_group: str,
         course_public_repo: str,
     ) -> None:
-        project_path = f"{course_group}/{course_public_repo}"
+        project_path = (
+            course_public_repo
+            if course_public_repo.startswith(f"{course_group}/")
+            else f"{course_group}/{course_public_repo}"
+        )
         if project_path in self.projects:
             return  # Already exists
 
@@ -80,6 +84,14 @@ class MockRmsApi(RmsApi):
         if course_students_group not in self.groups:
             self.groups[course_students_group] = MockRmsGroup(name=course_students_group)
         return self.groups[course_students_group]
+
+    def configure_course_manytask_token(
+        self, public_repo: str, students_group: str, token: str, private_repo: str | None = None
+    ) -> None:
+        if private_repo is not None:
+            self.projects[private_repo].ci_variables["MANYTASK_TOKEN"] = token
+        self.projects[public_repo].ci_variables["MANYTASK_TOKEN"] = token
+        self.groups[students_group].ci_variables["MANYTASK_TOKEN"] = token
 
     def create_namespace_group(
         self,
@@ -231,15 +243,6 @@ class MockRmsApi(RmsApi):
         if username not in self.users_by_username:
             raise RmsApiException(f"User with username {username} not found")
         return self.users_by_username[username]
-
-    def check_user_authenticated_in_rms(
-        self,
-        oauth: OAuth,
-        oauth_access_token: str,
-        oauth_refresh_token: str,
-    ) -> bool:
-        # Mock implementation always returns True
-        return True
 
     def create_course_group(
         self,
