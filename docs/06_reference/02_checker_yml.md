@@ -364,7 +364,7 @@ args:
 
 ### Available template variables
 
-#### `global` — [`GlobalPipelineVariables`](../../checker/checker/pipeline.py)
+#### `global` — [`GlobalPipelineVariables`](../../checker/checker/pipeline.py) {#global}
 
 Available in all three pipeline types.
 
@@ -376,7 +376,7 @@ Available in all three pipeline types.
 | `global.task_names` | `list[str]` | Names of all tasks being tested in this run. |
 | `global.task_sub_paths` | `list[str]` | Relative paths of all tasks being tested in this run. |
 
-#### `task` — [`TaskPipelineVariables`](../../checker/checker/pipeline.py)
+#### `task` — [`TaskPipelineVariables`](../../checker/checker/pipeline.py) {#task}
 
 Available only in `tasks_pipeline` and `report_pipeline` (not in `global_pipeline`).
 
