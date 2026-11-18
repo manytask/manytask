@@ -64,7 +64,7 @@ Course administrators can edit a task's score and **Is solved** flag in the scor
 dialog. Check the flag before saving: changing the score also updates the checkbox based on
 the task's `min_score`, and you can then adjust it explicitly. For large tasks, this saved flag
 determines whether the task contributes to `large_count`. See
-[task completion](manytask_yml_reference.md#task-completion) for automatic completion rules.
+[task completion](../06_reference/01_manytask_yml.md#task-completion) for automatic completion rules.
 
 ## Deleting courses and namespaces
 

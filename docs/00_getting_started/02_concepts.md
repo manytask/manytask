@@ -44,20 +44,20 @@ This page describes the main concepts used in the `Manytask` project - public/pr
 ## Glossary
 
 * **Layout** - a structure of the private repository (and respectively public repository).   
-    It is described in the [Private repository docs](./private_repo.md) page.
+    It is described in the [Private repository docs](../03_teachers/04_private_repository.md) page.
 
 
 * **Config-s** - a yaml files with configuration for checker - `.checker.yml` and `.manytask.yml`.  
-    See the minimal example in the [Private Repository docs](./private_repo.md) page. Also, there are detailed reference docs for [.checker.yml](./checker_yml_reference.md) and [.manytask.yml](./manytask_yml_reference.md)
+    See the minimal example in the [Private Repository docs](../03_teachers/04_private_repository.md) page. Also, there are detailed reference docs for [.checker.yml](../06_reference/02_checker_yml.md) and [.manytask.yml](../06_reference/01_manytask_yml.md)
 
 
 * **Pipeline** - a yaml-described pipeline in `.checker.yml` file to run during `checker check` and `checker export` commands.   
-    It is described in the [Pipelines and Plugins](./checker_pipelines_and_plugins.md) page.
+    It is described in the [Pipelines and Plugins](../03_teachers/08_checker_pipelines_and_plugins.md) page.
 
 
 * **Plugin** - a single stage of the pipeline, have arguments, return exclusion result. In a nutshell, it is a Python class with `run` method and `Args` pydantic class.  
-    Checker have some [built-in plugins](./checker_plugins.md), but you can write your own.  
-    See [Pipelines and Plugins](./checker_pipelines_and_plugins.md) page for more information on plugins.
+    Checker have some [built-in plugins](../06_reference/03_checker_plugins.md), but you can write your own.  
+    See [Pipelines and Plugins](../03_teachers/08_checker_pipelines_and_plugins.md) page for more information on plugins.
 
 
 * **Group** - a group of tasks with the same deadlines, can refer as lecture.
