@@ -9,6 +9,7 @@
 <a href="using_manytask.html"><strong>For students →</strong><span>Join a course and submit your solutions.</span></a>
 <a href="basic_example.html"><strong>For teachers →</strong><span>Build and run your first course.</span></a>
 <a href="dev.html"><strong>For developers →</strong><span>Set up locally and contribute.</span></a>
+<a href="deploy_guide.html"><strong>For institutions →</strong><span>Run your own Manytask instance.</span></a>
 </div>
 
 ## How it works
@@ -27,7 +28,13 @@ Read [Course as code](course_as_code.md) for the full workflow, or follow [the b
 - **Scores and deadlines.** Define task groups, points, and late-submission rules in [course configuration](manytask_yml_reference.md).
 - **A starting point.** Adapt the [reference course template](course_template.md).
 
-## GitLab and SourceCraft
+## Manytask for institutions
+
+Run your own Manytask instance for your university, school, or training program. Host courses on your infrastructure and connect the repositories your students and teachers use.
+
+Start with the [deployment guide](deploy_guide.md) to spin up an instance, then use the [production setup](system_setup.md) and [production operations guide](production.md) to configure and maintain it.
+
+### GitLab and SourceCraft
 
 Manytask has adapters for GitLab and SourceCraft. Authentication, repository configuration, and CI setup depend on the platform and deployment. See [concepts](concepts.md) and the [deployment guide](deploy_guide.md) when configuring an instance.
 
