@@ -247,13 +247,20 @@ button:focus-visible {
 }
 
 .yfm .mt-hero .mt-hero__button_primary {
+    --mt-hero-button-color: #17c3b2;
     border-color: #17c3b2;
     background: #17c3b2;
 }
 
+.yfm .mt-hero .mt-hero__button_sourcecraft {
+    --mt-hero-button-color: #f4717d;
+    border-color: #f4717d;
+    background: #f4717d;
+}
+
 .yfm .mt-hero .mt-hero__button:hover {
-    border-color: #ffcb77;
-    background: #ffcb77;
+    border-color: #202b35;
+    background: var(--mt-hero-button-color, #ffcb77);
 }
 
 .pc-ExtendedFeaturesBlock,
@@ -311,6 +318,10 @@ button:focus-visible {
     background: #f4717d;
 }
 
+.pc-ExtendedFeaturesBlock__items > .row:has(> :nth-child(4)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .pc-ExtendedFeaturesBlock .pc-ExtendedFeaturesBlock__item-title {
     font-size: 28px;
     line-height: 1.2;
@@ -352,7 +363,7 @@ button:focus-visible {
     gap: 24px;
     list-style: none;
     margin: 36px 0 24px;
-    padding: 0;
+    padding: 24px 0 0;
 }
 
 .yfm .mt-workflow > li {
@@ -443,7 +454,7 @@ button:focus-visible {
 
 .mt-doc-paths {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
     margin: 24px 0 40px;
 }
@@ -590,7 +601,8 @@ button:focus-visible {
 }
 
 @media (max-width: 639px) {
-    .pc-ExtendedFeaturesBlock__items > .row {
+    .pc-ExtendedFeaturesBlock__items > .row,
+    .pc-ExtendedFeaturesBlock__items > .row:has(> :nth-child(4)) {
         grid-template-columns: minmax(0, 1fr);
     }
 }

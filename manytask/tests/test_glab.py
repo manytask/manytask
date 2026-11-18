@@ -3,7 +3,7 @@ from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
-from gitlab import GitlabCreateError, GitlabGetError, const
+from gitlab import GitlabAuthenticationError, GitlabCreateError, GitlabGetError, const
 from gitlab.v4.objects import Group, GroupMember, Project, ProjectFork, User
 
 from manytask.abstract import RmsApiException
@@ -59,6 +59,7 @@ def create_mock_gitlab_group(group_id: int, name_short: str, name_full: str) -> 
     group.id = group_id
     group.name = name_short
     group.full_name = name_full
+    group.variables = MagicMock()
     return group
 
 
@@ -222,11 +223,12 @@ def test_get_project_by_name_success(gitlab, mock_gitlab_project):
 def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
     gitlab_api, mock_gitlab_instance = gitlab
     mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
-    mock_gitlab_instance.projects.list.return_value = []
+    mock_gitlab_instance.projects.get.side_effect = GitlabGetError("Not found", response_code=HTTPStatus.NOT_FOUND)
     mock_gitlab_instance.projects.create.return_value = mock_gitlab_project
 
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
+    mock_gitlab_instance.projects.get.assert_called_once_with(TEST_GROUP_PUBLIC_NAME)
     mock_gitlab_instance.projects.create.assert_called_once_with(
         _make_public_repo_params(TEST_GROUP_PUBLIC_NAME_SHORT, mock_gitlab_group.id)
     )
@@ -234,11 +236,36 @@ def test_create_public_repo(gitlab, mock_gitlab_group, mock_gitlab_project):
 
 def test_create_public_already_exist_repo(gitlab, mock_gitlab_group, mock_gitlab_public_project):
     gitlab_api, mock_gitlab_instance = gitlab
-    mock_gitlab_instance.groups.list.return_value = [mock_gitlab_group]
-    mock_gitlab_instance.projects.list.return_value = [mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.get.return_value = mock_gitlab_public_project
 
     gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
 
+    mock_gitlab_instance.projects.get.assert_called_once_with(TEST_GROUP_PUBLIC_NAME)
+    mock_gitlab_instance.projects.list.assert_not_called()
+    mock_gitlab_instance.projects.create.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        GitlabAuthenticationError("Unauthorized", response_code=HTTPStatus.UNAUTHORIZED),
+        GitlabGetError("Forbidden", response_code=HTTPStatus.FORBIDDEN),
+        GitlabGetError("Server error", response_code=HTTPStatus.INTERNAL_SERVER_ERROR),
+    ],
+)
+def test_create_public_repo_lookup_error(
+    gitlab: tuple[GitLabApi, MagicMock], mock_gitlab_group: Group, error: GitlabGetError | GitlabAuthenticationError
+) -> None:
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group
+    mock_gitlab_instance.projects.get.side_effect = error
+
+    with pytest.raises(type(error)) as exc_info:
+        gitlab_api.create_public_repo(TEST_GROUP_NAME, TEST_GROUP_PUBLIC_NAME)
+
+    assert exc_info.value is error
+    mock_gitlab_instance.projects.get.assert_called_once_with(TEST_GROUP_PUBLIC_NAME)
     mock_gitlab_instance.projects.create.assert_not_called()
 
 
@@ -255,6 +282,37 @@ def test_create_students_group(gitlab, mock_gitlab_group):
     gitlab_api.create_students_group(TEST_GROUP_NAME)
 
     mock_gitlab_instance.groups.create.assert_called_once_with(_make_students_group_params(short_name))
+
+
+def test_configure_course_manytask_token(
+    gitlab: tuple[GitLabApi, MagicMock], mock_gitlab_group_student: Group, mock_gitlab_public_project: Project
+) -> None:
+    gitlab_api, mock_gitlab_instance = gitlab
+    private_project = create_mock_gitlab_project(TEST_PROJECT_ID + 3, f"{TEST_GROUP_NAME}/private")
+    mock_gitlab_instance.projects.list.return_value = [private_project, mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group_student
+
+    gitlab_api.configure_course_manytask_token(
+        TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "course-token", f"{TEST_GROUP_NAME}/private"
+    )
+
+    expected = {"key": "MANYTASK_TOKEN", "value": "course-token", "masked": True, "masked_and_hidden": True}
+    private_project.variables.create.assert_called_once_with(expected)
+    mock_gitlab_public_project.variables.create.assert_called_once_with(expected)
+    mock_gitlab_group_student.variables.create.assert_called_once_with(expected)
+
+
+def test_configure_course_manytask_token_without_private_repo(
+    gitlab: tuple[GitLabApi, MagicMock], mock_gitlab_public_project: Project, mock_gitlab_group_student: Group
+) -> None:
+    gitlab_api, mock_gitlab_instance = gitlab
+    mock_gitlab_instance.projects.list.return_value = [mock_gitlab_public_project]
+    mock_gitlab_instance.groups.get.return_value = mock_gitlab_group_student
+
+    gitlab_api.configure_course_manytask_token(TEST_GROUP_PUBLIC_NAME, TEST_GROUP_STUDENT_NAME, "course-token")
+
+    mock_gitlab_public_project.variables.create.assert_called_once()
+    mock_gitlab_group_student.variables.create.assert_called_once()
 
 
 def test_get_group_by_name_success(gitlab, mock_gitlab_group):
