@@ -128,11 +128,13 @@ def test_successful_shared_task_is_reported_despite_other_failures(
     assert result.exit_code == 1, result.output
     assert "Task pipelines failed:" in result.output
     assert "Reporting score failed" not in result.output
-    assert len(reports.request_history) == 1
-    assert reports.request_history[0].text is not None
-    report = parse_qs(reports.request_history[0].text)
-    assert report["task"] == [passing_task]
-    assert report["score"] == ["1.0"]
+    assert len(reports.request_history) == len(TASK_NAMES)
+    for request, task_name in zip(reports.request_history, TASK_NAMES):
+        assert request.text is not None
+        report = parse_qs(request.text)
+        assert report["task"] == [task_name]
+        assert report["verdict"] == ["OK" if task_name == passing_task else "FAIL"]
+        assert report["score"] == ["1.0" if task_name == passing_task else "0.0"]
     assert f"Report for task '{passing_task}'" in result.output
 
 
@@ -151,5 +153,6 @@ def test_automatic_grading_reports_only_the_changed_successful_shared_task(
     assert reports.request_history[0].text is not None
     report = parse_qs(reports.request_history[0].text)
     assert report["task"] == ["seq-read"]
+    assert report["verdict"] == ["OK"]
     assert report["score"] == ["1.0"]
     assert "TESTING PASSED" in result.output

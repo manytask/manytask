@@ -70,6 +70,7 @@ class TaskPipelineVariables:
     task_name: str
     task_sub_path: str
     task_score_percent: float
+    verdict: str = "OK"
 
 
 PipelineContext = TypedDict(

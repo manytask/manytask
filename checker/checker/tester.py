@@ -20,6 +20,7 @@ from .pipeline import (
     TaskPipelineVariables,
 )
 from .plugins import load_plugins
+from .plugins.manytask import ManytaskPlugin
 from .utils import print_header_info, print_info, print_separator
 
 
@@ -167,7 +168,9 @@ class Tester:
             pipeline_conf = self.testing_config.tasks_pipeline
         return PipelineRunner(pipeline_conf, self.plugins, verbose=self.verbose)
 
-    def _get_task_report_pipeline_runner(self, task: FileSystemTask) -> PipelineRunner:
+    def _get_task_report_pipeline_runner(
+        self, task: FileSystemTask, verdict: str = "OK"
+    ) -> PipelineRunner:
         pipeline_conf = task.config.report_pipeline
         if pipeline_conf is None:
             group_config = self._get_group_config(task)
@@ -175,7 +178,17 @@ class Tester:
                 pipeline_conf = group_config.report_pipeline
         if pipeline_conf is None:
             pipeline_conf = self.testing_config.report_pipeline
-        return PipelineRunner(pipeline_conf, self.plugins, verbose=self.verbose)
+        # Existing course configs need no changes to report failed submissions.
+        # A failed pipeline may never produce the output used by its score template.
+        report_pipeline = []
+        for stage in pipeline_conf:
+            if stage.run == ManytaskPlugin.name:
+                args = {**stage.args, "verdict": verdict}
+                if verdict != "OK":
+                    args["score"] = 0.0
+                stage = stage.model_copy(update={"args": args})
+            report_pipeline.append(stage)
+        return PipelineRunner(report_pipeline, self.plugins, verbose=self.verbose)
 
     def validate(self) -> None:
         # get all tasks
@@ -213,6 +226,8 @@ class Tester:
         outputs: dict[str, PipelineStageResult],
         report: bool,
         timestamp: datetime | None,
+        *,
+        skip_testing: bool = False,
     ) -> tuple[PipelineResult, PipelineResult | None]:
         # run task pipeline
         print_header_info(f"Run <{task.name}> task pipeline:", color="pink")
@@ -224,29 +239,32 @@ class Tester:
             global_variables, outputs, task, task_variables
         )
 
-        task_pipeline_result: PipelineResult = self._get_task_pipeline_runner(task).run(
-            context, dry_run=self.dry_run
+        task_pipeline_result = (
+            PipelineResult(failed=True, stage_results=[])
+            if skip_testing
+            else self._get_task_pipeline_runner(task).run(context, dry_run=self.dry_run)
         )
         print_separator("-")
 
         print_info(str(task_pipeline_result), color="pink")
         print_separator("-")
 
+        task_variables.verdict = "OK" if task_pipeline_result else "FAIL"
+        report_pipeline = self._get_task_report_pipeline_runner(
+            task, task_variables.verdict
+        )
+        print_info(f"Reporting <{task.name}> task tests:", color="pink")
         task_report_result: PipelineResult | None = None
-        # Report score if task pipeline succeeded
-        if task_pipeline_result:
-            report_pipeline = self._get_task_report_pipeline_runner(task)
-            print_info(f"Reporting <{task.name}> task tests:", color="pink")
-            if report:
-                task_report_result = report_pipeline.run(context, dry_run=self.dry_run)
-                if task_report_result:
-                    print_info("->Reporting succeeded")
-                else:
-                    print_info("->Reporting failed")
+        if report:
+            task_report_result = report_pipeline.run(context, dry_run=self.dry_run)
+            if task_report_result:
+                print_info("->Reporting succeeded")
             else:
-                _: PipelineResult = report_pipeline.run(context, dry_run=True)
-                print_info("->Reporting disabled (dry-run)")
-            print_separator("-")
+                print_info("->Reporting failed")
+        else:
+            report_pipeline.run(context, dry_run=True)
+            print_info("->Reporting disabled (dry-run)")
+        print_separator("-")
 
         return task_pipeline_result, task_report_result
 
@@ -288,6 +306,7 @@ class Tester:
 
         # run global pipeline
         global_variables = self._get_global_pipeline_parameters(origin, tasks)
+        global_failed = False
         if len(self.global_pipeline) > 0 or self.verbose:
             print_header_info("Run global pipeline:", color="pink")
             context = self._build_global_context(global_variables, outputs)
@@ -297,22 +316,28 @@ class Tester:
             print_separator("-")
             print_info(str(global_pipeline_result), color="pink")
 
-            if not global_pipeline_result:
-                raise TestingError("Global pipeline failed")
+            global_failed = not global_pipeline_result
 
         failed_tasks = []
         failed_reports = []
         for task in tasks:
             task_result, report_result = self._run_task(
-                task, global_variables, outputs, report, timestamp
+                task,
+                global_variables,
+                outputs,
+                report,
+                timestamp,
+                skip_testing=global_failed,
             )
             if not task_result:
                 failed_tasks.append(task.name)
-            elif report_result is not None and not report_result:
+            if report_result is not None and not report_result:
                 failed_reports.append(task.name)
 
         errors = []
-        if failed_tasks:
+        if global_failed:
+            errors.append("Global pipeline failed")
+        elif failed_tasks:
             errors.append(f"Task pipelines failed: {failed_tasks}")
         if failed_reports:
             errors.append(f"Reporting score failed for: {failed_reports}")
