@@ -30,6 +30,10 @@
         {{ course_status.value.replace("_", " ").title() }}
     </span>
     <div class="d-flex flex-wrap align-items-center gap-2">
+        <button id="solved-last" type="button" class="btn btn-outline-secondary btn-sm"
+                aria-pressed="false" aria-controls="task-groups">
+            Hide solved
+        </button>
         <button id="task-group-order" type="button" class="btn btn-outline-secondary btn-sm" value="desc"
                 data-username="{{ username }}" data-course-name="{{ course_name }}">
             Show oldest first
@@ -43,13 +47,18 @@
     {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True) %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
         {% set solved_group_scores = [] %}
+        {% set completion = namespace(solved=group.tasks|length > 0) %}
         {% for task in group.tasks %}
             {% set _ = solved_group_scores.append(scores.get(task.name, 0)) %}
+            {% if scores.get(task.name, 0) < task.score %}
+                {% set completion.solved = false %}
+            {% endif %}
         {% endfor %}
         {% set solved_group_score = solved_group_scores|sum %}
 
         <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}"
-             data-group-start="{{ group.start.isoformat() }}">
+             data-group-start="{{ group.start.isoformat() }}"
+             data-group-solved="{{ 'true' if completion.solved else 'false' }}">
 
             <div class="d-block d-sm-flex justify-content-between align-items-start">
                 <div class="d-block flex-column align-items-start">
@@ -175,15 +184,22 @@
 </div>
 
     <script src="{{ url_for('static', filename='js/task-group-order.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/solved-last.js', v=2) }}"></script>
     <script>
         const orderButton = document.getElementById('task-group-order');
         const groupContainer = document.getElementById('task-groups');
+        const solvedLastButton = document.getElementById('solved-last');
         const taskGroups = Array.from(groupContainer.children, element => ({
-            start: element.dataset.groupStart, element,
+            start: element.dataset.groupStart,
+            solved: element.dataset.groupSolved === 'true',
+            element,
         }));
         initTaskGroupOrder(orderButton);
+        initSolvedLast(solvedLastButton, applyTaskGroupOrder);
         function applyTaskGroupOrder() {
-            for (const group of sortTaskGroups(taskGroups, orderButton.value)) {
+            let groups = sortTaskGroups(taskGroups, orderButton.value);
+            if (solvedLastButton.value === 'true') groups = moveSolvedGroupsLast(groups);
+            for (const group of groups) {
                 groupContainer.appendChild(group.element);
             }
         }
