@@ -1,4 +1,5 @@
 import logging
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -65,19 +66,25 @@ def test_initial_admin_binding_is_logged_despite_early_return(
     session.commit.assert_called_once()
 
 
-@pytest.mark.parametrize("method", ["get_effective_grade", "is_grade_overridden"])
-def test_getter_insert_attempt_is_visible_at_info(
-    storage: tuple[DataBaseApi, MagicMock], caplog: pytest.LogCaptureFixture, method: str
+@pytest.mark.parametrize("commit_fails", [False, True])
+def test_course_membership_insert_attempt_is_visible_at_info(
+    storage: tuple[DataBaseApi, MagicMock], caplog: pytest.LogCaptureFixture, commit_fails: bool
 ) -> None:
     caplog.set_level(logging.INFO, logger="manytask.database")
     api, session = storage
     api._get = MagicMock(return_value=SimpleNamespace(id=7))
-    with patch.object(DataBaseApi, "_query_with_for_update", return_value=None):
-        getattr(api, method)("demo", "student")
+    if commit_fails:
+        session.commit.side_effect = RuntimeError("commit failed")
+    with (
+        patch.object(DataBaseApi, "_query_with_for_update", return_value=None),
+        pytest.raises(RuntimeError, match="commit failed") if commit_fails else nullcontext(),
+    ):
+        api.sync_user_on_course("demo", "student", course_admin=False)
     assert "Ensuring course membership user=student course_id=7" in caplog.text
     assert "Creating new UserOnCourse" in caplog.text
+    assert ("Synced course membership course=demo user=student" in caplog.text) is not commit_fails
     session.flush.assert_called_once()
-    session.commit.assert_not_called()
+    session.commit.assert_called_once()
 
 
 def test_create_attempt_does_not_log_sensitive_values(caplog: pytest.LogCaptureFixture) -> None:
