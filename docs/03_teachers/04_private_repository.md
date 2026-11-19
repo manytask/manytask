@@ -4,6 +4,9 @@ Strictly speaking, the private repository is not needed: you can use public test
 
 ## The repository layout
 
+To prepare an existing local clone with an agent using `course-template` as an example,
+see [the private repository skill guide](09_private_repo_with_agent.md).
+
 Assume that you already have a task that you want to add, including tests and solution. Let us pack it into the repository, which is structured in a specific way for Manytask Checker to work. Then we configure checker to work locally, and in the CI.
 
 

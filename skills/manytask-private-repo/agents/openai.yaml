@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prepare a private Manytask course"
+  short_description: "Populate a local course clone using course-template"
+  default_prompt: "Use $manytask-private-repo to populate an existing local course repository from the course-template example and explain the manual CI settings."

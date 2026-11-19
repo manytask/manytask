@@ -53,6 +53,8 @@ items:
         href: 03_teachers/03_course_template.md
       - name: Private repository
         href: 03_teachers/04_private_repository.md
+      - name: Prepare a private repository with an agent
+        href: 03_teachers/09_private_repo_with_agent.md
       - name: Checker configuration
         href: 03_teachers/05_checker_configuration.md
       - name: Manytask configuration
