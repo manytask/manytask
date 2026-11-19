@@ -146,7 +146,7 @@ The CI pipeline gets the name of the task to check from `CI_COMMIT_MESSAGE`.
 
 ## Manytask configuration file
 
-Now the files are ready, we need to push them to the public repo and inform Manytask that there is a task for solving. This is done with `.manytask.yml` configuration file. The contents of such a file for our one-problem repo is below, please refer to [Manytask configuration file reference](manytask_yml_reference.md) for details.
+Now the files are ready, we need to push them to the public repo and inform Manytask that there is a task for solving. This is done with `.manytask.yml` configuration file. The contents of such a file for our one-problem repo is below, please refer to [Manytask configuration file reference](../06_reference/01_manytask_yml.md) for details.
 
 ```yaml
 version: 1

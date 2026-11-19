@@ -16,7 +16,7 @@ blocks:
             <div class="mt-hero__actions">
               <a class="mt-hero__button mt-hero__button_primary" href="https://app.manytask.org/">Manytask (GitLab)</a>
               <a class="mt-hero__button mt-hero__button_sourcecraft" href="https://src.manytask.org/">Manytask (SourceCraft)</a>
-              <a class="mt-hero__button" href="course_as_code.html">Course as code</a>
+              <a class="mt-hero__button" href="03_teachers/01_course_as_code.html">Course as code</a>
             </div>
           </div>
           <div class="mt-hero__art" aria-hidden="true">
@@ -32,21 +32,21 @@ blocks:
         text: 'Run your own tests on student solutions. Keep reference solutions and private tests separate from the materials you share.'
         links:
           - text: Meet the checker
-            url: checker_config.html
+            url: 03_teachers/05_checker_configuration.html
             theme: normal
             arrow: true
       - title: 'See the progress.'
         text: 'Bring scores, task groups, and deadlines together. Give students a clear view of their results and what comes next.'
         links:
           - text: Explore the web app
-            url: using_manytask.html
+            url: 02_students/01_using_manytask.html
             theme: normal
             arrow: true
       - title: 'Keep it in Git.'
         text: 'Version your course materials and give students their own repositories. Connect your deployment to GitLab or SourceCraft.'
         links:
           - text: Course as code
-            url: course_as_code.html
+            url: 03_teachers/01_course_as_code.html
             theme: normal
             arrow: true
   - type: content-layout-block
@@ -62,7 +62,7 @@ blocks:
         </ol>
       links:
         - text: Walk through a basic course
-          url: basic_example.html
+          url: 03_teachers/02_basic_example.html
           theme: normal
           arrow: true
   - type: extended-features-block
@@ -74,28 +74,28 @@ blocks:
         text: 'Join your course, set up your repository, and submit your first solution.'
         links:
           - text: Student guide
-            url: using_manytask.html
+            url: 02_students/01_using_manytask.html
             theme: normal
             arrow: true
       - title: 'Build your course'
         text: 'Start with the course template, add your tasks, and configure the checker.'
         links:
           - text: Teacher guide
-            url: basic_example.html
+            url: 03_teachers/02_basic_example.html
             theme: normal
             arrow: true
       - title: 'Customize and contribute'
         text: 'Explore the API, set up a local development environment, or contribute to the open-source project.'
         links:
           - text: Developer guide
-            url: dev.html
+            url: 05_development/01_local_development.html
             theme: normal
             arrow: true
       - title: 'Run your own instance'
         text: 'Run your own Manytask instance for your university, school, or training program. Connect your repositories and host your courses on your infrastructure.'
         links:
           - text: Deploy your own instance
-            url: deploy_guide.html
+            url: 04_administration/03_deploy_guide.html
             theme: normal
             arrow: true
   - type: content-layout-block

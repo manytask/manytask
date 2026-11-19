@@ -2,11 +2,11 @@
 
 Manytask was created to automate grading for coding courses and to introduce learners to popular development tools right away: git, GitLab CI, and other language-specific tools.
 
-![Manytask from students point of view](img/student_manytask_scheme.png)
+![Manytask from students point of view](../img/student_manytask_scheme.png)
 
 From the student's point of view, the Manytask consists of the following parts:
-- **The Manytask web app ([app.manytask.org](app.manytask.org))**. Here you can see the courses, you are registered to, available tasks, deadlines, and your points on each task of each course. When you solve tasks, this is reported to Manytask so that yourself and your teacher can see your progress.
-- **GitLab Instance ([gitlab.manytask.org](gitlab.manytask.org))**. Our GitLab instance where your personal remote repository, the course public repository, and the grading pipelines live. You will mostly interact with GitLab when submitting existing tasks and getting new ones, and you will use GitLab native tools to do so.
+- **The Manytask web app ([app.manytask.org](../app.manytask.org))**. Here you can see the courses, you are registered to, available tasks, deadlines, and your points on each task of each course. When you solve tasks, this is reported to Manytask so that yourself and your teacher can see your progress.
+- **GitLab Instance ([gitlab.manytask.org](../gitlab.manytask.org))**. Our GitLab instance where your personal remote repository, the course public repository, and the grading pipelines live. You will mostly interact with GitLab when submitting existing tasks and getting new ones, and you will use GitLab native tools to do so.
 - **Public repository.**. The repository with all the task currently issued by the teacher. This repository will be updated with new tasks as the course progresses. Keep an eye on it and check if your fork is up-to-date.
 - **Students repository.** This is your personal fork of public repository that will be created automatically when you register to course. You will submit your solution to this repository and CI/CD will verify that the solution passes all the checks.
 - **Your personal local repository.** Although it is possible to submit tasks directly from the GitLab web-interface, it is much more convenient to have a local copy of your repository. This way you can use your favorite IDE or text editor, run linters, type-checkers and tests locally, before you submit your solution.

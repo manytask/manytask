@@ -1,7 +1,7 @@
 # Production
 
 On this page you can find documentation on how to run `manytask` itself  
-NB: Please first refer to the [system setup documentation](./system_setup.md)
+NB: Please first refer to the [system setup documentation](01_system_setup.md)
 
 
 There are different varints how to set up manytask for you  
@@ -19,7 +19,7 @@ For example: `py.manytask.org` - domain for python course
 
 Then you need to set up manytask docker itself  
 
-> 📘 **See also:** [Deploy guide](./deploy_guide.md) — a step-by-step instructions on how to deploy to remote server, including database and instance admin setup. 
+> 📘 **See also:** [Deploy guide](03_deploy_guide.md) — a step-by-step instructions on how to deploy to remote server, including database and instance admin setup. 
 
 
 ### Manually (recommended) 
@@ -41,7 +41,7 @@ Here is the way you can go if you have 1 server with 1 manytask instance (1 cour
 
 2. Create `.env` file with production environment  
 
-   See [.env.example](../manytask/.env.example) as an example
+   See [.env.example](../../manytask/.env.example) as an example
    ```shell
    curl -JL https://raw.githubusercontent.com/yandexdataschool/manytask/main/manytask/.env.example -o .env
    ```
