@@ -41,10 +41,11 @@ same reading order as the website sidebar; numbering restarts in each directory.
 3. [Checker built-in plugins](06_reference/03_checker_plugins.md)
 4. [REST API](06_reference/04_rest_api.md)
 
-## 10 — Research
+## Research
 
-`10_research/` contains dated design and research documents for reading in the
-repository. These documents are separate from the published user guides.
+`research/` contains dated design and research documents for reading in the
+repository. These documents use date prefixes without ordering numbers and are
+separate from the published user guides.
 
 ## Editing and building
 
