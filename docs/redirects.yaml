@@ -1,5 +1,9 @@
 # Preserve published URLs when source pages move.
 files:
+  - from: incindents/2025-11-04-runner-overload.html
+    to: incidents/2025-11-04-runner-overload.html
+  - from: incindents/2026-10-08-service-recovery.html
+    to: incidents/2026-10-08-service-recovery.html
   - from: about.html
     to: 00_getting_started/01_about.html
   - from: concepts.html
