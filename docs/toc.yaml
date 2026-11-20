@@ -61,6 +61,8 @@ items:
         href: 03_teachers/07_running_course.md
       - name: Checker pipelines and plugins
         href: 03_teachers/08_checker_pipelines_and_plugins.md
+      - name: Prepare a private repository with an agent
+        href: 03_teachers/09_private_repo_with_agent.md
   - name: For institutions
     items:
       - name: Production setup
