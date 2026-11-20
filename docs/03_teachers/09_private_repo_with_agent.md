@@ -8,8 +8,8 @@ configuration example.
 ## 1. Clone the repository
 
 ```bash
-git clone "<PRIVATE_REPOSITORY_URL>" course-private
-cd course-private
+git clone "<PRIVATE_REPOSITORY_URL>" private
+cd private
 ```
 
 Fill in `<PRIVATE_REPOSITORY_URL>` with the SSH or HTTPS URL of your existing
@@ -22,7 +22,7 @@ Copy `skills/manytask-private-repo` from the Manytask checkout into your agent's
 skills directory (`~/.codex/skills/` for Codex). Supply the course clone path,
 the `course-template/` path, the language and task requirements:
 
-> Use $manytask-private-repo. Populate `/path/to/course-private`.
+> Use $manytask-private-repo. Populate `/path/to/private`.
 > Private repository: `<PRIVATE_REPOSITORY_URL>`.
 > Example: `/path/to/manytask/course-template`. Prepare a Python course with tasks: …
 > Prepare the files and manual setup checklist; do not commit or push yet.

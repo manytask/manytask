@@ -8,8 +8,8 @@ through the API is required.
 ## 1. Clone the existing private repository
 
 ```bash
-git clone "<PRIVATE_REPOSITORY_URL>" course-private
-cd course-private
+git clone "<PRIVATE_REPOSITORY_URL>" private
+cd private
 ```
 
 Replace `<PRIVATE_REPOSITORY_URL>` with the SSH or HTTPS URL of your existing
@@ -43,7 +43,7 @@ the actual files: the template README may lag behind the available profiles.
 ## 3. Ask the agent to populate the local clone
 
 > Use $manytask-private-repo. Populate the existing private repository clone
-> at `/path/to/course-private`. Private repository: `<PRIVATE_REPOSITORY_URL>`.
+> at `/path/to/private`. Private repository: `<PRIVATE_REPOSITORY_URL>`.
 > Course example:
 > `/path/to/manytask/course-template`. Prepare a Python course with these tasks: …
 > Manytask: `<MANYTASK_URL>`, course name: `<COURSE_NAME>`.
@@ -59,7 +59,7 @@ ID are unnecessary. CI tokens are not needed for local editing either.
 The result follows the `course-template` structure:
 
 ```text
-course-private/
+private/
 ├── .git/                   # preserved from the original clone
 ├── .checker.yml            # testing and export
 ├── .manytask.yml           # course settings, tasks, deadlines and scores
