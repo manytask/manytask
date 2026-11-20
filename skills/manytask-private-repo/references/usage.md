@@ -97,7 +97,7 @@ if committing and pushing have already been authorized.
 | Git access over SSH or HTTPS | Teacher GitLab | Local SSH agent or credential manager | Clone/push to the existing private project; a separate PAT with `api` scope is not required |
 | `GITLAB_API_TOKEN` | **Assignment/student GitLab** | CI/CD variable in the teacher private project | For `deploy-public`: a token with `write_repository` and permission to push to the assignment branch. Add `api` only for additional API calls |
 | `MANYTASK_TOKEN` | Administrator of the registered Manytask course | CI/CD variable in private; separately on the student side if score reporting is enabled | Apply `.manytask.yml` and report scores; this is not a GitLab PAT |
-| `DOCKER_AUTH_CONFIG` | Teacher project's registry | Separately in private and the destination student projects/group | Docker auth JSON. Students get a deploy token with only `read_registry`; use separate credentials for pushes |
+| `DOCKER_AUTH_CONFIG` | GitLab/project hosting the images, which may differ from the teacher source repository | Separately in private and the destination student projects/group | Docker auth JSON. Students get a deploy token with only `read_registry`; use separate credentials for pushes |
 
 Project/group access token availability depends on the host and subscription;
 a personal GitLab token with the necessary destination repository permissions
@@ -124,52 +124,93 @@ registry write tokens in the teacher private project.
 
 ### Registry credentials: DOCKER_AUTH_CONFIG
 
-1. On the GitLab hosting the **teacher private project**, open that project's
-   Settings → Repository → Deploy tokens. Create a named token with an expiry
-   date and scopes **`read_registry` + `write_registry`** for private release
-   jobs. Copy the generated **username and token** when shown; the token is
-   displayed only once. The deploy-token username is not the token's name or
-   necessarily your GitLab login.
-2. Create a second token on the same project with **`read_registry` only** for
-   student jobs. Do not reuse the release token in the students group.
-3. Identify the registry host from the private project's Deploy → Container
-   Registry image URL or the predefined `CI_REGISTRY`. For gitlab.com it is
-   `registry.gitlab.com`; a self-hosted instance may use another host or port.
-   Use the exact `host[:port]`, without `https://` or the project path.
-4. To generate the Docker auth value, run the following **manually in your own
-   terminal**, once for each token, substituting your registry host:
+The registry is an independent endpoint. The teacher repository can be on
+`gitlab.com` while images are stored on another GitLab, for example a registry
+on our self-hosted `gitlab.manytask.org`. Obtain the exact registry `host[:port]`
+and image project path from the image-hosting project's Deploy → Container
+Registry page or its administrator. Do not assume `registry.gitlab.com` or use
+the teacher source project's `CI_REGISTRY` when the images live elsewhere.
+The registry host has no `https://` prefix or project path.
+
+**Log in to the remote registry, then use the local Docker config:**
+
+1. Obtain credentials with access to the project **hosting the images**. You
+   can use an existing authorized registry login. For dedicated CI credentials,
+   create deploy tokens under that project's Settings → Repository → Deploy
+   tokens **on the registry's GitLab instance**, or ask its administrator for
+   them. Use `read_registry` + `write_registry` for release jobs and separate
+   `read_registry`-only credentials for student jobs. Save the generated username
+   and token when shown; the username need not match your account login.
+2. From your own terminal, log in to that remote registry:
 
    ```bash
-   registry_config_dir="$(mktemp -d)"
-   DOCKER_CONFIG="$registry_config_dir" docker login "<REGISTRY_HOST>"
+   docker login "<REGISTRY_HOST>"
    ```
 
-   At the prompts, enter the deploy-token username and use its token as the
-   password. This writes an isolated `config.json` under the temporary directory
-   instead of changing your normal Docker credentials. Open that file yourself;
-   do not ask the agent to read or print it. Its `auths` entry contains the
-   base64-encoded `username:token` value needed below.
-5. Enter a **single-line JSON value** in `DOCKER_AUTH_CONFIG`, substituting the
-   actual registry host and the generated `auth` value:
+   Enter the registry username and token/password at the prompts, without
+   putting the secret in the command. With 2FA, use an appropriate access token.
+   `docker login` contacts the remote registry but stores credentials on the
+   **machine running the Docker client**. If you run it over SSH on another
+   machine, the config is on that machine, not automatically on your laptop.
+3. Open the resulting config yourself: normally `~/.docker/config.json`, or
+   `$DOCKER_CONFIG/config.json` if `DOCKER_CONFIG` was set. Copy **only the entry
+   for the intended registry** under `auths`, preserving its exact `host[:port]`.
+   Do not copy credentials for unrelated registries or ask the agent to read
+   or print the file.
+4. In the teacher private project's Settings → CI/CD → Variables, save
+   `DOCKER_AUTH_CONFIG` as type **Variable**, not File. Use a single-line value
+   with no whitespace for masking:
 
    ```json
    {"auths":{"<REGISTRY_HOST>":{"auth":"<BASE64_USERNAME_COLON_TOKEN>"}}}
    ```
 
-   Save the read/write version in the teacher private project, and the read-only
-   version in the students group on student GitLab. The JSON is a secret;
-   base64 is not encryption. Do not commit it or paste it into chat. Once saved,
-   delete the temporary `config.json` and its directory from your own terminal.
+   The `auth` value is the one from the local config: base64 of `username:token`,
+   not the raw password alone. Keep the release read/write version in the teacher
+   private project's variables. Repeat with separate read-only credentials for
+   the `DOCKER_AUTH_CONFIG` variable in the students group on student GitLab.
+   The credentials come from the registry's GitLab even though the variable
+   is saved on the GitLab running the pipeline. Base64 is not encryption;
+   do not commit this JSON or paste it into chat.
 
-The current `.releaser-ci.yml` writes `DOCKER_AUTH_CONFIG` to Docker's config file
-before pushing images; the student runner uses it to pull the private testenv
-image before the job starts. GitLab also provides `CI_REGISTRY_USER` and
-`CI_REGISTRY_PASSWORD` automatically during a job. You need not create these
-variables, but using them instead requires adapting the release job to
-`docker login --password-stdin`. Keep the independent read-only deploy token for
-student pulls across GitLab instances.
+**If Docker uses a credential helper:** a config containing `credsStore` or
+`credHelpers` may have no inline `auth` value. Copying that config to CI will not
+copy credentials from your local keychain. Generate standalone auth JSON from
+the registry username and token instead. This manual command writes a private
+temporary file (mode `0600`) and prints only its path:
 
-See [GitLab deploy tokens](https://docs.gitlab.com/user/project/deploy_tokens/)
+```bash
+python3 -c '
+import base64, getpass, json, os, tempfile
+registry = input("Registry host (host[:port]): ").strip()
+username = input("Registry username: ")
+token = getpass.getpass("Registry token/password: ")
+auth = base64.b64encode((username + ":" + token).encode()).decode()
+fd, path = tempfile.mkstemp(prefix="registry-auth-", suffix=".json")
+with os.fdopen(fd, "w") as output:
+    json.dump({"auths": {registry: {"auth": auth}}}, output, separators=(",", ":"))
+print("Copy this file into DOCKER_AUTH_CONFIG, then delete it:", path)
+'
+```
+
+Open that file yourself, copy its contents into the variable, and delete it
+afterwards. Do not have the agent read it. An isolated `DOCKER_CONFIG` directory
+can keep a new login separate from your normal config, but it does not guarantee
+inline `auth`: Docker may still select an installed credential helper.
+
+The current release jobs write `DOCKER_AUTH_CONFIG` into Docker's config file
+before pushing images. The student runner also needs registry authentication to
+pull the testenv image **before** the job starts. A login command in the student's
+job script is too late for that image pull.
+
+GitLab's predefined `CI_REGISTRY_USER` and `CI_REGISTRY_PASSWORD` apply to its own
+job registry. They do **not** authorize a registry on another GitLab instance.
+Use the external registry credentials described above for that case. Only when
+using the job's own registry can you replace the release auth step with
+`docker login --password-stdin` using those predefined credentials.
+
+See [GitLab deploy tokens](https://docs.gitlab.com/user/project/deploy_tokens/),
+[Docker login and credential stores](https://docs.docker.com/reference/cli/docker/login/),
 and [runner registry authentication](https://docs.gitlab.com/ci/docker/using_docker_images/#access-an-image-from-a-private-container-registry).
 
 ### Export credentials: GITLAB_API_TOKEN
@@ -218,8 +259,8 @@ These are configuration values, not secrets:
 | `MANYTASK_URL` | The address of your Manytask instance. The current template prepends `https://`, so set its hostname (and any required path), without the scheme |
 | `COURSE_NAME` | The unique course name/slug used when registering the course in Manytask; it appears in the course URL |
 | `MANYTASK_API` | Derived by the template from `MANYTASK_URL` and `COURSE_NAME`; normally no manual variable is needed |
-| `REGISTRY`, `BASE_IMAGE`, branch `TESTENV_IMAGE` | Derived by the private pipeline from GitLab's predefined `CI_REGISTRY_IMAGE` and `CI_COMMIT_REF_SLUG`; normally keep the template's definitions |
-| Student `TESTENV_IMAGE` | Copy the full image path from the teacher project's Container Registry and select the published `testenv-image:latest` tag. Set it in the exported `.gitlab-ci.yml` or a students-group CI variable, because student `CI_REGISTRY_IMAGE` points elsewhere |
+| `REGISTRY`, `BASE_IMAGE`, branch `TESTENV_IMAGE` | The template defaults to the source project's `CI_REGISTRY_IMAGE`. For an external registry, override all three with the actual image project paths as shown below |
+| Student `TESTENV_IMAGE` | Copy the full image path from the image-hosting project's Container Registry and select the published `testenv-image:latest` tag. Set it in the exported `.gitlab-ci.yml` or a students-group CI variable, because student `CI_REGISTRY_IMAGE` points elsewhere |
 
 ## 5. Connect the course to Manytask if needed
 
@@ -251,8 +292,9 @@ Before the first pipeline, adapt these files in the course clone:
   `https://` itself; local HTTP requires changing the job, not simply supplying
   a URL with a scheme.
 - `.gitlab-ci.yml`: the full `TESTENV_IMAGE` URL:
-  `<REGISTRY_HOST>/<PRIVATE_PROJECT_PATH>/testenv-image:latest`, with your
-  teacher registry host and private project path filled in.
+  `<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>/testenv-image:latest`, with the
+  actual registry host and image-hosting project path filled in. That path need
+  not match the teacher source repository.
   In a student project, `$CI_REGISTRY_IMAGE` points to that project's own registry.
 
 `checker validate` checks course structure; `checker check . .` tests reference
@@ -271,8 +313,21 @@ mounted; gitlab.com shared runners do not guarantee this setup. Choose a suitabl
 self-managed runner and tags, or adapt `.docker` for Docker-in-Docker, including
 the service, TLS and DOCKER_HOST. Do not mix the two modes.
 
-Use the actual teacher `CI_REGISTRY` host, usually `registry.gitlab.com` on
-gitlab.com, rather than `gitlab.com:5050`. Follow
+When images live on another GitLab, the template's defaults still point to the
+source GitLab registry. Override **all three** release image variables, not just
+`REGISTRY`:
+
+```yaml
+variables:
+  REGISTRY: "<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>"
+  BASE_IMAGE: "$REGISTRY/ci-base:$CI_COMMIT_REF_SLUG"
+  TESTENV_IMAGE: "$REGISTRY/testenv-image:$CI_COMMIT_REF_SLUG"
+```
+
+Use `<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>/testenv-image:latest` for the student
+pipeline after `deploy-docker` publishes that tag. The registry path is the
+image-hosting project, not necessarily the source repository. Release jobs need
+push access and student runners need pull access to this exact registry. Follow
 [the registry credential setup](#registry-credentials-docker_auth_config) above
 for `DOCKER_AUTH_CONFIG`. A student GitLab's `CI_JOB_TOKEN` does not authorize
 access to another GitLab instance.

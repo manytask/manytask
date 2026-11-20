@@ -33,6 +33,8 @@ differ from student GitLab.
 
 For example, keep the teacher's private repository on `gitlab.com`, while
 student repositories live on our self-hosted GitLab at `gitlab.manytask.org`.
+The image registry can also be on a different GitLab from the source repository;
+supply its actual host and image project path separately.
 
 ## 3. Configure CI before running it
 
@@ -43,16 +45,21 @@ where supported. Supply these values manually:
 
 | Variable | How to obtain its value |
 | --- | --- |
-| `DOCKER_AUTH_CONFIG` | In the teacher private project's Settings → Repository → Deploy tokens, create a token with `read_registry` + `write_registry`. Generate single-line Docker auth JSON from its username and token using [the registry credential instructions](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#registry-credentials-docker_auth_config) |
+| `DOCKER_AUTH_CONFIG` | Obtain access to the project **hosting the images**, which may be on another GitLab. Run `docker login "<REGISTRY_HOST>"` locally, then copy only that registry's `auths` entry from local `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) into single-line JSON. See [registry credentials](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#registry-credentials-docker_auth_config) for scopes, credential helpers and the exact format |
 | `GITLAB_API_TOKEN` | On the **student GitLab**, create an assignment-project/group access token with Maintainer role, `write_repository` scope and permission to push to the assignment branch; copy the token into the teacher project's variable. See [export credentials](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#export-credentials-gitlab_api_token) for alternatives |
 | `MANYTASK_TOKEN` | In Manytask, open **Edit course → Course Token** as a course administrator and reveal/copy the existing token, or ask the administrator. See [the course setup guide](02_basic_example.md#create-the-course-in-the-manytask-interface) |
 
 Student jobs need a **separate** `DOCKER_AUTH_CONFIG` in their GitLab group,
-using a teacher-project deploy token with **`read_registry` only**. Also verify
+using credentials for the image-hosting project with **`read_registry` only**. Also verify
 `MANYTASK_TOKEN` there if score reporting is enabled. Variables do not inherit
 between gitlab.com and gitlab.manytask.org. Never give students registry write
 or export credentials, and do not put secret values in chat or course files.
 These tokens are not required for local course preparation.
+
+For an external registry, set the release pipeline's `REGISTRY`, `BASE_IMAGE`
+and `TESTENV_IMAGE` to that registry's image paths, and use its published testenv
+URL in student CI. The source GitLab's predefined `CI_REGISTRY_*` values describe
+its own registry and do not grant access to another GitLab.
 
 See the skill's [detailed guide](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md)
 for token permissions, runner and registry setup, course checks and Manytask

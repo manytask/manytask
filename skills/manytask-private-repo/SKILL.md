@@ -17,13 +17,16 @@ course content or chosen language, and the path to a Manytask checkout containin
 `course-template/`. Never infer the target repository from the template or a
 previous example; the user fills in `<PRIVATE_REPOSITORY_URL>` in the guide.
 Full integration also needs
-the Manytask URL, course name, assignment/student GitLab, public repository and
-students group. Missing service addresses need not block task preparation;
+the Manytask URL, course name, assignment/student GitLab, public repository,
+students group, and the container registry host and image project path.
+Missing service addresses need not block task preparation;
 record them as unresolved parameters and do not call an incomplete configuration
 ready to run.
 
 Distinguish the teacher GitLab (for example gitlab.com), the assignment/student
-GitLab (RMS), and Manytask. Their addresses may differ. Do not switch the entire
+GitLab (RMS), the container registry, and Manytask. The registry may belong to
+another GitLab instance; never infer its host or credentials from the source
+repository. Do not switch the entire
 Manytask instance's RMS to accommodate a teacher repository on another host.
 
 ## Populate the local clone
@@ -64,12 +67,14 @@ before preparing the user's CI handoff. Explain both where each value comes from
 and where to save it; listing variable names alone is insufficient:
 
 - **`DOCKER_AUTH_CONFIG`**: follow the [registry credential procedure](references/usage.md#registry-credentials-docker_auth_config).
-  The user creates deploy tokens on the teacher private project and generates
-  Docker auth JSON from the generated username and token. Save single-line JSON
-  as type **Variable**, not File. The teacher private project needs read/write
-  registry access; the students group needs a separate `read_registry`-only token.
-  The `auths` key must match the teacher registry's exact `host[:port]`, such as
-  `registry.gitlab.com`, not necessarily the student GitLab host.
+  Obtain credentials from the GitLab/project **hosting the images**, which may
+  differ from the teacher source repository. The user runs `docker login` against
+  that remote registry and retrieves the matching `auths` entry from the Docker
+  client's local `config.json`. See the guide for config paths and credential
+  helper handling. Save single-line JSON as type **Variable**, not File. Release
+  jobs need read/write access to the image project; student jobs need separate
+  `read_registry`-only credentials. The `auths` key must match the actual registry's
+  exact `host[:port]`. Do not copy unrelated registry credentials into CI.
 - **`GITLAB_API_TOKEN`**: follow the [export credential procedure](references/usage.md#export-credentials-gitlab_api_token).
   Create a project/group access token on the destination student GitLab with
   `write_repository`, Maintainer access and permission to push to the assignment
@@ -97,11 +102,13 @@ pipeline. Before an authorized push, check CI settings; use `[skip ci]` in the
 authorized commit if pipeline execution is not yet intended.
 
 Variables do not inherit across GitLab instances. Check the runner: the current
-template expects a Docker socket,
-while gitlab.com shared runners may need Docker-in-Docker. Student CI must use
-the full testenv image URL from the teacher registry, not its own
-`$CI_REGISTRY_IMAGE`. Give students separate `read_registry` credentials without
-write access.
+template expects a Docker socket, while gitlab.com shared runners may need
+Docker-in-Docker. For a registry on another GitLab, override `REGISTRY`,
+`BASE_IMAGE` and the release `TESTENV_IMAGE`; changing `REGISTRY` alone leaves
+the template's build paths pointing at `CI_REGISTRY_IMAGE`. Student CI must use
+the full published testenv image URL, not its own `$CI_REGISTRY_IMAGE`.
+GitLab's predefined `CI_REGISTRY_USER`/`CI_REGISTRY_PASSWORD` do not authenticate
+to an unrelated GitLab registry. Give students read-only registry credentials.
 
 Account for network access: a cloud runner's `localhost` does not reach a local
 Manytask instance. Do not expose local services automatically. Anyone able to
