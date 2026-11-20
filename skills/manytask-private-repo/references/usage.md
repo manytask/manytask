@@ -346,8 +346,9 @@ self-managed runner and tags, or adapt `.docker` for Docker-in-Docker, including
 the service, TLS and DOCKER_HOST. Do not mix the two modes.
 
 When images live on another GitLab, the template's defaults still point to the
-source GitLab registry. Override **all three** release image variables, not just
-`REGISTRY`:
+source GitLab registry. In your **private repository's `.releaser-ci.yml`**,
+edit the existing **top-level `variables:` block**, alongside `COURSE_NAME` and
+`MANYTASK_URL`. Set **all three** release image variables, not just `REGISTRY`:
 
 ```yaml
 variables:
@@ -356,9 +357,27 @@ variables:
   TESTENV_IMAGE: "$REGISTRY/testenv-image:$CI_COMMIT_REF_SLUG"
 ```
 
-Use `<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>/testenv-image:latest` for the student
-pipeline after `deploy-docker` publishes that tag. The registry path is the
-image-hosting project, not necessarily the source repository. Release jobs need
+Merge these entries into the existing block; keep its other variables and do
+not add a second top-level `variables:` key.
+
+Next, in **`.gitlab-ci.yml` in the same private repository**, update
+`TESTENV_IMAGE` in its existing top-level `variables:` block:
+
+```yaml
+variables:
+  TESTENV_IMAGE: "<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>/testenv-image:latest"
+```
+
+Keep other student CI settings such as `GIT_DEPTH`. The checker exports this
+`.gitlab-ci.yml` to the public repository for use by student projects, so set
+the path in the private source before exporting rather than editing each
+student fork. The `:latest` image is available after `deploy-docker` publishes
+that tag. These YAML values are non-secret configuration and can be committed;
+store credentials such as `DOCKER_AUTH_CONFIG` in GitLab's CI/CD variables UI.
+Do not change GitLab's predefined `CI_REGISTRY_*` variables.
+
+The registry path is the image-hosting project, not necessarily the source
+repository. Release jobs need
 push access and student runners need pull access to this exact registry. Follow
 [the registry credential setup](#registry-credentials-docker_auth_config) above
 for `DOCKER_AUTH_CONFIG`. A student GitLab's `CI_JOB_TOKEN` does not authorize

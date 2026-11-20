@@ -64,10 +64,14 @@ Never give students registry write or export credentials, and do not put secret
 values in chat or course files.
 These tokens are not required for local course preparation.
 
-For an external registry, set the release pipeline's `REGISTRY`, `BASE_IMAGE`
-and `TESTENV_IMAGE` to that registry's image paths, and use its published testenv
-URL in student CI. The source GitLab's predefined `CI_REGISTRY_*` values describe
-its own registry and do not grant access to another GitLab.
+For an external registry, edit the existing top-level **`variables:` block in
+the private repository's `.releaser-ci.yml`**: set `REGISTRY`, `BASE_IMAGE` and
+`TESTENV_IMAGE` to that registry's image paths. Then edit **`TESTENV_IMAGE` in
+the top-level `variables:` block of `.gitlab-ci.yml`**, also in the private
+repository, to the published `testenv-image:latest` URL. That file is exported
+to public/student repositories. See [the image path examples](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#runner-and-registry).
+These paths are non-secret configuration and can be committed; credentials go
+in GitLab CI/CD variables. Leave predefined `CI_REGISTRY_*` values unchanged.
 
 See the skill's [detailed guide](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md)
 for token permissions, runner and registry setup, course checks and Manytask

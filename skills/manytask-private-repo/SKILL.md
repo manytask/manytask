@@ -112,10 +112,13 @@ authorized commit if pipeline execution is not yet intended.
 
 Check the runner: the current template expects a Docker socket, while gitlab.com
 shared runners may need Docker-in-Docker. For a registry on another GitLab,
-override `REGISTRY`,
-`BASE_IMAGE` and the release `TESTENV_IMAGE`; changing `REGISTRY` alone leaves
-the template's build paths pointing at `CI_REGISTRY_IMAGE`. Student CI must use
-the full published testenv image URL, not its own `$CI_REGISTRY_IMAGE`.
+override `REGISTRY`, `BASE_IMAGE` and the release `TESTENV_IMAGE` in the existing
+top-level `variables:` block of the private repository's `.releaser-ci.yml`;
+changing `REGISTRY` alone leaves the template's build paths pointing at
+`CI_REGISTRY_IMAGE`. Set the full published testenv image URL in the top-level
+`variables:` block of `.gitlab-ci.yml` in the same private clone before it is
+exported for students. These paths are non-secret YAML configuration;
+credentials belong in CI/CD variables. Do not modify predefined `CI_REGISTRY_*`.
 GitLab's predefined `CI_REGISTRY_USER`/`CI_REGISTRY_PASSWORD` do not authenticate
 to an unrelated GitLab registry. Test image pull under an actual student's job
 permissions; add read-only student registry credentials only when needed.
