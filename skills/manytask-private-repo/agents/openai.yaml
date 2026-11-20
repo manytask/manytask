@@ -1,4 +1,4 @@
 interface:
-  display_name: "Prepare a private Manytask course"
-  short_description: "Populate a local course clone using course-template"
-  default_prompt: "Use $manytask-private-repo to populate an existing local course repository from the course-template example and explain the manual CI settings."
+  display_name: "Populate a Manytask private repository"
+  short_description: "Populate a Manytask private repo from course-template"
+  default_prompt: "Use $manytask-private-repo to populate <FOLDER> with a Manytask private repo containing a Python hello world task, using course-template as the reference."

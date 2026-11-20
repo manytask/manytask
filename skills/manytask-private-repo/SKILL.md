@@ -1,14 +1,26 @@
 ---
 name: manytask-private-repo
-description: Populate an existing, locally cloned private Manytask course repository on gitlab.com or another GitLab instance. Use course-template as a reference to prepare tasks, checker configuration, Docker and CI, and explain which credentials must be supplied manually.
+description: Populate a Manytask private repository (private repo) in a local folder using course-template as a reference. Use for requests such as "populate the XXX folder with the Manytask private repo with a Python hello world task"; prepare tasks, checker configuration, Docker and CI, including manual credential setup.
 ---
 
-# Prepare a private Manytask course repository
+# Populate a Manytask private repository
 
-Work in an existing local clone of the teacher repository. The GitLab project
+Work in an existing local clone of the private repository. The GitLab project
 already exists; creating projects, namespaces or API tokens for project creation
 is outside this workflow. The user guide starts with cloning:
 [usage and credential setup](references/usage.md).
+
+## Recognize the request
+
+"Private repository" or "private repo" is the standard Manytask name for the
+course repository containing configuration, reference solutions and hidden tests.
+A request such as "populate the XXX folder with the Manytask private repo with
+a Python hello world task" belongs to this skill, without requiring the user
+to say "teacher repository" or name the skill explicitly.
+
+Given a local clone path, language and task requirements, prepare the local
+course content using `course-template`. Missing integration URLs or credentials
+can remain pending while local preparation proceeds.
 
 ## Inputs
 
@@ -23,11 +35,11 @@ Missing service addresses need not block task preparation;
 record them as unresolved parameters and do not call an incomplete configuration
 ready to run.
 
-Distinguish the teacher GitLab (for example gitlab.com), the assignment/student
+Distinguish the GitLab hosting the private repository (for example gitlab.com), the assignment/student
 GitLab (RMS), the container registry, and Manytask. The registry may belong to
 another GitLab instance; never infer its host or credentials from the source
 repository. Do not switch the entire
-Manytask instance's RMS to accommodate a teacher repository on another host.
+Manytask instance's RMS to accommodate a private repository on another host.
 
 ## Populate the local clone
 
@@ -68,7 +80,7 @@ and where to save it; listing variable names alone is insufficient:
 
 - **`DOCKER_AUTH_CONFIG`**: follow the [registry credential procedure](references/usage.md#registry-credentials-docker_auth_config).
   Obtain credentials from the GitLab/project **hosting the images**, which may
-  differ from the teacher source repository. The user runs `docker login` against
+  differ from the private source repository. The user runs `docker login` against
   that remote registry and retrieves the matching `auths` entry from the Docker
   client's local `config.json`. See the guide for config paths and credential
   helper handling. Save single-line JSON as type **Variable**, not File. Release
@@ -84,7 +96,7 @@ and where to save it; listing variable names alone is insufficient:
 - **`GITLAB_API_TOKEN`**: follow the [export credential procedure](references/usage.md#export-credentials-gitlab_api_token).
   Create a project access token for the **public assignment repository** with
   `write_repository`, Maintainer access and permission to push to its export
-  branch, then save it in the teacher private project's variables. It needs no
+  branch, then save it in the private project's variables. It needs no
   access to student projects or the students group. If a personal token is
   necessary, use a dedicated account restricted to the public repository;
   personal tokens inherit the account's repository access. Do not give the
@@ -92,7 +104,7 @@ and where to save it; listing variable names alone is insufficient:
 - **`MANYTASK_TOKEN`**: follow the [course credential procedure](references/usage.md#course-credentials-manytask_token).
   Use the existing **Edit course → Course Token** value from Manytask, obtained
   by a course administrator. It is neither a GitLab token nor the registration
-  secret. Save it in the teacher private project for deployment; verify its
+  secret. Save it in the private project for deployment; verify its
   presence in the students group if score reporting is enabled.
 
 These secrets are not required to populate the local clone. Do not demand a PAT
@@ -104,7 +116,7 @@ Masked/Hidden and disabled expansion; Protected variables are unavailable on
 unprotected refs. Distinguish manually supplied secrets from GitLab's predefined
 variables and the [other pipeline values](references/usage.md#other-pipeline-values).
 
-The teacher project's CI configuration path must be **`.releaser-ci.yml`**.
+The private project's CI configuration path must be **`.releaser-ci.yml`**.
 The `.gitlab-ci.yml` file grades student submissions and is exported to public.
 Explain the manual path setting: otherwise the first push may run the wrong
 pipeline. Before an authorized push, check CI settings; use `[skip ci]` in the

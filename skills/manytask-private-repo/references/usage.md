@@ -42,6 +42,14 @@ the actual files: the template README may lag behind the available profiles.
 
 ## 3. Ask the agent to populate the local clone
 
+You can use the usual Manytask terminology without naming the skill:
+
+> Populate the XXX folder with the Manytask private repo with a Python hello world task.
+
+Replace `XXX` with the path to your local clone. "Private repo" means the course
+repository with its reference solutions, hidden tests and configuration. For
+an explicit invocation with integration settings:
+
 > Use $manytask-private-repo. Populate the existing private repository clone
 > at `/path/to/private`. Private repository: `<PRIVATE_REPOSITORY_URL>`.
 > Course example:
@@ -63,7 +71,7 @@ private/
 ├── .git/                   # preserved from the original clone
 ├── .checker.yml            # testing and export
 ├── .manytask.yml           # course settings, tasks, deadlines and scores
-├── .releaser-ci.yml        # teacher pipeline
+├── .releaser-ci.yml        # private release pipeline
 ├── .gitlab-ci.yml          # student pipeline, exported to public
 ├── base.docker
 ├── testenv.docker
@@ -86,7 +94,7 @@ working configuration.
 
 ## 4. Manually prepare CI access and settings
 
-Before the first push, open the teacher project's Settings → CI/CD → General
+Before the first push, open the private project's Settings → CI/CD → General
 pipelines → CI/CD configuration file and select **`.releaser-ci.yml`**. GitLab
 reads `.gitlab-ci.yml` by default, but that file is for students in this course.
 Until variables and the runner are ready, keep changes local or use `[skip ci]`
@@ -94,10 +102,10 @@ if committing and pushing have already been authorized.
 
 | Access / variable | Where to obtain it | Where to supply it | Purpose |
 | --- | --- | --- | --- |
-| Git access over SSH or HTTPS | Teacher GitLab | Local SSH agent or credential manager | Clone/push to the existing private project; a separate PAT with `api` scope is not required |
-| `GITLAB_API_TOKEN` | **Public assignment repository** on its GitLab instance | CI/CD variable in the teacher private project | For `deploy-public`: a token with `write_repository` and permission to push to the public repository's export branch. No access to student projects is required. Add `api` only for additional API calls |
+| Git access over SSH or HTTPS | GitLab hosting the private repository | Local SSH agent or credential manager | Clone/push to the existing private project; a separate PAT with `api` scope is not required |
+| `GITLAB_API_TOKEN` | **Public assignment repository** on its GitLab instance | CI/CD variable in the private project | For `deploy-public`: a token with `write_repository` and permission to push to the public repository's export branch. No access to student projects is required. Add `api` only for additional API calls |
 | `MANYTASK_TOKEN` | Administrator of the registered Manytask course | CI/CD variable in private; separately on the student side if score reporting is enabled | Apply `.manytask.yml` and report scores; this is not a GitLab PAT |
-| `DOCKER_AUTH_CONFIG` | GitLab/project hosting the images, which may differ from the teacher source repository | Private release pipeline with the current template; student projects/group only if existing pull access is insufficient | Docker auth JSON. When students need additional credentials, use a token with only `read_registry`, separate from release push credentials |
+| `DOCKER_AUTH_CONFIG` | GitLab/project hosting the images, which may differ from the private source repository | Private release pipeline with the current template; student projects/group only if existing pull access is insufficient | Docker auth JSON. When students need additional credentials, use a token with only `read_registry`, separate from release push credentials |
 
 Project access token availability depends on the host and subscription;
 a personal token for a dedicated account restricted to the public repository
@@ -110,7 +118,7 @@ Do not expose secrets to untrusted merge request pipelines.
 
 ### Add the variables in GitLab
 
-In the **teacher private project**, open Settings → CI/CD → Variables → Add
+In the **private project**, open Settings → CI/CD → Variables → Add
 variable. Use the exact key from the table, type **Variable** (not File), and
 environment scope `*` unless you deliberately restrict the jobs. Paste the value,
 disable variable expansion, select Masked and Hidden where supported, and save.
@@ -120,16 +128,16 @@ The current pipeline reads the JSON value itself, not a path to a file.
 Repeat only the necessary setup in the **students group** on student GitLab.
 Check existing student image-pull access before adding a
 registry variable. If additional credentials are required, use read-only access.
-Keep export and registry write tokens in the teacher private project.
+Keep export and registry write tokens in the private project.
 
 ### Registry credentials: DOCKER_AUTH_CONFIG
 
-The registry is an independent endpoint. The teacher repository can be on
+The registry is an independent endpoint. The private repository can be on
 `gitlab.com` while images are stored on another GitLab, for example a registry
 on our self-hosted `gitlab.manytask.org`. Obtain the exact registry `host[:port]`
 and image project path from the image-hosting project's Deploy → Container
 Registry page or its administrator. Do not assume `registry.gitlab.com` or use
-the teacher source project's `CI_REGISTRY` when the images live elsewhere.
+the private source project's `CI_REGISTRY` when the images live elsewhere.
 The registry host has no `https://` prefix or project path.
 
 **Check student image-pull access first.** A student `DOCKER_AUTH_CONFIG` variable
@@ -181,7 +189,7 @@ and [job-token access controls](https://docs.gitlab.com/ci/jobs/ci_job_token/#co
    for the intended registry** under `auths`, preserving its exact `host[:port]`.
    Do not copy credentials for unrelated registries or ask the agent to read
    or print the file.
-4. In the teacher private project's Settings → CI/CD → Variables, save
+4. In the private project's Settings → CI/CD → Variables, save
    `DOCKER_AUTH_CONFIG` as type **Variable**, not File. Use a single-line value
    with no whitespace for masking:
 
@@ -190,7 +198,7 @@ and [job-token access controls](https://docs.gitlab.com/ci/jobs/ci_job_token/#co
    ```
 
    The `auth` value is the one from the local config: base64 of `username:token`,
-   not the raw password alone. Keep the release read/write version in the teacher
+   not the raw password alone. Keep the release read/write version in the
    private project's variables. Only if student pull access is insufficient,
    repeat with separate read-only credentials for the `DOCKER_AUTH_CONFIG`
    variable in the students group on student GitLab.
@@ -244,13 +252,13 @@ and [runner registry authentication](https://docs.gitlab.com/ci/docker/using_doc
 This token is for pushing exported tasks to the **public assignment repository**,
 not accessing student projects or the students group. Create it on the GitLab
 hosting that public repository, for example `gitlab.manytask.org`, even when
-the teacher private project is on gitlab.com.
+the private project is on gitlab.com.
 
 Open the **public repository's Settings → Access tokens**. Create a project
 access token with a name, expiry date, **Maintainer** role and
 **`write_repository`** scope. It must be allowed to push to the public
 repository's export branch, including any protected-branch restrictions.
-Copy the token value when shown and add it as `GITLAB_API_TOKEN` in the teacher
+Copy the token value when shown and add it as `GITLAB_API_TOKEN` in the
 private project's CI/CD variables. It is not a registry deploy token.
 
 If project tokens are unavailable on your subscription, use a dedicated account
@@ -272,11 +280,11 @@ the course or instance administrator to provide it securely. Use the existing
 course token, not a newly generated GitLab token or the student registration
 secret.
 
-Add it as `MANYTASK_TOKEN` in the teacher private project's CI/CD variables for
+Add it as `MANYTASK_TOKEN` in the private project's CI/CD variables for
 `deploy-manytask`. Score reporting also needs `MANYTASK_TOKEN` in the students
 group. Manytask normally adds it to the public repository and students group
 when creating the course on its configured GitLab; verify that setup and copy
-it manually to the external teacher project. Masking does not prevent students
+it manually to the external private project. Masking does not prevent students
 who control their CI from extracting a token made available to those jobs.
 
 See the [Manytask basic example](https://github.com/manytask/manytask/blob/main/docs/03_teachers/02_basic_example.md#create-the-course-in-the-manytask-interface)
@@ -296,8 +304,8 @@ These are configuration values, not secrets:
 
 ## 5. Connect the course to Manytask if needed
 
-Teacher and student repositories can use different GitLab instances. For example,
-keep the teacher's private repository on `gitlab.com`, while assignment and
+Private and student repositories can use different GitLab instances. For example,
+keep the private repository on `gitlab.com`, while assignment and
 student repositories live on our self-hosted GitLab at `gitlab.manytask.org`.
 
 The Manytask form creates resources only on the instance's configured GitLab.
@@ -311,7 +319,7 @@ Before the first pipeline, adapt these files in the course clone:
 
 - `.manytask.yml`: `settings.course_name`, `gitlab_base_url`, `public_repo`,
   `students_group`; task URLs point to student GitLab, while the source link
-  points to teacher GitLab.
+  points to the GitLab hosting the private repository.
 - `.checker.yml`: `export.destination` points to the assignment repository on
   the RMS. Check the testing language and report pipeline; score reporting is
   commented out in the template. If enabling it, set the Manytask `report_url`
@@ -326,7 +334,7 @@ Before the first pipeline, adapt these files in the course clone:
 - `.gitlab-ci.yml`: the full `TESTENV_IMAGE` URL:
   `<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>/testenv-image:latest`, with the
   actual registry host and image-hosting project path filled in. That path need
-  not match the teacher source repository.
+  not match the private source repository.
   In a student project, `$CI_REGISTRY_IMAGE` points to that project's own registry.
 
 `checker validate` checks course structure; `checker check . .` tests reference
