@@ -31,6 +31,9 @@ For integration, also supply the Manytask URL, course name, student GitLab
 address, public repository path and students group path. Teacher GitLab may
 differ from student GitLab.
 
+For example, keep the teacher's private repository on `gitlab.com`, while
+student repositories live on our self-hosted GitLab at `gitlab.manytask.org`.
+
 ## 3. Configure CI before running it
 
 Set `.releaser-ci.yml` as the teacher project's CI/CD configuration file.

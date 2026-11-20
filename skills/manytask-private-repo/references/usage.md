@@ -110,6 +110,10 @@ Do not expose secrets to untrusted merge request pipelines.
 
 ## 5. Connect the course to Manytask if needed
 
+Teacher and student repositories can use different GitLab instances. For example,
+keep the teacher's private repository on `gitlab.com`, while assignment and
+student repositories live on our self-hosted GitLab at `gitlab.manytask.org`.
+
 The Manytask form creates resources only on the instance's configured GitLab.
 For an external private repository, register the course without selecting
 "create private repository". Public and students stay on Manytask's RMS. Add a
