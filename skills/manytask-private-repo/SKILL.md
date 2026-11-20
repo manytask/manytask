@@ -76,10 +76,13 @@ and where to save it; listing variable names alone is insufficient:
   `read_registry`-only credentials. The `auths` key must match the actual registry's
   exact `host[:port]`. Do not copy unrelated registry credentials into CI.
 - **`GITLAB_API_TOKEN`**: follow the [export credential procedure](references/usage.md#export-credentials-gitlab_api_token).
-  Create a project/group access token on the destination student GitLab with
-  `write_repository`, Maintainer access and permission to push to the assignment
-  branch, then save it in the teacher private project's variables. A personal
-  token with suitable access is an alternative. Do not give it to students.
+  Create a project access token for the **public assignment repository** with
+  `write_repository`, Maintainer access and permission to push to its export
+  branch, then save it in the teacher private project's variables. It needs no
+  access to student projects or the students group. If a personal token is
+  necessary, use a dedicated account restricted to the public repository;
+  personal tokens inherit the account's repository access. Do not give the
+  export token to students.
 - **`MANYTASK_TOKEN`**: follow the [course credential procedure](references/usage.md#course-credentials-manytask_token).
   Use the existing **Edit course → Course Token** value from Manytask, obtained
   by a course administrator. It is neither a GitLab token nor the registration

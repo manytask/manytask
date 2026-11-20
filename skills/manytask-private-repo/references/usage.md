@@ -95,12 +95,12 @@ if committing and pushing have already been authorized.
 | Access / variable | Where to obtain it | Where to supply it | Purpose |
 | --- | --- | --- | --- |
 | Git access over SSH or HTTPS | Teacher GitLab | Local SSH agent or credential manager | Clone/push to the existing private project; a separate PAT with `api` scope is not required |
-| `GITLAB_API_TOKEN` | **Assignment/student GitLab** | CI/CD variable in the teacher private project | For `deploy-public`: a token with `write_repository` and permission to push to the assignment branch. Add `api` only for additional API calls |
+| `GITLAB_API_TOKEN` | **Public assignment repository** on its GitLab instance | CI/CD variable in the teacher private project | For `deploy-public`: a token with `write_repository` and permission to push to the public repository's export branch. No access to student projects is required. Add `api` only for additional API calls |
 | `MANYTASK_TOKEN` | Administrator of the registered Manytask course | CI/CD variable in private; separately on the student side if score reporting is enabled | Apply `.manytask.yml` and report scores; this is not a GitLab PAT |
 | `DOCKER_AUTH_CONFIG` | GitLab/project hosting the images, which may differ from the teacher source repository | Separately in private and the destination student projects/group | Docker auth JSON. Students get a deploy token with only `read_registry`; use separate credentials for pushes |
 
-Project/group access token availability depends on the host and subscription;
-a personal GitLab token with the necessary destination repository permissions
+Project access token availability depends on the host and subscription;
+a personal token for a dedicated account restricted to the public repository
 is another option. Enter secrets manually in Settings → CI/CD → Variables or
 provide them through the agent environment. Do not put values in chat, course
 files, Git remotes or Dockerfiles. Mark CI variables Masked and Hidden where
@@ -215,20 +215,26 @@ and [runner registry authentication](https://docs.gitlab.com/ci/docker/using_doc
 
 ### Export credentials: GITLAB_API_TOKEN
 
-Create this token on the **destination assignment/student GitLab**, for example
-`gitlab.manytask.org`, even when the teacher private project is on gitlab.com.
-Open the assignment project's Settings → Access tokens, or the owning group's
-Settings → Access tokens. Create a token with a name, expiry date, **Maintainer**
-role and **`write_repository`** scope. It must be allowed to push to the assignment
-repository's default branch, including any protected-branch restrictions.
+This token is for pushing exported tasks to the **public assignment repository**,
+not accessing student projects or the students group. Create it on the GitLab
+hosting that public repository, for example `gitlab.manytask.org`, even when
+the teacher private project is on gitlab.com.
+
+Open the **public repository's Settings → Access tokens**. Create a project
+access token with a name, expiry date, **Maintainer** role and
+**`write_repository`** scope. It must be allowed to push to the public
+repository's export branch, including any protected-branch restrictions.
 Copy the token value when shown and add it as `GITLAB_API_TOKEN` in the teacher
 private project's CI/CD variables. It is not a registry deploy token.
 
-If project/group tokens are unavailable on your subscription, create a personal
-access token under your account's access-token settings with `write_repository`;
-the user must have the required access to the assignment repository. Add `api`
-only if your customized pipeline also calls the GitLab API. Keep this token out
-of student projects. See [project access tokens](https://docs.gitlab.com/user/project/settings/project_access_tokens/)
+If project tokens are unavailable on your subscription, use a dedicated account
+with write access only to the public repository and create a personal access
+token with `write_repository` under that account. Personal tokens inherit the
+account's access; this scope alone does not restrict a broadly privileged account
+to one project. A group token covering student projects grants unnecessary access
+for this export job. Add `api` only if your customized pipeline also calls the
+GitLab API. Keep this token out of student projects.
+See [project access tokens](https://docs.gitlab.com/user/project/settings/project_access_tokens/)
 and [personal access tokens](https://docs.gitlab.com/user/profile/personal_access_tokens/).
 
 ### Course credentials: MANYTASK_TOKEN
