@@ -39,8 +39,10 @@ differ from student GitLab.
 
 For example, keep the private repository on `gitlab.com`, while
 student repositories live on our self-hosted GitLab at `gitlab.manytask.org`.
-The image registry can also be on a different GitLab from the source repository;
-supply its actual host and image project path separately.
+Images can be stored in any container registry supported by Docker and the runner.
+We normally use the GitLab Container Registry attached to the **public assignment
+repository**. Supply the actual registry host and image namespace/path; the agent
+will suggest that usual setup and let you choose another registry.
 
 You can leave these settings out of the initial request: the agent will ask
 for missing values with suggestions, including the public repository URL,
@@ -57,7 +59,7 @@ where supported. Supply these values manually:
 
 | Variable | How to obtain its value |
 | --- | --- |
-| `DOCKER_AUTH_CONFIG` | Obtain access to the project **hosting the images**, which may be on another GitLab. Run `docker login "<REGISTRY_HOST>"` locally, then copy only that registry's `auths` entry from local `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) into single-line JSON. See [registry credentials](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#registry-credentials-docker_auth_config) for scopes, credential helpers and the exact format |
+| `DOCKER_AUTH_CONFIG` | Obtain credentials from the chosen registry provider, usually deploy tokens for the public assignment project's GitLab Container Registry. Run `docker login "<REGISTRY_HOST>"` locally, then copy only that registry's `auths` entry from local `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) into single-line JSON. See [registry credentials](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#registry-credentials-docker_auth_config) for permissions, credential helpers and the exact format |
 | `GITLAB_API_TOKEN` | In the **public assignment repository's Settings → Access tokens**, create a project token with Maintainer role, `write_repository` scope and permission to push to its export branch. It needs no access to student projects. Save it in the private project's variable. See [export credentials](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#export-credentials-gitlab_api_token) for alternatives |
 | `MANYTASK_TOKEN` | In Manytask, open **Edit course → Course Token** as a course administrator and reveal/copy the existing token, or ask the administrator. See [the course setup guide](02_basic_example.md#create-the-course-in-the-manytask-interface) |
 
@@ -68,7 +70,7 @@ Reporter access to the image project and that project allows the student
 project/group to authenticate. Sharing a GitLab group alone does not guarantee
 this. Existing inherited or runner credentials may also suffice; verify with
 an actual student's pipeline. Otherwise, configure read-only credentials for
-the image-hosting project in the students group, separate from release write
+the image namespace/repository in the students group, separate from release write
 credentials. See [student registry access](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#registry-credentials-docker_auth_config).
 
 Also verify `MANYTASK_TOKEN` in the students group if score reporting is enabled.

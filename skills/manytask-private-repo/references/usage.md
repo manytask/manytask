@@ -75,7 +75,7 @@ anything you have already specified. For example:
 | Where is the public assignment repository? | `https://gitlab.manytask.org/<COURSE_GROUP>/public` after filling in your group; a repository on another GitLab; decide later |
 | What is the course name and API base URL? | `https://app.manytask.org/api/<COURSE_NAME>` after confirming the course slug; your own Manytask deployment; decide later |
 | Where should student repositories be created? | The sibling `<COURSE_GROUP>/students` group on the public repository's GitLab; a different group |
-| Where are the course images stored? | An image path already in your configuration; the registry of the public repository's GitLab; another registry; decide later |
+| Where are the course images stored? | An existing confirmed image path; otherwise the GitLab Container Registry attached to the public assignment repository (our usual setup); another Docker-compatible registry; decide later. Confirm the registry host and image namespace/path |
 | Which runner and registry access are available? | An existing Docker-socket runner; a Docker-in-Docker runner; not configured yet. Use existing student pull access if available |
 | How far should setup go? | Prepare local files and tasks only; also configure integration. Confirm any missing task behavior, grading or deadline requirements using proposed defaults |
 
@@ -135,7 +135,7 @@ if committing and pushing have already been authorized.
 | Git access over SSH or HTTPS | GitLab hosting the private repository | Local SSH agent or credential manager | Clone/push to the existing private project; a separate PAT with `api` scope is not required |
 | `GITLAB_API_TOKEN` | **Public assignment repository** on its GitLab instance | CI/CD variable in the private project | For `deploy-public`: a token with `write_repository` and permission to push to the public repository's export branch. No access to student projects is required. Add `api` only for additional API calls |
 | `MANYTASK_TOKEN` | Administrator of the registered Manytask course | CI/CD variable in private; separately on the student side if score reporting is enabled | Apply `.manytask.yml` and report scores; this is not a GitLab PAT |
-| `DOCKER_AUTH_CONFIG` | GitLab/project hosting the images, which may differ from the private source repository | Private release pipeline with the current template; student projects/group only if existing pull access is insufficient | Docker auth JSON. When students need additional credentials, use a token with only `read_registry`, separate from release push credentials |
+| `DOCKER_AUTH_CONFIG` | Chosen registry provider, usually the public assignment project's GitLab Container Registry | Private release pipeline with the current template; student projects/group only if existing pull access is insufficient | Docker auth JSON. When students need additional credentials, use pull-only access (`read_registry` for GitLab), separate from release push credentials |
 
 Project access token availability depends on the host and subscription;
 a personal token for a dedicated account restricted to the public repository
@@ -162,13 +162,19 @@ Keep export and registry write tokens in the private project.
 
 ### Registry credentials: DOCKER_AUTH_CONFIG
 
-The registry is an independent endpoint. The private repository can be on
-`gitlab.com` while images are stored on another GitLab, for example a registry
-on our self-hosted `gitlab.manytask.org`. Obtain the exact registry `host[:port]`
-and image project path from the image-hosting project's Deploy → Container
-Registry page or its administrator. Do not assume `registry.gitlab.com` or use
-the private source project's `CI_REGISTRY` when the images live elsewhere.
-The registry host has no `https://` prefix or project path.
+The registry is an independent endpoint and can be **any container registry
+supported by Docker and the runner**, not only GitLab. We normally store images
+in the **GitLab Container Registry attached to the public assignment repository**.
+For example, the private source can be on `gitlab.com`, with public/student
+repositories and the public project's registry on our self-hosted
+`gitlab.manytask.org`.
+
+For that usual setup, obtain the exact registry `host[:port]` and public project
+path from the public repository's Deploy → Container Registry page. For another
+provider, obtain its registry endpoint and image namespace/repository path from
+that provider's console or administrator. Confirm the user's choice; do not
+assume `registry.gitlab.com` or use the private source project's `CI_REGISTRY`
+when images live elsewhere. The registry host has no `https://` prefix or path.
 
 **Check student image-pull access first.** A student `DOCKER_AUTH_CONFIG` variable
 is conditional, not a universal requirement:
@@ -195,12 +201,15 @@ and [job-token access controls](https://docs.gitlab.com/ci/jobs/ci_job_token/#co
 
 **Log in to the remote registry, then use the local Docker config:**
 
-1. Obtain credentials with access to the project **hosting the images**. You
-   can use an existing authorized registry login. For dedicated CI credentials,
-   create deploy tokens under that project's Settings → Repository → Deploy
-   tokens **on the registry's GitLab instance**, or ask its administrator for
-   them. Use `read_registry` + `write_registry` for release jobs. If student jobs
-   need extra credentials, create a separate `read_registry`-only token.
+1. Obtain credentials with access to the chosen image namespace/repository. You
+   can use an existing authorized registry login. For our usual **GitLab** setup,
+   create deploy tokens in the **public assignment project's** Settings →
+   Repository → Deploy tokens, or ask its administrator. Use `read_registry` +
+   `write_registry` for release jobs; if student jobs need extra credentials,
+   create a separate `read_registry`-only token. For **other registries**, use
+   the provider's service account or token with equivalent pull/push permissions
+   for releases and pull-only permissions for students. GitLab deploy-token
+   scopes are not universal registry scope names.
    Save the generated username and token when shown; the username need not
    match your account login.
 2. From your own terminal, log in to that remote registry:
@@ -232,7 +241,7 @@ and [job-token access controls](https://docs.gitlab.com/ci/jobs/ci_job_token/#co
    private project's variables. Only if student pull access is insufficient,
    repeat with separate read-only credentials for the `DOCKER_AUTH_CONFIG`
    variable in the students group on student GitLab.
-   The credentials come from the registry's GitLab even though the variable
+   The credentials come from the registry provider even though the variable
    is saved on the GitLab running the pipeline. Base64 is not encryption;
    do not commit this JSON or paste it into chat.
 
@@ -268,10 +277,14 @@ another variable: their runner may already have integrated or configured pull
 access.
 
 GitLab's predefined `CI_REGISTRY_USER` and `CI_REGISTRY_PASSWORD` apply to its own
-job registry. They do **not** authorize a registry on another GitLab instance.
+job registry. Do not assume they authorize another GitLab or an external provider.
 Use the external registry credentials described above for that case. Only when
 using the job's own registry can you replace the release auth step with
 `docker login --password-stdin` using those predefined credentials.
+
+For provider-specific login flows, follow the provider's Docker authentication
+instructions. Short-lived credentials may require refresh or runner integration
+before the job image is pulled; a copied static JSON value may expire.
 
 See [GitLab deploy tokens](https://docs.gitlab.com/user/project/deploy_tokens/),
 [Docker login and credential stores](https://docs.docker.com/reference/cli/docker/login/),
@@ -329,8 +342,8 @@ These are configuration values, not secrets:
 | `MANYTASK_URL` | The address of your Manytask instance. The current template prepends `https://`, so set its hostname (and any required path), without the scheme |
 | `COURSE_NAME` | The unique course name/slug used when registering the course in Manytask; it appears in the course URL |
 | `MANYTASK_API` | Derived by the template from `MANYTASK_URL` and `COURSE_NAME`; normally no manual variable is needed |
-| `REGISTRY`, `BASE_IMAGE`, branch `TESTENV_IMAGE` | The template defaults to the source project's `CI_REGISTRY_IMAGE`. For an external registry, override all three with the actual image project paths as shown below |
-| Student `TESTENV_IMAGE` | Copy the full image path from the image-hosting project's Container Registry and select the published `testenv-image:latest` tag. Set it in the exported `.gitlab-ci.yml` or a students-group CI variable, because student `CI_REGISTRY_IMAGE` points elsewhere |
+| `REGISTRY`, `BASE_IMAGE`, branch `TESTENV_IMAGE` | The template defaults to the source project's `CI_REGISTRY_IMAGE`. For an external registry, override all three with the actual image namespace paths as shown below |
+| Student `TESTENV_IMAGE` | Copy the full image path from the chosen registry and select the published `testenv-image:latest` tag. Set it in the exported `.gitlab-ci.yml` or a students-group CI variable, because student `CI_REGISTRY_IMAGE` points elsewhere |
 
 ## 5. Connect the course to Manytask if needed
 
@@ -362,8 +375,8 @@ Before the first pipeline, adapt these files in the course clone:
   `https://` itself; local HTTP requires changing the job, not simply supplying
   a URL with a scheme.
 - `.gitlab-ci.yml`: the full `TESTENV_IMAGE` URL:
-  `<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>/testenv-image:latest`, with the
-  actual registry host and image-hosting project path filled in. That path need
+  `<REGISTRY_HOST>/<IMAGE_NAMESPACE>/testenv-image:latest`, with the
+  actual registry host and image namespace/path filled in. That path need
   not match the private source repository.
   In a student project, `$CI_REGISTRY_IMAGE` points to that project's own registry.
 
@@ -383,14 +396,14 @@ mounted; gitlab.com shared runners do not guarantee this setup. Choose a suitabl
 self-managed runner and tags, or adapt `.docker` for Docker-in-Docker, including
 the service, TLS and DOCKER_HOST. Do not mix the two modes.
 
-When images live on another GitLab, the template's defaults still point to the
+When images live outside the source project's default registry, the template still points to the
 source GitLab registry. In your **private repository's `.releaser-ci.yml`**,
 edit the existing **top-level `variables:` block**, alongside `COURSE_NAME` and
 `MANYTASK_URL`. Set **all three** release image variables, not just `REGISTRY`:
 
 ```yaml
 variables:
-  REGISTRY: "<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>"
+  REGISTRY: "<REGISTRY_HOST>/<IMAGE_NAMESPACE>"
   BASE_IMAGE: "$REGISTRY/ci-base:$CI_COMMIT_REF_SLUG"
   TESTENV_IMAGE: "$REGISTRY/testenv-image:$CI_COMMIT_REF_SLUG"
 ```
@@ -403,7 +416,7 @@ Next, in **`.gitlab-ci.yml` in the same private repository**, update
 
 ```yaml
 variables:
-  TESTENV_IMAGE: "<REGISTRY_HOST>/<REGISTRY_PROJECT_PATH>/testenv-image:latest"
+  TESTENV_IMAGE: "<REGISTRY_HOST>/<IMAGE_NAMESPACE>/testenv-image:latest"
 ```
 
 Keep other student CI settings such as `GIT_DEPTH`. The checker exports this
@@ -414,8 +427,9 @@ that tag. These YAML values are non-secret configuration and can be committed;
 store credentials such as `DOCKER_AUTH_CONFIG` in GitLab's CI/CD variables UI.
 Do not change GitLab's predefined `CI_REGISTRY_*` variables.
 
-The registry path is the image-hosting project, not necessarily the source
-repository. Release jobs need
+The image namespace/path belongs to the chosen registry; in our usual GitLab
+setup it is the public assignment project path, not the private source path.
+Release jobs need
 push access and student runners need pull access to this exact registry. Follow
 [the registry credential setup](#registry-credentials-docker_auth_config) above
 for `DOCKER_AUTH_CONFIG`. A student GitLab's `CI_JOB_TOKEN` does not authorize
