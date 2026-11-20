@@ -59,12 +59,36 @@ private rules and would expose hidden tests.
 
 ## Prepare manual CI settings
 
-The user supplies GitLab CI/CD variables from the guide's table:
-`GITLAB_API_TOKEN`, `MANYTASK_TOKEN`, and registry authentication. They are not
-required to populate the local clone. Do not demand a PAT with `api` scope or a
-namespace ID merely to edit files. Accept secrets through environment variables
-or leave entry in the GitLab UI to the user; do not read secret files or write
-secret values into course files.
+Read the guide's [variable setup](references/usage.md#add-the-variables-in-gitlab)
+before preparing the user's CI handoff. Explain both where each value comes from
+and where to save it; listing variable names alone is insufficient:
+
+- **`DOCKER_AUTH_CONFIG`**: follow the [registry credential procedure](references/usage.md#registry-credentials-docker_auth_config).
+  The user creates deploy tokens on the teacher private project and generates
+  Docker auth JSON from the generated username and token. Save single-line JSON
+  as type **Variable**, not File. The teacher private project needs read/write
+  registry access; the students group needs a separate `read_registry`-only token.
+  The `auths` key must match the teacher registry's exact `host[:port]`, such as
+  `registry.gitlab.com`, not necessarily the student GitLab host.
+- **`GITLAB_API_TOKEN`**: follow the [export credential procedure](references/usage.md#export-credentials-gitlab_api_token).
+  Create a project/group access token on the destination student GitLab with
+  `write_repository`, Maintainer access and permission to push to the assignment
+  branch, then save it in the teacher private project's variables. A personal
+  token with suitable access is an alternative. Do not give it to students.
+- **`MANYTASK_TOKEN`**: follow the [course credential procedure](references/usage.md#course-credentials-manytask_token).
+  Use the existing **Edit course → Course Token** value from Manytask, obtained
+  by a course administrator. It is neither a GitLab token nor the registration
+  secret. Save it in the teacher private project for deployment; verify its
+  presence in the students group if score reporting is enabled.
+
+These secrets are not required to populate the local clone. Do not demand a PAT
+with `api` scope or a namespace ID merely to edit files. Accept secrets through
+environment variables or leave entry in the GitLab UI to the user; do not read
+secret files, print values or write them into course files. Check variable names,
+type, environment scope and Protected settings without exposing values. Explain
+Masked/Hidden and disabled expansion; Protected variables are unavailable on
+unprotected refs. Distinguish manually supplied secrets from GitLab's predefined
+variables and the [other pipeline values](references/usage.md#other-pipeline-values).
 
 The teacher project's CI configuration path must be **`.releaser-ci.yml`**.
 The `.gitlab-ci.yml` file grades student submissions and is exported to public.
@@ -72,9 +96,8 @@ Explain the manual path setting: otherwise the first push may run the wrong
 pipeline. Before an authorized push, check CI settings; use `[skip ci]` in the
 authorized commit if pipeline execution is not yet intended.
 
-The export `GITLAB_API_TOKEN` belongs to the destination student GitLab;
-`MANYTASK_TOKEN` belongs to the registered course. Variables do not inherit across
-GitLab instances. Check the runner: the current template expects a Docker socket,
+Variables do not inherit across GitLab instances. Check the runner: the current
+template expects a Docker socket,
 while gitlab.com shared runners may need Docker-in-Docker. Student CI must use
 the full testenv image URL from the teacher registry, not its own
 `$CI_REGISTRY_IMAGE`. Give students separate `read_registry` credentials without
