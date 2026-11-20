@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
 
-from pydantic import Field
-
 from checker.exceptions import PluginExecutionFailed
-from checker.plugins.firejail import SafeRunScriptPlugin
+from checker.plugins.cpp.runner import REPORT, Catch2Args, run_catch2
 from checker.utils import print_info
 
 from .base import PluginABC, PluginOutput
@@ -15,23 +12,15 @@ from .base import PluginABC, PluginOutput
 
 class CppRunTestsPlugin(PluginABC):
     name = "cpp_run_tests"
-    _REPORT = "report.txt"
+    _REPORT = REPORT
     _UBSAN = "ubsan"
     _ASAN = "asan"
     _TSAN = "tsan"
     _FILES = [_REPORT, _UBSAN, _ASAN, _TSAN]
 
-    class Args(PluginABC.Args):
-        root: Path
+    class Args(Catch2Args):
         tests: list[str]
-        timeout: float
         no_detect_leaks: bool
-        args: list[str]
-        paths_whitelist: list[str]
-        lock_network: bool = True
-        run_prefix: list[str] = Field(default_factory=list)
-        env_whitelist: list[str] = Field(default_factory=list)
-        show_env_variables: list[str] = Field(default_factory=list)
 
     @staticmethod
     def _get_sanitizers_env(args: Args, path: Path) -> dict[str, str]:
@@ -45,40 +34,18 @@ class CppRunTestsPlugin(PluginABC):
         }
 
     @staticmethod
-    def _print_logs(path: Path) -> None:
-        for file in CppRunTestsPlugin._FILES:
-            for file_path in path.glob(file + "*"):
-                with open(file_path, "r") as f:
-                    print_info(f.read())
-
-    @staticmethod
     def _run_tests(
         args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool
     ) -> None:
-        for name in args.show_env_variables:
-            print_info(f"{name} is set to `{os.getenv(name)}`")
-
-        env = CppRunTestsPlugin._get_sanitizers_env(args, tmp_dir)
-        paths_whitelist = [str(args.root / p) for p in args.paths_whitelist]
-        run_args = SafeRunScriptPlugin.Args(
-            origin=str(build_dir),
-            script=[
-                *args.run_prefix,
-                str(build_dir / target),
-                "-r",
-                f"console::out={tmp_dir / CppRunTestsPlugin._REPORT}::colour-mode=ansi",
-                *args.args,
-            ],
-            env_additional=env,
-            timeout=args.timeout,
-            paths_whitelist=paths_whitelist,
-            lock_network=args.lock_network,
-            env_whitelist=args.env_whitelist,
+        run_catch2(
+            args,
+            tmp_dir,
+            build_dir,
+            target,
+            env_additional=CppRunTestsPlugin._get_sanitizers_env(args, tmp_dir),
+            log_patterns=[file + "*" for file in CppRunTestsPlugin._FILES],
+            verbose=verbose,
         )
-        try:
-            SafeRunScriptPlugin()._run(run_args, verbose=verbose)
-        finally:
-            CppRunTestsPlugin._print_logs(tmp_dir)
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
         targets = args.tests[::2]
