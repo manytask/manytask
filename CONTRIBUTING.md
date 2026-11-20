@@ -9,7 +9,7 @@ We track our progress using GitHub Projects (https://github.com/orgs/manytask/pr
 
 ## Setting up a development environment
 
-See the [development guide](docs/dev.md) for a complete walkthrough of setting up a local environment (Manytask + local GitLab in Docker), configuring OAuth, adding a course, and running the stack.
+See the [development guide](docs/05_development/01_local_development.md) for a complete walkthrough of setting up a local environment (Manytask + local GitLab in Docker), configuring OAuth, adding a course, and running the stack.
 
 ### Quick start
 
@@ -20,7 +20,7 @@ cd manytask
 ./scripts/start_local_dev.sh
 ```
 
-It starts the Docker containers, waits for GitLab to become ready, sets up the OAuth application, and wires the resulting credentials into `.env` (creating it from `.env.example` if needed). Once it finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/) and the local GitLab at [http://localhost:8929/](http://localhost:8929/). See the [development guide](docs/dev.md) for details and troubleshooting.
+It starts the Docker containers, waits for GitLab to become ready, sets up the OAuth application, and wires the resulting credentials into `.env` (creating it from `.env.example` if needed). Once it finishes, Manytask is available at [http://localhost:8081/](http://localhost:8081/) and the local GitLab at [http://localhost:8929/](http://localhost:8929/). See the [development guide](docs/05_development/01_local_development.md) for details and troubleshooting.
 
 ### In short
 

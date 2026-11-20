@@ -74,7 +74,7 @@ Continue with [Adding a course](#adding-a-course) below.
 
 ### Step 3 — Prepare the `.env` file
 
-Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fill in the values. The relevant variables are:
+Copy [`manytask/.env.example`](../../manytask/.env.example) to `manytask/.env` and fill in the values. The relevant variables are:
 
 | Variable                 | Description                                                                                                       |
 |--------------------------|-------------------------------------------------------------------------------------------------------------------|
@@ -237,7 +237,7 @@ Using a single URL for both paths usually fails in local Docker setups.
 
 ### Code reference
 
-OAuth registration is configured in [`manytask/main.py`](manytask/manytask/main.py):
+OAuth registration is configured in [`manytask/main.py`](../../manytask/manytask/main.py):
 
 ```python
 def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id: str, client_secret: str) -> OAuth:
@@ -257,7 +257,7 @@ def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id:
     return oauth
 ```
 
-The corresponding config fields are defined in [`manytask/local_config.py`](manytask/manytask/local_config.py):
+The corresponding config fields are defined in [`manytask/local_config.py`](../../manytask/manytask/local_config.py):
 
 - `gitlab_url`
 - `gitlab_oauth_url`
@@ -266,7 +266,7 @@ The corresponding config fields are defined in [`manytask/local_config.py`](many
 
 ## Running tests
 
-For convenience, the code ships with a `Makefile` containing shortcuts to run the linter, type checker, formatter, and tests. See [`manytask/Makefile`](manytask/Makefile) for details. To run all checks:
+For convenience, the code ships with a `Makefile` containing shortcuts to run the linter, type checker, formatter, and tests. See [`manytask/Makefile`](../../manytask/Makefile) for details. To run all checks:
 
 ```bash
 make check

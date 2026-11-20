@@ -11,10 +11,10 @@ The template demonstrates the standard *Course as Code* layout:
 
 See the upstream docs:
 
-- Concept: [Course as Code](https://manytask.org/course_as_code.html)
-- Checker configuration: <https://manytask.org/checker_config.html>
-- `.checker.yml` reference: <https://manytask.org/checker_yml_reference.html>
-- Checker pipelines and plugins: <https://manytask.org/checker_pipelines_and_plugins.html>
+- Concept: [Course as Code](https://manytask.org/03_teachers/01_course_as_code.html)
+- Checker configuration: <https://manytask.org/03_teachers/05_checker_configuration.html>
+- `.checker.yml` reference: <https://manytask.org/06_reference/02_checker_yml.html>
+- Checker pipelines and plugins: <https://manytask.org/03_teachers/08_checker_pipelines_and_plugins.html>
 
 ---
 
@@ -142,8 +142,8 @@ checker export --dry-run
 ```
 
 For the full list of commands and config options, see the
-[checker configuration docs](https://manytask.org/checker_config.html) and the
-[`.checker.yml` reference](https://manytask.org/checker_yml_reference.html).
+[checker configuration docs](https://manytask.org/03_teachers/05_checker_configuration.html) and the
+[`.checker.yml` reference](https://manytask.org/06_reference/02_checker_yml.html).
 
 ---
 
@@ -163,7 +163,7 @@ For the full list of commands and config options, see the
 
 For several tasks sharing one folder, use `.tasks.yml` with a nonempty `tasks` mapping instead of
 `.task.yml`, and register each logical task name in `.manytask.yml`. See the
-[shared-folder example](https://manytask.org/checker_config.html#several-tasks-in-one-folder).
+[shared-folder example](https://manytask.org/03_teachers/05_checker_configuration.html#several-tasks-in-one-folder).
 
 ---
 

@@ -10,7 +10,7 @@ Use it to:
 
 ## Where to find it
 
-The canonical source lives **in this monorepo** under [`course-template/`](../course-template/).
+The canonical source lives **in this monorepo** under [`course-template/`](../../course-template/).
 
 It is deployed to the GitLab private template repository at:
 
@@ -79,13 +79,13 @@ This is the smallest end-to-end example that:
 - reports its score back to the Manytask web app once the report pipeline is enabled in CI.
 
 For several tasks in one folder, replace its `.task.yml` with `.tasks.yml` and define a nonempty
-`tasks` mapping. See [the shared-folder example](checker_config.md#several-tasks-in-one-folder).
+`tasks` mapping. See [the shared-folder example](05_checker_configuration.md#several-tasks-in-one-folder).
 
 ## How grading works (testenv image)
 
 Student submissions must be graded against the **hidden** (`test_private.*`) tests,
 but those tests are never exported to the public/student repository. Manytask solves
-this with a **testenv docker image** (see [Concepts](./concepts.md)): an image that
+this with a **testenv docker image** (see [Concepts](../00_getting_started/02_concepts.md)): an image that
 carries a copy of the private repository — including the private tests — and the
 checker. The same image runs `checker check` in the private repo and `checker grade`
 in student repos.
@@ -96,7 +96,7 @@ The template wires this in two pipelines:
    - **`verify`** validates the course configuration. **`build-base`** then publishes
      a checker/toolchain image, and **`check`** runs `checker check . .` in it.
    - **`build-testenv`** uses that base image and builds
-     [`testenv.docker`](../course-template/testenv.docker). Its first Docker stage
+     [`testenv.docker`](../../course-template/testenv.docker). Its first Docker stage
      runs `checker export-private`; the final, published stage copies only that
      exported reference into **`/opt/course`**, not the raw private checkout.
    - On the default branch, manual deploy jobs publish the `:latest` testenv image,
@@ -192,8 +192,8 @@ Full step-by-step instructions live in the template's own
 
 ## Related references
 
-- [Course as Code](./course_as_code.md) — the underlying concept
-- [Private repository](./private_repo.md) — how the private repo is structured
-- [.checker.yml reference](./checker_yml_reference.md) — every field explained
-- [.manytask.yml reference](./manytask_yml_reference.md) — schedule and grades schema
-- [Checker pipelines and plugins](./checker_pipelines_and_plugins.md) — building custom pipelines
+- [Course as Code](01_course_as_code.md) — the underlying concept
+- [Private repository](04_private_repository.md) — how the private repo is structured
+- [.checker.yml reference](../06_reference/02_checker_yml.md) — every field explained
+- [.manytask.yml reference](../06_reference/01_manytask_yml.md) — schedule and grades schema
+- [Checker pipelines and plugins](08_checker_pipelines_and_plugins.md) — building custom pipelines
