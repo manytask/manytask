@@ -110,9 +110,9 @@ Explain the manual path setting: otherwise the first push may run the wrong
 pipeline. Before an authorized push, check CI settings; use `[skip ci]` in the
 authorized commit if pipeline execution is not yet intended.
 
-Variables do not inherit across GitLab instances. Check the runner: the current
-template expects a Docker socket, while gitlab.com shared runners may need
-Docker-in-Docker. For a registry on another GitLab, override `REGISTRY`,
+Check the runner: the current template expects a Docker socket, while gitlab.com
+shared runners may need Docker-in-Docker. For a registry on another GitLab,
+override `REGISTRY`,
 `BASE_IMAGE` and the release `TESTENV_IMAGE`; changing `REGISTRY` alone leaves
 the template's build paths pointing at `CI_REGISTRY_IMAGE`. Student CI must use
 the full published testenv image URL, not its own `$CI_REGISTRY_IMAGE`.

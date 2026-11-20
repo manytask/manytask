@@ -117,9 +117,8 @@ disable variable expansion, select Masked and Hidden where supported, and save.
 Use single-line JSON without whitespace for masked `DOCKER_AUTH_CONFIG` values.
 The current pipeline reads the JSON value itself, not a path to a file.
 
-Repeat only the necessary setup in the **students group** on student GitLab;
-variables from the teacher's gitlab.com project do not propagate to
-gitlab.manytask.org. Check existing student image-pull access before adding a
+Repeat only the necessary setup in the **students group** on student GitLab.
+Check existing student image-pull access before adding a
 registry variable. If additional credentials are required, use read-only access.
 Keep export and registry write tokens in the teacher private project.
 

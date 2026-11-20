@@ -59,9 +59,9 @@ an actual student's pipeline. Otherwise, configure read-only credentials for
 the image-hosting project in the students group, separate from release write
 credentials. See [student registry access](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#registry-credentials-docker_auth_config).
 
-Also verify `MANYTASK_TOKEN` in the students group if score reporting is enabled. Variables do not inherit
-between gitlab.com and gitlab.manytask.org. Never give students registry write
-or export credentials, and do not put secret values in chat or course files.
+Also verify `MANYTASK_TOKEN` in the students group if score reporting is enabled.
+Never give students registry write or export credentials, and do not put secret
+values in chat or course files.
 These tokens are not required for local course preparation.
 
 For an external registry, set the release pipeline's `REGISTRY`, `BASE_IMAGE`
