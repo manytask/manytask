@@ -35,6 +35,43 @@ Missing service addresses need not block task preparation;
 record them as unresolved parameters and do not call an incomplete configuration
 ready to run.
 
+## Ask for missing settings with suggestions
+
+Before configuring integration, **ask the user about missing or conflicting
+settings**. Do not merely leave placeholders without asking. Reuse information
+already supplied in the conversation or existing course files; do not ask again
+for known values. Treat values copied from `course-template` as examples, not
+confirmed settings for this course.
+
+Use the available question/input tool with suggested options and custom input;
+otherwise ask a concise numbered set in chat. Ask up to three related questions
+per round. Give concrete proposed values from the known context and an option
+to decide later. Suggestions are not answers: do not select them silently.
+
+Cover these settings when they are unresolved:
+
+| Ask about | Suggested answers to offer |
+| --- | --- |
+| Public assignment repository URL | A public-repo URL already present in course configuration; `https://gitlab.manytask.org/<COURSE_GROUP>/public` with the user's group filled in when known; a custom URL; decide later. Ask for the repository URL, not access to student projects |
+| Course identity and API base URL | The known deployment plus confirmed course slug, such as `https://app.manytask.org/api/<COURSE_NAME>`; an existing custom Manytask deployment; decide later. Ask for the course slug if unknown; do not derive it from the generic folder name `private` |
+| Students group and default branch | A sibling `<COURSE_GROUP>/students` on the public repository's GitLab; a custom group. Suggest the existing configured branch or `main` for an empty repository |
+| Registry host and image project path | An existing configured image path; the registry of the GitLab hosting the public repository; a different registry; decide later. Keep this independent of the private repository host |
+| Runner and image-pull access | An existing runner with a Docker socket; a Docker-in-Docker runner; not configured yet. Ask whether student jobs already have registry pull access before proposing another credential |
+| Scope and course-specific requirements | Local preparation only; also configure integration. For unspecified task behavior, scores or deadlines that matter, offer explicit defaults rather than inventing requirements |
+
+Record the chosen URLs and paths, their corresponding configuration fields,
+and anything the user deferred. A **course API base URL** is
+`<MANYTASK_BASE_URL>/api/<COURSE_NAME>`; derive `/update_config` and `/report`
+from it. Distinguish that base from the site URL and a complete endpoint, and
+avoid duplicating the scheme or `/api/<COURSE_NAME>` in the current template's
+`MANYTASK_URL`/`MANYTASK_API` settings. See the
+[questionnaire examples](references/usage.md#questions-and-suggested-answers).
+
+Ask early while continuing independent local task preparation. Await an answer
+before applying dependent integration settings. If the user defers a setting,
+keep it visibly unresolved and report the limited readiness. Ask how credentials
+will be supplied, never for secret values in the questionnaire.
+
 Distinguish the GitLab hosting the private repository (for example gitlab.com), the assignment/student
 GitLab (RMS), the container registry, and Manytask. The registry may belong to
 another GitLab instance; never infer its host or credentials from the source

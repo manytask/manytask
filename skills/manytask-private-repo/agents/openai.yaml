@@ -1,4 +1,4 @@
 interface:
   display_name: "Populate a Manytask private repository"
   short_description: "Populate a Manytask private repo from course-template"
-  default_prompt: "Use $manytask-private-repo to populate <FOLDER> with a Manytask private repo containing a Python hello world task, using course-template as the reference."
+  default_prompt: "Use $manytask-private-repo to populate <FOLDER> with a Manytask private repo containing a Python hello world task using course-template; ask about missing public repository, course API and registry settings with suggested answers."

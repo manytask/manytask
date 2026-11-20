@@ -42,6 +42,12 @@ student repositories live on our self-hosted GitLab at `gitlab.manytask.org`.
 The image registry can also be on a different GitLab from the source repository;
 supply its actual host and image project path separately.
 
+You can leave these settings out of the initial request: the agent will ask
+for missing values with suggestions, including the public repository URL,
+course API base URL (`<MANYTASK_BASE_URL>/api/<COURSE_NAME>`), students group,
+registry and runner. It reuses answers already given and can continue local
+preparation while you decide. See [the setup questions](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#questions-and-suggested-answers).
+
 ## 3. Configure CI before running it
 
 Set `.releaser-ci.yml` as the private project's CI/CD configuration file.

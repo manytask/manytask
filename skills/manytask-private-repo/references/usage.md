@@ -64,6 +64,36 @@ preserve existing files and uncommitted changes, prepare the required
 configuration and verify the course. A project-creation API token and namespace
 ID are unnecessary. CI tokens are not needed for local editing either.
 
+### Questions and suggested answers
+
+You do not have to supply every integration setting in the initial request.
+The agent should ask about missing settings, offer suggestions, and reuse
+anything you have already specified. For example:
+
+| Question | Suggested answers |
+| --- | --- |
+| Where is the public assignment repository? | `https://gitlab.manytask.org/<COURSE_GROUP>/public` after filling in your group; a repository on another GitLab; decide later |
+| What is the course name and API base URL? | `https://app.manytask.org/api/<COURSE_NAME>` after confirming the course slug; your own Manytask deployment; decide later |
+| Where should student repositories be created? | The sibling `<COURSE_GROUP>/students` group on the public repository's GitLab; a different group |
+| Where are the course images stored? | An image path already in your configuration; the registry of the public repository's GitLab; another registry; decide later |
+| Which runner and registry access are available? | An existing Docker-socket runner; a Docker-in-Docker runner; not configured yet. Use existing student pull access if available |
+| How far should setup go? | Prepare local files and tasks only; also configure integration. Confirm any missing task behavior, grading or deadline requirements using proposed defaults |
+
+The agent asks a small batch of related questions at a time. It should show a
+concrete candidate where your existing configuration provides one, allow custom
+answers, and never treat a suggested value as your decision. No secret values
+belong in these answers. Local preparation can proceed while an integration
+setting is pending; configuration that depends on it must wait.
+
+The **course API base URL** includes the course slug:
+`<MANYTASK_BASE_URL>/api/<COURSE_NAME>`. Configuration is sent to
+`<COURSE_API_BASE_URL>/update_config`; scores go to
+`<COURSE_API_BASE_URL>/report`. If you provide a complete endpoint instead, the
+agent should distinguish it from the base rather than append these paths twice.
+These values map to the release pipeline's `MANYTASK_URL`, `COURSE_NAME` and
+derived `MANYTASK_API`, and the checker's full `report_url`. The current template
+prepends `https://` itself in the release job, so it must not be duplicated.
+
 The result follows the `course-template` structure:
 
 ```text
