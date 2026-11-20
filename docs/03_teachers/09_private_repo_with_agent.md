@@ -37,9 +37,22 @@ student repositories live on our self-hosted GitLab at `gitlab.manytask.org`.
 ## 3. Configure CI before running it
 
 Set `.releaser-ci.yml` as the teacher project's CI/CD configuration file.
-Manually add `GITLAB_API_TOKEN`, `MANYTASK_TOKEN` and registry credentials as CI/CD
-variables; do not put secret values in chat or course files. These tokens are
-not required for local course preparation.
+In the teacher private project, open **Settings → CI/CD → Variables → Add
+variable**. Use type **Variable**, disable expansion, and select Masked/Hidden
+where supported. Supply these values manually:
+
+| Variable | How to obtain its value |
+| --- | --- |
+| `DOCKER_AUTH_CONFIG` | In the teacher private project's Settings → Repository → Deploy tokens, create a token with `read_registry` + `write_registry`. Generate single-line Docker auth JSON from its username and token using [the registry credential instructions](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#registry-credentials-docker_auth_config) |
+| `GITLAB_API_TOKEN` | On the **student GitLab**, create an assignment-project/group access token with Maintainer role, `write_repository` scope and permission to push to the assignment branch; copy the token into the teacher project's variable. See [export credentials](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#export-credentials-gitlab_api_token) for alternatives |
+| `MANYTASK_TOKEN` | In Manytask, open **Edit course → Course Token** as a course administrator and reveal/copy the existing token, or ask the administrator. See [the course setup guide](02_basic_example.md#create-the-course-in-the-manytask-interface) |
+
+Student jobs need a **separate** `DOCKER_AUTH_CONFIG` in their GitLab group,
+using a teacher-project deploy token with **`read_registry` only**. Also verify
+`MANYTASK_TOKEN` there if score reporting is enabled. Variables do not inherit
+between gitlab.com and gitlab.manytask.org. Never give students registry write
+or export credentials, and do not put secret values in chat or course files.
+These tokens are not required for local course preparation.
 
 See the skill's [detailed guide](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md)
 for token permissions, runner and registry setup, course checks and Manytask
