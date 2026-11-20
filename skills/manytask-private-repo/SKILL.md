@@ -72,9 +72,15 @@ and where to save it; listing variable names alone is insufficient:
   that remote registry and retrieves the matching `auths` entry from the Docker
   client's local `config.json`. See the guide for config paths and credential
   helper handling. Save single-line JSON as type **Variable**, not File. Release
-  jobs need read/write access to the image project; student jobs need separate
-  `read_registry`-only credentials. The `auths` key must match the actual registry's
-  exact `host[:port]`. Do not copy unrelated registry credentials into CI.
+  jobs need read/write access to the image project. Before adding a student
+  variable, check whether its runner can already pull through GitLab-integrated
+  `CI_JOB_TOKEN` access, inherited/runner credentials, or public registry access.
+  For same-instance job-token access, the triggering user needs at least Reporter
+  access to the image project, which must allow the student project/group;
+  being in the same group alone is insufficient. Only if existing pull access
+  is unavailable, supply separate `read_registry`-only credentials to student CI.
+  The `auths` key must match the actual registry's exact `host[:port]`. Do not
+  copy unrelated registry credentials into CI.
 - **`GITLAB_API_TOKEN`**: follow the [export credential procedure](references/usage.md#export-credentials-gitlab_api_token).
   Create a project access token for the **public assignment repository** with
   `write_repository`, Maintainer access and permission to push to its export
@@ -111,7 +117,8 @@ Docker-in-Docker. For a registry on another GitLab, override `REGISTRY`,
 the template's build paths pointing at `CI_REGISTRY_IMAGE`. Student CI must use
 the full published testenv image URL, not its own `$CI_REGISTRY_IMAGE`.
 GitLab's predefined `CI_REGISTRY_USER`/`CI_REGISTRY_PASSWORD` do not authenticate
-to an unrelated GitLab registry. Give students read-only registry credentials.
+to an unrelated GitLab registry. Test image pull under an actual student's job
+permissions; add read-only student registry credentials only when needed.
 
 Account for network access: a cloud runner's `localhost` does not reach a local
 Manytask instance. Do not expose local services automatically. Anyone able to

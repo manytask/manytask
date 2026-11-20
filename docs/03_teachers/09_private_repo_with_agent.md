@@ -49,9 +49,17 @@ where supported. Supply these values manually:
 | `GITLAB_API_TOKEN` | In the **public assignment repository's Settings → Access tokens**, create a project token with Maintainer role, `write_repository` scope and permission to push to its export branch. It needs no access to student projects. Save it in the teacher private project's variable. See [export credentials](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#export-credentials-gitlab_api_token) for alternatives |
 | `MANYTASK_TOKEN` | In Manytask, open **Edit course → Course Token** as a course administrator and reveal/copy the existing token, or ask the administrator. See [the course setup guide](02_basic_example.md#create-the-course-in-the-manytask-interface) |
 
-Student jobs need a **separate** `DOCKER_AUTH_CONFIG` in their GitLab group,
-using credentials for the image-hosting project with **`read_registry` only**. Also verify
-`MANYTASK_TOKEN` there if score reporting is enabled. Variables do not inherit
+Student jobs need an additional `DOCKER_AUTH_CONFIG` **only if their runner
+cannot already pull the image**. On the same GitLab instance, integrated
+`CI_JOB_TOKEN` access can work when the user starting the job has at least
+Reporter access to the image project and that project allows the student
+project/group to authenticate. Sharing a GitLab group alone does not guarantee
+this. Existing inherited or runner credentials may also suffice; verify with
+an actual student's pipeline. Otherwise, configure read-only credentials for
+the image-hosting project in the students group, separate from release write
+credentials. See [student registry access](https://github.com/manytask/manytask/blob/main/skills/manytask-private-repo/references/usage.md#registry-credentials-docker_auth_config).
+
+Also verify `MANYTASK_TOKEN` in the students group if score reporting is enabled. Variables do not inherit
 between gitlab.com and gitlab.manytask.org. Never give students registry write
 or export credentials, and do not put secret values in chat or course files.
 These tokens are not required for local course preparation.

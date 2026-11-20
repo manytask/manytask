@@ -97,7 +97,7 @@ if committing and pushing have already been authorized.
 | Git access over SSH or HTTPS | Teacher GitLab | Local SSH agent or credential manager | Clone/push to the existing private project; a separate PAT with `api` scope is not required |
 | `GITLAB_API_TOKEN` | **Public assignment repository** on its GitLab instance | CI/CD variable in the teacher private project | For `deploy-public`: a token with `write_repository` and permission to push to the public repository's export branch. No access to student projects is required. Add `api` only for additional API calls |
 | `MANYTASK_TOKEN` | Administrator of the registered Manytask course | CI/CD variable in private; separately on the student side if score reporting is enabled | Apply `.manytask.yml` and report scores; this is not a GitLab PAT |
-| `DOCKER_AUTH_CONFIG` | GitLab/project hosting the images, which may differ from the teacher source repository | Separately in private and the destination student projects/group | Docker auth JSON. Students get a deploy token with only `read_registry`; use separate credentials for pushes |
+| `DOCKER_AUTH_CONFIG` | GitLab/project hosting the images, which may differ from the teacher source repository | Private release pipeline with the current template; student projects/group only if existing pull access is insufficient | Docker auth JSON. When students need additional credentials, use a token with only `read_registry`, separate from release push credentials |
 
 Project access token availability depends on the host and subscription;
 a personal token for a dedicated account restricted to the public repository
@@ -117,10 +117,11 @@ disable variable expansion, select Masked and Hidden where supported, and save.
 Use single-line JSON without whitespace for masked `DOCKER_AUTH_CONFIG` values.
 The current pipeline reads the JSON value itself, not a path to a file.
 
-Repeat the relevant setup in the **students group** on student GitLab; variables
-from the teacher's gitlab.com project do not propagate to gitlab.manytask.org.
-Use a separate registry credential there with read access only. Keep export and
-registry write tokens in the teacher private project.
+Repeat only the necessary setup in the **students group** on student GitLab;
+variables from the teacher's gitlab.com project do not propagate to
+gitlab.manytask.org. Check existing student image-pull access before adding a
+registry variable. If additional credentials are required, use read-only access.
+Keep export and registry write tokens in the teacher private project.
 
 ### Registry credentials: DOCKER_AUTH_CONFIG
 
@@ -132,15 +133,39 @@ Registry page or its administrator. Do not assume `registry.gitlab.com` or use
 the teacher source project's `CI_REGISTRY` when the images live elsewhere.
 The registry host has no `https://` prefix or project path.
 
+**Check student image-pull access first.** A student `DOCKER_AUTH_CONFIG` variable
+is conditional, not a universal requirement:
+
+- On the **same GitLab instance**, GitLab can supply integrated registry
+  credentials based on `CI_JOB_TOKEN`. The user starting the job must have at
+  least **Reporter** access to the image-hosting project, and that project must
+  allow the student project or group in its job-token allowlist (Settings →
+  CI/CD → Job token permissions). Sharing a group can provide inherited user
+  membership, but does not by itself establish job-token access.
+- Existing inherited CI variables, runner-level registry credentials, or public
+  access may already permit the pull. Do not add a duplicate variable when the
+  runner already has suitable access.
+- A job token from another GitLab instance does not authenticate to the registry.
+  If the registry is private and the runner has no existing access, add a
+  read-only `DOCKER_AUTH_CONFIG` to student CI as described below.
+
+Verify with a job that uses the published testenv image and is triggered by an
+actual student account. An administrator's successful pipeline does not prove
+student access. Authentication must work before the job image is pulled, so a
+`docker login` in that job's script cannot fix the initial image pull. See
+[GitLab registry access](https://docs.gitlab.com/ci/docker/using_docker_images/#access-an-image-from-a-private-container-registry)
+and [job-token access controls](https://docs.gitlab.com/ci/jobs/ci_job_token/#control-job-token-access-to-your-project).
+
 **Log in to the remote registry, then use the local Docker config:**
 
 1. Obtain credentials with access to the project **hosting the images**. You
    can use an existing authorized registry login. For dedicated CI credentials,
    create deploy tokens under that project's Settings → Repository → Deploy
    tokens **on the registry's GitLab instance**, or ask its administrator for
-   them. Use `read_registry` + `write_registry` for release jobs and separate
-   `read_registry`-only credentials for student jobs. Save the generated username
-   and token when shown; the username need not match your account login.
+   them. Use `read_registry` + `write_registry` for release jobs. If student jobs
+   need extra credentials, create a separate `read_registry`-only token.
+   Save the generated username and token when shown; the username need not
+   match your account login.
 2. From your own terminal, log in to that remote registry:
 
    ```bash
@@ -167,8 +192,9 @@ The registry host has no `https://` prefix or project path.
 
    The `auth` value is the one from the local config: base64 of `username:token`,
    not the raw password alone. Keep the release read/write version in the teacher
-   private project's variables. Repeat with separate read-only credentials for
-   the `DOCKER_AUTH_CONFIG` variable in the students group on student GitLab.
+   private project's variables. Only if student pull access is insufficient,
+   repeat with separate read-only credentials for the `DOCKER_AUTH_CONFIG`
+   variable in the students group on student GitLab.
    The credentials come from the registry's GitLab even though the variable
    is saved on the GitLab running the pipeline. Base64 is not encryption;
    do not commit this JSON or paste it into chat.
@@ -199,9 +225,10 @@ can keep a new login separate from your normal config, but it does not guarantee
 inline `auth`: Docker may still select an installed credential helper.
 
 The current release jobs write `DOCKER_AUTH_CONFIG` into Docker's config file
-before pushing images. The student runner also needs registry authentication to
-pull the testenv image **before** the job starts. A login command in the student's
-job script is too late for that image pull.
+before pushing images; keep it configured for that template unless adapting its
+authentication step. This release requirement does not imply that students need
+another variable: their runner may already have integrated or configured pull
+access.
 
 GitLab's predefined `CI_REGISTRY_USER` and `CI_REGISTRY_PASSWORD` apply to its own
 job registry. They do **not** authorize a registry on another GitLab instance.
