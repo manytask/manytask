@@ -352,6 +352,92 @@ def test_course_page_only_with_valid_session(app, mock_gitlab_oauth):
             assert response.location == f"/{TEST_COURSE_NAME}/create_project"
 
 
+def test_live_scores_reads_current_user_without_syncing(app: Any, mock_gitlab_oauth: Any) -> None:
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_scores", side_effect=[{"task1": 25}, {"task1": 100}]) as get_scores,
+        patch.object(app.storage_api, "get_bonus_score", return_value=10),
+        patch.object(app.storage_api, "max_score_started", return_value=200),
+        patch.object(app.storage_api, "sync_user_on_course") as sync,
+        patch.object(app.rms_api, "check_project_exists") as check_project,
+        patch.object(app.auth_api, "check_user_is_authenticated") as check_auth,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        for score in (25, 100):
+            response = client.get(f"/{TEST_COURSE_NAME}/scores?username=someone-else")
+            assert response.status_code == HTTPStatus.OK
+            assert response.json == {"scores": {"task1": score}, "bonus_score": 10, "max_score": 200}
+            assert response.headers["Cache-Control"] == "no-store"
+        assert get_scores.call_args.args == (TEST_COURSE_NAME, TEST_USERNAME)
+        sync.assert_not_called()
+        check_project.assert_not_called()
+        check_auth.assert_not_called()
+
+
+def test_live_scores_requires_session(app: Any) -> None:
+    with app.test_client() as client, patch.object(app.storage_api, "get_scores") as get_scores:
+        response = client.get(f"/{TEST_COURSE_NAME}/scores")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        get_scores.assert_not_called()
+
+
+@pytest.mark.parametrize("invalid_part", ["auth", "rms", "manytask", "deleted_user", "replaced_user"])
+def test_live_scores_rejects_invalid_identity(app: Any, invalid_part: str) -> None:
+    user_session = build_test_session(include_manytask=True)
+    if invalid_part in {"auth", "rms", "manytask"}:
+        user_session[invalid_part]["version"] = 0
+    if invalid_part == "replaced_user":
+        user_session["manytask"]["user_id"] = -1
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_scores") as get_scores,
+    ):
+        if invalid_part == "deleted_user":
+            app.storage_api.get_stored_user_by_auth_id = lambda _auth_id: None
+        set_session(client, user_session)
+        response = client.get(f"/{TEST_COURSE_NAME}/scores")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        get_scores.assert_not_called()
+
+
+@pytest.mark.parametrize("enrolled,hidden,admin", [(False, False, False), (True, True, False), (True, True, True)])
+def test_live_scores_checks_course_access(
+    app: Any, mock_gitlab_oauth: Any, mock_course: Any, enrolled: bool, hidden: bool, admin: bool
+) -> None:
+    app.oauth = mock_gitlab_oauth
+    mock_course.status = CourseStatus.HIDDEN if hidden else CourseStatus.IN_PROGRESS
+    app.storage_api.course_admin = admin
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "check_user_on_course", return_value=enrolled),
+        patch.object(app.storage_api, "get_scores", return_value={}) as get_scores,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/scores")
+        if admin:
+            assert response.status_code == HTTPStatus.OK
+            assert response.json["scores"] == {}
+        else:
+            assert response.status_code == HTTPStatus.FORBIDDEN
+            get_scores.assert_not_called()
+
+
+@pytest.mark.parametrize("status", [CourseStatus.CREATED, None])
+def test_live_scores_requires_ready_course(app: Any, mock_gitlab_oauth: Any, mock_course: Any, status: Any) -> None:
+    app.oauth = mock_gitlab_oauth
+    mock_course.status = status
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_course", return_value=mock_course if status else None),
+        patch.object(app.storage_api, "get_scores") as get_scores,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/scores")
+        assert response.status_code == HTTPStatus.FOUND
+        get_scores.assert_not_called()
+
+
 @pytest.mark.parametrize("page", ["", "database"])
 def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oauth, page):
     CSRFProtect(app)
@@ -418,6 +504,11 @@ def test_course_page_marks_only_fully_solved_groups(
     assert rendered_group["data-group-solved"] == str(fully_solved).lower()
     assert not rendered_group.has_attr("hidden")
     assert soup.find("script", src="/static/js/solved-last.js?v=2") is not None
+    assert soup.find("script", src="/static/js/live-scores.js") is not None
+    assert soup.select_one("#task-groups")["data-scores-url"] == f"/{TEST_COURSE_NAME}/scores"
+    for index, card in enumerate(soup.select("[data-task-name]"), start=1):
+        assert card["data-task-name"] == f"task{index}"
+        assert card["data-max-score"] == str(max_scores[index - 1])
 
 
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):

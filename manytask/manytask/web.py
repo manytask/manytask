@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import gitlab
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from sqlalchemy.exc import NoResultFound
@@ -285,6 +285,43 @@ def course_page(course_name: str) -> ResponseReturnValue:
     )
 
 
+@course_bp.get("/scores")
+@requires_ready
+def course_scores(course_name: str) -> ResponseReturnValue:
+    """Read personal scores using the signed session, without contacting the RMS."""
+    app: CustomFlask = current_app  # type: ignore
+    storage = app.storage_api
+    username = _score_viewer_username(app)
+    course = storage.get_course(course_name)
+    if course is None:
+        abort(HTTPStatus.NOT_FOUND)
+    if not app.debug:
+        if not storage.check_user_on_course(course_name, username):
+            abort(HTTPStatus.FORBIDDEN)
+        if course.status == CourseStatus.HIDDEN and not storage.check_if_course_admin(course_name, username):
+            abort(HTTPStatus.FORBIDDEN)
+
+    response = jsonify(
+        scores=storage.get_scores(course_name, username),
+        bonus_score=storage.get_bonus_score(course_name, username),
+        max_score=storage.max_score_started(course_name),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _score_viewer_username(app: CustomFlask) -> str:
+    if app.debug:
+        return "guest"
+    if not (valid_auth_session(session) and valid_rms_session(session) and valid_manytask_session(session)):
+        abort(HTTPStatus.UNAUTHORIZED)
+    # Resolve the current identity in storage so deleted/replaced users cannot keep polling.
+    user = app.storage_api.get_stored_user_by_auth_id(session["auth"]["user_auth_id"])
+    if user is None or user.user_id != session["manytask"]["user_id"]:
+        abort(HTTPStatus.UNAUTHORIZED)
+    return user.username
+
+
 @root_bp.route("/signup", methods=["GET", "POST"])
 def signup() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
@@ -494,8 +531,9 @@ def create_project(course_name: str) -> ResponseReturnValue:
     # Set user to be course admin if they provided course token as a secret
 
     is_course_admin: bool = secrets.compare_digest(request.form["secret"].encode("utf-8"), course.token.encode("utf-8"))
-    if not is_course_admin and not secrets.compare_digest(request.form["secret"].encode("utf-8"),
-                                                            course.registration_secret.encode("utf-8")):
+    if not is_course_admin and not secrets.compare_digest(
+        request.form["secret"].encode("utf-8"), course.registration_secret.encode("utf-8")
+    ):
         return render_create_project("Invalid secret")
 
     error_message = _create_student_project(app, course)

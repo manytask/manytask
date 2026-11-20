@@ -43,7 +43,7 @@
         </button>
     </div>
 </div>
-<div id="task-groups">
+<div id="task-groups" data-scores-url="{{ url_for('course.course_scores', course_name=course_name) }}">
     {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True) %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
         {% set solved_group_scores = [] %}
@@ -63,7 +63,7 @@
             <div class="d-block d-sm-flex justify-content-between align-items-start">
                 <div class="d-block flex-column align-items-start">
                     <span class="fs-2 mb-0">{{ group.name }}</span>
-                    <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
+                    <span class="score fs-6 d-none d-sm-block" data-group-score>Score: {{ solved_group_score }}/{{ total_group_score }}</span>
                 </div>
 
                 <div class="task-deadlines {% if deadlines_type.value == 'interpolate' %}task-deadlines--graph{% endif %}">
@@ -160,7 +160,8 @@
                         {% set task_tag = task_tag ~ ' bonus' %}
                     {% endif %}
 
-                    <div class="mt-task-card rounded {{ task_tag }}" style="position: relative">
+                    <div class="mt-task-card rounded {{ task_tag }}" style="position: relative"
+                         data-task-name="{{ task.name }}" data-max-score="{{ task.score }}">
                         <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
                             <span class="fs-5 mt-card__name">{{ task.name }}</span>
                             <span class="fs-1 fw-bold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
@@ -185,6 +186,7 @@
 
     <script src="{{ url_for('static', filename='js/task-group-order.js') }}"></script>
     <script src="{{ url_for('static', filename='js/solved-last.js', v=2) }}"></script>
+    <script src="{{ url_for('static', filename='js/live-scores.js') }}"></script>
     <script>
         const orderButton = document.getElementById('task-group-order');
         const groupContainer = document.getElementById('task-groups');
@@ -205,6 +207,12 @@
         }
         applyTaskGroupOrder();
         orderButton.addEventListener('click', applyTaskGroupOrder);
+        initLiveScores(groupContainer, () => {
+            for (const group of taskGroups) {
+                group.solved = group.element.dataset.groupSolved === 'true';
+            }
+            applyTaskGroupOrder();
+        });
     </script>
 
     <script src="https://unpkg.com/@popperjs/core@2"></script>
