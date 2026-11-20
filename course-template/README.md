@@ -88,11 +88,10 @@ Change at least these fields:
 
 ### 4. Set required GitLab CI/CD variables
 
-Set registry and API credentials in **Group -> Settings -> CI/CD -> Variables**.
-When a course is created through the Manytask form or API on GitLab, Manytask
-adds `MANYTASK_TOKEN` as a hidden, masked variable to its public repository and
-students group. Add the course token as `MANYTASK_TOKEN` to the private repository
-separately for the release pipeline.
+Set the registry and API credentials in **Group -> Settings -> CI/CD -> Variables**.
+Manytask adds `MANYTASK_TOKEN` as a hidden, masked variable to the public repository,
+students group, and any private repository it creates with the course. For a
+repository created separately, add the course token as `MANYTASK_TOKEN` there.
 
 | Variable | Where to get it | Used for |
 |---|---|---|
