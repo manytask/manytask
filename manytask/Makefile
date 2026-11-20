@@ -15,6 +15,13 @@ TESTCONTAINERS_RYUK_DISABLED ?= true
 export TESTCONTAINERS_RYUK_DISABLED
 
 .PHONY: dev test reset-dev clean-db lint setup install-deps check check-colima makemigrations migrate downgrade history docs test-colima copy-common-config run-manytask-tests run-js-tests
+.PHONY: test-e2e
+E2E_BUILD_TIMEOUT ?= 3600
+
+# Explicit socket required: e2e/run.py refuses a daemon with existing containers.
+test-e2e:
+	@test -n "$(E2E_DOCKER_HOST)" || { echo "Set E2E_DOCKER_HOST to a dedicated, empty Docker daemon"; exit 1; }
+	.venv/bin/python e2e/run.py --docker-host "$(E2E_DOCKER_HOST)" --toolchain-image "$(E2E_TOOLCHAIN_IMAGE)" --build-timeout "$(E2E_BUILD_TIMEOUT)"
 
 check: lint test
 
@@ -49,9 +56,9 @@ test-colima: copy-common-config install-deps run-js-tests
 
 lint:
 	@command -v uv >/dev/null 2>&1 || { echo "\033[0;31mError: uv is not installed.\033[0m"; exit 1; }
-	uv run ruff format $(ROOT_DIR) $(TESTS_DIR)
-	uv run ruff check $(ROOT_DIR) $(TESTS_DIR)/ --fix
-	uv run mypy $(ROOT_DIR)
+	uv run ruff format $(ROOT_DIR) $(TESTS_DIR) e2e
+	uv run ruff check $(ROOT_DIR) $(TESTS_DIR)/ e2e --fix
+	uv run mypy $(ROOT_DIR) e2e
 
 setup: install-deps
 
