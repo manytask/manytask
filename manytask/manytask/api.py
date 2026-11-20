@@ -200,6 +200,7 @@ def validate_json_request(model_class: type[T]) -> tuple[T | None, ResponseRetur
         If validation fails: (None, error_response)
     """
     if not request.is_json:
+        logger.warning("Rejected non-JSON request endpoint=%s", request.endpoint)
         return None, (jsonify(ErrorResponse(error="Request must be JSON").model_dump()), HTTPStatus.BAD_REQUEST)
 
     try:
@@ -509,6 +510,7 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
 @requires_token
 @requires_ready
 def report_score(course_name: str) -> ResponseReturnValue:
+    logger.info("Score report requested course=%s", sanitize_log_data(course_name))
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
@@ -682,13 +684,12 @@ def _format_config_validation_error(course_name: str, exc: ValidationError) -> s
 @bp.post("/update_config")
 @requires_token
 def update_config(course_name: str) -> ResponseReturnValue:
+    logger.info("Running update_config for course=%s", sanitize_log_data(course_name))
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     if course.status == CourseStatus.FINISHED:
         abort(HTTPStatus.CONFLICT, f"Cannot update config for the course '{course_name}' that is already finished.")
-
-    logger.info("Running update_config for course=%s", course_name)
 
     # ----- get and validate request parameters ----- #
     try:
@@ -749,6 +750,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     """
     Update student scores in the database via API endpoint and recalculate grade.
     """
+    logger.info("Score update requested course=%s", sanitize_log_data(course_name))
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
@@ -902,6 +904,9 @@ def create_namespace() -> ResponseReturnValue:
         - 409: Conflict (slug already exists)
         - 500: Internal server error
     """
+    logger.info(
+        "Namespace creation requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username"))
+    )
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
     rms_api = app.rms_api
@@ -1110,6 +1115,11 @@ def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNa
     app: CustomFlask = current_app  # type: ignore
 
     try:
+        logger.info(
+            "Namespace update requested id=%s by user=%s",
+            namespace_id,
+            sanitize_log_data(session.get("manytask", {}).get("username")),
+        )
         namespace = app.storage_api.update_namespace(namespace_id, validated_data.name, validated_data.description)
         result = NamespaceResponse.model_validate(namespace, from_attributes=True)
         return jsonify(result.model_dump()), HTTPStatus.OK
@@ -1129,6 +1139,11 @@ def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNa
     app: CustomFlask = current_app  # type: ignore
 
     try:
+        logger.info(
+            "Namespace deletion requested id=%s by user=%s",
+            namespace_id,
+            sanitize_log_data(session.get("manytask", {}).get("username")),
+        )
         app.storage_api.delete_namespace(namespace_id, validated_data.name)
         logger.info(
             "Successfully deleted namespace '%s' (id=%s) by user '%s'",
@@ -1140,8 +1155,10 @@ def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNa
     except NoResultFound:
         return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
     except NamespaceNotEmptyError as error:
+        logger.warning("Namespace deletion rejected id=%s: courses still exist", namespace_id)
         return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.CONFLICT
     except ValueError as error:
+        logger.warning("Namespace deletion rejected id=%s: name does not match", namespace_id)
         return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.BAD_REQUEST
     except Exception:
         logger.exception("Error deleting namespace id=%s", namespace_id)
@@ -1178,6 +1195,11 @@ def add_user_to_namespace(
         409: Conflict (user already has a role in this namespace)
         500: Internal server error
     """
+    logger.info(
+        "Namespace user addition requested namespace_id=%s user=%s",
+        namespace_id,
+        sanitize_log_data(validated_data.username),
+    )
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
@@ -1285,6 +1307,7 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
         404: Not found (user is not in the namespace)
         500: Internal server error
     """
+    logger.info("Namespace user removal requested namespace_id=%s user_id=%s", namespace_id, user_id)
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
     rms_api = app.rms_api
@@ -1370,6 +1393,7 @@ def update_user_role_in_namespace(
         404: Not found (user is not in the namespace)
         500: Internal server error (including GitLab errors)
     """
+    logger.info("Namespace role update requested namespace_id=%s user_id=%s", namespace_id, user_id)
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
     rms_api = app.rms_api
@@ -1853,6 +1877,11 @@ def set_course_admin(course_name: str, validated_data: SetCourseAdminRequest) ->
         403: Forbidden (not a course admin nor an instance admin)
         404: Course or user not found, or the user is not enrolled on the course
     """
+    logger.info(
+        "Course admin update requested course=%s user=%s",
+        sanitize_log_data(course_name),
+        sanitize_log_data(validated_data.username),
+    )
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
@@ -1920,6 +1949,11 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
         404: Course or user not found
         409: The user already has a role in the namespace
     """
+    logger.info(
+        "Program manager assignment requested course=%s user=%s",
+        sanitize_log_data(course_name),
+        sanitize_log_data(validated_data.username),
+    )
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 

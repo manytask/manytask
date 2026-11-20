@@ -32,6 +32,7 @@ class CourseStore:
         config: CourseConfig,
         course_token: str,
     ) -> None:
+        logger.info("Saving course config name={}", name)
         await self._redis.hset(  # type: ignore[misc]
             self._key(name),
             mapping={
@@ -41,6 +42,8 @@ class CourseStore:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
+
+        logger.info("Saved course config name={}", name)
 
     async def get_course(self, name: str) -> tuple[str, CourseConfig, str] | None:
         """Return (name, config, course_token) or None if missing/incompatible."""
@@ -76,4 +79,6 @@ class CourseStore:
         return names
 
     async def delete_course(self, name: str) -> None:
+        logger.info("Deleting course config name={}", name)
         await self._redis.delete(self._key(name))
+        logger.info("Deleted course config name={}", name)
