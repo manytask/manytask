@@ -13,8 +13,8 @@ variables:
   COURSE_NAME: "sandbox"
   MANYTASK_API: "$MANYTASK_URL/api/$COURSE_NAME"
   BRANCH_IMAGE_TAG: "$CI_COMMIT_REF_SLUG"
-  BASE_IMAGE: "$CI_REGISTRY_IMAGE/ci-base:$CI_COMMIT_REF_SLUG"
-  TESTENV_IMAGE: "$CI_REGISTRY_IMAGE/testenv-image:$CI_COMMIT_REF_SLUG"
+  BASE_IMAGE: "$REGISTRY/ci-base:$CI_COMMIT_REF_SLUG"
+  TESTENV_IMAGE: "$REGISTRY/testenv-image:$CI_COMMIT_REF_SLUG"
   # The checker is installed from the monorepo because the PyPI release does
   # not yet contain the `validate` and `export-private` commands.
   CHECKER_PIP_SPEC: "git+https://github.com/manytask/manytask.git@26.2.1#subdirectory=checker"
@@ -26,15 +26,40 @@ stages:
   - build-testenv
   - deploy
 
-.docker:
-  image: docker:20.10.18
+# Rootless BuildKit starts its own temporary daemon inside the job. No host
+# Docker socket, Docker-in-Docker service, or privileged runner is required.
+# The runner must allow user namespaces; see README.md for security_opt settings.
+.buildkit:
+  image:
+    name: moby/buildkit:rootless
+    entrypoint: [""]
+  variables:
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
   before_script:
-    # Local runners mount the host Docker socket instead of providing a Docker-in-Docker service.
-    # Override any inherited DOCKER_HOST (for example tcp://docker:2375).
-    - export DOCKER_HOST="unix:///var/run/docker.sock"
-    # Register config.json so Docker can pull and push course images.
-    - mkdir -p "$HOME/.docker"
-    - printf '%s' "$DOCKER_AUTH_CONFIG" > "$HOME/.docker/config.json"
+    - export DOCKER_CONFIG="$HOME/.docker"
+    - mkdir -p "$DOCKER_CONFIG"
+    # First match wins: Docker config, explicit registry credentials, or the
+    # current GitLab instance's CI credentials. Never print credentials.
+    - |
+      REGISTRY_HOST="${REGISTRY%%/*}"
+      if [ -n "$DOCKER_AUTH_CONFIG" ]; then
+        printf '%s' "$DOCKER_AUTH_CONFIG" > "$DOCKER_CONFIG/config.json"
+      else
+        if [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+          AUTH_USER="$REGISTRY_USERNAME"
+          AUTH_PASSWORD="$REGISTRY_PASSWORD"
+        elif [ -n "$CI_REGISTRY" ] && [ "$REGISTRY_HOST" = "$CI_REGISTRY" ]; then
+          AUTH_USER="${CI_REGISTRY_USER:-gitlab-ci-token}"
+          AUTH_PASSWORD="${CI_REGISTRY_PASSWORD:-$CI_JOB_TOKEN}"
+        else
+          echo "ERROR: No registry credentials. Set DOCKER_AUTH_CONFIG or REGISTRY_USERNAME/REGISTRY_PASSWORD." >&2
+          exit 1
+        fi
+        REGISTRY_AUTH="$(printf '%s:%s' "$AUTH_USER" "$AUTH_PASSWORD" | base64 | tr -d '\n')"
+        printf '{"auths":{"%s":{"auth":"%s"}}}' "$REGISTRY_HOST" "$REGISTRY_AUTH" > "$DOCKER_CONFIG/config.json"
+      fi
+  after_script:
+    - rm -f "$HOME/.docker/config.json"
 
 verify:
   image: python:3.12-slim
@@ -55,7 +80,7 @@ verify:
     - checker validate
 
 build-base:
-  extends: .docker
+  extends: .buildkit
   stage: build-base
   needs: ["verify"]
   rules:
@@ -68,8 +93,17 @@ build-base:
     - when: never
   script:
     - echo "building checker base image = $BASE_IMAGE"
-    - docker build --tag "$BASE_IMAGE" --file base.docker --build-arg "CHECKER_PIP_SPEC=$CHECKER_PIP_SPEC" --no-cache .
-    - docker push "$BASE_IMAGE"
+    - |
+      buildctl-daemonless.sh build \
+        --progress=plain \
+        --frontend=dockerfile.v0 \
+        --local context="$CI_PROJECT_DIR" \
+        --local dockerfile="$CI_PROJECT_DIR" \
+        --opt filename=base.docker \
+        --opt "build-arg:CHECKER_PIP_SPEC=$CHECKER_PIP_SPEC" \
+        --import-cache "type=registry,ref=$REGISTRY/buildkit-cache:base" \
+        --export-cache "type=registry,ref=$REGISTRY/buildkit-cache:base,mode=max,ignore-error=true" \
+        --output "type=image,name=$BASE_IMAGE,push=true"
 
 check:
   image: "$BASE_IMAGE"
@@ -87,7 +121,7 @@ check:
     - checker check . .
 
 build-testenv:
-  extends: .docker
+  extends: .buildkit
   stage: build-testenv
   needs: ["check"]
   rules:
@@ -100,11 +134,20 @@ build-testenv:
     - when: never
   script:
     - echo "building testenv image = $TESTENV_IMAGE"
-    - docker build --tag "$TESTENV_IMAGE" --file testenv.docker --build-arg "BASE_IMAGE=$BASE_IMAGE" --no-cache .
-    - docker push "$TESTENV_IMAGE"
+    # Do not export a registry cache here: intermediate stages contain the raw
+    # teacher checkout. Only the final export-private image may be published.
+    - |
+      buildctl-daemonless.sh build \
+        --progress=plain \
+        --frontend=dockerfile.v0 \
+        --local context="$CI_PROJECT_DIR" \
+        --local dockerfile="$CI_PROJECT_DIR" \
+        --opt filename=testenv.docker \
+        --opt "build-arg:BASE_IMAGE=$BASE_IMAGE" \
+        --output "type=image,name=$TESTENV_IMAGE,push=true"
 
 deploy-docker:
-  extends: .docker
+  extends: .buildkit
   stage: deploy
   needs: ["build-testenv"]
   rules:
@@ -114,9 +157,18 @@ deploy-docker:
       when: manual
     - when: never
   script:
-    - docker pull "$TESTENV_IMAGE"
-    - docker tag "$TESTENV_IMAGE" "$REGISTRY/testenv-image:latest"
-    - docker push "$REGISTRY/testenv-image:latest"
+    # Promote the checked image without rebuilding the course or copying the
+    # private checkout into another build context.
+    - |
+      PROMOTE_DIR="$(mktemp -d)"
+      printf 'ARG TESTENV_IMAGE\nFROM ${TESTENV_IMAGE}\n' > "$PROMOTE_DIR/Dockerfile"
+      buildctl-daemonless.sh build \
+        --progress=plain \
+        --frontend=dockerfile.v0 \
+        --local context="$PROMOTE_DIR" \
+        --local dockerfile="$PROMOTE_DIR" \
+        --opt "build-arg:TESTENV_IMAGE=$TESTENV_IMAGE" \
+        --output "type=image,name=$REGISTRY/testenv-image:latest,push=true"
 
 deploy-manytask:
   image: curlimages/curl:latest
