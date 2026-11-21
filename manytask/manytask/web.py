@@ -247,7 +247,6 @@ def course_page(course_name: str) -> ResponseReturnValue:
         username=student_username, course_students_group=course.gitlab_course_students_group
     )
 
-    tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
 
@@ -272,8 +271,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         if app.app_config.rms == "sourcecraft"
         else student_username,
         links=course.links,
-        scores=tasks_scores,
-        bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
+        scores=None,
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=app.favicon,

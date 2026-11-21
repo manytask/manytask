@@ -458,21 +458,8 @@ def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oau
     assert control["data-course-name"] == TEST_COURSE_NAME
 
 
-@pytest.mark.parametrize(
-    ("scores", "max_scores", "fully_solved"),
-    [
-        ({"task1": 100, "task2": 100}, [100, 100], True),
-        ({"task1": 120, "task2": 110}, [100, 100], True),
-        ({"task1": 200, "task2": 90}, [100, 100], False),
-        ({"task1": 100, "task2": 0}, [100, 100], False),
-        ({"task1": 100}, [100, 100], False),
-        ({}, [0], True),
-        ({}, [], False),
-    ],
-)
-def test_course_page_marks_only_fully_solved_groups(
-    app: Any, mock_gitlab_oauth: Any, scores: dict[str, int], max_scores: list[int], fully_solved: bool
-) -> None:
+@pytest.mark.parametrize("max_scores", [[100, 100], [0], []])
+def test_course_page_defers_scores_to_live_endpoint(app: Any, mock_gitlab_oauth: Any, max_scores: list[int]) -> None:
     CSRFProtect(app)
     app.oauth = mock_gitlab_oauth
     start = datetime(2020, 1, 1, tzinfo=timezone.utc)
@@ -488,12 +475,17 @@ def test_course_page_marks_only_fully_solved_groups(
     with (
         app.test_client() as client,
         patch.object(app.storage_api, "get_groups", return_value=[group]),
-        patch.object(app.storage_api, "get_scores", return_value=scores),
+        patch.object(app.storage_api, "get_scores") as get_scores,
+        patch.object(app.storage_api, "get_bonus_score") as get_bonus_score,
+        patch.object(app.storage_api, "max_score_started") as max_score_started,
     ):
         set_session(client, build_test_session(include_manytask=True))
         response = client.get(f"/{TEST_COURSE_NAME}/")
 
     assert response.status_code == HTTPStatus.OK
+    get_scores.assert_not_called()
+    get_bonus_score.assert_not_called()
+    max_score_started.assert_not_called()
     soup = BeautifulSoup(response.data, "html.parser")
     control = soup.find("button", id="solved-last")
     assert control is not None
@@ -501,14 +493,18 @@ def test_course_page_marks_only_fully_solved_groups(
     assert control["aria-pressed"] == "false"
     rendered_group = soup.select_one("#task-groups > [data-group-solved]")
     assert rendered_group is not None
-    assert rendered_group["data-group-solved"] == str(fully_solved).lower()
+    assert rendered_group["data-group-solved"] == "false"
     assert not rendered_group.has_attr("hidden")
     assert soup.find("script", src="/static/js/solved-last.js?v=2") is not None
-    assert soup.find("script", src="/static/js/live-scores.js") is not None
+    assert soup.find("script", src="/static/js/live-scores.js?v=2") is not None
     assert soup.select_one("#task-groups")["data-scores-url"] == f"/{TEST_COURSE_NAME}/scores"
+    assert soup.select_one("#task-groups")["aria-busy"] == "true"
+    assert soup.select_one("#scores-status").get_text(strip=True) == "Loading scores…"
+    assert soup.select_one("[data-score-total]").get_text(strip=True) == "…"
     for index, card in enumerate(soup.select("[data-task-name]"), start=1):
         assert card["data-task-name"] == f"task{index}"
         assert card["data-max-score"] == str(max_scores[index - 1])
+        assert card.select_one(".score").get_text(strip=True) == f"…/{max_scores[index - 1]}"
 
 
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):

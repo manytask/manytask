@@ -32,6 +32,7 @@ function applyLiveScores(container, snapshot) {
 
 function initLiveScores(container, onUpdate) {
     const interval = 2000;
+    const status = document.getElementById('scores-status');
     let delay = interval;
     let timer;
     let inFlight = false;
@@ -52,6 +53,9 @@ function initLiveScores(container, onUpdate) {
             // Session expiry and revoked course access need a fresh page/login.
             if (response.type === 'opaqueredirect' || [301, 302, 303, 307, 308, 401, 403, 404].includes(response.status)) {
                 stopped = true;
+                status.hidden = false;
+                status.textContent = 'Unable to load scores. Reload the page to check your access.';
+                container.setAttribute('aria-busy', 'false');
                 return;
             }
             if (!response.ok) throw new Error('Score refresh failed');
@@ -61,10 +65,13 @@ function initLiveScores(container, onUpdate) {
                 applyLiveScores(container, snapshot);
                 onUpdate();
                 lastSnapshot = serialized;
+                status.hidden = true;
+                container.setAttribute('aria-busy', 'false');
             }
             delay = interval;
         } catch {
             // Keep the last scores during an outage and retry with a capped backoff.
+            if (lastSnapshot === undefined) status.textContent = 'Unable to load scores. Retrying…';
             delay = Math.min(delay * 2, 30000);
         } finally {
             inFlight = false;

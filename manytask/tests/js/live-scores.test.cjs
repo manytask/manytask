@@ -27,11 +27,20 @@ function setup(cards = []) {
         querySelectorAll: () => cards,
         querySelector: () => groupScore,
     };
-    const container = {children: [group], dataset: {scoresUrl: '/python/scores'}};
+    const container = {
+        children: [group], dataset: {scoresUrl: '/python/scores'},
+        attributes: {'aria-busy': 'true'},
+        setAttribute(name, value) { this.attributes[name] = value; },
+    };
+    const status = {textContent: 'Loading scores…', hidden: false};
     const percent = {textContent: ''};
     const total = {textContent: ''};
     const document = new EventTarget();
     document.hidden = false;
+    document.getElementById = id => {
+        assert.equal(id, 'scores-status');
+        return status;
+    };
     document.querySelector = selector => selector === '[data-score-percent]' ? percent : total;
     const timers = new Map();
     let nextTimer = 0;
@@ -46,7 +55,7 @@ function setup(cards = []) {
         clearTimeout: id => timers.delete(id),
     });
     vm.runInContext(source, context);
-    return {context, container, group, groupScore, percent, total, document, window, timers};
+    return {context, container, group, groupScore, percent, total, status, document, window, timers};
 }
 
 function snapshot(scores, bonus = 0, max = 200) {
@@ -108,7 +117,7 @@ test('recomputes group completion after increases, reductions and missing scores
     }
 });
 
-test('handles zero maxima and empty groups consistently with page rendering', () => {
+test('handles zero maxima and empty groups after scores load', () => {
     for (const [cards, solved] of [[[], 'false'], [[card('zero', 0)], 'true']]) {
         const {context, container, group, percent, total} = setup(cards);
         context.applyLiveScores(container, snapshot({}, 0, 0));
@@ -133,6 +142,33 @@ test('leaves unchanged scores and ordering alone between polls', async () => {
     await settle();
     await tick(timers);
     assert.equal(updates, 1);
+});
+
+test('loads initial scores through the polling endpoint and clears loading placeholders', async () => {
+    const item = card('task', 100, ['unsolved']);
+    item.score.textContent = '…/100';
+    const {context, container, group, groupScore, percent, total, status, timers} = setup([item]);
+    let resolve;
+    let updates = 0;
+    context.fetch = () => new Promise(done => { resolve = done; });
+    context.initLiveScores(container, () => { updates++; });
+    assert.equal(item.score.textContent, '…/100');
+    assert.equal(container.attributes['aria-busy'], 'true');
+    assert.equal(status.hidden, false);
+    assert.equal(timers.size, 0);
+
+    resolve({ok: true, status: 200, json: async () => snapshot({task: 120}, 20, 100)});
+    await settle();
+    assert.equal(item.score.textContent, '120/100');
+    assert.equal(item.classList.contains('over_solved'), true);
+    assert.equal(group.dataset.groupSolved, 'true');
+    assert.equal(groupScore.textContent, 'Score: 120/100');
+    assert.equal(percent.textContent, '120.0%');
+    assert.equal(total.textContent, '100+20/100');
+    assert.equal(container.attributes['aria-busy'], 'false');
+    assert.equal(status.hidden, true);
+    assert.equal(updates, 1);
+    assert.equal([...timers.values()][0].delay, 2000);
 });
 
 test('polls current scores and notifies the ordering callback after applying them', async () => {
@@ -202,7 +238,7 @@ test('does not overlap requests or apply responses received while hidden', async
 });
 
 test('retries outages with capped backoff and returns to two seconds after recovery', async () => {
-    const {context, container, timers} = setup();
+    const {context, container, timers, status} = setup();
     let failing = true;
     let updates = 0;
     context.fetch = async () => {
@@ -211,6 +247,8 @@ test('retries outages with capped backoff and returns to two seconds after recov
     };
     context.initLiveScores(container, () => { updates++; });
     await settle();
+    assert.equal(status.textContent, 'Unable to load scores. Retrying…');
+    assert.equal(status.hidden, false);
     for (const delay of [4000, 8000, 16000, 30000, 30000]) {
         assert.equal([...timers.values()][0].delay, delay);
         await tick(timers);
@@ -219,16 +257,20 @@ test('retries outages with capped backoff and returns to two seconds after recov
     failing = false;
     await tick(timers);
     assert.equal(updates, 1);
+    assert.equal(status.hidden, true);
     assert.equal([...timers.values()][0].delay, 2000);
 });
 
 test('stops on login redirects and denied access', async () => {
     for (const status of [0, 302, 401, 403, 404]) {
-        const {context, container, timers} = setup();
+        const {context, container, timers, status: loadingStatus} = setup();
         context.fetch = async () => ({status, type: status === 0 ? 'opaqueredirect' : 'basic'});
         context.initLiveScores(container, () => assert.fail('Must keep the last scores'));
         await settle();
         assert.equal(timers.size, 0);
+        assert.equal(container.attributes['aria-busy'], 'false');
+        assert.equal(loadingStatus.hidden, false);
+        assert.match(loadingStatus.textContent, /Reload the page/);
     }
 });
 
