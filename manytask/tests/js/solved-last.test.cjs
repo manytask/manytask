@@ -95,6 +95,11 @@ test('the page moves actual group elements even with the previously cached date 
     orderButton.dataset = {username: 'alice', courseName: 'python'};
     const elements = {'solved-last': solvedButton, 'task-group-order': orderButton, 'task-groups': container};
     context.document = {getElementById: id => elements[id]};
+    let refreshOrder;
+    context.initLiveScores = (element, onUpdate) => {
+        assert.equal(element, container);
+        refreshOrder = onUpdate;
+    };
     const template = readFileSync(path.join(__dirname, '../../manytask/templates/tasks.html'), 'utf8');
     const inlineScript = template.match(/<script>\s*(const orderButton[\s\S]*?)<\/script>/)[1];
     vm.runInContext(inlineScript, context);
@@ -108,5 +113,14 @@ test('the page moves actual group elements even with the previously cached date 
     solvedButton.dispatchEvent(new Event('click'));
     assert.equal(solvedButton.textContent, 'Hide solved');
     orderButton.dispatchEvent(new Event('click'));
+    assert.deepEqual(container.children, [solved, unsolved]);
+
+    solvedButton.dispatchEvent(new Event('click'));
+    solved.dataset.groupSolved = 'false';
+    unsolved.dataset.groupSolved = 'true';
+    refreshOrder();
+    assert.deepEqual(container.children, [solved, unsolved]);
+    unsolved.dataset.groupSolved = 'false';
+    refreshOrder();
     assert.deepEqual(container.children, [solved, unsolved]);
 });

@@ -43,27 +43,19 @@
         </button>
     </div>
 </div>
-<div id="task-groups">
+<p id="scores-status" class="text-muted" role="status">Loading scores…</p>
+<div id="task-groups" aria-busy="true" data-scores-url="{{ url_for('course.course_scores', course_name=course_name) }}">
     {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True) %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
-        {% set solved_group_scores = [] %}
-        {% set completion = namespace(solved=group.tasks|length > 0) %}
-        {% for task in group.tasks %}
-            {% set _ = solved_group_scores.append(scores.get(task.name, 0)) %}
-            {% if scores.get(task.name, 0) < task.score %}
-                {% set completion.solved = false %}
-            {% endif %}
-        {% endfor %}
-        {% set solved_group_score = solved_group_scores|sum %}
 
         <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}"
              data-group-start="{{ group.start.isoformat() }}"
-             data-group-solved="{{ 'true' if completion.solved else 'false' }}">
+             data-group-solved="false">
 
             <div class="d-block d-sm-flex justify-content-between align-items-start">
                 <div class="d-block flex-column align-items-start">
                     <span class="fs-2 mb-0">{{ group.name }}</span>
-                    <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
+                    <span class="score fs-6 d-none d-sm-block" data-group-score>Score: …/{{ total_group_score }}</span>
                 </div>
 
                 <div class="task-deadlines {% if deadlines_type.value == 'interpolate' %}task-deadlines--graph{% endif %}">
@@ -142,15 +134,7 @@
                         {% set task_link = task_url_template | replace('$GROUP_NAME', group.name) | replace('$TASK_NAME', task.name) | replace('$USER_NAME', task_url_username) %}
                     {% endif %}
 
-                    {% if scores.get(task.name, 0) == task.score %}
-                        {% set task_tag = 'solved' %}
-                    {% elif scores.get(task.name, 0) > task.score %}
-                        {% set task_tag = 'over_solved' %}
-                    {% elif scores.get(task.name, 0) > 0 %}
-                        {% set task_tag = 'solved_partially' %}
-                    {% else %}
-                        {% set task_tag = 'unsolved' %}
-                    {% endif %}
+                    {% set task_tag = 'unsolved' %}
 
                     {% if task.is_special %}
                         {% set task_tag = task_tag ~ ' special' %}
@@ -160,10 +144,11 @@
                         {% set task_tag = task_tag ~ ' bonus' %}
                     {% endif %}
 
-                    <div class="mt-task-card rounded {{ task_tag }}" style="position: relative">
+                    <div class="mt-task-card rounded {{ task_tag }}" style="position: relative"
+                         data-task-name="{{ task.name }}" data-max-score="{{ task.score }}">
                         <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
                             <span class="fs-5 mt-card__name">{{ task.name }}</span>
-                            <span class="fs-1 fw-bold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
+                            <span class="fs-1 fw-bold score">…/{{ task.score }}</span>
                             {#                        {% if not group.hw and demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}#}
                             {#                            <div class="demand">#}
                             {#                                <div class="fs-6 stat"><i class="fa-solid fa-bolt"></i>{{ task_stats.get(task.name, '0') }}</div>#}
@@ -185,6 +170,7 @@
 
     <script src="{{ url_for('static', filename='js/task-group-order.js') }}"></script>
     <script src="{{ url_for('static', filename='js/solved-last.js', v=2) }}"></script>
+    <script src="{{ url_for('static', filename='js/live-scores.js', v=2) }}"></script>
     <script>
         const orderButton = document.getElementById('task-group-order');
         const groupContainer = document.getElementById('task-groups');
@@ -205,6 +191,12 @@
         }
         applyTaskGroupOrder();
         orderButton.addEventListener('click', applyTaskGroupOrder);
+        initLiveScores(groupContainer, () => {
+            for (const group of taskGroups) {
+                group.solved = group.element.dataset.groupSolved === 'true';
+            }
+            applyTaskGroupOrder();
+        });
     </script>
 
     <script src="https://unpkg.com/@popperjs/core@2"></script>

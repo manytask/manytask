@@ -5,11 +5,13 @@
 {% block body %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/user-menu.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
-    {% set solved_score = scores.values() | sum() %}
-    {% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
-    {% set solved_score_string = (solved_score - bonus_score) ~ bonus_score_string %}
-    {% set max_started = app.storage_api.max_score_started(course_name) %}
-    {% set solved_percent = "0.0" if max_started == 0 else (solved_score / max_started * 100) | round(1, 'common') %}
+    {% if scores is not none %}
+        {% set solved_score = scores.values() | sum() %}
+        {% set bonus_score_string = "+" ~ bonus_score if bonus_score > 0 else "" %}
+        {% set solved_score_string = (solved_score - bonus_score) ~ bonus_score_string %}
+        {% set max_started = app.storage_api.max_score_started(course_name) %}
+        {% set solved_percent = "0.0" if max_started == 0 else (solved_score / max_started * 100) | round(1, 'common') %}
+    {% endif %}
 
     <nav class="navbar navbar-expand-lg bg-body fixed-top shadow-sm">
         <div class="container-fluid d-flex justify-content-between align-items-center">
@@ -115,8 +117,8 @@
                 </div>
 
                 <div class="nav-score-display d-flex flex-column align-items-center justify-content-center me-2 px-3 py-1 shadow-sm">
-                    <span class="fw-bold">{{ solved_percent }}%</span>
-                    <small class="text-muted">{{ solved_score_string }}/{{ max_started }}</small>
+                    <span class="fw-bold" data-score-percent>{% if scores is none %}…{% else %}{{ solved_percent }}%{% endif %}</span>
+                    <small class="text-muted" data-score-total>{% if scores is none %}…{% else %}{{ solved_score_string }}/{{ max_started }}{% endif %}</small>
                 </div>
 
                 {% include "_user_menu.html" %}
