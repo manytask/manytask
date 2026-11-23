@@ -30,6 +30,7 @@ WORKDIR /app
 COPY --from=app_builder /app/.venv /app/.venv
 
 COPY manytask/manytask/ /app/manytask
+COPY course-template/ /app/course-template/
 COPY manytask/VERSION /app/VERSION
 
 ENV PATH="/app/.venv/bin:$PATH" \
