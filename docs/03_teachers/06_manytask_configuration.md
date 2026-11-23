@@ -111,4 +111,4 @@ Moreover, you could specify the minimum score needed to consider large task solv
 but it is a part of a task config rather than a feature of the grading system.
 Completion is stored separately from the score and can be edited by a course administrator;
 raising the threshold does not revoke completion already earned. See
-[task completion](manytask_yml_reference.md#task-completion) for the rules used by `large_count`.
+[task completion](../06_reference/01_manytask_yml.md#task-completion) for the rules used by `large_count`.

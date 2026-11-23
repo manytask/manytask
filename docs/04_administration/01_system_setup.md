@@ -118,7 +118,7 @@ Finally, (almost) you need manytask instance itself
 
 You should use official docker image, available at [docker hub](https://hub.docker.com/r/manytask/manytask)
 
-Please refer to the [production documentation](./production.md)
+Please refer to the [production documentation](02_production.md)
 
 
 ### Testing script 

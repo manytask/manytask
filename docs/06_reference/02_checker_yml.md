@@ -85,7 +85,7 @@ structure:
 A file that matches **none** of the three lists belongs to an unnamed fourth class — "other" —
 and is taken from the student during the default structure-based merge. Solution files should
 belong to this class. Shared-folder tasks can additionally use
-[automatic workspace preparation](checker_config.md#shared-folder-preparation).
+[automatic workspace preparation](../03_teachers/05_checker_configuration.md#shared-folder-preparation).
 
 | Class | Exported to public repo? | At grading time taken from |
 |---|---|---|
@@ -95,7 +95,7 @@ belong to this class. Shared-folder tasks can additionally use
 | **other** | yes | the **student's** repo |
 
 `checker check` / `checker grade` never test the student checkout in place. They build a merged
-tree in two passes ([`Exporter.export_for_testing`](../checker/checker/exporter.py)):
+tree in two passes ([`Exporter.export_for_testing`](../../checker/checker/exporter.py)):
 
 ```text
 pass 1 — student repo:    other files only        → the solution
@@ -122,13 +122,13 @@ pattern lists are not re-applied to its contents. `public_patterns: ["tools"]` t
 
 > **Warning:** `**` (double-star recursive glob) is **not supported in `structure` patterns**.
 > These patterns are applied at each directory level individually. Editable-file patterns have
-> [separate matching rules](checker_config.md#explicit-editable-files).
+> [separate matching rules](../03_teachers/05_checker_configuration.md#explicit-editable-files).
 
 > **Warning — never put a bare `"*"` in `public_patterns`.** The exporter
 > classifies a file as *public* before it considers `private_patterns`, and a
 > public match permanently disables private classification for that file
 > (`is_private = not is_public and ...` in
-> [`exporter.py`](../checker/checker/exporter.py) `_should_skip_path`). Python's
+> [`exporter.py`](../../checker/checker/exporter.py) `_should_skip_path`). Python's
 > `Path.match("*")` matches **every** file — including `test_private.py` and even
 > dotfiles — so `public_patterns: ["*"]` marks your private tests as public and
 > **leaks them into the student repository**.
@@ -364,7 +364,7 @@ args:
 
 ### Available template variables
 
-#### `global` — [`GlobalPipelineVariables`](../checker/checker/pipeline.py)
+#### `global` — [`GlobalPipelineVariables`](../../checker/checker/pipeline.py) {#global}
 
 Available in all three pipeline types.
 
@@ -376,7 +376,7 @@ Available in all three pipeline types.
 | `global.task_names` | `list[str]` | Names of all tasks being tested in this run. |
 | `global.task_sub_paths` | `list[str]` | Relative paths of all tasks being tested in this run. |
 
-#### `task` — [`TaskPipelineVariables`](../checker/checker/pipeline.py)
+#### `task` — [`TaskPipelineVariables`](../../checker/checker/pipeline.py) {#task}
 
 Available only in `tasks_pipeline` and `report_pipeline` (not in `global_pipeline`).
 
@@ -407,7 +407,7 @@ args:
 
 #### `outputs`
 
-Results of previous pipeline stages that used `register_output` to save their outputs under `<key>`. Each entry is a [`PipelineStageResult`](../checker/pipeline.py) object.
+Results of previous pipeline stages that used `register_output` to save their outputs under `<key>`. Each entry is a [`PipelineStageResult`](../../checker/pipeline.py) object.
 
 | Field | Type | Description |
 |---|---|---|
@@ -506,7 +506,7 @@ If the pipeline is defined for the smaller scope, this definition overrides larg
 ### `parameters.allow_change` {#allow_change}
 
 Optional file-pattern list, inherited like other parameters and supported in both task formats.
-See [Explicit editable files](checker_config.md#explicit-editable-files) for the format comparison,
+See [Explicit editable files](../03_teachers/05_checker_configuration.md#explicit-editable-files) for the format comparison,
 plugin usage, and shared-folder examples.
 
 For `.task.yml`, plugins and [`skip_unchanged_tasks`](#skip_unchanged_tasks) can consume the list;
@@ -516,7 +516,7 @@ components. A more specific list replaces the inherited list, including an expli
 
 In `.tasks.yml`, a missing or `null` effective list keeps the structure-based merge for the folder; `[]`
 contributes no student files. All selected tasks share one prepared workspace using their combined
-lists. See the [preparation rules](checker_config.md#shared-folder-preparation) for ordering,
+lists. See the [preparation rules](../03_teachers/05_checker_configuration.md#shared-folder-preparation) for ordering,
 student deletions, and the effect of an unrestricted task.
 
 ## Complete example of the file

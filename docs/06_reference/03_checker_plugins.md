@@ -10,7 +10,7 @@ repository** (`global.repo_dir`) into the testing tree. It leaves other files al
 untouched, so this stage alone does not restrict which student edits can affect grading.
 
 The example reads its patterns from the optional `parameters.allow_change` list, supported in
-both task formats. See [Explicit editable files](checker_config.md#explicit-editable-files) for
+both task formats. See [Explicit editable files](../03_teachers/05_checker_configuration.md#explicit-editable-files) for
 inheritance and the difference between plugin use and automatic shared-folder preparation.
 
 ```yaml
@@ -175,7 +175,7 @@ Combine multiple score percentages into a single value using a weighted strategy
 
 ## `report_score_manytask`
 
-Send the final score to the Manytask platform via its [REST API](./api.md). Used in `report_pipeline`
+Send the final score to the Manytask platform via its [REST API](04_rest_api.md). Used in `report_pipeline`
 after a successful task pipeline. HTTP error responses fail the stage; the current retry
 configuration does not retry POST requests on HTTP errors.
 

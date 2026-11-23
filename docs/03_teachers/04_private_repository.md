@@ -4,6 +4,9 @@ Strictly speaking, the private repository is not needed: you can use public test
 
 ## The repository layout
 
+To prepare an existing local clone with an agent using `course-template` as an example,
+see [the private repository skill guide](09_private_repo_with_agent.md).
+
 Assume that you already have a task that you want to add, including tests and solution. Let us pack it into the repository, which is structured in a specific way for Manytask Checker to work. Then we configure checker to work locally, and in the CI.
 
 
@@ -17,7 +20,7 @@ Tasks can have dedicated folders within group directories, or several tasks can 
 Also, there are 2 config files `.checker.yml` and `.manytask.yml` that are required for checker to work.
 
 A `.task.yml` file defines one task named after its folder. A `.tasks.yml` file defines several named tasks
-in the same folder; see [the shared-folder example](checker_config.md#several-tasks-in-one-folder).
+in the same folder; see [the shared-folder example](05_checker_configuration.md#several-tasks-in-one-folder).
 Use only one of these two task files in a folder. Each group, if any, is detected by `.group.yml`.
 
 Here's a breakdown:
@@ -82,7 +85,7 @@ It may be convenient to use different templating options in different tasks, whi
 
 ## Checker configuration (`.checker.yml`)
 
-This file specifies the default parameters for the checker script and defines the pipelines for task checking and exporting. There is a step-by-step [guide to writing `.checker.yml`](./checker_config.md) and a detailed [reference guide](./checker_yml_reference.md); here we show a minimal example.
+This file specifies the default parameters for the checker script and defines the pipelines for task checking and exporting. There is a step-by-step [guide to writing `.checker.yml`](05_checker_configuration.md) and a detailed [reference guide](../06_reference/02_checker_yml.md); here we show a minimal example.
 
 ```yaml
 version: 1
@@ -130,7 +133,7 @@ testing:
 
 Briefly, we set up patterns for the files that should be ignored by checker, files that are public (should be available to the students) and those that are private (should not be available to the students). The testing contains three stages: global, tasks and report. The global pipeline runs once per repo, preparing the testing system. Task pipeline runs tests for the task and save the result in `tests_output`. The report pipeline is then uses these data to report score (in this example it prints it). Both task and report pipeline run for each task needs checking. When `checker grade` is executed, the tasks need checking is determined by the changes in the last commit due to `changes_detection: last_commit_changes` setting. With `checker check` all the tasks will be checked.
 
-Note what is deliberately **missing** from the lists above: the solution file (`solution.py` and friends). A file matching none of the three lists is the only kind a student can actually change — at grading time the checker takes such files from the student repository, then overwrites everything public and private with your originals. This cuts both ways: listing a solution file as public would grade every student against your reference solution, while *omitting* `test_public.py` from `public_patterns` would let a student's edited tests run in CI. That is why `test_public.py` is listed above even though ordinary files are exported without being listed. The [configuration guide](./checker_config.md#the-file-classification-model) walks through this model in detail.
+Note what is deliberately **missing** from the lists above: the solution file (`solution.py` and friends). A file matching none of the three lists is the only kind a student can actually change — at grading time the checker takes such files from the student repository, then overwrites everything public and private with your originals. This cuts both ways: listing a solution file as public would grade every student against your reference solution, while *omitting* `test_public.py` from `public_patterns` would let a student's edited tests run in CI. That is why `test_public.py` is listed above even though ordinary files are exported without being listed. The [configuration guide](05_checker_configuration.md#the-file-classification-model) walks through this model in detail.
 
 One can override these settings for a group of tasks or even for single task using `.group.yml`, `.task.yml`, and `.tasks.yml` files:
 
@@ -149,7 +152,7 @@ One can override these settings for a group of tasks or even for single task usi
 
 This file outlines the deadlines for each group, task max score and etc. In the checker it is used to validate task and deadlines integrity and it is send to Manytask to update task, their deadlines and scores.
 
-One should consult [the `.manytask.yml` reference guide](./manytask_yml_reference.md) to see the detailed description of the file. Minimal example for a `.manytask.yml` file looks something like this:
+One should consult [the `.manytask.yml` reference guide](../06_reference/01_manytask_yml.md) to see the detailed description of the file. Minimal example for a `.manytask.yml` file looks something like this:
 
 ```yaml
 version: 1
