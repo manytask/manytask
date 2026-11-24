@@ -159,6 +159,7 @@ class DataBaseApi(StorageApi):
 
         :param config: DatabaseConfig instance containing all necessary settings
         """
+        logger.info("Initializing database storage for instance_admin=%s", config.instance_admin_username)
         self.database_url = config.database_url
         self.apply_migrations = config.apply_migrations
 
@@ -190,6 +191,7 @@ class DataBaseApi(StorageApi):
                 },
             )
             session.commit()
+            logger.info("Initialized instance admin user=%s", config.instance_admin_username)
 
     def get_scores(
         self,
@@ -399,12 +401,14 @@ class DataBaseApi(StorageApi):
         :return: created or updated StoredUser object
         """
 
+        logger.info("Syncing course membership course=%s user=%s course_admin=%s", course_name, username, course_admin)
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
             user_on_course = self._get_or_create_user_on_course(session, username, course)
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
             session.commit()
+            logger.info("Synced course membership course=%s user=%s", course_name, username)
 
     def get_all_scores_with_names(
         self, course_name: str, *, username: str | None = None
@@ -577,7 +581,7 @@ class DataBaseApi(StorageApi):
 
         :return: saved score
         """
-        logger.debug(
+        logger.info(
             "Attempting to store score for user '%s' in course '%s' task '%s'", username, course_name, task_name
         )
 
@@ -712,15 +716,19 @@ class DataBaseApi(StorageApi):
 
     def delete_course(self, course_name: str) -> bool:
         """Delete the course and its configuration only when nobody is registered."""
+        logger.info("Deleting course=%s", course_name)
         with self._session_create() as session:
             # Block new registrations (FK key-share locks) until deletion commits.
             course = session.scalar(select(Course).where(Course.name == course_name).with_for_update())
             if course is None:
+                logger.warning("Cannot delete course=%s: not found", course_name)
                 return False
             if session.scalar(select(UserOnCourse.id).where(UserOnCourse.course_id == course.id).limit(1)) is not None:
+                logger.warning("Cannot delete course=%s: users are registered", course_name)
                 raise CourseNotEmptyError("Cannot delete this course because users are already registered.")
             session.delete(course)
             session.commit()
+            logger.info("Deleted course=%s", course_name)
             return True
 
     def update_course(
@@ -789,8 +797,10 @@ class DataBaseApi(StorageApi):
             return bool(course.rms_settings_pending)
 
     def clear_rms_settings_pending(self, course_name: str) -> None:
+        logger.info("Clearing RMS settings pending flag for course=%s", course_name)
         with self._session_create() as session:
             self._update(session, models.Course, defaults={"rms_settings_pending": False}, name=course_name)
+            logger.info("Cleared RMS settings pending flag for course=%s", course_name)
 
     def find_task(self, course_name: str, task_name: str) -> tuple[AppCourse, ManytaskGroupConfig, ManytaskTaskConfig]:
         """Find task and its group by task name. Serialize result to Config objects.
@@ -957,6 +967,9 @@ class DataBaseApi(StorageApi):
     def sync_and_get_admin_status(self, course_name: str, username: str, course_admin: bool) -> bool:
         """Sync admin flag in gitlab and db"""
 
+        logger.info(
+            "Syncing course admin status course=%s user=%s course_admin=%s", course_name, username, course_admin
+        )
         with self._session_create() as session:
             logger.debug(
                 f"Syncing admin status for user '{username}' in course '{course_name}', new_status={course_admin}"
@@ -999,22 +1012,22 @@ class DataBaseApi(StorageApi):
             and user.rms_id == UNBOUND_INSTANCE_ADMIN_RMS_ID
             and user.auth_id == UNBOUND_INSTANCE_ADMIN_AUTH_ID
         ):
+            logger.info("Binding initial admin identity for user=%s", user.username)
             user.first_name = first_name
             user.last_name = last_name
             user.rms_id = rms_id
             user.auth_id = auth_id
             session.commit()
+            logger.info("Bound initial admin identity for user=%s", user.username)
         elif user.rms_id != rms_id or user.auth_id != auth_id:
+            logger.warning("Cannot update identity for user=%s: account conflict", user.username)
             raise UserIdentityConflictError(f"Username '{user.username}' belongs to a different account")
 
     def update_or_create_user(self, username: str, first_name: str, last_name: str, rms_id: str, auth_id: int) -> None:
         """Create a user, bind the initial admin, or keep an existing provider identity."""
 
+        logger.info("Creating or updating user=%s", username)
         with self._session_create() as session:
-            logger.debug(
-                f"Creating or updating user '{username}' "
-                f"(first_name={first_name}, last_name={last_name}, rms_id={rms_id}, auth_id={auth_id})"
-            )
             existing_user = self._query_with_for_update(session, models.User, username=username)
             if existing_user is not None:
                 self._bind_or_validate_existing_user(session, existing_user, first_name, last_name, rms_id, auth_id)
@@ -1319,10 +1332,10 @@ class DataBaseApi(StorageApi):
         :param new_first_name: new first name
         :param new_last_name: new last name
         """
+        logger.info("Updating profile for user=%s", username)
         with self._session_create() as session:
             try:
                 user = self._get(session, models.User, username=username)
-                old_first_name, old_last_name = user.first_name, user.last_name
 
                 if new_first_name:
                     user.first_name = new_first_name
@@ -1333,9 +1346,9 @@ class DataBaseApi(StorageApi):
 
                 changes = []
                 if new_first_name:
-                    changes.append(f"first_name: {old_first_name} -> {new_first_name}")
+                    changes.append("first_name")
                 if new_last_name:
-                    changes.append(f"last_name: {old_last_name} -> {new_last_name}")
+                    changes.append("last_name")
 
                 if changes:
                     logger.info("Updated user %s profile: %s", username, ", ".join(changes))
@@ -1357,7 +1370,7 @@ class DataBaseApi(StorageApi):
         :param deadlines_config: ManytaskDeadlinesConfig object
         """
         with self._session_create() as session:
-            logger.debug("Updating task groups from config for course '%s'", course_name)
+            logger.info("Updating task groups from config for course '%s'", course_name)
             new_task_names = set()
             new_task_to_group = {}
             for group in deadlines_config.groups:
@@ -1500,6 +1513,7 @@ class DataBaseApi(StorageApi):
         logger.info("Deadlines config synced for course '%s'", course_name)
 
     def _sync_grades_config(self, course_name: str, grades_config: ManytaskFinalGradeConfig | None) -> None:
+        logger.info("Syncing grades config for course=%s", course_name)
         if grades_config is None:
             # shortcut to remove existing grade formulas
             logger.debug("No grades config provided for course=%s, skipping sync", course_name)
@@ -1604,7 +1618,7 @@ class DataBaseApi(StorageApi):
             logger.info("Grades config sync completed for course=%s id=%s", course.name, course.id)
 
     def _check_pending_migrations(self, database_url: str) -> bool:
-        logger.debug("Checking pending migrations for database_url=%s", database_url)
+        logger.debug("Checking pending migrations")
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
         with self.engine.begin() as connection:
@@ -1625,7 +1639,7 @@ class DataBaseApi(StorageApi):
             return True
 
     def _apply_migrations(self, database_url: str) -> None:
-        logger.info("Applying migrations for database_url=%s", database_url)
+        logger.info("Applying database migrations")
         alembic_cfg = Config(self.DEFAULT_ALEMBIC_PATH, config_args={"sqlalchemy.url": database_url})
 
         try:
@@ -1655,6 +1669,7 @@ class DataBaseApi(StorageApi):
     def _get_or_create_user_on_course(
         self, session: Session, username: str, course: models.Course
     ) -> models.UserOnCourse:
+        logger.info("Ensuring course membership user=%s course_id=%s", username, course.id)
         user = self._get(
             session,
             models.User,
@@ -1716,7 +1731,7 @@ class DataBaseApi(StorageApi):
         instance = DataBaseApi._get(session, model, **kwargs)
 
         if defaults:
-            logger.debug("Updating %s %s", model.__name__, kwargs)
+            logger.info("Updating %s id=%s fields=%s", model.__name__, getattr(instance, "id", None), sorted(defaults))
             for key, value in defaults.items():
                 setattr(instance, key, value)
             session.commit()
@@ -1729,14 +1744,14 @@ class DataBaseApi(StorageApi):
         **kwargs: Any,  # params for create
     ) -> ModelType:
         try:
-            logger.debug("Creating %s with params: %s", model.__name__, kwargs)
+            logger.info("Creating %s fields=%s", model.__name__, sorted(kwargs))
             instance = model(**kwargs)
             session.add(instance)
             session.commit()
             return instance
         except IntegrityError:
             session.rollback()
-            logger.warning("%s with params %s already exists, fetching existing", model.__name__, kwargs)
+            logger.warning("%s already exists, fetching existing", model.__name__)
             return session.query(model).filter_by(**kwargs).one()
 
     @staticmethod
@@ -1775,8 +1790,13 @@ class DataBaseApi(StorageApi):
         :return: Created or updated instance
         """
         if instance:
-            logger.debug("Updating existing %s with defaults: %s", model.__name__, defaults)
             if defaults:
+                logger.info(
+                    "Updating existing %s id=%s fields=%s (pending commit)",
+                    model.__name__,
+                    getattr(instance, "id", None),
+                    sorted(defaults),
+                )
                 for key, value in defaults.items():
                     setattr(instance, key, value)
                 session.flush()
@@ -1788,7 +1808,7 @@ class DataBaseApi(StorageApi):
             kwargs.update(create_defaults)
 
         try:
-            logger.debug("Creating new %s with params: %s", model.__name__, kwargs)
+            logger.info("Creating new %s fields=%s (pending commit)", model.__name__, sorted(kwargs))
             new_instance = model(**kwargs)
             session.add(new_instance)
             session.flush()
@@ -1903,7 +1923,7 @@ class DataBaseApi(StorageApi):
                 defaults={"start": deadline_start, "steps": deadline_steps, "end": deadline_end},
                 id=task_group.deadline.id,
             )
-            logger.debug("Updated deadline for task group '%s'", task_group.name)
+            logger.info("Updated deadline for task group '%s'", task_group.name)
 
     def _get_all_grades(
         self,
@@ -2028,6 +2048,7 @@ class DataBaseApi(StorageApi):
         )
 
     def update_student_comment(self, course_name: str, username: str, comment: str | None) -> None:
+        logger.info("Updating student comment course=%s user=%s", course_name, username)
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
@@ -2036,7 +2057,7 @@ class DataBaseApi(StorageApi):
                 user_on_course.comment = comment
                 session.commit()
 
-                logger.info(f"Updated comment for user {username} in course {course_name}: -> '{comment}'")
+                logger.info("Updated comment for user=%s course=%s", username, course_name)
             except NoResultFound:
                 logger.error(f"User {username} not found in course {course_name}")
                 raise
@@ -2100,26 +2121,32 @@ class DataBaseApi(StorageApi):
 
     def update_namespace(self, namespace_id: int, name: str, description: str | None) -> models.Namespace:
         """Update the display name and description of an existing namespace."""
+        logger.info("Updating namespace id=%s", namespace_id)
         with self._session_create() as session:
             namespace = self._get(session, models.Namespace, id=namespace_id)
             namespace.name = name
             namespace.description = description
             session.commit()
+            logger.info("Updated namespace id=%s", namespace_id)
             session.refresh(namespace)
             session.expunge(namespace)
             return namespace
 
     def delete_namespace(self, namespace_id: int, name: str) -> None:
         """Delete an empty namespace after confirming its current name."""
+        logger.info("Deleting namespace id=%s", namespace_id)
         with self._session_create() as session:
             # Block concurrent renames and FK inserts while checking and deleting.
             namespace = session.query(models.Namespace).filter_by(id=namespace_id).with_for_update().one()
             if name != namespace.name:
+                logger.warning("Cannot delete namespace id=%s: name does not match", namespace_id)
                 raise ValueError("Namespace name does not match")
             if session.query(models.Course.id).filter_by(namespace_id=namespace_id).first() is not None:
+                logger.warning("Cannot delete namespace id=%s: courses still exist", namespace_id)
                 raise NamespaceNotEmptyError("Cannot delete namespace: it still contains courses")
             session.delete(namespace)
             session.commit()
+            logger.info("Deleted namespace id=%s", namespace_id)
 
     def get_all_namespaces(self) -> list[models.Namespace]:
         """Get all namespaces (for Instance Admin).
@@ -2627,6 +2654,7 @@ class DataBaseApi(StorageApi):
         :param student_scores_data: dict with student scores, percent, large_count, etc.
         :return: calculated final grade
         """
+        logger.info("Calculating and saving grade course=%s user=%s", course_name, username)
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
@@ -2660,6 +2688,7 @@ class DataBaseApi(StorageApi):
         Call after changing grade configuration to keep saved grades in sync.
         Skips students with final_grade_override.
         """
+        logger.info("Recalculating all grades for course=%s", course_name)
         scores_and_names = self.get_all_scores_with_names(course_name)
         grades_config = self.get_grades(course_name)
         course = self.get_course(course_name)
@@ -2711,6 +2740,7 @@ class DataBaseApi(StorageApi):
         if not grades:
             return
 
+        logger.info("Updating saved grades for %s students in course=%s", len(grades), course_name)
         with self._session_create() as session:
             course = self._get(session, models.Course, name=course_name)
 
@@ -2771,6 +2801,7 @@ class DataBaseApi(StorageApi):
         :param username: student's manytask username
         :param new_grade: new grade value to set manually
         """
+        logger.info("Setting grade override course=%s user=%s grade=%s", course_name, username, new_grade)
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
@@ -2790,6 +2821,7 @@ class DataBaseApi(StorageApi):
         :param course_name: course name
         :param username: student's manytask username
         """
+        logger.info("Clearing grade override course=%s user=%s", course_name, username)
         with self._session_create() as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
