@@ -505,8 +505,9 @@ def create_project(course_name: str) -> ResponseReturnValue:
     # Set user to be course admin if they provided course token as a secret
 
     is_course_admin: bool = secrets.compare_digest(request.form["secret"].encode("utf-8"), course.token.encode("utf-8"))
-    if not is_course_admin and not secrets.compare_digest(request.form["secret"].encode("utf-8"),
-                                                            course.registration_secret.encode("utf-8")):
+    if not is_course_admin and not secrets.compare_digest(
+        request.form["secret"].encode("utf-8"), course.registration_secret.encode("utf-8")
+    ):
         return render_create_project("Invalid secret")
 
     error_message = _create_student_project(app, course)
