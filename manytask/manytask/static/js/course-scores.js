@@ -30,22 +30,56 @@ function applyCourseScores(container, snapshot) {
         `${total - bonus}${bonus > 0 ? `+${bonus}` : ''}/${snapshot.max_score}`;
 }
 
-async function initCourseScores(container, onUpdate) {
+function initCourseScores(container, onUpdate) {
+    const interval = 2000;
     const status = document.getElementById('scores-status');
-    try {
-        const response = await fetch(container.dataset.scoresUrl, {
-            credentials: 'same-origin',
-            cache: 'no-store',
-            redirect: 'manual',
-            signal: AbortSignal.timeout(10000),
-        });
-        if (!response.ok) throw new Error('Score request failed');
-        applyCourseScores(container, await response.json());
-        onUpdate();
-        status.hidden = true;
-    } catch {
-        status.textContent = 'Unable to load scores. Reload the page to try again.';
-    } finally {
-        container.setAttribute('aria-busy', 'false');
+    let delay = interval;
+    let timer;
+    let inFlight = false;
+    let stopped = false;
+    let lastSnapshot;
+
+    async function refresh() {
+        clearTimeout(timer);
+        if (stopped || document.hidden || inFlight) return;
+        inFlight = true;
+        try {
+            const response = await fetch(container.dataset.scoresUrl, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                redirect: 'manual',
+                signal: AbortSignal.timeout(10000),
+            });
+            // Session expiry and revoked course access need a fresh page/login.
+            if (response.type === 'opaqueredirect' || [301, 302, 303, 307, 308, 401, 403, 404].includes(response.status)) {
+                stopped = true;
+                status.hidden = false;
+                status.textContent = 'Unable to load scores. Reload the page to check your access.';
+                container.setAttribute('aria-busy', 'false');
+                return;
+            }
+            if (!response.ok) throw new Error('Score refresh failed');
+            const snapshot = await response.json();
+            const serialized = JSON.stringify(snapshot);
+            if (!document.hidden && !stopped && serialized !== lastSnapshot) {
+                applyCourseScores(container, snapshot);
+                onUpdate();
+                lastSnapshot = serialized;
+                status.hidden = true;
+                container.setAttribute('aria-busy', 'false');
+            }
+            delay = interval;
+        } catch {
+            // Keep the last scores during an outage and retry with a capped backoff.
+            if (lastSnapshot === undefined) status.textContent = 'Unable to load scores. Retrying…';
+            delay = Math.min(delay * 2, 30000);
+        } finally {
+            inFlight = false;
+            if (!stopped && !document.hidden) timer = setTimeout(refresh, delay);
+        }
     }
+
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('pageshow', refresh);
+    refresh();
 }
