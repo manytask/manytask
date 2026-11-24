@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import os
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from pydantic import Field
-
 from checker.exceptions import PluginExecutionFailed
-from checker.plugins.firejail import SafeRunScriptPlugin
+from checker.plugins.cpp.runner import REPORT, REPORT_XML, Catch2Args, run_catch2
 from checker.utils import print_info
 
 from .base import PluginABC, PluginOutput
@@ -16,24 +13,12 @@ from .base import PluginABC, PluginOutput
 
 class CppRunBenchmarksPlugin(PluginABC):
     name = "cpp_run_benchmarks"
-    _REPORT = "report.txt"
-    _REPORT_XML = "report.xml"
+    _REPORT = REPORT
+    _REPORT_XML = REPORT_XML
 
-    class Args(PluginABC.Args):
-        root: Path
+    class Args(Catch2Args):
         benchmark: str | None
-        timeout: float
-        args: list[str]
         benchmark_values: list[str]
-        env_whitelist: list[str] = Field(default_factory=list)
-        show_env_variables: list[str] = Field(default_factory=list)
-
-    @staticmethod
-    def _print_logs(path: Path) -> None:
-        file_path = path / CppRunBenchmarksPlugin._REPORT
-        if file_path.exists():
-            with open(file_path, "r") as f:
-                print_info(f.read())
 
     @staticmethod
     def _parse_xml(tree: ET.ElementTree[ET.Element[str]]) -> dict[str, float]:
@@ -87,28 +72,15 @@ class CppRunBenchmarksPlugin(PluginABC):
     def _run_benchmarks(
         args: Args, tmp_dir: Path, build_dir: Path, target: str, verbose: bool
     ) -> None:
-        for name in args.show_env_variables:
-            print_info(f"{name} is set to `{os.getenv(name)}`")
-
-        xml_path = tmp_dir / CppRunBenchmarksPlugin._REPORT_XML
-        run_args = SafeRunScriptPlugin.Args(
-            origin=str(build_dir),
-            script=[
-                str(build_dir / target),
-                "-r",
-                f"xml::out={xml_path}",
-                "-r",
-                f"console::out={tmp_dir / CppRunBenchmarksPlugin._REPORT}::colour-mode=ansi",
-                *args.args,
-            ],
-            timeout=args.timeout,
-            env_whitelist=args.env_whitelist,
+        run_catch2(
+            args,
+            tmp_dir,
+            build_dir,
+            target,
+            xml_report=True,
+            verbose=verbose,
         )
-        try:
-            SafeRunScriptPlugin()._run(run_args, verbose=verbose)
-        finally:
-            CppRunBenchmarksPlugin._print_logs(tmp_dir)
-        CppRunBenchmarksPlugin._check_results(args, ET.parse(xml_path))
+        CppRunBenchmarksPlugin._check_results(args, ET.parse(tmp_dir / REPORT_XML))
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
         if args.benchmark is None:
