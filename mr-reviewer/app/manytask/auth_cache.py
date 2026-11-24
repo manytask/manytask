@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 
+from loguru import logger
 from redis.asyncio import Redis
 
 
@@ -33,4 +34,5 @@ class TokenAuthCache:
         return await self._redis.exists(self._key(course, token)) > 0  # type: ignore[no-any-return]
 
     async def remember_valid(self, course: str, token: str) -> None:
+        logger.info("Caching token validation for course={}", course)
         await self._redis.set(self._key(course, token), "ok", ex=self._ttl)

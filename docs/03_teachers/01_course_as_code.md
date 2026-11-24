@@ -2,7 +2,7 @@
 
 ## Course as a code
 
-![Course as a code concept](img/course_as_a_code.png)
+![Course as a code concept](../img/course_as_a_code.png)
 
 From the teacher's point of view, the general idea of Manytask project can be summarized as Course as a Code. For the teacher, all the tasks, their solutions, descriptions, build environment, run environment and deadlines are stored in a single private repository. When teacher pushes to this repository, new or updated tasks, lecture notes, deadlines are updated for students while teachers solutions and private tests are not revealed. The later stage can be automated, in which case teacher only interacts with the private repository, updating the course materials, setting the deadlines and revealing new tasks as the course progresses.
 

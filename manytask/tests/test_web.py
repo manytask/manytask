@@ -1,5 +1,6 @@
 import os
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
@@ -23,12 +24,13 @@ from manytask.abstract import (
 )
 from manytask.api import bp as api_bp
 from manytask.api import namespace_bp
+from manytask.config import ManytaskGroupConfig, ManytaskTaskConfig
 from manytask.course import CourseStatus, ProtectedBranchSettings
 from manytask.database import CourseNotEmptyError, UserIdentityConflictError
 from manytask.local_config import LocalConfig
 from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
-from manytask.web import course_bp, instance_admin_bp, root_bp
+from manytask.web import _private_repo_form_error, course_bp, instance_admin_bp, root_bp
 from tests.constants import (
     GITLAB_BASE_URL,
     TEST_CLIENT_PROFILE_SESSION_VERSION,
@@ -59,6 +61,96 @@ from tests.helpers import (
     raise_for_invalid_task,
     set_session,
 )
+
+
+@pytest.mark.parametrize(
+    ("path", "use_template", "language", "expected"),
+    [
+        ("new-course/private", False, "", None),
+        ("new-course/nested/private", False, "", None),
+        ("other-course/private", False, "", "inside the course group"),
+        ("new-course/..", False, "", "Private repository path"),
+        ("new-course/public", False, "", "different paths"),
+        ("new-course/private", True, "", "Select a supported"),
+        ("new-course/private", True, "python", None),
+    ],
+)
+def test_private_repo_form_validation(path, use_template, language, expected):
+    error = _private_repo_form_error("gitlab", path, "new-course", "new-course/public", use_template, language)
+    assert (error is None) if expected is None else expected in error
+
+
+def test_create_course_provisions_selected_private_template(app, mock_gitlab_oauth):
+    app.storage_api.stored_user.instance_admin = True
+    app.oauth = mock_gitlab_oauth
+    app.app_config.gitlab_oauth_url = GITLAB_BASE_URL
+    with (
+        app.test_client() as client,
+        patch("manytask.web.validate_csrf"),
+        patch("manytask.web.check_course_creation_namespace_permission", return_value=(None, None, None, None)),
+        patch.object(app.storage_api, "get_course_id_by_name", return_value=None, create=True),
+        patch.object(app.storage_api, "create_course", return_value=True, create=True) as create_course,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post(
+            "/instance_admin/courses/new",
+            data={
+                "csrf_token": "test",
+                "namespace_id": "0",
+                "unique_course_name": "new-course",
+                "course_group": "new-course",
+                "course_public_repo": "new-course/public",
+                "course_students_group": "new-course/students",
+                "default_branch": "main",
+                "registration_secret": "secret",
+                "token": "token",
+                "create_private_repo": "on",
+                "private_repo_path": "new-course/materials/private",
+                "use_course_template": "on",
+                "template_language": "python",
+            },
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert app.rms_api.projects["new-course/materials/private"].visibility == "private"
+    assert app.rms_api.projects["new-course/materials/private"].ci_variables["MANYTASK_TOKEN"] == "token"
+    assert app.rms_api.projects["new-course/public"].ci_variables["MANYTASK_TOKEN"] == "token"
+    assert app.rms_api.groups["new-course/students"].ci_variables["MANYTASK_TOKEN"] == "token"
+    settings = create_course.call_args.args[0]
+    assert settings.links["Private repository"] == f"{GITLAB_BASE_URL}/new-course/materials/private"
+
+
+def test_create_course_configures_manytask_token(app: Any, mock_gitlab_oauth: Any) -> None:
+    app.storage_api.stored_user.instance_admin = True
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch("manytask.web.validate_csrf"),
+        patch("manytask.web.check_course_creation_namespace_permission", return_value=(None, None, None, None)),
+        patch.object(app.storage_api, "get_course_id_by_name", return_value=None, create=True),
+        patch.object(app.storage_api, "create_course", return_value=True, create=True) as create_course,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post(
+            "/instance_admin/courses/new",
+            data={
+                "csrf_token": "test",
+                "namespace_id": "0",
+                "unique_course_name": "new-course",
+                "course_group": "new-course",
+                "course_public_repo": "new-course/public",
+                "course_students_group": "new-course/students",
+                "default_branch": "main",
+                "registration_secret": "secret",
+                "token": "token",
+            },
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert app.rms_api.projects["new-course/public"].ci_variables["MANYTASK_TOKEN"] == "token"
+    assert app.rms_api.groups["new-course/students"].ci_variables["MANYTASK_TOKEN"] == "token"
+    settings = create_course.call_args.args[0]
+    assert settings.token == "token"
 
 
 @pytest.fixture
@@ -278,6 +370,54 @@ def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oau
     assert control.get_text(strip=True) == "Show oldest first"
     assert control["data-username"] == TEST_USERNAME
     assert control["data-course-name"] == TEST_COURSE_NAME
+
+
+@pytest.mark.parametrize(
+    ("scores", "max_scores", "fully_solved"),
+    [
+        ({"task1": 100, "task2": 100}, [100, 100], True),
+        ({"task1": 120, "task2": 110}, [100, 100], True),
+        ({"task1": 200, "task2": 90}, [100, 100], False),
+        ({"task1": 100, "task2": 0}, [100, 100], False),
+        ({"task1": 100}, [100, 100], False),
+        ({}, [0], True),
+        ({}, [], False),
+    ],
+)
+def test_course_page_marks_only_fully_solved_groups(
+    app: Any, mock_gitlab_oauth: Any, scores: dict[str, int], max_scores: list[int], fully_solved: bool
+) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    group = ManytaskGroupConfig(
+        group="Homework",
+        start=start,
+        end=start + timedelta(days=7),
+        tasks=[
+            ManytaskTaskConfig(task=f"task{index}", score=score, is_bonus=index > 1)
+            for index, score in enumerate(max_scores, start=1)
+        ],
+    )
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_groups", return_value=[group]),
+        patch.object(app.storage_api, "get_scores", return_value=scores),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/")
+
+    assert response.status_code == HTTPStatus.OK
+    soup = BeautifulSoup(response.data, "html.parser")
+    control = soup.find("button", id="solved-last")
+    assert control is not None
+    assert control.get_text(strip=True) == "Hide solved"
+    assert control["aria-pressed"] == "false"
+    rendered_group = soup.select_one("#task-groups > [data-group-solved]")
+    assert rendered_group is not None
+    assert rendered_group["data-group-solved"] == str(fully_solved).lower()
+    assert not rendered_group.has_attr("hidden")
+    assert soup.find("script", src="/static/js/solved-last.js?v=2") is not None
 
 
 def test_course_page_uses_rms_username_for_project_existence_check(app, mock_gitlab_oauth):

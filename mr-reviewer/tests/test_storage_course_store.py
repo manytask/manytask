@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from fakeredis.aioredis import FakeRedis
 
@@ -25,6 +28,16 @@ def _config() -> CourseConfig:
             ],
         }
     )
+
+
+async def test_failed_write_logs_attempt_without_token(fake_redis: FakeRedis, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    with patch.object(fake_redis, "hset", new=AsyncMock(side_effect=RuntimeError("write failed"))):
+        with pytest.raises(RuntimeError):
+            await CourseStore(fake_redis).upsert_course("demo", _config(), course_token="private-token")
+    assert "Saving course config name=demo" in caplog.text
+    assert "Saved course config name=demo" not in caplog.text
+    assert "private-token" not in caplog.text
 
 
 class TestUpsertGet:

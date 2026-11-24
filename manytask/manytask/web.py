@@ -1,4 +1,5 @@
 import logging
+import re
 import secrets
 from http import HTTPStatus
 from urllib.parse import urlparse
@@ -58,6 +59,23 @@ logger = logging.getLogger(__name__)
 root_bp = Blueprint("root", __name__)
 course_bp = Blueprint("course", __name__, url_prefix="/<course_name>")
 instance_admin_bp = Blueprint("instance_admin", __name__, url_prefix="/instance_admin")
+
+
+def _private_repo_form_error(
+    rms: str, repo_path: str, course_group: str, public_repo: str, use_template: bool, language: str
+) -> str | None:
+    if rms != "gitlab":
+        return "Private repository creation is only available for GitLab"
+    if not course_group or not repo_path.startswith(f"{course_group}/"):
+        return "Private repository must be inside the course group"
+    if repo_path == public_repo:
+        return "Private and public repositories must have different paths"
+    segments = repo_path.removeprefix(f"{course_group}/").split("/")
+    if any(segment in {".", ".."} or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", segment) for segment in segments):
+        return "Private repository path must contain valid names relative to the course group"
+    if use_template and language not in {"python", "cpp", "bash", "go", "rust"}:
+        return "Select a supported programming language"
+    return None
 
 
 def _manytask_username_is_claimed(app: CustomFlask, username: str) -> bool:
@@ -269,6 +287,8 @@ def course_page(course_name: str) -> ResponseReturnValue:
 
 @root_bp.route("/signup", methods=["GET", "POST"])
 def signup() -> ResponseReturnValue:
+    if request.method == "POST":
+        logger.info("signup requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username")))
     app: CustomFlask = current_app  # type: ignore
 
     if app.app_config.disable_signup:
@@ -347,6 +367,11 @@ def signup() -> ResponseReturnValue:
 
 @root_bp.route("/signup_finish", methods=["GET", "POST"])
 def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
+    logger.info(
+        "signup_finish requested method=%s by user=%s",
+        sanitize_log_data(request.method),
+        sanitize_log_data(session.get("manytask", {}).get("username")),
+    )
     app: CustomFlask = current_app  # type: ignore
 
     if not valid_auth_session(session):
@@ -447,6 +472,10 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
 @requires_ready
 @requires_auth
 def create_project(course_name: str) -> ResponseReturnValue:
+    if request.method == "POST":
+        logger.info(
+            "create_project requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username"))
+        )
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
@@ -467,7 +496,6 @@ def create_project(course_name: str) -> ResponseReturnValue:
 
     if request.method == "GET":
         return render_create_project()
-
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
@@ -475,8 +503,10 @@ def create_project(course_name: str) -> ResponseReturnValue:
         return render_create_project("CSRF Error")
 
     # Set user to be course admin if they provided course token as a secret
-    is_course_admin: bool = secrets.compare_digest(request.form["secret"], course.token)
-    if not is_course_admin and not secrets.compare_digest(request.form["secret"], course.registration_secret):
+
+    is_course_admin: bool = secrets.compare_digest(request.form["secret"].encode("utf-8"), course.token.encode("utf-8"))
+    if not is_course_admin and not secrets.compare_digest(request.form["secret"].encode("utf-8"),
+                                                            course.registration_secret.encode("utf-8")):
         return render_create_project("Invalid secret")
 
     error_message = _create_student_project(app, course)
@@ -643,6 +673,10 @@ def show_database(course_name: str) -> ResponseReturnValue:
 @instance_admin_bp.route("/courses/new", methods=["GET", "POST"])
 @requires_instance_or_namespace_admin
 def create_course() -> ResponseReturnValue:  # noqa: PLR0911
+    if request.method == "POST":
+        logger.info(
+            "create_course requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username"))
+        )
     app: CustomFlask = current_app  # type: ignore
 
     if request.method == "POST":
@@ -699,10 +733,34 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         gitlab_course_public_repo = request.form["course_public_repo"].strip()
         gitlab_course_students_group = request.form["course_students_group"].strip()
 
+        create_private_repo = request.form.get("create_private_repo") == "on"
+        private_repo_full_path = request.form.get("private_repo_path", "").strip()
+        use_template = request.form.get("use_course_template") == "on"
+        template_language = request.form.get("template_language", "").strip()
+
+        # Both repository fields contain full paths; the RMS receives the private path relative to the course group.
+        gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
+        if create_private_repo:
+            private_repo_error = _private_repo_form_error(
+                app.app_config.rms,
+                private_repo_full_path,
+                gitlab_course_group_full_path,
+                gitlab_course_public_repo,
+                use_template,
+                template_language,
+            )
+            if private_repo_error:
+                return render_template(
+                    app.create_course_template,
+                    generated_token=generate_token_hex(24),
+                    error_message=private_repo_error,
+                    rms=app.app_config.rms,
+                    labels=app.create_course_labels,
+                )
+
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
-        gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
-
+        private_repo_path = private_repo_full_path.removeprefix(f"{gitlab_course_group_full_path}/")
         conflict = get_course_creation_conflict(app.storage_api, course_name, gitlab_course_group_full_path)
         if conflict is not None:
             return render_template(
@@ -713,6 +771,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
                 labels=app.create_course_labels,
             )
 
+        course_token = request.form["token"]
         try:
             logger.info(
                 "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
@@ -732,6 +791,23 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             app.rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
             logger.info("Created students group")
 
+            if create_private_repo:
+                app.rms_api.create_private_repo(
+                    gitlab_course_group_full_path,
+                    private_repo_path,
+                    gitlab_course_public_repo,
+                    gitlab_course_students_group,
+                    course_name,
+                    template_language if use_template else None,
+                )
+
+            app.rms_api.configure_course_manytask_token(
+                gitlab_course_public_repo,
+                gitlab_course_students_group,
+                course_token,
+                private_repo_full_path if create_private_repo else None,
+            )
+
         except Exception as e:
             logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
             return render_template(
@@ -750,8 +826,17 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             gitlab_course_students_group=gitlab_course_students_group,
             gitlab_default_branch=request.form["default_branch"],
             registration_secret=request.form["registration_secret"],
-            token=request.form["token"],
+            token=course_token,
             show_allscores=request.form.get("show_allscores", "off") == "on",
+            links=(
+                {
+                    "Private repository": (
+                        f"{app.app_config.gitlab_oauth_url}/{gitlab_course_group_full_path}/{private_repo_path}"
+                    )
+                }
+                if create_private_repo
+                else {}
+            ),
         )
 
         if app.storage_api.create_course(settings):
@@ -777,6 +862,8 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
 @instance_admin_bp.route("/courses/<course_name>/edit", methods=["GET", "POST"])
 @requires_course_admin
 def edit_course(course_name: str) -> ResponseReturnValue:
+    if request.method == "POST":
+        logger.info("edit_course requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username")))
     app: CustomFlask = current_app  # type: ignore
     course = app.storage_api.get_course(course_name)
 
@@ -834,12 +921,19 @@ def edit_course(course_name: str) -> ResponseReturnValue:
 @requires_course_admin
 def delete_course(course_name: str) -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
+    logger.info(
+        "Course deletion requested course=%s by user=%s",
+        sanitize_log_data(course_name),
+        sanitize_log_data(session.get("manytask", {}).get("username")),
+    )
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError:
+        logger.warning("Course deletion rejected course=%s: CSRF validation failed", sanitize_log_data(course_name))
         return {"error": "CSRF validation failed"}, HTTPStatus.BAD_REQUEST
 
     if request.form.get("confirmation_name") != course_name:
+        logger.warning("Course deletion rejected course=%s: name does not match", sanitize_log_data(course_name))
         return {
             "error": "Course name does not match. Type the exact course name to confirm deletion."
         }, HTTPStatus.BAD_REQUEST
@@ -848,6 +942,7 @@ def delete_course(course_name: str) -> ResponseReturnValue:
         if not app.storage_api.delete_course(course_name):
             return {"error": "Course not found."}, HTTPStatus.NOT_FOUND
     except CourseNotEmptyError as e:
+        logger.warning("Course deletion rejected course=%s: users are registered", sanitize_log_data(course_name))
         return {"error": str(e)}, HTTPStatus.CONFLICT
 
     logger.info(
@@ -894,29 +989,13 @@ def instance_admin_panel() -> ResponseReturnValue:
 
     users = app.storage_api.get_all_users()
 
-    namespaces = app.storage_api.get_all_namespaces()
-    namespaces_data = []
-    for namespace in namespaces:
-        users_count = len(app.storage_api.get_namespace_users(namespace.id))
-        namespaces_data.append(
-            {
-                "id": namespace.id,
-                "name": namespace.name,
-                "slug": namespace.slug,
-                "description": namespace.description or "",
-                "gitlab_group_id": namespace.gitlab_group_id,
-                "users_count": users_count,
-            }
-        )
-
-    return render_template(
-        "instance_admin_panel.html", courses=get_courses(app), users=users, namespaces=namespaces_data
-    )
+    return render_template("instance_admin_panel.html", users=users)
 
 
 @root_bp.route("/update_profile", methods=["POST"])
 @requires_auth
 def update_profile() -> ResponseReturnValue:
+    logger.info("Profile update requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username")))
     app: CustomFlask = current_app  # type: ignore
 
     request_username = request.form.get("username", None)

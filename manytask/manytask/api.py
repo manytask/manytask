@@ -73,6 +73,11 @@ def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Cour
     return course
 
 
+def _student_not_enrolled_response() -> ResponseReturnValue:
+    message = "Student is not enrolled in this course"
+    return jsonify(success=False, message=message, error=message), HTTPStatus.NOT_FOUND
+
+
 def _get_stored_user_or_not_found(storage_api: StorageApi, rms_id: str) -> StoredUser:
     stored_user = storage_api.get_stored_user_by_rms_id(rms_id)
     if stored_user is None:
@@ -195,6 +200,7 @@ def validate_json_request(model_class: type[T]) -> tuple[T | None, ResponseRetur
         If validation fails: (None, error_response)
     """
     if not request.is_json:
+        logger.warning("Rejected non-JSON request endpoint=%s", request.endpoint)
         return None, (jsonify(ErrorResponse(error="Request must be JSON").model_dump()), HTTPStatus.BAD_REQUEST)
 
     try:
@@ -504,6 +510,7 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
 @requires_token
 @requires_ready
 def report_score(course_name: str) -> ResponseReturnValue:
+    logger.info("Score report requested course=%s", sanitize_log_data(course_name))
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
@@ -553,7 +560,10 @@ def report_score(course_name: str) -> ResponseReturnValue:
         check_deadline=check_deadline,
         allow_reduction=allow_reduction,
     )
-    final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
+    try:
+        final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
+    except NoResultFound:
+        return _student_not_enrolled_response()
 
     logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
 
@@ -674,13 +684,12 @@ def _format_config_validation_error(course_name: str, exc: ValidationError) -> s
 @bp.post("/update_config")
 @requires_token
 def update_config(course_name: str) -> ResponseReturnValue:
+    logger.info("Running update_config for course=%s", sanitize_log_data(course_name))
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
     if course.status == CourseStatus.FINISHED:
         abort(HTTPStatus.CONFLICT, f"Cannot update config for the course '{course_name}' that is already finished.")
-
-    logger.info("Running update_config for course=%s", course_name)
 
     # ----- get and validate request parameters ----- #
     try:
@@ -741,6 +750,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     """
     Update student scores in the database via API endpoint and recalculate grade.
     """
+    logger.info("Score update requested course=%s", sanitize_log_data(course_name))
     app: CustomFlask = current_app  # type: ignore
     course: Course = app.storage_api.get_course(course_name)  # type: ignore
 
@@ -781,6 +791,8 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
                     update_fn=lambda _flags, _old_score: int(new_score),
                     is_solved=payload.new_solved.get(task_name),
                 )
+    except NoResultFound:
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error updating database: %s", str(e))
         return jsonify(
@@ -813,6 +825,8 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
             }
         ), HTTPStatus.OK
 
+    except (NoResultFound, StopIteration):
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error calculating grade: %s", str(e))
         return jsonify(
@@ -858,6 +872,8 @@ def update_comment(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully updated comment for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK
 
+    except NoResultFound:
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error updating comment: %s", str(e))
         return jsonify(
@@ -888,6 +904,9 @@ def create_namespace() -> ResponseReturnValue:
         - 409: Conflict (slug already exists)
         - 500: Internal server error
     """
+    logger.info(
+        "Namespace creation requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username"))
+    )
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
     rms_api = app.rms_api
@@ -1096,6 +1115,11 @@ def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNa
     app: CustomFlask = current_app  # type: ignore
 
     try:
+        logger.info(
+            "Namespace update requested id=%s by user=%s",
+            namespace_id,
+            sanitize_log_data(session.get("manytask", {}).get("username")),
+        )
         namespace = app.storage_api.update_namespace(namespace_id, validated_data.name, validated_data.description)
         result = NamespaceResponse.model_validate(namespace, from_attributes=True)
         return jsonify(result.model_dump()), HTTPStatus.OK
@@ -1115,6 +1139,11 @@ def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNa
     app: CustomFlask = current_app  # type: ignore
 
     try:
+        logger.info(
+            "Namespace deletion requested id=%s by user=%s",
+            namespace_id,
+            sanitize_log_data(session.get("manytask", {}).get("username")),
+        )
         app.storage_api.delete_namespace(namespace_id, validated_data.name)
         logger.info(
             "Successfully deleted namespace '%s' (id=%s) by user '%s'",
@@ -1126,8 +1155,10 @@ def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNa
     except NoResultFound:
         return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
     except NamespaceNotEmptyError as error:
+        logger.warning("Namespace deletion rejected id=%s: courses still exist", namespace_id)
         return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.CONFLICT
     except ValueError as error:
+        logger.warning("Namespace deletion rejected id=%s: name does not match", namespace_id)
         return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.BAD_REQUEST
     except Exception:
         logger.exception("Error deleting namespace id=%s", namespace_id)
@@ -1164,6 +1195,11 @@ def add_user_to_namespace(
         409: Conflict (user already has a role in this namespace)
         500: Internal server error
     """
+    logger.info(
+        "Namespace user addition requested namespace_id=%s user=%s",
+        namespace_id,
+        sanitize_log_data(validated_data.username),
+    )
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
@@ -1271,6 +1307,7 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
         404: Not found (user is not in the namespace)
         500: Internal server error
     """
+    logger.info("Namespace user removal requested namespace_id=%s user_id=%s", namespace_id, user_id)
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
     rms_api = app.rms_api
@@ -1356,6 +1393,7 @@ def update_user_role_in_namespace(
         404: Not found (user is not in the namespace)
         500: Internal server error (including GitLab errors)
     """
+    logger.info("Namespace role update requested namespace_id=%s user_id=%s", namespace_id, user_id)
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
     rms_api = app.rms_api
@@ -1590,6 +1628,10 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                 show_allscores=True,
             )
 
+            rms_api.configure_course_manytask_token(
+                gitlab_course_public_repo, gitlab_course_students_group, course_config.token
+            )
+
             success = storage_api.create_course(course_config)
 
             if not success:
@@ -1717,6 +1759,8 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully set grade override for user=%s to %d", sanitize_log_data(username), new_grade)
         return jsonify({"success": True}), HTTPStatus.OK
 
+    except NoResultFound:
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error overriding grade: %s", str(e))
         return jsonify(
@@ -1767,6 +1811,8 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
         logger.info("Successfully cleared grade override for user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK
 
+    except NoResultFound:
+        return _student_not_enrolled_response()
     except Exception as e:
         logger.error("Error clearing grade override: %s", str(e))
         return jsonify(
@@ -1831,6 +1877,11 @@ def set_course_admin(course_name: str, validated_data: SetCourseAdminRequest) ->
         403: Forbidden (not a course admin nor an instance admin)
         404: Course or user not found, or the user is not enrolled on the course
     """
+    logger.info(
+        "Course admin update requested course=%s user=%s",
+        sanitize_log_data(course_name),
+        sanitize_log_data(validated_data.username),
+    )
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 
@@ -1898,6 +1949,11 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
         404: Course or user not found
         409: The user already has a role in the namespace
     """
+    logger.info(
+        "Program manager assignment requested course=%s user=%s",
+        sanitize_log_data(course_name),
+        sanitize_log_data(validated_data.username),
+    )
     app: CustomFlask = current_app  # type: ignore
     storage_api = app.storage_api
 

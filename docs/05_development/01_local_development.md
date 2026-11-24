@@ -74,7 +74,7 @@ Continue with [Adding a course](#adding-a-course) below.
 
 ### Step 3 — Prepare the `.env` file
 
-Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fill in the values. The relevant variables are:
+Copy [`manytask/.env.example`](../../manytask/.env.example) to `manytask/.env` and fill in the values. The relevant variables are:
 
 | Variable                 | Description                                                                                                       |
 |--------------------------|-------------------------------------------------------------------------------------------------------------------|
@@ -92,7 +92,6 @@ Copy [`manytask/.env.example`](manytask/.env.example) to `manytask/.env` and fil
 | `GITLAB_DB_USER`         | Postgres role used by the local GitLab (e.g. `gitlab`)                                                             |
 | `GITLAB_DB_PASSWORD`     | Password of that role (e.g. `localgitlabdbpass`)                                                                   |
 | `GITLAB_DB_NAME`         | Database of the local GitLab (e.g. `gitlab`)                                                                       |
-| `DATABASE_URL`           | Connection string used inside containers (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}`) |
 | `DATABASE_URL`           | Connection string used inside containers (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}`) |
 | `DATABASE_URL_EXTERNAL`  | Connection string used from the host (for Alembic etc.) (default: `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}`) |
 | `DOCS_HOST`              | Host name for docs (not used in development, can be left blank)                                                    |
@@ -170,12 +169,12 @@ Review the target migration's `downgrade()` implementation first: reverse migrat
 From the repository root (so `@common.example.yml` resolves):
 
 ```bash
-export TESTER_TOKEN=<course_token>
+export MANYTASK_TOKEN=<course_token>
 ```
 
 ```bash
 curl -X POST \
-  -H "Authorization: Bearer $TESTER_TOKEN" \
+  -H "Authorization: Bearer $MANYTASK_TOKEN" \
   -H "Content-type: application/x-yaml" \
   --data-binary "@common.example.yml" \
   "http://localhost:8081/api/<course_name>/update_config"
@@ -238,7 +237,7 @@ Using a single URL for both paths usually fails in local Docker setups.
 
 ### Code reference
 
-OAuth registration is configured in [`manytask/main.py`](manytask/manytask/main.py):
+OAuth registration is configured in [`manytask/main.py`](../../manytask/manytask/main.py):
 
 ```python
 def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id: str, client_secret: str) -> OAuth:
@@ -258,7 +257,7 @@ def _authenticate(oauth: OAuth, internal_url: str, external_url: str, client_id:
     return oauth
 ```
 
-The corresponding config fields are defined in [`manytask/local_config.py`](manytask/manytask/local_config.py):
+The corresponding config fields are defined in [`manytask/local_config.py`](../../manytask/manytask/local_config.py):
 
 - `gitlab_url`
 - `gitlab_oauth_url`
@@ -267,7 +266,7 @@ The corresponding config fields are defined in [`manytask/local_config.py`](many
 
 ## Running tests
 
-For convenience, the code ships with a `Makefile` containing shortcuts to run the linter, type checker, formatter, and tests. See [`manytask/Makefile`](manytask/Makefile) for details. To run all checks:
+For convenience, the code ships with a `Makefile` containing shortcuts to run the linter, type checker, formatter, and tests. See [`manytask/Makefile`](../../manytask/Makefile) for details. To run all checks:
 
 ```bash
 make check

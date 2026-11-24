@@ -10,6 +10,9 @@ Small web application for managing courses: store students' grades, maintain dea
 
 See the [changelog](CHANGELOG.md) for release history.
 
+Browse the [documentation in this repository](docs/README.md) or read it at
+[manytask.org](https://manytask.org/).
+
 ---
 
 ## How it works

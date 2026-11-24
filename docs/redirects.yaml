@@ -1,0 +1,40 @@
+# Preserve published URLs when source pages move.
+files:
+  - from: about.html
+    to: 00_getting_started/01_about.html
+  - from: concepts.html
+    to: 00_getting_started/02_concepts.html
+  - from: using_manytask.html
+    to: 02_students/01_using_manytask.html
+  - from: course_as_code.html
+    to: 03_teachers/01_course_as_code.html
+  - from: basic_example.html
+    to: 03_teachers/02_basic_example.html
+  - from: course_template.html
+    to: 03_teachers/03_course_template.html
+  - from: private_repo.html
+    to: 03_teachers/04_private_repository.html
+  - from: checker_config.html
+    to: 03_teachers/05_checker_configuration.html
+  - from: manytask_config.html
+    to: 03_teachers/06_manytask_configuration.html
+  - from: running_course.html
+    to: 03_teachers/07_running_course.html
+  - from: checker_pipelines_and_plugins.html
+    to: 03_teachers/08_checker_pipelines_and_plugins.html
+  - from: system_setup.html
+    to: 04_administration/01_system_setup.html
+  - from: production.html
+    to: 04_administration/02_production.html
+  - from: deploy_guide.html
+    to: 04_administration/03_deploy_guide.html
+  - from: dev.html
+    to: 05_development/01_local_development.html
+  - from: manytask_yml_reference.html
+    to: 06_reference/01_manytask_yml.html
+  - from: checker_yml_reference.html
+    to: 06_reference/02_checker_yml.html
+  - from: checker_plugins.html
+    to: 06_reference/03_checker_plugins.html
+  - from: api.html
+    to: 06_reference/04_rest_api.html

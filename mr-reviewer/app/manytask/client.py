@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+from loguru import logger
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.manytask.errors import (
@@ -110,6 +111,7 @@ class ManytaskClient:
         allow_reduction: bool,
         check_deadline: bool,
     ) -> int:
+        logger.info("Reporting score course={} user={} task={} score={}", course_name, username, task, score)
         form = {
             "username": username,
             "task": task,

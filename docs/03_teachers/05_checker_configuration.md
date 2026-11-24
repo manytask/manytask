@@ -9,10 +9,10 @@ questions:
 3. **How is a solution graded?** — the pipelines and plugins that run for each task.
 
 This page is a step-by-step guide for writing that file. For the exhaustive field-by-field
-description see the [`.checker.yml` reference](./checker_yml_reference.md).
+description see the [`.checker.yml` reference](../06_reference/02_checker_yml.md).
 
 The examples below use a small Python course. The same rules apply to any language — the
-[course template](./course_template.md) ships equivalent C++, Go, Rust and Bash groups.
+[course template](03_course_template.md) ships equivalent C++, Go, Rust and Bash groups.
 
 ---
 
@@ -134,7 +134,7 @@ structure:
 copy of the task statement harms nobody. And `add.py` is deliberately absent from every list — that
 is what makes it the student's to edit.
 
-> The [course template](./course_template.md) omits `test_public.py` from `public_patterns`. It
+> The [course template](03_course_template.md) omits `test_public.py` from `public_patterns`. It
 > gets away with it because its private tests are the ones that produce the score, so a tampered
 > public test cannot inflate a grade. If any part of your score comes from public tests, list them.
 
@@ -200,7 +200,7 @@ there. Only tasks enabled in `.manytask.yml` are selected for grading or publish
 
 - **`.task.yml`:** `structure` determines which files come from the student and which come from
   the reference repository. Plugins can use `allow_change` for copying or checking selected files.
-  It can also support [`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks) when
+  It can also support [`skip_unchanged_tasks`](../06_reference/02_checker_yml.md#skip_unchanged_tasks) when
   enabled. Defining it alone does not change file merging.
 - **`.tasks.yml`:** the checker additionally uses `allow_change` to rebuild the shared folder from
   reference files, then overlay matching student files. It combines the lists of selected tasks
@@ -225,8 +225,8 @@ parameters:
     - ../clang-fun/checker/*.h
 ```
 
-Pass the list as `patterns` to [`copy_files`](checker_plugins.md#copy_files) or
-[`check_regexps`](checker_plugins.md#check_regexps). A task that needs no such file selection can
+Pass the list as `patterns` to [`copy_files`](../06_reference/03_checker_plugins.md#copy_files) or
+[`check_regexps`](../06_reference/03_checker_plugins.md#check_regexps). A task that needs no such file selection can
 omit the parameter.
 
 ### Automatic workspace preparation for `.tasks.yml` {#shared-folder-preparation}
@@ -289,14 +289,14 @@ task. `.task.yml` does not accept this mapping: rename a multi-task file to `.ta
 Add `add` and `multiply` separately to `.manytask.yml`. Task names must be unique across the
 course, including names from flat `.task.yml` files. `checker check --task add` and branch-name
 selection address the logical task name; `task.task_sub_path` still points to `python/arithmetic`.
-With [`last_commit_changes`](checker_yml_reference.md#changes_detection), changing only `add.py`
+With [`last_commit_changes`](../06_reference/02_checker_yml.md#changes_detection), changing only `add.py`
 selects `add`; a shared file listed by both tasks selects both. A task without a nonempty list
 keeps folder-based selection. The separate
-[`skip_unchanged_tasks`](checker_yml_reference.md#skip_unchanged_tasks) check can then skip selected
+[`skip_unchanged_tasks`](../06_reference/02_checker_yml.md#skip_unchanged_tasks) check can then skip selected
 tasks whose solutions still match the published templates.
 
 If `ui.task_url_template` contains `$TASK_NAME`, give each schedule entry a
-[`url`](manytask_yml_reference.md#task) pointing to the actual shared folder or its statement,
+[`url`](../06_reference/01_manytask_yml.md#task) pointing to the actual shared folder or its statement,
 because the logical name is no longer the folder name.
 
 Allow-list both `".task.yml"` and `".tasks.yml"` in `public_patterns` when `private_patterns: [".*", ...]` hides dotfiles.
@@ -413,22 +413,27 @@ testing:
         username: ${{ env.GITLAB_USER_LOGIN }}
         task_name: ${{ task.task_name }}
         score: ${{ outputs.private_tests.percentage }}
-        report_url: https://app.manytask.org
+        report_url: https://app.manytask.org/api/course-name/report
         report_token: ${{ env.MANYTASK_TOKEN }}
         check_deadline: true
 ```
 
 `report_pipeline` runs only when `tasks_pipeline` succeeded, and only under `checker grade` — this
-is what pushes the score to Manytask, so it needs a `MANYTASK_TOKEN` CI variable. `checker check`
-runs the report pipeline in dry-run mode, so local runs never report a score.
+is what pushes the score to Manytask, so it needs a `MANYTASK_TOKEN` CI variable. Replace
+`course-name` in `report_url` with your course slug. The GitLab CI example reads the student's
+username from `GITLAB_USER_LOGIN`; other runners must provide an appropriate RMS username.
+
+With automatic task detection, `checker grade` enables reporting by default. Selecting tasks
+explicitly with `--task`, `--group`, or `--all-tasks` disables reporting unless `--submit-score`
+is also passed. `checker check` runs the report pipeline in dry-run mode and never sends scores.
 
 `changes_detection: last_commit_changes` means `checker grade` tests only the tasks touched by the
 pushed commits (diff against `CI_COMMIT_BEFORE_SHA` in GitLab CI, or `--base-ref`; `HEAD~1` otherwise).
-See the [selection rules](checker_yml_reference.md#changes_detection) for shared folders.
-`checker check` always tests everything.
+See the [selection rules](../06_reference/02_checker_yml.md#changes_detection) for shared folders.
+`checker check` tests all enabled tasks by default; `--task` and `--group` narrow the selection.
 
-See [Checker pipelines and plugins](./checker_pipelines_and_plugins.md) and the
-[built-in plugin list](./checker_plugins.md) for the available stages.
+See [Checker pipelines and plugins](08_checker_pipelines_and_plugins.md) and the
+[built-in plugin list](../06_reference/03_checker_plugins.md) for the available stages.
 
 ## CI wiring
 
@@ -467,7 +472,7 @@ the [merge and preparation rules](#where-student-edits-actually-go) described ab
 | Variable | Where | Description |
 |---|---|---|
 | `GITLAB_API_TOKEN` | private repo | Push access to the public repo (`write_repository`, Maintainer) |
-| `MANYTASK_TOKEN` | group | Course token used by `report_score_manytask` |
+| `MANYTASK_TOKEN` | students group | Course token used by `report_score_manytask` |
 | `DOCKER_AUTH_CONFIG` | group | Registry credentials so student repos can pull the test image |
 
 ## Adding a new task

@@ -10,7 +10,7 @@ Use it to:
 
 ## Where to find it
 
-The canonical source lives **in this monorepo** under [`course-template/`](../course-template/).
+The canonical source lives **in this monorepo** under [`course-template/`](../../course-template/).
 
 It is deployed to the GitLab private template repository at:
 
@@ -79,13 +79,13 @@ This is the smallest end-to-end example that:
 - reports its score back to the Manytask web app once the report pipeline is enabled in CI.
 
 For several tasks in one folder, replace its `.task.yml` with `.tasks.yml` and define a nonempty
-`tasks` mapping. See [the shared-folder example](checker_config.md#several-tasks-in-one-folder).
+`tasks` mapping. See [the shared-folder example](05_checker_configuration.md#several-tasks-in-one-folder).
 
 ## How grading works (testenv image)
 
 Student submissions must be graded against the **hidden** (`test_private.*`) tests,
 but those tests are never exported to the public/student repository. Manytask solves
-this with a **testenv docker image** (see [Concepts](./concepts.md)): an image that
+this with a **testenv docker image** (see [Concepts](../00_getting_started/02_concepts.md)): an image that
 carries a copy of the private repository — including the private tests — and the
 checker. The same image runs `checker check` in the private repo and `checker grade`
 in student repos.
@@ -96,7 +96,7 @@ The template wires this in two pipelines:
    - **`verify`** validates the course configuration. **`build-base`** then publishes
      a checker/toolchain image, and **`check`** runs `checker check . .` in it.
    - **`build-testenv`** uses that base image and builds
-     [`testenv.docker`](../course-template/testenv.docker). Its first Docker stage
+     [`testenv.docker`](../../course-template/testenv.docker). Its first Docker stage
      runs `checker export-private`; the final, published stage copies only that
      exported reference into **`/opt/course`**, not the raw private checkout.
    - On the default branch, manual deploy jobs publish the `:latest` testenv image,
@@ -106,9 +106,11 @@ The template wires this in two pipelines:
    testenv image (`image: "$TESTENV_IMAGE"`) and runs `checker grade . /opt/course`:
    the student's solution comes from the checkout (`.`), the hidden tests come from the
    baked `/opt/course`. To report the score to the web app, enable the
-   `report_pipeline` (`report_score_manytask`) in `.checker.yml` — `checker grade`
-   always runs it — and provide a `MANYTASK_TOKEN` CI variable. (The grade
-   `--submit-score` flag is currently a no-op in checker, so it does not report.)
+   `report_pipeline` (`report_score_manytask`) in `.checker.yml`, set `report_url` to
+   `https://<host>/api/<course_name>/report`, and provide a `MANYTASK_TOKEN` CI variable.
+   `checker grade` enables reporting by default when detecting tasks automatically.
+   Runs with `--task`, `--group`, or `--all-tasks` report only with `--submit-score`;
+   `checker check` never sends scores.
 
 Because the image lives in the **private** project's registry but student repos are
 forks of the **public** project, students pull it across projects via a
@@ -126,6 +128,25 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
 > hardening against it.
 
 ## Using the template for your own course
+
+On GitLab, the **Create course** form can create a private repository in the new
+course group. Select **Create private repository**; the path field shows a full
+path beside the public repository (for example, `<your-course>/private`). You can
+edit that path within the same course group, then optionally select **Create
+from course template** and a programming language. The template is copied from
+the `course-template/` snapshot bundled with the running Manytask image; it
+does not depend on a template project in the course's GitLab instance. Rebuild
+the app image after updating the template. Only the selected language's
+task directory and schedule entry are copied. The repository is private, and a
+link appears on the course page. By default, its name follows the public repo
+(`public-2026-fall` → `private-2026-fall`) in the same group.
+
+The generated configuration fills in the course name, public repository, student
+group, and private repository links. Review the CI settings and add the required
+credentials before releasing assignments. SourceCraft course creation does not
+offer private repository provisioning yet.
+
+For a course created outside the form, use the manual setup below.
 
 1. Create two empty GitLab projects — `<your-course>/private` (template clone) and `<your-course>/public` (auto-generated for students) — plus an empty `<your-course>/students` group.
 2. Clone the monorepo, then deploy the template to your private GitLab project:
@@ -146,14 +167,17 @@ whose host matches the private project's `CI_REGISTRY` — on this instance
     ```
 
 3. Edit `.checker.yml` (`export.destination`), `.manytask.yml` (`settings`, `ui`, `deadlines.schedule`), and `.releaser-ci.yml` (`REGISTRY`, `MANYTASK_URL`, `COURSE_NAME`, and `PUBLIC_REPO_URL`).
-4. Add CI/CD variables in **Group → Settings → CI/CD → Variables**:
+4. Add registry and API credentials in **Group → Settings → CI/CD → Variables**.
+   Manytask provisions `MANYTASK_TOKEN` as a hidden, masked variable on the public
+   repository, students group, and any private repository it creates. For a
+   repository created separately, add the course token as `MANYTASK_TOKEN` there.
 
     | Variable | Purpose |
     |---|---|
     | `GITLAB_API_TOKEN` | Lets `checker export --commit` push to the public repo. Group access token, role `Maintainer`, scope `write_repository`. |
     | `DOCKER_AUTH_CONFIG` | Lets the private pipeline push course images and student repos pull them. Set it to deploy/group-token credentials with `read_registry` + `write_registry` on the private project. |
     | `TESTENV_IMAGE` | Absolute registry path to the testenv image used by the student `grade` job; host must match the private project's `CI_REGISTRY` (e.g. `gitlab.manytask.org:5050/<course>/private/testenv-image:latest`). Defaults to the sandbox path in `.gitlab-ci.yml`; override for your course. |
-    | `MANYTASK_TOKEN` | Course token used by the optional `report_score_manytask` pipeline in `.checker.yml` and by `.releaser-ci.yml` to send `.manytask.yml` to Manytask. |
+    | `MANYTASK_TOKEN` | Course token used by `.checker.yml` and `.releaser-ci.yml`. |
 
 5. Create a **deploy token** with `read_registry` + `write_registry` on the private
    project and store its Docker auth JSON in `DOCKER_AUTH_CONFIG`. The release jobs
@@ -168,8 +192,8 @@ Full step-by-step instructions live in the template's own
 
 ## Related references
 
-- [Course as Code](./course_as_code.md) — the underlying concept
-- [Private repository](./private_repo.md) — how the private repo is structured
-- [.checker.yml reference](./checker_yml_reference.md) — every field explained
-- [.manytask.yml reference](./manytask_yml_reference.md) — schedule and grades schema
-- [Checker pipelines and plugins](./checker_pipelines_and_plugins.md) — building custom pipelines
+- [Course as Code](01_course_as_code.md) — the underlying concept
+- [Private repository](04_private_repository.md) — how the private repo is structured
+- [.checker.yml reference](../06_reference/02_checker_yml.md) — every field explained
+- [.manytask.yml reference](../06_reference/01_manytask_yml.md) — schedule and grades schema
+- [Checker pipelines and plugins](08_checker_pipelines_and_plugins.md) — building custom pipelines
