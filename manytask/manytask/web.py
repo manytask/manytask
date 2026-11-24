@@ -673,13 +673,12 @@ def show_database(course_name: str) -> ResponseReturnValue:
 @instance_admin_bp.route("/courses/new", methods=["GET", "POST"])
 @requires_instance_or_namespace_admin
 def create_course() -> ResponseReturnValue:  # noqa: PLR0911
+    app: CustomFlask = current_app  # type: ignore
+
     if request.method == "POST":
         logger.info(
             "create_course requested by user=%s", sanitize_log_data(session.get("manytask", {}).get("username"))
         )
-    app: CustomFlask = current_app  # type: ignore
-
-    if request.method == "POST":
         try:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
@@ -774,7 +773,9 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         course_token = request.form["token"]
         try:
             logger.info(
-                "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
+                "Creating GitLab course group: %s (full path: %s)",
+                sanitize_log_data(gitlab_course_group),
+                sanitize_log_data(gitlab_course_group_full_path),
             )
             course_group_id = app.rms_api.create_course_group(
                 parent_group_id=namespace.gitlab_group_id if namespace else None,
@@ -783,11 +784,11 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             )
             logger.info("Created course group with id=%s", course_group_id)
 
-            logger.info("Creating public repo: %s", gitlab_course_public_repo)
+            logger.info("Creating public repo: %s", sanitize_log_data(gitlab_course_public_repo))
             app.rms_api.create_public_repo(gitlab_course_group_full_path, gitlab_course_public_repo)
             logger.info("Created public repo")
 
-            logger.info("Creating students group: %s", gitlab_course_students_group)
+            logger.info("Creating students group: %s", sanitize_log_data(gitlab_course_students_group))
             app.rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
             logger.info("Created students group")
 
