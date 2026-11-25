@@ -2,7 +2,6 @@ import logging
 import re
 import secrets
 from http import HTTPStatus
-from urllib.parse import urlparse
 
 import gitlab
 from authlib.integrations.flask_client import OAuth
@@ -1027,13 +1026,17 @@ def update_profile() -> ResponseReturnValue:
     app.storage_api.update_user_profile(target_user.username, new_first_name, new_last_name)
     logger.info("Successfully updated profile for user: %s", sanitize_log_data(request_username))
 
-    referrer = request.referrer
-    if referrer:
-        referrer_url = urlparse(referrer)
-        current_url = urlparse(request.host_url)
+    return_to = request.form.get("return_to")
+    if return_to == "instance_admin.instance_admin_panel":
+        return redirect(url_for("instance_admin.instance_admin_panel"))
 
-        if referrer_url.netloc == current_url.netloc and referrer_url.scheme in ("http", "https"):
-            return redirect(referrer)
+    return_course = request.form.get("return_course", "")
+    # Course names must occupy a single path segment in the generated URL.
+    if return_course and return_course not in {".", ".."} and "/" not in return_course and "\\" not in return_course:
+        if return_to == "course.course_page":
+            return redirect(url_for("course.course_page", course_name=return_course))
+        if return_to == "course.show_database":
+            return redirect(url_for("course.show_database", course_name=return_course))
 
     return redirect(url_for("root.index"))
 
