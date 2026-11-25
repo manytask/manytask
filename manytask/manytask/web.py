@@ -5,7 +5,7 @@ from http import HTTPStatus
 
 import gitlab
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from sqlalchemy.exc import NoResultFound
@@ -246,7 +246,6 @@ def course_page(course_name: str) -> ResponseReturnValue:
         username=student_username, course_students_group=course.gitlab_course_students_group
     )
 
-    tasks_scores = storage_api.get_scores(course.course_name, student_username)
     tasks_stats = storage_api.get_stats(course.course_name)
     allscores_url = url_for("course.show_database", course_name=course_name)
 
@@ -271,8 +270,7 @@ def course_page(course_name: str) -> ResponseReturnValue:
         if app.app_config.rms == "sourcecraft"
         else student_username,
         links=course.links,
-        scores=tasks_scores,
-        bonus_score=storage_api.get_bonus_score(course.course_name, student_username),
+        scores=None,
         now=get_current_time(),
         task_stats=tasks_stats,
         course_favicon=app.favicon,
@@ -282,6 +280,43 @@ def course_page(course_name: str) -> ResponseReturnValue:
         has_role=has_role,
         sourcecraft_accept_invite_required=sourcecraft_accept_invite_required,
     )
+
+
+@course_bp.get("/scores")
+@requires_ready
+def course_scores(course_name: str) -> ResponseReturnValue:
+    """Read personal scores using the signed session, without contacting the RMS."""
+    app: CustomFlask = current_app  # type: ignore
+    storage = app.storage_api
+    username = _score_viewer_username(app)
+    course = storage.get_course(course_name)
+    if course is None:
+        abort(HTTPStatus.NOT_FOUND)
+    if not app.debug:
+        if not storage.check_user_on_course(course_name, username):
+            abort(HTTPStatus.FORBIDDEN)
+        if course.status == CourseStatus.HIDDEN and not storage.check_if_course_admin(course_name, username):
+            abort(HTTPStatus.FORBIDDEN)
+
+    response = jsonify(
+        scores=storage.get_scores(course_name, username),
+        bonus_score=storage.get_bonus_score(course_name, username),
+        max_score=storage.max_score_started(course_name),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _score_viewer_username(app: CustomFlask) -> str:
+    if app.debug:
+        return "guest"
+    if not (valid_auth_session(session) and valid_rms_session(session) and valid_manytask_session(session)):
+        abort(HTTPStatus.UNAUTHORIZED)
+    # Resolve the current identity in storage to reject sessions for deleted or replaced users.
+    user = app.storage_api.get_stored_user_by_auth_id(session["auth"]["user_auth_id"])
+    if user is None or user.user_id != session["manytask"]["user_id"]:
+        abort(HTTPStatus.UNAUTHORIZED)
+    return user.username
 
 
 @root_bp.route("/signup", methods=["GET", "POST"])
