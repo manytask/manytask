@@ -11,6 +11,10 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="change">
                     <input type="hidden" name="username" value="{{ username }}">
+                    <input type="hidden" name="return_to" value="{{ request.endpoint }}">
+                    {% if course_name is defined %}
+                        <input type="hidden" name="return_course" value="{{ course_name }}">
+                    {% endif %}
                     <div class="mb-3">
 
                         <div class="row g-2">

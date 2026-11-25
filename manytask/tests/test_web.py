@@ -438,6 +438,58 @@ def test_course_scores_requires_ready_course(app: Any, mock_gitlab_oauth: Any, m
         get_scores.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "page", ["/", f"/{TEST_COURSE_NAME}/", f"/{TEST_COURSE_NAME}/database", "/instance_admin/panel"]
+)
+def test_profile_form_returns_to_its_page(app: Any, mock_gitlab_oauth: Any, page: str) -> None:
+    CSRFProtect(app)
+    app.oauth = mock_gitlab_oauth
+    app.storage_api.stored_user.instance_admin = True
+
+    with (
+        app.test_client() as client,
+        patch.object(app.storage_api, "get_all_users", return_value=[app.storage_api.stored_user], create=True),
+        patch.object(app.storage_api, "update_user_profile", create=True) as update_profile,
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        profile_page = client.get(page)
+        assert profile_page.status_code == HTTPStatus.OK
+        form = BeautifulSoup(profile_page.data, "html.parser").select_one("#changeUserInfoForm")
+        assert form is not None
+        form_data = {field["name"]: field["value"] for field in form.select('input[type="hidden"]')}
+        form_data.update(username=TEST_USERNAME, first_name=TEST_FIRST_NAME, last_name=TEST_LAST_NAME)
+
+        response = client.post(form["action"], data=form_data, headers={"Referer": "https://example.invalid/"})
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == page
+    update_profile.assert_called_once_with(TEST_USERNAME, TEST_FIRST_NAME, TEST_LAST_NAME)
+
+
+@pytest.mark.parametrize(
+    ("return_to", "return_course"),
+    [("", ""), ("unsupported", TEST_COURSE_NAME), ("course.course_page", "group/course")],
+)
+def test_profile_update_falls_back_to_course_list(
+    app: Any, mock_gitlab_oauth: Any, return_to: str, return_course: str
+) -> None:
+    app.oauth = mock_gitlab_oauth
+    with (
+        app.test_client() as client,
+        patch("manytask.web.validate_csrf"),
+        patch.object(app.storage_api, "update_user_profile", create=True),
+    ):
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.post(
+            "/update_profile",
+            data={"username": TEST_USERNAME, "return_to": return_to, "return_course": return_course},
+            headers={"Referer": f"http://localhost/{TEST_COURSE_NAME}/"},
+        )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.location == "/"
+
+
 @pytest.mark.parametrize("page", ["", "database"])
 def test_personal_task_order_is_only_offered_on_assignments(app, mock_gitlab_oauth, page):
     CSRFProtect(app)
