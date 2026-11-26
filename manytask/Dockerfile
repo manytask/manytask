@@ -46,5 +46,5 @@ CMD ["gunicorn", "--bind", "0.0.0.0:5050", \
     "--log-file", "-", \
     "--capture-output", \
     "--workers", "2", \
-    "--threads", "4", \
-    "manytask:create_app()"]
+    "--worker-class", "gevent", \
+    "manytask.gevent_app:app"]

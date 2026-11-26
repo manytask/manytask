@@ -3,7 +3,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import gitlab
 import pytest
@@ -375,9 +375,24 @@ def test_course_scores_reads_current_user_without_syncing(app: Any, mock_gitlab_
         check_auth.assert_not_called()
 
 
-def test_course_scores_requires_session(app: Any) -> None:
+def test_course_score_stream_uses_session_identity_and_never_queries_scores(app: Any) -> None:
+    app.score_events = Mock()
+    app.score_events.stream.return_value = iter(["data: refresh\n\n"])
     with app.test_client() as client, patch.object(app.storage_api, "get_scores") as get_scores:
-        response = client.get(f"/{TEST_COURSE_NAME}/scores")
+        set_session(client, build_test_session(include_manytask=True))
+        response = client.get(f"/{TEST_COURSE_NAME}/scores?username=another", headers={"Accept": "text/event-stream"})
+        assert response.mimetype == "text/event-stream"
+        assert response.headers["X-Accel-Buffering"] == "no"
+        assert response.headers["Cache-Control"] == "no-store"
+        assert response.data == b"data: refresh\n\n"
+        app.score_events.stream.assert_called_once_with(TEST_COURSE_NAME, TEST_USERNAME)
+        get_scores.assert_not_called()
+
+
+@pytest.mark.parametrize("accept", ["application/json", "text/event-stream"])
+def test_course_scores_requires_session(app: Any, accept: str) -> None:
+    with app.test_client() as client, patch.object(app.storage_api, "get_scores") as get_scores:
+        response = client.get(f"/{TEST_COURSE_NAME}/scores", headers={"Accept": accept})
         assert response.status_code == HTTPStatus.UNAUTHORIZED
         get_scores.assert_not_called()
 
@@ -548,7 +563,7 @@ def test_course_page_defers_scores_to_endpoint(app: Any, mock_gitlab_oauth: Any,
     assert rendered_group["data-group-solved"] == "false"
     assert not rendered_group.has_attr("hidden")
     assert soup.find("script", src="/static/js/solved-last.js?v=2") is not None
-    assert soup.find("script", src="/static/js/course-scores.js?v=1") is not None
+    assert soup.find("script", src="/static/js/course-scores.js?v=3") is not None
     assert soup.select_one("#task-groups")["data-scores-url"] == f"/{TEST_COURSE_NAME}/scores"
     assert soup.select_one("#task-groups")["aria-busy"] == "true"
     assert soup.select_one("#scores-status").get_text(strip=True) == "Loading scores…"

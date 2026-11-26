@@ -5,7 +5,19 @@ from http import HTTPStatus
 
 import gitlab
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from sqlalchemy.exc import NoResultFound
@@ -298,11 +310,16 @@ def course_scores(course_name: str) -> ResponseReturnValue:
         if course.status == CourseStatus.HIDDEN and not storage.check_if_course_admin(course_name, username):
             abort(HTTPStatus.FORBIDDEN)
 
-    response = jsonify(
-        scores=storage.get_scores(course_name, username),
-        bonus_score=storage.get_bonus_score(course_name, username),
-        max_score=storage.max_score_started(course_name),
-    )
+    if request.accept_mimetypes.best_match(("application/json", "text/event-stream")) == "text/event-stream":
+        response = Response(app.score_events.stream(course_name, username), mimetype="text/event-stream")
+        response.headers["X-Accel-Buffering"] = "no"
+    else:
+        response = jsonify(
+            scores=storage.get_scores(course_name, username),
+            bonus_score=storage.get_bonus_score(course_name, username),
+            max_score=storage.max_score_started(course_name),
+        )
+    response.vary.add("Accept")
     response.headers["Cache-Control"] = "no-store"
     return response
 

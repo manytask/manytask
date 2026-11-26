@@ -46,6 +46,7 @@ from .models import (
     User,
     UserOnCourse,
 )
+from .score_events import notify_score_change
 from .utils.generic import calculate_percent
 
 ModelType = TypeVar("ModelType", bound=models.Base)
@@ -603,6 +604,8 @@ class DataBaseApi(StorageApi):
                 elif new_score != grade.score and task.is_large and new_score > 0 and new_score >= task.min_score:
                     # Preserve completion earned under an earlier min_score unless explicitly overridden.
                     grade.is_solved = True
+                if grade.score != new_score:
+                    notify_score_change(session, course_name, username)
                 grade.score = new_score
                 grade.last_submit_date = datetime.now(timezone.utc)
 
@@ -1509,6 +1512,7 @@ class DataBaseApi(StorageApi):
                     logger.debug(
                         "Updated/created task '%s' in group '%s' (course '%s')", task.name, group.name, course_name
                     )
+            notify_score_change(session, course_name)
             session.commit()
         logger.info("Deadlines config synced for course '%s'", course_name)
 
