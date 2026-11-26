@@ -42,10 +42,23 @@ function setup(cards = []) {
         return status;
     };
     document.querySelector = selector => selector === '[data-score-percent]' ? percent : total;
-    const context = vm.createContext({document, AbortSignal});
+    const streams = [];
+    class EventSource {
+        static CONNECTING = 0;
+        constructor(url) {
+            assert.equal(url, container.dataset.scoresUrl);
+            streams.push(this);
+        }
+        close() { this.closed = true; }
+    }
+    const context = vm.createContext({
+        document, window: new EventTarget(), EventSource, AbortController, AbortSignal, setTimeout, clearTimeout,
+    });
     vm.runInContext(source, context);
-    return {context, container, group, groupScore, percent, total, status};
+    return {context, container, group, groupScore, percent, total, status, streams};
 }
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
 
 function snapshot(scores, bonus = 0, max = 200) {
     return {scores, bonus_score: bonus, max_score: max};
@@ -111,7 +124,7 @@ test('missing task names that match object properties still get zero points', ()
 test('loads initial scores through the course scores endpoint and clears loading placeholders', async () => {
     const item = card('task', 100, ['unsolved']);
     item.score.textContent = '…/100';
-    const {context, container, group, groupScore, percent, total, status} = setup([item]);
+    const {context, container, group, groupScore, percent, total, status, streams} = setup([item]);
     let resolve;
     let updates = 0;
     let requests = 0;
@@ -121,13 +134,14 @@ test('loads initial scores through the course scores endpoint and clears loading
         assert.equal(options.cache, 'no-store');
         return new Promise(done => { resolve = done; });
     };
-    const loaded = context.initCourseScores(container, () => { updates++; });
+    context.initCourseScores(container, () => { updates++; });
+    streams[0].onmessage();
     assert.equal(item.score.textContent, '…/100');
     assert.equal(container.attributes['aria-busy'], 'true');
     assert.equal(status.hidden, false);
 
     resolve({ok: true, status: 200, json: async () => snapshot({task: 120}, 20, 100)});
-    await loaded;
+    await settle();
     assert.equal(item.score.textContent, '120/100');
     assert.equal(item.classList.contains('over_solved'), true);
     assert.equal(group.dataset.groupSolved, 'true');
@@ -141,12 +155,89 @@ test('loads initial scores through the course scores endpoint and clears loading
 });
 
 test('shows a reload message when the initial request fails', async () => {
-    const {context, container, status} = setup();
+    const {context, container, status, streams} = setup();
     context.fetch = async () => ({ok: false, status: 403});
     let updates = 0;
-    await context.initCourseScores(container, () => { updates++; });
+    context.initCourseScores(container, () => { updates++; });
+    streams[0].onerror();
+    await settle();
+    assert.ok(streams[0].closed);
     assert.equal(updates, 0);
     assert.equal(container.attributes['aria-busy'], 'false');
     assert.equal(status.hidden, false);
     assert.match(status.textContent, /Reload the page/);
+});
+
+test('coalesces invalidations during a read and stays idle between events', async () => {
+    const {context, container, streams, total} = setup();
+    const requests = [];
+    context.fetch = () => new Promise(resolve => requests.push(resolve));
+    context.setTimeout = () => assert.fail('scheduled a poll');
+    let updates = 0;
+    context.initCourseScores(container, () => updates++);
+    context.window.dispatchEvent(new Event('pageshow'));
+    assert.equal(streams.length, 1);
+    for (let i = 0; i < 5; i++) streams[0].onmessage();
+    assert.equal(requests.length, 1);
+    requests[0]({ok: true, json: async () => snapshot({x: 2})});
+    await settle();
+    assert.equal(requests.length, 2);
+    requests[1]({ok: true, json: async () => snapshot({x: 7})});
+    await settle();
+    assert.equal(total.textContent, '7/200');
+    streams[0].onmessage();
+    requests[2]({ok: true, json: async () => snapshot({x: 7})});
+    await settle();
+    assert.equal(updates, 2);
+});
+
+test('closes hidden streams and ignores stale responses after resuming', async () => {
+    const {context, container, streams, total} = setup();
+    const requests = [];
+    context.fetch = () => new Promise(resolve => requests.push(resolve));
+    context.initCourseScores(container, () => {});
+    streams[0].onmessage();
+    context.document.hidden = true;
+    context.document.dispatchEvent(new Event('visibilitychange'));
+    assert.ok(streams[0].closed);
+    context.document.hidden = false;
+    context.document.dispatchEvent(new Event('visibilitychange'));
+    streams[0].onmessage();
+    streams[1].onmessage();
+    assert.equal(requests.length, 2);
+    requests[1]({ok: true, json: async () => snapshot({x: 10})});
+    await settle();
+    requests[0]({ok: true, json: async () => snapshot({x: 1})});
+    await settle();
+    assert.equal(total.textContent, '10/200');
+    context.window.dispatchEvent(new Event('pagehide'));
+    assert.ok(streams[1].closed);
+});
+
+test('recovers from a failed snapshot and stops reconnecting after access is revoked', async () => {
+    const {context, container, status, streams} = setup();
+    let reconnect;
+    context.setTimeout = callback => { reconnect = callback; return 1; };
+    context.clearTimeout = () => { reconnect = undefined; };
+    context.fetch = async () => ({ok: false, status: 503});
+    context.initCourseScores(container, () => {});
+    streams[0].onmessage();
+    await settle();
+    assert.ok(streams[0].closed);
+    assert.match(status.textContent, /Retrying/);
+    reconnect();
+    context.fetch = async () => ({ok: true, json: async () => snapshot({x: 3})});
+    streams[1].onmessage();
+    await settle();
+    assert.equal(status.hidden, true);
+
+    context.fetch = async () => ({ok: false, status: 403});
+    streams[1].onmessage();
+    await settle();
+    assert.ok(streams[1].closed);
+    assert.equal(reconnect, undefined);
+    context.window.dispatchEvent(new Event('pageshow'));
+    assert.equal(streams.length, 2);
+    assert.equal(status.hidden, false);
+    assert.match(status.textContent, /check your access/);
 });

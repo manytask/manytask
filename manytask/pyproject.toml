@@ -30,6 +30,7 @@ dependencies = [
     "yandexcloud>=0.388.0",
     "grpcio>=1.78.0",
     "tenacity>=9.0.0",
+    "gevent>=25.9.1",
 ]
 
 

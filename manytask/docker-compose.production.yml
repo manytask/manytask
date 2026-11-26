@@ -75,6 +75,8 @@ services:
     env_file: .env
     environment:
       VIRTUAL_HOST: ${APP_HOST:?set APP_HOST, e.g. --env-file manytask/.env}
+      # LISTEN needs a dedicated session on the database behind PgBouncer.
+      SCORE_EVENTS_DATABASE_URL: ${SCORE_EVENTS_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}}
       VIRTUAL_PORT: 5050
       LETSENCRYPT_HOST: ${APP_HOST:?set APP_HOST, e.g. --env-file manytask/.env}
       LETSENCRYPT_EMAIL: no-reply@manytask.org

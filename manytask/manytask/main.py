@@ -18,6 +18,7 @@ from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
+from .score_events import ScoreEvents
 from .utils.rms_settings import schedule_rms_settings_reconcile
 
 MAX_AGE_IN_SECONDS = 86400
@@ -65,6 +66,7 @@ class CustomFlask(Flask):
     rms_api: abstract.RmsApi
     auth_api: abstract.AuthApi
     storage_api: abstract.StorageApi
+    score_events: ScoreEvents
 
     manytask_version: str | None = None
 
@@ -121,6 +123,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     # api objects
     app.storage_api = _database_storage_setup()
+    app.score_events = ScoreEvents(os.environ.get("SCORE_EVENTS_DATABASE_URL") or os.environ["DATABASE_URL"])
 
     rms = app.app_config.rms
 
