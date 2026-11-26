@@ -548,7 +548,7 @@ def test_course_page_defers_scores_to_endpoint(app: Any, mock_gitlab_oauth: Any,
     assert rendered_group["data-group-solved"] == "false"
     assert not rendered_group.has_attr("hidden")
     assert soup.find("script", src="/static/js/solved-last.js?v=2") is not None
-    assert soup.find("script", src="/static/js/course-scores.js?v=2") is not None
+    assert soup.find("script", src="/static/js/course-scores.js?v=4") is not None
     assert soup.select_one("#task-groups")["data-scores-url"] == f"/{TEST_COURSE_NAME}/scores"
     assert soup.select_one("#task-groups")["aria-busy"] == "true"
     assert soup.select_one("#scores-status").get_text(strip=True) == "Loading scores…"

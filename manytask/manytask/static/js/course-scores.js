@@ -31,7 +31,7 @@ function applyCourseScores(container, snapshot) {
 }
 
 function initCourseScores(container, onUpdate) {
-    const interval = 2000;
+    const interval = 10000;
     const status = document.getElementById('scores-status');
     let delay = interval;
     let timer;

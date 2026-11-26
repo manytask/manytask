@@ -168,7 +168,7 @@ test('loads initial scores through the polling endpoint and clears loading place
     assert.equal(container.attributes['aria-busy'], 'false');
     assert.equal(status.hidden, true);
     assert.equal(updates, 1);
-    assert.equal([...timers.values()][0].delay, 2000);
+    assert.equal([...timers.values()][0].delay, 10000);
 });
 
 test('polls current scores and notifies the ordering callback after applying them', async () => {
@@ -190,7 +190,7 @@ test('polls current scores and notifies the ordering callback after applying the
     });
     await settle();
     for (const score of [50, 100, 120, 0]) {
-        assert.equal([...timers.values()][0].delay, 2000);
+        assert.equal([...timers.values()][0].delay, 10000);
         await tick(timers);
         assert.equal(item.score.textContent, `${score}/100`);
     }
@@ -237,7 +237,7 @@ test('does not overlap requests or apply responses received while hidden', async
     assert.equal(timers.size, 0);
 });
 
-test('retries outages with capped backoff and returns to two seconds after recovery', async () => {
+test('retries outages with capped backoff and returns to ten seconds after recovery', async () => {
     const {context, container, timers, status} = setup();
     let failing = true;
     let updates = 0;
@@ -249,7 +249,7 @@ test('retries outages with capped backoff and returns to two seconds after recov
     await settle();
     assert.equal(status.textContent, 'Unable to load scores. Retrying…');
     assert.equal(status.hidden, false);
-    for (const delay of [4000, 8000, 16000, 30000, 30000]) {
+    for (const delay of [20000, 30000, 30000]) {
         assert.equal([...timers.values()][0].delay, delay);
         await tick(timers);
     }
@@ -258,7 +258,7 @@ test('retries outages with capped backoff and returns to two seconds after recov
     await tick(timers);
     assert.equal(updates, 1);
     assert.equal(status.hidden, true);
-    assert.equal([...timers.values()][0].delay, 2000);
+    assert.equal([...timers.values()][0].delay, 10000);
 });
 
 test('stops on login redirects and denied access', async () => {
@@ -286,6 +286,6 @@ test('keeps the last scores and retries server errors and malformed responses', 
         context.initCourseScores(container, () => assert.fail('Must keep the last scores'));
         await settle();
         assert.equal(item.score.textContent, '50/100');
-        assert.equal([...timers.values()][0].delay, 4000);
+        assert.equal([...timers.values()][0].delay, 20000);
     }
 });
