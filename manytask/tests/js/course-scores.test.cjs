@@ -42,13 +42,39 @@ function setup(cards = []) {
         return status;
     };
     document.querySelector = selector => selector === '[data-score-percent]' ? percent : total;
-    const context = vm.createContext({document, AbortSignal});
+    const timers = new Map();
+    let nextTimer = 0;
+    const window = new EventTarget();
+    const context = vm.createContext({
+        document, window, AbortSignal,
+        setTimeout: (callback, delay) => {
+            const id = ++nextTimer;
+            timers.set(id, {callback, delay});
+            return id;
+        },
+        clearTimeout: id => timers.delete(id),
+    });
     vm.runInContext(source, context);
-    return {context, container, group, groupScore, percent, total, status};
+    return {context, container, group, groupScore, percent, total, status, document, window, timers};
 }
 
 function snapshot(scores, bonus = 0, max = 200) {
     return {scores, bonus_score: bonus, max_score: max};
+}
+
+function response(scores = {}) {
+    return {ok: true, status: 200, json: async () => snapshot(scores)};
+}
+
+async function settle() {
+    await new Promise(resolve => setImmediate(resolve));
+}
+
+async function tick(timers) {
+    assert.equal(timers.size, 1);
+    const [id, timer] = timers.entries().next().value;
+    timers.delete(id);
+    await timer.callback();
 }
 
 test('updates every tile state and score, preserving bonus and special styles', () => {
@@ -108,26 +134,31 @@ test('missing task names that match object properties still get zero points', ()
     for (const item of cards) assert.equal(item.score.textContent, '0/100');
 });
 
-test('loads initial scores through the course scores endpoint and clears loading placeholders', async () => {
+test('leaves unchanged scores and ordering alone between polls', async () => {
+    const {context, container, timers} = setup();
+    let updates = 0;
+    context.fetch = async () => response();
+    context.initCourseScores(container, () => { updates++; });
+    await settle();
+    await tick(timers);
+    assert.equal(updates, 1);
+});
+
+test('loads initial scores through the polling endpoint and clears loading placeholders', async () => {
     const item = card('task', 100, ['unsolved']);
     item.score.textContent = '…/100';
-    const {context, container, group, groupScore, percent, total, status} = setup([item]);
+    const {context, container, group, groupScore, percent, total, status, timers} = setup([item]);
     let resolve;
     let updates = 0;
-    let requests = 0;
-    context.fetch = (url, options) => {
-        requests++;
-        assert.equal(url, '/python/scores');
-        assert.equal(options.cache, 'no-store');
-        return new Promise(done => { resolve = done; });
-    };
-    const loaded = context.initCourseScores(container, () => { updates++; });
+    context.fetch = () => new Promise(done => { resolve = done; });
+    context.initCourseScores(container, () => { updates++; });
     assert.equal(item.score.textContent, '…/100');
     assert.equal(container.attributes['aria-busy'], 'true');
     assert.equal(status.hidden, false);
+    assert.equal(timers.size, 0);
 
     resolve({ok: true, status: 200, json: async () => snapshot({task: 120}, 20, 100)});
-    await loaded;
+    await settle();
     assert.equal(item.score.textContent, '120/100');
     assert.equal(item.classList.contains('over_solved'), true);
     assert.equal(group.dataset.groupSolved, 'true');
@@ -137,16 +168,124 @@ test('loads initial scores through the course scores endpoint and clears loading
     assert.equal(container.attributes['aria-busy'], 'false');
     assert.equal(status.hidden, true);
     assert.equal(updates, 1);
-    assert.equal(requests, 1);
+    assert.equal([...timers.values()][0].delay, 10000);
 });
 
-test('shows a reload message when the initial request fails', async () => {
-    const {context, container, status} = setup();
-    context.fetch = async () => ({ok: false, status: 403});
+test('polls current scores and notifies the ordering callback after applying them', async () => {
+    const item = card('task', 100);
+    const {context, container, timers, group} = setup([item]);
+    const scores = [0, 50, 100, 120, 0];
     let updates = 0;
-    await context.initCourseScores(container, () => { updates++; });
+    context.fetch = async (url, options) => {
+        assert.equal(url, '/python/scores');
+        assert.equal(options.credentials, 'same-origin');
+        assert.equal(options.cache, 'no-store');
+        assert.equal(options.redirect, 'manual');
+        assert.ok(options.signal instanceof AbortSignal);
+        return response({task: scores.shift()});
+    };
+    context.initCourseScores(container, () => {
+        updates++;
+        assert.equal(group.dataset.groupSolved, String(updates === 3 || updates === 4));
+    });
+    await settle();
+    for (const score of [50, 100, 120, 0]) {
+        assert.equal([...timers.values()][0].delay, 10000);
+        await tick(timers);
+        assert.equal(item.score.textContent, `${score}/100`);
+    }
+    assert.equal(updates, 5);
+});
+
+test('pauses in a hidden tab and immediately refreshes when visible', async () => {
+    const {context, container, document, timers} = setup();
+    let requests = 0;
+    context.fetch = async () => { requests++; return response(); };
+    document.hidden = true;
+    context.initCourseScores(container, () => {});
+    await settle();
+    assert.equal(requests, 0);
+    document.hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await settle();
+    assert.equal(requests, 1);
+    assert.equal(timers.size, 1);
+    document.hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    assert.equal(timers.size, 0);
+    document.hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await settle();
+    assert.equal(requests, 2);
+});
+
+test('does not overlap requests or apply responses received while hidden', async () => {
+    const {context, container, document, window, timers} = setup();
+    let resolve;
+    let requests = 0;
+    let updates = 0;
+    context.fetch = () => { requests++; return new Promise(done => { resolve = done; }); };
+    context.initCourseScores(container, () => { updates++; });
+    window.dispatchEvent(new Event('pageshow'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    assert.equal(requests, 1);
+    assert.equal(timers.size, 0);
+    document.hidden = true;
+    resolve(response());
+    await settle();
     assert.equal(updates, 0);
-    assert.equal(container.attributes['aria-busy'], 'false');
+    assert.equal(timers.size, 0);
+});
+
+test('retries outages with capped backoff and returns to ten seconds after recovery', async () => {
+    const {context, container, timers, status} = setup();
+    let failing = true;
+    let updates = 0;
+    context.fetch = async () => {
+        if (failing) throw new Error('Offline');
+        return response();
+    };
+    context.initCourseScores(container, () => { updates++; });
+    await settle();
+    assert.equal(status.textContent, 'Unable to load scores. Retrying…');
     assert.equal(status.hidden, false);
-    assert.match(status.textContent, /Reload the page/);
+    for (const delay of [20000, 30000, 30000]) {
+        assert.equal([...timers.values()][0].delay, delay);
+        await tick(timers);
+    }
+    assert.equal(updates, 0);
+    failing = false;
+    await tick(timers);
+    assert.equal(updates, 1);
+    assert.equal(status.hidden, true);
+    assert.equal([...timers.values()][0].delay, 10000);
+});
+
+test('stops on login redirects and denied access', async () => {
+    for (const status of [0, 302, 401, 403, 404]) {
+        const {context, container, timers, status: loadingStatus} = setup();
+        context.fetch = async () => ({status, type: status === 0 ? 'opaqueredirect' : 'basic'});
+        context.initCourseScores(container, () => assert.fail('Must keep the last scores'));
+        await settle();
+        assert.equal(timers.size, 0);
+        assert.equal(container.attributes['aria-busy'], 'false');
+        assert.equal(loadingStatus.hidden, false);
+        assert.match(loadingStatus.textContent, /Reload the page/);
+    }
+});
+
+test('keeps the last scores and retries server errors and malformed responses', async () => {
+    for (const result of [
+        {ok: false, status: 500},
+        {ok: true, status: 200, json: async () => { throw new Error('Invalid JSON'); }},
+    ]) {
+        const item = card('task', 100);
+        const {context, container, timers} = setup([item]);
+        item.score.textContent = '50/100';
+        context.fetch = async () => result;
+        context.initCourseScores(container, () => assert.fail('Must keep the last scores'));
+        await settle();
+        assert.equal(item.score.textContent, '50/100');
+        assert.equal([...timers.values()][0].delay, 20000);
+    }
 });
