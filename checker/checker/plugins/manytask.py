@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import IO, Any, Optional
+from typing import IO, Any, Optional, Self
 
 import requests
 import requests.adapters
 import urllib3
-from pydantic import AnyUrl
+from pydantic import AnyUrl, ConfigDict, field_validator, model_validator
 
 from checker.exceptions import PluginExecutionFailed
 
@@ -26,9 +26,12 @@ class ManytaskPlugin(PluginABC):
     name = "report_score_manytask"
 
     class Args(PluginABC.Args):
+        model_config = ConfigDict(hide_input_in_errors=True)
+
         origin: Optional[str] = None  # as pydantic does not support | in older python versions
         patterns: list[str] = ["*"]
-        username: str
+        username: str | None = None
+        user_id: str | None = None
         task_name: str
         score: int | float | None  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
         report_url: AnyUrl
@@ -36,6 +39,19 @@ class ManytaskPlugin(PluginABC):
         check_deadline: bool
         allow_reduction: bool = False
         send_time: datetime = datetime.now().astimezone()
+
+        @field_validator("username", "user_id")
+        @classmethod
+        def empty_identifier_as_none(cls, value: str | None) -> str | None:
+            return value if value and value.strip() else None
+
+        @model_validator(mode="after")
+        def validate_identifier(self) -> Self:
+            if (self.username is None) == (self.user_id is None):
+                raise ValueError(
+                    "Provide exactly one non-empty identifier (username or user_id)"
+                )
+            return self
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
         output: list[str] = []
@@ -47,11 +63,17 @@ class ManytaskPlugin(PluginABC):
         except ValueError as e:
             raise PluginExecutionFailed(f"Failed to format send_time: {e}")
 
+        identifier_field, identifier = (
+            ("username", args.username)
+            if args.username is not None
+            else ("user_id", args.user_id)
+        )
+
         # Do not expose token in logs.
         data = {
             "token": args.report_token,
             "task": args.task_name,
-            "username": args.username,
+            identifier_field: identifier,
             "score": args.score,
             "check_deadline": args.check_deadline,
             "allow_reduction": args.allow_reduction,
@@ -70,7 +92,7 @@ class ManytaskPlugin(PluginABC):
         try:
             result = response.json()
             output.append(
-                f"Report for task '{args.task_name}' for user '{args.username}', "
+                f"Report for task '{args.task_name}' for user '{identifier}', "
                 f"requested score: {args.score}, result score: {result['score']}"
             )
             return PluginOutput(output="\n".join(output))

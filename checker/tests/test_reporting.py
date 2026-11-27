@@ -25,7 +25,11 @@ TIMESTAMP = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
 
 def _create_tester(
-    tmp_path: Path, mocker: MockerFixture, failed_tasks: set[str]
+    tmp_path: Path,
+    mocker: MockerFixture,
+    failed_tasks: set[str],
+    *,
+    report_identity: dict[str, str] | None = None,
 ) -> Tester:
     tasks = [
         FileSystemTask(name, name, CheckerSubConfig.default())
@@ -74,7 +78,7 @@ def _create_tester(
                         "name": "Report score",
                         "run": "report_score_manytask",
                         "args": {
-                            "username": "student",
+                            **(report_identity or {"username": "student"}),
                             "task_name": "${{ task.task_name }}",
                             "score": "${{ task.task_score_percent }}",
                             "report_url": REPORT_URL,
@@ -94,6 +98,29 @@ def _create_tester(
         },
     )
     return Tester(course, config)
+
+
+def test_sourcecraft_report_preserves_caller_id_as_string(
+    tmp_path: Path, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SOURCECRAFT_CALLER_ID", "000")
+    tester = _create_tester(
+        tmp_path,
+        mocker,
+        set(),
+        report_identity={"user_id": "${{ env.SOURCECRAFT_CALLER_ID | tojson }}"},
+    )
+
+    with Mocker() as reports:
+        reports.post(REPORT_URL, json={"score": 1.0})
+        tester.run(tmp_path, timestamp=TIMESTAMP)
+
+    assert len(reports.request_history) == 2
+    for request in reports.request_history:
+        assert request.text is not None
+        fields = parse_qs(request.text, keep_blank_values=True)
+        assert fields["user_id"] == ["000"]
+        assert "username" not in fields
 
 
 @pytest.mark.parametrize("failed_tasks", [set(), {"second"}])
