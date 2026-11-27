@@ -421,7 +421,8 @@ testing:
 `report_pipeline` runs only when `tasks_pipeline` succeeded, and only under `checker grade` — this
 is what pushes the score to Manytask, so it needs a `MANYTASK_TOKEN` CI variable. Replace
 `course-name` in `report_url` with your course slug. The GitLab CI example reads the student's
-username from `GITLAB_USER_LOGIN`; other runners must provide an appropriate RMS username.
+username from `GITLAB_USER_LOGIN`. For SourceCraft, configure the plugin to read the student's
+[user ID from `SOURCECRAFT_CALLER_ID`](../06_reference/03_checker_plugins.md#sourcecraft-score-reporting).
 
 With automatic task detection, `checker grade` enables reporting by default. Selecting tasks
 explicitly with `--task`, `--group`, or `--all-tasks` disables reporting unless `--submit-score`

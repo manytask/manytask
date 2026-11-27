@@ -55,6 +55,7 @@ class TestManytaskPlugin:
         "parameters, expected_exception",
         [
             ({}, None),
+            ({"user_id": " "}, None),
             (
                 {
                     "origin": "test/",
@@ -119,6 +120,28 @@ class TestManytaskPlugin:
     def test_empty_args_raise_validation_error(self) -> None:
         with pytest.raises(ValidationError):
             ManytaskPlugin.Args(**{})
+
+    @pytest.mark.parametrize(
+        "identifiers",
+        [
+            {"username": "student", "user_id": "rms-42"},
+            {},
+            {"username": ""},
+            {"user_id": " \t"},
+            {"username": " ", "user_id": ""},
+        ],
+    )
+    def test_report_requires_exactly_one_non_empty_identifier(
+        self, identifiers: dict[str, str]
+    ) -> None:
+        args = self.get_default_args_dict()
+        del args["username"]
+        args.update(identifiers)
+
+        with pytest.raises(
+            ValidationError, match="Provide exactly one non-empty identifier"
+        ):
+            ManytaskPlugin.Args(**args)
 
     def test_date_without_timezone_throws_warning(self) -> None:
         plugin = ManytaskPlugin()
@@ -216,14 +239,22 @@ class TestManytaskPlugin:
                 assert result.status_code == HTTP_OK
                 assert result.text == "Success"
 
-    def test_plugin_run(self, mocker: MockFixture) -> None:
+    @pytest.mark.parametrize(
+        "identifier_field, identifier",
+        [("username", TEST_USERNAME), ("user_id", "rms-42")],
+    )
+    def test_plugin_run(
+        self, mocker: MockFixture, identifier_field: str, identifier: str
+    ) -> None:
         args_dict = self.get_default_full_args_dict()
+        del args_dict["username"]
+        args_dict[identifier_field] = identifier
         result_score = 1.0
         expected_files = {"files": "good"}
         expected_data = {
             "token": self.REPORT_TOKEN,
             "task": self.TEST_TASK_NAME,
-            "username": self.TEST_USERNAME,
+            identifier_field: identifier,
             "score": self.TEST_SCORE,
             "check_deadline": self.TEST_CHECK_DEADLINE,
             "allow_reduction": False,
@@ -237,7 +268,7 @@ class TestManytaskPlugin:
         result = ManytaskPlugin().run(args_dict)
 
         assert result.output == (
-            f"Report for task '{self.TEST_TASK_NAME}' for user '{self.TEST_USERNAME}', "
+            f"Report for task '{self.TEST_TASK_NAME}' for user '{identifier}', "
             f"requested score: {self.TEST_SCORE}, result score: {result_score}"
         )
 

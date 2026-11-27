@@ -179,6 +179,9 @@ Send the final score to the Manytask platform via its [REST API](04_rest_api.md)
 after a successful task pipeline. HTTP error responses fail the stage; the current retry
 configuration does not retry POST requests on HTTP errors.
 
+Provide exactly one non-empty RMS identifier, `username` or `user_id`. Blank values are treated as unset.
+This GitLab example uses the student's login from `GITLAB_USER_LOGIN`.
+
 ```yaml
 - name: "Report score"
   run: "report_score_manytask"
@@ -193,7 +196,8 @@ configuration does not retry POST requests on HTTP errors.
 
 | Arg | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `username` | `str` | yes | — | Student's username in RMS. |
+| `username` | `str` | if `user_id` is unset | — | Student's username in RMS. |
+| `user_id` | `str` | if `username` is unset | — | Student's user ID in RMS. |
 | `task_name` | `str` | yes | — | Task identifier as registered in `.manytask.yml`. |
 | `score` | `float \| int \| null` | yes | — | Score to report, in `[0.0, 1.0]` (bonus scores may exceed `1.0` but float larger than `2.0` will not be accepted). |
 | `report_url` | `AnyUrl` | yes | — | Full score endpoint URL: `https://<host>/api/<course_name>/report`. The plugin uses it as given. |
@@ -211,6 +215,24 @@ configuration does not retry POST requests on HTTP errors.
 | `float` | A percentage of the score in `[0.0, 1.0]`, with an ability to give bonus up to `2.0`. Number below `0.0` will be clamped to `0.0`, number over `2.0` will return HTTP Bad Request. The number will be multiplied by the max number of points set to the task. |
 | `int` | If the reported number is an integer, including a negative integer, it is taken as a final score. It can be larger than the task maximum. Persisting a negative value requires `allow_reduction: true`. |
 | `null` | Task is considered fully solved, max points are issued. |
+
+### SourceCraft {#sourcecraft-score-reporting}
+
+Use this step in `testing.report_pipeline` in `.checker.yml`. SourceCraft supplies the student's
+RMS user ID in `SOURCECRAFT_CALLER_ID`. Set `MANYTASK_TOKEN` in CI to your Manytask course token.
+The `tojson` filter preserves the ID as a string when it contains only digits.
+
+```yaml
+- name: "Report score"
+  run: "report_score_manytask"
+  args:
+    user_id: ${{ env.SOURCECRAFT_CALLER_ID | tojson }}
+    task_name: ${{ task.task_name }}
+    score: ${{ outputs.test_result.percentage }}
+    report_url: https://manytask.example.com/api/course-name/report
+    report_token: ${{ env.MANYTASK_TOKEN }}
+    check_deadline: true
+```
 
 
 ## `run_pytest`
