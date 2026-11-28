@@ -220,7 +220,7 @@ testing:
 |---|---|---|---|---|
 | `changes_detection` | `str` | ➖ | `last_commit_changes` | Strategy for detecting which tasks changed. The full list of options are `branch_name`, `branch_name_or_commit_message`, `commit_message`, `last_commit_changes`, `files_changed`. See details [below](#changes_detection). |
 | `search_plugins` | `list[str]` | ➖ | `[]` | Paths (relative to repo root) to search for custom plugin Python files. |
-| `skip_unchanged_tasks` | `str` | ➖ | `null` | Name of the task parameter holding glob patterns of student-editable files (e.g. `allow_change`). If set, `checker grade` skips (does not run and does not report) any detected task whose matching files are byte-identical to the published version. `null` disables the check. See details [below](#skip_unchanged_tasks). |
+| `skip_unchanged_tasks` | `str` | ➖ | `null` | Name of the task parameter holding globs for the published-version comparison, such as `allow_change` or `check_on_change`. If set, `checker grade` skips any detected task whose matching files are byte-identical to the published version. `null` disables the check. See details [below](#skip_unchanged_tasks). |
 | `global_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once** per checker run, before any task pipeline. |
 | `tasks_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task**. Can be overridden in `.task.yml` or `.tasks.yml`. |
 | `report_pipeline` | `list[stage]` | ➖ | `[]` | Pipeline executed **once per task** only if `tasks_pipeline` succeeded. Can be overridden in `.task.yml` or `.tasks.yml`. |
@@ -251,18 +251,15 @@ New-branch pushes with a null base also use this fallback; the checker cannot in
 The course CI template uses `GIT_DEPTH: "0"` so long pushes do not lose earlier messages to a shallow clone.
 Branch-only detection always uses the current branch name, regardless of the number of pushed commits.
 
-When tasks defined in `.tasks.yml` share a folder, `last_commit_changes` selects a task with a nonempty effective
-`parameters.allow_change` list only if the commit diff changes a file matching that list. Patterns
-are relative to the shared folder and inherit from `default_parameters` through `.group.yml`,
-task-file defaults, and the individual task entry, as they do for grading. A changed shared file
-listed by several tasks selects all of them. A sibling solved in an older commit is not selected
-merely because its solution differs from the published template.
+When tasks defined in `.tasks.yml` share a folder, `last_commit_changes` uses
+[`parameters.check_on_change`](#check_on_change) to match changed files. If the effective
+value is omitted or `null`, it uses `parameters.allow_change`. A changed file that matches
+patterns for several tasks selects all of them.
 
-Tasks without a nonempty effective list (omitted, `null`, or `[]`) retain folder-based detection:
-any change beneath the folder selects them. Single-task folders also retain folder-based detection.
+When selection falls back to `allow_change` and that list is empty or absent, any change beneath
+the folder selects the task. Single-task folders also use folder-based detection.
 Branch-name and commit-message selection use logical task names from the `tasks` mapping in
-`.tasks.yml`; `--task <name>` also selects by that logical name. These explicit selections are not
-restricted by `allow_change`.
+`.tasks.yml`. The `--task <name>` option also selects by that logical name.
 
 ### `skip_unchanged_tasks`
 
@@ -270,13 +267,13 @@ When a student pulls newly published tasks from the public repo, all of them sho
 `changes_detection`: the untouched task is graded and reported as a failed submission, charging a penalty
 for a task the student hasn't even started.
 
-Set `skip_unchanged_tasks` to the name of the parameter that lists a task's student-editable files (typically
-`allow_change`). For each task `changes_detection` picks up,
+Set `skip_unchanged_tasks` to the name of the task parameter whose patterns should be compared against
+the published files, typically `allow_change`. For each task `changes_detection` picks up,
 `checker grade` then compares every file matching those patterns against the file the export would publish at
 that path (its `.template` counterpart, or the reference file with `SOLUTION BEGIN`/`SOLUTION END` blocks
 replaced, depending on `export.templates`; see [`templates` strategies](#templates-strategies)) - a task where every such file is
-byte-identical to the published version is skipped entirely: not run, not reported, no penalty. A task with no
-`allow_change` patterns, or none of whose files match, is always graded normally.
+byte-identical to the published version is skipped entirely without a test run, grade report, or penalty.
+A task with no patterns in the configured parameter, or with no matching files, is graded normally.
 
 This check happens after commit selection and compares against the published version, not the
 commit's base. It can skip newly pulled templates; it does not select tasks or rerun older solutions.
@@ -518,6 +515,17 @@ In `.tasks.yml`, a missing or `null` effective list keeps the structure-based me
 contributes no student files. All selected tasks share one prepared workspace using their combined
 lists. See the [preparation rules](../03_teachers/05_checker_configuration.md#shared-folder-preparation) for ordering,
 student deletions, and the effect of an unrestricted task.
+
+### `parameters.check_on_change` {#check_on_change}
+
+Optional list of folder-relative glob patterns for `last_commit_changes` in folders shared by
+multiple `.tasks.yml` entries. Use the same pattern syntax and inheritance as `allow_change`.
+Omit the parameter or set it to `null` to use `allow_change` for selection. Set it to `[]` to disable
+selection by file changes for that task. Workspace preparation uses `allow_change`, so include any required student
+dependencies there. See the [shared-folder example](../03_teachers/05_checker_configuration.md#several-tasks-in-one-folder).
+
+To compare only these files against the published templates after selecting a task, set
+`testing.skip_unchanged_tasks: check_on_change`. This comparison reads the named parameter directly.
 
 ## Complete example of the file
 

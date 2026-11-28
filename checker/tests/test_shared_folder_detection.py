@@ -141,14 +141,20 @@ def test_shared_folder_globs_match_from_task_root(
 
 
 @pytest.mark.parametrize("scope", ["default", "group", "file"])
-def test_shared_folder_detection_inherits_editable_patterns(
-    tmp_path: Path, scope: str
+@pytest.mark.parametrize("parameter", ["allow_change", "check_on_change"])
+def test_shared_folder_detection_inherits_patterns(
+    tmp_path: Path, scope: str, parameter: str
 ) -> None:
     course, repository, folder = _make_course(tmp_path)
     path = folder / ".tasks.yml"
     config = yaml.safe_load(path.read_text())
-    config["tasks"]["seq-read"]["parameters"].pop("allow_change")
-    parameters = {"allow_change": ["inherited.cpp"]}
+    # Give siblings their own patterns so only seq-read matches the inherited list.
+    if parameter == "check_on_change":
+        for name in TASK_NAMES[1:]:
+            config["tasks"][name]["parameters"][parameter] = [f"{name}.cpp"]
+    else:
+        config["tasks"]["seq-read"]["parameters"].pop(parameter)
+    parameters = {parameter: ["inherited.cpp"]}
     defaults = None
     if scope == "default":
         defaults = parameters
@@ -182,16 +188,31 @@ def test_shared_task_without_patterns_keeps_folder_detection(
     assert _detect(course) == ["seq-read", "seq-write"]
 
 
+@pytest.mark.parametrize("patterns, expected", [(None, ["seq-read"]), ([], [])])
+def test_shared_folder_detection_distinguishes_null_and_empty_check_on_change(
+    tmp_path: Path, patterns: list[str] | None, expected: list[str]
+) -> None:
+    course, repository, folder = _make_course(tmp_path)
+    course.potential_tasks["seq-read"].config.parameters.root["check_on_change"] = (
+        patterns
+    )
+    (folder / "seq-read.cpp").write_text("new submission")
+    _commit(repository)
+
+    assert _detect(course) == expected
+
+
 @pytest.mark.parametrize("scope", ["default", "group"])
+@pytest.mark.parametrize("parameter", ["allow_change", "check_on_change"])
 def test_shared_folder_detection_rejects_inherited_sibling_patterns(
-    tmp_path: Path, scope: str
+    tmp_path: Path, scope: str, parameter: str
 ) -> None:
     course, repository, folder = _make_course(tmp_path)
     path = folder / ".tasks.yml"
     config = yaml.safe_load(path.read_text())
     config["tasks"]["seq-read"].pop("parameters")
     path.write_text(yaml.safe_dump(config))
-    parameters = {"allow_change": ["../sibling/*.cpp"]}
+    parameters = {parameter: ["../sibling/*.cpp"]}
     if scope == "group":
         (folder / ".group.yml").write_text(
             yaml.safe_dump({"version": 1, "parameters": parameters})
@@ -199,7 +220,7 @@ def test_shared_folder_detection_rejects_inherited_sibling_patterns(
     _commit(repository)
     course = Course(course.manytask_config, tmp_path)
 
-    with pytest.raises(ValueError, match="inside the task folder"):
+    with pytest.raises(ValueError, match=f"{parameter}.*inside the task folder"):
         _detect(course, parameters if scope == "default" else None)
 
 
