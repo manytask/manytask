@@ -219,10 +219,10 @@ class CheckerSubConfig(CheckerTaskOverrides, YamlLoaderMixin["CheckerSubConfig"]
         editable = self.get_editable_patterns(parameters)
         if not self._folder_local_allow_change:
             return None
-        triggers = _validate_task_patterns(
+        patterns = _validate_task_patterns(
             "check_on_change", parameters.get("check_on_change")
         )
-        return (editable or None) if triggers is None else triggers
+        return (editable or None) if patterns is None else patterns
 
     @classmethod
     def default(cls) -> "CheckerSubConfig":

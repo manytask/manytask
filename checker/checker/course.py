@@ -526,7 +526,7 @@ class Course:
         :return: list of changed tasks
         :param task_patterns: optional task-relative globs supplied by a configuration adapter;
             nonempty lists narrow file-based detection for tasks sharing a folder
-        :param default_parameters: global defaults used when resolving task trigger patterns
+        :param default_parameters: global defaults used when resolving check_on_change and allow_change
         :raises CheckerException: if repository is not a git repository
         """
         print_info(f"Detecting changes by {detection_type}")

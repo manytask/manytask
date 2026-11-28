@@ -148,7 +148,7 @@ def test_shared_folder_detection_inherits_patterns(
     course, repository, folder = _make_course(tmp_path)
     path = folder / ".tasks.yml"
     config = yaml.safe_load(path.read_text())
-    # Override the inherited triggers for siblings so only seq-read can match.
+    # Give siblings their own patterns so only seq-read matches the inherited list.
     if parameter == "check_on_change":
         for name in TASK_NAMES[1:]:
             config["tasks"][name]["parameters"][parameter] = [f"{name}.cpp"]
@@ -188,13 +188,13 @@ def test_shared_task_without_patterns_keeps_folder_detection(
     assert _detect(course) == ["seq-read", "seq-write"]
 
 
-@pytest.mark.parametrize("triggers, expected", [(None, ["seq-read"]), ([], [])])
-def test_shared_folder_detection_distinguishes_null_and_empty_triggers(
-    tmp_path: Path, triggers: list[str] | None, expected: list[str]
+@pytest.mark.parametrize("patterns, expected", [(None, ["seq-read"]), ([], [])])
+def test_shared_folder_detection_distinguishes_null_and_empty_check_on_change(
+    tmp_path: Path, patterns: list[str] | None, expected: list[str]
 ) -> None:
     course, repository, folder = _make_course(tmp_path)
     course.potential_tasks["seq-read"].config.parameters.root["check_on_change"] = (
-        triggers
+        patterns
     )
     (folder / "seq-read.cpp").write_text("new submission")
     _commit(repository)

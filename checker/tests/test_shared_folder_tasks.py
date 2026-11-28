@@ -272,7 +272,7 @@ def test_grade_selects_one_logical_task_from_a_shared_folder(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize("changed_task", ["one", "two"])
-def test_grade_copies_dependency_without_triggering_dependent_task(
+def test_grade_copies_dependency_without_selecting_dependent_task(
     tmp_path: Path, changed_task: str
 ) -> None:
     student, reference = _create_course(tmp_path, unchanged_one=changed_task == "two")
