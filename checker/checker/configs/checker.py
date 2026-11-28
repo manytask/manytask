@@ -212,7 +212,9 @@ class CheckerSubConfig(CheckerTaskOverrides, YamlLoaderMixin["CheckerSubConfig"]
             return None
         return _validate_task_patterns("allow_change", parameters.get("allow_change"))
 
-    def get_trigger_patterns(self, parameters: dict[str, Any]) -> list[str] | None:
+    def get_check_on_change_patterns(
+        self, parameters: dict[str, Any]
+    ) -> list[str] | None:
         """Return patterns for commit-based selection of tasks sharing a folder."""
         editable = self.get_editable_patterns(parameters)
         if not self._folder_local_allow_change:

@@ -567,7 +567,7 @@ class Course:
         if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
             if task_patterns is None:
                 task_patterns = {
-                    task.name: task.config.get_trigger_patterns(
+                    task.name: task.config.get_check_on_change_patterns(
                         self.get_task_parameters(task, default_parameters)
                     )
                     for task in potential_tasks
