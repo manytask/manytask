@@ -52,13 +52,7 @@ jobs:
 
       - name: Build testenv and assert it has no raw private checkout
         run: |
-          # Test the checker revision under CI before its release tag exists.
-          checker_pip_spec="git+${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git@${GITHUB_SHA}#subdirectory=checker"
-          docker build \
-            --tag course-template-base \
-            --file course-template/base.docker \
-            --build-arg "CHECKER_PIP_SPEC=$checker_pip_spec" \
-            course-template
+          docker build --tag course-template-base --file course-template/base.docker course-template
           docker build \
             --tag course-template-testenv \
             --file course-template/testenv.docker \
