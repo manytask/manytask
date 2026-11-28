@@ -271,6 +271,44 @@ def test_grade_selects_one_logical_task_from_a_shared_folder(tmp_path: Path) -> 
     assert (student / "reported.txt").read_text().splitlines() == ["two"]
 
 
+@pytest.mark.parametrize("changed_task", ["one", "two"])
+def test_grade_copies_dependency_without_triggering_dependent_task(
+    tmp_path: Path, changed_task: str
+) -> None:
+    student, reference = _create_course(tmp_path, unchanged_one=changed_task == "two")
+    task_path = reference / "group/shared/.tasks.yml"
+    config = yaml.safe_load(task_path.read_text())
+    config["tasks"]["one"]["parameters"].update(
+        allow_change=["one.txt", "two.txt"], check_on_change=["one.txt"]
+    )
+
+    repository = git.Repo.init(student)
+    actor = git.Actor("Checker tests", "checker@example.com")
+    repository.index.add(["group/shared"])
+    repository.index.commit("Initial student files", author=actor, committer=actor)
+    changed_file = f"group/shared/{changed_task}.txt"
+    revised = f"student {changed_task} revised"
+    (student / changed_file).write_text(revised)
+    repository.index.add([changed_file])
+    repository.index.commit("Revise one solution", author=actor, committer=actor)
+    config["tasks"][changed_task]["parameters"]["own_content"] = revised
+    _write_yaml(task_path, config)
+    _expect_workspace(
+        reference,
+        {
+            "one.txt": revised if changed_task == "one" else "reference one",
+            "two.txt": revised if changed_task == "two" else "student two",
+            "protected.txt": "reference protected",
+        },
+    )
+
+    result = _grade(student, reference)
+
+    assert result.exit_code == 0, result.output
+    assert (student / "executed.txt").read_text().splitlines() == [changed_task]
+    assert (student / "reported.txt").read_text().splitlines() == [changed_task]
+
+
 @pytest.mark.parametrize("scope", ["global", "group", "file"])
 def test_allow_change_is_inherited_before_task_file_preparation(
     tmp_path: Path, scope: str

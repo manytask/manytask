@@ -18,11 +18,14 @@ from checker.exceptions import BadConfig
     [["../solution.py"], ["/tmp/solution.py"], ["src/../../solution.py"], [""]],
 )
 @pytest.mark.parametrize("scope", ["file", "entry"])
-def test_allow_change_stays_in_task_folder(patterns: list[str], scope: str) -> None:
+@pytest.mark.parametrize("parameter", ["allow_change", "check_on_change"])
+def test_task_patterns_stay_in_task_folder(
+    patterns: list[str], scope: str, parameter: str
+) -> None:
     data = {"version": 1, "tasks": {"parse": {}}}
     target = data if scope == "file" else data["tasks"]["parse"]
-    target["parameters"] = {"allow_change": patterns}
-    with pytest.raises(ValidationError, match="inside the task folder"):
+    target["parameters"] = {parameter: patterns}
+    with pytest.raises(ValidationError, match=f"{parameter}.*inside the task folder"):
         CheckerTasksFileConfig.model_validate(data)
 
 

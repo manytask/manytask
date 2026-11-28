@@ -270,12 +270,14 @@ tasks:
       allow_change: ["add.py"]
   multiply:
     parameters:
-      allow_change: ["multiply.py"]
+      allow_change: ["multiply.py", "add.py"]
+      check_on_change: ["multiply.py"]
       timeout: 60
 ```
 
-Selecting only `add` uses the student's `add.py` and the reference `multiply.py`; selecting only
-`multiply` does the reverse. Selecting both overlays both student implementations into one workspace.
+Selecting `multiply` copies both student implementations into the workspace so it can call the
+student's `add`. Selecting only `add` copies the student's `add.py` and uses the reference
+`multiply.py`.
 Both tasks inherit common top-level settings. Here `add` uses a timeout of
 30 seconds and `multiply` uses 60 seconds. A `tasks` entry can override `parameters`,
 `task_pipeline` and `report_pipeline`. Set `allow_change` inside `parameters` to choose editable files. Parameters merge per key; pattern
@@ -290,8 +292,9 @@ Add `add` and `multiply` separately to `.manytask.yml`. Task names must be uniqu
 course, including names from flat `.task.yml` files. `checker check --task add` and branch-name
 selection address the logical task name; `task.task_sub_path` still points to `python/arithmetic`.
 With [`last_commit_changes`](../06_reference/02_checker_yml.md#changes_detection), changing only `add.py`
-selects `add`; a shared file listed by both tasks selects both. A task without a nonempty list
-keeps folder-based selection. The separate
+selects `add`, and changing only `multiply.py` selects `multiply`.
+[`check_on_change`](../06_reference/02_checker_yml.md#check_on_change) supplies the selection patterns
+for `multiply`. The `add` task uses its `allow_change` list as the default. The
 [`skip_unchanged_tasks`](../06_reference/02_checker_yml.md#skip_unchanged_tasks) check can then skip selected
 tasks whose solutions still match the published templates.
 

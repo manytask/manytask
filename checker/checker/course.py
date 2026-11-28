@@ -398,9 +398,9 @@ class Course:
             patterns = (task_patterns or {}).get(task.name)
             if (
                 tasks_per_path[task.relative_path] > 1
-                and patterns
+                and patterns is not None
                 and not any(
-                    self._matches_editable_pattern(
+                    self._matches_task_pattern(
                         file.parts, Path(pattern).parts, pattern.endswith("/")
                     )
                     for file in task_files
@@ -421,7 +421,7 @@ class Course:
         return changed_tasks
 
     @staticmethod
-    def _matches_editable_pattern(
+    def _matches_task_pattern(
         path: tuple[str, ...], pattern: tuple[str, ...], directory_only: bool = False
     ) -> bool:
         """Match task-relative globs, including descendants of matching folders.
@@ -432,16 +432,14 @@ class Course:
         if not pattern:
             return bool(path) or not directory_only
         if pattern[0] == "**":
-            return Course._matches_editable_pattern(
-                path, pattern[1:], directory_only
-            ) or (
+            return Course._matches_task_pattern(path, pattern[1:], directory_only) or (
                 bool(path)
-                and Course._matches_editable_pattern(path[1:], pattern, directory_only)
+                and Course._matches_task_pattern(path[1:], pattern, directory_only)
             )
         return (
             bool(path)
             and fnmatchcase(path[0], pattern[0])
-            and Course._matches_editable_pattern(path[1:], pattern[1:], directory_only)
+            and Course._matches_task_pattern(path[1:], pattern[1:], directory_only)
         )
 
     def _resolve_base_commit(self, repo: git.Repo, head: git.Commit) -> git.Commit | None:
@@ -528,7 +526,7 @@ class Course:
         :return: list of changed tasks
         :param task_patterns: optional task-relative globs supplied by a configuration adapter;
             nonempty lists narrow file-based detection for tasks sharing a folder
-        :param default_parameters: global defaults used when resolving parameters.allow_change
+        :param default_parameters: global defaults used when resolving task trigger patterns
         :raises CheckerException: if repository is not a git repository
         """
         print_info(f"Detecting changes by {detection_type}")
@@ -569,10 +567,14 @@ class Course:
         if detection_type == CheckerTestingConfig.ChangesDetectionType.LAST_COMMIT_CHANGES:
             if task_patterns is None:
                 task_patterns = {
-                    task.name: task.config.get_editable_patterns(
+                    task.name: task.config.get_trigger_patterns(
                         self.get_task_parameters(task, default_parameters)
                     )
                     for task in potential_tasks
+                }
+            else:
+                task_patterns = {
+                    name: patterns or None for name, patterns in task_patterns.items()
                 }
             return self._detect_by_last_commit_changes(
                 repo, potential_tasks, task_patterns

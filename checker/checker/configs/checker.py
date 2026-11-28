@@ -24,11 +24,11 @@ TParamType = Union[bool, int, float, str, list[Union[int, float, str, None]], No
 TTemplate = Union[str, list[Union[TParamType, str]], dict[str, Union[TParamType, str]]]
 
 
-def validate_allow_change(value: object) -> list[str] | None:
+def _validate_task_patterns(parameter: str, value: object) -> list[str] | None:
     if value is None:
         return None
     message = (
-        "allow_change must be a list of relative glob patterns inside the task folder"
+        f"{parameter} must be a list of relative glob patterns inside the task folder"
     )
     if not isinstance(value, list):
         raise ValueError(message)
@@ -147,7 +147,7 @@ class CheckerTestingConfig(CustomBaseModel):
 
     search_plugins: list[str] = Field(default_factory=list)
 
-    # name of the task parameter holding glob patterns of student-editable files (e.g. "allow_change");
+    # name of the task parameter holding globs for the published-version comparison;
     # None disables skipping tasks unchanged since the published version
     skip_unchanged_tasks: Optional[str] = None
 
@@ -203,14 +203,24 @@ class CheckerSubConfig(CheckerTaskOverrides, YamlLoaderMixin["CheckerSubConfig"]
     _folder_local_allow_change: bool = PrivateAttr(default=False)
 
     def get_editable_patterns(self, parameters: dict[str, Any]) -> list[str] | None:
-        """Return folder-local patterns for automatic preparation and selection.
+        """Return folder-local patterns for automatic workspace preparation.
 
         Only .tasks.yml opts into these rules. In .task.yml, allow_change stays
         available to plugins and unchanged-task checks without this validation.
         """
         if not self._folder_local_allow_change:
             return None
-        return validate_allow_change(parameters.get("allow_change"))
+        return _validate_task_patterns("allow_change", parameters.get("allow_change"))
+
+    def get_trigger_patterns(self, parameters: dict[str, Any]) -> list[str] | None:
+        """Return patterns for commit-based selection of tasks sharing a folder."""
+        editable = self.get_editable_patterns(parameters)
+        if not self._folder_local_allow_change:
+            return None
+        triggers = _validate_task_patterns(
+            "check_on_change", parameters.get("check_on_change")
+        )
+        return (editable or None) if triggers is None else triggers
 
     @classmethod
     def default(cls) -> "CheckerSubConfig":
@@ -291,11 +301,14 @@ class CheckerTasksFileConfig(_CheckerTaskFileConfig):
     tasks: dict[str, CheckerTaskOverrides] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def check_allow_change(self) -> Self:
+    def check_task_patterns(self) -> Self:
         configs: list[CheckerTaskOverrides] = [self, *self.tasks.values()]
         for config in configs:
             if config.parameters is not None:
-                validate_allow_change(config.parameters.root.get("allow_change"))
+                for parameter in ("allow_change", "check_on_change"):
+                    _validate_task_patterns(
+                        parameter, config.parameters.root.get(parameter)
+                    )
         return self
 
     @field_validator("tasks")
