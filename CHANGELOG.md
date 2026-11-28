@@ -1,5 +1,31 @@
 # Changelog
 
+## [26.2.2](https://github.com/manytask/manytask/releases/tag/26.2.2) - 2026-11-28
+
+This release adds GitLab private repository setup from the course template, improves the course CI and C++ runner options, and fixes enrollment, repository lookup, and profile navigation.
+
+### Features
+
+- Create a GitLab private course repository from the course template during course creation, or set one up with the Manytask private repository skill ([#1116](https://github.com/manytask/manytask/pull/1116), [#1245](https://github.com/manytask/manytask/pull/1245)).
+- Set the `MANYTASK_TOKEN` CI variable when provisioning a GitLab public course repository so the checker can report scores ([#1234](https://github.com/manytask/manytask/pull/1234)).
+- Let students move solved task groups to the bottom of their task list ([#1239](https://github.com/manytask/manytask/pull/1239)).
+- Support custom wrappers such as sanitizers for C++ tests, and environment-variable forwarding for both C++ tests and benchmarks ([#1222](https://github.com/manytask/manytask/pull/1222)).
+- Build and publish course template images with rootless BuildKit in GitLab CI ([#1230](https://github.com/manytask/manytask/pull/1230)).
+
+### Fixes
+
+- Keep grade reads free of enrollment side effects and require an existing enrollment for grade updates ([#1224](https://github.com/manytask/manytask/pull/1224), [#1225](https://github.com/manytask/manytask/pull/1225)).
+- Look up public GitLab course repositories by their full path and use the repository root as the SourceCraft image build context ([#1235](https://github.com/manytask/manytask/pull/1235), [#1233](https://github.com/manytask/manytask/pull/1233)).
+- Handle non-ASCII course secrets during registration, sanitize course creation logs, and restrict profile return redirects to known Manytask pages ([#1178](https://github.com/manytask/manytask/pull/1178), [#1248](https://github.com/manytask/manytask/pull/1248), [#1251](https://github.com/manytask/manytask/pull/1251)).
+
+### Other changes
+
+- Log database mutations and simplify the instance administration panel ([#1236](https://github.com/manytask/manytask/pull/1236), [#1213](https://github.com/manytask/manytask/pull/1213)).
+- Refresh and reorganize the teacher and checker guides, document the `MANYTASK_TOKEN` variable, and add self-hosting guidance, instance links, and incident postmortems ([#1229](https://github.com/manytask/manytask/pull/1229), [#1231](https://github.com/manytask/manytask/pull/1231), [#1240](https://github.com/manytask/manytask/pull/1240), [#1241](https://github.com/manytask/manytask/pull/1241), [#1242](https://github.com/manytask/manytask/pull/1242), [#1243](https://github.com/manytask/manytask/pull/1243), [#1244](https://github.com/manytask/manytask/pull/1244)).
+- Update Soup Sieve and the GitHub Actions setup for uv, and format the course-secret validation check ([#1232](https://github.com/manytask/manytask/pull/1232), [#1247](https://github.com/manytask/manytask/pull/1247), [#1249](https://github.com/manytask/manytask/pull/1249)).
+
+**Full Changelog**: [26.2.1...26.2.2](https://github.com/manytask/manytask/compare/26.2.1...26.2.2)
+
 ## [26.2.1](https://github.com/manytask/manytask/releases/tag/26.2.1) - 2026-11-12
 
 This patch release fixes course registration and repository recovery for GitLab users who already have access through a parent group.
